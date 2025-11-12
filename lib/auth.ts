@@ -1,55 +1,37 @@
-import NextAuth from "next-auth";
-import Credentials from "next-auth/providers/credentials";
+import type { NextAuthOptions } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "./prisma";
 import bcrypt from "bcryptjs";
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const authOptions: NextAuthOptions = {
   providers: [
-    Credentials({
-      name: "credentials",
+    CredentialsProvider({
+      name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" }
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          console.log("[auth] Missing email or password");
           return null;
         }
 
         const user = await prisma.user.findUnique({
-          where: {
-            email: credentials.email as string
-          },
-          include: {
-            organization: true
-          }
-        });
-
-        console.log("[auth] User lookup:", {
-          email: credentials.email,
-          found: !!user,
-          hasPassword: !!user?.password
+          where: { email: credentials.email },
         });
 
         if (!user || !user.password) {
-          console.log("[auth] User not found or no password");
           return null;
         }
 
         const isPasswordValid = await bcrypt.compare(
-          credentials.password as string,
+          credentials.password,
           user.password
         );
 
-        console.log("[auth] Password check:", { isPasswordValid });
-
         if (!isPasswordValid) {
-          console.log("[auth] Password invalid");
           return null;
         }
-
-        console.log("[auth] Auth successful for", user.email);
 
         return {
           id: user.id,
@@ -57,38 +39,37 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           name: `${user.firstName} ${user.lastName}`,
           role: user.role,
           membershipStatus: user.membershipStatus,
-          organizationId: user.organizationId,
         };
-      }
-    })
+      },
+    }),
   ],
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.role = user.role;
-        token.membershipStatus = user.membershipStatus;
-        token.organizationId = user.organizationId;
+        token.role = (user as any).role;
+        token.membershipStatus = (user as any).membershipStatus;
       }
       return token;
     },
     async session({ session, token }) {
-      if (token && session.user) {
+      if (session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as string;
-        session.user.membershipStatus = token.membershipStatus as string;
-        session.user.organizationId = token.organizationId as string | null;
+        (session.user as any).role = token.role;
+        (session.user as any).membershipStatus = token.membershipStatus;
       }
       return session;
-    }
+    },
   },
   pages: {
     signIn: "/login",
-    error: "/login",
   },
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   secret: process.env.NEXTAUTH_SECRET,
-});
+};
 
+// For API routes
+export const auth = () => import("next-auth").then(m => m.default);

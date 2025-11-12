@@ -1,8 +1,9 @@
-import { auth } from "@/lib/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminDashboard() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   
   const userCount = await prisma.user.count();
   const documentCount = await prisma.document.count();

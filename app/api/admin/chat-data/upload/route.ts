@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parse } from "csv-parse/sync";
 
@@ -87,7 +88,7 @@ function parseJson(text: string): TrainingRow[] {
 }
 
 export async function POST(request: Request) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   const errorResponse = ensureSuperAdmin(session);
   if (errorResponse) {
     return errorResponse;

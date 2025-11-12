@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import {
   getSettingValue,
   setSettingValue,
@@ -62,7 +63,7 @@ function normalizeValue(value: unknown): string | null {
 }
 
 export async function GET() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   const errorResponse = ensureSuperAdmin(session);
   if (errorResponse) {
     return errorResponse;
@@ -113,7 +114,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   const errorResponse = ensureSuperAdmin(session);
   if (errorResponse) {
     return errorResponse;

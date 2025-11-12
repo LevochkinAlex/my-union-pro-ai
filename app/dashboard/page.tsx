@@ -1,15 +1,15 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export default async function DashboardPage() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
 
   if (!session) {
     redirect("/login");
   }
 
-  // Редирект на чат для пользователей с неполным профилем
-  const membershipStatus = session.user.membershipStatus;
+  const membershipStatus = (session.user as any)?.membershipStatus;
   if (
     membershipStatus === "PROFILE_INCOMPLETE" ||
     membershipStatus === "PENDING_VERIFICATION"
@@ -28,4 +28,3 @@ export default async function DashboardPage() {
     </div>
   );
 }
-

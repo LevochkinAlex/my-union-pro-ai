@@ -1,25 +1,25 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
 
   if (!session) {
     redirect("/login");
   }
 
-  // Проверяем, что это суперадмин
-  if (session.user.role !== "SUPER_ADMIN") {
+  const userRole = (session.user as any)?.role;
+  if (userRole !== "SUPER_ADMIN") {
     redirect("/dashboard");
   }
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Sidebar */}
       <aside className="w-64 border-r border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
         <div className="flex h-16 items-center border-b border-gray-200 px-6 dark:border-gray-700">
           <h1 className="text-lg font-bold text-gray-900 dark:text-white">
@@ -116,11 +116,9 @@ export default async function AdminLayout({
         </nav>
       </aside>
 
-      {/* Main content */}
       <main className="flex-1 overflow-auto">
         {children}
       </main>
     </div>
   );
 }
-
