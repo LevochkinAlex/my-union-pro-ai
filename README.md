@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MyUnion Pro
 
-## Getting Started
+AI-агент для управления профсоюзом на базе Next.js + TailAdmin UI.
 
-First, run the development server:
+## 🚀 Быстрый старт
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+cd /Users/renatusmanov/my-union-pro
+pnpm install
+pnpm prisma migrate dev
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 📋 Текущий статус
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+✅ Базовая авторизация (Login, Register, Forgot Password)  
+✅ Prisma схема с моделями  
+✅ Email отправка через SMTP  
+✅ TailAdmin UI компоненты интегрированы  
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+🔄 В процессе: AI чат для сбора данных профиля
 
-## Learn More
+## 📁 Основные файлы
 
-To learn more about Next.js, take a look at the following resources:
+- `PROJECT_STATUS.md` - **ПОЛНАЯ ИНФОРМАЦИЯ О ПРОЕКТЕ** (читай первым!)
+- `prisma/schema.prisma` - схема базы данных
+- `.env.local` - переменные окружения
+- `app/(auth)/` - страницы авторизации
+- `lib/auth.ts` - конфигурация NextAuth
+- `lib/email.ts` - функции отправки email
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🔑 Важные переменные окружения
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Все в `.env.local`:
+- `DATABASE_URL` - PostgreSQL
+- `NEXTAUTH_SECRET` - секрет для NextAuth
+- `OPENROUTER_API_KEY` - для AI чата
+- `SMTP_*` - настройки email
+- `DADATA_API_KEY`, `DADATA_SECRET_KEY` - поиск организаций
 
-## Deploy on Vercel
+## 📚 Документация
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Смотри `PROJECT_STATUS.md` для полной информации!**
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Там описано:
+- Что сделано
+- Что нужно сделать дальше
+- Структура проекта
+- Процесс регистрации
+- Технические детали
+
+## 🎯 Следующие шаги
+
+1. Интегрировать OpenRouter AI для чата
+2. Создать генератор PDF заявлений
+3. Создать dashboard с меню
+
+---
+
+**Для продолжения работы в другом чате - читай `PROJECT_STATUS.md`**
