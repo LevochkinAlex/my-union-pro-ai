@@ -1,6 +1,6 @@
 "use client";
 import Checkbox from "@/components/form/input/Checkbox";
-import Input from "@/components/form/input/InputField";
+import Input from "@/components/ui/InputField";
 import Label from "@/components/form/Label";
 import { ChevronLeftIcon } from "@/icons";
 import { Eye, EyeOff } from "lucide-react";

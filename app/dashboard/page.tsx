@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import Chat from "@/components/chat/Chat";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -9,22 +10,12 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const membershipStatus = (session.user as any)?.membershipStatus;
-  if (
-    membershipStatus === "PROFILE_INCOMPLETE" ||
-    membershipStatus === "PENDING_VERIFICATION"
-  ) {
-    redirect("/dashboard/chat");
+  // Редирект супер-админов в админ-панель
+  const userRole = session.user.role;
+  if (userRole === "SUPER_ADMIN") {
+    redirect("/admin/dashboard");
   }
 
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="text-center">
-        <h1 className="mb-4 text-2xl font-bold">Добро пожаловать в MyUnion!</h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          Dashboard будет здесь
-        </p>
-      </div>
-    </div>
-  );
+  // Главная страница - это чат
+  return <Chat />;
 }

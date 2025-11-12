@@ -22,7 +22,7 @@ async function createSuperAdmin() {
     }
 
     // Создаем супер-администратора
-    const admin = await prisma.user.create({
+    await prisma.user.create({
       data: {
         email,
         password: hashedPassword,

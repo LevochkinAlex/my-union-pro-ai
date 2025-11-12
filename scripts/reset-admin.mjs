@@ -17,7 +17,7 @@ async function resetAdmin() {
     // Создаём нового с новым паролем
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const admin = await prisma.user.create({
+    await prisma.user.create({
       data: {
         email,
         password: hashedPassword,

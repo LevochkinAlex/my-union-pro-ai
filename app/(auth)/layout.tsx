@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import ThemeToggle from "@/components/ThemeToggle";
+import Image from "next/image";
 
 export const metadata: Metadata = {
   title: "MyUnion — единая панель управления профсоюзом",
@@ -30,10 +31,12 @@ export default function AuthLayout({
           <div className="text-center text-white max-w-md">
             {/* Логотип MyUnion */}
             <div className="mb-8">
-              <img 
+              <Image 
                 src="/Logo_dark_theme.svg" 
                 alt="MyUnion Pro" 
-                className="h-16 mx-auto"
+                width={128}
+                height={64}
+                className="h-16 w-auto mx-auto"
               />
             </div>
             

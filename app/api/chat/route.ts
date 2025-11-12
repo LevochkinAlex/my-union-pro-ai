@@ -3,33 +3,102 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOpenRouterConfig } from "@/lib/settings";
+import { generateEmbedding } from "@/lib/knowledge/embeddings";
+import type { Prisma } from "@prisma/client";
+import { ensureSuperAdmin } from "@/lib/admin-auth";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-// Промпт для сбора данных профиля
-const SYSTEM_PROMPT = `Ты - помощник профсоюза, который помогает новым членам заполнить свой профиль. 
-Твоя задача - вежливо и дружелюбно собрать следующую информацию о пользователе:
+type ChatMessagePayload = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
 
-1. **ФИО**: Фамилия, Имя, Отчество (обязательно)
-2. **Дата рождения**: в формате ДД.ММ.ГГГГ (обязательно)
-3. **Адрес**: полный адрес проживания (обязательно, будет использован DaData для валидации)
-4. **Телефон**: номер телефона в формате +7XXXXXXXXXX (обязательно)
-5. **Должность**: занимаемая должность на работе (обязательно)
-6. **Профессия**: основная профессия (обязательно)
-7. **Образование**: уровень образования (например: среднее, среднее специальное, высшее) (обязательно)
-8. **Организация**: название организации, где работает пользователь (можно поиск по ИНН) (обязательно)
+type RetrievedChunk = {
+  id: string;
+  knowledgeBaseId: string;
+  content: string;
+  similarity: number;
+};
 
-Соблюдай следующие правила:
-- Задавай вопросы по одному, не перегружай пользователя
-- Будь дружелюбным и профессиональным
-- Если пользователь уже предоставил какую-то информацию, не спрашивай повторно
-- Отвечай на русском языке
-- Если пользователь задает вопросы не по теме профиля, вежливо направь его обратно к заполнению профиля
-- После сбора всех обязательных данных, подтверди их списком и сообщи: "Отлично! Все данные собраны. Теперь вы можете загрузить свою подпись и сгенерировать заявления для вступления в профсоюз."
+const defaultBotInclude = {
+  knowledgeBases: {
+    include: {
+      knowledgeBase: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  },
+  apiProvider: true,
+} as const satisfies Prisma.ChatBotInclude;
 
-Важно: Когда соберешь все данные, в конце ответа добавь специальный маркер: [PROFILE_COMPLETE] - это сигнал системе, что профиль готов к сохранению.
+type DefaultBot = Prisma.ChatBotGetPayload<{
+  include: typeof defaultBotInclude;
+}>;
 
-Начни с приветствия: "Здравствуйте! Я помогу вам заполнить профиль для вступления в профсоюз. Давайте начнем с вашего ФИО. Пожалуйста, укажите вашу фамилию, имя и отчество."`;
+function resolveProviderOverride(bot: DefaultBot): Record<string, unknown> | null {
+  const raw = bot.providerOverride;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+  return raw as Record<string, unknown>;
+}
+
+// Получение активного бота по умолчанию
+async function getDefaultBot() {
+  const bot = await prisma.chatBot.findFirst({
+    where: {
+      isActive: true,
+      isDefault: true,
+    },
+    include: defaultBotInclude,
+  });
+
+  return bot;
+}
+
+function cosineSimilarity(a: number[], b: number[]) {
+  if (a.length === 0 || b.length === 0 || a.length !== b.length) {
+    return 0;
+  }
+
+  const dot = a.reduce((sum, value, index) => sum + value * b[index], 0);
+  const magnitudeA = Math.sqrt(a.reduce((sum, value) => sum + value * value, 0));
+  const magnitudeB = Math.sqrt(b.reduce((sum, value) => sum + value * value, 0));
+
+  if (!magnitudeA || !magnitudeB) {
+    return 0;
+  }
+
+  return dot / (magnitudeA * magnitudeB);
+}
+
+// Формирование системного промпта с учетом настроек бота и релевантных документов
+async function buildSystemPrompt(bot: DefaultBot, chunks: RetrievedChunk[]): Promise<string> {
+  let prompt = bot.systemPrompt;
+
+  // Добавляем контекст, если есть
+  if (bot.context) {
+    prompt += `\n\nКонтекст:\n${bot.context}`;
+  }
+
+  if (chunks.length > 0) {
+    const kbNameMap = new Map(
+      (bot.knowledgeBases || []).map((relation) => [relation.knowledgeBaseId, relation.knowledgeBase?.name ?? "База знаний"]),
+    );
+
+    prompt += `\n\nАктуальные материалы (используй их как факты, указывай их происхождение при ответе):\n`;
+    chunks.forEach((chunk, index) => {
+      const kbName = kbNameMap.get(chunk.knowledgeBaseId) ?? "База знаний";
+      prompt += `\n[${index + 1}] ${kbName} (релевантность ${chunk.similarity.toFixed(2)}):\n${chunk.content}\n`;
+    });
+  }
+
+  return prompt;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,6 +120,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Получаем активного бота по умолчанию
+    const bot = await getDefaultBot();
+    if (!bot) {
+      return NextResponse.json(
+        { error: "AI бот не настроен. Обратитесь к администратору." },
+        { status: 503 }
+      );
+    }
+
+    const relevantChunks = await retrieveRelevantChunks(bot, message);
+
+    // Формируем системный промпт с учетом настроек бота
+    const systemPrompt = await buildSystemPrompt(bot, relevantChunks);
+
     // Получаем историю сообщений пользователя
     const chatHistory = await prisma.chatMessage.findMany({
       where: {
@@ -63,13 +146,13 @@ export async function POST(request: NextRequest) {
     });
 
     // Формируем массив сообщений для OpenRouter
-    const messages = [
+    const messages: ChatMessagePayload[] = [
       {
         role: "system",
-        content: SYSTEM_PROMPT,
+        content: systemPrompt,
       },
       ...chatHistory.map((msg) => ({
-        role: msg.role,
+        role: msg.role as ChatMessagePayload["role"],
         content: msg.content,
       })),
       {
@@ -87,44 +170,144 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const openRouterConfig = await getOpenRouterConfig();
+    // Получаем настройки провайдера
+    const overrideConfig = resolveProviderOverride(bot);
+    const providerName =
+      (typeof overrideConfig?.provider === "string" ? overrideConfig.provider : undefined) ||
+      bot.apiProvider?.name ||
+      "openrouter";
 
-    if (!openRouterConfig.apiKey) {
-      console.error("[chat] OpenRouter API ключ не настроен");
+    const providerApiKey =
+      (typeof overrideConfig?.apiKey === "string" ? overrideConfig.apiKey : undefined) ||
+      bot.apiProvider?.apiKey ||
+      "";
+
+    const providerApiBaseUrl =
+      (typeof overrideConfig?.apiBaseUrl === "string" ? overrideConfig.apiBaseUrl : undefined) ||
+      bot.apiProvider?.apiBaseUrl ||
+      "";
+
+    const overrideHeaders =
+      overrideConfig && typeof overrideConfig.headers === "object" && !Array.isArray(overrideConfig.headers)
+        ? (overrideConfig.headers as Record<string, unknown>)
+        : null;
+
+    // Определяем API конфигурацию в зависимости от провайдера бота
+    let apiUrl: string | undefined;
+    let apiKey: string | undefined;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (overrideHeaders && typeof overrideHeaders === "object") {
+      for (const [key, value] of Object.entries(overrideHeaders)) {
+        if (typeof value === "string" && value.trim().length > 0) {
+          headers[key] = value;
+        }
+      }
+    }
+
+    if (providerName === "openrouter") {
+      const openRouterConfig = await getOpenRouterConfig();
+      apiKey = providerApiKey || openRouterConfig.apiKey || "";
+      apiUrl = providerApiBaseUrl || OPENROUTER_API_URL;
+      headers["Authorization"] = `Bearer ${apiKey}`;
+      headers["HTTP-Referer"] = process.env.NEXTAUTH_URL || "http://localhost:3004";
+      headers["X-Title"] = "MyUnion Pro";
+    } else if (providerName === "openai") {
+      apiKey = providerApiKey || "";
+      apiUrl = providerApiBaseUrl || "https://api.openai.com/v1/chat/completions";
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    } else if (providerName === "anthropic") {
+      apiKey = providerApiKey || "";
+      apiUrl = providerApiBaseUrl || "https://api.anthropic.com/v1/messages";
+      headers["x-api-key"] = apiKey;
+      headers["anthropic-version"] = "2023-06-01";
+    } else if (providerName === "custom") {
+      apiKey = providerApiKey || "";
+      apiUrl = providerApiBaseUrl || "";
+      if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+      }
+    } else if (bot.apiProvider?.apiBaseUrl || providerApiBaseUrl) {
+      // Любой другой провайдер из таблицы
+      apiKey = providerApiKey || "";
+      apiUrl = bot.apiProvider?.apiBaseUrl || providerApiBaseUrl || "";
+      if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+      }
+    } else {
+      // Fallback на OpenRouter
+      const openRouterConfig = await getOpenRouterConfig();
+      apiKey = openRouterConfig.apiKey || "";
+      apiUrl = OPENROUTER_API_URL;
+      headers["Authorization"] = `Bearer ${apiKey}`;
+      headers["HTTP-Referer"] = process.env.NEXTAUTH_URL || "http://localhost:3004";
+      headers["X-Title"] = "MyUnion Pro";
+    }
+
+    if (!apiKey || !apiUrl) {
+      console.error("[chat] API ключ или URL не настроены");
       return NextResponse.json(
         { error: "AI недоступен. Обратитесь к администратору." },
         { status: 503 },
       );
     }
 
-    // Отправляем запрос в OpenRouter
-    const response = await fetch(OPENROUTER_API_URL, {
+    // Формируем тело запроса в зависимости от провайдера
+    let requestBody: Record<string, unknown>;
+    if (providerName === "anthropic") {
+      // Anthropic использует другой формат
+      requestBody = {
+        model: bot.model,
+        max_tokens: bot.maxTokens,
+        messages: messages.filter((m) => m.role !== "system"),
+        system: messages.find((m) => m.role === "system")?.content || "",
+      };
+    } else {
+      // OpenAI/OpenRouter/прочие формат
+      requestBody = {
+        model: bot.model,
+        messages,
+        temperature: bot.temperature,
+        max_tokens: bot.maxTokens,
+      };
+    }
+
+    // Отправляем запрос в API
+    const response = await fetch(apiUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${openRouterConfig.apiKey}`,
-        "HTTP-Referer": process.env.NEXTAUTH_URL || "http://localhost:3000",
-        "X-Title": "MyUnion Pro",
-      },
-      body: JSON.stringify({
-        model: openRouterConfig.model || "openai/gpt-4o-mini",
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 1000,
-      }),
+      headers,
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error("OpenRouter API error:", errorData);
+      console.error(`[chat] ${providerName} API error:`, errorData);
+      let errorMessage = "Ошибка при обращении к AI";
+      try {
+        const errorJson = JSON.parse(errorData);
+        errorMessage = errorJson.error?.message || errorJson.error || errorMessage;
+      } catch {
+        // Если не JSON, используем текст ошибки
+        if (errorData) {
+          errorMessage = errorData.substring(0, 200);
+        }
+      }
       return NextResponse.json(
-        { error: "Ошибка при обращении к AI" },
+        { error: errorMessage },
         { status: 500 }
       );
     }
 
     const data = await response.json();
-    const aiResponse = data.choices[0]?.message?.content || "Извините, не удалось получить ответ.";
+    // Обрабатываем разные форматы ответов
+    let aiResponse: string;
+    if (providerName === "anthropic") {
+      aiResponse = data.content?.[0]?.text || data.content || "Извините, не удалось получить ответ.";
+    } else {
+      aiResponse = data.choices?.[0]?.message?.content || data.choices?.[0]?.text || "Извините, не удалось получить ответ.";
+    }
 
     // Сохраняем ответ AI
     await prisma.chatMessage.create({
@@ -148,31 +331,62 @@ export async function POST(request: NextRequest) {
 }
 
 // GET - получение истории сообщений
-export async function GET(request: NextRequest) {
+export async function GET() {
+  console.log("GET /api/chat: Получен запрос");
   try {
+    console.log("GET /api/chat: Попытка получить сессию...");
     const session = await getServerSession(authOptions);
+    console.log("GET /api/chat: Сессия получена:", session ? `для пользователя ${session.user?.id}` : "сессия отсутствует");
 
     if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Не авторизован" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+    
+    console.log(`GET /api/chat: Поиск сообщений для пользователя ${session.user.id}...`);
+    const messages = await prisma.chatMessage.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "asc" },
+    });
+    console.log(`GET /api/chat: Найдено ${messages.length} сообщений.`);
+
+    if (messages.length === 0) {
+      console.log("GET /api/chat: Сообщений нет, создаем приветствие.");
+      console.log("GET /api/chat: Поиск бота по умолчанию...");
+      const defaultBot = await getDefaultBot();
+      if (!defaultBot) {
+        console.error("GET /api/chat: Критическая ошибка - бот по умолчанию не найден!");
+        throw new Error("Бот по умолчанию не сконфигурирован в базе данных.");
+      }
+      console.log(`GET /api/chat: Бот по умолчанию найден: ${defaultBot.name}`);
+      
+      const welcomeMessageContent = "Здравствуйте! Я — ваш персональный ассистент MyUnion Pro. Я помогу вам составить заявления для вступления в профсоюз и для перечисления членских взносов. Давайте начнем! Как я могу к вам обращаться (назовите, пожалуйста, ваши фамилию, имя и отчество)?";
+      
+      console.log("GET /api/chat: Создание приветственного сообщения в БД...");
+      const welcomeMessage = await prisma.chatMessage.create({
+        data: {
+          content: welcomeMessageContent,
+          role: "assistant",
+          userId: session.user.id,
+          // TODO: Добавить chatBotId после применения миграции БД
+          // chatBotId: defaultBot.id,
+        },
+      });
+      console.log("GET /api/chat: Приветственное сообщение создано. ID:", welcomeMessage.id);
+      return NextResponse.json({ messages: [welcomeMessage] });
     }
 
-    const messages = await prisma.chatMessage.findMany({
-      where: {
-        userId: session.user.id,
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
-    });
-
+    console.log("GET /api/chat: Возвращаем историю сообщений.");
     return NextResponse.json({ messages });
+    
   } catch (error) {
-    console.error("Get messages error:", error);
+    console.error("!!! GET /api/chat КРИТИЧЕСКАЯ ОШИБКА:", error);
+    // ВРЕМЕННО: возвращаем детали ошибки для отладки
     return NextResponse.json(
-      { error: "Внутренняя ошибка сервера" },
+      { 
+        error: "Внутренняя ошибка сервера",
+        details: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      },
       { status: 500 }
     );
   }

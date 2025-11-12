@@ -3,7 +3,11 @@
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 
-export default function ThemeToggle() {
+interface ThemeToggleProps {
+  collapsed?: boolean;
+}
+
+export default function ThemeToggle({ collapsed = false }: ThemeToggleProps) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -11,34 +15,22 @@ export default function ThemeToggle() {
     setMounted(true);
   }, []);
 
-  const ButtonWrapper = ({
-    children,
-  }: {
-    children: React.ReactNode;
-  }) => (
-    <button
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-700 shadow-lg transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-      aria-label="Toggle theme"
-      disabled={!mounted}
-    >
-      {children}
-    </button>
-  );
-
-  if (!mounted) {
+  if (typeof window === 'undefined' || !mounted) {
     return (
-      <ButtonWrapper>
-        <div className="h-5 w-5" />
-      </ButtonWrapper>
+      <div className="h-9 w-9 rounded-full bg-gray-200 dark:bg-gray-700" />
     );
   }
 
   return (
-    <ButtonWrapper>
+    <button
+      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+      className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
+      aria-label="Toggle theme"
+      title={collapsed ? (theme === "dark" ? "Светлая тема" : "Темная тема") : undefined}
+    >
       {theme === "dark" ? (
         <svg
-          className="h-5 w-5 text-yellow-400"
+          className="h-5 w-5"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -52,7 +44,7 @@ export default function ThemeToggle() {
         </svg>
       ) : (
         <svg
-          className="h-5 w-5 text-gray-700"
+          className="h-5 w-5"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -65,7 +57,7 @@ export default function ThemeToggle() {
           />
         </svg>
       )}
-    </ButtonWrapper>
+    </button>
   );
 }
 

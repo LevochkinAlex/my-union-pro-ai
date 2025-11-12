@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -103,7 +103,7 @@ function extractProfileData(messages: Array<{ role: string; content: string }>) 
 }
 
 // API для извлечения и сохранения данных профиля из чата
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const session = await getServerSession(authOptions);
 
@@ -155,7 +155,50 @@ export async function POST(request: NextRequest) {
         ...profileData,
         membershipStatus: "DOCUMENTS_PENDING", // После заполнения профиля переходим к документам
       },
+      include: {
+        organization: true,
+      },
     });
+
+    // Автоматически генерируем заявления после заполнения профиля
+    try {
+      const { generateMembershipApplication, generateContributionsApplication } = await import("@/lib/documents");
+      
+      const ppoChairman = updatedUser.organization?.chairmanName || "Председатель ППО";
+      
+      // Генерируем оба заявления
+      const [membershipPath, contributionsPath] = await Promise.all([
+        generateMembershipApplication(updatedUser, ppoChairman),
+        generateContributionsApplication(updatedUser, ppoChairman),
+      ]);
+
+      // Сохраняем документы в базе данных
+      await Promise.all([
+        prisma.document.create({
+          data: {
+            type: "MEMBERSHIP_APPLICATION",
+            status: "DRAFT",
+            title: "Заявление о вступлении в профсоюз",
+            filePath: membershipPath,
+            userId: updatedUser.id,
+            organizationId: updatedUser.organizationId || null,
+          },
+        }),
+        prisma.document.create({
+          data: {
+            type: "CONTRIBUTION_APPLICATION",
+            status: "DRAFT",
+            title: "Заявление о взносах",
+            filePath: contributionsPath,
+            userId: updatedUser.id,
+            organizationId: updatedUser.organizationId || null,
+          },
+        }),
+      ]);
+    } catch (error) {
+      console.error("[extract-profile] Ошибка генерации заявлений:", error);
+      // Не прерываем процесс, если генерация заявлений не удалась
+    }
 
     return NextResponse.json({
       success: true,

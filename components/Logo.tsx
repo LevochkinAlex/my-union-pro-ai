@@ -10,9 +10,9 @@ interface LogoProps {
 }
 
 const sizeMap = {
-  sm: "h-8",
-  md: "h-12",
-  lg: "h-16",
+  sm: { height: 32, width: 32 },
+  md: { height: 48, width: 48 },
+  lg: { height: 64, width: 64 },
 };
 
 export default function Logo({ className = "", size = "md" }: LogoProps) {
@@ -23,13 +23,17 @@ export default function Logo({ className = "", size = "md" }: LogoProps) {
     setMounted(true);
   }, []);
 
-  // Показываем light logo пока не определилась тема
-  if (!mounted) {
+  const { height, width } = sizeMap[size];
+
+  if (typeof window === 'undefined' || !mounted) {
     return (
-      <img
+      <Image
         src="/Logo_light_theme.svg"
         alt="MyUnion"
-        className={`${sizeMap[size]} ${className}`}
+        width={width * 3} // Assume logo is 3x wider than tall
+        height={height}
+        className={`${className}`}
+        priority
       />
     );
   }
@@ -38,10 +42,12 @@ export default function Logo({ className = "", size = "md" }: LogoProps) {
   const logoSrc = currentTheme === "dark" ? "/Logo_dark_theme.svg" : "/Logo_light_theme.svg";
 
   return (
-    <img
+    <Image
       src={logoSrc}
       alt="MyUnion"
-      className={`${sizeMap[size]} ${className}`}
+      width={width * 3}
+      height={height}
+      className={`${className}`}
     />
   );
 }
@@ -54,14 +60,17 @@ export function LogoIcon({ className = "", size = "md" }: LogoProps) {
     setMounted(true);
   }, []);
 
-  const iconSize = size === "sm" ? "w-8 h-8" : size === "lg" ? "w-16 h-16" : "w-12 h-12";
+  const { height, width } = sizeMap[size];
 
-  if (!mounted) {
+  if (typeof window === 'undefined' || !mounted) {
     return (
-      <img
+      <Image
         src="/icon_light.svg"
         alt="MyUnion Icon"
-        className={`${iconSize} ${className}`}
+        width={width}
+        height={height}
+        className={`${className}`}
+        priority
       />
     );
   }
@@ -70,10 +79,12 @@ export function LogoIcon({ className = "", size = "md" }: LogoProps) {
   const iconSrc = currentTheme === "dark" ? "/icon_dark.svg" : "/icon_light.svg";
 
   return (
-    <img
+    <Image
       src={iconSrc}
       alt="MyUnion Icon"
-      className={`${iconSize} ${className}`}
+      width={width}
+      height={height}
+      className={`${className}`}
     />
   );
 }

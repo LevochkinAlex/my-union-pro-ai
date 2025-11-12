@@ -1,18 +1,15 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
-import Chat from "@/components/chat/Chat";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export default async function ChatPage() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
 
   if (!session) {
     redirect("/login");
   }
 
-  return (
-    <div className="h-screen">
-      <Chat />
-    </div>
-  );
+  // Редирект на главную, так как главная страница - это чат
+  redirect("/dashboard");
 }
 

@@ -9,80 +9,80 @@ datasource db {
 
 // Роли пользователей
 enum UserRole {
-  MEMBER              // Обычный член профсоюза
-  PENDING_MEMBER      // Ожидает одобрения
-  PPO_HEAD            // Председатель ППО
-  REGIONAL_CHAIRMAN   // Председатель регионального отделения
-  FEDERAL_CHAIRMAN    // Председатель федерации
-  SUPER_ADMIN         // Суперадмин
+  MEMBER // Обычный член профсоюза
+  PENDING_MEMBER // Ожидает одобрения
+  PPO_HEAD // Председатель ППО
+  REGIONAL_CHAIRMAN // Председатель регионального отделения
+  FEDERAL_CHAIRMAN // Председатель федерации
+  SUPER_ADMIN // Суперадмин
 }
 
 // Статусы членства
 enum MembershipStatus {
-  PENDING_VERIFICATION  // Ожидает проверки email
-  PROFILE_INCOMPLETE    // Email подтвержден, профиль не заполнен
-  DOCUMENTS_PENDING     // Документы отправлены на проверку
-  APPROVED              // Одобрен как член профсоюза
-  REJECTED              // Отклонен
-  SUSPENDED             // Приостановлен
+  PENDING_VERIFICATION // Ожидает проверки email
+  PROFILE_INCOMPLETE // Email подтвержден, профиль не заполнен
+  DOCUMENTS_PENDING // Документы отправлены на проверку
+  APPROVED // Одобрен как член профсоюза
+  REJECTED // Отклонен
+  SUSPENDED // Приостановлен
 }
 
 // Типы организаций
 enum OrganizationType {
-  PRIMARY        // Первичная профсоюзная организация (ППО)
-  REGIONAL       // Региональное отделение
-  FEDERAL        // Федерация
+  PRIMARY // Первичная профсоюзная организация (ППО)
+  REGIONAL // Региональное отделение
+  FEDERAL // Федерация
 }
 
 // Пользователь
 model User {
-  id                String            @id @default(cuid())
-  email             String            @unique
-  password          String?
-  role              UserRole          @default(PENDING_MEMBER)
-  membershipStatus  MembershipStatus  @default(PENDING_VERIFICATION)
-  
+  id               String           @id @default(cuid())
+  email            String           @unique
+  password         String?
+  role             UserRole         @default(PENDING_MEMBER)
+  membershipStatus MembershipStatus @default(PENDING_VERIFICATION)
+
   // Персональные данные
-  firstName         String?
-  lastName          String?
-  middleName        String?
-  dateOfBirth       DateTime?
-  phone             String?
-  address           String?
-  
+  firstName   String?
+  lastName    String?
+  middleName  String?
+  dateOfBirth DateTime?
+  phone       String?
+  address     String?
+
   // Профессиональная информация
-  jobTitle          String?           // Занимаемая должность
-  profession        String?           // Основная профессия
-  education         String?           // Образование
-  
+  jobTitle   String? // Занимаемая должность
+  profession String? // Основная профессия
+  education  String? // Образование
+
   // Подпись (путь к файлу на сервере)
-  signaturePath     String?
-  
+  signaturePath String?
+
   // Организация
-  organizationId    String?
-  organization      Organization?     @relation(fields: [organizationId], references: [id])
-  
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   // Заявления
-  documents         Document[]
-  
+  documents Document[]
+
   // Email верификация
-  emailVerified     DateTime?
-  verificationToken String?           @unique
+  emailVerified       DateTime?
+  verificationToken   String?   @unique
   verificationExpires DateTime?
-  
+
   // Сброс пароля
-  resetToken        String?           @unique
+  resetToken        String?   @unique
   resetTokenExpires DateTime?
-  
+
   // Чат с AI
-  chatMessages      ChatMessage[]
-  updatedSettings   SystemSetting[]       @relation("SystemSettingUpdatedBy")
-  uploadedTrainingSamples AiTrainingSample[] @relation("AiTrainingSampleUploadedBy")
-  
+  chatMessages               ChatMessage[]
+  updatedSettings            SystemSetting[]     @relation("SystemSettingUpdatedBy")
+  uploadedKnowledgeDocuments KnowledgeDocument[] @relation("KnowledgeDocumentUploadedBy")
+
   // Timestamps
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([email])
   @@index([organizationId])
   @@index([verificationToken])
@@ -91,34 +91,34 @@ model User {
 
 // Организация (ППО, региональные, федерация)
 model Organization {
-  id            String              @id @default(cuid())
-  name          String
-  type          OrganizationType
-  
+  id   String           @id @default(cuid())
+  name String
+  type OrganizationType
+
   // Иерархия
-  parentId      String?
-  parent        Organization?       @relation("OrganizationHierarchy", fields: [parentId], references: [id])
-  children      Organization[]      @relation("OrganizationHierarchy")
-  
+  parentId String?
+  parent   Organization?  @relation("OrganizationHierarchy", fields: [parentId], references: [id])
+  children Organization[] @relation("OrganizationHierarchy")
+
   // Контакты
-  inn           String?             @unique
-  address       String?
-  phone         String?
-  email         String?
-  
+  inn     String? @unique
+  address String?
+  phone   String?
+  email   String?
+
   // Председатель
-  chairmanName  String?
-  
+  chairmanName String?
+
   // Члены
-  members       User[]
-  
+  members User[]
+
   // Документы организации
-  documents     Document[]
-  
-  isActive      Boolean             @default(true)
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  
+  documents Document[]
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([type])
   @@index([parentId])
   @@index([inn])
@@ -126,50 +126,50 @@ model Organization {
 
 // Типы документов
 enum DocumentType {
-  MEMBERSHIP_APPLICATION    // Заявление о вступлении в ППО
-  CONTRIBUTION_APPLICATION  // Заявление о взносах
-  APPEAL                    // Обращение
-  OTHER                     // Прочее
+  MEMBERSHIP_APPLICATION // Заявление о вступлении в ППО
+  CONTRIBUTION_APPLICATION // Заявление о взносах
+  APPEAL // Обращение
+  OTHER // Прочее
 }
 
 // Статусы документов
 enum DocumentStatus {
-  DRAFT           // Черновик
-  PENDING         // Ожидает проверки
-  APPROVED        // Одобрен
-  REJECTED        // Отклонен
-  ARCHIVED        // В архиве
+  DRAFT // Черновик
+  PENDING // Ожидает проверки
+  APPROVED // Одобрен
+  REJECTED // Отклонен
+  ARCHIVED // В архиве
 }
 
 // Документ (заявления, обращения)
 model Document {
-  id              String          @id @default(cuid())
-  type            DocumentType
-  status          DocumentStatus  @default(PENDING)
-  
+  id     String         @id @default(cuid())
+  type   DocumentType
+  status DocumentStatus @default(PENDING)
+
   // Содержимое
-  title           String
-  content         String?         @db.Text
-  
+  title   String
+  content String? @db.Text
+
   // Файлы (PDF и подписанные копии)
-  filePath        String?         // Сгенерированный PDF
-  signedFilePath  String?         // Подписанный скан
-  
+  filePath       String? // Сгенерированный PDF
+  signedFilePath String? // Подписанный скан
+
   // Владелец
-  userId          String
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   // Организация
-  organizationId  String?
-  organization    Organization?   @relation(fields: [organizationId], references: [id])
-  
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   // Комментарий при отклонении
-  rejectionReason String?         @db.Text
-  
+  rejectionReason String? @db.Text
+
   // Timestamps
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([userId])
   @@index([organizationId])
   @@index([status])
@@ -178,55 +178,59 @@ model Document {
 
 // Сообщения AI чата для сбора данных профиля
 model ChatMessage {
-  id        String   @id @default(cuid())
-  
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  role      String   // "user" или "assistant"
-  content   String   @db.Text
-  
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  chatBotId String?
+  chatBot   ChatBot? @relation(fields: [chatBotId], references: [id], onDelete: SetNull)
+
+  role    String // "user" или "assistant"
+  content String @db.Text
+
   createdAt DateTime @default(now())
-  
+
   @@index([userId])
+  @@index([chatBotId])
   @@index([createdAt])
 }
 
 // Новости (для будущего функционала)
 model News {
-  id          String   @id @default(cuid())
-  title       String
-  content     String   @db.Text
-  excerpt     String?
-  coverImage  String?
-  
-  isPublished Boolean  @default(false)
+  id         String  @id @default(cuid())
+  title      String
+  content    String  @db.Text
+  excerpt    String?
+  coverImage String?
+
+  isPublished Boolean   @default(false)
   publishedAt DateTime?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([publishedAt])
 }
 
 // Скидки (для будущего функционала)
 model Discount {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   title       String
-  description String   @db.Text
-  discount    String   // "10%", "2+1", "Фиксированная цена" и т.д.
-  
-  company     String   // Название компании
-  category    String?  // Категория (Магазины, Рестораны, Услуги и т.д.)
-  
-  validFrom   DateTime
-  validUntil  DateTime?
-  
-  isActive    Boolean  @default(true)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  description String @db.Text
+  discount    String // "10%", "2+1", "Фиксированная цена" и т.д.
+
+  company  String // Название компании
+  category String? // Категория (Магазины, Рестораны, Услуги и т.д.)
+
+  validFrom  DateTime
+  validUntil DateTime?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([isActive])
   @@index([validFrom])
   @@index([validUntil])
@@ -245,17 +249,240 @@ model SystemSetting {
   @@index([key])
 }
 
-// Данные для обучения AI-чата
-model AiTrainingSample {
-  id               String   @id @default(cuid())
-  question         String
-  answer           String   @db.Text
-  category         String?
-  sourceFileName   String?
-  uploadedByUserId String?
-  uploadedBy       User?    @relation("AiTrainingSampleUploadedBy", fields: [uploadedByUserId], references: [id])
-  createdAt        DateTime @default(now())
+// Устарело: Обучающие данные для AI (вопрос-ответ)
+// model AiTrainingSample {
+//   id               String   @id @default(cuid())
+//   question         String
+//   answer           String   @db.Text
+//   category         String?
+//   sourceFileName   String?
+//   uploadedByUserId String?
+//   uploadedBy       User?    @relation("AiTrainingSampleUploadedBy", fields: [uploadedByUserId], references: [id])
+//   createdAt        DateTime @default(now())
+//
+//   @@index([category])
+//   @@index([createdAt])
+// }
 
-  @@index([category])
-  @@index([createdAt])
+// База знаний (Knowledge Base) - как в Coze
+model KnowledgeBase {
+  id          String  @id @default(cuid())
+  name        String
+  description String? @db.Text
+  isActive    Boolean @default(true)
+
+  // Документы в базе знаний
+  documents KnowledgeDocument[]
+  sources   KnowledgeSource[]
+  chunks    KnowledgeChunk[]
+
+  // Боты, использующие эту базу знаний
+  bots ChatBotKnowledgeBase[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+// Типы документов в базе знаний
+enum KnowledgeSourceType {
+  FILE
+  URL
+  WEB_SEARCH
+  API
+  MANUAL
+}
+
+enum KnowledgeSourceStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum DocumentContentType {
+  TEXT
+  IMAGE
+  AUDIO
+  VIDEO
+}
+
+enum ProcessingStatus {
+  UPLOADED
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model KnowledgeSource {
+  id              String               @id @default(cuid())
+  knowledgeBaseId String
+  knowledgeBase   KnowledgeBase        @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  type            KnowledgeSourceType
+  url             String?
+  title           String?
+  metadata        Json?
+  status          KnowledgeSourceStatus @default(PENDING)
+  lastFetchedAt   DateTime?
+  documents       KnowledgeDocument[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([knowledgeBaseId])
+  @@index([status])
+  @@index([type])
+}
+
+model KnowledgeDocument {
+  id              String        @id @default(cuid())
+  knowledgeBaseId String
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  sourceId        String?
+  source          KnowledgeSource? @relation(fields: [sourceId], references: [id])
+
+  // Метаданные файла
+  fileName   String?
+  originalName String
+  filePath   String?
+  mimeType   String?
+  fileType   String?
+  fileSize   Int?
+  checksum   String?
+  contentType DocumentContentType @default(TEXT)
+
+  // Обработка
+  processingStatus ProcessingStatus @default(UPLOADED)
+  processedAt      DateTime?
+  extractedText    String? @db.Text
+  meta             Json?
+
+  uploadedByUserId String?
+  uploadedBy       User?   @relation("KnowledgeDocumentUploadedBy", fields: [uploadedByUserId], references: [id])
+
+  chunks    KnowledgeChunk[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([knowledgeBaseId])
+  @@index([sourceId])
+  @@index([processingStatus])
+  @@index([contentType])
+}
+
+model KnowledgeChunk {
+  id              String        @id @default(cuid())
+  knowledgeBaseId String
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  documentId      String?
+  document        KnowledgeDocument? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  content         String @db.Text
+  tokens          Int?
+  embedding       Float[]
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  @@index([knowledgeBaseId])
+  @@index([documentId])
+}
+
+// Настройки AI бота (промпт, тон, контекст)
+model ChatBot {
+  id          String  @id @default(cuid())
+  name        String
+  description String? @db.Text
+
+  // Системный промпт
+  systemPrompt String @db.Text
+
+  // Тон общения
+  tone String @default("professional") // professional, friendly, formal, casual
+
+  // Контекст (дополнительная информация)
+  context String? @db.Text
+
+  // Модель AI (например: openai/gpt-4o-mini, anthropic/claude-3-haiku и т.д.)
+  model String @default("openai/gpt-4o-mini")
+
+  // API провайдер
+  apiProviderId String?
+  apiProvider   ApiProvider? @relation(fields: [apiProviderId], references: [id])
+
+  // Дополнительные настройки (для кастомных провайдеров или переопределений)
+  providerOverride Json?
+
+  // Температура для генерации (0-2)
+  temperature Float @default(0.7)
+
+  // Максимальное количество токенов
+  maxTokens Int @default(1000)
+
+  // Базы знаний, используемые этим ботом
+  knowledgeBases ChatBotKnowledgeBase[]
+  retrievalConfig Json?
+
+  // Сообщения, созданные этим ботом
+  messages ChatMessage[]
+
+  // Активен ли бот
+  isActive Boolean @default(true)
+
+  // Является ли ботом по умолчанию
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([isDefault])
+  @@index([apiProviderId])
+}
+
+// Связь бота с базой знаний (many-to-many)
+model ChatBotKnowledgeBase {
+  id              String        @id @default(cuid())
+  chatBotId       String
+  chatBot         ChatBot       @relation(fields: [chatBotId], references: [id], onDelete: Cascade)
+  knowledgeBaseId String
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([chatBotId, knowledgeBaseId])
+  @@index([chatBotId])
+  @@index([knowledgeBaseId])
+}
+
+// Настройки API провайдеров (OpenRouter, OpenAI, Anthropic и т.д.)
+model ApiProvider {
+  id          String  @id @default(cuid())
+  name        String  @unique // openrouter, openai, anthropic, custom
+  displayName String // Отображаемое имя
+  description String? @db.Text
+
+  // API ключ (зашифрован или в открытом виде, зависит от реализации)
+  apiKey String? @db.Text
+
+  // Базовый URL для API
+  apiBaseUrl String? @db.Text
+
+  // Доступные модели для этого провайдера (JSON массив)
+  availableModels String? @db.Text // JSON массив моделей
+  capabilities   Json?
+
+  // Активен ли провайдер
+  isActive Boolean @default(true)
+
+  // Является ли провайдером по умолчанию
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bots ChatBot[]
+
+  @@index([isActive])
+  @@index([isDefault])
 }

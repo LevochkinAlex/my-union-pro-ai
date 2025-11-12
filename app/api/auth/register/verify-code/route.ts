@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "Email подтвержден. Пароль отправлен на вашу почту.",
+      temporaryPassword: generatedPassword,
     });
   } catch (error) {
     console.error("Verification error:", error);

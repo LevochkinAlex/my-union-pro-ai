@@ -1,4 +1,4 @@
-import type { NextAuthOptions } from "next-auth";
+import type { NextAuthOptions, User } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "./prisma";
 import bcrypt from "bcryptjs";
@@ -6,40 +6,46 @@ import bcrypt from "bcryptjs";
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
+      id: "credentials",
       name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials): Promise<User | null> {
         if (!credentials?.email || !credentials?.password) {
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-        });
+        try {
+          const user = await prisma.user.findUnique({
+            where: { email: credentials.email },
+          });
 
-        if (!user || !user.password) {
+          if (!user || !user.password) {
+            return null;
+          }
+
+          const isPasswordValid = await bcrypt.compare(
+            credentials.password,
+            user.password
+          );
+
+          if (!isPasswordValid) {
+            return null;
+          }
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim(),
+            role: user.role,
+            membershipStatus: user.membershipStatus,
+          };
+        } catch (error) {
+          console.error("[NextAuth] Authorize error:", error);
           return null;
         }
-
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password,
-          user.password
-        );
-
-        if (!isPasswordValid) {
-          return null;
-        }
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: `${user.firstName} ${user.lastName}`,
-          role: user.role,
-          membershipStatus: user.membershipStatus,
-        };
       },
     }),
   ],
@@ -47,16 +53,16 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.role = (user as any).role;
-        token.membershipStatus = (user as any).membershipStatus;
+        token.role = user.role;
+        token.membershipStatus = user.membershipStatus;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
-        (session.user as any).role = token.role;
-        (session.user as any).membershipStatus = token.membershipStatus;
+        session.user.id = token.id;
+        session.user.role = token.role;
+        session.user.membershipStatus = token.membershipStatus;
       }
       return session;
     },
@@ -69,7 +75,21 @@ export const authOptions: NextAuthOptions = {
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   secret: process.env.NEXTAUTH_SECRET,
+  debug: process.env.NODE_ENV === "development",
 };
 
-// For API routes
-export const auth = () => import("next-auth").then(m => m.default);
+// Логирование конфигурации при загрузке модуля
+if (process.env.NODE_ENV === "development") {
+  console.log("[NextAuth] Config:", {
+    hasSecret: !!process.env.NEXTAUTH_SECRET,
+    nextAuthUrl: process.env.NEXTAUTH_URL,
+    secretLength: process.env.NEXTAUTH_SECRET?.length || 0,
+  });
+  
+  if (!process.env.NEXTAUTH_URL) {
+    console.warn("[NextAuth] WARNING: NEXTAUTH_URL is not set!");
+  }
+  if (!process.env.NEXTAUTH_SECRET) {
+    console.warn("[NextAuth] WARNING: NEXTAUTH_SECRET is not set!");
+  }
+}

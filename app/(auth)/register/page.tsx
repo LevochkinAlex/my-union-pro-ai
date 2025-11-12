@@ -3,9 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Input from "@/components/form/input/InputField";
+import Input from "@/components/ui/InputField";
 import Label from "@/components/form/Label";
 import Button from "@/components/ui/button/Button";
+import { signIn } from "next-auth/react";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -35,7 +36,7 @@ export default function RegisterPage() {
       }
 
       setStep("verify");
-    } catch (error) {
+    } catch {
       setError("Произошла ошибка");
     } finally {
       setLoading(false);
@@ -61,9 +62,29 @@ export default function RegisterPage() {
         return;
       }
 
-      // Пользователь создан, перенаправляем в личный кабинет
+      if (!data?.temporaryPassword) {
+        setError(
+          "Регистрация прошла, но не удалось получить временный пароль. Проверьте почту и войдите вручную.",
+        );
+        return;
+      }
+
+      const signInResult = await signIn("credentials", {
+        email,
+        password: data.temporaryPassword,
+        redirect: false,
+      });
+
+      if (signInResult?.error || !signInResult?.ok) {
+        setError(
+          "Регистрация прошла, но не удалось выполнить вход. Проверьте почту и войдите вручную.",
+        );
+        return;
+      }
+
       router.push("/dashboard");
-    } catch (error) {
+      router.refresh();
+    } catch {
       setError("Произошла ошибка");
     } finally {
       setLoading(false);

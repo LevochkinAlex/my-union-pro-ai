@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import Input from "@/components/form/input/InputField";
+import Input from "@/components/ui/InputField";
 import Label from "@/components/form/Label";
 import Button from "@/components/ui/button/Button";
 import { Eye, EyeOff } from "lucide-react";
@@ -61,7 +61,7 @@ function ResetPasswordContent() {
       setTimeout(() => {
         router.push("/login");
       }, 3000);
-    } catch (error) {
+    } catch {
       setError("Произошла ошибка");
     } finally {
       setLoading(false);

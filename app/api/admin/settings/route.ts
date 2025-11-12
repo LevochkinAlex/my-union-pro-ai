@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import {
   getSettingValue,
   setSettingValue,
 } from "@/lib/settings";
+import { ensureSuperAdmin } from "@/lib/admin-auth";
 
 type SettingsPayload = {
   smtpHost?: string | null;
@@ -36,19 +35,6 @@ const SETTING_KEYS = {
   onesignalRestApiKey: "onesignal.restApiKey" as const,
 };
 
-function ensureSuperAdmin(session: any): NextResponse | null {
-  const user = (session as any)?.user;
-  if (!user?.id || !user?.role) {
-    return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
-  }
-
-  if (user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
-  }
-
-  return null;
-}
-
 function normalizeValue(value: unknown): string | null {
   if (value === null || value === undefined) {
     return null;
@@ -63,10 +49,9 @@ function normalizeValue(value: unknown): string | null {
 }
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  const errorResponse = ensureSuperAdmin(session);
-  if (errorResponse) {
-    return errorResponse;
+  const { error } = await ensureSuperAdmin();
+  if (error) {
+    return error;
   }
 
   const [smtpHost, smtpPort, smtpUser, smtpPassword, smtpFrom, apiKey, model] =
@@ -114,10 +99,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  const errorResponse = ensureSuperAdmin(session);
-  if (errorResponse) {
-    return errorResponse;
+  const { session, error } = await ensureSuperAdmin();
+  if (error) {
+    return error;
   }
 
   let payload: SettingsPayload;

@@ -8,6 +8,7 @@ type SettingKey =
   | "smtp.from"
   | "openrouter.apiKey"
   | "openrouter.model"
+  | "openrouter.embeddingModel"
   | "dadata.apiKey"
   | "dadata.secretKey"
   | "onesignal.appId"
@@ -22,6 +23,7 @@ const ENV_FALLBACKS: Record<SettingKey, string | undefined> = {
   "smtp.from": process.env.SMTP_FROM,
   "openrouter.apiKey": process.env.OPENROUTER_API_KEY,
   "openrouter.model": process.env.OPENROUTER_MODEL,
+  "openrouter.embeddingModel": process.env.OPENROUTER_EMBEDDING_MODEL,
   "dadata.apiKey": process.env.DADATA_API_KEY,
   "dadata.secretKey": process.env.DADATA_SECRET_KEY,
   "onesignal.appId": process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID,
@@ -90,6 +92,18 @@ export async function getOpenRouterConfig() {
   return {
     apiKey: apiKey ?? "",
     model: model ?? "openrouter/auto",
+  };
+}
+
+export async function getOpenRouterEmbeddingConfig() {
+  const [apiKey, embeddingModel] = await Promise.all([
+    getSettingValue("openrouter.apiKey"),
+    getSettingValue("openrouter.embeddingModel"),
+  ]);
+
+  return {
+    apiKey: apiKey ?? "",
+    model: embeddingModel ?? process.env.OPENROUTER_EMBEDDING_MODEL ?? "text-embedding-3-large",
   };
 }
 

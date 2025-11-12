@@ -1,15 +1,20 @@
-import type { NextConfig } from "next";
+require('dotenv').config({ path: './.env.local' });
 
-const nextConfig: NextConfig = {
-  webpack(config) {
-    config.module.rules.push({
-      test: /\.svg$/,
-      use: ["@svgr/webpack"],
-    });
-    return config;
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  swcMinify: true,
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'cdn.jsdelivr.net',
+      },
+    ],
   },
-  // Пустой конфиг Turbopack для подавления предупреждения
-  turbopack: {},
+  experimental: {
+    turbopack: {},
+  },
 };
 
-export default nextConfig;
+module.exports = nextConfig;

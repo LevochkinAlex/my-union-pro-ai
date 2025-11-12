@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import Link from "next/link";
 
 export default async function AdminLayout({
   children,
@@ -13,8 +14,7 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
-  const userRole = (session.user as any)?.role;
-  if (userRole !== "SUPER_ADMIN") {
+  if (session.user.role !== "SUPER_ADMIN") {
     redirect("/dashboard");
   }
 
@@ -28,7 +28,7 @@ export default async function AdminLayout({
         </div>
         
         <nav className="space-y-1 p-4">
-          <a
+          <Link
             href="/admin/dashboard"
             className="flex items-center gap-3 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
           >
@@ -46,9 +46,9 @@ export default async function AdminLayout({
               />
             </svg>
             Dashboard
-          </a>
+          </Link>
           
-          <a
+          <Link
             href="/admin/users"
             className="flex items-center gap-3 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
           >
@@ -66,9 +66,9 @@ export default async function AdminLayout({
               />
             </svg>
             Пользователи
-          </a>
+          </Link>
           
-          <a
+          <Link
             href="/admin/settings"
             className="flex items-center gap-3 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
           >
@@ -92,10 +92,10 @@ export default async function AdminLayout({
               />
             </svg>
             Настройки
-          </a>
+          </Link>
           
-          <a
-            href="/admin/chat-data"
+          <Link
+            href="/admin/ai-chat"
             className="flex items-center gap-3 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
           >
             <svg
@@ -108,11 +108,12 @@ export default async function AdminLayout({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
               />
             </svg>
-            Данные для AI
-          </a>
+            AI Чат
+          </Link>
+          
         </nav>
       </aside>
 
