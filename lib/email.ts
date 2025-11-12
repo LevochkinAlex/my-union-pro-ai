@@ -1,18 +1,97 @@
 import nodemailer from "nodemailer";
+import { getSmtpConfig } from "./settings";
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || "465"),
-  secure: process.env.SMTP_PORT === "465",
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASSWORD,
-  },
-});
+type EmailConfig = {
+  host: string;
+  port: string;
+  user: string;
+  pass: string;
+  from: string;
+};
 
-export async function sendVerificationEmail(email: string, code: string) {
+function maskConfig(config: EmailConfig) {
+  return {
+    host: config.host || "не задан",
+    port: config.port || "не задан",
+    user: config.user || "не задан",
+    from: config.from || "не задан",
+    pass: config.pass ? "***" : "не задан",
+  };
+}
+
+const EMAIL_FALLBACK_MESSAGE =
+  "[email] SMTP настройки не найдены. Письмо не отправлено, используем fallback лог.";
+
+const isEmailConfigured = (config: EmailConfig): boolean =>
+  !!config.host && !!config.port && !!config.user && !!config.pass && !!config.from;
+
+async function resolveEmailConfig(): Promise<EmailConfig> {
+  const config = await getSmtpConfig();
+  return {
+    host: config.host ?? "",
+    port: config.port ?? "",
+    user: config.user ?? "",
+    pass: config.pass ?? "",
+    from: config.from ?? "",
+  };
+}
+
+async function createTransporter() {
+  const config = await resolveEmailConfig();
+
+  if (process.env.NODE_ENV === "development") {
+    console.log("[email] Текущие SMTP настройки:", maskConfig(config));
+  }
+
+  if (!isEmailConfigured(config)) {
+    return { transporter: null, config };
+  }
+
+  const port = parseInt(config.port || "465", 10);
+  const secure = port === 465;
+
+  const transporter = nodemailer.createTransport({
+    host: config.host,
+    port,
+    secure,
+    auth: {
+      user: config.user,
+      pass: config.pass,
+    },
+  });
+
+  return { transporter, config };
+}
+
+function logEmailFallback({
+  to,
+  subject,
+  html,
+}: {
+  to: string;
+  subject: string;
+  html: string;
+}) {
+  console.warn(
+    "[email] SMTP настройки не найдены. Письмо не отправлено, используем fallback лог.",
+  );
+  console.info("[email] Получатель:", to);
+  console.info("[email] Тема:", subject);
+  console.info("[email] HTML:\n", html);
+}
+
+type EmailResult = {
+  sent: boolean;
+  info?: unknown;
+  fallback?: boolean;
+  error?: string;
+};
+
+export async function sendVerificationEmail(email: string, code: string): Promise<EmailResult> {
+  const { transporter, config } = await createTransporter();
+
   const mailOptions = {
-    from: process.env.SMTP_FROM,
+    from: config.from || "support@myunion.pro",
     to: email,
     subject: "Подтверждение регистрации MyUnion",
     html: `
@@ -30,12 +109,25 @@ export async function sendVerificationEmail(email: string, code: string) {
     `,
   };
 
-  await transporter.sendMail(mailOptions);
+  if (!transporter) {
+    logEmailFallback(mailOptions);
+    return { sent: false, fallback: true, info: EMAIL_FALLBACK_MESSAGE };
+  }
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    return { sent: true, info };
+  } catch (error) {
+    console.error("[email] Ошибка при отправке письма:", error);
+    return { sent: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
-export async function sendWelcomeEmail(email: string, password: string) {
+export async function sendWelcomeEmail(email: string, password: string): Promise<EmailResult> {
+  const { transporter, config } = await createTransporter();
+
   const mailOptions = {
-    from: process.env.SMTP_FROM,
+    from: config.from || "support@myunion.pro",
     to: email,
     subject: "Добро пожаловать в MyUnion",
     html: `
@@ -57,7 +149,18 @@ export async function sendWelcomeEmail(email: string, password: string) {
     `,
   };
 
-  await transporter.sendMail(mailOptions);
+  if (!transporter) {
+    logEmailFallback(mailOptions);
+    return { sent: false, fallback: true, info: EMAIL_FALLBACK_MESSAGE };
+  }
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    return { sent: true, info };
+  } catch (error) {
+    console.error("[email] Ошибка при отправке письма:", error);
+    return { sent: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 

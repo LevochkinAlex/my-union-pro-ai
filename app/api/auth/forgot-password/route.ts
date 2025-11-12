@@ -3,15 +3,28 @@ import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 
-const transporter = nodemailer.createTransport({
+// Используем ту же логику что и в lib/email.ts
+const emailConfig = {
   host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || "465"),
-  secure: process.env.SMTP_PORT === "465",
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASSWORD,
-  },
-});
+  port: process.env.SMTP_PORT,
+  user: process.env.SMTP_USER,
+  pass: process.env.SMTP_PASSWORD,
+  from: process.env.SMTP_FROM,
+};
+
+const isEmailConfigured = !!emailConfig.host && !!emailConfig.port && !!emailConfig.user && !!emailConfig.pass && !!emailConfig.from;
+
+const transporter = isEmailConfigured
+  ? nodemailer.createTransport({
+      host: emailConfig.host!,
+      port: parseInt(emailConfig.port || "465"),
+      secure: emailConfig.port === "465",
+      auth: {
+        user: emailConfig.user!,
+        pass: emailConfig.pass!,
+      },
+    })
+  : null;
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,10 +62,10 @@ export async function POST(request: NextRequest) {
     });
 
     // Отправляем email с ссылкой
-    const resetUrl = `${process.env.NEXTAUTH_URL}/auth/reset-password?token=${resetToken}`;
+    const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${resetToken}`;
 
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM,
+    const mailOptions = {
+      from: emailConfig.from,
       to: email,
       subject: "Восстановление пароля MyUnion",
       html: `
@@ -69,7 +82,17 @@ export async function POST(request: NextRequest) {
           </p>
         </div>
       `,
-    });
+    };
+
+    if (!transporter) {
+      console.warn("[forgot-password] SMTP настройки не найдены. Письмо не отправлено.");
+      console.info("[forgot-password] Получатель:", email);
+      console.info("[forgot-password] Тема:", mailOptions.subject);
+      console.info("[forgot-password] Ссылка для сброса:", resetUrl);
+      // Не блокируем процесс, просто логируем
+    } else {
+      await transporter.sendMail(mailOptions);
+    }
 
     return NextResponse.json({
       success: true,

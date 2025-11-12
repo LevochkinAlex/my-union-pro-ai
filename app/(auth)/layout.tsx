@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export const metadata: Metadata = {
   title: "MyUnion — единая панель управления профсоюзом",
@@ -11,9 +12,9 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Left side - Auth form */}
-      <div className="flex flex-1 w-full lg:w-1/2 bg-white">
+      <div className="flex flex-1 w-full lg:w-1/2 bg-white dark:bg-gray-800">
         {children}
       </div>
 
@@ -27,17 +28,19 @@ export default function AuthLayout({
         </div>
         <div className="relative z-10 flex items-center justify-center w-full p-12">
           <div className="text-center text-white max-w-md">
-            <div className="mb-6">
-              <div className="w-20 h-20 mx-auto mb-6 bg-white/10 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                <svg className="w-12 h-12" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
-                </svg>
-              </div>
+            {/* Логотип MyUnion */}
+            <div className="mb-8">
+              <img 
+                src="/Logo_dark_theme.svg" 
+                alt="MyUnion Pro" 
+                className="h-16 mx-auto"
+              />
             </div>
-            <h2 className="mb-4 text-4xl font-bold">MyUnion Pro</h2>
+            
             <p className="text-xl text-white/90 mb-8">
               Современная платформа для управления профсоюзом
             </p>
+            
             <div className="space-y-4 text-left">
               <div className="flex items-start gap-3">
                 <svg className="w-6 h-6 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -69,6 +72,10 @@ export default function AuthLayout({
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="fixed right-16 bottom-16 z-50">
+        <ThemeToggle />
       </div>
     </div>
   );

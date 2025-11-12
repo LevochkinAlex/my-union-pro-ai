@@ -76,6 +76,8 @@ model User {
   
   // Чат с AI
   chatMessages      ChatMessage[]
+  updatedSettings   SystemSetting[]       @relation("SystemSettingUpdatedBy")
+  uploadedTrainingSamples AiTrainingSample[] @relation("AiTrainingSampleUploadedBy")
   
   // Timestamps
   createdAt         DateTime          @default(now())
@@ -228,4 +230,32 @@ model Discount {
   @@index([isActive])
   @@index([validFrom])
   @@index([validUntil])
+}
+
+// Настройки системы (SMTP, OpenRouter и т.д.)
+model SystemSetting {
+  id              String   @id @default(cuid())
+  key             String   @unique
+  value           String?  @db.Text
+  updatedByUserId String?
+  updatedBy       User?    @relation("SystemSettingUpdatedBy", fields: [updatedByUserId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([key])
+}
+
+// Данные для обучения AI-чата
+model AiTrainingSample {
+  id               String   @id @default(cuid())
+  question         String
+  answer           String   @db.Text
+  category         String?
+  sourceFileName   String?
+  uploadedByUserId String?
+  uploadedBy       User?    @relation("AiTrainingSampleUploadedBy", fields: [uploadedByUserId], references: [id])
+  createdAt        DateTime @default(now())
+
+  @@index([category])
+  @@index([createdAt])
 }

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getOpenRouterConfig } from "@/lib/settings";
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 // Промпт для сбора данных профиля
@@ -86,17 +86,27 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    const openRouterConfig = await getOpenRouterConfig();
+
+    if (!openRouterConfig.apiKey) {
+      console.error("[chat] OpenRouter API ключ не настроен");
+      return NextResponse.json(
+        { error: "AI недоступен. Обратитесь к администратору." },
+        { status: 503 },
+      );
+    }
+
     // Отправляем запрос в OpenRouter
     const response = await fetch(OPENROUTER_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${openRouterConfig.apiKey}`,
         "HTTP-Referer": process.env.NEXTAUTH_URL || "http://localhost:3000",
         "X-Title": "MyUnion Pro",
       },
       body: JSON.stringify({
-        model: "openai/gpt-4o-mini", // Можно использовать другую модель
+        model: openRouterConfig.model || "openai/gpt-4o-mini",
         messages: messages,
         temperature: 0.7,
         max_tokens: 1000,
