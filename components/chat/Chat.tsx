@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
+import { trackAppealQuestion, detectAppealType, extractKeywords } from "@/lib/analytics";
 
 interface ChatMessage {
   id: string;
@@ -200,6 +201,17 @@ export default function Chat() {
         createdAt: new Date(),
       } : tempUserMessage;
       
+      // Track analytics if using Appeal Bot
+      if (mode === "appeal" && chatBotId) {
+        const appealType = detectAppealType(userMessage);
+        const keywords = extractKeywords(userMessage);
+        trackAppealQuestion({
+          appealType,
+          question: userMessage,
+          keywords,
+        });
+      }
+
       // Включаем автоскролл для ответа AI
       shouldAutoScrollRef.current = true;
       
