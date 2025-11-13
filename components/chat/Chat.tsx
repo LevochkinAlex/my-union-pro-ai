@@ -19,6 +19,8 @@ export default function Chat() {
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const shouldAutoScrollRef = useRef(false); // Флаг для контроля автоскролла
+  const isInitialLoadRef = useRef(true); // Флаг для первой загрузки
 
   const loadMessages = useCallback(async () => {
     try {
@@ -41,6 +43,12 @@ export default function Chat() {
       
       const data = await response.json();
       setMessages(data.messages || []);
+      
+      // Скроллим вниз только при первой загрузке
+      if (isInitialLoadRef.current) {
+        shouldAutoScrollRef.current = true;
+        isInitialLoadRef.current = false;
+      }
     } catch (error) {
       console.error("Ошибка загрузки сообщений:", error);
       setError(error instanceof Error ? error.message : "Не удалось загрузить историю чата");
@@ -64,9 +72,12 @@ export default function Chat() {
     }
   }, [session, loadMessages]);
 
-  // Прокрутка вниз при новых сообщениях
+  // Прокрутка вниз только при новых сообщениях от пользователя или бота
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (shouldAutoScrollRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      shouldAutoScrollRef.current = false;
+    }
   }, [messages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,6 +88,9 @@ export default function Chat() {
     const userMessage = input.trim();
     setInput("");
     setIsLoading(true);
+
+    // Включаем автоскролл для нового сообщения
+    shouldAutoScrollRef.current = true;
 
     // Оптимистично добавляем сообщение пользователя
     const tempUserMessage: ChatMessage = {
@@ -119,21 +133,29 @@ export default function Chat() {
         throw new Error(data.error || `Ошибка отправки сообщения (${response.status})`);
       }
       
-      // Добавляем ответ AI
+      // Добавляем ответ AI (с серверными ID если есть)
       const aiMessage: ChatMessage = {
-        id: `ai-${Date.now()}`,
+        id: data.id || `ai-${Date.now()}`,
         role: "assistant",
         content: data.message,
         createdAt: new Date(),
       };
       
+      // Заменяем временное сообщение пользователя на настоящее если есть userId
+      const realUserMessage: ChatMessage = data.userId ? {
+        id: data.userId,
+        role: "user",
+        content: userMessage,
+        createdAt: new Date(),
+      } : tempUserMessage;
+      
+      // Включаем автоскролл для ответа AI
+      shouldAutoScrollRef.current = true;
+      
       setMessages((prev) => {
         const filtered = prev.filter((msg) => msg.id !== tempUserMessage.id);
-        return [...filtered, aiMessage];
+        return [...filtered, realUserMessage, aiMessage];
       });
-
-      // Перезагружаем историю для получения правильных ID
-      await loadMessages();
 
       // Если AI сообщил о завершении профиля, сохраняем данные
       if (data.message.includes("[PROFILE_COMPLETE]")) {
