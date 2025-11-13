@@ -1,4 +1,4 @@
-import { Queue, Worker, QueueScheduler, type JobsOptions } from "bullmq";
+import { Queue, Worker, type JobsOptions } from "bullmq";
 import type { RedisOptions } from "ioredis";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";

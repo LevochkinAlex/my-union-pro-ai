@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import pdfParse from "pdf-parse";
+import * as pdfParse from "pdf-parse";
 import mammoth from "mammoth";
 import ExcelJS from "exceljs";
 import { parse as parseCsv } from "csv-parse/sync";
