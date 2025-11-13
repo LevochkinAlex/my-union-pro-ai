@@ -375,6 +375,44 @@ export async function POST(request: NextRequest) {
       aiResponse = data.choices?.[0]?.message?.content || data.choices?.[0]?.text || "Извините, не удалось получить ответ.";
     }
 
+    // Проверяем полноту профиля и добавляем маркер завершения если нужно
+    try {
+      const allMessages = await prisma.chatMessage.findMany({
+        where: { userId: session.user.id },
+        orderBy: { createdAt: "asc" },
+      });
+
+      // Проверяем, есть ли уже маркер
+      const hasCompleteMarker = allMessages.some(
+        msg => msg.role === "assistant" && msg.content.includes("[PROFILE_COMPLETE]")
+      );
+
+      // Если маркера нет, проверяем полноту профиля
+      if (!hasCompleteMarker) {
+        const user = await prisma.user.findUnique({
+          where: { id: session.user.id },
+        });
+
+        // Проверяем, заполнены ли все необходимые поля профиля
+        const isProfileComplete = 
+          user?.firstName &&
+          user?.lastName &&
+          user?.dateOfBirth &&
+          user?.phone &&
+          user?.address &&
+          user?.jobTitle &&
+          user?.profession &&
+          user?.education;
+
+        if (isProfileComplete) {
+          aiResponse += "\n\n[PROFILE_COMPLETE]";
+        }
+      }
+    } catch (error) {
+      console.error("[chat] Error checking profile completeness:", error);
+      // Don't fail the chat if profile check fails
+    }
+
     // Сохраняем ответ AI
     await prisma.chatMessage.create({
       data: {
