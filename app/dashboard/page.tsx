@@ -16,9 +16,9 @@ export default async function DashboardPage() {
     redirect("/admin/dashboard");
   }
 
-  // Главная страница - это чат (полная высота, без padding)
+  // Главная страница - это чат (полная высота)
   return (
-    <div className="h-screen w-full flex flex-col -mx-4 -my-8 sm:-mx-8 lg:-mx-12">
+    <div className="h-full w-full flex flex-col">
       <Chat />
     </div>
   );
