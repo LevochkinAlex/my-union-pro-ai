@@ -42,13 +42,23 @@ type ChatBot = {
   };
 };
 
+type ApiProviderModel = string | {
+  id: string;
+  name: string;
+  description?: string;
+  pricing?: unknown;
+  context_length?: number;
+  capabilities?: unknown;
+  updated_at?: string;
+};
+
 type ApiProvider = {
   id: string;
   name: string;
   displayName: string;
   description: string | null;
   apiBaseUrl: string | null;
-  availableModels: string[];
+  availableModels: ApiProviderModel[];
   isActive: boolean;
   isDefault: boolean;
   updatedAt: string;
@@ -384,11 +394,15 @@ export default function AdminAIChatPage() {
                   {provider.availableModels.length > 0 && (
                     <div className="max-h-32 overflow-y-auto rounded bg-gray-50 p-3 text-xs dark:bg-gray-900/40">
                       <ul className="space-y-1">
-                        {provider.availableModels.slice(0, 15).map((modelId, index) => (
-                          <li key={`${provider.id}-${modelId}-${index}`} className="text-gray-600 dark:text-gray-300">
-                            {modelId}
-                          </li>
-                        ))}
+                        {provider.availableModels.slice(0, 15).map((model, index) => {
+                          const modelId = typeof model === 'string' ? model : model.id;
+                          const modelName = typeof model === 'string' ? model : (model.name || model.id);
+                          return (
+                            <li key={`${provider.id}-${modelId}-${index}`} className="text-gray-600 dark:text-gray-300">
+                              {modelName}
+                            </li>
+                          );
+                        })}
                         {provider.availableModels.length > 15 && (
                           <li className="text-gray-400 dark:text-gray-500">…и другие</li>
                         )}
