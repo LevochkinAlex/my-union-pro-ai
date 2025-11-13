@@ -256,15 +256,20 @@ export default function SettingsPage() {
 
   if (loading || isEnvLoading) {
     return (
-      <div>
-        <p>Загрузка настроек...</p>
+      <div className="p-6">
+        <p className="text-gray-600 dark:text-gray-400">Загрузка настроек...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-bold">Системные настройки</h1>
+    <div className="p-6 md:p-8 space-y-8">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Системные настройки</h1>
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          Управление настройками SMTP, AI и интеграциями
+        </p>
+      </div>
 
       {message && (
           <div
@@ -278,10 +283,10 @@ export default function SettingsPage() {
           </div>
         )}
 
-      <form onSubmit={handleSaveSettings} className="space-y-6 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-        {/* SMTP, OpenRouter, DaData, OneSignal sections */}
-        <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-            <h2 className="mb-6 text-xl font-bold text-gray-900 dark:text-white">
+      <form onSubmit={handleSaveSettings} className="space-y-6">
+        {/* SMTP Настройки */}
+        <div className="rounded-lg bg-white p-6 shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+            <h2 className="mb-6 text-xl font-semibold text-gray-900 dark:text-white">
               SMTP Настройки
             </h2>
 
@@ -355,8 +360,8 @@ export default function SettingsPage() {
           </div>
 
           {/* OpenRouter Settings */}
-          <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-            <h2 className="mb-6 text-xl font-bold text-gray-900 dark:text-white">
+          <div className="rounded-lg bg-white p-6 shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+            <h2 className="mb-6 text-xl font-semibold text-gray-900 dark:text-white">
               OpenRouter (AI)
             </h2>
 
@@ -392,8 +397,8 @@ export default function SettingsPage() {
           </div>
 
           {/* DaData Settings */}
-          <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-            <h2 className="mb-6 text-xl font-bold text-gray-900 dark:text-white">
+          <div className="rounded-lg bg-white p-6 shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+            <h2 className="mb-6 text-xl font-semibold text-gray-900 dark:text-white">
               DaData API
             </h2>
 
@@ -426,8 +431,8 @@ export default function SettingsPage() {
           </div>
 
           {/* OneSignal Settings */}
-          <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-            <h2 className="mb-6 text-xl font-bold text-gray-900 dark:text-white">
+          <div className="rounded-lg bg-white p-6 shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+            <h2 className="mb-6 text-xl font-semibold text-gray-900 dark:text-white">
               OneSignal Push
             </h2>
 
