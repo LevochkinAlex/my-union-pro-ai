@@ -174,27 +174,30 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
           ) : sessions.length === 0 ? (
             <div className="px-2 py-2 text-xs text-gray-500">История пуста</div>
           ) : (
-            <>
-              <div className="space-y-1 max-h-48 overflow-y-auto">
-                {sessions.map((session) => (
-                  <div
-                    key={session.id}
-                    onClick={() => handleOpenSession(session.id)}
-                    className="group flex items-center justify-between gap-2 rounded px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      <svg className="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2h-3l-4 4z"
-                        />
-                      </svg>
-                      <span className="flex-1 truncate">{session.title}</span>
-                    </div>
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {sessions.map((session) => (
+                <div
+                  key={session.id}
+                  onClick={() => handleOpenSession(session.id)}
+                  className="group relative flex items-center justify-between gap-2 rounded px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700 cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <svg className="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2h-3l-4 4z"
+                      />
+                    </svg>
+                    <span className="flex-1 truncate">{session.title}</span>
+                  </div>
 
-                    {/* Dropdown menu button */}
+                  {/* Dropdown menu button */}
+                  <div
+                    className="relative z-50"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -207,30 +210,68 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                         <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
                       </svg>
                     </button>
-                  </div>
-                ))}
-              </div>
 
-              {/* Dropdown content - rendered after scroll container */}
-              {openMenuId && (
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg mt-1 z-50">
-                  <button
-                    onClick={(e) => handleDeleteSession(e, openMenuId)}
-                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                    Удалить этот чат
-                  </button>
+                    {/* Dropdown menu - positioned absolutely */}
+                    {openMenuId === session.id && (
+                      <div className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                        <button
+                          onClick={(e) => handleDeleteSession(e, session.id)}
+                          className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2 border-b border-gray-100 dark:border-gray-700"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
+                          </svg>
+                          Удалить чат
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            alert("Функция переименования ещё не реализована");
+                            setOpenMenuId(null);
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700 flex items-center gap-2 border-b border-gray-100 dark:border-gray-700"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                            />
+                          </svg>
+                          Переименовать
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm("Вы уверены, что хотите очистить этот чат?")) {
+                              alert("Функция очистки чата ещё не реализована");
+                            }
+                            setOpenMenuId(null);
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700 flex items-center gap-2"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                          Очистить чат
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </>
+              ))}
+            </div>
           )}
 
           {/* Clear all button */}
