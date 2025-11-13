@@ -17,32 +17,37 @@ function extractProfileData(messages: Array<{ role: string; content: string }>) 
     education?: string;
   } = {};
 
-  // Объединяем все сообщения пользователя в один текст для анализа
-  const userMessages = messages
-    .filter((msg) => msg.role === "user")
+  // Объединяем ВСЕ сообщения (пользователя и AI) для анализа
+  // AI часто подтверждает данные в своих ответах
+  const allText = messages
     .map((msg) => msg.content)
     .join(" ");
 
-  // Простое извлечение данных с помощью регулярных выражений
-  // ФИО (пример: "Иванов Иван Иванович")
-  const fioMatch = userMessages.match(
-    /(?:фио|ф\.?и\.?о\.?|фамилия|имя|отчество)[\s:]*([А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+){1,2})/i
-  );
+  console.log("[extract] Анализируемый текст:", allText.substring(0, 500) + "...");
+
+  // ФИО - ищем три слова с заглавной буквы подряд
+  const fioPattern = /\*\*ФИО\*\*:\s*([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/i;
+  const fioMatch = allText.match(fioPattern) || 
+                   allText.match(/([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)/);
+  
   if (fioMatch) {
-    const parts = fioMatch[1].trim().split(/\s+/);
-    if (parts.length >= 2) {
-      profileData.lastName = parts[0];
-      profileData.firstName = parts[1];
-      if (parts.length >= 3) {
-        profileData.middleName = parts[2];
-      }
+    // Если нашли 3 слова - это Фамилия Имя Отчество
+    if (fioMatch[3]) {
+      profileData.lastName = fioMatch[1].trim();
+      profileData.firstName = fioMatch[2].trim();
+      profileData.middleName = fioMatch[3].trim();
+    } else if (fioMatch[2]) {
+      // Если 2 слова - это Имя Фамилия
+      profileData.firstName = fioMatch[1].trim();
+      profileData.lastName = fioMatch[2].trim();
     }
+    console.log("[extract] ФИО найдено:", { lastName: profileData.lastName, firstName: profileData.firstName, middleName: profileData.middleName });
   }
 
-  // Дата рождения (формат ДД.ММ.ГГГГ)
-  const dateMatch = userMessages.match(
-    /(?:дата\s+рождения|родился|родилась)[\s:]*(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4})/i
-  );
+  // Дата рождения - ищем паттерн **Дата рождения**: или просто дату
+  const datePattern = /\*\*Дата рождения\*\*:\s*(\d{1,2}\.\d{1,2}\.\d{4})/i;
+  const dateMatch = allText.match(datePattern) || allText.match(/(\d{1,2}\.\d{1,2}\.\d{4})/);
+  
   if (dateMatch) {
     const dateStr = dateMatch[1].replace(/[-/]/g, ".");
     const [day, month, year] = dateStr.split(".");
@@ -52,75 +57,66 @@ function extractProfileData(messages: Array<{ role: string; content: string }>) 
         parseInt(month) - 1,
         parseInt(day)
       );
+      console.log("[extract] Дата рождения:", profileData.dateOfBirth);
     }
   }
 
-  // Телефон
-  const phoneMatch = userMessages.match(
-    /(?:\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/g
-  );
+  // Телефон - ищем российский номер
+  const phonePattern = /\*\*Телефон\*\*:\s*(\+7\s*\(\d{3}\)\s*\d{3}-\d{2}-\d{2})/i;
+  const phoneMatch = allText.match(phonePattern) || allText.match(/\+7\s*\(\d{3}\)\s*\d{3}-\d{2}-\d{2}/);
+  
   if (phoneMatch) {
-    profileData.phone = phoneMatch[0].replace(/\D/g, "");
-    if (!profileData.phone.startsWith("7")) {
-      profileData.phone = "7" + profileData.phone;
-    }
-    profileData.phone = "+" + profileData.phone;
+    profileData.phone = phoneMatch[1] || phoneMatch[0];
+    console.log("[extract] Телефон:", profileData.phone);
   }
 
-  // Адрес (ищем после ключевых слов)
-  const addressMatch = userMessages.match(
-    /(?:адрес|проживаю|живу)[\s:]*([А-ЯЁа-яё0-9\s,.\-]+(?:улица|ул\.|проспект|пр\.|дом|д\.|квартира|кв\.|город|г\.|область|обл\.)[А-ЯЁа-яё0-9\s,.\-]*)/i
-  );
+  // Адрес - ищем после маркера **Адрес**:
+  const addressPattern = /\*\*Адрес\*\*:\s*(.+?)(?:\n|$)/i;
+  const addressMatch = allText.match(addressPattern);
+  
   if (addressMatch) {
     profileData.address = addressMatch[1].trim();
+    console.log("[extract] Адрес:", profileData.address);
   }
 
   // Должность
-  const jobTitleMatch = userMessages.match(
-    /(?:должность|работаю|занимаю)[\s:]*([А-ЯЁа-яё\s]+)/i
-  );
-  if (jobTitleMatch && jobTitleMatch[1].length < 100) {
+  const jobTitlePattern = /\*\*Должность\*\*:\s*(.+?)(?:\n|$)/i;
+  const jobTitleMatch = allText.match(jobTitlePattern);
+  
+  if (jobTitleMatch) {
     profileData.jobTitle = jobTitleMatch[1].trim();
+    console.log("[extract] Должность:", profileData.jobTitle);
   }
 
   // Профессия
-  const professionMatch = userMessages.match(
-    /(?:профессия|специальность)[\s:]*([А-ЯЁа-яё\s]+)/i
-  );
-  if (professionMatch && professionMatch[1].length < 100) {
-    profileData.profession = professionMatch[1].trim();
-  }
-
-  // Образование (используем стандартизированные значения)
-  const educationStandards = [
-    "Начальное общее",
-    "Основное общее",
-    "Среднее общее",
-    "Среднее профессиональное",
-    "Неполное высшее",
-    "Высшее (бакалавриат)",
-    "Высшее (специалитет)",
-    "Высшее (магистратура)",
-    "Аспирантура",
-    "Докторантура",
-  ];
+  const professionPattern = /\*\*Профессия\*\*:\s*(.+?)(?:\n|$)/i;
+  const professionMatch = allText.match(professionPattern);
   
-  // Ищем образование в тексте
-  const educationPattern = educationStandards.join("|");
-  const educationMatch = userMessages.match(
-    new RegExp(`(?:образование[\\s:]*)(${educationPattern})`, "i")
-  );
-  if (educationMatch) {
-    // Находим точное совпадение из стандартного списка (игнорируя регистр)
-    const foundValue = educationMatch[1];
-    const standardValue = educationStandards.find(
-      (std) => std.toLowerCase() === foundValue.toLowerCase()
-    );
-    if (standardValue) {
-      profileData.education = standardValue;
-    }
+  if (professionMatch) {
+    profileData.profession = professionMatch[1].trim();
+    console.log("[extract] Профессия:", profileData.profession);
   }
 
+  // Образование - ищем после маркера
+  const educationPattern = /\*\*Образование\*\*:\s*(.+?)(?:\n|$)/i;
+  const educationMatch = allText.match(educationPattern);
+  
+  if (educationMatch) {
+    profileData.education = educationMatch[1].trim();
+    console.log("[extract] Образование:", profileData.education);
+  }
+
+  // Организация - ищем после маркера
+  const organizationPattern = /\*\*Организация\*\*:\s*(.+?)(?:\n|$)/i;
+  const organizationMatch = allText.match(organizationPattern);
+  
+  if (organizationMatch) {
+    const orgName = organizationMatch[1].trim();
+    console.log("[extract] Организация найдена:", orgName);
+    // Организацию мы обработаем отдельно, чтобы найти или создать в БД
+  }
+
+  console.log("[extract] Финальные данные:", profileData);
   return profileData;
 }
 
@@ -167,6 +163,9 @@ export async function POST() {
         content: msg.content,
       }))
     );
+
+    console.log("[extract-profile] Извлеченные данные:", profileData);
+    console.log("[extract-profile] Всего сообщений:", messages.length);
 
     // Обновляем профиль пользователя
     const updatedUser = await prisma.user.update({
