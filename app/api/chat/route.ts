@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { message } = await request.json();
+    const { message, chatBotId } = await request.json();
 
     if (!message || typeof message !== "string") {
       return NextResponse.json(
@@ -149,8 +149,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Получаем активного бота по умолчанию
-    const bot = await getDefaultBot();
+    // Получаем бота - либо переданный, либо default
+    let bot: DefaultBot | null = null;
+    
+    if (chatBotId) {
+      // Use specified bot (e.g., Appeal Bot)
+      bot = await prisma.chatBot.findUnique({
+        where: { id: chatBotId },
+        include: defaultBotInclude,
+      });
+    } else {
+      // Use default bot
+      bot = await getDefaultBot();
+    }
+    
     if (!bot) {
       return NextResponse.json(
         { error: "AI бот не настроен. Обратитесь к администратору." },

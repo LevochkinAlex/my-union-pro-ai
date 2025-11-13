@@ -45,8 +45,8 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   };
 
   const handleNewChat = () => {
-    // Просто переходим на /dashboard (это очистит страницу чата)
-    router.push("/dashboard");
+    // Start Appeal Bot conversation
+    router.push("/dashboard?mode=appeal");
     router.refresh();
   };
 

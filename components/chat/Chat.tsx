@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 
 interface ChatMessage {
   id: string;
@@ -12,6 +13,9 @@ interface ChatMessage {
 
 export default function Chat() {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
+  const mode = searchParams.get("mode"); // Can be "appeal" for Appeal Bot
+  const [chatBotId, setChatBotId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -65,14 +69,34 @@ export default function Chat() {
     }
   }, [input]);
 
+  // Load Appeal Bot if mode is "appeal"
+  useEffect(() => {
+    if (mode === "appeal") {
+      const loadAppealBot = async () => {
+        try {
+          const response = await fetch("/api/chat/appeal-bot");
+          if (response.ok) {
+            const data = await response.json();
+            setChatBotId(data.chatBotId);
+          }
+        } catch (error) {
+          console.error("Error loading Appeal Bot:", error);
+        }
+      };
+      loadAppealBot();
+    }
+  }, [mode]);
+
   // Загружаем историю сообщений и проверяем генерацию заявлений
   useEffect(() => {
     if (session?.user?.id) {
       loadMessages();
       // Проверяем, есть ли полный профиль и нужно ли генерировать заявления
-      checkAndGenerateDocuments();
+      if (mode !== "appeal") {
+        checkAndGenerateDocuments();
+      }
     }
-  }, [session, loadMessages]);
+  }, [session, loadMessages, mode]);
 
   // Проверяем статус профиля и генерируем заявления если нужно
   const checkAndGenerateDocuments = useCallback(async () => {
@@ -125,12 +149,17 @@ export default function Chat() {
 
     try {
       setError(null);
+      const body: any = { message: userMessage };
+      if (chatBotId) {
+        body.chatBotId = chatBotId;
+      }
+      
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify(body),
       });
 
       let data;
