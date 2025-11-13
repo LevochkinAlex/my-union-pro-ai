@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -18,16 +18,31 @@ interface ChatMenuProps {
 export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   const [isExpanded, setIsExpanded] = useState(true); // Keep expanded by default
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const loadSessions = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch("/api/chat/sessions");
+      if (response.ok) {
+        const data = await response.json();
+        setSessions(data.sessions || []);
+      }
+    } catch (error) {
+      console.error("Error loading chat sessions:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (isExpanded) {
       loadSessions();
     }
-  }, [isExpanded]);
+  }, [isExpanded, loadSessions]);
 
   // Click outside handler to close dropdown
   useEffect(() => {
@@ -55,21 +70,6 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   }, [openMenuId]);
 
 
-  const loadSessions = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch("/api/chat/sessions");
-      if (response.ok) {
-        const data = await response.json();
-        setSessions(data.sessions || []);
-      }
-    } catch (error) {
-      console.error("Error loading chat sessions:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleNewChat = () => {
     // This is the "Appeal" chat
     router.push("/dashboard?mode=appeal");
@@ -82,20 +82,23 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   };
 
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
-    e.preventDefault();
     e.stopPropagation();
+    if (!confirm("Вы уверены, что хотите удалить этот чат?")) return;
     
-    if (!confirm("Вы уверены, что хотите удалить этот чат?")) {
-      return;
-    }
-
     try {
       // Note: Individual session deletion would require creating a specific API endpoint
       // For now, users can clear all chat history via "Очистить все"
       alert("Удаление отдельных чатов пока не реализовано. Используйте 'Очистить все' для удаления всей истории");
-      setOpenMenuId(null);
+      // Refresh sessions after deletion
+      await loadSessions();
+      // If the deleted session was the active one, navigate to a new chat
+      const currentSessionId = new URLSearchParams(window.location.search).get("session");
+      if (currentSessionId === sessionId) {
+        router.push("/dashboard");
+      }
     } catch (error) {
-      console.error("Error deleting session:", error);
+      console.error("Error deleting chat session:", error);
+      alert("Ошибка при удалении чата");
     }
   };
 
@@ -113,6 +116,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
         setSessions([]);
         router.push("/dashboard");
         router.refresh();
+        await loadSessions(); // Refresh sessions after clearing all
       } else {
         alert("Ошибка при удалении истории");
       }
@@ -166,7 +170,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            <span>Новый чат</span>
+            <span>+ Новый чат</span>
           </button>
 
           {/* Sessions list */}
