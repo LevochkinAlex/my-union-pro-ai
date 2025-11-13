@@ -39,6 +39,12 @@ function ChatContent() {
         const contentType = response.headers.get("content-type");
         if (contentType && contentType.includes("application/json")) {
           const errorData = await response.json();
+          // If session not found (404), just load empty chat
+          if (response.status === 404) {
+            setMessages([]);
+            setError(null);
+            return;
+          }
           throw new Error(errorData.error || `Ошибка сервера: ${response.status}`);
         } else {
           // Если HTML - значит редирект на логин
