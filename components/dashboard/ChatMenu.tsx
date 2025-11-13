@@ -71,16 +71,14 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   };
 
   const handleNewChat = () => {
-    // This is now the "Appeal" chat
+    // This is the "Appeal" chat
     router.push("/dashboard?mode=appeal");
-    // Hard reload to ensure all state is cleared
     window.location.href = "/dashboard?mode=appeal";
   };
 
   const handleOpenSession = (sessionId: string) => {
-    // Navigate to specific chat session
     router.push(`/dashboard?session=${sessionId}`);
-    router.refresh();
+    window.location.href = `/dashboard?session=${sessionId}`;
   };
 
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
@@ -101,10 +99,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     }
   };
 
-  const handleClearAll = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
+  const handleClearAll = async () => {
     if (!confirm("Вы уверены, что хотите очистить всю историю чата? Это действие нельзя отменить.")) {
       return;
     }
@@ -163,13 +158,13 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
       {/* Expanded menu */}
       {isExpanded && !isCollapsed && (
         <div ref={menuRef} className="ml-4 space-y-1 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-800">
-          {/* New chat button */}
+          {/* New chat button (for appeals) */}
           <button
             onClick={handleNewChat}
             className="w-full flex items-center gap-2 rounded px-2 py-2 text-sm text-purple-700 hover:bg-purple-100 dark:text-purple-400 dark:hover:bg-purple-900/20 font-medium"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             <span>Новый чат</span>
           </button>
@@ -198,8 +193,6 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                     </svg>
                     <span className="flex-1 truncate">{session.title}</span>
                   </div>
-
-                  {/* Dropdown menu button */}
                   <div className="relative">
                     <button
                       onClick={(e) => {
@@ -213,8 +206,6 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                         <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
                       </svg>
                     </button>
-
-                    {/* Dropdown content */}
                     {openMenuId === session.id && (
                       <div className="absolute right-0 mt-1 w-40 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800 z-50">
                         <button
@@ -238,7 +229,6 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
               ))}
             </div>
           )}
-
           {/* Clear all button */}
           {sessions.length > 0 && (
             <button
