@@ -34,6 +34,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     const handleClickOutside = () => {
       if (openMenuId) {
         setOpenMenuId(null);
+        setHoveredSession(null);
       }
     };
 
@@ -173,7 +174,12 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                 <div
                   key={session.id}
                   onMouseEnter={() => setHoveredSession(session.id)}
-                  onMouseLeave={() => setHoveredSession(null)}
+                  onMouseLeave={() => {
+                    // Don't hide hover state if menu is open
+                    if (openMenuId !== session.id) {
+                      setHoveredSession(null);
+                    }
+                  }}
                   onClick={() => handleOpenSession(session.id)}
                   className="relative flex items-center gap-2 rounded px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 group cursor-pointer"
                 >
