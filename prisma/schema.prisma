@@ -197,6 +197,9 @@ model ChatMessage {
   chatBotId String?
   chatBot   ChatBot? @relation(fields: [chatBotId], references: [id], onDelete: SetNull)
 
+  appealId String?
+  appeal   UserAppeal? @relation(fields: [appealId], references: [id], onDelete: Cascade)
+
   role    String // "user" или "assistant"
   content String @db.Text
 
@@ -204,6 +207,7 @@ model ChatMessage {
 
   @@index([userId])
   @@index([chatBotId])
+  @@index([appealId])
   @@index([createdAt])
 }
 
@@ -496,4 +500,80 @@ model ApiProvider {
 
   @@index([isActive])
   @@index([isDefault])
+}
+
+// Типы обращений
+enum AppealType {
+  LEGAL // Юридический вопрос
+  ACCOUNTING // Бухгалтерский вопрос
+  TECHNICAL // Технический вопрос
+  OTHER // Прочее
+}
+
+// Статусы обращений
+enum AppealStatus {
+  DRAFT // Черновик
+  SUBMITTED // Отправлено
+  IN_REVIEW // На рассмотрении
+  RESOLVED // Решено
+  REJECTED // Отклонено
+}
+
+// Обращения пользователей (для аналитики и обработки)
+model UserAppeal {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type   AppealType
+  status AppealStatus @default(DRAFT)
+
+  // Основная информация
+  title       String
+  description String @db.Text
+  question    String @db.Text
+
+  // Связь с чатом
+  chatMessages ChatMessage[]
+
+  // Метаданные
+  tags       String? // JSON массив тегов для аналитики
+  resolved   Boolean   @default(false)
+  resolvedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Аналитика обращений
+model AppealAnalytics {
+  id String @id @default(cuid())
+
+  appealType AppealType
+
+  // Статистика
+  totalCount    Int @default(0)
+  resolvedCount Int @default(0)
+
+  // Теги и ключевые слова для анализа
+  commonKeywords String? @db.Text // JSON массив ключевых слов
+
+  // Время средне обработки (в часах)
+  averageResolutionTime Float?
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([appealType, periodStart, periodEnd])
+  @@index([appealType])
+  @@index([periodStart])
 }
