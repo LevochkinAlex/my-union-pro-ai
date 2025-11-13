@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
+import { trackAppealQuestion, detectAppealType, extractKeywords } from "@/lib/analytics";
 
 interface ChatMessage {
   id: string;
@@ -14,7 +15,9 @@ interface ChatMessage {
 function ChatContent() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
+  const mode = searchParams?.get("mode"); // 'appeal' for Appeal Bot
   const sessionId = searchParams?.get("session"); // Specific chat session to load
+  const [chatBotId, setChatBotId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -71,21 +74,39 @@ function ChatContent() {
     }
   }, [sessionId]);
 
-  // Автоматическое изменение высоты textarea
+  // Load Appeal Bot ID if in appeal mode
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    if (mode === "appeal") {
+      const loadAppealBot = async () => {
+        try {
+          const response = await fetch("/api/chat/appeal-bot");
+          if (response.ok) {
+            const data = await response.json();
+            setChatBotId(data.chatBotId);
+            // Clear messages when switching to appeal bot
+            setMessages([]);
+          }
+        } catch (error) {
+          console.error("Error loading Appeal Bot:", error);
+        }
+      };
+      loadAppealBot();
     }
-  }, [input]);
+  }, [mode]);
 
-  // Загружаем историю сообщений и проверяем генерацию заявлений
+  // Load message history
   useEffect(() => {
-    if (session?.user?.id) {
+    if (session?.user?.id && !mode) { // Don't load history for new appeal chat
       loadMessages();
+    }
+  }, [session, loadMessages, mode]);
+
+  // Auto-run document generation check after chat is loaded
+  useEffect(() => {
+    if (messages.length > 0 && mode !== "appeal") {
       checkAndGenerateDocuments();
     }
-  }, [session, loadMessages]);
+  }, [messages, mode]);
 
   // Проверяем статус профиля и генерируем заявления если нужно
   const checkAndGenerateDocuments = useCallback(async () => {
@@ -138,13 +159,17 @@ function ChatContent() {
 
     try {
       setError(null);
-      
+      const body: { message: string; chatBotId?: string } = { message: userMessage };
+      if (chatBotId) {
+        body.chatBotId = chatBotId;
+      }
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify(body),
       });
 
       let data;
@@ -185,7 +210,18 @@ function ChatContent() {
         createdAt: new Date(),
       } : tempUserMessage;
 
-      // Включаем автоскролл для ответа AI
+      // Track analytics if using Appeal Bot
+      if (mode === "appeal" && chatBotId) {
+        const appealType = detectAppealType(userMessage);
+        const keywords = extractKeywords(userMessage);
+        trackAppealQuestion({
+          appealType,
+          question: userMessage,
+          keywords,
+        });
+      }
+
+      // Enable autoscroll for AI response
       shouldAutoScrollRef.current = true;
       
       setMessages((prev) => {
@@ -193,43 +229,9 @@ function ChatContent() {
         return [...filtered, realUserMessage, aiMessage];
       });
 
-      // Если AI сообщил о завершении профиля, сохраняем данные и генерируем документы
+      // If AI signals profile completion, save data and generate documents
       if (data.message.includes("[PROFILE_COMPLETE]")) {
-        try {
-          // Сохраняем профиль
-          const extractResponse = await fetch("/api/chat/extract-profile", {
-            method: "POST",
-          });
-          
-          if (extractResponse.ok) {
-            const extractData = await extractResponse.json();
-            console.log("Профиль сохранен:", extractData);
-            
-            // Генерируем документы
-            const generateResponse = await fetch("/api/documents/generate", {
-              method: "POST",
-            });
-            
-            if (generateResponse.ok) {
-              const generateData = await generateResponse.json();
-              console.log("Документы сгенерированы:", generateData);
-              
-              // Добавляем сообщение с кнопками скачивания
-              const documentsMessage: ChatMessage = {
-                id: `docs-${Date.now()}`,
-                role: "assistant",
-                content: `✅ Документы успешно сгенерированы!\n\nВы можете скачать:\n1. Заявление о вступлении в профсоюз\n2. Заявление о перечислении членских взносов\n\nПерейдите в раздел "Документы" для просмотра и скачивания.`,
-                createdAt: new Date(),
-              };
-              
-              shouldAutoScrollRef.current = true;
-              setMessages((prev) => [...prev, documentsMessage]);
-            }
-          }
-        } catch (error) {
-          console.error("Ошибка обработки профиля:", error);
-          setError("Профиль сохранен, но возникла ошибка при генерации документов.");
-        }
+        checkAndGenerateDocuments();
       }
     } catch (error) {
       console.error("Ошибка отправки сообщения:", error);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -16,18 +16,31 @@ interface ChatMenuProps {
 }
 
 export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true); // Keep expanded by default
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [hoveredSession, setHoveredSession] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const router = useRouter();
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isExpanded) {
       loadSessions();
     }
   }, [isExpanded]);
+
+  // Click outside handler to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [menuRef]);
 
   // Close menu when pressing Escape
   useEffect(() => {
@@ -60,7 +73,15 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   const handleNewChat = () => {
     // Clear current chat and start fresh
     router.push("/dashboard");
-    router.refresh();
+    setOpenMenuId(null);
+    // We need a full page reload to reset the chat state correctly
+    window.location.href = "/dashboard";
+  };
+
+  const handleNewAppealChat = () => {
+    router.push("/dashboard?mode=appeal");
+    setOpenMenuId(null);
+    window.location.href = "/dashboard?mode=appeal";
   };
 
   const handleOpenSession = (sessionId: string) => {
@@ -148,7 +169,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
 
       {/* Expanded menu */}
       {isExpanded && !isCollapsed && (
-        <div className="ml-4 space-y-1 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-700/30">
+        <div ref={menuRef} className="ml-4 space-y-1 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-800">
           {/* New chat button */}
           <button
             onClick={handleNewChat}
@@ -157,9 +178,19 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            <span>Новый чат</span>
+            <span>Новый чат (Заявление)</span>
           </button>
 
+          {/* New Appeal chat button */}
+          <button
+            onClick={handleNewAppealChat}
+            className="w-full flex items-center gap-2 rounded px-2 py-2 text-sm text-purple-700 hover:bg-purple-100 dark:text-purple-400 dark:hover:bg-purple-900/20 font-medium"
+          >
+             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+             </svg>
+            <span>Создать обращение</span>
+          </button>
 
           {/* Sessions list */}
           {isLoading ? (
@@ -171,50 +202,42 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
               {sessions.map((session) => (
                 <div
                   key={session.id}
-                  onMouseEnter={() => setHoveredSession(session.id)}
-                  onMouseLeave={() => {
-                    // Don't hide hover state if menu is open
-                    if (openMenuId !== session.id) {
-                      setHoveredSession(null);
-                    }
-                  }}
                   onClick={() => handleOpenSession(session.id)}
-                  className="relative flex items-center gap-2 rounded px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 group cursor-pointer"
+                  className="group flex items-center justify-between gap-2 rounded px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700 cursor-pointer"
                 >
-                  <svg className="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2h-3l-4 4z"
-                    />
-                  </svg>
-                  <span className="flex-1 truncate">{session.title}</span>
+                  <div className="flex items-center gap-2 truncate">
+                    <svg className="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2h-3l-4 4z"
+                      />
+                    </svg>
+                    <span className="flex-1 truncate">{session.title}</span>
+                  </div>
 
                   {/* Dropdown menu button */}
                   <div className="relative">
-                    {(hoveredSession === session.id || openMenuId === session.id) && (
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setOpenMenuId(openMenuId === session.id ? null : session.id);
-                        }}
-                        className="h-5 w-5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"
-                        title="Опции"
-                      >
-                        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                        </svg>
-                      </button>
-                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuId(openMenuId === session.id ? null : session.id);
+                      }}
+                      className="h-5 w-5 rounded hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center opacity-0 group-hover:opacity-100"
+                      title="Опции"
+                    >
+                      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                      </svg>
+                    </button>
 
-                    {/* Dropdown content - show when openMenuId matches (outside hover condition) */}
+                    {/* Dropdown content */}
                     {openMenuId === session.id && (
                       <div className="absolute right-0 mt-1 w-40 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800 z-50">
                         <button
                           onClick={(e) => handleDeleteSession(e, session.id)}
-                          className="w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2 rounded-lg"
+                          className="w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2"
                         >
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path
