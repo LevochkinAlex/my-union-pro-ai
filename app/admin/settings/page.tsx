@@ -59,8 +59,6 @@ export default function SettingsPage() {
   const [message, setMessage] = useState<MessageState | null>(null);
   const [envSettings, setEnvSettings] = useState<EnvSettings>({});
   const [envTarget, setEnvTarget] = useState<EnvTarget>('local');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [isEnvLoading, setIsEnvLoading] = useState(true);
   const [isEnvSaving, setIsEnvSaving] = useState(false);
   const [envMessage, setEnvMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -128,8 +126,11 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadSettings();
+  }, [loadSettings]);
+
+  useEffect(() => {
     loadEnvSettings(envTarget);
-  }, [loadSettings, loadEnvSettings, envTarget]);
+  }, [loadEnvSettings, envTarget]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -253,7 +254,7 @@ export default function SettingsPage() {
     [settings, initialData],
   );
 
-  if (isLoading) {
+  if (loading || isEnvLoading) {
     return (
       <div>
         <p>Загрузка настроек...</p>
