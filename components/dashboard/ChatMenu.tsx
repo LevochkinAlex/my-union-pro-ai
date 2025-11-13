@@ -159,7 +159,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
 
       {/* Expanded menu */}
       {isExpanded && !isCollapsed && (
-        <div ref={menuRef} className="ml-4 space-y-1 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-800">
+        <div ref={menuRef} className="ml-4 space-y-1 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-800 relative">
           {/* SINGLE New Chat Button */}
           <button onClick={handleNewChat} className="w-full flex items-center gap-2 rounded px-2 py-2 text-sm text-purple-700 hover:bg-purple-100 dark:text-purple-400 dark:hover:bg-purple-900/20 font-medium">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -194,7 +194,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                   </div>
 
                   {/* Dropdown menu button */}
-                  <div className="relative">
+                  <div className="relative z-50">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -210,7 +210,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
 
                     {/* Dropdown content */}
                     {openMenuId === session.id && (
-                      <div className="absolute left-0 mt-1 w-40 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800 z-50">
+                      <div className="absolute -left-32 mt-1 w-40 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800 z-50">
                         <button
                           onClick={(e) => handleDeleteSession(e, session.id)}
                           className="w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2"
