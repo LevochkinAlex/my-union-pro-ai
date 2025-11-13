@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { trackAppealQuestion, detectAppealType, extractKeywords } from "@/lib/analytics";
@@ -12,10 +12,10 @@ interface ChatMessage {
   createdAt: Date;
 }
 
-export default function Chat() {
+function ChatContent() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
-  const mode = searchParams.get("mode"); // Can be "appeal" for Appeal Bot
+  const mode = searchParams?.get("mode"); // Can be "appeal" for Appeal Bot
   const [chatBotId, setChatBotId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -492,5 +492,26 @@ export default function Chat() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Loading fallback for Suspense
+function ChatLoading() {
+  return (
+    <div className="flex h-full items-center justify-center">
+      <div className="text-center">
+        <div className="inline-flex h-12 w-12 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600"></div>
+        <p className="mt-4 text-gray-600 dark:text-gray-400">Загрузка чата...</p>
+      </div>
+    </div>
+  );
+}
+
+// Default export with Suspense
+export default function Chat() {
+  return (
+    <Suspense fallback={<ChatLoading />}>
+      <ChatContent />
+    </Suspense>
   );
 }
