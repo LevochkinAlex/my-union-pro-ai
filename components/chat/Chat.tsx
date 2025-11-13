@@ -339,12 +339,14 @@ function ChatContent() {
           {messages.length === 0 ? (
             <div className="flex h-full min-h-[60vh] items-center justify-center">
               <div className="text-center">
-                <div className="mb-4 text-5xl">👋</div>
+                <div className="mb-4 text-5xl">{mode === "appeal" ? "📝" : "👋"}</div>
                 <h3 className="mb-2 text-2xl font-semibold text-gray-900 dark:text-white">
-                  Добро пожаловать!
+                  {mode === "appeal" ? "Создание обращения" : "Добро пожаловать!"}
                 </h3>
                 <p className="text-lg text-gray-600 dark:text-gray-400">
-                  Начните диалог, чтобы заполнить свой профиль
+                  {mode === "appeal" 
+                    ? "Опишите вашу проблему или вопрос. Я помогу вам составить обращение к профсоюзу."
+                    : "Начните диалог, чтобы заполнить свой профиль"}
                 </p>
               </div>
             </div>
@@ -460,6 +462,38 @@ function ChatContent() {
                 )}
               </button>
             </div>
+            {mode === "appeal" && messages.length === 0 && (
+              <div className="mt-3 flex flex-wrap gap-2 justify-center">
+                <button
+                  type="button"
+                  onClick={() => setInput("Мне нужна помощь с трудовым спором")}
+                  className="inline-block rounded-full bg-blue-100 px-3 py-1 text-xs text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 transition-colors"
+                >
+                  💼 Трудовой спор
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInput("Как оформить жалобу?")}
+                  className="inline-block rounded-full bg-purple-100 px-3 py-1 text-xs text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50 transition-colors"
+                >
+                  📋 Жалоба
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInput("Консультация по правовым вопросам")}
+                  className="inline-block rounded-full bg-green-100 px-3 py-1 text-xs text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50 transition-colors"
+                >
+                  ⚖️ Консультация
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInput("Вопрос по социальным льготам")}
+                  className="inline-block rounded-full bg-orange-100 px-3 py-1 text-xs text-orange-700 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:hover:bg-orange-900/50 transition-colors"
+                >
+                  🛡️ Льготы
+                </button>
+              </div>
+            )}
             <p className="mt-2 text-center text-xs text-gray-500 dark:text-gray-400">
               Нажмите Enter для отправки, Shift+Enter для новой строки
             </p>
