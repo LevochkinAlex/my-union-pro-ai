@@ -79,6 +79,9 @@ model User {
   updatedSettings            SystemSetting[]     @relation("SystemSettingUpdatedBy")
   uploadedKnowledgeDocuments KnowledgeDocument[] @relation("KnowledgeDocumentUploadedBy")
 
+  // Обращения
+  appeals UserAppeal[]
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
