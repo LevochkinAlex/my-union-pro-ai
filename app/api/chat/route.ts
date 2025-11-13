@@ -7,6 +7,69 @@ import { generateEmbedding } from "@/lib/knowledge/embeddings";
 import type { Prisma } from "@prisma/client";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
 
+// Helper function to extract profile data from messages
+function extractProfileDataFromMessages(messages: Array<{ role: string; content: string }>) {
+  const profileData: any = {};
+  
+  // Join all text for analysis
+  const allText = messages
+    .map((msg) => msg.content)
+    .join(" ");
+
+  // Extract name patterns
+  const fioPattern = /([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/;
+  const fioMatch = allText.match(fioPattern);
+  if (fioMatch) {
+    if (fioMatch[3]) {
+      profileData.lastName = fioMatch[1].trim();
+      profileData.firstName = fioMatch[2].trim();
+      profileData.middleName = fioMatch[3].trim();
+    } else if (fioMatch[2]) {
+      profileData.firstName = fioMatch[1].trim();
+      profileData.lastName = fioMatch[2].trim();
+    }
+  }
+
+  // Extract date of birth
+  const datePattern = /(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/;
+  const dateMatch = allText.match(datePattern);
+  if (dateMatch) {
+    const [, day, month, year] = dateMatch;
+    profileData.dateOfBirth = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  }
+
+  // Extract phone
+  const phonePattern = /\+?7[\s-]?\(?(\d{3})\)?[\s-]?(\d{3})[\s-]?(\d{2})[\s-]?(\d{2})/;
+  const phoneMatch = allText.match(phonePattern);
+  if (phoneMatch) {
+    profileData.phone = allText.match(/\+?7[\s\-\(\)0-9]+/)?.[0] || "";
+  }
+
+  // Extract address
+  const addressPattern = /(ул\.|улица|пр\.|проспект|пл\.|площадь).+?(?=\.|\n|$)/i;
+  const addressMatch = allText.match(addressPattern);
+  if (addressMatch) {
+    profileData.address = addressMatch[0].trim();
+  }
+
+  // Extract job title and profession
+  const jobPattern = /(должност|должность|специалист|инженер|программист|бухгалтер|юрист).+?(?=\.|\n|,|$)/i;
+  const jobMatch = allText.match(jobPattern);
+  if (jobMatch) {
+    profileData.jobTitle = jobMatch[0].trim();
+    profileData.profession = jobMatch[0].trim();
+  }
+
+  // Extract education
+  const educationPattern = /(высшее|среднее|начальное|бакалавриат|магистратура|специалитет|аспирантура).+?(?=\.|\n|$)/i;
+  const educationMatch = allText.match(educationPattern);
+  if (educationMatch) {
+    profileData.education = educationMatch[0].trim();
+  }
+
+  return profileData;
+}
+
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 type ChatMessagePayload = {
@@ -387,8 +450,35 @@ export async function POST(request: NextRequest) {
         msg => msg.role === "assistant" && msg.content.includes("[PROFILE_COMPLETE]")
       );
 
-      // Если маркера нет, проверяем полноту профиля
+      // Если маркера нет, сначала пытаемся извлечь и обновить данные из чата
       if (!hasCompleteMarker) {
+        console.log("[chat] No complete marker found, attempting to extract profile data...");
+        
+        try {
+          // Пытаемся извлечь данные из сообщений чата
+          const messagesForExtraction = allMessages.map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+          }));
+          
+          // Функция извлечения (скопирована из extract-profile route)
+          const extractedData = extractProfileDataFromMessages(messagesForExtraction);
+          
+          console.log("[chat] Extracted data:", extractedData);
+          
+          // Обновляем профиль с извлеченными данными
+          if (Object.keys(extractedData).length > 0) {
+            await prisma.user.update({
+              where: { id: session.user.id },
+              data: extractedData,
+            });
+            console.log("[chat] Profile updated with extracted data");
+          }
+        } catch (extractError) {
+          console.warn("[chat] Error extracting data:", extractError);
+        }
+
+        // Теперь проверяем полноту профиля
         const user = await prisma.user.findUnique({
           where: { id: session.user.id },
         });
@@ -417,9 +507,13 @@ export async function POST(request: NextRequest) {
         });
 
         if (isProfileComplete) {
-          console.log("[chat] Adding [PROFILE_COMPLETE] marker to response");
+          console.log("[chat] ✅ Profile is COMPLETE! Adding [PROFILE_COMPLETE] marker");
           aiResponse += "\n\n[PROFILE_COMPLETE]";
+        } else {
+          console.log("[chat] ❌ Profile still incomplete after extraction");
         }
+      } else {
+        console.log("[chat] Profile complete marker already exists");
       }
     } catch (error) {
       console.error("[chat] Error checking profile completeness:", error);
