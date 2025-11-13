@@ -12,6 +12,11 @@ type UserDetailsFormProps = {
     lastName: string;
     middleName: string;
     phone: string;
+    dateOfBirth: string | null;
+    address: string | null;
+    jobTitle: string | null;
+    profession: string | null;
+    education: string | null;
     role: string;
     membershipStatus: string;
     createdAt: string;
@@ -51,6 +56,11 @@ export default function UserDetailsForm({
     lastName: user.lastName ?? "",
     middleName: user.middleName ?? "",
     phone: user.phone ?? "",
+    dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : "",
+    address: user.address ?? "",
+    jobTitle: user.jobTitle ?? "",
+    profession: user.profession ?? "",
+    education: user.education ?? "",
     role: user.role as RoleOption,
     membershipStatus: user.membershipStatus as StatusOption,
   });
@@ -62,11 +72,17 @@ export default function UserDetailsForm({
   const [deleting, setDeleting] = useState(false);
 
   const isDirty = useMemo(() => {
+    const originalDate = user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : "";
     return (
       formData.firstName !== (user.firstName ?? "") ||
       formData.lastName !== (user.lastName ?? "") ||
       formData.middleName !== (user.middleName ?? "") ||
       formData.phone !== (user.phone ?? "") ||
+      formData.dateOfBirth !== originalDate ||
+      formData.address !== (user.address ?? "") ||
+      formData.jobTitle !== (user.jobTitle ?? "") ||
+      formData.profession !== (user.profession ?? "") ||
+      formData.education !== (user.education ?? "") ||
       formData.role !== user.role ||
       formData.membershipStatus !== user.membershipStatus
     );
@@ -112,6 +128,11 @@ export default function UserDetailsForm({
         lastName: data.user.lastName ?? "",
         middleName: data.user.middleName ?? "",
         phone: data.user.phone ?? "",
+        dateOfBirth: data.user.dateOfBirth ? new Date(data.user.dateOfBirth).toISOString().split('T')[0] : "",
+        address: data.user.address ?? "",
+        jobTitle: data.user.jobTitle ?? "",
+        profession: data.user.profession ?? "",
+        education: data.user.education ?? "",
         role: data.user.role as RoleOption,
         membershipStatus: data.user.membershipStatus as StatusOption,
       });
@@ -277,6 +298,75 @@ export default function UserDetailsForm({
                 name="middleName"
                 value={formData.middleName}
                 onChange={handleChange}
+                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Дата рождения
+              </label>
+              <input
+                type="date"
+                name="dateOfBirth"
+                value={formData.dateOfBirth}
+                onChange={handleChange}
+                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Адрес проживания
+              </label>
+              <input
+                type="text"
+                name="address"
+                value={formData.address}
+                onChange={handleChange}
+                placeholder="Полный адрес с индексом"
+                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Должность
+              </label>
+              <input
+                type="text"
+                name="jobTitle"
+                value={formData.jobTitle}
+                onChange={handleChange}
+                placeholder="Занимаемая должность"
+                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Профессия
+              </label>
+              <input
+                type="text"
+                name="profession"
+                value={formData.profession}
+                onChange={handleChange}
+                placeholder="Основная профессия"
+                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Образование
+              </label>
+              <input
+                type="text"
+                name="education"
+                value={formData.education}
+                onChange={handleChange}
+                placeholder="Уровень образования"
                 className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               />
             </div>

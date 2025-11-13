@@ -8,6 +8,11 @@ type UpdatePayload = {
   lastName?: string | null;
   middleName?: string | null;
   phone?: string | null;
+  dateOfBirth?: string | null;
+  address?: string | null;
+  jobTitle?: string | null;
+  profession?: string | null;
+  education?: string | null;
   role?: UserRole;
   membershipStatus?: MembershipStatus;
 };
@@ -98,7 +103,23 @@ export async function PUT(
     lastName: normalizeString(payload.lastName),
     middleName: normalizeString(payload.middleName),
     phone: normalizeString(payload.phone),
+    address: normalizeString(payload.address),
+    jobTitle: normalizeString(payload.jobTitle),
+    profession: normalizeString(payload.profession),
+    education: normalizeString(payload.education),
   };
+
+  // Обработка даты рождения
+  if (payload.dateOfBirth !== undefined) {
+    if (payload.dateOfBirth === null || payload.dateOfBirth === "") {
+      updateData.dateOfBirth = null;
+    } else {
+      const date = new Date(payload.dateOfBirth);
+      if (!isNaN(date.getTime())) {
+        updateData.dateOfBirth = date.toISOString();
+      }
+    }
+  }
 
   if (payload.role) {
     if (!Object.values(UserRole).includes(payload.role)) {
@@ -135,6 +156,11 @@ export async function PUT(
         lastName: updatedUser.lastName,
         middleName: updatedUser.middleName,
         phone: updatedUser.phone,
+        dateOfBirth: updatedUser.dateOfBirth,
+        address: updatedUser.address,
+        jobTitle: updatedUser.jobTitle,
+        profession: updatedUser.profession,
+        education: updatedUser.education,
         role: updatedUser.role,
         membershipStatus: updatedUser.membershipStatus,
         updatedAt: updatedUser.updatedAt,
