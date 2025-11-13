@@ -32,7 +32,6 @@ function ChatContent() {
       
       // If sessionId is provided, load that specific session
       const url = sessionId ? `/api/chat/session/${sessionId}` : "/api/chat";
-      console.log("[Chat] Loading messages from URL:", url);
       const response = await fetch(url);
       
       if (!response.ok) {
