@@ -8,10 +8,17 @@ import { prisma } from "@/lib/prisma";
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
+  console.log("[chat/session] ===== REQUEST START =====");
+  
   try {
+    // Await params if it's a Promise (Next.js 15+)
+    const resolvedParams = params instanceof Promise ? await params : params;
+    console.log("[chat/session] Raw params:", resolvedParams);
+    
     const session = await getServerSession(authOptions);
+    console.log("[chat/session] Session check complete");
 
     if (!session?.user?.id) {
       console.error("[chat/session] Not authenticated");
@@ -21,7 +28,7 @@ export async function GET(
       );
     }
 
-    const sessionId = params.id;
+    const sessionId = resolvedParams.id;
     console.log("[chat/session] Requested session ID:", sessionId);
 
     // Session ID format: session-{timestamp}
@@ -58,33 +65,40 @@ export async function GET(
     }
 
     // Find session boundaries using the same 1-hour gap logic
+    console.log("[chat/session] Starting session boundary analysis...");
     const ONE_HOUR = 60 * 60 * 1000;
     const sessions: Array<{ startTime: number; messages: typeof allMessages }> = [];
     let currentSessionMessages: typeof allMessages = [];
     let lastTime: Date | null = null;
 
-    for (const msg of allMessages) {
-      if (!lastTime || new Date(msg.createdAt).getTime() - new Date(lastTime).getTime() > ONE_HOUR) {
-        // Starting a new session
-        if (currentSessionMessages.length > 0) {
-          sessions.push({
-            startTime: new Date(currentSessionMessages[0].createdAt).getTime(),
-            messages: currentSessionMessages,
-          });
+    try {
+      for (const msg of allMessages) {
+        if (!lastTime || new Date(msg.createdAt).getTime() - new Date(lastTime).getTime() > ONE_HOUR) {
+          // Starting a new session
+          if (currentSessionMessages.length > 0) {
+            sessions.push({
+              startTime: new Date(currentSessionMessages[0].createdAt).getTime(),
+              messages: currentSessionMessages,
+            });
+          }
+          currentSessionMessages = [msg];
+        } else {
+          currentSessionMessages.push(msg);
         }
-        currentSessionMessages = [msg];
-      } else {
-        currentSessionMessages.push(msg);
+        lastTime = msg.createdAt;
       }
-      lastTime = msg.createdAt;
-    }
 
-    // Don't forget the last session
-    if (currentSessionMessages.length > 0) {
-      sessions.push({
-        startTime: new Date(currentSessionMessages[0].createdAt).getTime(),
-        messages: currentSessionMessages,
-      });
+      // Don't forget the last session
+      if (currentSessionMessages.length > 0) {
+        sessions.push({
+          startTime: new Date(currentSessionMessages[0].createdAt).getTime(),
+          messages: currentSessionMessages,
+        });
+      }
+      console.log("[chat/session] Session boundary analysis complete");
+    } catch (loopError) {
+      console.error("[chat/session] Error during session parsing:", loopError);
+      throw loopError;
     }
 
     console.log("[chat/session] Found sessions:", sessions.length);
@@ -119,7 +133,13 @@ export async function GET(
       })),
     });
   } catch (error) {
+    console.error("[chat/session] ===== ERROR CAUGHT =====");
+    console.error("[chat/session] Error type:", typeof error);
     console.error("[chat/session] Error:", error);
+    if (error instanceof Error) {
+      console.error("[chat/session] Error message:", error.message);
+      console.error("[chat/session] Error stack:", error.stack);
+    }
     return NextResponse.json(
       { error: "Ошибка при получении сеанса чата" },
       { status: 500 }
