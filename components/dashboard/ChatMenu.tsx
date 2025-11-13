@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -18,18 +18,32 @@ interface ChatMenuProps {
 export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   const [isExpanded, setIsExpanded] = useState(true); // Keep expanded by default
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const loadSessions = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch("/api/chat/sessions");
+      if (response.ok) {
+        const data = await response.json();
+        setSessions(data.sessions || []);
+      }
+    } catch (error) {
+      console.error("Error loading chat sessions:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (isExpanded) {
       loadSessions();
     }
-  }, [isExpanded]);
+  }, [isExpanded, loadSessions]);
 
-  // Click outside handler to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -55,63 +69,40 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   }, [openMenuId]);
 
 
-  const loadSessions = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch("/api/chat/sessions");
-      if (response.ok) {
-        const data = await response.json();
-        setSessions(data.sessions || []);
-      }
-    } catch (error) {
-      console.error("Error loading chat sessions:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleNewChat = () => {
-    // Clear current chat and start fresh
-    router.push("/dashboard");
-    setOpenMenuId(null);
-    // We need a full page reload to reset the chat state correctly
-    window.location.href = "/dashboard";
-  };
-
-  const handleNewAppealChat = () => {
+    // This is for "appeals"
     router.push("/dashboard?mode=appeal");
-    setOpenMenuId(null);
-    window.location.href = "/dashboard?mode=appeal";
   };
 
   const handleOpenSession = (sessionId: string) => {
-    // Navigate to specific chat session
     router.push(`/dashboard?session=${sessionId}`);
-    router.refresh();
   };
 
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
-    e.preventDefault();
     e.stopPropagation();
-    
-    if (!confirm("Вы уверены, что хотите удалить этот чат?")) {
-      return;
-    }
+    if (!confirm("Вы уверены, что хотите удалить этот чат?")) return;
 
     try {
-      // Note: Individual session deletion would require creating a specific API endpoint
-      // For now, users can clear all chat history via "Очистить все"
-      alert("Удаление отдельных чатов пока не реализовано. Используйте 'Очистить все' для удаления всей истории");
-      setOpenMenuId(null);
+      const response = await fetch(`/api/chat/sessions?id=${sessionId}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        setOpenMenuId(null);
+        await loadSessions();
+        const currentSessionId = new URLSearchParams(window.location.search).get("session");
+        if (currentSessionId === sessionId) {
+          router.push("/dashboard");
+        }
+      } else {
+        alert("Ошибка при удалении чата");
+      }
     } catch (error) {
-      console.error("Error deleting session:", error);
+      console.error("Error deleting chat session:", error);
+      alert("Ошибка при удалении чата");
     }
   };
 
-  const handleClearAll = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
+  const handleClearAll = async () => {
     if (!confirm("Вы уверены, что хотите очистить всю историю чата? Это действие нельзя отменить.")) {
       return;
     }
@@ -122,9 +113,8 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
       });
 
       if (response.ok) {
-        setSessions([]);
+        await loadSessions();
         router.push("/dashboard");
-        router.refresh();
       } else {
         alert("Ошибка при удалении истории");
       }
@@ -170,26 +160,12 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
       {/* Expanded menu */}
       {isExpanded && !isCollapsed && (
         <div ref={menuRef} className="ml-4 space-y-1 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-800">
-          {/* New chat button */}
-          <button
-            onClick={handleNewChat}
-            className="w-full flex items-center gap-2 rounded px-2 py-2 text-sm text-blue-700 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/20 font-medium"
-          >
+          {/* SINGLE New Chat Button */}
+          <button onClick={handleNewChat} className="w-full flex items-center gap-2 rounded px-2 py-2 text-sm text-purple-700 hover:bg-purple-100 dark:text-purple-400 dark:hover:bg-purple-900/20 font-medium">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            <span>Новый чат (Заявление)</span>
-          </button>
-
-          {/* New Appeal chat button */}
-          <button
-            onClick={handleNewAppealChat}
-            className="w-full flex items-center gap-2 rounded px-2 py-2 text-sm text-purple-700 hover:bg-purple-100 dark:text-purple-400 dark:hover:bg-purple-900/20 font-medium"
-          >
-             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-             </svg>
-            <span>Создать обращение</span>
+            <span>Новый чат</span>
           </button>
 
           {/* Sessions list */}
