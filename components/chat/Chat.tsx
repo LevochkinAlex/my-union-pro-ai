@@ -277,7 +277,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden m-4 sm:m-6 lg:m-8">
+    <div className="flex h-full flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
       {/* Сообщение об ошибке */}
       {error && (
         <div className="mx-auto w-full max-w-4xl px-4 pt-4">
