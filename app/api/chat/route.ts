@@ -84,38 +84,21 @@ async function retrieveRelevantChunks(bot: DefaultBot, query: string): Promise<R
   }
 
   try {
-    const embedding = await generateEmbedding(query);
-    if (!embedding || embedding.length === 0) {
-      return [];
-    }
-
+    // Пока работаем без embeddings - просто возвращаем все chunks
     const chunks = await prisma.knowledgeChunk.findMany({
       where: {
         knowledgeBaseId: { in: kbIds },
-        embedding: { isEmpty: false },
       },
-      take: 100,
+      take: 10,
     });
 
-    const scored = chunks
-      .map((chunk) => {
-        const chunkEmbedding = chunk.embedding as Prisma.JsonValue;
-        if (!Array.isArray(chunkEmbedding)) {
-          return null;
-        }
-        const similarity = cosineSimilarity(embedding, chunkEmbedding as number[]);
-        return {
-          id: chunk.id,
-          knowledgeBaseId: chunk.knowledgeBaseId,
-          content: chunk.content,
-          similarity,
-        };
-      })
-      .filter((item): item is RetrievedChunk => item !== null && item.similarity > 0.7)
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, 5);
-
-    return scored;
+    // Возвращаем все chunks с фиксированной similarity
+    return chunks.map((chunk) => ({
+      id: chunk.id,
+      knowledgeBaseId: chunk.knowledgeBaseId,
+      content: chunk.content,
+      similarity: 1.0, // Все chunks считаем релевантными
+    }));
   } catch (error) {
     console.error("Ошибка поиска релевантных фрагментов:", error);
     return [];
