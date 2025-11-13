@@ -24,19 +24,24 @@ function normalizeString(value: unknown): string | null {
 // GET - получение данных одного пользователя
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
     const { error } = await ensureSuperAdmin();
     if (error) return error;
     
-    const userId = params.id;
+    const resolvedParams = await Promise.resolve(params);
+    const userId = resolvedParams.id;
+    
     if (!userId) {
       return NextResponse.json({ error: "ID пользователя не указан" }, { status: 400 });
     }
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
+      include: {
+        organization: true,
+      },
     });
 
     if (!user) {
