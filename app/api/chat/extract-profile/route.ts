@@ -91,12 +91,34 @@ function extractProfileData(messages: Array<{ role: string; content: string }>) 
     profileData.profession = professionMatch[1].trim();
   }
 
-  // Образование
+  // Образование (используем стандартизированные значения)
+  const educationStandards = [
+    "Начальное общее",
+    "Основное общее",
+    "Среднее общее",
+    "Среднее профессиональное",
+    "Неполное высшее",
+    "Высшее (бакалавриат)",
+    "Высшее (специалитет)",
+    "Высшее (магистратура)",
+    "Аспирантура",
+    "Докторантура",
+  ];
+  
+  // Ищем образование в тексте
+  const educationPattern = educationStandards.join("|");
   const educationMatch = userMessages.match(
-    /(?:образование)[\s:]*([А-ЯЁа-яё\s]+(?:среднее|высшее|специальное))/i
+    new RegExp(`(?:образование[\\s:]*)(${educationPattern})`, "i")
   );
   if (educationMatch) {
-    profileData.education = educationMatch[1].trim();
+    // Находим точное совпадение из стандартного списка (игнорируя регистр)
+    const foundValue = educationMatch[1];
+    const standardValue = educationStandards.find(
+      (std) => std.toLowerCase() === foundValue.toLowerCase()
+    );
+    if (standardValue) {
+      profileData.education = standardValue;
+    }
   }
 
   return profileData;

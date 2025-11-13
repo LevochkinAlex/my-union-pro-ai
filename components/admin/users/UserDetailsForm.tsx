@@ -3,6 +3,12 @@
 import { useMemo, useState } from "react";
 import Button from "@/components/ui/button/Button";
 import { useRouter } from "next/navigation";
+import PhoneInput from "@/components/form/PhoneInput";
+import AddressInput from "@/components/form/AddressInput";
+import DateInput from "@/components/form/DateInput";
+import Select from "@/components/ui/Select";
+import { EDUCATION_LEVELS } from "@/lib/constants/education";
+import { capitalizeName } from "@/lib/utils/nameFormatting";
 
 type UserDetailsFormProps = {
   user: {
@@ -91,7 +97,13 @@ export default function UserDetailsForm({
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
-    const { name, value } = e.target;
+    let { name, value } = e.target;
+
+    // Автоматическая капитализация для полей ФИО
+    if (name === "firstName" || name === "lastName" || name === "middleName") {
+      value = capitalizeName(value);
+    }
+
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -252,12 +264,12 @@ export default function UserDetailsForm({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Телефон
+                Фамилия
               </label>
               <input
-                type="tel"
-                name="phone"
-                value={formData.phone}
+                type="text"
+                name="lastName"
+                value={formData.lastName}
                 onChange={handleChange}
                 className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               />
@@ -278,19 +290,6 @@ export default function UserDetailsForm({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Фамилия
-              </label>
-              <input
-                type="text"
-                name="lastName"
-                value={formData.lastName}
-                onChange={handleChange}
-                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Отчество
               </label>
               <input
@@ -304,14 +303,26 @@ export default function UserDetailsForm({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Телефон
+              </label>
+              <PhoneInput
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Дата рождения
               </label>
-              <input
-                type="date"
+              <DateInput
                 name="dateOfBirth"
                 value={formData.dateOfBirth}
                 onChange={handleChange}
-                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                placeholder="ДД.ММ.ГГГГ"
+                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               />
             </div>
 
@@ -319,13 +330,12 @@ export default function UserDetailsForm({
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Адрес проживания
               </label>
-              <input
-                type="text"
+              <AddressInput
                 name="address"
                 value={formData.address}
                 onChange={handleChange}
-                placeholder="Полный адрес с индексом"
-                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                placeholder="Начните вводить адрес..."
+                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               />
             </div>
 
@@ -361,14 +371,19 @@ export default function UserDetailsForm({
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Образование
               </label>
-              <input
-                type="text"
+              <Select
                 name="education"
                 value={formData.education}
                 onChange={handleChange}
-                placeholder="Уровень образования"
-                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-              />
+                className="mt-2"
+              >
+                <option value="">Выберите уровень образования</option>
+                {EDUCATION_LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {level}
+                  </option>
+                ))}
+              </Select>
             </div>
 
             <div>
