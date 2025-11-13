@@ -7,14 +7,14 @@ import Button from "@/components/ui/button/Button";
 import InputField from "@/components/ui/InputField";
 import TextArea from "@/components/ui/TextArea";
 import Label from "@/components/form/Label";
-import { KnowledgeBase, KnowledgeDocument, KnowledgeSource, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { format } from "date-fns";
 
 function isJsonObject(value: Prisma.JsonValue | null): value is Prisma.JsonObject {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-type KnowledgeDocument = {
+type KnowledgeDocumentData = {
   id: string;
   fileName: string | null;
   originalName: string;
@@ -27,12 +27,12 @@ type KnowledgeDocument = {
   meta: Record<string, unknown> | null;
 };
 
-type KnowledgeBase = {
+type KnowledgeBaseData = {
   id: string;
   name: string;
   description: string | null;
   isActive: boolean;
-  documents: KnowledgeDocument[];
+  documents: KnowledgeDocumentData[];
   sources: Array<{
     id: string;
     type: string;
@@ -52,8 +52,7 @@ type KnowledgeBasePageProps = {
   params: { id: string };
 };
 
-type KnowledgeBaseWithRelations = KnowledgeBase & {
-  documents: (KnowledgeDocument & { source: KnowledgeSource | null })[];
+type KnowledgeBaseWithRelations = KnowledgeBaseData & {
   _count: { sources: number };
   stats: {
     queued: number;
@@ -174,7 +173,7 @@ export default function KnowledgeBaseDetailsPage() {
     }
   };
 
-  const formatStatus = (doc: KnowledgeDocument) => {
+  const formatStatus = (doc: KnowledgeDocumentData) => {
     switch (doc.processingStatus) {
       case "COMPLETED":
         return { label: "Обработан", className: "text-green-600 dark:text-green-400" };
