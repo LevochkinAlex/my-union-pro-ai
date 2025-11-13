@@ -384,8 +384,8 @@ export default function AdminAIChatPage() {
                   {provider.availableModels.length > 0 && (
                     <div className="max-h-32 overflow-y-auto rounded bg-gray-50 p-3 text-xs dark:bg-gray-900/40">
                       <ul className="space-y-1">
-                        {provider.availableModels.slice(0, 15).map((modelId) => (
-                          <li key={modelId} className="text-gray-600 dark:text-gray-300">
+                        {provider.availableModels.slice(0, 15).map((modelId, index) => (
+                          <li key={`${provider.id}-${modelId}-${index}`} className="text-gray-600 dark:text-gray-300">
                             {modelId}
                           </li>
                         ))}
