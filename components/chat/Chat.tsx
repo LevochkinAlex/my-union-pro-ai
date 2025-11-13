@@ -49,6 +49,9 @@ function ChatContent() {
       const data = await response.json();
       setMessages(data.messages || []);
       
+      // Явно очищаем ошибку при успешной загрузке
+      setError(null);
+      
       // Скроллим вниз только при первой загрузке
       if (isInitialLoadRef.current) {
         shouldAutoScrollRef.current = true;
