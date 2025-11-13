@@ -1,0 +1,218 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+
+interface ChatSession {
+  id: string;
+  title: string;
+  createdAt: string;
+  messageCount: number;
+}
+
+interface ChatMenuProps {
+  isCollapsed: boolean;
+}
+
+export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hoveredSession, setHoveredSession] = useState<string | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isExpanded) {
+      loadSessions();
+    }
+  }, [isExpanded]);
+
+  const loadSessions = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch("/api/chat/sessions");
+      if (response.ok) {
+        const data = await response.json();
+        setSessions(data.sessions || []);
+      }
+    } catch (error) {
+      console.error("Error loading chat sessions:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!confirm("Вы уверены, что хотите удалить этот чат?")) {
+      return;
+    }
+
+    try {
+      // Для теперь просто показываем сообщение
+      // В будущем здесь будет удаление конкретного сеанса
+      alert("Функция удаления отдельного чата будет добавлена позже");
+    } catch (error) {
+      console.error("Error deleting session:", error);
+    }
+  };
+
+  const handleClearAll = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm("Вы уверены, что хотите очистить всю историю чата? Это действие нельзя отменить.")) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/chat/sessions", {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setSessions([]);
+        router.push("/dashboard");
+        router.refresh();
+      } else {
+        alert("Ошибка при удалении истории");
+      }
+    } catch (error) {
+      console.error("Error clearing all chats:", error);
+      alert("Ошибка при удалении истории");
+    }
+  };
+
+  return (
+    <div className={`space-y-2 ${isCollapsed ? "" : ""}`}>
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className={`w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-colors ${
+          isExpanded
+            ? "bg-blue-600 text-white shadow-sm"
+            : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+        } ${isCollapsed ? "h-10 w-10 justify-center" : "px-3 py-2.5"}`}
+      >
+        <svg className="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+          />
+        </svg>
+        {!isCollapsed && (
+          <>
+            <span className="flex-1 text-left">AI Чат</span>
+            <svg
+              className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+            </svg>
+          </>
+        )}
+      </button>
+
+      {/* Expanded menu */}
+      {isExpanded && !isCollapsed && (
+        <div className="ml-4 space-y-1 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-700/30">
+          {/* New chat button */}
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2 rounded px-2 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Новый чат</span>
+          </Link>
+
+          {/* Sessions list */}
+          {isLoading ? (
+            <div className="px-2 py-2 text-xs text-gray-500">Загрузка...</div>
+          ) : sessions.length === 0 ? (
+            <div className="px-2 py-2 text-xs text-gray-500">История пуста</div>
+          ) : (
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {sessions.map((session) => (
+                <div
+                  key={session.id}
+                  onMouseEnter={() => setHoveredSession(session.id)}
+                  onMouseLeave={() => setHoveredSession(null)}
+                  className="relative flex items-center gap-2 rounded px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 group"
+                >
+                  <svg className="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2h-3l-4 4z"
+                    />
+                  </svg>
+                  <span className="flex-1 truncate">{session.title}</span>
+
+                  {/* Dropdown menu */}
+                  {hoveredSession === session.id && (
+                    <div className="relative group">
+                      <button
+                        className="h-5 w-5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"
+                        title="Опции"
+                      >
+                        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                        </svg>
+                      </button>
+
+                      {/* Dropdown content */}
+                      <div className="absolute right-0 mt-1 w-40 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800 hidden group-hover:block z-50">
+                        <button
+                          onClick={(e) => handleDeleteSession(e, session.id)}
+                          className="w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
+                          </svg>
+                          Удалить чат
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Clear all button */}
+          {sessions.length > 0 && (
+            <button
+              onClick={handleClearAll}
+              className="w-full mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 flex items-center gap-2 rounded px-2 py-2 text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
+              </svg>
+              <span>Очистить все</span>
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+

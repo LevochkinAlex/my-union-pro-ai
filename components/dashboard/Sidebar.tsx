@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import ThemeToggle from "@/components/ThemeToggle";
 import { LogoIcon } from "@/components/Logo";
+import ChatMenu from "@/components/dashboard/ChatMenu";
 import { signOut } from "next-auth/react";
 
 interface NavItem {
@@ -60,7 +61,16 @@ export default function Sidebar({ items, userInitial }: SidebarProps) {
 
         {/* Navigation */}
         <nav className={`flex-1 py-4 space-y-2 overflow-y-auto ${isCollapsed ? "px-3" : "px-4"}`}>
+          {/* Chat menu with history */}
+          <ChatMenu isCollapsed={isCollapsed} />
+
+          {/* Other menu items */}
           {items.map((item) => {
+            // Skip AI Chat item since it's now in ChatMenu
+            if (item.href === "/dashboard" && item.label === "AI Чат") {
+              return null;
+            }
+
             const isActive = item.href === "/dashboard"
               ? pathname === "/dashboard"
               : pathname === item.href || pathname.startsWith(item.href + "/");
