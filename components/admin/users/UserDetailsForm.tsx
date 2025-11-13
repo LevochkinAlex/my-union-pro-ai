@@ -326,7 +326,7 @@ export default function UserDetailsForm({
               />
             </div>
 
-            <div className="md:col-span-2">
+            <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Адрес проживания
               </label>
