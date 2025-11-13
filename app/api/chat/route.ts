@@ -76,6 +76,52 @@ function cosineSimilarity(a: number[], b: number[]) {
   return dot / (magnitudeA * magnitudeB);
 }
 
+// Поиск релевантных фрагментов в базах знаний
+async function retrieveRelevantChunks(bot: DefaultBot, query: string): Promise<RetrievedChunk[]> {
+  const kbIds = (bot.knowledgeBases || []).map((rel) => rel.knowledgeBaseId);
+  if (kbIds.length === 0) {
+    return [];
+  }
+
+  try {
+    const embedding = await generateEmbedding(query);
+    if (!embedding || embedding.length === 0) {
+      return [];
+    }
+
+    const chunks = await prisma.knowledgeChunk.findMany({
+      where: {
+        knowledgeBaseId: { in: kbIds },
+        embedding: { isEmpty: false },
+      },
+      take: 100,
+    });
+
+    const scored = chunks
+      .map((chunk) => {
+        const chunkEmbedding = chunk.embedding as Prisma.JsonValue;
+        if (!Array.isArray(chunkEmbedding)) {
+          return null;
+        }
+        const similarity = cosineSimilarity(embedding, chunkEmbedding as number[]);
+        return {
+          id: chunk.id,
+          knowledgeBaseId: chunk.knowledgeBaseId,
+          content: chunk.content,
+          similarity,
+        };
+      })
+      .filter((item): item is RetrievedChunk => item !== null && item.similarity > 0.7)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 5);
+
+    return scored;
+  } catch (error) {
+    console.error("Ошибка поиска релевантных фрагментов:", error);
+    return [];
+  }
+}
+
 // Формирование системного промпта с учетом настроек бота и релевантных документов
 async function buildSystemPrompt(bot: DefaultBot, chunks: RetrievedChunk[]): Promise<string> {
   let prompt = bot.systemPrompt;
@@ -167,6 +213,7 @@ export async function POST(request: NextRequest) {
         userId: session.user.id,
         role: "user",
         content: message,
+        chatBotId: bot.id,
       },
     });
 
@@ -315,6 +362,7 @@ export async function POST(request: NextRequest) {
         userId: session.user.id,
         role: "assistant",
         content: aiResponse,
+        chatBotId: bot.id,
       },
     });
 
@@ -367,8 +415,7 @@ export async function GET() {
           content: welcomeMessageContent,
           role: "assistant",
           userId: session.user.id,
-          // TODO: Добавить chatBotId после применения миграции БД
-          // chatBotId: defaultBot.id,
+          chatBotId: defaultBot.id,
         },
       });
       console.log("GET /api/chat: Приветственное сообщение создано. ID:", welcomeMessage.id);
