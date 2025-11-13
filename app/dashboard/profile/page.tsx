@@ -418,7 +418,6 @@ export default function ProfilePage() {
         </form>
       </div>
       )}
-      </div>
     </div>
   );
 }
