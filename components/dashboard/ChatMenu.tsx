@@ -213,7 +213,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
 
           {/* Dropdown menu - outside overflow container */}
           {openMenuId && (
-            <div className="fixed top-16 left-56 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-[9999]">
+            <div className="fixed top-28 left-56 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-[9999]">
               <button
                 onClick={(e) => handleDeleteSession(e, openMenuId)}
                 className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2 border-b border-gray-100 dark:border-gray-700"
