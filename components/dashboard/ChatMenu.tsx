@@ -200,7 +200,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                         e.stopPropagation();
                         setOpenMenuId(openMenuId === session.id ? null : session.id);
                       }}
-                      className="h-5 w-5 rounded hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center opacity-0 group-hover:opacity-100"
+                      className="h-5 w-5 rounded hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center"
                       title="Опции"
                     >
                       <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
