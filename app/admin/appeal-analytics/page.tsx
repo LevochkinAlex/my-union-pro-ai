@@ -62,6 +62,35 @@ export default function AppealAnalyticsPage() {
     }
   };
 
+  const handleExport = async (format: "csv" | "pdf") => {
+    try {
+      const params = new URLSearchParams();
+      params.append("format", format);
+      params.append("days", days.toString());
+      if (selectedType) {
+        params.append("type", selectedType);
+      }
+
+      const response = await fetch(`/api/admin/analytics-export?${params}`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = response.headers
+          .get("content-disposition")
+          ?.split("filename=")[1]
+          ?.replace(/"/g, "") || `analytics.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (error) {
+      console.error("Error exporting analytics:", error);
+    }
+  };
+
   if (!analytics || isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -86,8 +115,8 @@ export default function AppealAnalyticsPage() {
         </p>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-4 items-center">
+      {/* Filters and Export */}
+      <div className="flex gap-4 items-end flex-wrap">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Период (дни)
@@ -119,6 +148,39 @@ export default function AppealAnalyticsPage() {
             <option value="TECHNICAL">Технические</option>
             <option value="OTHER">Прочие</option>
           </select>
+        </div>
+
+        {/* Export Buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleExport("csv")}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
+            </svg>
+            CSV
+          </button>
+
+          <button
+            onClick={() => handleExport("pdf")}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+              />
+            </svg>
+            PDF
+          </button>
         </div>
       </div>
 
