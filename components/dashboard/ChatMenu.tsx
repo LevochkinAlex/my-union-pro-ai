@@ -56,6 +56,12 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     router.refresh();
   };
 
+  const handleOpenSession = (sessionId: string) => {
+    // Navigate to specific chat session
+    router.push(`/dashboard?session=${sessionId}`);
+    router.refresh();
+  };
+
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -65,8 +71,9 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     }
 
     try {
-      // TODO: Реализовать удаление конкретного сеанса в будущем
-      alert("Функция удаления отдельного чата будет добавлена позже");
+      // Note: Individual session deletion would require creating a specific API endpoint
+      // For now, users can clear all chat history via "Очистить все"
+      alert("Удаление отдельных чатов пока не реализовано. Используйте 'Очистить все' для удаления всей истории");
       setOpenMenuId(null);
     } catch (error) {
       console.error("Error deleting session:", error);
@@ -169,7 +176,8 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                   key={session.id}
                   onMouseEnter={() => setHoveredSession(session.id)}
                   onMouseLeave={() => setHoveredSession(null)}
-                  className="relative flex items-center gap-2 rounded px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 group"
+                  onClick={() => handleOpenSession(session.id)}
+                  className="relative flex items-center gap-2 rounded px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 group cursor-pointer"
                 >
                   <svg className="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path

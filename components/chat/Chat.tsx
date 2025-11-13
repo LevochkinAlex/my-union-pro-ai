@@ -16,6 +16,7 @@ function ChatContent() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const mode = searchParams?.get("mode"); // Can be "appeal" for Appeal Bot
+  const sessionId = searchParams?.get("session"); // Specific chat session to load
   const [chatBotId, setChatBotId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -32,7 +33,9 @@ function ChatContent() {
       setIsLoadingHistory(true);
       setError(null);
       
-      const response = await fetch("/api/chat");
+      // If sessionId is provided, load that specific session
+      const url = sessionId ? `/api/chat/session/${sessionId}` : "/api/chat";
+      const response = await fetch(url);
       
       if (!response.ok) {
         // Проверяем, что это JSON
@@ -60,7 +63,7 @@ function ChatContent() {
     } finally {
       setIsLoadingHistory(false);
     }
-  }, []);
+  }, [sessionId]);
 
   // Автоматическое изменение высоты textarea
   useEffect(() => {
