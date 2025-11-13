@@ -20,6 +20,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hoveredSession, setHoveredSession] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -43,6 +44,12 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     }
   };
 
+  const handleNewChat = () => {
+    // Просто переходим на /dashboard (это очистит страницу чата)
+    router.push("/dashboard");
+    router.refresh();
+  };
+
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -52,9 +59,9 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     }
 
     try {
-      // Для теперь просто показываем сообщение
-      // В будущем здесь будет удаление конкретного сеанса
+      // TODO: Реализовать удаление конкретного сеанса в будущем
       alert("Функция удаления отдельного чата будет добавлена позже");
+      setOpenMenuId(null);
     } catch (error) {
       console.error("Error deleting session:", error);
     }
@@ -123,15 +130,15 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
       {isExpanded && !isCollapsed && (
         <div className="ml-4 space-y-1 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-700/30">
           {/* New chat button */}
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2 rounded px-2 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+          <button
+            onClick={handleNewChat}
+            className="w-full flex items-center gap-2 rounded px-2 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             <span>Новый чат</span>
-          </Link>
+          </button>
 
           {/* Sessions list */}
           {isLoading ? (
@@ -157,10 +164,11 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                   </svg>
                   <span className="flex-1 truncate">{session.title}</span>
 
-                  {/* Dropdown menu */}
+                  {/* Dropdown menu button */}
                   {hoveredSession === session.id && (
-                    <div className="relative group">
+                    <div className="relative">
                       <button
+                        onClick={() => setOpenMenuId(openMenuId === session.id ? null : session.id)}
                         className="h-5 w-5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"
                         title="Опции"
                       >
@@ -169,23 +177,25 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                         </svg>
                       </button>
 
-                      {/* Dropdown content */}
-                      <div className="absolute right-0 mt-1 w-40 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800 hidden group-hover:block z-50">
-                        <button
-                          onClick={(e) => handleDeleteSession(e, session.id)}
-                          className="w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2"
-                        >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                          </svg>
-                          Удалить чат
-                        </button>
-                      </div>
+                      {/* Dropdown content - show when openMenuId matches */}
+                      {openMenuId === session.id && (
+                        <div className="absolute right-0 mt-1 w-40 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800 z-50">
+                          <button
+                            onClick={(e) => handleDeleteSession(e, session.id)}
+                            className="w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2 rounded-lg"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
+                            </svg>
+                            Удалить чат
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
