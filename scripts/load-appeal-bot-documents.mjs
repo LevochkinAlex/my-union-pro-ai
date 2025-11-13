@@ -16,6 +16,14 @@ const projectRoot = path.join(__dirname, "..");
 const { PrismaClient } = await import("@prisma/client");
 const prisma = new PrismaClient();
 
+// Import Bull for queue
+let Bull;
+try {
+  Bull = (await import("bull")).default;
+} catch (e) {
+  console.warn("⚠️  Bull not installed. Documents will be queued but not processed until worker is running.");
+}
+
 const DOCS_DIR = path.join(projectRoot, "public", "docs", "union");
 const BOT_NAME = "Appeal Bot";
 const KB_NAME = "Appeal Bot Knowledge Base";
@@ -210,7 +218,30 @@ async function loadDocuments() {
           },
         });
 
-        console.log(`✅ ${file} (${(fileSize / 1024).toFixed(1)}KB)`);
+        // Add to processing queue if Bull is available
+        if (Bull) {
+          try {
+            const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+            const queue = new Bull("document-processing", redisUrl);
+            
+            await queue.add(
+              { documentId: document.id, knowledgeBaseId: knowledgeBase.id },
+              {
+                priority: 5,
+                attempts: 3,
+                backoff: { type: "exponential", delay: 2000 },
+              }
+            );
+            
+            await queue.close();
+            console.log(`✅ ${file} (${(fileSize / 1024).toFixed(1)}KB) - queued for processing`);
+          } catch (queueError) {
+            console.warn(`⚠️  ${file} - Failed to queue:`, queueError.message);
+          }
+        } else {
+          console.log(`✅ ${file} (${(fileSize / 1024).toFixed(1)}KB) - marked for async processing`);
+        }
+        
         successCount++;
       } catch (error) {
         console.error(`❌ ${file} - Error:`, error.message);

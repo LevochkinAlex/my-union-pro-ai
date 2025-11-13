@@ -13,7 +13,10 @@
     "prisma:push": "dotenv -e .env.local -- pnpm prisma db push",
     "prisma:reset": "dotenv -e .env.local -- pnpm prisma migrate reset --force",
     "prisma:validate": "dotenv -e .env.local -- pnpm prisma validate",
-    "seed:default-bot": "dotenv -e .env.local -- node scripts/create-default-bot.mjs"
+    "seed:default-bot": "dotenv -e .env.local -- node scripts/create-default-bot.mjs",
+    "worker": "dotenv -e .env.local -- tsx scripts/worker.ts",
+    "worker:prod": "node dist/scripts/worker.js",
+    "load-documents": "dotenv -e .env.local -- node scripts/load-appeal-bot-documents.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.65",
