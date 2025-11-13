@@ -385,6 +385,30 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Send push notification to user
+    try {
+      const internalToken = process.env.INTERNAL_API_TOKEN;
+      await fetch(`${process.env.NEXTAUTH_URL || "http://localhost:3004"}/api/push/send`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Internal-Token": internalToken || "",
+        },
+        body: JSON.stringify({
+          userId: session.user.id,
+          title: bot.name || "AI Assistant",
+          message: aiResponse.substring(0, 100) + (aiResponse.length > 100 ? "..." : ""),
+          data: {
+            type: "chat_message",
+            chatBotId: bot.id,
+          },
+        }),
+      });
+    } catch (pushError) {
+      console.warn("[chat] Push notification failed:", pushError);
+      // Don't fail the chat if push fails
+    }
+
     return NextResponse.json({
       message: aiResponse,
     });

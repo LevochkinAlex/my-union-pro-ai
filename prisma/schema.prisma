@@ -82,6 +82,9 @@ model User {
   // Обращения
   appeals UserAppeal[]
 
+  // Push Notifications
+  pushSubscriptions PushSubscription[]
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -579,4 +582,24 @@ model AppealAnalytics {
   @@unique([appealType, periodStart, periodEnd])
   @@index([appealType])
   @@index([periodStart])
+}
+
+// Push Notifications
+model PushSubscription {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // OneSignal subscription data
+  oneSignalId   String // User ID in OneSignal
+  subscriptionId String? // Subscription ID for the device
+
+  lastSyncAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, oneSignalId])
+  @@index([userId])
+  @@index([oneSignalId])
 }
