@@ -14,6 +14,7 @@ export async function GET(
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
+      console.error("[chat/session] Not authenticated");
       return NextResponse.json(
         { error: "Не авторизован" },
         { status: 401 }
@@ -21,16 +22,20 @@ export async function GET(
     }
 
     const sessionId = params.id;
+    console.log("[chat/session] Requested session ID:", sessionId);
 
     // Session ID format: session-{timestamp}
     const sessionTimestamp = parseInt(sessionId.replace("session-", ""));
     
     if (isNaN(sessionTimestamp)) {
+      console.error("[chat/session] Invalid session ID format:", sessionId);
       return NextResponse.json(
         { error: "Неверный формат ID сеанса" },
         { status: 400 }
       );
     }
+    
+    console.log("[chat/session] Parsed timestamp:", sessionTimestamp, "Date:", new Date(sessionTimestamp));
 
     // Get all messages for this user
     const allMessages = await prisma.chatMessage.findMany({
@@ -42,7 +47,10 @@ export async function GET(
       },
     });
 
+    console.log("[chat/session] Total messages for user:", allMessages.length);
+
     if (allMessages.length === 0) {
+      console.error("[chat/session] No messages found for user");
       return NextResponse.json(
         { error: "Нет сообщений" },
         { status: 404 }
@@ -79,15 +87,26 @@ export async function GET(
       });
     }
 
+    console.log("[chat/session] Found sessions:", sessions.length);
+    console.log("[chat/session] Session start times:", sessions.map(s => ({
+      timestamp: s.startTime,
+      date: new Date(s.startTime).toISOString(),
+      messageCount: s.messages.length
+    })));
+    
     // Find the session matching our ID
     const targetSession = sessions.find((s) => s.startTime === sessionTimestamp);
 
     if (!targetSession || targetSession.messages.length === 0) {
+      console.error("[chat/session] Session not found! Looking for timestamp:", sessionTimestamp);
+      console.error("[chat/session] Available timestamps:", sessions.map(s => s.startTime));
       return NextResponse.json(
         { error: "Сеанс чата не найден" },
         { status: 404 }
       );
     }
+    
+    console.log("[chat/session] Found target session with", targetSession.messages.length, "messages");
 
     const sessionMessages = targetSession.messages;
 

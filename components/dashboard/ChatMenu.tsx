@@ -29,6 +29,20 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     }
   }, [isExpanded]);
 
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (openMenuId) {
+        setOpenMenuId(null);
+      }
+    };
+
+    if (openMenuId) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [openMenuId]);
+
   const loadSessions = async () => {
     try {
       setIsLoading(true);
@@ -174,8 +188,8 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                   <span className="flex-1 truncate">{session.title}</span>
 
                   {/* Dropdown menu button */}
-                  {hoveredSession === session.id && (
-                    <div className="relative">
+                  <div className="relative">
+                    {hoveredSession === session.id && (
                       <button
                         onClick={(e) => {
                           e.preventDefault();
@@ -189,28 +203,28 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                           <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
                         </svg>
                       </button>
+                    )}
 
-                      {/* Dropdown content - show when openMenuId matches */}
-                      {openMenuId === session.id && (
-                        <div className="absolute right-0 mt-1 w-40 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800 z-50">
-                          <button
-                            onClick={(e) => handleDeleteSession(e, session.id)}
-                            className="w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2 rounded-lg"
-                          >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                              />
-                            </svg>
-                            Удалить чат
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    {/* Dropdown content - show when openMenuId matches (outside hover condition) */}
+                    {openMenuId === session.id && (
+                      <div className="absolute right-0 mt-1 w-40 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800 z-50">
+                        <button
+                          onClick={(e) => handleDeleteSession(e, session.id)}
+                          className="w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2 rounded-lg"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
+                          </svg>
+                          Удалить чат
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
