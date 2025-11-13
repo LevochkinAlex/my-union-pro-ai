@@ -97,13 +97,34 @@ function extractProfileData(messages: Array<{ role: string; content: string }>) 
     console.log("[extract] Профессия:", profileData.profession);
   }
 
-  // Образование - ищем после маркера
+  // Образование - ищем после маркера и нормализуем к стандартным значениям
   const educationPattern = /\*\*Образование\*\*:\s*(.+?)(?:\n|$)/i;
   const educationMatch = allText.match(educationPattern);
   
   if (educationMatch) {
-    profileData.education = educationMatch[1].trim();
-    console.log("[extract] Образование:", profileData.education);
+    const rawEducation = educationMatch[1].trim();
+    
+    // Стандартные значения образования (должны совпадать с EDUCATION_LEVELS)
+    const educationStandards = [
+      "Начальное общее",
+      "Основное общее (9 классов)",
+      "Среднее общее (11 классов)",
+      "Среднее профессиональное",
+      "Неполное высшее",
+      "Высшее (бакалавриат)",
+      "Высшее (специалитет)",
+      "Высшее (магистратура)",
+      "Аспирантура",
+      "Докторантура",
+    ];
+    
+    // Ищем совпадение (игнорируя регистр)
+    const matchedStandard = educationStandards.find(
+      std => std.toLowerCase() === rawEducation.toLowerCase()
+    );
+    
+    profileData.education = matchedStandard || rawEducation;
+    console.log("[extract] Образование:", profileData.education, matchedStandard ? "(нормализовано)" : "");
   }
 
   // Организация - ищем после маркера
