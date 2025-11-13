@@ -423,7 +423,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Send push notification to user
+    // Send push notification to user with action buttons
     try {
       const internalToken = process.env.INTERNAL_API_TOKEN;
       await fetch(`${process.env.NEXTAUTH_URL || "http://localhost:3004"}/api/push/send`, {
@@ -436,6 +436,16 @@ export async function POST(request: NextRequest) {
           userId: session.user.id,
           title: bot.name || "AI Assistant",
           message: aiResponse.substring(0, 100) + (aiResponse.length > 100 ? "..." : ""),
+          buttons: [
+            {
+              id: "open_chat",
+              text: "Открыть чат",
+            },
+            {
+              id: "mark_read",
+              text: "Прочитано",
+            },
+          ],
           data: {
             type: "chat_message",
             chatBotId: bot.id,

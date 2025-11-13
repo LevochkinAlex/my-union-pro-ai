@@ -7,6 +7,12 @@ const ONESIGNAL_API_KEY = process.env.ONESIGNAL_API_KEY;
 const ONESIGNAL_APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
 const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
 
+interface ActionButton {
+  id: string;
+  text: string;
+  icon?: string;
+}
+
 interface PushPayload {
   userId?: string;
   oneSignalIds?: string[];
@@ -14,6 +20,7 @@ interface PushPayload {
   message: string;
   icon?: string;
   data?: Record<string, any>;
+  buttons?: ActionButton[];
 }
 
 /**
@@ -79,8 +86,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Send via OneSignal API
-    const notificationPayload = {
+    // Build notification payload with optional action buttons
+    const notificationPayload: Record<string, any> = {
       app_id: ONESIGNAL_APP_ID,
       include_external_user_ids: recipientIds,
       headings: { en: payload.title },
@@ -90,6 +97,15 @@ export async function POST(request: NextRequest) {
       priority: 10, // High priority
       ttl: 86400, // 24 hours
     };
+
+    // Add action buttons if provided
+    if (payload.buttons && payload.buttons.length > 0) {
+      notificationPayload.big_buttons = payload.buttons.map((btn) => ({
+        id: btn.id,
+        text: btn.text,
+        ...(btn.icon && { icon: btn.icon }),
+      }));
+    }
 
     const response = await fetch(ONESIGNAL_API_URL, {
       method: "POST",
