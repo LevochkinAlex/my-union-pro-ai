@@ -1,0 +1,77 @@
+
+> my-union-pro@0.1.0 dev /Users/renatusmanov/my-union-pro
+> dotenv -e .env.local -- next dev -p 3004
+
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+ ⚠ Invalid next.config.ts options detected: 
+ ⚠     Unrecognized key(s) in object: 'turbopack' at "experimental"
+ ⚠     Unrecognized key(s) in object: 'swcMinify'
+ ⚠ See more info here: https://nextjs.org/docs/messages/invalid-next-config
+   ▲ Next.js 16.0.1 (Turbopack)
+   - Local:        http://localhost:3004
+   - Network:      http://192.168.0.110:3004
+   - Environments: .env.local, .env
+   - Experiments (use with caution):
+     ? turbopack (invalid experimental key)
+
+ ✓ Starting...
+ ✓ Ready in 684ms
+[NextAuth] Config: {
+  hasSecret: true,
+  nextAuthUrl: 'http://localhost:3004',
+  secretLength: 64
+}
+[next-auth][warn][DEBUG_ENABLED] 
+https://next-auth.js.org/warnings#debug_enabled
+ GET /admin/settings 200 in 2.4s (compile: 2.2s, render: 224ms)
+[NextAuth] Config: {
+  hasSecret: true,
+  nextAuthUrl: 'http://localhost:3004',
+  secretLength: 64
+}
+ GET /admin/users/cmhwc73qe000jp10e4mrgcejr 307 in 2.5s (compile: 2.4s, render: 91ms)
+[NextAuth] Config: {
+  hasSecret: true,
+  nextAuthUrl: 'http://localhost:3004',
+  secretLength: 64
+}
+[next-auth][warn][DEBUG_ENABLED] 
+https://next-auth.js.org/warnings#debug_enabled
+ GET /api/admin/env-settings?target=local 200 in 686ms (compile: 555ms, render: 131ms)
+ GET /login 200 in 679ms (compile: 492ms, render: 187ms)
+[NextAuth] Config: {
+  hasSecret: true,
+  nextAuthUrl: 'http://localhost:3004',
+  secretLength: 64
+}
+ GET /api/auth/session 200 in 1128ms (compile: 1119ms, render: 9ms)
+ GET /api/auth/session 200 in 91ms (compile: 80ms, render: 12ms)
+ GET /api/admin/settings 200 in 1574ms (compile: 483ms, render: 1090ms)
+ GET /dashboard 200 in 462ms (compile: 369ms, render: 93ms)
+ GET /api/auth/session 200 in 25ms (compile: 8ms, render: 17ms)
+GET /api/chat: Получен запрос
+GET /api/chat: Попытка получить сессию...
+GET /api/chat: Сессия получена: для пользователя cmhwc73qe000jp10e4mrgcejr
+GET /api/chat: Поиск сообщений для пользователя cmhwc73qe000jp10e4mrgcejr...
+GET /api/chat: Найдено 10 сообщений.
+GET /api/chat: Возвращаем историю сообщений.
+ GET /api/chat 200 in 361ms (compile: 147ms, render: 215ms)
+[NextAuth] Config: {
+  hasSecret: true,
+  nextAuthUrl: 'http://localhost:3004',
+  secretLength: 64
+}
+ GET /dashboard 200 in 55ms (compile: 5ms, render: 50ms)
+ GET /api/auth/session 200 in 12ms (compile: 2ms, render: 10ms)
+GET /api/chat: Получен запрос
+GET /api/chat: Попытка получить сессию...
+GET /api/chat: Сессия получена: для пользователя cmhwc73qe000jp10e4mrgcejr
+GET /api/chat: Поиск сообщений для пользователя cmhwc73qe000jp10e4mrgcejr...
+GET /api/chat: Найдено 10 сообщений.
+GET /api/chat: Возвращаем историю сообщений.
+ GET /api/chat 200 in 100ms (compile: 892µs, render: 99ms)
+[NextAuth] Config: {
+  hasSecret: true,
+  nextAuthUrl: 'http://localhost:3004',
+  secretLength: 64
+}

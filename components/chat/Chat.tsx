@@ -23,13 +23,27 @@ export default function Chat() {
   const loadMessages = useCallback(async () => {
     try {
       setIsLoadingHistory(true);
+      setError(null);
+      
       const response = await fetch("/api/chat");
-      if (response.ok) {
-        const data = await response.json();
-        setMessages(data.messages || []);
+      
+      if (!response.ok) {
+        // Проверяем, что это JSON
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Ошибка сервера: ${response.status}`);
+        } else {
+          // Если HTML - значит редирект на логин
+          throw new Error("Сессия истекла. Пожалуйста, войдите в систему заново.");
+        }
       }
+      
+      const data = await response.json();
+      setMessages(data.messages || []);
     } catch (error) {
       console.error("Ошибка загрузки сообщений:", error);
+      setError(error instanceof Error ? error.message : "Не удалось загрузить историю чата");
     } finally {
       setIsLoadingHistory(false);
     }
