@@ -99,8 +99,8 @@ export default async function DashboardLayout({
 
       {/* Main content */}
       <div id="main-content" className="flex flex-col flex-1 md:pl-64 transition-all duration-300">
-        <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
-          <div className="min-h-full px-4 py-8 sm:px-8 lg:px-12">
+        <main className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900">
+          <div className="flex-1 overflow-y-auto px-4 py-8 sm:px-8 lg:px-12">
             {children}
           </div>
         </main>
