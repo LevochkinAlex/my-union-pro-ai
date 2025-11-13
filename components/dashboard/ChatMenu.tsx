@@ -45,14 +45,8 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   };
 
   const handleNewChat = () => {
-    // Start regular chat (not Appeal Bot)
+    // Clear current chat and start fresh
     router.push("/dashboard");
-    router.refresh();
-  };
-
-  const handleNewAppealBot = () => {
-    // Start Appeal Bot conversation
-    router.push("/dashboard?mode=appeal");
     router.refresh();
   };
 
@@ -108,51 +102,36 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
 
   return (
     <div className={`space-y-2 ${isCollapsed ? "" : ""}`}>
-      <div className="flex gap-2">
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className={`flex-1 flex items-center gap-3 rounded-lg text-sm font-medium transition-colors ${
-            isExpanded
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-          } ${isCollapsed ? "h-10 w-10 justify-center" : "px-3 py-2.5"}`}
-        >
-          <svg className="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            />
-          </svg>
-          {!isCollapsed && (
-            <>
-              <span className="flex-1 text-left">AI Чат</span>
-              <svg
-                className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
-            </>
-          )}
-        </button>
-
-        {/* Appeal Bot quick button */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className={`w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-colors ${
+          isExpanded
+            ? "bg-blue-600 text-white shadow-sm"
+            : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+        } ${isCollapsed ? "h-10 w-10 justify-center" : "px-3 py-2.5"}`}
+      >
+        <svg className="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+          />
+        </svg>
         {!isCollapsed && (
-          <button
-            onClick={handleNewAppealBot}
-            className="flex items-center justify-center h-10 px-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors flex-shrink-0"
-            title="Appeal Bot"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <>
+            <span className="flex-1 text-left">AI Чат</span>
+            <svg
+              className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
             </svg>
-          </button>
+          </>
         )}
-      </div>
+      </button>
 
       {/* Expanded menu */}
       {isExpanded && !isCollapsed && (
@@ -198,7 +177,11 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                   {hoveredSession === session.id && (
                     <div className="relative">
                       <button
-                        onClick={() => setOpenMenuId(openMenuId === session.id ? null : session.id)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setOpenMenuId(openMenuId === session.id ? null : session.id);
+                        }}
                         className="h-5 w-5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"
                         title="Опции"
                       >

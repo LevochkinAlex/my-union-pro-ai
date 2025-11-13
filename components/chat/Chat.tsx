@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { trackAppealQuestion, detectAppealType, extractKeywords } from "@/lib/analytics";
 
 interface ChatMessage {
   id: string;
@@ -15,9 +14,7 @@ interface ChatMessage {
 function ChatContent() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
-  const mode = searchParams?.get("mode"); // Can be "appeal" for Appeal Bot
   const sessionId = searchParams?.get("session"); // Specific chat session to load
-  const [chatBotId, setChatBotId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -73,34 +70,13 @@ function ChatContent() {
     }
   }, [input]);
 
-  // Load Appeal Bot if mode is "appeal"
-  useEffect(() => {
-    if (mode === "appeal") {
-      const loadAppealBot = async () => {
-        try {
-          const response = await fetch("/api/chat/appeal-bot");
-          if (response.ok) {
-            const data = await response.json();
-            setChatBotId(data.chatBotId);
-          }
-        } catch (error) {
-          console.error("Error loading Appeal Bot:", error);
-        }
-      };
-      loadAppealBot();
-    }
-  }, [mode]);
-
   // Загружаем историю сообщений и проверяем генерацию заявлений
   useEffect(() => {
     if (session?.user?.id) {
       loadMessages();
-      // Проверяем, есть ли полный профиль и нужно ли генерировать заявления
-      if (mode !== "appeal") {
-        checkAndGenerateDocuments();
-      }
+      checkAndGenerateDocuments();
     }
-  }, [session, loadMessages, mode]);
+  }, [session, loadMessages]);
 
   // Проверяем статус профиля и генерируем заявления если нужно
   const checkAndGenerateDocuments = useCallback(async () => {
@@ -153,17 +129,13 @@ function ChatContent() {
 
     try {
       setError(null);
-      const body: any = { message: userMessage };
-      if (chatBotId) {
-        body.chatBotId = chatBotId;
-      }
       
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ message: userMessage }),
       });
 
       let data;
@@ -203,17 +175,6 @@ function ChatContent() {
         content: userMessage,
         createdAt: new Date(),
       } : tempUserMessage;
-      
-      // Track analytics if using Appeal Bot
-      if (mode === "appeal" && chatBotId) {
-        const appealType = detectAppealType(userMessage);
-        const keywords = extractKeywords(userMessage);
-        trackAppealQuestion({
-          appealType,
-          question: userMessage,
-          keywords,
-        });
-      }
 
       // Включаем автоскролл для ответа AI
       shouldAutoScrollRef.current = true;
