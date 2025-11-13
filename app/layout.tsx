@@ -1,12 +1,7 @@
 import { Metadata } from "next";
-import { Outfit } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
-
-const outfit = Outfit({
-  subsets: ["latin"],
-  variable: "--font-outfit",
-});
+import { onest } from "./fonts";
 
 export const metadata: Metadata = {
   title: "MyUnion — единая панель управления профсоюзом",
@@ -20,7 +15,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru" suppressHydrationWarning>
-      <body className={`${outfit.variable} font-outfit`}>
+      <body className={`${onest.variable} font-sans`}>
         <Providers>{children}</Providers>
       </body>
     </html>
