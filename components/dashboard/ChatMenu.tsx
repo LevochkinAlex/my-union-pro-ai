@@ -45,6 +45,12 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   };
 
   const handleNewChat = () => {
+    // Start regular chat (not Appeal Bot)
+    router.push("/dashboard");
+    router.refresh();
+  };
+
+  const handleNewAppealBot = () => {
     // Start Appeal Bot conversation
     router.push("/dashboard?mode=appeal");
     router.refresh();
@@ -132,12 +138,23 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
           {/* New chat button */}
           <button
             onClick={handleNewChat}
-            className="w-full flex items-center gap-2 rounded px-2 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="w-full flex items-center gap-2 rounded px-2 py-2 text-sm text-blue-700 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/20 font-medium"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             <span>Новый чат</span>
+          </button>
+
+          {/* Appeal Bot button */}
+          <button
+            onClick={handleNewAppealBot}
+            className="w-full flex items-center gap-2 rounded px-2 py-2 text-sm text-purple-700 hover:bg-purple-100 dark:text-purple-400 dark:hover:bg-purple-900/20 font-medium"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Appeal Bot</span>
           </button>
 
           {/* Sessions list */}
