@@ -404,7 +404,20 @@ export async function POST(request: NextRequest) {
           user?.profession &&
           user?.education;
 
+        console.log("[chat] Profile completeness check:", {
+          firstName: !!user?.firstName,
+          lastName: !!user?.lastName,
+          dateOfBirth: !!user?.dateOfBirth,
+          phone: !!user?.phone,
+          address: !!user?.address,
+          jobTitle: !!user?.jobTitle,
+          profession: !!user?.profession,
+          education: !!user?.education,
+          isComplete: isProfileComplete,
+        });
+
         if (isProfileComplete) {
+          console.log("[chat] Adding [PROFILE_COMPLETE] marker to response");
           aiResponse += "\n\n[PROFILE_COMPLETE]";
         }
       }
