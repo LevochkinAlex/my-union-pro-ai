@@ -208,35 +208,56 @@ export async function POST() {
       
       const ppoChairman = updatedUser.organization?.chairmanName || "Председатель ППО";
       
+      console.log("[extract-profile] Начинаем генерацию заявлений для пользователя:", updatedUser.id);
+      
       // Генерируем оба заявления
       const [membershipPath, contributionsPath] = await Promise.all([
         generateMembershipApplication(updatedUser, ppoChairman),
         generateContributionsApplication(updatedUser, ppoChairman),
       ]);
 
-      // Сохраняем документы в базе данных
-      await Promise.all([
-        prisma.document.create({
-          data: {
-            type: "MEMBERSHIP_APPLICATION",
-            status: "DRAFT",
-            title: "Заявление о вступлении в профсоюз",
-            filePath: membershipPath,
-            userId: updatedUser.id,
-            organizationId: updatedUser.organizationId || null,
+      console.log("[extract-profile] Заявления сгенерированы:", { membershipPath, contributionsPath });
+
+      // Проверяем, есть ли уже сохраненные документы, чтобы не дублировать
+      const existingDocs = await prisma.document.findMany({
+        where: {
+          userId: updatedUser.id,
+          type: {
+            in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
           },
-        }),
-        prisma.document.create({
-          data: {
-            type: "CONTRIBUTION_APPLICATION",
-            status: "DRAFT",
-            title: "Заявление о взносах",
-            filePath: contributionsPath,
-            userId: updatedUser.id,
-            organizationId: updatedUser.organizationId || null,
-          },
-        }),
-      ]);
+        },
+      });
+
+      // Сохраняем документы в базе данных только если их еще нет
+      if (existingDocs.length === 0) {
+        await Promise.all([
+          prisma.document.create({
+            data: {
+              type: "MEMBERSHIP_APPLICATION",
+              status: "DRAFT",
+              title: "Заявление о вступлении в профсоюз",
+              filePath: membershipPath,
+              fileName: `membership_${updatedUser.id}.pdf`,
+              userId: updatedUser.id,
+              organizationId: updatedUser.organizationId || null,
+            },
+          }),
+          prisma.document.create({
+            data: {
+              type: "CONTRIBUTION_APPLICATION",
+              status: "DRAFT",
+              title: "Заявление о взносах",
+              filePath: contributionsPath,
+              fileName: `contributions_${updatedUser.id}.pdf`,
+              userId: updatedUser.id,
+              organizationId: updatedUser.organizationId || null,
+            },
+          }),
+        ]);
+        console.log("[extract-profile] Документы успешно сохранены в базу данных");
+      } else {
+        console.log("[extract-profile] Документы уже существуют, пропускаем создание");
+      }
     } catch (error) {
       console.error("[extract-profile] Ошибка генерации заявлений:", error);
       // Не прерываем процесс, если генерация заявлений не удалась

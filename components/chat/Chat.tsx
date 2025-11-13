@@ -65,12 +65,34 @@ export default function Chat() {
     }
   }, [input]);
 
-  // Загружаем историю сообщений при монтировании
+  // Загружаем историю сообщений и проверяем генерацию заявлений
   useEffect(() => {
     if (session?.user?.id) {
       loadMessages();
+      // Проверяем, есть ли полный профиль и нужно ли генерировать заявления
+      checkAndGenerateDocuments();
     }
   }, [session, loadMessages]);
+
+  // Проверяем статус профиля и генерируем заявления если нужно
+  const checkAndGenerateDocuments = useCallback(async () => {
+    try {
+      const response = await fetch("/api/chat/extract-profile", {
+        method: "POST",
+      });
+      
+      if (response.ok) {
+        // Профиль был успешно обработан и заявления сгенерированы
+        console.log("Documents generated successfully");
+      } else if (response.status === 400) {
+        // Профиль еще не заполнен полностью
+        console.log("Profile not yet complete");
+      }
+    } catch (error) {
+      // Ошибка при проверке - это нормально
+      console.error("Error checking profile:", error);
+    }
+  }, []);
 
   // Прокрутка вниз только при новых сообщениях от пользователя или бота
   useEffect(() => {
