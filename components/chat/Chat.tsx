@@ -255,7 +255,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-white dark:bg-gray-900">
+    <div className="flex h-full flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
       {/* Сообщение об ошибке */}
       {error && (
         <div className="mx-auto w-full max-w-4xl px-4 pt-4">
@@ -378,11 +378,11 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* Форма ввода */}
-      <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-        <div className="mx-auto max-w-4xl px-4 py-4">
+      {/* Форма ввода - фиксированная */}
+      <div className="shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-4">
+        <div className="mx-auto max-w-4xl">
           <form onSubmit={handleSubmit} className="relative">
-            <div className="relative flex items-end rounded-2xl border border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-700 focus-within:border-blue-500 dark:focus-within:border-blue-500 transition-colors">
+            <div className="relative flex items-end rounded-2xl border-2 border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700 focus-within:border-blue-500 dark:focus-within:border-blue-500 transition-colors hover:border-gray-400 dark:hover:border-gray-500">
               <textarea
                 ref={textareaRef}
                 value={input}
