@@ -60,15 +60,13 @@ export default function AddressInput({
     setIsLoading(true);
 
     try {
-      const response = await fetch("https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address", {
+      const response = await fetch("/api/dadata/suggest-address", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Token ${process.env.NEXT_PUBLIC_DADATA_API_KEY || ""}`,
         },
         body: JSON.stringify({
           query: query,
-          count: 10,
         }),
       });
 
@@ -76,6 +74,8 @@ export default function AddressInput({
         const data = await response.json();
         setSuggestions(data.suggestions || []);
         setIsOpen(true);
+      } else {
+        console.error("Ошибка получения подсказок адреса:", response.status, await response.text());
       }
     } catch (error) {
       console.error("Ошибка получения подсказок адреса:", error);
