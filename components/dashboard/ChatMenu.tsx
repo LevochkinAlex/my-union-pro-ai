@@ -29,6 +29,18 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     }
   }, [isExpanded]);
 
+  // Close menu when pressing Escape
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && openMenuId) {
+        setOpenMenuId(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [openMenuId]);
+
 
   const loadSessions = async () => {
     try {
