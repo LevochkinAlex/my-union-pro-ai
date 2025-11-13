@@ -283,6 +283,15 @@ export async function POST(request: NextRequest) {
         { status: 503 },
       );
     }
+    
+    console.log(`[chat] Конфигурация:`, {
+      provider: providerName,
+      apiUrl,
+      apiKeyPresent: !!apiKey,
+      apiKeyPrefix: apiKey?.substring(0, 8) + '...',
+      model: bot.model,
+      headersKeys: Object.keys(headers),
+    });
 
     // Формируем тело запроса в зависимости от провайдера
     let requestBody: Record<string, unknown>;
@@ -305,11 +314,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Отправляем запрос в API
+    console.log(`[chat] Отправка запроса к ${providerName}:`, { apiUrl, model: bot.model, messagesCount: messages.length });
     const response = await fetch(apiUrl, {
       method: "POST",
       headers,
       body: JSON.stringify(requestBody),
     });
+
+    console.log(`[chat] ${providerName} ответил со статусом:`, response.status, response.statusText);
+    
+    // Проверяем Content-Type перед парсингом
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      const errorText = await response.text();
+      console.error(`[chat] ${providerName} вернул не-JSON (${contentType}):`, errorText.substring(0, 500));
+      return NextResponse.json(
+        { error: `AI сервис вернул некорректный ответ. Проверьте настройки API ключа и модели.` },
+        { status: 503 }
+      );
+    }
 
     if (!response.ok) {
       const errorData = await response.text();
@@ -331,6 +354,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
+    console.log(`[chat] ${providerName} успешно ответил`);
     // Обрабатываем разные форматы ответов
     let aiResponse: string;
     if (providerName === "anthropic") {
