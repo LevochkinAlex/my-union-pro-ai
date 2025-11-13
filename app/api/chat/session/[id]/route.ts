@@ -22,8 +22,17 @@ export async function GET(
 
     const sessionId = params.id;
 
-    // Get all messages for this session starting from the given message ID
-    // Group by 1-hour intervals to find the session boundary
+    // Session ID format: session-{timestamp}
+    const sessionTimestamp = parseInt(sessionId.replace("session-", ""));
+    
+    if (isNaN(sessionTimestamp)) {
+      return NextResponse.json(
+        { error: "Неверный формат ID сеанса" },
+        { status: 400 }
+      );
+    }
+
+    // Get all messages for this user
     const allMessages = await prisma.chatMessage.findMany({
       where: {
         userId: session.user.id,
@@ -33,34 +42,43 @@ export async function GET(
       },
     });
 
-    // Find the starting message for this session
-    const startingMessageIndex = allMessages.findIndex(
-      (msg) => msg.id === sessionId
-    );
+    // Find session boundaries using the same 1-hour gap logic
+    const ONE_HOUR = 60 * 60 * 1000;
+    let sessionMessages: typeof allMessages = [];
+    let lastTime: Date | null = null;
+    let foundSession = false;
+    let currentSessionStart: Date | null = null;
 
-    if (startingMessageIndex === -1) {
+    for (const msg of allMessages) {
+      // Check if this is a new session boundary
+      if (!lastTime || new Date(msg.createdAt).getTime() - new Date(lastTime).getTime() > ONE_HOUR) {
+        // Starting a new session
+        if (currentSessionStart && new Date(currentSessionStart).getTime() === sessionTimestamp) {
+          // Found our session, but it's complete now
+          foundSession = true;
+          break;
+        }
+        // Reset for new session
+        currentSessionStart = msg.createdAt;
+        sessionMessages = [msg];
+      } else {
+        // Continue current session
+        sessionMessages.push(msg);
+      }
+
+      // Check if current session matches our target
+      if (currentSessionStart && new Date(currentSessionStart).getTime() === sessionTimestamp) {
+        foundSession = true;
+      }
+
+      lastTime = msg.createdAt;
+    }
+
+    if (!foundSession || sessionMessages.length === 0) {
       return NextResponse.json(
         { error: "Сеанс чата не найден" },
         { status: 404 }
       );
-    }
-
-    // Find all messages in this session (until next 1-hour gap)
-    const ONE_HOUR = 60 * 60 * 1000;
-    const sessionMessages: typeof allMessages = [];
-    const startTime = new Date(
-      allMessages[startingMessageIndex].createdAt
-    ).getTime();
-
-    for (let i = startingMessageIndex; i < allMessages.length; i++) {
-      const messageTime = new Date(allMessages[i].createdAt).getTime();
-
-      // Stop if we've hit the next session boundary
-      if (i > startingMessageIndex && messageTime - startTime > ONE_HOUR) {
-        break;
-      }
-
-      sessionMessages.push(allMessages[i]);
     }
 
     return NextResponse.json({
