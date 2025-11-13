@@ -157,9 +157,10 @@ export default function Chat() {
         return [...filtered, realUserMessage, aiMessage];
       });
 
-      // Если AI сообщил о завершении профиля, сохраняем данные
+      // Если AI сообщил о завершении профиля, сохраняем данные и генерируем документы
       if (data.message.includes("[PROFILE_COMPLETE]")) {
         try {
+          // Сохраняем профиль
           const extractResponse = await fetch("/api/chat/extract-profile", {
             method: "POST",
           });
@@ -167,9 +168,31 @@ export default function Chat() {
           if (extractResponse.ok) {
             const extractData = await extractResponse.json();
             console.log("Профиль сохранен:", extractData);
+            
+            // Генерируем документы
+            const generateResponse = await fetch("/api/documents/generate", {
+              method: "POST",
+            });
+            
+            if (generateResponse.ok) {
+              const generateData = await generateResponse.json();
+              console.log("Документы сгенерированы:", generateData);
+              
+              // Добавляем сообщение с кнопками скачивания
+              const documentsMessage: ChatMessage = {
+                id: `docs-${Date.now()}`,
+                role: "assistant",
+                content: `✅ Документы успешно сгенерированы!\n\nВы можете скачать:\n1. Заявление о вступлении в профсоюз\n2. Заявление о перечислении членских взносов\n\nПерейдите в раздел "Документы" для просмотра и скачивания.`,
+                createdAt: new Date(),
+              };
+              
+              shouldAutoScrollRef.current = true;
+              setMessages((prev) => [...prev, documentsMessage]);
+            }
           }
         } catch (error) {
-          console.error("Ошибка сохранения профиля:", error);
+          console.error("Ошибка обработки профиля:", error);
+          setError("Профиль сохранен, но возникла ошибка при генерации документов.");
         }
       }
     } catch (error) {

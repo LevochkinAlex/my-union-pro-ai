@@ -135,6 +135,8 @@ enum DocumentType {
 // Статусы документов
 enum DocumentStatus {
   DRAFT // Черновик
+  GENERATED // Сгенерирован
+  SIGNED // Подписан
   PENDING // Ожидает проверки
   APPROVED // Одобрен
   REJECTED // Отклонен
@@ -145,15 +147,23 @@ enum DocumentStatus {
 model Document {
   id     String         @id @default(cuid())
   type   DocumentType
-  status DocumentStatus @default(PENDING)
+  status DocumentStatus @default(GENERATED)
 
   // Содержимое
-  title   String
-  content String? @db.Text
+  title       String
+  content     String? @db.Text
+  description String? @db.Text
 
   // Файлы (PDF и подписанные копии)
   filePath       String? // Сгенерированный PDF
   signedFilePath String? // Подписанный скан
+  fileName       String? // Имя файла
+  fileSize       Int? // Размер в байтах
+  mimeType       String  @default("application/pdf")
+
+  // Google Drive хранение
+  driveFileId String? @unique // ID файла в Google Drive
+  driveUrl    String? // Публичная ссылка на файл
 
   // Владелец
   userId String
@@ -161,7 +171,7 @@ model Document {
 
   // Организация
   organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id])
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
   // Комментарий при отклонении
   rejectionReason String? @db.Text
@@ -174,6 +184,7 @@ model Document {
   @@index([organizationId])
   @@index([status])
   @@index([type])
+  @@index([driveFileId])
 }
 
 // Сообщения AI чата для сбора данных профиля
