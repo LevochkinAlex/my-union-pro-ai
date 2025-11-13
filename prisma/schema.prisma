@@ -529,6 +529,9 @@ enum AppealStatus {
 model UserAppeal {
   id String @id @default(cuid())
 
+  // 8-значный публичный ID для отслеживания (10000000-99999999)
+  publicId String @unique @db.Char(8)
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -552,6 +555,7 @@ model UserAppeal {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+  @@index([publicId])
   @@index([type])
   @@index([status])
   @@index([createdAt])

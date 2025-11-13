@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import ThemeToggle from "@/components/ThemeToggle";
 import { LogoIcon } from "@/components/Logo";
 import ChatMenu from "@/components/dashboard/ChatMenu";
+import AppealMenu from "@/components/dashboard/AppealMenu";
 import { signOut } from "next-auth/react";
 
 interface NavItem {
@@ -63,6 +64,9 @@ export default function Sidebar({ items, userInitial }: SidebarProps) {
         <nav className={`flex-1 py-4 space-y-2 overflow-y-auto ${isCollapsed ? "px-3" : "px-4"}`}>
           {/* Chat menu with history */}
           <ChatMenu isCollapsed={isCollapsed} />
+          
+          {/* Appeal menu */}
+          <AppealMenu isCollapsed={isCollapsed} />
 
           {/* Other menu items */}
           {items.map((item) => {

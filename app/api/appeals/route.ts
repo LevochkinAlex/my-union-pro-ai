@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { generateAppealPublicId, formatAppealId } from "@/lib/appeal-id";
 
 /**
  * GET /api/appeals - Retrieve user's appeals
@@ -40,6 +41,7 @@ export async function GET(request: NextRequest) {
       success: true,
       appeals: appeals.map((appeal) => ({
         id: appeal.id,
+        publicId: formatAppealId(appeal.publicId),
         type: appeal.type,
         status: appeal.status,
         title: appeal.title,
@@ -82,14 +84,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Generate unique 8-digit public ID
+    let publicId: string;
+    let isUnique = false;
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    while (!isUnique && attempts < maxAttempts) {
+      publicId = generateAppealPublicId();
+      const existing = await prisma.userAppeal.findUnique({
+        where: { publicId },
+      });
+      if (!existing) {
+        isUnique = true;
+      }
+      attempts++;
+    }
+
+    if (!isUnique) {
+      return NextResponse.json(
+        { error: "Failed to generate unique ID" },
+        { status: 500 }
+      );
+    }
+
     // Create new appeal
     const appeal = await prisma.userAppeal.create({
       data: {
         userId: session.user.id,
+        publicId: publicId!,
         type,
         status: "PENDING",
         title,
         description: description || "",
+        question: "", // Will be filled when user sends first message
       },
     });
 
@@ -97,6 +125,7 @@ export async function POST(request: NextRequest) {
       success: true,
       appeal: {
         id: appeal.id,
+        publicId: formatAppealId(appeal.publicId),
         type: appeal.type,
         status: appeal.status,
         title: appeal.title,

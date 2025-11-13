@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 
 interface Appeal {
   id: string;
+  publicId: string;
   type: string;
   status: string;
   title: string;
@@ -166,6 +167,9 @@ export default function AppealsPage() {
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                       {appeal.title}
                     </h3>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-bold text-purple-700 bg-purple-100 dark:text-purple-300 dark:bg-purple-900/30">
+                      #{appeal.publicId}
+                    </span>
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(appeal.status)}`}>
                       {APPEAL_STATUSES[appeal.status as keyof typeof APPEAL_STATUSES]?.label || appeal.status}
                     </span>
