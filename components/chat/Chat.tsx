@@ -172,6 +172,29 @@ export default function Chat() {
     );
   }
 
+  // Проверка авторизации
+  if (!session) {
+    return (
+      <div className="flex h-full items-center justify-center bg-white dark:bg-gray-900">
+        <div className="text-center max-w-md px-6">
+          <div className="mb-4 text-6xl">🔒</div>
+          <h2 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">
+            Требуется авторизация
+          </h2>
+          <p className="mb-6 text-gray-600 dark:text-gray-400">
+            Пожалуйста, войдите в систему, чтобы использовать AI чат
+          </p>
+          <a
+            href="/login"
+            className="inline-block rounded-lg bg-blue-600 px-6 py-3 text-white hover:bg-blue-700 transition-colors"
+          >
+            Войти в систему
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col bg-white dark:bg-gray-900">
       {/* Сообщение об ошибке */}
