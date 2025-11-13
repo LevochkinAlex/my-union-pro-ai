@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -22,7 +22,6 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   const [hoveredSession, setHoveredSession] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const router = useRouter();
-  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isExpanded) {
@@ -30,23 +29,6 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     }
   }, [isExpanded]);
 
-  // Close menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      // If click is outside the menu ref, close it
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        if (openMenuId) {
-          setOpenMenuId(null);
-          setHoveredSession(null);
-        }
-      }
-    };
-
-    if (openMenuId) {
-      document.addEventListener("click", handleClickOutside);
-      return () => document.removeEventListener("click", handleClickOutside);
-    }
-  }, [openMenuId]);
 
   const loadSessions = async () => {
     try {
@@ -120,7 +102,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   };
 
   return (
-    <div ref={menuRef} className={`space-y-2 ${isCollapsed ? "" : ""}`}>
+    <div className={`space-y-2 ${isCollapsed ? "" : ""}`}>
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className={`w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-colors ${
