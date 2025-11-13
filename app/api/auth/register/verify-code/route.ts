@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await bcrypt.hash(generatedPassword, 10);
 
     // Обновляем пользователя: подтверждаем email, устанавливаем пароль
-    await prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { email },
       data: {
         emailVerified: new Date(),
@@ -54,6 +54,29 @@ export async function POST(request: NextRequest) {
         membershipStatus: "PROFILE_INCOMPLETE", // Email подтвержден, профиль не заполнен
       },
     });
+
+    // Создаем начальный чат "Заявление" с приветствием бота
+    try {
+      const defaultBot = await prisma.chatBot.findFirst({
+        where: { name: "MyUnion Pro" },
+      });
+
+      if (defaultBot) {
+        const welcomeMessage = "Здравствуйте! Я — ваш персональный ассистент MyUnion Pro. Я помогу вам составить заявления для вступления в профсоюз и для перечисления членских взносов. Давайте начнем! Как я могу к вам обращаться (назовите, пожалуйста, ваши фамилию, имя и отчество)?";
+
+        await prisma.chatMessage.create({
+          data: {
+            content: welcomeMessage,
+            role: "assistant",
+            userId: updatedUser.id,
+            chatBotId: defaultBot.id,
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Error creating initial chat message:", error);
+      // Don't fail registration if chat creation fails
+    }
 
     // Отправляем приветственное письмо с паролем
     await sendWelcomeEmail(email, generatedPassword);
