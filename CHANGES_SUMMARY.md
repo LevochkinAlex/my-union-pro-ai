@@ -181,7 +181,7 @@ Comprehensive development session implementing multiple features for the MyUnion
 ## 📊 Statistics
 
 ### Commits Made
-Total: **9 commits**
+Total: **10 commits**
 
 ### Files Created
 - `lib/i18n.ts`
@@ -190,6 +190,9 @@ Total: **9 commits**
 - `app/api/chat/sessions/rename/route.ts`
 - `app/api/appeals/route.ts`
 - `app/dashboard/appeals/page.tsx`
+- `lib/appeal-id.ts` ⭐ NEW
+- `components/dashboard/AppealMenu.tsx` ⭐ NEW
+- `app/api/appeals/[id]/route.ts` ⭐ NEW
 - `CHANGES_SUMMARY.md` (this file)
 
 ### Files Modified
@@ -200,21 +203,44 @@ Total: **9 commits**
 - `components/dashboard/ChatMenu.tsx` (1 major change)
 - `app/dashboard/layout.tsx` (1 major change)
 - `components/Providers.tsx` (1 major change)
+- `prisma/schema.prisma` ⭐ NEW
+- `app/api/appeals/route.ts` ⭐ NEW
+- `components/dashboard/Sidebar.tsx` ⭐ NEW
+- `app/dashboard/appeals/page.tsx` ⭐ NEW
 
 ### Total Changes
-- **7 files created**
-- **7 files modified**
-- **Lines added**: ~1,500+
-- **Lines removed**: ~50
+- **10 files created**
+- **11 files modified**
+- **Lines added**: ~2,000+
+- **Lines removed**: ~100
 
 ---
 
-## 🔄 Pending Tasks
+## 🔄 NEW: Appeal Chat with 8-Digit ID (✓ DONE)
+**Files Created**: `lib/appeal-id.ts`, `components/dashboard/AppealMenu.tsx`, `app/api/appeals/[id]/route.ts`
+**Files Modified**: `prisma/schema.prisma`, `app/api/appeals/route.ts`, `components/dashboard/Sidebar.tsx`, `app/dashboard/appeals/page.tsx`
 
-### Task 2: Appeal Chat with 8-Digit ID (In Progress)
-- Creating new appeals should add them to sidebar as "Обращение" with 8-digit ID
-- Requires database schema for storing appeal metadata
-- Would benefit from webhook integration for real-time updates
+**Changes**:
+- Added `publicId` field to UserAppeal model (8-digit unique string)
+- Created appeal ID generation utility with collision detection
+- Implemented AppealMenu component showing appeals in sidebar
+- Appeals display type, status, and public ID in sidebar format
+- Each appeal can be opened directly from sidebar
+- Added DELETE endpoint for removing appeals
+- Appeals page displays public IDs with purple badges
+- Format: "XXXXXXXX" (8 digits, displayed as "1234-5678" in UI)
+- Full CRUD operations with proper ownership validation
+
+**Features**:
+- ✅ Unique 8-digit IDs generated using Math.random (10000000-99999999)
+- ✅ Collision detection with retry logic (max 10 attempts)
+- ✅ Appeals appear in sidebar when expanded
+- ✅ Display appeal type and status with emoji indicators
+- ✅ Click to open appeal details
+- ✅ Delete option in dropdown menu
+- ✅ Real-time updates when appeals are created/deleted
+
+**Commit**: `feat: Add 8-digit public ID for appeals with sidebar integration`
 
 ---
 
