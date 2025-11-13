@@ -86,16 +86,22 @@ export default function Chat() {
       let data;
       try {
         data = await response.json();
-      } catch {
+      } catch (jsonError) {
         // Если ответ не является валидным JSON
+        if (response.status === 401) {
+          throw new Error("Сессия истекла. Пожалуйста, войдите в систему снова.");
+        }
         throw new Error(
           response.status === 503
             ? "AI бот не настроен. Обратитесь к администратору."
-            : `Ошибка сервера (${response.status}). Попробуйте еще раз.`
+            : `Ошибка сервера (${response.status}). Попробуйте перезагрузить страницу.`
         );
       }
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Необходима авторизация. Пожалуйста, войдите в систему.");
+        }
         throw new Error(data.error || `Ошибка отправки сообщения (${response.status})`);
       }
       
