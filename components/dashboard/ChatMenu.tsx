@@ -20,8 +20,11 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [renameSessionId, setRenameSessionId] = useState<string | null>(null);
+  const [newSessionName, setNewSessionName] = useState("");
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -121,6 +124,32 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     } catch (error) {
       console.error("Error clearing all chats:", error);
       alert("Ошибка при удалении истории");
+    }
+  };
+
+  const handleRenameSession = async (sessionId: string, newName: string) => {
+    if (!newName.trim()) return;
+
+    try {
+      const response = await fetch("/api/chat/sessions/rename", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, title: newName }),
+      });
+
+      if (response.ok) {
+        // Update the session in local state
+        setSessions(sessions.map(s => 
+          s.id === sessionId ? { ...s, title: newName } : s
+        ));
+        setRenameSessionId(null);
+        setNewSessionName("");
+      } else {
+        alert("Ошибка при переименовании чата");
+      }
+    } catch (error) {
+      console.error("Error renaming session:", error);
+      alert("Ошибка при переименовании чата");
     }
   };
 
@@ -231,7 +260,9 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  alert("Функция переименования ещё не реализована");
+                  const currentSession = sessions.find(s => s.id === openMenuId);
+                  setRenameSessionId(openMenuId);
+                  setNewSessionName(currentSession?.title || "");
                   setOpenMenuId(null);
                 }}
                 className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700 flex items-center gap-2 border-b border-gray-100 dark:border-gray-700"
@@ -286,6 +317,53 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
               <span>Очистить все</span>
             </button>
           )}
+        </div>
+      )}
+
+      {/* Rename Modal */}
+      {renameSessionId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000]">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Переименовать чат
+            </h3>
+            <input
+              ref={renameInputRef}
+              type="text"
+              value={newSessionName}
+              onChange={(e) => setNewSessionName(e.target.value)}
+              placeholder="Введите новое название чата"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleRenameSession(renameSessionId, newSessionName);
+                }
+                if (e.key === "Escape") {
+                  setRenameSessionId(null);
+                  setNewSessionName("");
+                }
+              }}
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setRenameSessionId(null);
+                  setNewSessionName("");
+                }}
+                className="px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => handleRenameSession(renameSessionId, newSessionName)}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                disabled={!newSessionName.trim()}
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
