@@ -195,7 +195,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
 
                   {/* Dropdown menu button */}
                   <div className="relative">
-                    {hoveredSession === session.id && (
+                    {(hoveredSession === session.id || openMenuId === session.id) && (
                       <button
                         onClick={(e) => {
                           e.preventDefault();
