@@ -80,14 +80,14 @@ export async function POST(request: NextRequest) {
     // Сохраняем информацию о документе в базе данных
     const relativePath = `/uploads/documents/${uniqueFileName}`;
     
-    // Если это заявление о вступлении, проверяем, есть ли уже сгенерированное заявление
+    // Если это заявление, проверяем, есть ли уже документ этого типа (не создаем новый)
     let document;
-    if (documentType === "MEMBERSHIP_APPLICATION") {
+    if (documentType === "MEMBERSHIP_APPLICATION" || documentType === "CONTRIBUTION_APPLICATION") {
+      // Ищем любой существующий документ этого типа (независимо от статуса)
       const existingDoc = await prisma.document.findFirst({
         where: {
           userId: session.user.id,
-          type: "MEMBERSHIP_APPLICATION",
-          status: "GENERATED", // Ищем сгенерированное заявление
+          type: documentType,
         },
         orderBy: {
           createdAt: "desc",
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       });
 
       if (existingDoc) {
-        // Обновляем существующий документ, добавляя подписанный файл
+        // Всегда обновляем существующий документ, добавляя подписанный файл
         document = await prisma.document.update({
           where: { id: existingDoc.id },
           data: {
@@ -104,48 +104,10 @@ export async function POST(request: NextRequest) {
             updatedAt: new Date(),
           },
         });
-        console.log("[upload] Updated existing MEMBERSHIP_APPLICATION with signed file:", document.id);
+        console.log(`[upload] Updated existing ${documentType} with signed file:`, document.id);
       } else {
-        // Создаем новый документ
-        document = await prisma.document.create({
-          data: {
-            userId: session.user.id,
-            type: documentType,
-            status: "SIGNED",
-            title: file.name,
-            fileName: file.name,
-            filePath: relativePath,
-            signedFilePath: relativePath,
-            fileSize: file.size,
-            mimeType: file.type || "application/octet-stream",
-          },
-        });
-        console.log("[upload] Created new MEMBERSHIP_APPLICATION document:", document.id);
-      }
-    } else if (documentType === "CONTRIBUTION_APPLICATION") {
-      // Аналогично для заявления о взносах
-      const existingDoc = await prisma.document.findFirst({
-        where: {
-          userId: session.user.id,
-          type: "CONTRIBUTION_APPLICATION",
-          status: "GENERATED",
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
-
-      if (existingDoc) {
-        document = await prisma.document.update({
-          where: { id: existingDoc.id },
-          data: {
-            status: "SIGNED",
-            signedFilePath: relativePath,
-            updatedAt: new Date(),
-          },
-        });
-        console.log("[upload] Updated existing CONTRIBUTION_APPLICATION with signed file:", document.id);
-      } else {
+        // Если документа нет вообще - создаем новый (но это не должно происходить в нормальном flow)
+        console.warn(`[upload] No existing ${documentType} found, creating new document (unexpected)`);
         document = await prisma.document.create({
           data: {
             userId: session.user.id,
