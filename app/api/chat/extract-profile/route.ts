@@ -209,7 +209,15 @@ export async function POST() {
       console.log("[extract-profile] Документы сохранены/обновлены в базе данных");
     } catch (error) {
       console.error("[extract-profile] Ошибка генерации заявлений:", error);
+      // Логируем подробности ошибки
+      if (error instanceof Error) {
+        console.error("[extract-profile] Error details:", {
+          message: error.message,
+          stack: error.stack,
+        });
+      }
       // Не прерываем процесс, если генерация заявлений не удалась
+      // Возможно документы уже были сгенерированы в /api/chat
     }
 
     // Добавляем маркер завершения профиля, если его еще нет

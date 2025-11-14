@@ -135,13 +135,6 @@ function ChatContent() {
     }
   }, [session, loadMessages, mode, sessionId]);
 
-  // Auto-run document generation check after chat is loaded (только для STATEMENT)
-  useEffect(() => {
-    if (messages.length > 0 && sessionType === "STATEMENT" && mode !== "appeal") {
-      checkAndGenerateDocuments();
-    }
-  }, [messages, mode, sessionType]);
-
   // Проверяем статус профиля и генерируем заявления если нужно
   const checkAndGenerateDocuments = useCallback(async () => {
     try {
@@ -150,7 +143,12 @@ function ChatContent() {
         method: "POST",
       });
 
-      const data = await response.json().catch(() => null);
+      let data: any = null;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.warn("[chat] Response is not JSON:", jsonError);
+      }
       
       if (response.ok) {
         console.log("[chat] ✅ Documents generated successfully");
@@ -165,13 +163,40 @@ function ChatContent() {
         }
       } else if (response.status === 400 && data) {
         console.log("[chat] ⚠️ Profile not yet complete", data.missingFields || []);
+        // Это нормально - профиль еще не заполнен
       } else {
-        console.error("[chat] ❌ Error generating documents:", data);
+        // Другие ошибки - логируем подробнее
+        console.error("[chat] ❌ Error generating documents:", {
+          status: response.status,
+          statusText: response.statusText,
+          data: data,
+        });
+        // Не показываем ошибку пользователю, так как документы могут быть уже сгенерированы в /api/chat
       }
     } catch (error) {
       console.error("[chat] ❌ Error checking profile:", error);
+      // Не показываем ошибку пользователю
     }
   }, [sessionId, currentSessionId]);
+
+  // Auto-run document generation check after chat is loaded (только для STATEMENT)
+  // Проверяем только если есть маркер [PROFILE_COMPLETE] но документы могут быть не сгенерированы
+  useEffect(() => {
+    if (messages.length > 0 && sessionType === "STATEMENT" && mode !== "appeal") {
+      const lastMessage = messages[messages.length - 1];
+      const hasProfileCompleteMarker = lastMessage?.content?.includes("[PROFILE_COMPLETE]");
+      
+      // Проверяем документы только если есть маркер завершения профиля
+      if (hasProfileCompleteMarker) {
+        // Небольшая задержка чтобы дать время серверу сгенерировать документы
+        const timeoutId = setTimeout(() => {
+          checkAndGenerateDocuments();
+        }, 2000);
+        
+        return () => clearTimeout(timeoutId);
+      }
+    }
+  }, [messages, mode, sessionType, checkAndGenerateDocuments]);
 
   // Прокрутка вниз только при новых сообщениях от пользователя или бота
   useEffect(() => {
