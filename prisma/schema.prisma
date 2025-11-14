@@ -76,6 +76,7 @@ model User {
 
   // Чат с AI
   chatMessages               ChatMessage[]
+  chatSessions               ChatSession[]
   updatedSettings            SystemSetting[]     @relation("SystemSettingUpdatedBy")
   uploadedKnowledgeDocuments KnowledgeDocument[] @relation("KnowledgeDocumentUploadedBy")
 
@@ -197,12 +198,41 @@ model Document {
   @@index([driveFileId])
 }
 
+// Сессии чата
+enum ChatSessionType {
+  STATEMENT // Чат для создания заявления
+  APPEAL    // Чат для обращения
+}
+
+model ChatSession {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title String // Название сессии (например, "Заявление" или "Обращение №123456")
+  type  ChatSessionType @default(STATEMENT)
+
+  // Сообщения в этой сессии
+  messages ChatMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+}
+
 // Сообщения AI чата для сбора данных профиля
 model ChatMessage {
   id String @id @default(cuid())
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sessionId String?
+  session   ChatSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   chatBotId String?
   chatBot   ChatBot? @relation(fields: [chatBotId], references: [id], onDelete: SetNull)
@@ -216,6 +246,7 @@ model ChatMessage {
   createdAt DateTime @default(now())
 
   @@index([userId])
+  @@index([sessionId])
   @@index([chatBotId])
   @@index([appealId])
   @@index([createdAt])

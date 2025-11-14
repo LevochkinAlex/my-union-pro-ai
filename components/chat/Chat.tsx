@@ -18,6 +18,7 @@ function ChatContent() {
   const mode = searchParams?.get("mode"); // 'appeal' for Appeal Bot
   const sessionId = searchParams?.get("session"); // Specific chat session to load
   const [chatBotId, setChatBotId] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(sessionId || null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -72,6 +73,11 @@ function ChatContent() {
       const data = await response.json();
       setMessages(data.messages || []);
       
+      // Обновляем sessionId если он был возвращен
+      if (data.session?.id) {
+        setCurrentSessionId(data.session.id);
+      }
+      
       // Явно очищаем ошибку при успешной загрузке
       setError(null);
       
@@ -110,10 +116,13 @@ function ChatContent() {
 
   // Load message history
   useEffect(() => {
-    if (session?.user?.id && !mode) { // Don't load history for new appeal chat
+    if (session?.user?.id) {
+      if (sessionId) {
+        setCurrentSessionId(sessionId);
+      }
       loadMessages();
     }
-  }, [session, loadMessages, mode]);
+  }, [session, loadMessages, mode, sessionId]);
 
   // Auto-run document generation check after chat is loaded
   useEffect(() => {
@@ -173,9 +182,12 @@ function ChatContent() {
 
     try {
       setError(null);
-      const body: { message: string; chatBotId?: string } = { message: userMessage };
+      const body: { message: string; chatBotId?: string; sessionId?: string } = { message: userMessage };
       if (chatBotId) {
         body.chatBotId = chatBotId;
+      }
+      if (currentSessionId) {
+        body.sessionId = currentSessionId;
       }
 
       const response = await fetch("/api/chat", {
@@ -233,6 +245,17 @@ function ChatContent() {
           question: userMessage,
           keywords,
         });
+      }
+
+      // Обновляем sessionId если он был возвращен
+      if (data.sessionId) {
+        setCurrentSessionId(data.sessionId);
+        // Обновляем URL с sessionId
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href);
+          url.searchParams.set("session", data.sessionId);
+          window.history.replaceState({}, "", url.toString());
+        }
       }
 
       // Enable autoscroll for AI response

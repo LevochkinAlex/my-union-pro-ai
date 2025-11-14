@@ -170,12 +170,41 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     message = body.message;
     const chatBotId = body.chatBotId;
+    const sessionId = body.sessionId; // ID сессии чата
 
     if (!message || typeof message !== "string") {
       return NextResponse.json(
         { error: "Сообщение обязательно" },
         { status: 400 }
       );
+    }
+
+    // Получаем или создаем сессию чата
+    let chatSession = null;
+    if (sessionId) {
+      // Проверяем, что сессия существует и принадлежит пользователю
+      chatSession = await prisma.chatSession.findFirst({
+        where: {
+          id: sessionId,
+          userId: session.user.id,
+        },
+      });
+      
+      if (!chatSession) {
+        return NextResponse.json(
+          { error: "Сессия не найдена" },
+          { status: 404 }
+        );
+      }
+    } else {
+      // Создаем новую сессию для заявления (по умолчанию)
+      chatSession = await prisma.chatSession.create({
+        data: {
+          userId: session.user.id,
+          title: "Заявление",
+          type: "STATEMENT",
+        },
+      });
     }
 
     // Получаем бота - либо переданный, либо default
@@ -204,9 +233,10 @@ export async function POST(request: NextRequest) {
     // Формируем системный промпт с учетом настроек бота
     const systemPrompt = await buildSystemPrompt(bot, relevantChunks);
 
-    // Получаем историю сообщений пользователя
+    // Получаем историю сообщений из текущей сессии
     const chatHistory = await prisma.chatMessage.findMany({
       where: {
+        sessionId: chatSession.id,
         userId: session.user.id,
       },
       orderBy: {
@@ -231,10 +261,11 @@ export async function POST(request: NextRequest) {
       },
     ];
 
-    // Сохраняем сообщение пользователя
+    // Сохраняем сообщение пользователя с привязкой к сессии
     await prisma.chatMessage.create({
       data: {
         userId: session.user.id,
+        sessionId: chatSession.id,
         role: "user",
         content: message,
         chatBotId: bot.id,
@@ -407,7 +438,10 @@ export async function POST(request: NextRequest) {
     // Проверяем полноту профиля и добавляем маркер завершения если нужно
     try {
       const allMessages = await prisma.chatMessage.findMany({
-        where: { userId: session.user.id },
+        where: { 
+          userId: session.user.id,
+          sessionId: chatSession.id,
+        },
         orderBy: { createdAt: "asc" },
       });
 
@@ -498,10 +532,11 @@ export async function POST(request: NextRequest) {
       // Don't fail the chat if profile check fails
     }
 
-    // Сохраняем ответ AI
+    // Сохраняем ответ AI с привязкой к сессии
     await prisma.chatMessage.create({
       data: {
         userId: session.user.id,
+        sessionId: chatSession.id,
         role: "assistant",
         content: aiResponse,
         chatBotId: bot.id,
@@ -544,6 +579,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       message: aiResponse,
+      sessionId: chatSession.id,
     });
   } catch (error) {
     console.error("Chat API error:", error);
@@ -583,9 +619,35 @@ export async function GET() {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
     
-    console.log(`GET /api/chat: Поиск сообщений для пользователя ${session.user.id}...`);
+    // Ищем последнюю сессию заявления (STATEMENT) или создаем новую
+    let chatSession = await prisma.chatSession.findFirst({
+      where: {
+        userId: session.user.id,
+        type: "STATEMENT",
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    // Если нет сессии заявления, создаем новую
+    if (!chatSession) {
+      console.log("GET /api/chat: Сессии заявления нет, создаем новую...");
+      chatSession = await prisma.chatSession.create({
+        data: {
+          userId: session.user.id,
+          title: "Заявление",
+          type: "STATEMENT",
+        },
+      });
+    }
+    
+    console.log(`GET /api/chat: Поиск сообщений для сессии ${chatSession.id}...`);
     const messages = await prisma.chatMessage.findMany({
-      where: { userId: session.user.id },
+      where: { 
+        userId: session.user.id,
+        sessionId: chatSession.id,
+      },
       orderBy: { createdAt: "asc" },
     });
     console.log(`GET /api/chat: Найдено ${messages.length} сообщений.`);
@@ -608,15 +670,30 @@ export async function GET() {
           content: welcomeMessageContent,
           role: "assistant",
           userId: session.user.id,
+          sessionId: chatSession.id,
           chatBotId: defaultBot.id,
         },
       });
       console.log("GET /api/chat: Приветственное сообщение создано. ID:", welcomeMessage.id);
-      return NextResponse.json({ messages: [welcomeMessage] });
+      return NextResponse.json({ 
+        session: {
+          id: chatSession.id,
+          title: chatSession.title,
+          type: chatSession.type,
+        },
+        messages: [welcomeMessage] 
+      });
     }
 
     console.log("GET /api/chat: Возвращаем историю сообщений.");
-    return NextResponse.json({ messages });
+    return NextResponse.json({ 
+      session: {
+        id: chatSession.id,
+        title: chatSession.title,
+        type: chatSession.type,
+      },
+      messages 
+    });
     
   } catch (error) {
     console.error("!!! GET /api/chat КРИТИЧЕСКАЯ ОШИБКА:", error);

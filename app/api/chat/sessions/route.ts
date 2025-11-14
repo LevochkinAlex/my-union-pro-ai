@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// Получить список последних уникальных чатов (по группам сообщений)
+// Получить список сессий чата
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -17,79 +17,31 @@ export async function GET(request: NextRequest) {
 
     console.log("[sessions-api] Fetching sessions for user:", session.user.id);
 
-    // Получаем сообщения пользователя, сгруппированные по временным интервалам
-    // для определения отдельных сеансов чата
-    const messages = await prisma.chatMessage.findMany({
+    // Получаем все сессии пользователя
+    const chatSessions = await prisma.chatSession.findMany({
       where: {
         userId: session.user.id,
+      },
+      include: {
+        _count: {
+          select: { messages: true },
+        },
       },
       orderBy: {
         createdAt: "desc",
       },
-      take: 100, // Последние 100 сообщений
     });
 
-    console.log("[sessions-api] Found messages:", messages.length);
+    console.log("[sessions-api] Found sessions:", chatSessions.length);
 
-    // Группируем сообщения в сеансы (промежуток более 1 часа считается новым сеансом)
-    const sessions: Array<{ messages: typeof messages; startTime: Date }> = [];
-    let currentSession: typeof messages = [];
-    let lastTime: Date | null = null;
-    let sessionStartTime: Date | null = null;
-    const ONE_HOUR = 60 * 60 * 1000;
-
-    for (const message of messages) {
-      if (!lastTime || new Date(message.createdAt).getTime() - new Date(lastTime).getTime() > ONE_HOUR) {
-        if (currentSession.length > 0 && sessionStartTime) {
-          sessions.push({ messages: currentSession, startTime: sessionStartTime });
-        }
-        currentSession = [message];
-        sessionStartTime = message.createdAt;
-      } else {
-        currentSession.push(message);
-      }
-      lastTime = message.createdAt;
-    }
-
-    if (currentSession.length > 0 && sessionStartTime) {
-      sessions.push({ messages: currentSession, startTime: sessionStartTime });
-    }
-
-    // Форматируем результат с заголовком каждого сеанса
-    const formattedSessions = sessions.map((session, index) => {
-      const firstUserMessage = session.messages
-        .slice()
-        .reverse()
-        .find((msg) => msg.role === "user");
-      
-      // Первый чат (самый старый) - это всегда "Заявление"
-      // Проверяем по индексу - последний элемент в отсортированном массиве (самый старый)
-      const isFirstChat = index === sessions.length - 1;
-      
-      // Проверяем если это содержит инициальное сообщение для statement
-      const hasInitialMessage = session.messages.some(msg => 
-        msg.role === "user" && msg.content === "Начать заполнение заявления"
-      );
-      
-      const isStatement = isFirstChat || hasInitialMessage;
-      
-      const title = isStatement 
-        ? "Заявление" 
-        : (firstUserMessage?.content
-            .substring(0, 50)
-            .replace(/\n/g, " ") || "Новый чат");
-
-      // Generate a stable session ID based on start time
-      const sessionId = `session-${session.startTime.getTime()}`;
-
-      console.log(`[sessions-api] Session ${index}: ${sessionId} - ${title} (${session.messages.length} messages, isStatement: ${isStatement})`);
-
+    // Форматируем результат
+    const formattedSessions = chatSessions.map((chatSession) => {
       return {
-        id: sessionId,
-        title,
-        createdAt: session.startTime,
-        messageCount: session.messages.length,
-        isStatement: isStatement, // Пометка что это statement
+        id: chatSession.id,
+        title: chatSession.title,
+        type: chatSession.type,
+        createdAt: chatSession.createdAt,
+        messageCount: chatSession._count.messages,
       };
     });
 
@@ -102,6 +54,58 @@ export async function GET(request: NextRequest) {
     console.error("Error fetching chat sessions:", error);
     return NextResponse.json(
       { error: "Ошибка при получении сеансов чата" },
+      { status: 500 }
+    );
+  }
+}
+
+// Создать новую сессию чата
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Не авторизован" },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const type = body.type || "APPEAL"; // APPEAL для обращения, STATEMENT для заявления
+    const title = body.title;
+
+    // Генерируем название для обращения
+    let sessionTitle = title;
+    if (!sessionTitle && type === "APPEAL") {
+      // Генерируем номер обращения на основе timestamp
+      const appealNumber = Date.now().toString().slice(-8);
+      sessionTitle = `Обращение №${appealNumber}`;
+    } else if (!sessionTitle) {
+      sessionTitle = "Заявление";
+    }
+
+    // Создаем новую сессию
+    const chatSession = await prisma.chatSession.create({
+      data: {
+        userId: session.user.id,
+        title: sessionTitle,
+        type: type === "APPEAL" ? "APPEAL" : "STATEMENT",
+      },
+    });
+
+    return NextResponse.json({
+      session: {
+        id: chatSession.id,
+        title: chatSession.title,
+        type: chatSession.type,
+        createdAt: chatSession.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error("Error creating chat session:", error);
+    return NextResponse.json(
+      { error: "Ошибка при создании сессии чата" },
       { status: 500 }
     );
   }

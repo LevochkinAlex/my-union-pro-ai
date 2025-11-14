@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation";
 interface ChatSession {
   id: string;
   title: string;
+  type: "STATEMENT" | "APPEAL";
   createdAt: string;
   messageCount: number;
-  isStatement?: boolean; // Это заявление (не удалять/очищать)
 }
 
 interface Appeal {
@@ -48,12 +48,6 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
         // Все сессии, включая statement (заявление)
         const allSessions = data.sessions || [];
         setSessions(allSessions);
-        
-        // Если нет заявления, это ошибка - оно всегда должно быть
-        const hasStatement = allSessions.some((s: ChatSession) => s.isStatement);
-        if (!hasStatement) {
-          console.warn("No statement chat found for user");
-        }
       }
 
       if (appealsRes.ok) {
@@ -96,9 +90,26 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     return () => document.removeEventListener("keydown", handleEscape);
   }, [openMenuId]);
 
-  const handleNewAppeal = () => {
-    // Create new appeal chat
-    router.push("/dashboard?mode=appeal");
+  const handleNewAppeal = async () => {
+    try {
+      // Создаем новую сессию обращения
+      const response = await fetch("/api/chat/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "APPEAL" }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Переходим к новой сессии
+        router.push(`/dashboard?session=${data.session.id}`);
+      } else {
+        alert("Ошибка при создании нового обращения");
+      }
+    } catch (error) {
+      console.error("Error creating new appeal:", error);
+      alert("Ошибка при создании нового обращения");
+    }
   };
 
   const handleOpenSession = (sessionId: string, type: "statement" | "appeal" | "chat" = "chat") => {
@@ -109,10 +120,10 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     }
   };
 
-  const handleDeleteSession = async (e: React.MouseEvent, sessionId: string, isStatement: boolean = false) => {
+  const handleDeleteSession = async (e: React.MouseEvent, sessionId: string, sessionType: "STATEMENT" | "APPEAL" = "APPEAL") => {
     e.stopPropagation();
     
-    if (isStatement) {
+    if (sessionType === "STATEMENT") {
       alert("Нельзя удалить чат заявления");
       return;
     }
@@ -120,7 +131,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     if (!confirm("Вы уверены, что хотите удалить этот чат?")) return;
 
     try {
-      const response = await fetch(`/api/chat/sessions?id=${sessionId}`, {
+      const response = await fetch(`/api/chat/sessions/${sessionId}`, {
         method: "DELETE",
       });
       if (response.ok) {
@@ -158,10 +169,10 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     }
   };
 
-  const handleClearSession = async (e: React.MouseEvent, sessionId: string, isStatement: boolean = false) => {
+  const handleClearSession = async (e: React.MouseEvent, sessionId: string, sessionType: "STATEMENT" | "APPEAL" = "APPEAL") => {
     e.stopPropagation();
     
-    if (isStatement) {
+    if (sessionType === "STATEMENT") {
       alert("Нельзя очищать чат заявления");
       return;
     }
@@ -227,9 +238,9 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
       {isExpanded && (
         <div className="space-y-1 border-l-2 border-gray-200 dark:border-gray-700 pl-2" ref={menuRef}>
           {/* Statement Chat - Always present, cannot be deleted/cleared */}
-          {sessions.find(s => s.isStatement) && (
+          {sessions.find(s => s.type === "STATEMENT") && (
             <div
-              onClick={() => handleOpenSession(sessions.find(s => s.isStatement)!.id, "chat")}
+              onClick={() => handleOpenSession(sessions.find(s => s.type === "STATEMENT")!.id, "chat")}
               className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer transition-colors group"
             >
               <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -242,7 +253,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
             </div>
           )}
 
-          {/* New Appeal Button */}
+          {/* New Chat Button */}
           <button
             onClick={handleNewAppeal}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded transition-colors border border-dashed border-purple-300 dark:border-purple-700"
@@ -250,7 +261,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Новое обращение
+            + Новый чат
           </button>
 
           {/* Appeals List */}
@@ -301,13 +312,13 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
             </div>
           )}
 
-          {/* Other Chat Sessions */}
-          {sessions.filter(s => !s.isStatement).length > 0 && (
+          {/* Appeal Sessions */}
+          {sessions.filter(s => s.type === "APPEAL").length > 0 && (
             <div className="space-y-1 mt-2">
               <div className="px-3 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Чаты
+                Обращения
               </div>
-              {sessions.filter(s => !s.isStatement).map((session) => (
+              {sessions.filter(s => s.type === "APPEAL").map((session) => (
                 <div key={session.id} className="relative group">
                   <div
                     onClick={() => handleOpenSession(session.id, "chat")}
@@ -349,7 +360,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                         Переименовать
                       </button>
                       <button
-                        onClick={(e) => handleClearSession(e, session.id, session.isStatement)}
+                        onClick={(e) => handleClearSession(e, session.id, session.type)}
                         className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 border-b border-gray-100 dark:border-gray-700"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -358,7 +369,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                         Очистить чат
                       </button>
                       <button
-                        onClick={(e) => handleDeleteSession(e, session.id, session.isStatement)}
+                        onClick={(e) => handleDeleteSession(e, session.id, session.type)}
                         className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

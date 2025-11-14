@@ -193,10 +193,20 @@ function generateContributionsApplicationHTML(
 async function generatePDFFromHTML(html: string, outputPath: string): Promise<void> {
   await ensureDocumentsDir();
   
-  const browser = await puppeteer.launch({
+  // Используем системный Chromium, если доступен
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || 
+    (process.platform === "linux" ? "/usr/bin/chromium-browser" : undefined);
+  
+  const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  };
+  
+  if (executablePath) {
+    launchOptions.executablePath = executablePath;
+  }
+  
+  const browser = await puppeteer.launch(launchOptions);
   
   try {
     const page = await browser.newPage();
