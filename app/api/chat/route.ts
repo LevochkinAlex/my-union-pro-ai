@@ -10,6 +10,7 @@ import { extractProfileDataFromMessages, isProfileComplete } from "@/lib/profile
 import type { Prisma } from "@prisma/client";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
 import { findOrganization } from "@/lib/organization-search";
+import { validateAddressWithDaData } from "@/lib/dadata";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -159,7 +160,9 @@ async function buildSystemPrompt(
      * Улицы, проспекта, бульвара
      * Номера дома
      * Номера квартиры/офиса (если применимо)
-   - Адрес будет автоматически валидирован и стандартизирован через сервис адресов
+   - Адрес будет автоматически валидирован и стандартизирован через сервис Dadata
+   - Если в сообщении пользователя есть метка "[Валидированный адрес через Dadata: ...]", обязательно покажи пользователю этот валидированный адрес и подтверди, что адрес обработан и сохранен
+   - После валидации адреса скажи: "Отлично! Ваш адрес валидирован и сохранен: [валидированный адрес]. Теперь, пожалуйста, укажите ваш номер телефона."
 
 6. **ТЕЛЕФОН**: Спроси: "Теперь, пожалуйста, укажите ваш номер телефона."
    - Ожидаются российские номера в формате +7 или 8 с 10 цифрами
@@ -308,6 +311,28 @@ export async function POST(request: NextRequest) {
 
     const relevantChunks = await retrieveRelevantChunks(bot, message);
 
+    // Если в сообщении пользователя есть адрес, валидируем его через Dadata ДО отправки к AI
+    let validatedAddress: string | null = null;
+    let userMessage = message;
+    if (message && (message.toLowerCase().includes("адрес") || message.toLowerCase().includes("живу") || message.toLowerCase().includes("проживаю"))) {
+      try {
+        console.log("[chat] Pre-validating address via Dadata:", message);
+        validatedAddress = await validateAddressWithDaData(message);
+        if (validatedAddress) {
+          console.log("[chat] Address pre-validated via Dadata:", validatedAddress);
+          // Обновляем сообщение пользователя, добавляя валидированный адрес
+          userMessage = `${message}\n\n[Валидированный адрес через Dadata: ${validatedAddress}]`;
+          // Сохраняем валидированный адрес в профиль сразу
+          await prisma.user.update({
+            where: { id: session.user.id },
+            data: { address: validatedAddress },
+          });
+        }
+      } catch (dadataError) {
+        console.warn("[chat] Error pre-validating address with Dadata:", dadataError);
+      }
+    }
+
     // Формируем системный промпт с учетом настроек бота и типа сессии
     const systemPrompt = await buildSystemPrompt(bot, relevantChunks, chatSession.type);
 
@@ -335,7 +360,7 @@ export async function POST(request: NextRequest) {
       })),
       {
         role: "user",
-        content: message,
+        content: userMessage,
       },
     ];
 
@@ -554,6 +579,30 @@ export async function POST(request: NextRequest) {
           const extractedData = await extractProfileDataFromMessages(messagesForExtraction);
           
           console.log("[chat] Extracted data:", extractedData);
+          
+          // Если в сообщении пользователя есть адрес, валидируем его через Dadata
+          if (message && (message.toLowerCase().includes("адрес") || message.toLowerCase().includes("живу") || message.toLowerCase().includes("проживаю") || extractedData.address)) {
+            const addressToValidate = extractedData.address || message;
+            if (addressToValidate && addressToValidate.length > 5) {
+              try {
+                console.log("[chat] Validating address via Dadata:", addressToValidate);
+                const validatedAddress = await validateAddressWithDaData(addressToValidate);
+                if (validatedAddress) {
+                  extractedData.address = validatedAddress;
+                  console.log("[chat] Address validated via Dadata:", validatedAddress);
+                  // Обновляем адрес в профиле сразу
+                  await prisma.user.update({
+                    where: { id: session.user.id },
+                    data: { address: validatedAddress },
+                  });
+                } else {
+                  console.log("[chat] Address could not be validated via Dadata, using original");
+                }
+              } catch (dadataError) {
+                console.warn("[chat] Error validating address with Dadata:", dadataError);
+              }
+            }
+          }
           
           // Если есть название организации, пытаемся найти её в базе
           if (extractedData.organizationName || message.includes("организац") || message.includes("работаю")) {
