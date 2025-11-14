@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import * as pdfParse from "pdf-parse";
+import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 import ExcelJS from "exceljs";
 import { parse as parseCsv } from "csv-parse/sync";
@@ -17,8 +17,13 @@ function normalizeWhitespace(text: string) {
 
 async function extractFromPdf(filePath: string) {
   const buffer = await fs.readFile(filePath);
-  const data = await pdfParse(buffer);
-  return normalizeWhitespace(data.text || "");
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const result = await parser.getText();
+    return normalizeWhitespace(result.text || "");
+  } finally {
+    await parser.destroy();
+  }
 }
 
 async function extractFromDocx(filePath: string) {
@@ -55,9 +60,13 @@ async function extractFromXlsx(filePath: string) {
     const rows: string[] = [];
 
     worksheet.eachRow((row) => {
-      const values = row.values
-        .flat()
-        .filter((value) => typeof value === "string" || typeof value === "number")
+      const rawValues = Array.isArray(row.values)
+        ? row.values
+        : Object.values(row.values ?? {});
+
+      const values = rawValues
+        .flatMap((value) => (Array.isArray(value) ? value : [value]))
+        .filter((value): value is string | number => typeof value === "string" || typeof value === "number")
         .map((value) => String(value).trim())
         .filter(Boolean);
 

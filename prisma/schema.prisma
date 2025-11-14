@@ -85,6 +85,10 @@ model User {
   // Push Notifications
   pushSubscriptions PushSubscription[]
 
+  // System Logs
+  systemLogs SystemLog[]
+  resolvedLogs SystemLog[] @relation("ResolvedLogs")
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -606,4 +610,47 @@ model PushSubscription {
   @@unique([userId, oneSignalId])
   @@index([userId])
   @@index([oneSignalId])
+}
+
+// Логирование системных ошибок и событий
+enum LogLevel {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+model SystemLog {
+  id String @id @default(cuid())
+
+  level LogLevel @default(INFO)
+  source String // API endpoint, component name, etc
+  message String
+  details Json?
+  stackTrace String?
+
+  // Связь с пользователем (если ошибка произошла в контексте пользователя)
+  userId String?
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Метаданные для анализа
+  metadata Json?
+
+  // Статус разрешения ошибки
+  resolved Boolean @default(false)
+  resolvedAt DateTime?
+  resolvedBy String?
+  resolvedByUser User? @relation("ResolvedLogs", fields: [resolvedBy], references: [id], onDelete: SetNull)
+
+  // Уведомление отправлено?
+  notificationSent Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([level])
+  @@index([source])
+  @@index([resolved])
+  @@index([createdAt])
+  @@index([userId])
 }

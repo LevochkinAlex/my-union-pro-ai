@@ -26,9 +26,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const body = await request.json();
+    const targetUserId = body.userId || session.user.id;
+
     // Fill profile with test data
     const updatedUser = await prisma.user.update({
-      where: { id: session.user.id },
+      where: { id: targetUserId },
       data: {
         firstName: "Иван",
         lastName: "Иванов",

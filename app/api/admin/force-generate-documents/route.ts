@@ -20,7 +20,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Проверяем, что это супер-админ
-    await ensureSuperAdmin(session.user.id);
+    const { error } = await ensureSuperAdmin();
+    if (error) {
+      return error;
+    }
 
     // Получаем всех пользователей с полным профилем
     const usersWithCompleteProfile = await prisma.user.findMany({
@@ -39,7 +42,7 @@ export async function POST(request: NextRequest) {
       },
       include: {
         organization: true,
-        Document: {
+        documents: {
           where: {
             type: {
               in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
@@ -56,7 +59,7 @@ export async function POST(request: NextRequest) {
     for (const user of usersWithCompleteProfile) {
       try {
         // Пропускаем если документы уже существуют
-        if (user.Document && user.Document.length >= 2) {
+        if (user.documents && user.documents.length >= 2) {
           console.log(`[force-generate] Пользователь ${user.id} уже имеет документы, пропускаем`);
           results.push({
             userId: user.id,
@@ -83,16 +86,7 @@ export async function POST(request: NextRequest) {
         ]);
 
         // Сохраняем в БД только если их нет
-        const existingDocs = await prisma.document.findMany({
-          where: {
-            userId: user.id,
-            type: {
-              in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
-            },
-          },
-        });
-
-        if (existingDocs.length === 0) {
+        if (!user.documents || user.documents.length === 0) {
           await Promise.all([
             prisma.document.create({
               data: {

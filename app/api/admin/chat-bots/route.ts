@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
+import type { Prisma } from "@prisma/client";
 
 // GET - список всех ботов
 export async function GET() {
@@ -102,17 +103,24 @@ export async function POST(request: NextRequest) {
       providerId = provider.id;
     }
 
-    const cleanOverride = providerOverride && typeof providerOverride === "object"
-      ? Object.fromEntries(
-          Object.entries(providerOverride).filter(([, value]) =>
-            value !== null && value !== undefined && String(value).trim() !== ""
-          ),
-        )
-      : null;
+    const cleanOverride: Prisma.JsonValue | null =
+      providerOverride && typeof providerOverride === "object"
+        ? (JSON.parse(
+            JSON.stringify(
+              Object.fromEntries(
+                Object.entries(providerOverride).filter(([, value]) => {
+                  if (value === null || value === undefined) return false;
+                  return typeof value === "string" ? value.trim().length > 0 : true;
+                }),
+              ),
+            ),
+          ) as Prisma.JsonValue)
+        : null;
 
-    const cleanRetrievalConfig = retrievalConfig && typeof retrievalConfig === "object"
-      ? retrievalConfig
-      : null;
+    const cleanRetrievalConfig: Prisma.JsonValue | null =
+      retrievalConfig && typeof retrievalConfig === "object"
+        ? (JSON.parse(JSON.stringify(retrievalConfig)) as Prisma.JsonValue)
+        : null;
 
     // Если устанавливаем бота по умолчанию, снимаем флаг с других
     if (isDefault) {

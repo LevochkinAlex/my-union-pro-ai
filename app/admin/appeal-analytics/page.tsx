@@ -32,7 +32,8 @@ export default function AppealAnalyticsPage() {
   const [selectedType, setSelectedType] = useState<AppealType | "">("");
 
   // Check if user is admin
-  if (session && session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN") {
+  const role = session?.user?.role as string | undefined;
+  if (session && !["SUPER_ADMIN", "ADMIN"].includes(role || "")) {
     redirect("/dashboard");
   }
 

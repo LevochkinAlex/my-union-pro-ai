@@ -7,8 +7,16 @@ import { prisma } from "@/lib/prisma";
 import { extractTextFromFile } from "@/lib/knowledge/extract";
 import { chunkText } from "@/lib/knowledge/chunker";
 import { generateEmbedding } from "@/lib/knowledge/embeddings";
-import type Bull from "bull";
+import type { Job } from "bullmq";
 import path from "path";
+import type { Prisma } from "@prisma/client";
+
+function toMetadataObject(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
 
 export interface DocumentProcessingJob {
   documentId: string;
@@ -22,7 +30,7 @@ export interface DocumentProcessingJob {
  * Extracted text, create chunks, generate embeddings
  */
 export async function processDocument(
-  job: Bull.Job<DocumentProcessingJob>
+  job: Job<DocumentProcessingJob>
 ): Promise<{
   documentId: string;
   chunksCreated: number;
@@ -141,7 +149,7 @@ export async function processDocument(
           data: {
             status: "COMPLETED",
             metadata: {
-              ...(document.source?.metadata || {}),
+              ...toMetadataObject(document.source?.metadata),
               mimeType: document.mimeType,
               size: document.fileSize,
               textLength: text.length,
@@ -190,13 +198,13 @@ export async function processDocument(
  * Job processor function to be used with Bull queue
  */
 export async function documentProcessorHandler(
-  job: Bull.Job<DocumentProcessingJob>
+  job: Job<DocumentProcessingJob>
 ): Promise<any> {
-  job.progress(0);
+  await job.updateProgress(0);
 
   try {
     const result = await processDocument(job);
-    job.progress(100);
+    await job.updateProgress(100);
     return result;
   } catch (error) {
     console.error("[Worker] Job failed:", error);

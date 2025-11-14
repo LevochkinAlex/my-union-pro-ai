@@ -1,21 +1,34 @@
 /**
- * Bull Queue setup for async document processing
+ * BullMQ Queue setup for async document processing
  * Requires Redis connection
  */
 
-import Bull from "bull";
+import { Queue, QueueEvents, Job } from "bullmq";
 
 // Queue names
 export const DOCUMENT_PROCESSING_QUEUE = "document-processing";
 
+type BullQueue = Queue<DocumentProcessingJob, any, string>;
+
 // Create queues
-let documentQueue: Bull.Queue | null = null;
+let documentQueue: BullQueue | null = null;
+let documentQueueEvents: QueueEvents | null = null;
 
-export function getDocumentQueue(): Bull.Queue {
+function getConnectionOptions() {
+  const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+  return {
+    connection: {
+      url: redisUrl,
+    },
+  };
+}
+
+export function getDocumentQueue(): BullQueue {
   if (!documentQueue) {
-    const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+    const connection = getConnectionOptions().connection;
 
-    documentQueue = new Bull(DOCUMENT_PROCESSING_QUEUE, redisUrl, {
+    documentQueue = new Queue(DOCUMENT_PROCESSING_QUEUE, {
+      connection,
       defaultJobOptions: {
         attempts: 3, // Retry failed jobs 3 times
         backoff: {
@@ -25,29 +38,22 @@ export function getDocumentQueue(): Bull.Queue {
         removeOnComplete: true, // Remove job after completion
         removeOnFail: false, // Keep failed jobs for analysis
       },
-      settings: {
-        maxStalledCount: 2,
-        stalledInterval: 30000, // Check for stalled jobs every 30s
-        maxRetriesPerSecond: 5,
-        retryProcessDelay: 5000, // Delay between retries
-      },
     });
 
-    // Event listeners
-    documentQueue.on("completed", (job) => {
-      console.log(`[Queue] Job ${job.id} completed:`, job.data);
+    documentQueueEvents = new QueueEvents(DOCUMENT_PROCESSING_QUEUE, {
+      connection,
     });
 
-    documentQueue.on("failed", (job, err) => {
-      console.error(`[Queue] Job ${job.id} failed:`, err.message);
+    documentQueueEvents.on("completed", ({ jobId }) => {
+      console.log(`[Queue] Job ${jobId} completed`);
     });
 
-    documentQueue.on("error", (err) => {
+    documentQueueEvents.on("failed", ({ jobId, failedReason }) => {
+      console.error(`[Queue] Job ${jobId} failed:`, failedReason);
+    });
+
+    documentQueueEvents.on("error", (err) => {
       console.error("[Queue] Queue error:", err);
-    });
-
-    documentQueue.on("stalled", (job) => {
-      console.warn(`[Queue] Job ${job.id} stalled, will retry`);
     });
   }
 
@@ -61,6 +67,10 @@ export async function closeQueues() {
   if (documentQueue) {
     await documentQueue.close();
     documentQueue = null;
+  }
+  if (documentQueueEvents) {
+    await documentQueueEvents.close();
+    documentQueueEvents = null;
   }
 }
 
@@ -80,7 +90,7 @@ export interface DocumentProcessingJob {
 export async function addDocumentToQueue(
   data: DocumentProcessingJob,
   priority?: "low" | "normal" | "high"
-): Promise<Bull.Job> {
+): Promise<Job> {
   const queue = getDocumentQueue();
 
   // Map priority to Bull priority (higher = processed first)
@@ -90,7 +100,7 @@ export async function addDocumentToQueue(
     low: 1,
   }[priority || "normal"];
 
-  const job = await queue.add(data, {
+  const job = await queue.add(data.documentId, data, {
     priority: bullPriority,
     jobId: `doc-${data.documentId}-${Date.now()}`,
   });
@@ -113,7 +123,7 @@ export async function getJobStatus(jobId: string) {
   return {
     id: job.id,
     state: await job.getState(),
-    progress: job.progress(),
+    progress: (typeof job.progress === "number" ? job.progress : 0) ?? 0,
     attempts: job.attemptsMade,
     maxAttempts: job.opts.attempts,
     data: job.data,
@@ -128,15 +138,22 @@ export async function getJobStatus(jobId: string) {
 export async function getQueueStats() {
   const queue = getDocumentQueue();
 
-  const counts = await queue.getJobCounts();
+  const counts = await queue.getJobCounts(
+    "waiting",
+    "active",
+    "completed",
+    "failed",
+    "delayed",
+    "paused"
+  );
 
   return {
-    waiting: counts.waiting,
-    active: counts.active,
-    completed: counts.completed,
-    failed: counts.failed,
-    delayed: counts.delayed,
-    paused: counts.paused,
+    waiting: counts.waiting || 0,
+    active: counts.active || 0,
+    completed: counts.completed || 0,
+    failed: counts.failed || 0,
+    delayed: counts.delayed || 0,
+    paused: counts.paused || 0,
   };
 }
 
@@ -145,7 +162,7 @@ export async function getQueueStats() {
  */
 export async function clearFailedJobs() {
   const queue = getDocumentQueue();
-  const failedJobs = await queue.getFailed();
+  const failedJobs = await queue.getJobs(["failed"], 0, -1, false);
   
   for (const job of failedJobs) {
     await job.remove();

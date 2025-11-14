@@ -55,13 +55,24 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Создаем начальный чат "Заявление" с приветствием бота
+    // Создаем начальный чат "Заявление" с начальным юзер-сообщением
     try {
       const defaultBot = await prisma.chatBot.findFirst({
         where: { name: "MyUnion Pro" },
       });
 
       if (defaultBot) {
+        // Создаем начальное пользовательское сообщение чтобы чат не был пустым
+        await prisma.chatMessage.create({
+          data: {
+            content: "Начать заполнение заявления",
+            role: "user",
+            userId: updatedUser.id,
+            chatBotId: defaultBot.id,
+          },
+        });
+
+        // Добавляем ответ бота с приветствием
         const welcomeMessage = "Здравствуйте! Я — ваш персональный ассистент MyUnion Pro. Я помогу вам составить заявления для вступления в профсоюз и для перечисления членских взносов. Давайте начнем! Как я могу к вам обращаться (назовите, пожалуйста, ваши фамилию, имя и отчество)?";
 
         await prisma.chatMessage.create({

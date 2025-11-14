@@ -4,71 +4,11 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOpenRouterConfig } from "@/lib/settings";
 import { generateEmbedding } from "@/lib/knowledge/embeddings";
+import { Logger } from "@/lib/logger";
+import { generateMembershipApplication, generateContributionsApplication } from "@/lib/documents";
+import { extractProfileDataFromMessages, isProfileComplete } from "@/lib/profile-extraction";
 import type { Prisma } from "@prisma/client";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
-
-// Helper function to extract profile data from messages
-function extractProfileDataFromMessages(messages: Array<{ role: string; content: string }>) {
-  const profileData: any = {};
-  
-  // Join all text for analysis
-  const allText = messages
-    .map((msg) => msg.content)
-    .join(" ");
-
-  // Extract name patterns
-  const fioPattern = /([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/;
-  const fioMatch = allText.match(fioPattern);
-  if (fioMatch) {
-    if (fioMatch[3]) {
-      profileData.lastName = fioMatch[1].trim();
-      profileData.firstName = fioMatch[2].trim();
-      profileData.middleName = fioMatch[3].trim();
-    } else if (fioMatch[2]) {
-      profileData.firstName = fioMatch[1].trim();
-      profileData.lastName = fioMatch[2].trim();
-    }
-  }
-
-  // Extract date of birth
-  const datePattern = /(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/;
-  const dateMatch = allText.match(datePattern);
-  if (dateMatch) {
-    const [, day, month, year] = dateMatch;
-    profileData.dateOfBirth = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-  }
-
-  // Extract phone
-  const phonePattern = /\+?7[\s-]?\(?(\d{3})\)?[\s-]?(\d{3})[\s-]?(\d{2})[\s-]?(\d{2})/;
-  const phoneMatch = allText.match(phonePattern);
-  if (phoneMatch) {
-    profileData.phone = allText.match(/\+?7[\s\-\(\)0-9]+/)?.[0] || "";
-  }
-
-  // Extract address
-  const addressPattern = /(ул\.|улица|пр\.|проспект|пл\.|площадь).+?(?=\.|\n|$)/i;
-  const addressMatch = allText.match(addressPattern);
-  if (addressMatch) {
-    profileData.address = addressMatch[0].trim();
-  }
-
-  // Extract job title and profession
-  const jobPattern = /(должност|должность|специалист|инженер|программист|бухгалтер|юрист).+?(?=\.|\n|,|$)/i;
-  const jobMatch = allText.match(jobPattern);
-  if (jobMatch) {
-    profileData.jobTitle = jobMatch[0].trim();
-    profileData.profession = jobMatch[0].trim();
-  }
-
-  // Extract education
-  const educationPattern = /(высшее|среднее|начальное|бакалавриат|магистратура|специалитет|аспирантура).+?(?=\.|\n|$)/i;
-  const educationMatch = allText.match(educationPattern);
-  if (educationMatch) {
-    profileData.education = educationMatch[0].trim();
-  }
-
-  return profileData;
-}
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -177,6 +117,27 @@ async function buildSystemPrompt(bot: DefaultBot, chunks: RetrievedChunk[]): Pro
     prompt += `\n\nКонтекст:\n${bot.context}`;
   }
 
+  // Добавляем инструкции по извлечению данных профиля
+  prompt += `\n\n## ИНСТРУКЦИИ ПО ИЗВЛЕЧЕНИЮ ДАННЫХ ПРОФИЛЯ:
+
+При заполнении профиля:
+1. **Дата рождения**: Пользователь может указать дату в любом формате:
+   - ДД.ММ.ГГГГ (12.02.1970)
+   - ДД/ММ/ГГГГ (12/02/1970)
+   - Естественный формат (12 февраля 1970, 12 фев 1970)
+   Ты можешь распознавать все эти форматы и парсить их правильно.
+
+2. **Адрес**: Попроси полный адрес с указанием:
+   - Города или населенного пункта
+   - Улицы, проспекта, бульвара
+   - Номера дома
+   - Номера квартиры/офиса (если применимо)
+   Это будет автоматически валидировано и стандартизировано через сервис адресов.
+
+3. **Телефон**: Ожидаются российские номера в формате +7 или 8 с 10 цифрами.
+
+Во всех случаях парси естественный язык пользователя и не требуй строгих форматов.`;
+
   if (chunks.length > 0) {
     const kbNameMap = new Map(
       (bot.knowledgeBases || []).map((relation) => [relation.knowledgeBaseId, relation.knowledgeBase?.name ?? "База знаний"]),
@@ -193,8 +154,11 @@ async function buildSystemPrompt(bot: DefaultBot, chunks: RetrievedChunk[]): Pro
 }
 
 export async function POST(request: NextRequest) {
+  let session: any = null;
+  let message: string = "";
+  
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -203,7 +167,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { message, chatBotId } = await request.json();
+    const body = await request.json();
+    message = body.message;
+    const chatBotId = body.chatBotId;
 
     if (!message || typeof message !== "string") {
       return NextResponse.json(
@@ -461,8 +427,8 @@ export async function POST(request: NextRequest) {
             content: msg.content,
           }));
           
-          // Функция извлечения (скопирована из extract-profile route)
-          const extractedData = extractProfileDataFromMessages(messagesForExtraction);
+          // Функция извлечения
+          const extractedData = await extractProfileDataFromMessages(messagesForExtraction);
           
           console.log("[chat] Extracted data:", extractedData);
           
@@ -484,15 +450,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Проверяем, заполнены ли все необходимые поля профиля
-        const isProfileComplete = 
-          user?.firstName &&
-          user?.lastName &&
-          user?.dateOfBirth &&
-          user?.phone &&
-          user?.address &&
-          user?.jobTitle &&
-          user?.profession &&
-          user?.education;
+        const profileIsComplete = isProfileComplete(user);
 
         console.log("[chat] Profile completeness check:", {
           firstName: !!user?.firstName,
@@ -503,12 +461,32 @@ export async function POST(request: NextRequest) {
           jobTitle: !!user?.jobTitle,
           profession: !!user?.profession,
           education: !!user?.education,
-          isComplete: isProfileComplete,
+          isComplete: profileIsComplete,
         });
 
-        if (isProfileComplete) {
+        if (profileIsComplete) {
           console.log("[chat] ✅ Profile is COMPLETE! Adding [PROFILE_COMPLETE] marker");
           aiResponse += "\n\n[PROFILE_COMPLETE]";
+          
+          // Генерируем документы
+          try {
+            console.log("[chat] 📄 Generating documents...");
+            const userOrg = await prisma.user.findUnique({
+              where: { id: session.user.id },
+              include: { organization: true },
+            });
+            
+            if (userOrg) {
+              await Promise.all([
+                generateMembershipApplication(userOrg),
+                generateContributionsApplication(userOrg),
+              ]);
+              console.log("[chat] ✅ Documents generated successfully");
+            }
+          } catch (docError) {
+            console.error("[chat] ⚠️  Error generating documents:", docError);
+            // Don't fail the response if document generation fails
+          }
         } else {
           console.log("[chat] ❌ Profile still incomplete after extraction");
         }
@@ -570,12 +548,23 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Chat API error:", error);
     const errorMessage = error instanceof Error ? error.message : "Внутренняя ошибка сервера";
-    const errorStack = error instanceof Error ? error.stack : "";
-    console.error("Error details:", errorMessage, errorStack);
+    
+    // Log critical error
+    await Logger.critical(
+      "api/chat/POST",
+      errorMessage,
+      error,
+      {
+        userMessage: message?.substring(0, 100),
+        sessionExists: !!session,
+      },
+      session?.user?.id
+    );
+    
     return NextResponse.json(
       { 
         error: errorMessage,
-        details: process.env.NODE_ENV === "development" ? errorStack : undefined
+        details: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.stack : "") : undefined
       },
       { status: 500 }
     );

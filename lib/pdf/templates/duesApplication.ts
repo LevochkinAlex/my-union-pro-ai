@@ -1,4 +1,4 @@
-import PDFDocument from "pdfkit";
+import { Readable } from "stream";
 import { createPDFDocument, UserData, formatDate, getFullName, streamToBuffer } from "../generator";
 
 /**
@@ -32,7 +32,8 @@ export async function generateDuesApplication(userData: UserData): Promise<Buffe
     .fontSize(16)
     .font("Helvetica-Bold")
     .text("ЗАЯВЛЕНИЕ", { align: "center" })
-    .text("о перечислении членских взносов", { align: "center", fontSize: 14 })
+    .fontSize(14)
+    .text("о перечислении членских взносов", { align: "center" })
     .moveDown(1.5);
 
   // Текст заявления
@@ -118,6 +119,6 @@ export async function generateDuesApplication(userData: UserData): Promise<Buffe
 
   doc.end();
 
-  return streamToBuffer(doc);
+  return streamToBuffer(doc as unknown as Readable);
 }
 

@@ -6,21 +6,25 @@
  * Or in production: node dist/scripts/worker.js
  */
 
-import { getDocumentQueue, DOCUMENT_PROCESSING_QUEUE } from "@/lib/queue";
-import { documentProcessorHandler } from "@/lib/workers/document-processor";
+import { DOCUMENT_PROCESSING_QUEUE } from "@/lib/queue";
+import { documentProcessorHandler, type DocumentProcessingJob } from "@/lib/workers/document-processor";
+import { Worker } from "bullmq";
+import { getRedisOptions } from "@/lib/redis";
 
 async function startWorker() {
   try {
     console.log("🚀 Starting document processor worker...");
 
-    const queue = getDocumentQueue();
-
-    // Process jobs
-    await queue.process(
+    const worker = new Worker<DocumentProcessingJob>(
       DOCUMENT_PROCESSING_QUEUE,
-      1, // Process 1 job at a time (can increase for parallelism)
-      documentProcessorHandler
+      documentProcessorHandler,
+      {
+        connection: getRedisOptions(),
+        concurrency: 1,
+      }
     );
+
+    await worker.waitUntilReady();
 
     console.log("✅ Worker started and listening for jobs");
     console.log(`   Queue: ${DOCUMENT_PROCESSING_QUEUE}`);
@@ -29,13 +33,13 @@ async function startWorker() {
     // Keep process alive
     process.on("SIGTERM", async () => {
       console.log("\n⏹️  Shutting down worker...");
-      await queue.close();
+      await worker.close();
       process.exit(0);
     });
 
     process.on("SIGINT", async () => {
       console.log("\n⏹️  Shutting down worker...");
-      await queue.close();
+      await worker.close();
       process.exit(0);
     });
   } catch (error) {

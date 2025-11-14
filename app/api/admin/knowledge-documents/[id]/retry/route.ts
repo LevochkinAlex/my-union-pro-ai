@@ -24,13 +24,18 @@ export async function POST(
       return NextResponse.json({ error: "Документ не найден" }, { status: 404 });
     }
 
+    const currentMeta =
+      document.meta && typeof document.meta === "object" && !Array.isArray(document.meta)
+        ? document.meta
+        : {};
+
     await prisma.knowledgeDocument.update({
       where: { id: documentId },
       data: {
         processingStatus: "QUEUED",
         processedAt: null,
         meta: {
-          ...(document.meta ?? {}),
+          ...currentMeta,
           retriedAt: new Date().toISOString(),
         },
       },

@@ -1,144 +1,25 @@
+import fs from "fs/promises";
+import path from "path";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { extractProfileDataFromMessages, isProfileComplete } from "@/lib/profile-extraction";
 
-// Функция для извлечения данных из истории чата
-function extractProfileData(messages: Array<{ role: string; content: string }>) {
-  const profileData: {
-    firstName?: string;
-    lastName?: string;
-    middleName?: string;
-    dateOfBirth?: Date;
-    phone?: string;
-    address?: string;
-    jobTitle?: string;
-    profession?: string;
-    education?: string;
-  } = {};
+function resolveDocumentPath(filePath: string) {
+  const normalized = filePath.startsWith("/") ? filePath.slice(1) : filePath;
+  return path.join(process.cwd(), "public", normalized);
+}
 
-  // Объединяем ВСЕ сообщения (пользователя и AI) для анализа
-  // AI часто подтверждает данные в своих ответах
-  const allText = messages
-    .map((msg) => msg.content)
-    .join(" ");
-
-  console.log("[extract] Анализируемый текст:", allText.substring(0, 500) + "...");
-
-  // ФИО - ищем три слова с заглавной буквы подряд
-  const fioPattern = /\*\*ФИО\*\*:\s*([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/i;
-  const fioMatch = allText.match(fioPattern) || 
-                   allText.match(/([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)/);
-  
-  if (fioMatch) {
-    // Если нашли 3 слова - это Фамилия Имя Отчество
-    if (fioMatch[3]) {
-      profileData.lastName = fioMatch[1].trim();
-      profileData.firstName = fioMatch[2].trim();
-      profileData.middleName = fioMatch[3].trim();
-    } else if (fioMatch[2]) {
-      // Если 2 слова - это Имя Фамилия
-      profileData.firstName = fioMatch[1].trim();
-      profileData.lastName = fioMatch[2].trim();
-    }
-    console.log("[extract] ФИО найдено:", { lastName: profileData.lastName, firstName: profileData.firstName, middleName: profileData.middleName });
-  }
-
-  // Дата рождения - ищем паттерн **Дата рождения**: или просто дату
-  const datePattern = /\*\*Дата рождения\*\*:\s*(\d{1,2}\.\d{1,2}\.\d{4})/i;
-  const dateMatch = allText.match(datePattern) || allText.match(/(\d{1,2}\.\d{1,2}\.\d{4})/);
-  
-  if (dateMatch) {
-    const dateStr = dateMatch[1].replace(/[-/]/g, ".");
-    const [day, month, year] = dateStr.split(".");
-    if (day && month && year) {
-      profileData.dateOfBirth = new Date(
-        parseInt(year),
-        parseInt(month) - 1,
-        parseInt(day)
-      );
-      console.log("[extract] Дата рождения:", profileData.dateOfBirth);
-    }
-  }
-
-  // Телефон - ищем российский номер
-  const phonePattern = /\*\*Телефон\*\*:\s*(\+7\s*\(\d{3}\)\s*\d{3}-\d{2}-\d{2})/i;
-  const phoneMatch = allText.match(phonePattern) || allText.match(/\+7\s*\(\d{3}\)\s*\d{3}-\d{2}-\d{2}/);
-  
-  if (phoneMatch) {
-    profileData.phone = phoneMatch[1] || phoneMatch[0];
-    console.log("[extract] Телефон:", profileData.phone);
-  }
-
-  // Адрес - ищем после маркера **Адрес**:
-  const addressPattern = /\*\*Адрес\*\*:\s*(.+?)(?:\n|$)/i;
-  const addressMatch = allText.match(addressPattern);
-  
-  if (addressMatch) {
-    profileData.address = addressMatch[1].trim();
-    console.log("[extract] Адрес:", profileData.address);
-  }
-
-  // Должность
-  const jobTitlePattern = /\*\*Должность\*\*:\s*(.+?)(?:\n|$)/i;
-  const jobTitleMatch = allText.match(jobTitlePattern);
-  
-  if (jobTitleMatch) {
-    profileData.jobTitle = jobTitleMatch[1].trim();
-    console.log("[extract] Должность:", profileData.jobTitle);
-  }
-
-  // Профессия
-  const professionPattern = /\*\*Профессия\*\*:\s*(.+?)(?:\n|$)/i;
-  const professionMatch = allText.match(professionPattern);
-  
-  if (professionMatch) {
-    profileData.profession = professionMatch[1].trim();
-    console.log("[extract] Профессия:", profileData.profession);
-  }
-
-  // Образование - ищем после маркера и нормализуем к стандартным значениям
-  const educationPattern = /\*\*Образование\*\*:\s*(.+?)(?:\n|$)/i;
-  const educationMatch = allText.match(educationPattern);
-  
-  if (educationMatch) {
-    const rawEducation = educationMatch[1].trim();
-    
-    // Стандартные значения образования (должны совпадать с EDUCATION_LEVELS)
-    const educationStandards = [
-      "Начальное общее",
-      "Основное общее (9 классов)",
-      "Среднее общее (11 классов)",
-      "Среднее профессиональное",
-      "Неполное высшее",
-      "Высшее (бакалавриат)",
-      "Высшее (специалитет)",
-      "Высшее (магистратура)",
-      "Аспирантура",
-      "Докторантура",
-    ];
-    
-    // Ищем совпадение (игнорируя регистр)
-    const matchedStandard = educationStandards.find(
-      std => std.toLowerCase() === rawEducation.toLowerCase()
-    );
-    
-    profileData.education = matchedStandard || rawEducation;
-    console.log("[extract] Образование:", profileData.education, matchedStandard ? "(нормализовано)" : "");
-  }
-
-  // Организация - ищем после маркера
-  const organizationPattern = /\*\*Организация\*\*:\s*(.+?)(?:\n|$)/i;
-  const organizationMatch = allText.match(organizationPattern);
-  
-  if (organizationMatch) {
-    const orgName = organizationMatch[1].trim();
-    console.log("[extract] Организация найдена:", orgName);
-    // Организацию мы обработаем отдельно, чтобы найти или создать в БД
-  }
-
-  console.log("[extract] Финальные данные:", profileData);
-  return profileData;
+async function loadDocumentBuffer(filePath: string) {
+  const absolutePath = resolveDocumentPath(filePath);
+  const buffer = await fs.readFile(absolutePath);
+  return {
+    buffer,
+    base64: buffer.toString("base64"),
+    size: buffer.length,
+    fileName: filePath.split("/").pop() || "document.pdf",
+  };
 }
 
 // API для извлечения и сохранения данных профиля из чата
@@ -163,30 +44,78 @@ export async function POST() {
       },
     });
 
-    // Проверяем, есть ли маркер завершения профиля
-    const hasCompleteMarker = messages.some(
-      (msg) =>
-        msg.role === "assistant" &&
-        msg.content.includes("[PROFILE_COMPLETE]")
-    );
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: { organization: true },
+    });
 
-    if (!hasCompleteMarker) {
+    if (!user) {
       return NextResponse.json(
-        { error: "Профиль еще не заполнен полностью" },
-        { status: 400 }
+        { error: "Пользователь не найден" },
+        { status: 404 }
       );
     }
 
     // Извлекаем данные из чата
-    const profileData = extractProfileData(
+    const rawProfileData = await extractProfileDataFromMessages(
       messages.map((msg) => ({
         role: msg.role,
         content: msg.content,
       }))
     );
 
-    console.log("[extract-profile] Извлеченные данные:", profileData);
+    console.log("[extract-profile] Извлеченные данные:", rawProfileData);
     console.log("[extract-profile] Всего сообщений:", messages.length);
+
+    // Убираем пустые значения, чтобы не перезаписывать существующие поля
+    const profileData = Object.fromEntries(
+      Object.entries(rawProfileData).filter(
+        ([, value]) =>
+          value !== undefined &&
+          value !== null &&
+          value !== "" &&
+          !(typeof value === "number" && Number.isNaN(value))
+      )
+    );
+
+    const mergedUser = { ...user, ...profileData };
+    const requiredFields: Record<string, string> = {
+      firstName: "Имя",
+      lastName: "Фамилия",
+      dateOfBirth: "Дата рождения",
+      phone: "Телефон",
+      address: "Адрес",
+      jobTitle: "Должность",
+      profession: "Профессия",
+      education: "Образование",
+    };
+    const missingFields = Object.entries(requiredFields)
+      .filter(([key]) => {
+        const value = (mergedUser as any)[key];
+        return value === null || value === undefined || value === "";
+      })
+      .map(([, label]) => label);
+
+    if (!isProfileComplete(mergedUser)) {
+      console.log("[extract-profile] Профиль все еще не полон", {
+        firstName: !!mergedUser.firstName,
+        lastName: !!mergedUser.lastName,
+        dateOfBirth: !!mergedUser.dateOfBirth,
+        phone: !!mergedUser.phone,
+        address: !!mergedUser.address,
+        jobTitle: !!mergedUser.jobTitle,
+        profession: !!mergedUser.profession,
+        education: !!mergedUser.education,
+      });
+
+      return NextResponse.json(
+        {
+          error: "Профиль еще не заполнен полностью",
+          missingFields,
+        },
+        { status: 400 }
+      );
+    }
 
     // Обновляем профиль пользователя
     const updatedUser = await prisma.user.update({
@@ -218,7 +147,6 @@ export async function POST() {
 
       console.log("[extract-profile] Заявления сгенерированы:", { membershipPath, contributionsPath });
 
-      // Проверяем, есть ли уже сохраненные документы, чтобы не дублировать
       const existingDocs = await prisma.document.findMany({
         where: {
           userId: updatedUser.id,
@@ -228,39 +156,81 @@ export async function POST() {
         },
       });
 
-      // Сохраняем документы в базе данных только если их еще нет
-      if (existingDocs.length === 0) {
-        await Promise.all([
-          prisma.document.create({
-            data: {
-              type: "MEMBERSHIP_APPLICATION",
-              status: "DRAFT",
-              title: "Заявление о вступлении в профсоюз",
-              filePath: membershipPath,
-              fileName: `membership_${updatedUser.id}.pdf`,
-              userId: updatedUser.id,
-              organizationId: updatedUser.organizationId || null,
-            },
-          }),
-          prisma.document.create({
-            data: {
-              type: "CONTRIBUTION_APPLICATION",
-              status: "DRAFT",
-              title: "Заявление о взносах",
-              filePath: contributionsPath,
-              fileName: `contributions_${updatedUser.id}.pdf`,
-              userId: updatedUser.id,
-              organizationId: updatedUser.organizationId || null,
-            },
-          }),
-        ]);
-        console.log("[extract-profile] Документы успешно сохранены в базу данных");
-      } else {
-        console.log("[extract-profile] Документы уже существуют, пропускаем создание");
-      }
+      const [membershipFile, contributionsFile] = await Promise.all([
+        loadDocumentBuffer(membershipPath),
+        loadDocumentBuffer(contributionsPath),
+      ]);
+
+      const upsertDocument = async (
+        type: "MEMBERSHIP_APPLICATION" | "CONTRIBUTION_APPLICATION",
+        payload: {
+          title: string;
+          filePath: string;
+          buffer: { base64: string; size: number; fileName: string };
+        }
+      ) => {
+        const existing = existingDocs.find((doc) => doc.type === type);
+        const data = {
+          type,
+          status: "GENERATED" as const,
+          title: payload.title,
+          content: payload.buffer.base64,
+          filePath: payload.filePath,
+          fileName: payload.buffer.fileName,
+          fileSize: payload.buffer.size,
+          mimeType: "application/pdf",
+          userId: updatedUser.id,
+          organizationId: updatedUser.organizationId || null,
+        };
+
+        if (existing) {
+          await prisma.document.update({
+            where: { id: existing.id },
+            data,
+          });
+        } else {
+          await prisma.document.create({ data });
+        }
+      };
+
+      await Promise.all([
+        upsertDocument("MEMBERSHIP_APPLICATION", {
+          title: "Заявление о вступлении в профсоюз",
+          filePath: membershipPath,
+          buffer: membershipFile,
+        }),
+        upsertDocument("CONTRIBUTION_APPLICATION", {
+          title: "Заявление о взносах",
+          filePath: contributionsPath,
+          buffer: contributionsFile,
+        }),
+      ]);
+
+      console.log("[extract-profile] Документы сохранены/обновлены в базе данных");
     } catch (error) {
       console.error("[extract-profile] Ошибка генерации заявлений:", error);
       // Не прерываем процесс, если генерация заявлений не удалась
+    }
+
+    // Добавляем маркер завершения профиля, если его еще нет
+    const markerExists = await prisma.chatMessage.findFirst({
+      where: {
+        userId: session.user.id,
+        content: {
+          contains: "[PROFILE_COMPLETE]",
+        },
+      },
+    });
+
+    if (!markerExists) {
+      await prisma.chatMessage.create({
+        data: {
+          userId: session.user.id,
+          role: "assistant",
+          content:
+            "Профиль подтвержден и документы готовы к скачиванию. [PROFILE_COMPLETE]",
+        },
+      });
     }
 
     return NextResponse.json({
@@ -270,6 +240,7 @@ export async function POST() {
         email: updatedUser.email,
         membershipStatus: updatedUser.membershipStatus,
       },
+      missingFields: [],
     });
   } catch (error) {
     console.error("Extract profile error:", error);

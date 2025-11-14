@@ -5,14 +5,17 @@ import { extractTextFromFile } from "@/lib/knowledge/extract";
 import { chunkText } from "@/lib/knowledge/chunker";
 import { generateEmbedding } from "@/lib/knowledge/embeddings";
 
-function mergeMetadata(existing: Prisma.JsonValue | null | undefined, updates: Record<string, unknown>) {
+function mergeMetadata(
+  existing: Prisma.JsonValue | null | undefined,
+  updates: Record<string, unknown>,
+): Prisma.InputJsonValue {
   if (existing && typeof existing === "object" && !Array.isArray(existing)) {
     return {
-      ...existing,
+      ...(existing as Record<string, unknown>),
       ...updates,
-    } as Prisma.JsonValue;
+    } as Prisma.InputJsonValue;
   }
-  return updates;
+  return updates as Prisma.InputJsonValue;
 }
 
 export async function processKnowledgeDocument(documentId: string) {

@@ -6,22 +6,25 @@ import { ensureSuperAdmin } from "@/lib/admin-auth";
 function serializeProvider(provider: ApiProvider) {
   const { availableModels, capabilities, ...rest } = provider;
   let parsedModels: unknown = [];
-  if (availableModels) {
+  if (typeof availableModels === "string" && availableModels.trim().length > 0) {
     try {
       parsedModels = JSON.parse(availableModels);
-    } catch {
+    } catch (error) {
       console.warn(`[api-providers] Не удалось распарсить availableModels для ${provider.name}:`, error);
       parsedModels = [];
     }
   }
 
   let parsedCapabilities: unknown = null;
-  if (capabilities) {
+  if (typeof capabilities === "string" && capabilities.trim().length > 0) {
     try {
       parsedCapabilities = JSON.parse(capabilities);
-    } catch {
+    } catch (error) {
+      console.warn(`[api-providers] Не удалось распарсить capabilities для ${provider.name}:`, error);
       parsedCapabilities = null;
     }
+  } else if (capabilities) {
+    parsedCapabilities = capabilities;
   }
 
   return {

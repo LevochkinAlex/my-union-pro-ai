@@ -24,10 +24,6 @@ type SettingsForm = {
   onesignalRestApiKey: string;
 };
 
-type Settings = {
-  [key: string]: string;
-};
-
 type EnvSettings = Record<string, string>;
 type EnvTarget = 'local' | 'production';
 
@@ -52,7 +48,7 @@ type MessageState = {
 };
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<Settings>({});
+  const [settings, setSettings] = useState<SettingsForm>(EMPTY_FORM);
   const [initialData, setInitialData] = useState<SettingsForm>(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -197,29 +193,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSaveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    setMessage(null);
-    try {
-      const response = await fetch("/api/admin/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
-      });
-      if (response.ok) {
-        setMessage({ type: "success", text: "Настройки успешно сохранены." });
-      } else {
-        setMessage({ type: "error", text: "Ошибка при сохранении настроек." });
-      }
-    } catch (error) {
-      console.error("Failed to save settings:", error);
-      setMessage({ type: "error", text: "Ошибка при сохранении настроек." });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const handleSaveEnvSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsEnvSaving(true);
@@ -283,7 +256,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-      <form onSubmit={handleSaveSettings} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
         {/* SMTP Настройки */}
         <div className="rounded-lg bg-white p-6 shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
             <h2 className="mb-6 text-xl font-semibold text-gray-900 dark:text-white">

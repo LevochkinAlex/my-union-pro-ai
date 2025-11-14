@@ -121,7 +121,8 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
 
     // Only admins can view analytics
-    if (session?.user?.role !== "SUPER_ADMIN" && session?.user?.role !== "ADMIN") {
+    const role = session?.user?.role as string | undefined;
+    if (!role || !["SUPER_ADMIN", "ADMIN"].includes(role)) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }

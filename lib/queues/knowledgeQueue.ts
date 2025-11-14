@@ -5,14 +5,17 @@ import { prisma } from "@/lib/prisma";
 import { getRedisOptions } from "@/lib/redis";
 import { processKnowledgeDocument } from "@/lib/knowledge/processor";
 
-function mergeMetadata(existing: Prisma.JsonValue | null | undefined, updates: Record<string, unknown>) {
+function mergeMetadata(
+  existing: Prisma.JsonValue | null | undefined,
+  updates: Record<string, unknown>,
+): Prisma.InputJsonValue {
   if (existing && typeof existing === "object" && !Array.isArray(existing)) {
     return {
-      ...existing,
+      ...(existing as Record<string, unknown>),
       ...updates,
-    } as Prisma.JsonValue;
+    } as Prisma.InputJsonValue;
   }
-  return updates;
+  return updates as Prisma.InputJsonValue;
 }
 
 export type KnowledgeIngestionJob = {
@@ -45,11 +48,6 @@ function createQueue(connection: RedisOptions) {
 }
 
 function createWorker(connection: RedisOptions) {
-  const scheduler = new QueueScheduler(QUEUE_NAME, { connection });
-  scheduler.waitUntilReady().catch((error) => {
-    console.error("[knowledgeQueue] scheduler error", error);
-  });
-
   const worker = new Worker<KnowledgeIngestionJob>(
     QUEUE_NAME,
     async (job) => {
@@ -115,7 +113,7 @@ function createWorker(connection: RedisOptions) {
     console.error("[knowledgeQueue] worker error", err);
   });
 
-  return { worker, scheduler };
+  return { worker };
 }
 
 declare global {
@@ -123,7 +121,6 @@ declare global {
   var __knowledgeWorker:
     | {
         worker: Worker<KnowledgeIngestionJob>;
-        scheduler: QueueScheduler;
       }
     | undefined;
 }

@@ -25,7 +25,7 @@ export interface UserData {
 /**
  * Создает базовый PDFDocument с настройками
  */
-export function createPDFDocument(options: PDFGeneratorOptions): PDFDocument {
+export function createPDFDocument(options: PDFGeneratorOptions): InstanceType<typeof PDFDocument> {
   const doc = new PDFDocument({
     size: "A4",
     margins: {
@@ -45,10 +45,12 @@ export function createPDFDocument(options: PDFGeneratorOptions): PDFDocument {
   return doc;
 }
 
+type ReadableLike = Pick<Readable, "on">;
+
 /**
  * Преобразует поток в Buffer
  */
-export async function streamToBuffer(stream: Readable): Promise<Buffer> {
+export async function streamToBuffer(stream: ReadableLike): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     stream.on("data", (chunk) => chunks.push(chunk));

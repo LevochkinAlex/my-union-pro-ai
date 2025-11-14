@@ -1,7 +1,14 @@
+import fs from "fs/promises";
+import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+
+function resolveFilePath(filePath: string) {
+  const normalized = filePath.startsWith("/") ? filePath.slice(1) : filePath;
+  return path.join(process.cwd(), "public", normalized);
+}
 
 export async function GET(
   request: NextRequest,
@@ -30,16 +37,33 @@ export async function GET(
       return NextResponse.json({ error: "Доступ запрещен" }, { status: 403 });
     }
 
-    // Получаем содержимое документа (base64)
-    if (!document.content) {
-      return NextResponse.json({ error: "Содержимое документа не найдено" }, { status: 404 });
+    let pdfBuffer: Buffer | null = null;
+
+    if (document.content) {
+      pdfBuffer = Buffer.from(document.content, "base64");
+    } else if (document.filePath) {
+      try {
+        const absolutePath = resolveFilePath(document.filePath);
+        const fileBuffer = await fs.readFile(absolutePath);
+        pdfBuffer = fileBuffer;
+      } catch (error) {
+        console.error("[documents/download] Не удалось прочитать файл:", error);
+      }
     }
 
-    // Декодируем из base64
-    const pdfBuffer = Buffer.from(document.content, "base64");
+    if (!pdfBuffer) {
+      return NextResponse.json(
+        { error: "Содержимое документа не найдено" },
+        { status: 404 }
+      );
+    }
+
+    const pdfBytes = new Uint8Array(pdfBuffer.length);
+    pdfBytes.set(pdfBuffer);
+    const arrayBuffer = pdfBytes.buffer;
 
     // Возвращаем PDF файл
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(arrayBuffer, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",

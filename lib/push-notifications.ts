@@ -28,6 +28,18 @@ export async function initializePushNotifications() {
     return false;
   }
 
+  const isLocalhost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+
+  if (
+    isLocalhost &&
+    process.env.NEXT_PUBLIC_ENABLE_PUSH_ON_LOCAL !== "true"
+  ) {
+    console.info("[Push] Skipping OneSignal init on localhost");
+    return false;
+  }
+
   try {
     // Dynamically load OneSignal script
     window.OneSignal = window.OneSignal || [];

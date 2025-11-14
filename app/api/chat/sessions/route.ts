@@ -15,6 +15,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    console.log("[sessions-api] Fetching sessions for user:", session.user.id);
+
     // Получаем сообщения пользователя, сгруппированные по временным интервалам
     // для определения отдельных сеансов чата
     const messages = await prisma.chatMessage.findMany({
@@ -26,6 +28,8 @@ export async function GET(request: NextRequest) {
       },
       take: 100, // Последние 100 сообщений
     });
+
+    console.log("[sessions-api] Found messages:", messages.length);
 
     // Группируем сообщения в сеансы (промежуток более 1 часа считается новым сеансом)
     const sessions: Array<{ messages: typeof messages; startTime: Date }> = [];
@@ -52,25 +56,44 @@ export async function GET(request: NextRequest) {
     }
 
     // Форматируем результат с заголовком каждого сеанса
-    const formattedSessions = sessions.map((session) => {
+    const formattedSessions = sessions.map((session, index) => {
       const firstUserMessage = session.messages
         .slice()
         .reverse()
         .find((msg) => msg.role === "user");
-      const title = firstUserMessage?.content
-        .substring(0, 50)
-        .replace(/\n/g, " ") || "Новый чат";
+      
+      // Первый чат (самый старый) - это всегда "Заявление"
+      // Проверяем по индексу - последний элемент в отсортированном массиве (самый старый)
+      const isFirstChat = index === sessions.length - 1;
+      
+      // Проверяем если это содержит инициальное сообщение для statement
+      const hasInitialMessage = session.messages.some(msg => 
+        msg.role === "user" && msg.content === "Начать заполнение заявления"
+      );
+      
+      const isStatement = isFirstChat || hasInitialMessage;
+      
+      const title = isStatement 
+        ? "Заявление" 
+        : (firstUserMessage?.content
+            .substring(0, 50)
+            .replace(/\n/g, " ") || "Новый чат");
 
       // Generate a stable session ID based on start time
       const sessionId = `session-${session.startTime.getTime()}`;
+
+      console.log(`[sessions-api] Session ${index}: ${sessionId} - ${title} (${session.messages.length} messages, isStatement: ${isStatement})`);
 
       return {
         id: sessionId,
         title,
         createdAt: session.startTime,
         messageCount: session.messages.length,
+        isStatement: isStatement, // Пометка что это statement
       };
     });
+
+    console.log("[sessions-api] Returning", formattedSessions.length, "formatted sessions");
 
     return NextResponse.json({
       sessions: formattedSessions,

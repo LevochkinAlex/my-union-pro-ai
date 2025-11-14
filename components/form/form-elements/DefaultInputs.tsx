@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import ComponentCard from '../../common/ComponentCard';
 import Label from '../Label';
-import Input from '../input/InputField';
+import Input from '@/components/ui/InputField';
 import Select from '../Select';
 import { ChevronDownIcon, TimeIcon } from '../../../icons';
 import { Eye, EyeOff } from "lucide-react";

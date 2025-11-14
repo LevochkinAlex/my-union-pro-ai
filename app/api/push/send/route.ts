@@ -31,7 +31,8 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions);
 
     // Only admins can send push notifications
-    if (session?.user?.role !== "SUPER_ADMIN" && session?.user?.role !== "ADMIN") {
+    const role = session?.user?.role as string | undefined;
+    if (!role || !["SUPER_ADMIN", "ADMIN"].includes(role)) {
       // Allow internal calls from chat API
       const internalToken = request.headers.get("X-Internal-Token");
       if (internalToken !== process.env.INTERNAL_API_TOKEN) {

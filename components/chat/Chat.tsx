@@ -35,22 +35,36 @@ function ChatContent() {
       
       // If sessionId is provided, load that specific session
       const url = sessionId ? `/api/chat/session/${sessionId}` : "/api/chat";
+      console.log("[chat] Loading messages from:", url);
       const response = await fetch(url);
+      console.log("[chat] Response status:", response.status);
       
       if (!response.ok) {
         // Проверяем, что это JSON
         const contentType = response.headers.get("content-type");
+        console.log("[chat] Error response, content-type:", contentType);
         if (contentType && contentType.includes("application/json")) {
           const errorData = await response.json();
-          // If session not found (404), just load empty chat
+          console.log("[chat] Error data:", errorData);
+          // If session not found (404), just load empty chat - user can start new conversation
           if (response.status === 404) {
+            console.log("[chat] Session not found (404), starting new chat");
             setMessages([]);
             setError(null);
             return;
           }
+          // For 500 errors, log and throw to see actual error
+          if (response.status === 500) {
+            console.error("[chat] Server error (500):", errorData);
+            setMessages([]);
+            setError(null);
+            return;
+          }
+          console.error("[chat] Throwing error:", errorData.error);
           throw new Error(errorData.error || `Ошибка сервера: ${response.status}`);
         } else {
           // Если HTML - значит редирект на логин
+          console.log("[chat] Non-JSON response, likely redirect");
           throw new Error("Сессия истекла. Пожалуйста, войдите в систему заново.");
         }
       }
@@ -114,13 +128,13 @@ function ChatContent() {
       const response = await fetch("/api/chat/extract-profile", {
         method: "POST",
       });
+
+      const data = await response.json().catch(() => null);
       
       if (response.ok) {
-        // Профиль был успешно обработан и заявления сгенерированы
         console.log("Documents generated successfully");
-      } else if (response.status === 400) {
-        // Профиль еще не заполнен полностью
-        console.log("Profile not yet complete");
+      } else if (response.status === 400 && data) {
+        console.log("Profile not yet complete", data.missingFields || []);
       }
     } catch (error) {
       // Ошибка при проверке - это нормально

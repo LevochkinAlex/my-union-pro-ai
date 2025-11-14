@@ -24,11 +24,14 @@ export async function GET(request: NextRequest) {
         userId: session.user.id,
       },
       include: {
-        messages: {
+        chatMessages: {
           select: {
             id: true,
             content: true,
             createdAt: true,
+          },
+          orderBy: {
+            createdAt: "desc",
           },
         },
       },
@@ -48,8 +51,8 @@ export async function GET(request: NextRequest) {
         description: appeal.description,
         createdAt: appeal.createdAt,
         updatedAt: appeal.updatedAt,
-        messageCount: appeal.messages.length,
-        lastMessage: appeal.messages[0]?.createdAt || null,
+        messageCount: appeal.chatMessages.length,
+        lastMessage: appeal.chatMessages[0]?.createdAt || null,
       })),
     });
   } catch (error) {
@@ -114,7 +117,7 @@ export async function POST(request: NextRequest) {
         userId: session.user.id,
         publicId: publicId!,
         type,
-        status: "PENDING",
+        status: "DRAFT",
         title,
         description: description || "",
         question: "", // Will be filled when user sends first message

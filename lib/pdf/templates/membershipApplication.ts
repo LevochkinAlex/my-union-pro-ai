@@ -1,4 +1,4 @@
-import PDFDocument from "pdfkit";
+import { Readable } from "stream";
 import { createPDFDocument, UserData, formatDate, getFullName, streamToBuffer } from "../generator";
 
 /**
@@ -100,6 +100,6 @@ export async function generateMembershipApplication(userData: UserData): Promise
 
   doc.end();
 
-  return streamToBuffer(doc);
+  return streamToBuffer(doc as unknown as Readable);
 }
 
