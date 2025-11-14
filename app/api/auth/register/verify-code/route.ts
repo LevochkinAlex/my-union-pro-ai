@@ -55,25 +55,24 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Создаем начальный чат "Заявление" с начальным юзер-сообщением
+    // Создаем начальный чат "Заявление" с ChatSession
     try {
       const defaultBot = await prisma.chatBot.findFirst({
         where: { name: "MyUnion Pro" },
       });
 
       if (defaultBot) {
-        // Создаем начальное пользовательское сообщение чтобы чат не был пустым
-        await prisma.chatMessage.create({
+        // Создаем ChatSession типа STATEMENT
+        const chatSession = await prisma.chatSession.create({
           data: {
-            content: "Начать заполнение заявления",
-            role: "user",
             userId: updatedUser.id,
-            chatBotId: defaultBot.id,
+            title: "Заявление",
+            type: "STATEMENT",
           },
         });
 
-        // Добавляем ответ бота с приветствием
-        const welcomeMessage = "Здравствуйте! Я — ваш персональный ассистент MyUnion Pro. Я помогу вам составить заявления для вступления в профсоюз и для перечисления членских взносов. Давайте начнем! Как я могу к вам обращаться (назовите, пожалуйста, ваши фамилию, имя и отчество)?";
+        // Добавляем приветственное сообщение бота согласно новому промпту
+        const welcomeMessage = "Здравствуйте! Я ваш помощник для вступления в Профсоюз работников здравоохранения РФ. Я помогу вам заполнить профиль и подготовить необходимые документы для этого. Давайте начнем. Укажите регион России, в которой вы находитесь.";
 
         await prisma.chatMessage.create({
           data: {
@@ -81,11 +80,12 @@ export async function POST(request: NextRequest) {
             role: "assistant",
             userId: updatedUser.id,
             chatBotId: defaultBot.id,
+            sessionId: chatSession.id,
           },
         });
       }
     } catch (error) {
-      console.error("Error creating initial chat message:", error);
+      console.error("Error creating initial chat session:", error);
       // Don't fail registration if chat creation fails
     }
 

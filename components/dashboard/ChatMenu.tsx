@@ -67,6 +67,23 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     }
   }, [isExpanded, loadSessions]);
 
+  // Обновляем сессии при фокусе окна (например, после регистрации)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (isExpanded) {
+        loadSessions();
+      }
+    };
+    
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [isExpanded, loadSessions]);
+
+  // Обновляем сессии при монтировании компонента
+  useEffect(() => {
+    loadSessions();
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {

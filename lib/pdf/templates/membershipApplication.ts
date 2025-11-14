@@ -37,8 +37,17 @@ export async function generateMembershipApplication(userData: UserData): Promise
     .text(`от ${fullNameGenitive}.`, { align: "right" })
     .moveDown(0.3)
     .fontSize(14)
-    .text(userData.jobTitle || "", { align: "right" })
-    .moveDown(2);
+    .text(userData.jobTitle || "", { align: "right" });
+  
+  // Добавляем название организации, если оно указано
+  if (userData.organizationName) {
+    doc
+      .moveDown(0.3)
+      .fontSize(14)
+      .text(userData.organizationName, { align: "right" });
+  }
+  
+  doc.moveDown(2);
 
   // Название документа по центру
   doc
