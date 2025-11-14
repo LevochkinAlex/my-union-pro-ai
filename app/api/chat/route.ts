@@ -668,37 +668,67 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Send push notification to user with action buttons
+    // Send push notification to user with action buttons (only if user is not actively chatting)
     try {
-      const internalToken = process.env.INTERNAL_API_TOKEN;
-      await fetch(`${process.env.NEXTAUTH_URL || "http://localhost:3004"}/api/push/send`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Internal-Token": internalToken || "",
-        },
-        body: JSON.stringify({
-          userId: session.user.id,
-          title: bot.name || "AI Assistant",
-          message: aiResponse.substring(0, 100) + (aiResponse.length > 100 ? "..." : ""),
-          buttons: [
-            {
-              id: "open_chat",
-              text: "Открыть чат",
+      const ONESIGNAL_API_KEY = process.env.ONESIGNAL_API_KEY;
+      const ONESIGNAL_APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
+      
+      if (ONESIGNAL_API_KEY && ONESIGNAL_APP_ID) {
+        // Get user's OneSignal subscriptions
+        const userSubs = await prisma.pushSubscription.findMany({
+          where: { userId: session.user.id },
+          select: { oneSignalId: true },
+        });
+
+        if (userSubs.length > 0) {
+          const recipientIds = userSubs.map((sub) => sub.oneSignalId);
+          const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
+          
+          const notificationPayload = {
+            app_id: ONESIGNAL_APP_ID,
+            include_external_user_ids: recipientIds,
+            headings: { en: bot.name || "AI Assistant", ru: bot.name || "AI Помощник" },
+            contents: { 
+              en: aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : ""),
+              ru: aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : ""),
             },
-            {
-              id: "mark_read",
-              text: "Прочитано",
+            data: {
+              type: "chat_message",
+              chatBotId: bot.id,
+              sessionId: chatSession.id,
+              url: `/dashboard?session=${chatSession.id}`,
             },
-          ],
-          data: {
-            type: "chat_message",
-            chatBotId: bot.id,
-          },
-        }),
-      });
+            priority: 10,
+            ttl: 86400, // 24 hours
+          };
+
+          const pushResponse = await fetch(ONESIGNAL_API_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              Authorization: `Basic ${ONESIGNAL_API_KEY}`,
+            },
+            body: JSON.stringify(notificationPayload),
+          });
+
+          if (pushResponse.ok) {
+            const result = await pushResponse.json();
+            console.log("[chat] ✅ Push notification sent:", {
+              notificationId: result.id,
+              recipients: recipientIds.length,
+            });
+          } else {
+            const errorText = await pushResponse.text();
+            console.warn("[chat] ⚠️ Push notification failed:", errorText);
+          }
+        } else {
+          console.log("[chat] ℹ️ No push subscriptions found for user");
+        }
+      } else {
+        console.log("[chat] ℹ️ OneSignal not configured, skipping push notification");
+      }
     } catch (pushError) {
-      console.warn("[chat] Push notification failed:", pushError);
+      console.warn("[chat] ⚠️ Push notification error:", pushError);
       // Don't fail the chat if push fails
     }
 
