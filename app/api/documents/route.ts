@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
         fileName: true,
         fileSize: true,
         mimeType: true,
+        filePath: true,
+        signedFilePath: true,
         driveFileId: true,
         driveUrl: true,
         createdAt: true,

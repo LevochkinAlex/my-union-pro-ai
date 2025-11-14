@@ -48,11 +48,14 @@ export async function POST(request: NextRequest) {
       });
 
       if (chatSession?.type === "STATEMENT") {
-        // В чате заявления - скорее всего это подписанное заявление
+        // В чате заявления - определяем тип по имени файла или по умолчанию MEMBERSHIP_APPLICATION
         if (fileName.includes("вступлени") || fileName.includes("membership")) {
           documentType = "MEMBERSHIP_APPLICATION";
         } else if (fileName.includes("взнос") || fileName.includes("contributions")) {
           documentType = "CONTRIBUTION_APPLICATION";
+        } else {
+          // По умолчанию в STATEMENT сессии считаем это заявлением о вступлении
+          documentType = "MEMBERSHIP_APPLICATION";
         }
       }
     }
@@ -77,21 +80,101 @@ export async function POST(request: NextRequest) {
     // Сохраняем информацию о документе в базе данных
     const relativePath = `/uploads/documents/${uniqueFileName}`;
     
-    const document = await prisma.document.create({
-      data: {
-        userId: session.user.id,
-        type: documentType,
-        status: documentType === "OTHER" ? "GENERATED" : "SIGNED", // Если это заявление - считаем подписанным
-        title: file.name,
-        fileName: file.name,
-        filePath: relativePath,
-        fileSize: file.size,
-        mimeType: file.type || "application/octet-stream",
-        ...(documentType !== "OTHER" && {
-          signedFilePath: relativePath, // Для заявлений это подписанный файл
-        }),
-      },
-    });
+    // Если это заявление о вступлении, проверяем, есть ли уже сгенерированное заявление
+    let document;
+    if (documentType === "MEMBERSHIP_APPLICATION") {
+      const existingDoc = await prisma.document.findFirst({
+        where: {
+          userId: session.user.id,
+          type: "MEMBERSHIP_APPLICATION",
+          status: "GENERATED", // Ищем сгенерированное заявление
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      if (existingDoc) {
+        // Обновляем существующий документ, добавляя подписанный файл
+        document = await prisma.document.update({
+          where: { id: existingDoc.id },
+          data: {
+            status: "SIGNED",
+            signedFilePath: relativePath,
+            updatedAt: new Date(),
+          },
+        });
+        console.log("[upload] Updated existing MEMBERSHIP_APPLICATION with signed file:", document.id);
+      } else {
+        // Создаем новый документ
+        document = await prisma.document.create({
+          data: {
+            userId: session.user.id,
+            type: documentType,
+            status: "SIGNED",
+            title: file.name,
+            fileName: file.name,
+            filePath: relativePath,
+            signedFilePath: relativePath,
+            fileSize: file.size,
+            mimeType: file.type || "application/octet-stream",
+          },
+        });
+        console.log("[upload] Created new MEMBERSHIP_APPLICATION document:", document.id);
+      }
+    } else if (documentType === "CONTRIBUTION_APPLICATION") {
+      // Аналогично для заявления о взносах
+      const existingDoc = await prisma.document.findFirst({
+        where: {
+          userId: session.user.id,
+          type: "CONTRIBUTION_APPLICATION",
+          status: "GENERATED",
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      if (existingDoc) {
+        document = await prisma.document.update({
+          where: { id: existingDoc.id },
+          data: {
+            status: "SIGNED",
+            signedFilePath: relativePath,
+            updatedAt: new Date(),
+          },
+        });
+        console.log("[upload] Updated existing CONTRIBUTION_APPLICATION with signed file:", document.id);
+      } else {
+        document = await prisma.document.create({
+          data: {
+            userId: session.user.id,
+            type: documentType,
+            status: "SIGNED",
+            title: file.name,
+            fileName: file.name,
+            filePath: relativePath,
+            signedFilePath: relativePath,
+            fileSize: file.size,
+            mimeType: file.type || "application/octet-stream",
+          },
+        });
+      }
+    } else {
+      // Для других типов документов просто создаем новый
+      document = await prisma.document.create({
+        data: {
+          userId: session.user.id,
+          type: documentType,
+          status: "GENERATED",
+          title: file.name,
+          fileName: file.name,
+          filePath: relativePath,
+          fileSize: file.size,
+          mimeType: file.type || "application/octet-stream",
+        },
+      });
+    }
 
     return NextResponse.json({
       success: true,

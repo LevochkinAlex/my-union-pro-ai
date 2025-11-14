@@ -12,6 +12,8 @@ interface Document {
   fileName: string | null;
   fileSize: number | null;
   mimeType: string;
+  filePath: string | null;
+  signedFilePath: string | null;
   driveFileId: string | null;
   driveUrl: string | null;
   createdAt: string;
@@ -212,26 +214,71 @@ export default function DocumentsPage() {
                     )}
                   </div>
                 </div>
-                <div className="ml-4 flex gap-2">
-                  <button
-                    onClick={() => handleDownload(doc.id, doc.fileName)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                  >
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                <div className="ml-4 flex flex-col gap-2">
+                  {doc.filePath && (
+                    <button
+                      onClick={() => handleDownload(doc.id, doc.fileName)}
+                      className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                      />
-                    </svg>
-                    Скачать
-                  </button>
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                        />
+                      </svg>
+                      Скачать
+                    </button>
+                  )}
+                  {doc.signedFilePath && (
+                    <button
+                      onClick={async () => {
+                        // Скачиваем подписанный файл
+                        try {
+                          const response = await fetch(`/api/documents/${doc.id}/download?signed=true`);
+                          if (!response.ok) {
+                            throw new Error("Ошибка скачивания документа");
+                          }
+
+                          const blob = await response.blob();
+                          const url = window.URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          const signedFileName = doc.fileName ? `подписанное_${doc.fileName}` : "подписанное_заявление.pdf";
+                          a.download = signedFileName;
+                          document.body.appendChild(a);
+                          a.click();
+                          window.URL.revokeObjectURL(url);
+                          document.body.removeChild(a);
+                        } catch (err) {
+                          console.error("Ошибка скачивания:", err);
+                          alert("Не удалось скачать подписанное заявление");
+                        }
+                      }}
+                      className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                    >
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                      Скачать подписанное заявление
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

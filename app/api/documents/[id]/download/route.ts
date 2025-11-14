@@ -22,6 +22,8 @@ export async function GET(
     }
 
     const { id } = await Promise.resolve(context.params);
+    const { searchParams } = new URL(request.url);
+    const downloadSigned = searchParams.get("signed") === "true";
 
     // Получаем документ
     const document = await prisma.document.findUnique({
@@ -37,18 +39,24 @@ export async function GET(
       return NextResponse.json({ error: "Доступ запрещен" }, { status: 403 });
     }
 
+    // Определяем, какой файл скачивать: подписанный или обычный
+    const filePathToDownload = downloadSigned && document.signedFilePath 
+      ? document.signedFilePath 
+      : document.filePath;
+
     let fileBuffer: Buffer | null = null;
 
-    if (document.content) {
-      // Документ хранится в базе данных как base64
+    if (document.content && !downloadSigned) {
+      // Документ хранится в базе данных как base64 (только для обычного файла)
       fileBuffer = Buffer.from(document.content, "base64");
       console.log("[documents/download] Загружен из базы данных (base64), размер:", fileBuffer.length);
-    } else if (document.filePath) {
+    } else if (filePathToDownload) {
       // Документ хранится как файл на диске
       try {
-        const absolutePath = resolveFilePath(document.filePath);
+        const absolutePath = resolveFilePath(filePathToDownload);
         console.log("[documents/download] Пытаемся прочитать файл:", absolutePath);
-        console.log("[documents/download] Исходный путь из БД:", document.filePath);
+        console.log("[documents/download] Исходный путь из БД:", filePathToDownload);
+        console.log("[documents/download] Скачиваем подписанный файл:", downloadSigned);
         
         // Проверяем существование файла
         try {
@@ -89,9 +97,13 @@ export async function GET(
 
     // Определяем Content-Type на основе mimeType документа или расширения файла
     let contentType = document.mimeType || "application/pdf";
+    const fileNameToUse = downloadSigned && document.signedFilePath
+      ? (filePathToDownload?.split("/").pop() || document.fileName || "document.pdf")
+      : (document.fileName || "document.pdf");
+    
     if (!contentType || contentType === "application/pdf") {
       // Если mimeType не указан или PDF, проверяем расширение файла
-      const fileName = document.fileName || document.filePath || "";
+      const fileName = fileNameToUse || filePathToDownload || "";
       if (fileName.endsWith(".docx")) {
         contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
       } else if (fileName.endsWith(".doc")) {
@@ -103,8 +115,9 @@ export async function GET(
 
     console.log("[documents/download] Возвращаем файл:", {
       contentType,
-      fileName: document.fileName,
+      fileName: fileNameToUse,
       size: fileBuffer.length,
+      signed: downloadSigned,
     });
 
     // Возвращаем файл
@@ -112,7 +125,7 @@ export async function GET(
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(document.fileName || "document.pdf")}"`,
+        "Content-Disposition": `attachment; filename="${encodeURIComponent(fileNameToUse)}"`,
         "Content-Length": fileBuffer.length.toString(),
       },
     });

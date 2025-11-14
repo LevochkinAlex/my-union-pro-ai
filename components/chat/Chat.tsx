@@ -408,7 +408,7 @@ function ChatContent() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            message: `Я загрузил файл: ${file.name}. Пожалуйста, проверь его.`,
+            message: `Я загрузил файл: ${file.name}. Это мое подписанное заявление. Пожалуйста, проверь его правильность заполнения.`,
             sessionId: currentSessionId,
           }),
         });
