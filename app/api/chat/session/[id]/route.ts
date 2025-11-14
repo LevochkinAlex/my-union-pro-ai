@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 // Получить сообщения конкретной сессии
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -18,7 +18,7 @@ export async function GET(
       );
     }
 
-    const sessionId = params.id;
+    const { id: sessionId } = await params;
 
     // Проверяем, что сессия существует и принадлежит пользователю
     const chatSession = await prisma.chatSession.findFirst({

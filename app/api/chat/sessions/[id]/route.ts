@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 // Удалить сессию чата
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -18,7 +18,7 @@ export async function DELETE(
       );
     }
 
-    const sessionId = params.id;
+    const { id: sessionId } = await params;
 
     // Проверяем, что сессия существует и принадлежит пользователю
     const chatSession = await prisma.chatSession.findFirst({
