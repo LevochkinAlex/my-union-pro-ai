@@ -685,11 +685,95 @@ export async function POST(request: NextRequest) {
             });
             
             if (userOrg) {
-              await Promise.all([
+              // Генерируем PDF файлы
+              const [membershipPath, contributionsPath] = await Promise.all([
                 generateMembershipApplication(userOrg),
                 generateContributionsApplication(userOrg, userOrg.organization?.name, undefined),
               ]);
-              console.log("[chat] ✅ Documents generated successfully");
+              
+              console.log("[chat] PDF files generated:", { membershipPath, contributionsPath });
+              
+              // Проверяем существующие документы
+              const existingDocs = await prisma.document.findMany({
+                where: {
+                  userId: session.user.id,
+                  type: {
+                    in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
+                  },
+                },
+              });
+
+              // Получаем размеры файлов
+              const fs = await import("fs/promises");
+              const pathModule = await import("path");
+              
+              const membershipStats = await fs.stat(pathModule.join(process.cwd(), "public", membershipPath));
+              const contributionsStats = await fs.stat(pathModule.join(process.cwd(), "public", contributionsPath));
+
+              // Создаем или обновляем документы в базе данных
+              const ppoChairman = userOrg.organization?.chairmanName || "Председатель ППО";
+              
+              // Заявление о вступлении
+              const existingMembership = existingDocs.find(d => d.type === "MEMBERSHIP_APPLICATION");
+              if (existingMembership) {
+                await prisma.document.update({
+                  where: { id: existingMembership.id },
+                  data: {
+                    filePath: membershipPath,
+                    fileName: pathModule.basename(membershipPath),
+                    fileSize: membershipStats.size,
+                    status: "GENERATED",
+                  },
+                });
+                console.log("[chat] ✅ Membership application updated in DB");
+              } else {
+                await prisma.document.create({
+                  data: {
+                    userId: session.user.id,
+                    type: "MEMBERSHIP_APPLICATION",
+                    status: "GENERATED",
+                    title: "Заявление о вступлении в профсоюз",
+                    filePath: membershipPath,
+                    fileName: pathModule.basename(membershipPath),
+                    fileSize: membershipStats.size,
+                    mimeType: "application/pdf",
+                    organizationId: userOrg.organizationId || null,
+                  },
+                });
+                console.log("[chat] ✅ Membership application created in DB");
+              }
+
+              // Заявление о взносах
+              const existingContributions = existingDocs.find(d => d.type === "CONTRIBUTION_APPLICATION");
+              if (existingContributions) {
+                await prisma.document.update({
+                  where: { id: existingContributions.id },
+                  data: {
+                    filePath: contributionsPath,
+                    fileName: pathModule.basename(contributionsPath),
+                    fileSize: contributionsStats.size,
+                    status: "GENERATED",
+                  },
+                });
+                console.log("[chat] ✅ Contributions application updated in DB");
+              } else {
+                await prisma.document.create({
+                  data: {
+                    userId: session.user.id,
+                    type: "CONTRIBUTION_APPLICATION",
+                    status: "GENERATED",
+                    title: "Заявление о взносах",
+                    filePath: contributionsPath,
+                    fileName: pathModule.basename(contributionsPath),
+                    fileSize: contributionsStats.size,
+                    mimeType: "application/pdf",
+                    organizationId: userOrg.organizationId || null,
+                  },
+                });
+                console.log("[chat] ✅ Contributions application created in DB");
+              }
+              
+              console.log("[chat] ✅ Documents generated and saved to database successfully");
             }
           } catch (docError) {
             console.error("[chat] ⚠️  Error generating documents:", docError);

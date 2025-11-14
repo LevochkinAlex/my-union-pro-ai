@@ -25,8 +25,10 @@ function ChatContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const shouldAutoScrollRef = useRef(false); // Флаг для контроля автоскролла
   const isInitialLoadRef = useRef(true); // Флаг для первой загрузки
 
@@ -143,6 +145,7 @@ function ChatContent() {
   // Проверяем статус профиля и генерируем заявления если нужно
   const checkAndGenerateDocuments = useCallback(async () => {
     try {
+      console.log("[chat] Checking profile and generating documents...");
       const response = await fetch("/api/chat/extract-profile", {
         method: "POST",
       });
@@ -150,15 +153,25 @@ function ChatContent() {
       const data = await response.json().catch(() => null);
       
       if (response.ok) {
-        console.log("Documents generated successfully");
+        console.log("[chat] ✅ Documents generated successfully");
+        // Обновляем сообщения чтобы показать кнопку скачивания
+        if (sessionId || currentSessionId) {
+          const url = (sessionId || currentSessionId) ? `/api/chat/session/${sessionId || currentSessionId}` : "/api/chat";
+          const messagesResponse = await fetch(url);
+          if (messagesResponse.ok) {
+            const messagesData = await messagesResponse.json();
+            setMessages(messagesData.messages || []);
+          }
+        }
       } else if (response.status === 400 && data) {
-        console.log("Profile not yet complete", data.missingFields || []);
+        console.log("[chat] ⚠️ Profile not yet complete", data.missingFields || []);
+      } else {
+        console.error("[chat] ❌ Error generating documents:", data);
       }
     } catch (error) {
-      // Ошибка при проверке - это нормально
-      console.error("Error checking profile:", error);
+      console.error("[chat] ❌ Error checking profile:", error);
     }
-  }, []);
+  }, [sessionId, currentSessionId]);
 
   // Прокрутка вниз только при новых сообщениях от пользователя или бота
   useEffect(() => {
@@ -297,6 +310,22 @@ function ChatContent() {
     }
   };
 
+  // Автоматическое изменение высоты textarea
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = "52px"; // Сброс высоты
+      const scrollHeight = textarea.scrollHeight;
+      const maxHeight = 200; // Максимальная высота
+      textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
+      if (scrollHeight > maxHeight) {
+        textarea.style.overflowY = "auto";
+      } else {
+        textarea.style.overflowY = "hidden";
+      }
+    }
+  }, [input]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -304,6 +333,84 @@ function ChatContent() {
       if (form) {
         form.requestSubmit();
       }
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Ограничиваем размер файла до 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Файл слишком большой. Максимальный размер: 10MB");
+      setTimeout(() => setError(null), 5000);
+      return;
+    }
+
+    setUploadingFile(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("sessionId", currentSessionId || "");
+
+      const response = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Ошибка загрузки файла");
+      }
+
+      const data = await response.json();
+      
+      // Добавляем сообщение о загруженном файле
+      const fileMessage: ChatMessage = {
+        id: `file-${Date.now()}`,
+        role: "user",
+        content: `📎 Загружен файл: ${file.name}`,
+        createdAt: new Date(),
+      };
+
+      setMessages((prev) => [...prev, fileMessage]);
+
+      // Отправляем сообщение боту о загруженном файле
+      if (currentSessionId) {
+        const chatResponse = await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message: `Я загрузил файл: ${file.name}. Пожалуйста, проверь его.`,
+            sessionId: currentSessionId,
+          }),
+        });
+
+        if (chatResponse.ok) {
+          const chatData = await chatResponse.json();
+          const aiMessage: ChatMessage = {
+            id: `ai-${Date.now()}`,
+            role: "assistant",
+            content: chatData.message,
+            createdAt: new Date(),
+          };
+          setMessages((prev) => [...prev, aiMessage]);
+          shouldAutoScrollRef.current = true;
+        }
+      }
+
+      // Очищаем input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } catch (error) {
+      console.error("Ошибка загрузки файла:", error);
+      setError(error instanceof Error ? error.message : "Не удалось загрузить файл");
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setUploadingFile(false);
     }
   };
 
@@ -500,6 +607,39 @@ function ChatContent() {
         <div className="mx-auto max-w-4xl">
           <form onSubmit={handleSubmit} className="relative">
             <div className="relative flex items-end rounded-2xl border-2 border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700 focus-within:border-blue-500 dark:focus-within:border-blue-500 transition-colors hover:border-gray-400 dark:hover:border-gray-500">
+              {/* Кнопка загрузки файла */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                id="file-upload"
+                className="hidden"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                onChange={handleFileUpload}
+                disabled={isLoading || uploadingFile}
+              />
+              <label
+                htmlFor="file-upload"
+                className="m-2 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed dark:text-gray-400 dark:hover:bg-gray-600 dark:hover:text-gray-200"
+                title="Прикрепить файл"
+              >
+                {uploadingFile ? (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
+                ) : (
+                  <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                    />
+                  </svg>
+                )}
+              </label>
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -511,16 +651,17 @@ function ChatContent() {
                     : "Введите ваше сообщение..."
                 }
                 rows={1}
-                disabled={isLoading}
+                disabled={isLoading || uploadingFile}
                 className="flex-1 resize-none border-0 bg-transparent px-4 py-3 text-[15px] text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-0 dark:text-gray-100 dark:placeholder-gray-400"
                 style={{
                   minHeight: "52px",
                   maxHeight: "200px",
+                  overflowY: "auto",
                 }}
               />
               <button
                 type="submit"
-                disabled={!input.trim() || isLoading}
+                disabled={(!input.trim() && !uploadingFile) || isLoading || uploadingFile}
                 className="m-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-blue-500 dark:hover:bg-blue-600"
                 aria-label="Отправить сообщение"
               >
