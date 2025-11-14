@@ -137,12 +137,17 @@ async function buildSystemPrompt(
 
 2. **ОРГАНИЗАЦИЯ**: Затем спроси: "Теперь укажите наименование организации, в которой вы работаете."
    - Пользователь может написать регион и название организации
-   - Попытайся найти корректное название организации в базе данных МойСоюз
-   - Если организация найдена в базе, используй её точное название
-   - Если организация не найдена в базе МойСоюз, скажи: "К сожалению Ваша организация не участвует в проекте МойСоюз. Но мы создадим вам это заявление, а если организация добавится в будущем, то оно обязательно дойдет до адресата."
+   - После получения ответа пользователя система автоматически найдет корректное название организации в базе данных МойСоюз или в реестре Минюста РФ
+   - Если система нашла организацию, она покажет тебе найденное название в формате: "[НАЙДЕНА ОРГАНИЗАЦИЯ: полное название организации]"
+   - Ты ДОЛЖЕН показать пользователю найденное название и спросить: "Я нашел вашу организацию: [название]. Это правильная организация? (да/нет)"
+   - Если пользователь подтвердит (да/да, правильно/верно), используй это название и переходи к следующему шагу
+   - Если пользователь откажется (нет/неправильно), попроси указать более точное название или уточнить детали
+   - Если организация найдена в базе МойСоюз, используй её точное название
+   - Если организация найдена в реестре Минюста, но не в базе МойСоюз, скажи: "Я нашел вашу организацию в реестре: [название]. К сожалению, она пока не участвует в проекте МойСоюз, но мы создадим вам заявление, и если организация добавится в будущем, то оно обязательно дойдет до адресата."
+   - Если организация не найдена нигде, попроси уточнить название или проверить правильность написания
    - ВСЕГДА создавай заявление, даже если организации нет в базе
    - Название ППО обычно пересекается с названием организации
-   - Сохрани название организации в профиле пользователя
+   - Сохрани подтвержденное название организации в профиле пользователя
 
 3. **ФИО**: Спроси: "Здорово! Пожалуйста, укажите вашу фамилию, имя и отчество."
    - Извлеки фамилию, имя, отчество
@@ -160,9 +165,8 @@ async function buildSystemPrompt(
      * Улицы, проспекта, бульвара
      * Номера дома
      * Номера квартиры/офиса (если применимо)
-   - Адрес будет автоматически валидирован и стандартизирован через сервис Dadata
-   - Если в сообщении пользователя есть метка "[Валидированный адрес через Dadata: ...]", обязательно покажи пользователю этот валидированный адрес и подтверди, что адрес обработан и сохранен
-   - После валидации адреса скажи: "Отлично! Ваш адрес валидирован и сохранен: [валидированный адрес]. Теперь, пожалуйста, укажите ваш номер телефона."
+   - Адрес будет автоматически валидирован и стандартизирован
+   - После валидации адреса скажи: "Отлично! Ваш адрес сохранен: [адрес]. Теперь, пожалуйста, укажите ваш номер телефона."
 
 6. **ТЕЛЕФОН**: Спроси: "Теперь, пожалуйста, укажите ваш номер телефона."
    - Ожидаются российские номера в формате +7 или 8 с 10 цифрами
@@ -320,9 +324,7 @@ export async function POST(request: NextRequest) {
         validatedAddress = await validateAddressWithDaData(message);
         if (validatedAddress) {
           console.log("[chat] Address pre-validated via Dadata:", validatedAddress);
-          // Обновляем сообщение пользователя, добавляя валидированный адрес
-          userMessage = `${message}\n\n[Валидированный адрес через Dadata: ${validatedAddress}]`;
-          // Сохраняем валидированный адрес в профиль сразу
+          // Сохраняем валидированный адрес в профиль сразу (без добавления метки в сообщение)
           await prisma.user.update({
             where: { id: session.user.id },
             data: { address: validatedAddress },
@@ -330,6 +332,31 @@ export async function POST(request: NextRequest) {
         }
       } catch (dadataError) {
         console.warn("[chat] Error pre-validating address with Dadata:", dadataError);
+      }
+    }
+
+    // Если в сообщении пользователя есть название организации, ищем её ДО отправки к AI
+    let foundOrganization: { name: string; foundInDatabase: boolean; id?: string } | null = null;
+    if (chatSession.type === "STATEMENT" && message && (message.toLowerCase().includes("организац") || message.toLowerCase().includes("работаю") || message.toLowerCase().includes("работа"))) {
+      try {
+        // Получаем регион пользователя для более точного поиска
+        const user = await prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: { region: true },
+        });
+        
+        console.log("[chat] Searching organization before AI:", message);
+        foundOrganization = await findOrganization(message, user?.region || undefined);
+        
+        if (foundOrganization) {
+          console.log("[chat] Organization found:", foundOrganization.name, "in DB:", foundOrganization.foundInDatabase);
+          // Добавляем метку в сообщение для AI, чтобы он мог показать найденную организацию пользователю
+          userMessage = `${message}\n\n[НАЙДЕНА ОРГАНИЗАЦИЯ: ${foundOrganization.name}${foundOrganization.foundInDatabase ? " (в базе МойСоюз)" : " (в реестре Минюста РФ)"}]`;
+        } else {
+          console.log("[chat] Organization not found");
+        }
+      } catch (orgError) {
+        console.warn("[chat] Error searching organization before AI:", orgError);
       }
     }
 
@@ -604,8 +631,19 @@ export async function POST(request: NextRequest) {
             }
           }
           
-          // Если есть название организации, пытаемся найти её в базе
-          if (extractedData.organizationName || message.includes("организац") || message.includes("работаю")) {
+          // Если организация уже была найдена до отправки к AI, используем её
+          if (foundOrganization) {
+            if (foundOrganization.foundInDatabase && foundOrganization.id) {
+              // Организация найдена в базе - привязываем к пользователю
+              extractedData.organizationId = foundOrganization.id;
+              console.log("[chat] Using organization found before AI (in database):", foundOrganization.name);
+            } else {
+              // Организация найдена в Минюсте, но не в базе - сохраняем название
+              extractedData.organizationName = foundOrganization.name;
+              console.log("[chat] Using organization found before AI (in Minjust):", foundOrganization.name);
+            }
+          } else if (extractedData.organizationName || message.includes("организац") || message.includes("работаю")) {
+            // Если организация не была найдена до AI, пытаемся найти её сейчас
             const orgName = extractedData.organizationName || message;
             const userRegion = extractedData.region;
             
