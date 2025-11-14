@@ -142,7 +142,7 @@ export async function POST() {
       // Генерируем оба заявления
       const [membershipPath, contributionsPath] = await Promise.all([
         generateMembershipApplication(updatedUser, ppoChairman),
-        generateContributionsApplication(updatedUser, ppoChairman),
+        generateContributionsApplication(updatedUser, updatedUser.organization?.name, undefined),
       ]);
 
       console.log("[extract-profile] Заявления сгенерированы:", { membershipPath, contributionsPath });

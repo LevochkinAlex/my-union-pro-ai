@@ -27,19 +27,40 @@ function getCurrentDate(): string {
   return formatDate(new Date());
 }
 
-// Генерация HTML для заявления о вступлении
+// Получение ФИО в родительном падеже (упрощенная версия)
+function getFullNameGenitive(user: { firstName?: string | null; lastName?: string | null; middleName?: string | null }): string {
+  if (!user.lastName || !user.firstName) return "";
+  
+  const lastNameGenitive = user.lastName.endsWith("ов") || user.lastName.endsWith("ев") || user.lastName.endsWith("ин")
+    ? user.lastName + "а"
+    : user.lastName.endsWith("а") || user.lastName.endsWith("я")
+    ? user.lastName.slice(0, -1) + "ы"
+    : user.lastName + "а";
+  
+  const firstNameGenitive = user.firstName.endsWith("а") || user.firstName.endsWith("я")
+    ? user.firstName.slice(0, -1) + "ы"
+    : user.firstName + "а";
+  
+  const middleNameGenitive = user.middleName
+    ? user.middleName.endsWith("ич")
+      ? user.middleName + "а"
+      : user.middleName.endsWith("на")
+      ? user.middleName.slice(0, -1) + "ы"
+      : user.middleName + "а"
+    : "";
+  
+  return `${lastNameGenitive} ${firstNameGenitive}${middleNameGenitive ? ` ${middleNameGenitive}` : ""}`;
+}
+
+// Генерация HTML для заявления о вступлении (согласно образцу PDF)
 function generateMembershipApplicationHTML(
   user: User & { organization?: Organization | null },
   ppoChairman: string = "Председатель ППО"
 ): string {
   const fullName = `${user.lastName || ""} ${user.firstName || ""} ${user.middleName || ""}`.trim();
-  const birthDate = user.dateOfBirth ? formatDate(user.dateOfBirth) : "";
-  const address = user.address || "";
-  const phone = user.phone || "";
+  const fullNameGenitive = getFullNameGenitive(user);
   const jobTitle = user.jobTitle || "";
-  const profession = user.profession || "";
-  const education = user.education || "";
-  const organizationName = user.organization?.name || "МООП РЗ";
+  const ppoName = user.organization?.name || "первичной профсоюзной организации";
   const currentDate = getCurrentDate();
 
   return `
@@ -62,50 +83,61 @@ function generateMembershipApplicationHTML(
     .title {
       text-align: center;
       font-weight: bold;
+      font-size: 16pt;
       margin-bottom: 1.5em;
       text-transform: uppercase;
     }
     .content {
-      text-indent: 1.5cm;
       margin-bottom: 1em;
+      font-size: 14pt;
+    }
+    .footer {
+      margin-top: 2em;
+      display: flex;
+      justify-content: space-between;
+    }
+    .date {
+      text-align: left;
+      font-size: 14pt;
     }
     .signature {
-      margin-top: 2em;
       text-align: right;
+      font-size: 14pt;
     }
     .signature-line {
       border-top: 1px solid #000;
       width: 200px;
       display: inline-block;
-      margin-top: 40px;
+      margin-top: 5px;
     }
   </style>
 </head>
 <body>
   <div class="header">
-    ${organizationName}<br>
-    ${ppoChairman}
+    Председателю ${ppoName}<br>
+    от ${fullNameGenitive}.<br>
+    ${jobTitle}
   </div>
   
   <div class="title">
-    Заявление
+    ЗАЯВЛЕНИЕ.
   </div>
   
   <div class="content">
-    Я, ${fullName}, ${birthDate ? `родившийся(ая) ${birthDate} года,` : ""} ${address ? `проживающий(ая) по адресу: ${address},` : ""} ${phone ? `телефон: ${phone},` : ""} ${jobTitle ? `работающий(ая) в должности ${jobTitle},` : ""} ${profession ? `по профессии ${profession},` : ""} ${education ? `имеющий(ая) ${education} образование,` : ""} прошу принять меня в члены профсоюза.
+    Прошу принять меня в Профсоюз работников здравоохранения РФ с ${currentDate}
   </div>
   
   <div class="content">
-    С Уставом профсоюза и условиями членства ознакомлен(а).
+    С уставом Профсоюза работников здравоохранения РФ ознакомлен(а) и обязуюсь исполнять.
   </div>
   
-  <div class="signature">
-    <div style="margin-top: 60px;">
+  <div class="footer">
+    <div class="date">
       ${currentDate}
     </div>
-    <div class="signature-line"></div>
-    <div style="margin-top: 5px; font-size: 12pt;">
-      ${fullName}
+    <div class="signature">
+      Личная подпись<br>
+      <div class="signature-line"></div>
     </div>
   </div>
 </body>
@@ -113,13 +145,17 @@ function generateMembershipApplicationHTML(
   `.trim();
 }
 
-// Генерация HTML для заявления о взносах
+// Генерация HTML для заявления о взносах (согласно новому образцу PDF)
 function generateContributionsApplicationHTML(
   user: User & { organization?: Organization | null },
-  ppoChairman: string = "Председатель ППО"
+  employerName?: string,
+  employerFullName?: string
 ): string {
   const fullName = `${user.lastName || ""} ${user.firstName || ""} ${user.middleName || ""}`.trim();
-  const organizationName = user.organization?.name || "МООП РЗ";
+  const fullNameGenitive = getFullNameGenitive(user);
+  const organizationName = user.organization?.name || employerName || "организации работодателя";
+  const employerFIO = employerFullName || "";
+  const jobTitle = user.jobTitle || "";
   const currentDate = getCurrentDate();
 
   return `
@@ -142,47 +178,50 @@ function generateContributionsApplicationHTML(
     .title {
       text-align: center;
       font-weight: bold;
+      font-size: 16pt;
       margin-bottom: 1.5em;
       text-transform: uppercase;
     }
     .content {
-      text-indent: 1.5cm;
       margin-bottom: 1em;
+      font-size: 14pt;
+      text-align: left;
     }
     .signature {
       margin-top: 2em;
-      text-align: right;
+      text-align: left;
     }
     .signature-line {
       border-top: 1px solid #000;
       width: 200px;
       display: inline-block;
-      margin-top: 40px;
+      margin-top: 5px;
     }
   </style>
 </head>
 <body>
   <div class="header">
+    Руководителю (главному врачу, директору)<br>
     ${organizationName}<br>
-    ${ppoChairman}
+    ${employerFIO}
+  </div>
+  
+  <div style="text-align: right; margin-bottom: 2em;">
+    от ${fullNameGenitive}<br>
+    ${jobTitle}
   </div>
   
   <div class="title">
-    Заявление
+    ЗАЯВЛЕНИЕ.
   </div>
   
   <div class="content">
-    Я, ${fullName}, прошу удерживать из моей заработной платы членские взносы в размере 1% и перечислять их на счет профсоюза.
+    На основании ст.28 Федерального закона «О профессиональных союзах, их правах и гарантиях деятельности» прошу ежемесячно удерживать из моей заработной платы членские профсоюзные взносы в размере 1% (один процент) и перечислять их на счет профсоюзной организации с ${currentDate}
   </div>
   
   <div class="signature">
-    <div style="margin-top: 60px;">
-      ${currentDate}
-    </div>
+    Подпись<br>
     <div class="signature-line"></div>
-    <div style="margin-top: 5px; font-size: 12pt;">
-      ${fullName}
-    </div>
   </div>
 </body>
 </html>
@@ -245,9 +284,10 @@ export async function generateMembershipApplication(
 // Генерация заявления о взносах
 export async function generateContributionsApplication(
   user: User & { organization?: Organization | null },
-  ppoChairman?: string
+  employerName?: string,
+  employerFullName?: string
 ): Promise<string> {
-  const html = generateContributionsApplicationHTML(user, ppoChairman);
+  const html = generateContributionsApplicationHTML(user, employerName, employerFullName);
   const fileName = `contributions_${user.id}_${Date.now()}.pdf`;
   const filePath = path.join(DOCUMENTS_DIR, fileName);
   

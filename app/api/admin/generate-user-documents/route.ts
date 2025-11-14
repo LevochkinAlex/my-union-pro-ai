@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
 
       try {
         console.log("[generate-documents] Generating contributions application...");
-        contributionsPath = await generateContributionsApplication(user, ppoChairman);
+        contributionsPath = await generateContributionsApplication(user, user.organization?.name, undefined);
         console.log(`[generate-documents] Contributions generated: ${contributionsPath}`);
       } catch (contribError) {
         console.error("[generate-documents] Error generating contributions:", contribError);
@@ -298,7 +298,7 @@ export async function PUT(request: NextRequest) {
 
         const [membershipPath, contributionsPath] = await Promise.all([
           generateMembershipApplication(user, ppoChairman),
-          generateContributionsApplication(user, ppoChairman),
+          generateContributionsApplication(user, user.organization?.name, undefined),
         ]);
 
         // Delete old documents if any

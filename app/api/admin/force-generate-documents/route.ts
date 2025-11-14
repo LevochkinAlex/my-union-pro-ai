@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
         // Генерируем оба заявления
         const [membershipPath, contributionsPath] = await Promise.all([
           generateMembershipApplication(user, ppoChairman),
-          generateContributionsApplication(user, ppoChairman),
+          generateContributionsApplication(user, user.organization?.name, undefined),
         ]);
 
         // Сохраняем в БД только если их нет

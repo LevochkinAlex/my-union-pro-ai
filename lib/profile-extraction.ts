@@ -97,6 +97,13 @@ export async function extractProfileDataFromMessages(
     .map((msg) => msg.content)
     .join("\n");
 
+  // Extract region (регион России)
+  const regionPattern = /(?:регион|область|край|республика)[\s:]+([А-ЯЁ][а-яё\s-]+(?:область|край|республика|автономный округ)?)/i;
+  const regionMatch = allText.match(regionPattern);
+  if (regionMatch) {
+    profileData.region = regionMatch[1].trim();
+  }
+
   // Extract name patterns (ФИО)
   const fioPattern = /([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/;
   const fioMatch = allText.match(fioPattern);
@@ -215,6 +222,22 @@ export async function extractProfileDataFromMessages(
     const educationMatch = allText.match(educationPattern);
     if (educationMatch) {
       profileData.education = educationMatch[0].trim();
+    }
+  }
+
+  // Extract organization name
+  const orgLabelPattern = /(?:\*\*Организация\*\*|Организация|работаю|работает)[^:\n]*[:\-–]\s*(.+)/i;
+  const orgLabelMatch = allText.match(orgLabelPattern);
+  if (orgLabelMatch) {
+    profileData.organizationName = orgLabelMatch[1].split(/\n/)[0].trim();
+  }
+
+  // Также пытаемся найти название организации в контексте работы
+  if (!profileData.organizationName) {
+    const orgPattern = /(?:работаю|работает|организация|место работы)[\s:]+([А-ЯЁ][А-ЯЁа-яё\s"«»-]+(?:ООО|ЗАО|ОАО|ИП|ГБУЗ|ГБУ|МБУ|МУП|АО|ПАО|НКО|ОО|ППО|профсоюз)?)/i;
+    const orgMatch = allText.match(orgPattern);
+    if (orgMatch) {
+      profileData.organizationName = orgMatch[1].trim();
     }
   }
 

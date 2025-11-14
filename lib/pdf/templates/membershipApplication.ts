@@ -1,13 +1,14 @@
 import { Readable } from "stream";
-import { createPDFDocument, UserData, formatDate, getFullName, streamToBuffer } from "../generator";
+import { createPDFDocument, UserData, formatDate, getFullName, getFullNameGenitive, streamToBuffer } from "../generator";
 
 /**
  * Генерирует заявление о вступлении в профсоюз
+ * Формат согласно образцу: Заявление о вступлении.pdf
  */
 export async function generateMembershipApplication(userData: UserData): Promise<Buffer> {
   const doc = createPDFDocument({
     title: "Заявление о вступлении в профсоюз",
-    subject: "Заявление о вступлении в МООП РЗ",
+    subject: "Заявление о вступлении в Профсоюз работников здравоохранения РФ",
     keywords: "профсоюз, заявление, вступление",
   });
 
@@ -17,86 +18,62 @@ export async function generateMembershipApplication(userData: UserData): Promise
     middleName: userData.middleName,
   });
 
-  // Заголовок
+  const fullNameGenitive = getFullNameGenitive({
+    firstName: userData.firstName,
+    lastName: userData.lastName,
+    middleName: userData.middleName,
+  });
+
+  const ppoName = userData.organizationName || "первичной профсоюзной организации";
+  const currentDate = formatDate(new Date());
+
+  // Заголовок справа вверху
   doc
     .fontSize(14)
-    .font("Helvetica-Bold")
-    .text("Председателю Межрегиональной общественной", { align: "right" })
-    .text("организации профсоюза работников здравоохранения", { align: "right" })
-    .moveDown(0.5)
-    .text(`от ${fullName}`, { align: "right" })
+    .font("Times-Roman")
+    .text(`Председателю ${ppoName}`, { align: "right" })
+    .moveDown(0.3)
+    .fontSize(14)
+    .text(`от ${fullNameGenitive}.`, { align: "right" })
+    .moveDown(0.3)
+    .fontSize(14)
+    .text(userData.jobTitle || "", { align: "right" })
     .moveDown(2);
 
-  // Название документа
+  // Название документа по центру
   doc
     .fontSize(16)
-    .font("Helvetica-Bold")
-    .text("ЗАЯВЛЕНИЕ", { align: "center" })
+    .font("Times-Bold")
+    .text("ЗАЯВЛЕНИЕ.", { align: "center" })
     .moveDown(1.5);
 
   // Текст заявления
   doc
-    .fontSize(12)
-    .font("Helvetica")
-    .text("Прошу принять меня в члены Межрегиональной общественной организации профсоюза работников здравоохранения (МООП РЗ).", {
-      align: "justify",
-      indent: 30,
+    .fontSize(14)
+    .font("Times-Roman")
+    .text(`Прошу принять меня в Профсоюз работников здравоохранения РФ с ${currentDate}`, {
+      align: "left",
     })
-    .moveDown(1.5);
-
-  // Персональные данные
-  doc
-    .fontSize(12)
-    .font("Helvetica-Bold")
-    .text("Персональные данные:", { underline: true })
-    .moveDown(0.5)
-    .font("Helvetica");
-
-  const personalData = [
-    ["ФИО:", fullName],
-    ["Дата рождения:", formatDate(userData.dateOfBirth)],
-    ["Адрес проживания:", userData.address],
-    ["Телефон:", userData.phone],
-    ["Должность:", userData.jobTitle],
-    ["Профессия:", userData.profession],
-    ["Образование:", userData.education],
-    ["Организация:", userData.organizationName],
-  ];
-
-  if (userData.organizationInn) {
-    personalData.push(["ИНН организации:", userData.organizationInn]);
-  }
-
-  personalData.forEach(([label, value]) => {
-    doc
-      .font("Helvetica-Bold")
-      .text(label, { continued: true })
-      .font("Helvetica")
-      .text(` ${value}`)
-      .moveDown(0.5);
-  });
-
-  doc.moveDown(1.5);
-
-  // Согласие на обработку персональных данных
-  doc
-    .fontSize(11)
-    .font("Helvetica")
-    .text(
-      "Настоящим я даю согласие на обработку моих персональных данных Межрегиональной общественной организацией профсоюза работников здравоохранения в соответствии с Федеральным законом от 27.07.2006 № 152-ФЗ \"О персональных данных\".",
-      {
-        align: "justify",
-      }
-    )
+    .moveDown(1)
+    .text("С уставом Профсоюза работников здравоохранения РФ ознакомлен(а) и обязуюсь исполнять.", {
+      align: "left",
+    })
     .moveDown(2);
 
-  // Подпись и дата
+  // Дата слева внизу
   doc
-    .fontSize(12)
-    .font("Helvetica")
-    .text(`Дата: ${formatDate(new Date())}`, { continued: false })
-    .moveDown(2)
-    .text("Подпись: __________________ / " + fullName + " /", { continued: false });
+    .fontSize(14)
+    .font("Times-Roman")
+    .text(currentDate, { align: "left" })
+    .moveDown(1);
+
+  // Подпись справа внизу
+  doc
+    .fontSize(14)
+    .font("Times-Roman")
+    .text("Личная подпись", { align: "right" })
+    .moveDown(0.2)
+    .text("__________________", { align: "right" });
 
   doc.end();
 

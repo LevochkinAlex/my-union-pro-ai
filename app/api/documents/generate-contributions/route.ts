@@ -42,7 +42,7 @@ export async function POST() {
     const ppoChairman = user.organization?.chairmanName || "Председатель ППО";
 
     // Генерируем заявление
-    const filePath = await generateContributionsApplication(user, ppoChairman);
+    const filePath = await generateContributionsApplication(user, user.organization?.name, undefined);
 
     // Сохраняем документ в базе данных
     const document = await prisma.document.create({

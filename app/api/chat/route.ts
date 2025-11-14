@@ -9,6 +9,7 @@ import { generateMembershipApplication, generateContributionsApplication } from 
 import { extractProfileDataFromMessages, isProfileComplete } from "@/lib/profile-extraction";
 import type { Prisma } from "@prisma/client";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
+import { findOrganization } from "@/lib/organization-search";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -109,7 +110,11 @@ async function retrieveRelevantChunks(bot: DefaultBot, query: string): Promise<R
 }
 
 // Формирование системного промпта с учетом настроек бота и релевантных документов
-async function buildSystemPrompt(bot: DefaultBot, chunks: RetrievedChunk[]): Promise<string> {
+async function buildSystemPrompt(
+  bot: DefaultBot,
+  chunks: RetrievedChunk[],
+  sessionType?: "STATEMENT" | "APPEAL"
+): Promise<string> {
   let prompt = bot.systemPrompt;
 
   // Добавляем контекст, если есть
@@ -117,26 +122,99 @@ async function buildSystemPrompt(bot: DefaultBot, chunks: RetrievedChunk[]): Pro
     prompt += `\n\nКонтекст:\n${bot.context}`;
   }
 
-  // Добавляем инструкции по извлечению данных профиля
-  prompt += `\n\n## ИНСТРУКЦИИ ПО ИЗВЛЕЧЕНИЮ ДАННЫХ ПРОФИЛЯ:
+  // Добавляем специфичные инструкции в зависимости от типа сессии
+  if (sessionType === "STATEMENT") {
+    // Инструкции для чата создания заявления
+    prompt += `\n\n## ИНСТРУКЦИИ ПО СОЗДАНИЮ ЗАЯВЛЕНИЯ О ВСТУПЛЕНИИ В ПРОФСОЮЗ:
 
-При заполнении профиля:
-1. **Дата рождения**: Пользователь может указать дату в любом формате:
-   - ДД.ММ.ГГГГ (12.02.1970)
-   - ДД/ММ/ГГГГ (12/02/1970)
-   - Естественный формат (12 февраля 1970, 12 фев 1970)
-   Ты можешь распознавать все эти форматы и парсить их правильно.
+Ты помощник для вступления в Профсоюз работников здравоохранения РФ. Твоя задача - помочь пользователю заполнить профиль и подготовить необходимые документы.
 
-2. **Адрес**: Попроси полный адрес с указанием:
-   - Города или населенного пункта
-   - Улицы, проспекта, бульвара
-   - Номера дома
-   - Номера квартиры/офиса (если применимо)
-   Это будет автоматически валидировано и стандартизировано через сервис адресов.
+### ПОСЛЕДОВАТЕЛЬНОСТЬ СБОРА ДАННЫХ:
 
-3. **Телефон**: Ожидаются российские номера в формате +7 или 8 с 10 цифрами.
+1. **РЕГИОН**: Сначала спроси: "Укажите регион России, в которой вы находитесь."
+   - Запиши регион в профиль пользователя
 
-Во всех случаях парси естественный язык пользователя и не требуй строгих форматов.`;
+2. **ОРГАНИЗАЦИЯ**: Затем спроси: "Теперь укажите наименование организации, в которой вы работаете."
+   - Пользователь может написать регион и название организации
+   - Попытайся найти корректное название организации в базе данных МойСоюз
+   - Если организация найдена в базе, используй её точное название
+   - Если организация не найдена в базе МойСоюз, скажи: "К сожалению Ваша организация не участвует в проекте МойСоюз. Но мы создадим вам это заявление, а если организация добавится в будущем, то оно обязательно дойдет до адресата."
+   - ВСЕГДА создавай заявление, даже если организации нет в базе
+   - Название ППО обычно пересекается с названием организации
+   - Сохрани название организации в профиле пользователя
+
+3. **ФИО**: Спроси: "Здорово! Пожалуйста, укажите вашу фамилию, имя и отчество."
+   - Извлеки фамилию, имя, отчество
+
+4. **ДАТА РОЖДЕНИЯ**: Спроси: "Теперь, пожалуйста, укажите вашу дату рождения в формате ДД.ММ.ГГГГ."
+   - Пользователь может указать дату в любом формате:
+     * ДД.ММ.ГГГГ (12.02.1970)
+     * ДД/ММ/ГГГГ (12/02/1970)
+     * Естественный формат (12 февраля 1970, 12 фев 1970)
+   - Распознавай все эти форматы и парси их правильно
+
+5. **АДРЕС**: Спроси: "Теперь, пожалуйста, укажите ваш полный адрес проживания."
+   - Попроси полный адрес с указанием:
+     * Города или населенного пункта
+     * Улицы, проспекта, бульвара
+     * Номера дома
+     * Номера квартиры/офиса (если применимо)
+   - Адрес будет автоматически валидирован и стандартизирован через сервис адресов
+
+6. **ТЕЛЕФОН**: Спроси: "Теперь, пожалуйста, укажите ваш номер телефона."
+   - Ожидаются российские номера в формате +7 или 8 с 10 цифрами
+
+7. **ДОЛЖНОСТЬ**: Спроси: "Теперь укажите, пожалуйста, вашу занимаемую должность на работе."
+   - Запиши должность
+
+8. **ПРОФЕССИЯ**: Если не указана, спроси профессию
+
+9. **ОБРАЗОВАНИЕ**: Если не указано, спроси образование
+
+### ПОСЛЕ ЗАПОЛНЕНИЯ ВСЕХ ДАННЫХ:
+
+Когда все данные собраны, скажи:
+"Отлично! Все данные собраны. Теперь я сгенерирую для вас заявление о вступлении в профсоюз. После этого вы сможете его скачать, распечатать, подписать и загрузить обратно сюда для проверки."
+
+После генерации документов скажи:
+"Скачайте и проверьте данные в заявлении. Ознакомьтесь с уставом (Устав доступен в разделе Документы). После проверки распечатайте заявление, подпишите его и загрузите обратно сюда для проверки правильности заполнения."
+
+Когда пользователь загрузит подписанное заявление, проверь правильность заполнения:
+- Проверь, что все данные из профиля совпадают с данными в документе
+- Проверь наличие подписи
+- Проверь правильность заполнения всех полей
+
+После загрузки скажи:
+"Заявление отправлено в Профсоюз. Для полного доступа к системе Вам необходимо подписанные оригиналы принести в Профком."
+
+### ВАЖНО:
+- Парси естественный язык пользователя и не требуй строгих форматов
+- НЕ предлагай создавать обращения - для этого есть отдельный чат
+- Всегда создавай заявление, даже если организации нет в базе
+- Будь вежливым и профессиональным`;
+  } else if (sessionType === "APPEAL") {
+    // Инструкции для чата обращений
+    prompt += `\n\n## ИНСТРУКЦИИ ДЛЯ РАБОТЫ С ОБРАЩЕНИЯМИ:
+
+Ты помогаешь пользователю с его обращением в профсоюз. Пользователь УЖЕ является членом профсоюза или обращается с конкретным вопросом/проблемой.
+
+Твоя задача:
+- Выслушать и понять проблему или вопрос пользователя
+- Предоставить полезную информацию на основе базы знаний профсоюза
+- Помочь решить вопрос пользователя или направить его к правильному решению
+- Быть вежливым и профессиональным
+
+СТРОГО ЗАПРЕЩЕНО:
+- НЕ предлагай пользователю вступить в профсоюз - для этого есть отдельный чат "Заявление"
+- НЕ предлагай создать заявление о вступлении - пользователь уже может быть членом
+- НЕ проси заполнять профиль - это делается в отдельном чате "Заявление"
+- НЕ переключайся на тему вступления в профсоюз
+
+ФОКУС:
+- Только на решении конкретного обращения пользователя
+- На предоставлении информации по его вопросу
+- На помощи с проблемами, связанными с профсоюзом`;
+  }
 
   if (chunks.length > 0) {
     const kbNameMap = new Map(
@@ -230,8 +308,8 @@ export async function POST(request: NextRequest) {
 
     const relevantChunks = await retrieveRelevantChunks(bot, message);
 
-    // Формируем системный промпт с учетом настроек бота
-    const systemPrompt = await buildSystemPrompt(bot, relevantChunks);
+    // Формируем системный промпт с учетом настроек бота и типа сессии
+    const systemPrompt = await buildSystemPrompt(bot, relevantChunks, chatSession.type);
 
     // Получаем историю сообщений из текущей сессии
     const chatHistory = await prisma.chatMessage.findMany({
@@ -436,43 +514,89 @@ export async function POST(request: NextRequest) {
     }
 
     // Проверяем полноту профиля и добавляем маркер завершения если нужно
-    try {
-      const allMessages = await prisma.chatMessage.findMany({
-        where: { 
-          userId: session.user.id,
-          sessionId: chatSession.id,
-        },
-        orderBy: { createdAt: "asc" },
-      });
+    // Только для STATEMENT сессий
+    if (chatSession.type === "STATEMENT") {
+      try {
+        const allMessages = await prisma.chatMessage.findMany({
+          where: { 
+            userId: session.user.id,
+            sessionId: chatSession.id,
+          },
+          orderBy: { createdAt: "asc" },
+        });
 
-      // Проверяем, есть ли уже маркер
-      const hasCompleteMarker = allMessages.some(
-        msg => msg.role === "assistant" && msg.content.includes("[PROFILE_COMPLETE]")
-      );
+        // Проверяем, есть ли уже маркер
+        const hasCompleteMarker = allMessages.some(
+          msg => msg.role === "assistant" && msg.content.includes("[PROFILE_COMPLETE]")
+        );
 
-      // Если маркера нет, сначала пытаемся извлечь и обновить данные из чата
-      if (!hasCompleteMarker) {
-        console.log("[chat] No complete marker found, attempting to extract profile data...");
+        // Всегда пытаемся извлечь и обновить данные из чата (даже если маркер есть, чтобы обновить данные)
+        console.log("[chat] Extracting profile data from messages...");
         
         try {
-          // Пытаемся извлечь данные из сообщений чата
-          const messagesForExtraction = allMessages.map((msg) => ({
-            role: msg.role,
-            content: msg.content,
-          }));
+          // Пытаемся извлечь данные из сообщений чата (включая новое сообщение)
+          const messagesForExtraction = [
+            ...allMessages.map((msg) => ({
+              role: msg.role,
+              content: msg.content,
+            })),
+            {
+              role: "user" as const,
+              content: message,
+            },
+            {
+              role: "assistant" as const,
+              content: aiResponse,
+            },
+          ];
           
           // Функция извлечения
           const extractedData = await extractProfileDataFromMessages(messagesForExtraction);
           
           console.log("[chat] Extracted data:", extractedData);
           
-          // Обновляем профиль с извлеченными данными
+          // Если есть название организации, пытаемся найти её в базе
+          if (extractedData.organizationName || message.includes("организац") || message.includes("работаю")) {
+            const orgName = extractedData.organizationName || message;
+            const userRegion = extractedData.region;
+            
+            try {
+              const foundOrg = await findOrganization(orgName, userRegion);
+              if (foundOrg?.foundInDatabase && foundOrg.id) {
+                // Организация найдена в базе - привязываем к пользователю
+                extractedData.organizationId = foundOrg.id;
+                console.log("[chat] Organization found in database:", foundOrg.name);
+              } else if (foundOrg?.name) {
+                // Организация найдена в Минюсте, но не в базе - сохраняем название
+                extractedData.organizationName = foundOrg.name;
+                console.log("[chat] Organization found in Minjust:", foundOrg.name);
+              }
+            } catch (orgError) {
+              console.warn("[chat] Error searching organization:", orgError);
+            }
+          }
+          
+          // Обновляем профиль с извлеченными данными (даже если данные уже есть, перезаписываем)
           if (Object.keys(extractedData).length > 0) {
-            await prisma.user.update({
-              where: { id: session.user.id },
-              data: extractedData,
-            });
-            console.log("[chat] Profile updated with extracted data");
+            // Убираем пустые значения и organizationName (это не поле в User)
+            const cleanData = Object.fromEntries(
+              Object.entries(extractedData).filter(
+                ([key, value]) =>
+                  key !== "organizationName" && // organizationName не сохраняем напрямую
+                  value !== undefined &&
+                  value !== null &&
+                  value !== "" &&
+                  !(typeof value === "number" && Number.isNaN(value))
+              )
+            );
+            
+            if (Object.keys(cleanData).length > 0) {
+              await prisma.user.update({
+                where: { id: session.user.id },
+                data: cleanData,
+              });
+              console.log("[chat] Profile updated with extracted data:", cleanData);
+            }
           }
         } catch (extractError) {
           console.warn("[chat] Error extracting data:", extractError);
@@ -498,7 +622,8 @@ export async function POST(request: NextRequest) {
           isComplete: profileIsComplete,
         });
 
-        if (profileIsComplete) {
+        // Добавляем маркер только если его еще нет и профиль заполнен
+        if (!hasCompleteMarker && profileIsComplete) {
           console.log("[chat] ✅ Profile is COMPLETE! Adding [PROFILE_COMPLETE] marker");
           aiResponse += "\n\n[PROFILE_COMPLETE]";
           
@@ -513,7 +638,7 @@ export async function POST(request: NextRequest) {
             if (userOrg) {
               await Promise.all([
                 generateMembershipApplication(userOrg),
-                generateContributionsApplication(userOrg),
+                generateContributionsApplication(userOrg, userOrg.organization?.name, undefined),
               ]);
               console.log("[chat] ✅ Documents generated successfully");
             }
@@ -521,15 +646,15 @@ export async function POST(request: NextRequest) {
             console.error("[chat] ⚠️  Error generating documents:", docError);
             // Don't fail the response if document generation fails
           }
-        } else {
+        } else if (!profileIsComplete) {
           console.log("[chat] ❌ Profile still incomplete after extraction");
+        } else {
+          console.log("[chat] Profile complete marker already exists");
         }
-      } else {
-        console.log("[chat] Profile complete marker already exists");
+      } catch (error) {
+        console.error("[chat] Error checking profile completeness:", error);
+        // Don't fail the chat if profile check fails
       }
-    } catch (error) {
-      console.error("[chat] Error checking profile completeness:", error);
-      // Don't fail the chat if profile check fails
     }
 
     // Сохраняем ответ AI с привязкой к сессии

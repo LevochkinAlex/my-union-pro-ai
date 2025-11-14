@@ -20,6 +20,7 @@ export interface UserData {
   education: string;
   organizationName: string;
   organizationInn?: string;
+  region?: string; // Регион России
 }
 
 /**
@@ -79,8 +80,26 @@ export function getFullName(user: { firstName: string; lastName: string; middleN
  * TODO: Использовать библиотеку для склонения
  */
 export function getFullNameGenitive(user: { firstName: string; lastName: string; middleName?: string }): string {
-  // Упрощенная версия - просто добавляем окончания
+  // Упрощенная версия - добавляем окончания для родительного падежа
   // В реальном проекте лучше использовать библиотеку типа "petrovich"
-  return `${user.lastName}а ${user.firstName}а${user.middleName ? ` ${user.middleName}ча` : ""}`;
+  const lastNameGenitive = user.lastName.endsWith("ов") || user.lastName.endsWith("ев") || user.lastName.endsWith("ин")
+    ? user.lastName + "а"
+    : user.lastName.endsWith("а") || user.lastName.endsWith("я")
+    ? user.lastName.slice(0, -1) + "ы"
+    : user.lastName + "а";
+  
+  const firstNameGenitive = user.firstName.endsWith("а") || user.firstName.endsWith("я")
+    ? user.firstName.slice(0, -1) + "ы"
+    : user.firstName + "а";
+  
+  const middleNameGenitive = user.middleName
+    ? user.middleName.endsWith("ич")
+      ? user.middleName + "а"
+      : user.middleName.endsWith("на")
+      ? user.middleName.slice(0, -1) + "ы"
+      : user.middleName + "а"
+    : "";
+  
+  return `${lastNameGenitive} ${firstNameGenitive}${middleNameGenitive ? ` ${middleNameGenitive}` : ""}`;
 }
 

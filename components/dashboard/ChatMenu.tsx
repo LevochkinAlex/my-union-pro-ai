@@ -101,6 +101,8 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
 
       if (response.ok) {
         const data = await response.json();
+        // Обновляем список сессий
+        await loadSessions();
         // Переходим к новой сессии и очищаем сообщения
         router.push(`/dashboard?session=${data.session.id}`);
       } else {
@@ -262,7 +264,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            + Новый чат
+            Новый чат
           </button>
 
           {/* Appeals List */}

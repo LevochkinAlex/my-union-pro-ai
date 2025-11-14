@@ -49,6 +49,7 @@ model User {
   dateOfBirth DateTime?
   phone       String?
   address     String?
+  region      String? // Регион России
 
   // Профессиональная информация
   jobTitle   String? // Занимаемая должность
@@ -252,45 +253,8 @@ model ChatMessage {
   @@index([createdAt])
 }
 
-// Новости (для будущего функционала)
-model News {
-  id         String  @id @default(cuid())
-  title      String
-  content    String  @db.Text
-  excerpt    String?
-  coverImage String?
-
-  isPublished Boolean   @default(false)
-  publishedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([publishedAt])
-}
-
-// Скидки (для будущего функционала)
-model Discount {
-  id          String @id @default(cuid())
-  title       String
-  description String @db.Text
-  discount    String // "10%", "2+1", "Фиксированная цена" и т.д.
-
-  company  String // Название компании
-  category String? // Категория (Магазины, Рестораны, Услуги и т.д.)
-
-  validFrom  DateTime
-  validUntil DateTime?
-
-  isActive Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([isActive])
-  @@index([validFrom])
-  @@index([validUntil])
-}
+// Удалено: Новости (для будущего функционала) - не используется
+// Удалено: Скидки (для будущего функционала) - не используется
 
 // Настройки системы (SMTP, OpenRouter и т.д.)
 model SystemSetting {

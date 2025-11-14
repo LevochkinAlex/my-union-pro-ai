@@ -89,6 +89,43 @@ export async function POST(request: NextRequest) {
       // Don't fail registration if chat creation fails
     }
 
+    // Добавляем устав в документы по умолчанию
+    try {
+      const charterPath = "/docs/union/Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
+      
+      // Проверяем, не добавлен ли уже устав
+      const existingCharter = await prisma.document.findFirst({
+        where: {
+          userId: updatedUser.id,
+          type: "OTHER",
+          title: {
+            contains: "Устав",
+          },
+        },
+      });
+
+      if (!existingCharter) {
+        const charterDoc = await prisma.document.create({
+          data: {
+            userId: updatedUser.id,
+            type: "OTHER",
+            status: "GENERATED",
+            title: "Устав Профсоюза работников здравоохранения РФ",
+            description: "Устав Профсоюза работников здравоохранения РФ (принят на VII съезде, апрель 2021)",
+            filePath: charterPath,
+            fileName: "Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx",
+            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          },
+        });
+        console.log("[register] ✅ Устав добавлен в документы пользователя:", charterDoc.id);
+      } else {
+        console.log("[register] У пользователя уже есть устав, пропускаем");
+      }
+    } catch (error) {
+      console.error("[register] ❌ Error adding charter document:", error);
+      // Don't fail registration if charter document creation fails
+    }
+
     // Отправляем приветственное письмо с паролем
     await sendWelcomeEmail(email, generatedPassword);
 
