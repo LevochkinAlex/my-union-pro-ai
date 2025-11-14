@@ -580,6 +580,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       message: aiResponse,
       sessionId: chatSession.id,
+      sessionType: chatSession.type,
     });
   } catch (error) {
     console.error("Chat API error:", error);
@@ -643,14 +644,42 @@ export async function GET() {
     }
     
     console.log(`GET /api/chat: Поиск сообщений для сессии ${chatSession.id}...`);
-    const messages = await prisma.chatMessage.findMany({
+    let messages = await prisma.chatMessage.findMany({
       where: { 
         userId: session.user.id,
         sessionId: chatSession.id,
       },
       orderBy: { createdAt: "asc" },
     });
-    console.log(`GET /api/chat: Найдено ${messages.length} сообщений.`);
+    console.log(`GET /api/chat: Найдено ${messages.length} сообщений в сессии.`);
+
+    // Если в сессии нет сообщений, но есть старые сообщения без sessionId, привязываем их к сессии
+    if (messages.length === 0) {
+      console.log("GET /api/chat: Сообщений в сессии нет, проверяем старые сообщения без sessionId...");
+      const oldMessages = await prisma.chatMessage.findMany({
+        where: {
+          userId: session.user.id,
+          sessionId: null,
+        },
+        orderBy: { createdAt: "asc" },
+        take: 100, // Берем последние 100 сообщений
+      });
+      
+      if (oldMessages.length > 0) {
+        console.log(`GET /api/chat: Найдено ${oldMessages.length} старых сообщений без sessionId, привязываем к сессии...`);
+        // Привязываем старые сообщения к сессии
+        await prisma.chatMessage.updateMany({
+          where: {
+            id: { in: oldMessages.map(m => m.id) },
+          },
+          data: {
+            sessionId: chatSession.id,
+          },
+        });
+        messages = oldMessages;
+        console.log(`GET /api/chat: Привязано ${messages.length} сообщений к сессии.`);
+      }
+    }
 
     if (messages.length === 0) {
       console.log("GET /api/chat: Сообщений нет, создаем приветствие.");

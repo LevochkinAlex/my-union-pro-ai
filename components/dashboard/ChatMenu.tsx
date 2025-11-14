@@ -101,10 +101,11 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
 
       if (response.ok) {
         const data = await response.json();
-        // Переходим к новой сессии
+        // Переходим к новой сессии и очищаем сообщения
         router.push(`/dashboard?session=${data.session.id}`);
       } else {
-        alert("Ошибка при создании нового обращения");
+        const errorData = await response.json().catch(() => ({}));
+        alert(errorData.error || "Ошибка при создании нового обращения");
       }
     } catch (error) {
       console.error("Error creating new appeal:", error);

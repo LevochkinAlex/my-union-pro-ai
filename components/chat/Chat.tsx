@@ -19,6 +19,7 @@ function ChatContent() {
   const sessionId = searchParams?.get("session"); // Specific chat session to load
   const [chatBotId, setChatBotId] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(sessionId || null);
+  const [sessionType, setSessionType] = useState<"STATEMENT" | "APPEAL" | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -73,9 +74,15 @@ function ChatContent() {
       const data = await response.json();
       setMessages(data.messages || []);
       
-      // Обновляем sessionId если он был возвращен
+      // Обновляем sessionId и тип сессии если они были возвращены
       if (data.session?.id) {
         setCurrentSessionId(data.session.id);
+      }
+      if (data.session?.type) {
+        setSessionType(data.session.type);
+      } else if (!sessionId) {
+        // Если загружаем без sessionId, это STATEMENT по умолчанию
+        setSessionType("STATEMENT");
       }
       
       // Явно очищаем ошибку при успешной загрузке
@@ -120,16 +127,18 @@ function ChatContent() {
       if (sessionId) {
         setCurrentSessionId(sessionId);
       }
+      // Очищаем тип сессии при смене sessionId
+      setSessionType(null);
       loadMessages();
     }
   }, [session, loadMessages, mode, sessionId]);
 
-  // Auto-run document generation check after chat is loaded
+  // Auto-run document generation check after chat is loaded (только для STATEMENT)
   useEffect(() => {
-    if (messages.length > 0 && mode !== "appeal") {
+    if (messages.length > 0 && sessionType === "STATEMENT" && mode !== "appeal") {
       checkAndGenerateDocuments();
     }
-  }, [messages, mode]);
+  }, [messages, mode, sessionType]);
 
   // Проверяем статус профиля и генерируем заявления если нужно
   const checkAndGenerateDocuments = useCallback(async () => {
@@ -247,7 +256,7 @@ function ChatContent() {
         });
       }
 
-      // Обновляем sessionId если он был возвращен
+      // Обновляем sessionId и тип сессии если они были возвращены
       if (data.sessionId) {
         setCurrentSessionId(data.sessionId);
         // Обновляем URL с sessionId
@@ -256,6 +265,9 @@ function ChatContent() {
           url.searchParams.set("session", data.sessionId);
           window.history.replaceState({}, "", url.toString());
         }
+      }
+      if (data.sessionType) {
+        setSessionType(data.sessionType);
       }
 
       // Enable autoscroll for AI response
@@ -432,8 +444,8 @@ function ChatContent() {
                 </div>
               ))}
 
-              {/* Download Documents Button - показываем после завершения профиля */}
-              {messages.length > 0 && messages[messages.length - 1].content.includes("[PROFILE_COMPLETE]") && !isLoading && (
+              {/* Download Documents Button - показываем только для STATEMENT сессий после завершения профиля */}
+              {sessionType === "STATEMENT" && messages.length > 0 && messages[messages.length - 1].content.includes("[PROFILE_COMPLETE]") && !isLoading && (
                 <div className="flex items-center justify-center px-4 py-6">
                   <div className="text-center max-w-md">
                     <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
@@ -493,7 +505,11 @@ function ChatContent() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Введите ваше сообщение..."
+                placeholder={
+                  sessionType === "APPEAL" 
+                    ? "Опишите ваше обращение или задайте вопрос..." 
+                    : "Введите ваше сообщение..."
+                }
                 rows={1}
                 disabled={isLoading}
                 className="flex-1 resize-none border-0 bg-transparent px-4 py-3 text-[15px] text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-0 dark:text-gray-100 dark:placeholder-gray-400"
