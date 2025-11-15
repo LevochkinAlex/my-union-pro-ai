@@ -3,6 +3,13 @@
  * Uses official OneSignalDeferred API
  */
 
+declare global {
+  interface Window {
+    OneSignalDeferred?: any[];
+    OneSignal?: any;
+  }
+}
+
 export async function initializePushNotifications(): Promise<boolean> {
   if (typeof window === "undefined") {
     console.log("[OneSignal] Window not available");
