@@ -129,7 +129,13 @@ export async function initializePushNotifications() {
  * Sync push subscription with backend
  */
 export async function syncPushSubscription() {
-  if (typeof window === "undefined" || !window.OneSignal) {
+  if (typeof window === "undefined") {
+    console.warn("[Push] Window not available");
+    return;
+  }
+
+  const OneSignal = (window as any).OneSignal;
+  if (!OneSignal) {
     console.warn("[Push] OneSignal not available");
     return;
   }
@@ -208,13 +214,19 @@ export async function syncPushSubscription() {
  * Request push notification permission
  */
 export async function requestPushPermission(): Promise<boolean> {
-  if (typeof window === "undefined" || !window.OneSignal) {
+  if (typeof window === "undefined") {
+    console.warn("[Push] Window not available");
+    return false;
+  }
+
+  const OneSignal = (window as any).OneSignal;
+  if (!OneSignal) {
     console.warn("[Push] OneSignal not available");
     return false;
   }
 
   try {
-    const permission = await window.OneSignal.showNativePrompt?.();
+    const permission = await OneSignal.showNativePrompt?.();
     console.log("[Push] Permission requested:", permission);
     return permission === "granted";
   } catch (error) {
