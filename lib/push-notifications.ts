@@ -120,16 +120,23 @@ export async function syncPushSubscription() {
     }
 
     // Use OneSignal.push to ensure SDK is ready
+    console.log("[Push] About to call OneSignal.push()...");
     return new Promise<void>((resolve) => {
       try {
         OneSignal.push(() => {
+          console.log("[Push] Inside OneSignal.push() callback");
           const OneSignalInstance = (window as any).OneSignal;
+          
+          console.log("[Push] OneSignalInstance:", OneSignalInstance ? "exists" : "null");
+          console.log("[Push] OneSignalInstance type:", typeof OneSignalInstance);
           
           if (!OneSignalInstance) {
             console.warn("[Push] OneSignal instance not available in push queue");
             resolve();
             return;
           }
+          
+          console.log("[Push] OneSignalInstance methods:", Object.keys(OneSignalInstance).slice(0, 10));
 
           // Set external user ID first (non-blocking)
           if (userId && typeof OneSignalInstance.setExternalUserId === "function") {
