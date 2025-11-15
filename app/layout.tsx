@@ -33,6 +33,36 @@ export default function RootLayout({
               id="onesignal-sdk"
               src="https://cdn.onesignal.com/sdks/web/v15/OneSignalSDK.page.js"
               strategy="lazyOnload"
+              onLoad={() => {
+                console.log("[Push] ✅ OneSignal SDK script loaded");
+                // After SDK loads, wait a bit and then try to initialize
+                setTimeout(() => {
+                  const OneSignal = (window as any).OneSignal;
+                  if (OneSignal) {
+                    console.log("[Push] OneSignal after script load:", typeof OneSignal, "is array:", Array.isArray(OneSignal));
+                    // Try to initialize if it's still an array
+                    if (Array.isArray(OneSignal)) {
+                      console.log("[Push] OneSignal is still array after script load, pushing init...");
+                      OneSignal.push(function() {
+                        console.log("[Push] ✅ Inside OneSignal.push() after script load");
+                        const OneSignalInstance = (window as any).OneSignal;
+                        if (OneSignalInstance && typeof OneSignalInstance.init === 'function') {
+                          OneSignalInstance.init({
+                            appId: "${ONESIGNAL_APP_ID}",
+                            allowLocalhostAsSecureOrigin: true,
+                            serviceWorkerPath: "/OneSignalSDKWorker.js",
+                            serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js"
+                          });
+                          console.log("[Push] ✅ OneSignal.init() called after script load");
+                        }
+                      });
+                    }
+                  }
+                }, 1000);
+              }}
+              onError={(e) => {
+                console.error("[Push] ❌ Failed to load OneSignal SDK:", e);
+              }}
             />
             <Script
               id="onesignal-init-code"
