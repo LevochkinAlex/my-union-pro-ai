@@ -1,57 +1,84 @@
 /**
  * OneSignal Initialization Script
- * This runs as soon as the page loads
+ * Loads immediately before the SDK, initializes when SDK is ready
  */
 (function() {
-  // Ensure OneSignal queue exists
   if (typeof window === 'undefined') return;
   
-  window.OneSignal = window.OneSignal || [];
+  const appId = window.OneSignalAppId || window.NEXT_PUBLIC_ONESIGNAL_APP_ID;
   
-  // Configuration
-  const config = {
-    appId: window.OneSignalAppId || window.NEXT_PUBLIC_ONESIGNAL_APP_ID,
-    allowLocalhostAsSecureOrigin: true,
-  };
-  
-  console.log('[OneSignal-Init] Configuration:', { appId: config.appId });
-  
-  if (!config.appId) {
+  if (!appId) {
     console.warn('[OneSignal-Init] No app ID configured');
     return;
   }
   
-  // Wait for OneSignal SDK to load
-  let attempts = 0;
-  const maxAttempts = 100; // 10 seconds
+  console.log('[OneSignal-Init] Configuration appId:', appId);
   
-  const checkAndInit = setInterval(function() {
+  // Store config for SDK to use
+  window.OneSignalConfig = {
+    appId: appId,
+    allowLocalhostAsSecureOrigin: true,
+  };
+  
+  // Initialize OneSignal queue
+  window.OneSignal = window.OneSignal || [];
+  
+  // Poll for OneSignal SDK initialization
+  let attempts = 0;
+  const maxAttempts = 150; // 15 seconds
+  const pollInterval = 100;
+  
+  const initWhenReady = setInterval(function() {
     attempts++;
     
-    // Check if OneSignal SDK is ready
-    if (typeof window.OneSignal !== 'undefined' && typeof window.OneSignal.push === 'function') {
-      clearInterval(checkAndInit);
-      console.log('[OneSignal-Init] ✅ SDK loaded, initializing...');
+    // Check if OneSignal SDK is loaded
+    const OneSignal = window.OneSignal;
+    
+    // If it's no longer an array, SDK might be loaded
+    if (OneSignal && !Array.isArray(OneSignal) && typeof OneSignal.initialized !== 'undefined') {
+      clearInterval(initWhenReady);
+      console.log('[OneSignal-Init] ✅ SDK loaded');
+      // SDK is already initialized, no need to do anything
+      return;
+    }
+    
+    // If it has push function, SDK is ready for queue
+    if (OneSignal && typeof OneSignal.push === 'function' && attempts > 20) { // Wait for SDK to fully load
+      clearInterval(initWhenReady);
+      console.log('[OneSignal-Init] ✅ SDK ready, pushing init callback');
       
-      // Push init callback
-      window.OneSignal.push(function() {
+      // Push the initialization
+      OneSignal.push(function() {
         console.log('[OneSignal-Init] Inside push callback');
+        const instance = window.OneSignal;
+        
+        if (!instance) {
+          console.warn('[OneSignal-Init] OneSignal instance unavailable');
+          return;
+        }
+        
+        if (typeof instance.init !== 'function') {
+          console.warn('[OneSignal-Init] OneSignal.init is not a function');
+          console.log('[OneSignal-Init] Available methods:', Object.keys(instance).slice(0, 10));
+          return;
+        }
+        
         try {
-          if (typeof window.OneSignal.init === 'function') {
-            window.OneSignal.init(config);
-            console.log('[OneSignal-Init] ✅ OneSignal initialized successfully');
-          } else {
-            console.warn('[OneSignal-Init] OneSignal.init is not a function');
-            console.log('[OneSignal-Init] OneSignal methods:', Object.keys(window.OneSignal).slice(0, 10));
-          }
+          console.log('[OneSignal-Init] Calling OneSignal.init...');
+          instance.init(window.OneSignalConfig);
+          console.log('[OneSignal-Init] ✅ OneSignal.init() successful');
         } catch (error) {
-          console.error('[OneSignal-Init] Error during initialization:', error);
+          console.error('[OneSignal-Init] Error calling init:', error);
         }
       });
-    } else if (attempts >= maxAttempts) {
-      clearInterval(checkAndInit);
-      console.error('[OneSignal-Init] ❌ OneSignal SDK not loaded after 10 seconds');
+      return;
     }
-  }, 100);
+    
+    if (attempts >= maxAttempts) {
+      clearInterval(initWhenReady);
+      console.error('[OneSignal-Init] ❌ OneSignal SDK not initialized after 15 seconds');
+      console.log('[OneSignal-Init] window.OneSignal type:', typeof window.OneSignal);
+      console.log('[OneSignal-Init] window.OneSignal is array:', Array.isArray(window.OneSignal));
+    }
+  }, pollInterval);
 })();
-
