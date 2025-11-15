@@ -958,23 +958,31 @@ ID документа: ${uploadedDocument.documentId}
 
             // Добавляем звук - это ОБЯЗАТЕЛЬНО для веб-уведомлений
             if (user?.pushSoundEnabled !== false) {
-              // OneSignal v1 API использует "sound" для веб-уведомлений
-              // Нужно просто указать "default" или путь к файлу
+              // OneSignal v1 API - правильный формат для звука
+              notificationPayload.sound = "default";
+              // Для веб-уведомлений Chrome/Firefox
               notificationPayload.chrome_web_sound = "default";
               notificationPayload.firefox_sound = "default";
-              notificationPayload.sound = "default";
-              notificationPayload.adm_small_icon = "icon_1";
-              notificationPayload.adm_sound = "default";
+              // Для Safari
+              notificationPayload.safari_sound = "default";
+              // Важно: добавляем параметр для веб-уведомлений
+              notificationPayload.web_push_topic = "notification";
             } else {
+              notificationPayload.sound = null;
               notificationPayload.chrome_web_sound = null;
               notificationPayload.firefox_sound = null;
-              notificationPayload.sound = null;
+              notificationPayload.safari_sound = null;
             }
 
             console.log("[chat] 📢 Notification payload:", {
               recipients: recipientIds.length,
+              recipientIds: recipientIds.slice(0, 3), // Первые 3 для логов
               sound: notificationPayload.chrome_web_sound,
+              chrome_web_sound: notificationPayload.chrome_web_sound,
+              firefox_sound: notificationPayload.firefox_sound,
+              safari_sound: notificationPayload.safari_sound,
               url: notificationPayload.url,
+              fullPayload: JSON.stringify(notificationPayload, null, 2),
             });
 
             const pushResponse = await fetch(ONESIGNAL_API_URL, {
