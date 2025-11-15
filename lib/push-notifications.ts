@@ -82,6 +82,14 @@ export async function initializePushNotifications() {
         window.OneSignal.push(() => {
           console.log("[Push] OneSignal SDK ready");
 
+          // Set external user ID (user ID from our database)
+          // This helps us identify users in OneSignal dashboard
+          window.OneSignal.setExternalUserId?.((userId: string | null) => {
+            if (userId) {
+              console.log("[Push] External user ID set:", userId);
+            }
+          });
+
           // Set up event listeners
           window.OneSignal.on("subscriptionChange", (isSubscribed: boolean) => {
             console.log("[Push] Subscription changed:", isSubscribed);
@@ -126,9 +134,30 @@ export async function syncPushSubscription() {
   }
 
   try {
+    // Get user ID from session
+    const sessionResponse = await fetch("/api/auth/session");
+    const session = await sessionResponse.json();
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      console.warn("[Push] No user ID available");
+      return;
+    }
+
     // Use OneSignal.push to ensure SDK is ready
     return new Promise<void>((resolve) => {
       window.OneSignal.push(() => {
+        // Set external user ID first
+        if (userId && window.OneSignal.setExternalUserId) {
+          window.OneSignal.setExternalUserId(userId, (success: boolean) => {
+            if (success) {
+              console.log("[Push] External user ID set:", userId);
+            } else {
+              console.warn("[Push] Failed to set external user ID");
+            }
+          });
+        }
+
         window.OneSignal.getUserId((playerId: string | null) => {
           if (!playerId) {
             console.warn("[Push] No player ID available - user may not be subscribed");
