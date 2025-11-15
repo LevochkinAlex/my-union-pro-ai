@@ -897,6 +897,12 @@ ID документа: ${uploadedDocument.documentId}
           select: { oneSignalId: true },
         });
 
+        console.log("[chat] Checking push subscriptions:", {
+          userId: session.user.id,
+          subscriptionsCount: userSubs.length,
+          subscriptions: userSubs.map(s => s.oneSignalId),
+        });
+
         if (userSubs.length > 0) {
           // Проверяем настройки пользователя для push уведомлений
           const user = await prisma.user.findUnique({
@@ -907,9 +913,14 @@ ID документа: ${uploadedDocument.documentId}
             },
           });
 
+          console.log("[chat] User push settings:", {
+            pushNotificationsEnabled: user?.pushNotificationsEnabled,
+            pushSoundEnabled: user?.pushSoundEnabled,
+          });
+
           // Если push уведомления отключены, не отправляем
           if (user && user.pushNotificationsEnabled === false) {
-            console.log("[chat] Push notifications disabled for user");
+            console.log("[chat] ⚠️ Push notifications disabled for user");
           } else {
             const recipientIds = userSubs.map((sub) => sub.oneSignalId);
             const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
