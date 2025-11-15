@@ -39,7 +39,7 @@ export default function RootLayout({
             {/* Load OneSignal SDK */}
             <Script
               id="onesignal-sdk"
-              src="https://cdn.onesignal.com/sdks/web/v15/OneSignalSDK.page.js"
+              src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
               strategy="afterInteractive"
             />
           </>

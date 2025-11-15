@@ -1,6 +1,6 @@
 /**
- * OneSignal Initialization Script
- * Load BEFORE SDK to prepare initialization
+ * OneSignal v16 Initialization Script
+ * SDK v16 has better initialization support
  */
 (function() {
   if (typeof window === 'undefined') return;
@@ -12,77 +12,60 @@
     return;
   }
   
-  console.log('[OneSignal] Initializing with appId:', appId);
+  console.log('[OneSignal] v16 Initializing with appId:', appId);
   
-  // Create queue if needed
-  if (!window.OneSignal) {
-    window.OneSignal = [];
-  }
-  
-  // Store config
+  // OneSignal v16 uses a different initialization approach
+  // It will auto-initialize when the SDK loads if window.OneSignalConfig is present
   window.OneSignalConfig = {
     appId: appId,
     allowLocalhostAsSecureOrigin: true,
+    notifyButton: {
+      enable: true,
+    },
   };
   
-  // Wait for SDK to load and initialize it
+  console.log('[OneSignal] v16 Config set, waiting for SDK to load and initialize...');
+  
+  // For v16, SDK handles initialization automatically
+  // We just need to wait for it to load
   let checkAttempts = 0;
   const maxChecks = 300; // 30 seconds
   
-  const init = setInterval(function() {
+  const checkSDK = setInterval(function() {
     checkAttempts++;
     
     const OS = window.OneSignal;
     
     if (!OS) {
       if (checkAttempts >= maxChecks) {
-        clearInterval(init);
+        clearInterval(checkSDK);
         console.error('[OneSignal] ❌ SDK not loaded after 30 seconds');
       }
       return;
     }
     
-    // Check if it's been initialized (no longer an array or has been converted)
-    if (!Array.isArray(OS)) {
-      if (OS.initialized === false) {
-        // Not yet initialized, SDK loaded but not called init yet
-        console.log('[OneSignal] SDK loaded, calling init...');
+    // In v16, check if initialized using the promise-based API
+    if (OS && OS.Slidedown) {
+      clearInterval(checkSDK);
+      console.log('[OneSignal] ✅ v16 SDK loaded and ready');
+      
+      // v16 initialization is automatic, but we can verify it's ready
+      if (typeof OS.init === 'function') {
         try {
+          console.log('[OneSignal] Calling OneSignal.init() for v16...');
           OS.init(window.OneSignalConfig);
-          console.log('[OneSignal] ✅ Init called successfully');
+          console.log('[OneSignal] ✅ v16 OneSignal initialized');
         } catch (error) {
-          console.error('[OneSignal] Error calling init:', error);
+          console.warn('[OneSignal] init() threw error (might already be initialized):', error.message);
         }
-      } else {
-        console.log('[OneSignal] ✅ SDK appears to be initialized already');
       }
-      clearInterval(init);
+      
       return;
     }
     
-    // Still an array - SDK loading
-    if (checkAttempts === 50) {
-      // After 5 seconds, try via push if still array
-      console.log('[OneSignal] SDK loading, trying via push...');
-      if (typeof OS.push === 'function') {
-        OS.push(() => {
-          console.log('[OneSignal] Inside push callback');
-          const instance = window.OneSignal;
-          if (instance && typeof instance.init === 'function' && !instance.initialized) {
-            try {
-              instance.init(window.OneSignalConfig);
-              console.log('[OneSignal] ✅ Init via push successful');
-            } catch (error) {
-              console.error('[OneSignal] Error in push callback:', error);
-            }
-          }
-        });
-      }
-    }
-    
     if (checkAttempts >= maxChecks) {
-      clearInterval(init);
-      console.error('[OneSignal] ❌ Failed to initialize after 30 seconds');
+      clearInterval(checkSDK);
+      console.error('[OneSignal] ❌ SDK not ready after 30 seconds');
     }
   }, 100);
 })();
