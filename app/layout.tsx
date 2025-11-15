@@ -20,27 +20,43 @@ export default function RootLayout({
       <head>
         {ONESIGNAL_APP_ID && (
           <>
-            {/* Initialize OneSignal queue before SDK loads */}
+            {/* Set config before SDK loads */}
             <Script
-              id="onesignal-queue"
+              id="onesignal-config"
               strategy="beforeInteractive"
               dangerouslySetInnerHTML={{
-                __html: `window.OneSignal = window.OneSignal || []; window.OneSignalAppId = "${ONESIGNAL_APP_ID}";`,
+                __html: `
+                  window.OneSignalAppId = "${ONESIGNAL_APP_ID}";
+                  window.OneSignalConfig = {
+                    appId: "${ONESIGNAL_APP_ID}",
+                    allowLocalhostAsSecureOrigin: true,
+                  };
+                `,
               }}
             />
             
-            {/* Load OneSignal init script */}
-            <Script
-              id="onesignal-init"
-              src="/onesignal-init.js"
-              strategy="beforeInteractive"
-            />
-            
-            {/* Load OneSignal SDK */}
+            {/* Load OneSignal SDK v16 */}
             <Script
               id="onesignal-sdk"
               src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
               strategy="afterInteractive"
+              dangerouslySetInnerHTML={{
+                __html: `
+                  // Initialize OneSignal after SDK loads
+                  window.OneSignalSDKLoaded = true;
+                  console.log('[OneSignal] v16 SDK loaded');
+                  
+                  if (window.OneSignal && typeof window.OneSignal.init === 'function') {
+                    console.log('[OneSignal] Initializing OneSignal v16...');
+                    try {
+                      window.OneSignal.init(window.OneSignalConfig);
+                      console.log('[OneSignal] ✅ v16 initialized successfully');
+                    } catch (error) {
+                      console.error('[OneSignal] Error during v16 init:', error);
+                    }
+                  }
+                `,
+              }}
             />
           </>
         )}
