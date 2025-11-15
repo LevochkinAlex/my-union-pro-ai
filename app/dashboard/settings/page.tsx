@@ -232,6 +232,42 @@ export default function SettingsPage() {
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
                   Нажмите, чтобы разрешить браузеру показывать уведомления
                 </p>
+                
+                {/* Тестовое уведомление */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (Notification.permission === "granted") {
+                      const notification = new Notification("🔔 Тестовое уведомление", {
+                        body: "Если вы видите это уведомление, значит всё работает! Звук должен воспроизводиться.",
+                        icon: `${window.location.origin}/icon.png`,
+                        badge: `${window.location.origin}/icon.png`,
+                        silent: false,
+                        requireInteraction: false,
+                      });
+                      
+                      notification.onclick = () => {
+                        window.focus();
+                        notification.close();
+                      };
+                      
+                      setTimeout(() => notification.close(), 8000);
+                      
+                      setMessage({
+                        type: "success",
+                        text: "Тестовое уведомление отправлено! Проверьте, появилось ли оно.",
+                      });
+                    } else {
+                      setMessage({
+                        type: "error",
+                        text: "Сначала разрешите уведомления в браузере",
+                      });
+                    }
+                  }}
+                  className="w-full mt-2 inline-flex items-center justify-center rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                >
+                  🧪 Тест уведомления
+                </button>
               </div>
             </div>
           </div>

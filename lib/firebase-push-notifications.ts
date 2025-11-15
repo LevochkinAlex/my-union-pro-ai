@@ -233,28 +233,46 @@ export async function setupForegroundMessageHandler() {
       });
 
       // Показываем уведомление
-      const notification = new Notification(
-        payload.notification?.title || "AI Помощник",
-        notificationOptions
-      );
+      console.log("[Firebase] 📢 Creating notification...");
+      
+      try {
+        const notification = new Notification(
+          payload.notification?.title || "AI Помощник",
+          notificationOptions
+        );
 
-      console.log("[Firebase] ✅ Notification shown");
+        console.log("[Firebase] ✅ Notification created and shown");
 
-      // Звук воспроизводится браузером через silent: false
+        notification.onshow = () => {
+          console.log("[Firebase] 🔔 Notification displayed on screen");
+        };
 
-      notification.onclick = () => {
-        console.log("[Firebase] 🔘 Notification clicked");
-        window.focus();
-        if (payload.data?.url) {
-          window.location.href = payload.data.url;
-        }
-        notification.close();
-      };
+        notification.onerror = (error) => {
+          console.error("[Firebase] ❌ Notification error:", error);
+        };
 
-      // Автоматически закрываем через 5 секунд
-      setTimeout(() => {
-        notification.close();
-      }, 5000);
+        notification.onclose = () => {
+          console.log("[Firebase] 🔕 Notification closed");
+        };
+
+        notification.onclick = () => {
+          console.log("[Firebase] 🔘 Notification clicked");
+          window.focus();
+          if (payload.data?.url) {
+            window.location.href = payload.data.url;
+          }
+          notification.close();
+        };
+
+        // Автоматически закрываем через 10 секунд
+        setTimeout(() => {
+          console.log("[Firebase] ⏰ Auto-closing notification");
+          notification.close();
+        }, 10000);
+      } catch (notifError) {
+        console.error("[Firebase] ❌ Failed to create notification:", notifError);
+        throw notifError;
+      }
     } catch (error) {
       console.error("[Firebase] ❌ Error showing notification:", error);
     }
