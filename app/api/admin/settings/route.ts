@@ -14,13 +14,13 @@ export async function GET() {
       });
     }
 
-    const settings = await prisma.systemSettings.findUnique({
+    const settings = await prisma.systemSetting.findUnique({
       where: { id: "system_settings" },
     });
 
     if (!settings) {
       // Создаём default settings если их нет
-      const created = await prisma.systemSettings.create({
+      const created = await prisma.systemSetting.create({
         data: { id: "system_settings" },
       });
       return new Response(JSON.stringify(created), { status: 200 });
@@ -48,7 +48,7 @@ export async function PUT(request: Request) {
 
     const data = await request.json();
 
-    const updated = await prisma.systemSettings.upsert({
+    const updated = await prisma.systemSetting.upsert({
       where: { id: "system_settings" },
       create: { id: "system_settings", ...data },
       update: data,

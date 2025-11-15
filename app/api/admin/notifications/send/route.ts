@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     }
 
     // Получаем OneSignal конфиг из системных настроек
-    const settings = await prisma.systemSettings.findUnique({
+    const settings = await prisma.systemSetting.findUnique({
       where: { id: "system_settings" },
     });
 
