@@ -20,55 +20,42 @@ export default function RootLayout({
       <head>
         {ONESIGNAL_APP_ID && (
           <>
-            {/* Initialize OneSignal queue before SDK loads */}
+            {/* Initialize OneSignal configuration before SDK loads */}
             <Script
-              id="onesignal-queue-init"
+              id="onesignal-config"
               strategy="beforeInteractive"
               dangerouslySetInnerHTML={{
-                __html: `window.OneSignal = window.OneSignal || [];`,
+                __html: `
+                  window.OneSignal = window.OneSignal || [];
+                  window.OneSignalConfig = {
+                    appId: "${ONESIGNAL_APP_ID}",
+                    allowLocalhostAsSecureOrigin: true,
+                  };
+                `,
               }}
             />
             
-            {/* Load OneSignal SDK */}
+            {/* Load OneSignal SDK and initialize */}
             <Script
               id="onesignal-sdk"
               src="https://cdn.onesignal.com/sdks/web/v15/OneSignalSDK.page.js"
-              strategy="lazyOnload"
-            />
-            
-            {/* Initialize OneSignal after SDK loads */}
-            <Script
-              id="onesignal-init"
-              strategy="lazyOnload"
+              strategy="afterInteractive"
               dangerouslySetInnerHTML={{
                 __html: `
-                  (function() {
-                    console.log("[OneSignal] Init script loaded");
-                    
-                    // Wait for OneSignal to be available
-                    const checkAndInit = setInterval(function() {
-                      if (typeof window !== 'undefined' && window.OneSignal && typeof window.OneSignal.push === 'function') {
-                        clearInterval(checkAndInit);
-                        console.log("[OneSignal] ✅ SDK ready, initializing...");
-                        
-                        window.OneSignal.push(function() {
-                          console.log("[OneSignal] Inside push callback");
-                          try {
-                            window.OneSignal.init({
-                              appId: "${ONESIGNAL_APP_ID}",
-                              allowLocalhostAsSecureOrigin: true,
-                            });
-                            console.log("[OneSignal] ✅ Initialization complete");
-                          } catch (error) {
-                            console.error("[OneSignal] Init error:", error);
-                          }
-                        });
-                      }
-                    }, 100);
-                    
-                    // Fallback: stop checking after 10 seconds
-                    setTimeout(() => clearInterval(checkAndInit), 10000);
-                  })();
+                  // This runs in parallel with loading the SDK script
+                  if (typeof OneSignal !== 'undefined' && OneSignal.init) {
+                    console.log("[OneSignal] SDK loaded, initializing...");
+                    OneSignal.init(window.OneSignalConfig);
+                    console.log("[OneSignal] ✅ Initialized");
+                  } else {
+                    // SDK might not be ready yet, queue the init
+                    window.OneSignal = window.OneSignal || [];
+                    window.OneSignal.push(() => {
+                      console.log("[OneSignal] SDK ready via push, initializing...");
+                      window.OneSignal.init(window.OneSignalConfig);
+                      console.log("[OneSignal] ✅ Initialized via push");
+                    });
+                  }
                 `,
               }}
             />

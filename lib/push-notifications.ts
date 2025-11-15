@@ -117,6 +117,8 @@ export async function syncPushSubscription(): Promise<void> {
               return;
             }
 
+            console.log("[OneSignal] performSync called, instance:", typeof instance, "is array:", Array.isArray(instance));
+
             // Set external user ID
             if (typeof instance.setExternalUserId === "function") {
               try {
@@ -125,18 +127,22 @@ export async function syncPushSubscription(): Promise<void> {
               } catch (error) {
                 console.warn("[OneSignal] Error setting external user ID:", error);
               }
+            } else {
+              console.warn("[OneSignal] setExternalUserId not available");
             }
 
             // Get player ID
             if (typeof instance.getUserId === "function") {
+              console.log("[OneSignal] Calling getUserId...");
               instance.getUserId((playerId: string | null) => {
+                console.log("[OneSignal] getUserId callback, playerId:", playerId);
                 if (!playerId) {
                   console.log("[OneSignal] No player ID - user not subscribed yet");
                   resolve();
                   return;
                 }
 
-                console.log("[OneSignal] Player ID:", playerId);
+                console.log("[OneSignal] Player ID obtained:", playerId);
 
                 // Save subscription to backend
                 fetch("/api/push/subscribe", {
@@ -152,7 +158,8 @@ export async function syncPushSubscription(): Promise<void> {
                       const data = await response.json();
                       console.log("[OneSignal] ✅ Subscription synced:", data.subscription?.id);
                     } else {
-                      console.error("[OneSignal] Failed to sync subscription:", response.status);
+                      const errorText = await response.text();
+                      console.error("[OneSignal] Failed to sync subscription:", response.status, errorText);
                     }
                   })
                   .catch((error) => {
@@ -161,19 +168,21 @@ export async function syncPushSubscription(): Promise<void> {
                   .finally(() => resolve());
               });
             } else {
-              console.warn("[OneSignal] getUserId not available");
+              console.warn("[OneSignal] getUserId not available, instance methods:", Object.keys(instance).slice(0, 10));
               resolve();
             }
           };
 
           // If OneSignal is still a queue, use push
           if (Array.isArray(OneSignal)) {
-            console.log("[OneSignal] Using queue push for sync");
+            console.log("[OneSignal] OneSignal is array, using push for sync");
             OneSignal.push(() => {
+              console.log("[OneSignal] Push callback executed for sync");
               performSync((window as any).OneSignal);
             });
           } else {
             // If already initialized
+            console.log("[OneSignal] OneSignal already initialized, calling performSync directly");
             performSync(OneSignal);
           }
         })
