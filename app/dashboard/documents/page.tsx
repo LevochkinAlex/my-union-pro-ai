@@ -41,7 +41,25 @@ export default function DocumentsPage() {
       }
 
       const data = await response.json();
-      setDocuments(data.documents || []);
+      // Фильтруем документы: скрываем загруженные пользователем документы типа OTHER
+      // (но оставляем системные документы, например устав)
+      const filteredDocuments = (data.documents || []).filter((doc: Document) => {
+        // Показываем все документы, кроме загруженных пользователем OTHER документов
+        if (doc.type === "OTHER") {
+          // Показываем устав и другие системные документы
+          const isSystemDocument = 
+            doc.title?.toLowerCase().includes("устав") ||
+            doc.description?.toLowerCase().includes("устав");
+          
+          // Скрываем загруженные пользователем файлы (имеют путь в /uploads/documents/)
+          const isUploadedFile = doc.filePath?.startsWith("/uploads/documents/");
+          
+          // Показываем только системные документы, скрываем загруженные
+          return isSystemDocument || !isUploadedFile;
+        }
+        return true;
+      });
+      setDocuments(filteredDocuments);
     } catch (err) {
       console.error("Ошибка загрузки документов:", err);
       setError(err instanceof Error ? err.message : "Не удалось загрузить документы");
