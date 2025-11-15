@@ -101,22 +101,36 @@ export async function syncPushSubscription(): Promise<void> {
     // Get subscription ID using OneSignalDeferred pattern
     let playerId: string | null = null;
 
-    // For v16, we need to get subscription through the deferred API
+    // For v16, get subscription through proper v16 API
     const getPlayerId = (): Promise<string | null> => {
       return new Promise((resolve) => {
         if (typeof window !== "undefined" && window.OneSignalDeferred) {
           window.OneSignalDeferred.push(async (OneSignal: any) => {
             try {
-              const subscription = await OneSignal.User.PushSubscription.getSubscription();
-              if (subscription?.id) {
-                console.log("[OneSignal] Player ID (v16 getSubscription):", subscription.id);
-                resolve(subscription.id);
+              // v16 official way - use getUserId for player ID
+              const userId = await OneSignal.User.getOnesignalId();
+              if (userId) {
+                console.log("[OneSignal] Player ID (v16 getOnesignalId):", userId);
+                resolve(userId);
               } else {
-                console.log("[OneSignal] No subscription found");
+                // Fallback to checking if subscription exists
+                const isPushEnabled = await OneSignal.Notifications.isPushSupported();
+                if (isPushEnabled) {
+                  const hasPermission = await OneSignal.Notifications.getNotificationPermission();
+                  if (hasPermission) {
+                    // Get subscription ID from internal API
+                    const sub = OneSignal.User?.PushSubscription;
+                    if (sub?.id) {
+                      console.log("[OneSignal] Player ID (PushSubscription.id):", sub.id);
+                      resolve(sub.id);
+                    }
+                  }
+                }
+                console.log("[OneSignal] No player ID available");
                 resolve(null);
               }
             } catch (error) {
-              console.error("[OneSignal] Error getting subscription:", error);
+              console.error("[OneSignal] Error getting player ID:", error);
               resolve(null);
             }
           });

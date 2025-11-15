@@ -655,3 +655,19 @@ model SystemLog {
   @@index([createdAt])
   @@index([userId])
 }
+
+// Системные настройки (для супер-админа)
+model SystemSettings {
+  id String @id @default("system_settings")
+  
+  // OneSignal конфигурация
+  oneSignalAppId String?
+  oneSignalRestApiKey String?
+  
+  // Другие настройки
+  maintenanceMode Boolean @default(false)
+  maintenanceMessage String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
