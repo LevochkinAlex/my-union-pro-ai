@@ -27,10 +27,6 @@ export default function RootLayout({
               dangerouslySetInnerHTML={{
                 __html: `
                   window.OneSignalAppId = "${ONESIGNAL_APP_ID}";
-                  window.OneSignalConfig = {
-                    appId: "${ONESIGNAL_APP_ID}",
-                    allowLocalhostAsSecureOrigin: true,
-                  };
                 `,
               }}
             />
@@ -40,21 +36,34 @@ export default function RootLayout({
               id="onesignal-sdk"
               src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
               strategy="afterInteractive"
+            />
+            
+            {/* Initialize OneSignal after SDK loads */}
+            <Script
+              id="onesignal-init-after"
+              strategy="lazyOnload"
               dangerouslySetInnerHTML={{
                 __html: `
-                  // Initialize OneSignal after SDK loads
-                  window.OneSignalSDKLoaded = true;
-                  console.log('[OneSignal] v16 SDK loaded');
-                  
-                  if (window.OneSignal && typeof window.OneSignal.init === 'function') {
-                    console.log('[OneSignal] Initializing OneSignal v16...');
-                    try {
-                      window.OneSignal.init(window.OneSignalConfig);
-                      console.log('[OneSignal] ✅ v16 initialized successfully');
-                    } catch (error) {
-                      console.error('[OneSignal] Error during v16 init:', error);
-                    }
-                  }
+                  (function() {
+                    const waitForOS = setInterval(function() {
+                      if (typeof window.OneSignal !== 'undefined' && typeof window.OneSignal.init === 'function') {
+                        clearInterval(waitForOS);
+                        console.log('[OneSignal] SDK ready, initializing...');
+                        try {
+                          window.OneSignal.init({
+                            appId: window.OneSignalAppId,
+                            allowLocalhostAsSecureOrigin: true,
+                          });
+                          console.log('[OneSignal] ✅ Initialized successfully');
+                        } catch (error) {
+                          console.error('[OneSignal] Init error:', error);
+                        }
+                      }
+                    }, 100);
+                    
+                    // Timeout after 30 seconds
+                    setTimeout(() => clearInterval(waitForOS), 30000);
+                  })();
                 `,
               }}
             />
