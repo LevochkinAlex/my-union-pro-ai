@@ -1,0 +1,204 @@
+{
+  "meta": {
+    "total": 8,
+    "page": 1,
+    "per_page": 100,
+    "last_updated": "2025-10-01T12:00:00+03:00",
+    "source": "bestbenefits.ru/manual-export"
+  },
+  "data": [
+    {
+      "id": 5001,
+      "parent_id": null,
+      "name": "Яндекс Лавка — готовая еда и продукты",
+      "short_description": "Первые три заказа со скидкой 15% и бесплатной доставкой",
+      "description": "Удобно заказать готовую еду и продукты в приложении Яндекс Лавка. Партнёрская программа BestBenefits для членов профсоюзов MyUnion.",
+      "image_url": "https://bestbenefits.ru/storage/products/Aug2025/yandex-lavka.jpg",
+      "cta_url": "https://bestbenefits.ru/catalog/yandex-lavka",
+      "promo_code": "MYUNION15",
+      "discount_value": "15%",
+      "main_category": { "id": 18, "order": 1, "name": "Рестораны и доставка" },
+      "categories": [
+        { "id": 24, "order": 1, "name": "Доставка еды" },
+        { "id": 51, "order": 2, "name": "Premium" }
+      ],
+      "cities": [
+        { "id": 1, "name": "Москва" },
+        { "id": 2, "name": "Санкт-Петербург" },
+        { "id": 5, "name": "Казань" }
+      ],
+      "tags": ["онлайн", "доставка", "еда"],
+      "isPremium": true,
+      "updated_at": "2025-09-28T08:30:00+03:00",
+      "end": "2025-12-31T23:59:59+03:00"
+    },
+    {
+      "id": 5002,
+      "parent_id": null,
+      "name": "Flowwow — цветы и подарки",
+      "short_description": "До 20% на букеты и подарки в любом городе присутствия",
+      "description": "Flowwow доставляет букеты, торты, шарики и подарки в сотнях городов России и СНГ.",
+      "image_url": "https://bestbenefits.ru/storage/products/Aug2025/flowwow.jpg",
+      "cta_url": "https://bestbenefits.ru/catalog/flowwow",
+      "promo_code": "UNION20",
+      "discount_value": "до 20%",
+      "main_category": { "id": 12, "order": 1, "name": "Товары" },
+      "categories": [
+        { "id": 45, "order": 1, "name": "Цветы" },
+        { "id": 46, "order": 2, "name": "Городские подарки" }
+      ],
+      "cities": [
+        { "id": 1, "name": "Москва" },
+        { "id": 2, "name": "Санкт-Петербург" },
+        { "id": 3, "name": "Нижний Новгород" },
+        { "id": 8, "name": "Новосибирск" }
+      ],
+      "tags": ["онлайн", "подарки"],
+      "isPremium": false,
+      "updated_at": "2025-09-20T11:20:00+03:00",
+      "end": "2026-01-15T23:59:59+03:00"
+    },
+    {
+      "id": 5003,
+      "parent_id": null,
+      "name": "Dr.Head — аудиотехника",
+      "short_description": "Премиальная акустика и наушники со скидкой 12%",
+      "description": "Официальные поставки лучших аудиобрендов. Специальный промокод для профсоюзов.",
+      "image_url": "https://bestbenefits.ru/storage/products/Aug2025/drhead.jpg",
+      "cta_url": "https://bestbenefits.ru/catalog/dr-head",
+      "promo_code": "AUDIO12",
+      "discount_value": "12%",
+      "main_category": { "id": 3, "order": 1, "name": "Техника и электроника" },
+      "categories": [
+        { "id": 7, "order": 1, "name": "Аудио" },
+        { "id": 8, "order": 2, "name": "Premium" }
+      ],
+      "cities": [
+        { "id": 1, "name": "Москва" },
+        { "id": 4, "name": "Екатеринбург" }
+      ],
+      "tags": ["техника", "офлайн", "premium"],
+      "isPremium": true,
+      "updated_at": "2025-09-10T14:10:00+03:00",
+      "end": "2025-11-30T23:59:59+03:00"
+    },
+    {
+      "id": 5004,
+      "parent_id": null,
+      "name": "Nikko — химчистка и уход за гардеробом",
+      "short_description": "Скидка 18% на химчистку с доставкой",
+      "description": "Nikko заберёт и доставит одежду после профессиональной химчистки.",
+      "image_url": "https://bestbenefits.ru/storage/products/Aug2025/nikko.jpg",
+      "cta_url": "https://bestbenefits.ru/catalog/nikko",
+      "promo_code": "CLEAN18",
+      "discount_value": "18%",
+      "main_category": { "id": 25, "order": 1, "name": "Услуги" },
+      "categories": [
+        { "id": 67, "order": 1, "name": "Химчистка" },
+        { "id": 25, "order": 2, "name": "С доставкой" }
+      ],
+      "cities": [
+        { "id": 1, "name": "Москва" },
+        { "id": 9, "name": "Краснодар" }
+      ],
+      "tags": ["доставка", "сервис"],
+      "isPremium": false,
+      "updated_at": "2025-09-25T09:40:00+03:00",
+      "end": "2025-12-31T23:59:59+03:00"
+    },
+    {
+      "id": 5005,
+      "parent_id": null,
+      "name": "Tasty Coffee — свежий кофе",
+      "short_description": "Скидка 17% и бесплатная доставка зерна",
+      "description": "Обжарка по заказу, подписка на кофе и наборы для офиса.",
+      "image_url": "https://bestbenefits.ru/storage/products/Aug2025/tasty-coffee.jpg",
+      "cta_url": "https://bestbenefits.ru/catalog/tasty-coffee",
+      "promo_code": "UNION17",
+      "discount_value": "17%",
+      "main_category": { "id": 18, "order": 1, "name": "Рестораны и доставка" },
+      "categories": [
+        { "id": 30, "order": 1, "name": "Кофе" },
+        { "id": 24, "order": 2, "name": "Доставка" }
+      ],
+      "cities": [
+        { "id": 1, "name": "Москва" },
+        { "id": 2, "name": "Санкт-Петербург" },
+        { "id": 6, "name": "Самара" }
+      ],
+      "tags": ["подписка", "доставка"],
+      "isPremium": false,
+      "updated_at": "2025-09-12T12:05:00+03:00",
+      "end": "2025-12-31T23:59:59+03:00"
+    },
+    {
+      "id": 5006,
+      "parent_id": null,
+      "name": "Skyeng и Skysmart — онлайн-обучение",
+      "short_description": "Скидка 20% на индивидуальные занятия и курсы для детей",
+      "description": "Онлайн-уроки для взрослых и детей. Можно выбрать учителя, график и формат.",
+      "image_url": "https://bestbenefits.ru/storage/products/Aug2025/skyeng.jpg",
+      "cta_url": "https://bestbenefits.ru/catalog/skyeng",
+      "promo_code": "EDU20",
+      "discount_value": "20%",
+      "main_category": { "id": 30, "order": 1, "name": "Обучение" },
+      "categories": [
+        { "id": 98, "order": 1, "name": "Иностранные языки" },
+        { "id": 99, "order": 2, "name": "Дети" }
+      ],
+      "cities": [
+        { "id": 0, "name": "Онлайн" }
+      ],
+      "tags": ["онлайн", "образование"],
+      "isPremium": false,
+      "updated_at": "2025-09-05T17:00:00+03:00",
+      "end": "2026-03-31T23:59:59+03:00"
+    },
+    {
+      "id": 5007,
+      "parent_id": null,
+      "name": "Okko и Кинопоиск — онлайн-кинотеатры",
+      "short_description": "45 дней просмотра сериалов и фильмов бесплатно",
+      "description": "Эксклюзивные коллекции и премьеры. Доступно на Smart TV и мобильных устройствах.",
+      "image_url": "https://bestbenefits.ru/storage/products/Aug2025/okko.jpg",
+      "cta_url": "https://bestbenefits.ru/catalog/okko",
+      "promo_code": "UNION45",
+      "discount_value": "45 дней",
+      "main_category": { "id": 40, "order": 1, "name": "Развлечения" },
+      "categories": [
+        { "id": 401, "order": 1, "name": "Онлайн-кинотеатр" }
+      ],
+      "cities": [
+        { "id": 0, "name": "Онлайн" }
+      ],
+      "tags": ["подписка", "digital"],
+      "isPremium": false,
+      "updated_at": "2025-09-02T13:45:00+03:00",
+      "end": "2025-11-15T23:59:59+03:00"
+    },
+    {
+      "id": 5008,
+      "parent_id": null,
+      "name": "Haval PRO в БорисХоф — покупка и сервис авто",
+      "short_description": "Экономия до 210 000 ₽ при покупке и обслуживании",
+      "description": "Эксклюзивные условия на покупку Haval и оригинальный сервис у официального дилера БорисХоф.",
+      "image_url": "https://bestbenefits.ru/storage/products/Aug2025/haval.jpg",
+      "cta_url": "https://bestbenefits.ru/catalog/haval-pro",
+      "promo_code": "HAVALPRO",
+      "discount_value": "до 210 000 ₽",
+      "main_category": { "id": 55, "order": 1, "name": "Услуги" },
+      "categories": [
+        { "id": 551, "order": 1, "name": "Авто" },
+        { "id": 552, "order": 2, "name": "Premium" }
+      ],
+      "cities": [
+        { "id": 1, "name": "Москва" }
+      ],
+      "tags": ["auto", "premium"],
+      "isPremium": true,
+      "updated_at": "2025-09-18T16:30:00+03:00",
+      "end": "2025-12-01T23:59:59+03:00"
+    }
+  ]
+}
+

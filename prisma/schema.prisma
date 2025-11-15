@@ -86,6 +86,7 @@ model User {
 
   // Push Notifications
   pushSubscriptions PushSubscription[]
+  discountPreference DiscountPreference?
 
   // Настройки уведомлений
   pushNotificationsEnabled Boolean @default(true) // Включены ли push уведомления
@@ -614,6 +615,24 @@ model PushSubscription {
   @@index([userId])
   @@index([fcmToken])
   @@index([oneSignalId]) // Legacy index
+}
+
+model DiscountPreference {
+  id String @id @default(cuid())
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  pushEnabled Boolean @default(false)
+  filters     Json?
+  geolocation Json?
+
+  lastNotificationAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pushEnabled])
 }
 
 // Логирование системных ошибок и событий

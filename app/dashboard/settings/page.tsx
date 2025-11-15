@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { requestPushPermission } from "@/lib/firebase-push-notifications";
 
 interface UserSettings {
   pushNotificationsEnabled: boolean;
@@ -22,7 +21,6 @@ export default function SettingsPage() {
     emailBotNotifications: false,
     emailAppealNotifications: true,
   });
-  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -196,79 +194,6 @@ export default function SettingsPage() {
                 </button>
               </div>
 
-              <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setIsRequestingPermission(true);
-                    try {
-                      const granted = await requestPushPermission();
-                      if (granted) {
-                        setMessage({
-                          type: "success",
-                          text: "Разрешение на уведомления получено! Теперь вы будете получать push уведомления.",
-                        });
-                      } else {
-                        setMessage({
-                          type: "error",
-                          text: "Не удалось получить разрешение на уведомления. Проверьте настройки браузера.",
-                        });
-                      }
-                    } catch (error) {
-                      console.error("Error requesting permission:", error);
-                      setMessage({
-                        type: "error",
-                        text: "Ошибка при запросе разрешения на уведомления",
-                      });
-                    } finally {
-                      setIsRequestingPermission(false);
-                    }
-                  }}
-                  disabled={isRequestingPermission}
-                  className="w-full inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isRequestingPermission ? "Запрос разрешения..." : "Разрешить уведомления в браузере"}
-                </button>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
-                  Нажмите, чтобы разрешить браузеру показывать уведомления
-                </p>
-                
-                {/* Тестовое уведомление */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (Notification.permission === "granted") {
-                      const notification = new Notification("🔔 Тестовое уведомление", {
-                        body: "Если вы видите это уведомление, значит всё работает! Звук должен воспроизводиться.",
-                        icon: `${window.location.origin}/icon.png`,
-                        badge: `${window.location.origin}/icon.png`,
-                        silent: false,
-                        requireInteraction: false,
-                      });
-                      
-                      notification.onclick = () => {
-                        window.focus();
-                        notification.close();
-                      };
-                      
-                      setTimeout(() => notification.close(), 8000);
-                      
-                      setMessage({
-                        type: "success",
-                        text: "Тестовое уведомление отправлено! Проверьте, появилось ли оно.",
-                      });
-                    } else {
-                      setMessage({
-                        type: "error",
-                        text: "Сначала разрешите уведомления в браузере",
-                      });
-                    }
-                  }}
-                  className="w-full mt-2 inline-flex items-center justify-center rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
-                >
-                  🧪 Тест уведомления
-                </button>
-              </div>
             </div>
           </div>
 
