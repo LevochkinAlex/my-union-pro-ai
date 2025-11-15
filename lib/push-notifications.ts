@@ -142,8 +142,10 @@ export async function syncPushSubscription() {
           return;
         }
         
+        // Try to push callback
+        console.log("[Push] Pushing callback to OneSignal array...");
         OneSignal.push(() => {
-          console.log("[Push] Inside OneSignal.push() callback");
+          console.log("[Push] ✅ Inside OneSignal.push() callback - SDK is ready!");
           const OneSignalInstance = (window as any).OneSignal;
           
           console.log("[Push] OneSignalInstance:", OneSignalInstance ? "exists" : "null");
@@ -159,6 +161,17 @@ export async function syncPushSubscription() {
           
           trySyncDirectly(OneSignalInstance, userId, resolve);
         });
+        
+        // Also try to access OneSignal directly after a delay (in case push doesn't work)
+        setTimeout(() => {
+          const directOneSignal = (window as any).OneSignal;
+          if (directOneSignal && typeof directOneSignal === "object" && !Array.isArray(directOneSignal)) {
+            console.log("[Push] OneSignal initialized directly, trying direct access...");
+            trySyncDirectly(directOneSignal, userId, resolve);
+          } else {
+            console.log("[Push] OneSignal still not initialized after delay");
+          }
+        }, 2000);
       } catch (error) {
         console.error("[Push] Error in OneSignal.push():", error);
         resolve();
