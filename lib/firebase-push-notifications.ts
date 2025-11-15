@@ -43,25 +43,9 @@ async function getMessagingInstance(): Promise<Messaging | null> {
       return null;
     }
     
-    // Get Service Worker registration
-    let swRegistration = null;
-    if ("serviceWorker" in navigator) {
-      try {
-        swRegistration = await navigator.serviceWorker.getRegistration();
-        if (!swRegistration) {
-          console.warn("[Firebase] Service Worker not registered yet");
-          return null;
-        }
-        console.log("[Firebase] Service Worker found:", swRegistration.scope);
-      } catch (error) {
-        console.warn("[Firebase] Error getting Service Worker:", error);
-        return null;
-      }
-    }
-    
-    messagingInstance = getMessaging(app, {
-      serviceWorkerRegistration: swRegistration || undefined,
-    });
+    // Get messaging instance
+    messagingInstance = getMessaging(app);
+    console.log("[Firebase] Messaging instance created");
     return messagingInstance;
   } catch (error) {
     console.error("[Firebase] Error getting messaging:", error);
