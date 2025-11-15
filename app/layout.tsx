@@ -40,44 +40,83 @@ export default function RootLayout({
               dangerouslySetInnerHTML={{
                 __html: `
                   (function() {
+                    console.log("[Push] SDK loader script started");
+                    let attempts = 0;
+                    const maxAttempts = 100; // 10 seconds
+                    
                     // Wait for SDK script to load
                     const checkSDK = setInterval(function() {
-                      if (typeof window !== 'undefined' && window.OneSignal && typeof window.OneSignal.push === 'function') {
-                        clearInterval(checkSDK);
-                        console.log("[Push] ✅ OneSignal SDK script detected");
+                      attempts++;
+                      if (typeof window === 'undefined') {
+                        console.log("[Push] Window undefined, attempt", attempts);
+                        if (attempts >= maxAttempts) {
+                          clearInterval(checkSDK);
+                          console.warn("[Push] Window still undefined after", maxAttempts, "attempts");
+                        }
+                        return;
+                      }
+                      
+                      console.log("[Push] Check attempt", attempts, "OneSignal:", window.OneSignal ? (typeof window.OneSignal) : "missing", "push:", window.OneSignal && typeof window.OneSignal.push);
+                      
+                      if (window.OneSignal) {
+                        console.log("[Push] OneSignal exists! Type:", typeof window.OneSignal, "is array:", Array.isArray(window.OneSignal), "has push:", typeof window.OneSignal.push);
                         
-                        // After SDK loads, wait a bit and then try to initialize
-                        setTimeout(() => {
-                          const OneSignal = window.OneSignal;
-                          if (OneSignal) {
-                            console.log("[Push] OneSignal after script load:", typeof OneSignal, "is array:", Array.isArray(OneSignal));
-                            // Try to initialize if it's still an array
-                            if (Array.isArray(OneSignal)) {
-                              console.log("[Push] OneSignal is still array after script load, pushing init...");
-                              OneSignal.push(function() {
-                                console.log("[Push] ✅ Inside OneSignal.push() after script load");
-                                const OneSignalInstance = window.OneSignal;
-                                if (OneSignalInstance && typeof OneSignalInstance.init === 'function') {
-                                  OneSignalInstance.init({
+                        if (typeof window.OneSignal.push === 'function') {
+                          clearInterval(checkSDK);
+                          console.log("[Push] ✅ OneSignal SDK script detected with push function!");
+                          
+                          // After SDK loads, wait a bit and then try to initialize
+                          setTimeout(() => {
+                            const OneSignal = window.OneSignal;
+                            if (OneSignal) {
+                              console.log("[Push] OneSignal after script load:", typeof OneSignal, "is array:", Array.isArray(OneSignal));
+                              // Try to initialize if it's still an array
+                              if (Array.isArray(OneSignal)) {
+                                console.log("[Push] OneSignal is still array after script load, pushing init...");
+                                OneSignal.push(function() {
+                                  console.log("[Push] ✅ Inside OneSignal.push() after script load");
+                                  const OneSignalInstance = window.OneSignal;
+                                  console.log("[Push] OneSignalInstance:", typeof OneSignalInstance, "is array:", Array.isArray(OneSignalInstance));
+                                  if (OneSignalInstance && typeof OneSignalInstance.init === 'function') {
+                                    console.log("[Push] Calling OneSignal.init()...");
+                                    OneSignalInstance.init({
+                                      appId: "${ONESIGNAL_APP_ID}",
+                                      allowLocalhostAsSecureOrigin: true,
+                                      serviceWorkerPath: "/OneSignalSDKWorker.js",
+                                      serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js"
+                                    });
+                                    console.log("[Push] ✅ OneSignal.init() called after script load");
+                                  } else {
+                                    console.warn("[Push] OneSignalInstance.init is not a function. OneSignalInstance:", OneSignalInstance);
+                                  }
+                                });
+                              } else {
+                                console.log("[Push] OneSignal is not an array, trying direct init...");
+                                if (typeof OneSignal.init === 'function') {
+                                  OneSignal.init({
                                     appId: "${ONESIGNAL_APP_ID}",
                                     allowLocalhostAsSecureOrigin: true,
                                     serviceWorkerPath: "/OneSignalSDKWorker.js",
                                     serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js"
                                   });
-                                  console.log("[Push] ✅ OneSignal.init() called after script load");
+                                  console.log("[Push] ✅ OneSignal initialized directly");
                                 }
-                              });
+                              }
                             }
-                          }
-                        }, 1000);
+                          }, 1000);
+                        } else {
+                          console.log("[Push] OneSignal exists but push is not a function yet, type:", typeof window.OneSignal.push);
+                        }
+                      } else {
+                        console.log("[Push] OneSignal not found yet");
+                      if (attempts >= maxAttempts) {
+                          clearInterval(checkSDK);
+                          console.error("[Push] ❌ OneSignal SDK not detected after", maxAttempts, "attempts (10 seconds)");
+                          console.log("[Push] Window.OneSignal:", window.OneSignal);
+                          console.log("[Push] All window properties:", Object.keys(window).filter(k => k.toLowerCase().includes('signal')));
+                        }
                       }
                     }, 100);
-                    
-                    // Timeout after 10 seconds
-                    setTimeout(function() {
-                      clearInterval(checkSDK);
-                      console.warn("[Push] OneSignal SDK not detected after 10 seconds");
-                    }, 10000);
                   })();
                 `,
               }}
