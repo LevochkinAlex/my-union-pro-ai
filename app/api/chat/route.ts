@@ -925,6 +925,9 @@ ID документа: ${uploadedDocument.documentId}
             const recipientIds = userSubs.map((sub) => sub.oneSignalId);
             const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
             
+            // OneSignal требует английский язык в содержимом (en обязателен!)
+            const messagePreview = aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : "");
+            
             const notificationPayload: Record<string, any> = {
               app_id: ONESIGNAL_APP_ID,
               include_player_ids: recipientIds,
@@ -933,8 +936,8 @@ ID документа: ${uploadedDocument.documentId}
                 ru: bot.name || "AI Помощник" 
               },
               contents: { 
-                en: aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : ""),
-                ru: aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : ""),
+                en: "You have a new message", // ОБЯЗАТЕЛЬНО английский для OneSignal API
+                ru: messagePreview,
               },
               // Параметры для веб-уведомлений
               url: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/dashboard?session=${chatSession.id}`,
