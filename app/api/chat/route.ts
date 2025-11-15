@@ -927,41 +927,42 @@ ID документа: ${uploadedDocument.documentId}
             
             const notificationPayload: Record<string, any> = {
               app_id: ONESIGNAL_APP_ID,
-              include_player_ids: recipientIds, // Используем include_player_ids вместо include_external_user_ids
+              include_player_ids: recipientIds,
               headings: { en: bot.name || "AI Assistant", ru: bot.name || "AI Помощник" },
               contents: { 
                 en: aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : ""),
                 ru: aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : ""),
               },
+              // Важно для веб-уведомлений
+              web_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/dashboard?session=${chatSession.id}`,
+              ios_attachments: { id: "icon" },
+              big_picture: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/logo.png`,
+              large_icon: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/logo.png`,
               data: {
                 type: "chat_message",
                 chatBotId: bot.id,
                 sessionId: chatSession.id,
-                url: `/dashboard?session=${chatSession.id}`,
               },
               priority: 10,
-              ttl: 86400, // 24 hours
+              ttl: 86400,
             };
 
             // Добавляем звук для уведомлений
-            // Для веб-уведомлений звук управляется браузером
             if (user?.pushSoundEnabled !== false) {
-              // Для веб-уведомлений используем специальные параметры
-              // chrome_web_sound и firefox_sound работают для веб-уведомлений
-              notificationPayload.chrome_web_sound = "default";
-              notificationPayload.firefox_sound = "default";
+              // Для веб-уведомлений (Chrome, Firefox, Safari)
+              notificationPayload.chrome_web_sound = "/notification-sound.mp3";
+              notificationPayload.firefox_sound = "/notification-sound.mp3";
               notificationPayload.safari_sound = "default";
               // Для мобильных приложений
               notificationPayload.sound = "default";
-              // Дополнительно указываем, что уведомление должно воспроизводить звук
-              notificationPayload.chrome_web_notification = {
-                sound: "default",
-              };
+              // Дополнительно для веб-уведомлений
+              notificationPayload.web_push_topic = "notification_received";
             } else {
               // Если звук отключен, отправляем без звука
-              notificationPayload.sound = null;
               notificationPayload.chrome_web_sound = null;
               notificationPayload.firefox_sound = null;
+              notificationPayload.safari_sound = null;
+              notificationPayload.sound = null;
             }
 
             const pushResponse = await fetch(ONESIGNAL_API_URL, {
