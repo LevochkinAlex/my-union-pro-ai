@@ -41,70 +41,45 @@ export async function initializePushNotifications() {
   }
 
   try {
-    // OneSignal SDK should already be loaded via Script component in layout
-    // Just initialize it when ready
-    const checkAndInit = () => {
+    // OneSignal SDK should already be initialized via Script component in layout
+    // Just wait for it to be ready and sync subscription
+    const checkAndSync = () => {
       const OneSignal = (window as any).OneSignal;
       
       if (!OneSignal) {
         console.warn("[Push] OneSignal not available yet, retrying...");
-        setTimeout(checkAndInit, 500);
+        setTimeout(checkAndSync, 500);
         return false;
       }
 
-      // Use push queue to ensure SDK is ready
-      OneSignal.push(() => {
-        const OneSignalInstance = (window as any).OneSignal;
-        
-        if (!OneSignalInstance) {
-          console.error("[Push] OneSignal not available in push queue");
-          return;
-        }
-
-        // Initialize OneSignal with minimal config to avoid SDK errors
-        if (typeof OneSignalInstance.init === "function") {
-          try {
-            // Use minimal config without promptOptions to avoid SDK initialization errors
-            OneSignalInstance.init({
-              appId: ONESIGNAL_APP_ID,
-              allowLocalhostAsSecureOrigin: true,
-              serviceWorkerPath: "/OneSignalSDKWorker.js",
-              serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
-              // Removed promptOptions to avoid SDK errors
-            });
-
-            console.log("[Push] OneSignal.init called successfully");
-
-            // Wait longer for SDK to fully initialize all internal components
-            setTimeout(() => {
-              syncPushSubscription();
-              
-              // Set up periodic sync (every 30 seconds)
-              setInterval(() => {
-                syncPushSubscription();
-              }, 30000);
-            }, 5000); // Increased delay to 5 seconds
-          } catch (error) {
-            console.error("[Push] Error initializing OneSignal:", error);
-            // Even if init fails, try to sync subscription after delay
-            setTimeout(() => {
-              syncPushSubscription();
-            }, 5000);
-          }
-        } else {
-          console.error("[Push] OneSignal.init is not a function. OneSignal object:", OneSignalInstance);
-          // Try to sync anyway after delay
-          setTimeout(() => {
+      // Check if SDK is initialized (has init method or is already initialized)
+      if (typeof OneSignal.init === "function") {
+        // SDK not initialized yet, wait a bit more
+        console.log("[Push] OneSignal SDK detected, waiting for initialization...");
+        setTimeout(() => {
+          syncPushSubscription();
+          
+          // Set up periodic sync (every 30 seconds)
+          setInterval(() => {
             syncPushSubscription();
-          }, 5000);
-        }
-      });
+          }, 30000);
+        }, 3000);
+      } else {
+        // SDK might be initialized, try to sync
+        console.log("[Push] OneSignal SDK appears initialized, syncing subscription...");
+        syncPushSubscription();
+        
+        // Set up periodic sync (every 30 seconds)
+        setInterval(() => {
+          syncPushSubscription();
+        }, 30000);
+      }
       
       return true;
     };
 
-    // Wait a bit for SDK to be loaded from Script component
-    setTimeout(checkAndInit, 1000);
+    // Wait for SDK to be loaded from Script component
+    setTimeout(checkAndSync, 2000);
     return true;
   } catch (error) {
     console.error("[Push] Error initializing OneSignal:", error);

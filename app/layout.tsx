@@ -26,6 +26,15 @@ export default function RootLayout({
               dangerouslySetInnerHTML={{
                 __html: `
                   window.OneSignal = window.OneSignal || [];
+                  window.OneSignalDeferred = window.OneSignalDeferred || [];
+                  OneSignalDeferred.push(function(OneSignal) {
+                    OneSignal.init({
+                      appId: "${ONESIGNAL_APP_ID}",
+                      allowLocalhostAsSecureOrigin: true,
+                      serviceWorkerPath: "/OneSignalSDKWorker.js",
+                      serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js"
+                    });
+                  });
                 `,
               }}
             />
