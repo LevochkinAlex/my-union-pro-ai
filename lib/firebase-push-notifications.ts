@@ -209,10 +209,15 @@ export async function setupForegroundMessageHandler() {
   }
 
   onMessage(messaging, async (payload) => {
-    console.log("[Firebase] Foreground message received:", payload);
+    console.log("[Firebase] 🔔 Foreground message received:", payload);
     
     // Show notification manually in foreground
-    if (Notification.permission === "granted") {
+    if (Notification.permission !== "granted") {
+      console.warn("[Firebase] ⚠️ Notification permission not granted");
+      return;
+    }
+
+    try {
       // Проверяем настройки пользователя для звука
       let soundEnabled = true;
       try {
@@ -220,6 +225,7 @@ export async function setupForegroundMessageHandler() {
         if (settingsResponse.ok) {
           const settings = await settingsResponse.json();
           soundEnabled = settings.pushSoundEnabled !== false;
+          console.log("[Firebase] Sound enabled:", soundEnabled);
         }
       } catch (error) {
         console.warn("[Firebase] Failed to get user settings:", error);
@@ -227,43 +233,66 @@ export async function setupForegroundMessageHandler() {
 
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
       const notificationOptions: NotificationOptions = {
-        body: payload.notification?.body,
+        body: payload.notification?.body || payload.data?.body || "Новое сообщение",
         icon: payload.notification?.icon || `${baseUrl}/icon.png`,
         badge: `${baseUrl}/icon.png`,
-        tag: payload.data?.sessionId,
-        data: payload.data,
+        tag: payload.data?.sessionId || "chat-message",
+        data: payload.data || {},
         requireInteraction: false,
+        silent: !soundEnabled, // Браузерный звук
       };
 
-      // Добавляем звук если включен
-      if (soundEnabled) {
-        notificationOptions.silent = false;
-        // Воспроизводим звук вручную
-        try {
-          const audio = new Audio(`${baseUrl}/notification-sound.mp3`);
-          audio.volume = 0.5;
-          await audio.play().catch((err) => {
-            console.warn("[Firebase] Failed to play sound:", err);
-          });
-        } catch (error) {
-          console.warn("[Firebase] Error playing sound:", error);
-        }
-      } else {
-        notificationOptions.silent = true;
-      }
+      console.log("[Firebase] 📢 Showing notification:", {
+        title: payload.notification?.title || "AI Помощник",
+        body: notificationOptions.body,
+        soundEnabled,
+      });
 
+      // Показываем уведомление
       const notification = new Notification(
-        payload.notification?.title || "New message",
+        payload.notification?.title || "AI Помощник",
         notificationOptions
       );
 
+      console.log("[Firebase] ✅ Notification shown");
+
+      // Воспроизводим звук отдельно (если включен)
+      if (soundEnabled) {
+        try {
+          const audio = new Audio(`${baseUrl}/notification-sound.mp3`);
+          audio.volume = 0.7;
+          audio.preload = "auto";
+          
+          // Пробуем воспроизвести
+          const playPromise = audio.play();
+          if (playPromise !== undefined) {
+            await playPromise.catch((err) => {
+              console.warn("[Firebase] ⚠️ Failed to play sound:", err);
+              // Пробуем использовать встроенный звук браузера
+              notificationOptions.silent = false;
+            });
+          }
+        } catch (error) {
+          console.warn("[Firebase] ⚠️ Error playing sound:", error);
+          // Продолжаем без звука
+        }
+      }
+
       notification.onclick = () => {
+        console.log("[Firebase] 🔘 Notification clicked");
         window.focus();
         if (payload.data?.url) {
           window.location.href = payload.data.url;
         }
         notification.close();
       };
+
+      // Автоматически закрываем через 5 секунд
+      setTimeout(() => {
+        notification.close();
+      }, 5000);
+    } catch (error) {
+      console.error("[Firebase] ❌ Error showing notification:", error);
     }
   });
 }
