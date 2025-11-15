@@ -26,21 +26,53 @@ export default function RootLayout({
               dangerouslySetInnerHTML={{
                 __html: `
                   window.OneSignal = window.OneSignal || [];
-                  window.OneSignalDeferred = window.OneSignalDeferred || [];
-                  OneSignalDeferred.push(function(OneSignal) {
-                    OneSignal.init({
-                      appId: "${ONESIGNAL_APP_ID}",
-                      allowLocalhostAsSecureOrigin: true,
-                      serviceWorkerPath: "/OneSignalSDKWorker.js",
-                      serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js"
-                    });
-                  });
                 `,
               }}
             />
             <Script
-              src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
-              strategy="afterInteractive"
+              id="onesignal-sdk"
+              src="https://cdn.onesignal.com/sdks/web/v15/OneSignalSDK.page.js"
+              strategy="lazyOnload"
+            />
+            <Script
+              id="onesignal-init-code"
+              strategy="lazyOnload"
+              dangerouslySetInnerHTML={{
+                __html: `
+                  (function() {
+                    function initOneSignal() {
+                      if (typeof window === 'undefined' || !window.OneSignal) {
+                        setTimeout(initOneSignal, 100);
+                        return;
+                      }
+                      
+                      try {
+                        window.OneSignal.push(function() {
+                          const OneSignalInstance = window.OneSignal;
+                          if (OneSignalInstance && typeof OneSignalInstance.init === 'function') {
+                            OneSignalInstance.init({
+                              appId: "${ONESIGNAL_APP_ID}",
+                              allowLocalhostAsSecureOrigin: true,
+                              serviceWorkerPath: "/OneSignalSDKWorker.js",
+                              serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js"
+                            });
+                            console.log("[Push] OneSignal initialized successfully");
+                          }
+                        });
+                      } catch (error) {
+                        console.error("[Push] Error initializing OneSignal:", error);
+                      }
+                    }
+                    
+                    // Wait for SDK to load
+                    if (document.readyState === 'loading') {
+                      document.addEventListener('DOMContentLoaded', initOneSignal);
+                    } else {
+                      setTimeout(initOneSignal, 500);
+                    }
+                  })();
+                `,
+              }}
             />
           </>
         )}
