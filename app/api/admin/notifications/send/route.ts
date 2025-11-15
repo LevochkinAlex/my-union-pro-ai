@@ -24,11 +24,18 @@ export async function POST(request: Request) {
     }
 
     // Получаем OneSignal конфиг из системных настроек
-    const settings = await prisma.systemSetting.findUnique({
-      where: { id: "system_settings" },
+    const appIdSetting = await prisma.systemSetting.findUnique({
+      where: { key: "onesignal_app_id" },
     });
 
-    if (!settings?.oneSignalAppId || !settings?.oneSignalRestApiKey) {
+    const apiKeySetting = await prisma.systemSetting.findUnique({
+      where: { key: "onesignal_rest_api_key" },
+    });
+
+    const oneSignalAppId = appIdSetting?.value;
+    const oneSignalRestApiKey = apiKeySetting?.value;
+
+    if (!oneSignalAppId || !oneSignalRestApiKey) {
       return new Response(
         JSON.stringify({ error: "OneSignal not configured" }),
         { status: 400 }
@@ -60,7 +67,7 @@ export async function POST(request: Request) {
 
     // Отправляем уведомление через OneSignal API
     const notificationPayload = {
-      app_id: settings.oneSignalAppId,
+      app_id: oneSignalAppId,
       include_player_ids: playerIds,
       headings: { ru: heading, en: heading },
       contents: { ru: content, en: content },
@@ -76,7 +83,7 @@ export async function POST(request: Request) {
       method: "POST",
       headers: {
         "Content-Type": "application/json; charset=utf-8",
-        Authorization: `Bearer ${settings.oneSignalRestApiKey}`,
+        Authorization: `Bearer ${oneSignalRestApiKey}`,
       },
       body: JSON.stringify(notificationPayload),
     });
@@ -114,4 +121,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

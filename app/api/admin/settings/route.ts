@@ -14,19 +14,22 @@ export async function GET() {
       });
     }
 
-    const settings = await prisma.systemSetting.findUnique({
-      where: { id: "system_settings" },
+    // Получаем OneSignal настройки
+    const appIdSetting = await prisma.systemSetting.findUnique({
+      where: { key: "onesignal_app_id" },
     });
 
-    if (!settings) {
-      // Создаём default settings если их нет
-      const created = await prisma.systemSetting.create({
-        data: { id: "system_settings" },
-      });
-      return new Response(JSON.stringify(created), { status: 200 });
-    }
+    const apiKeySetting = await prisma.systemSetting.findUnique({
+      where: { key: "onesignal_rest_api_key" },
+    });
 
-    return new Response(JSON.stringify(settings), { status: 200 });
+    return new Response(
+      JSON.stringify({
+        oneSignalAppId: appIdSetting?.value,
+        oneSignalRestApiKey: apiKeySetting?.value,
+      }),
+      { status: 200 }
+    );
   } catch (error) {
     console.error("[admin/settings] Error:", error);
     return new Response(JSON.stringify({ error: "Internal error" }), {
@@ -47,14 +50,32 @@ export async function PUT(request: Request) {
     }
 
     const data = await request.json();
+    const { oneSignalAppId, oneSignalRestApiKey } = data;
 
-    const updated = await prisma.systemSetting.upsert({
-      where: { id: "system_settings" },
-      create: { id: "system_settings", ...data },
-      update: data,
-    });
+    if (oneSignalAppId) {
+      await prisma.systemSetting.upsert({
+        where: { key: "onesignal_app_id" },
+        create: { key: "onesignal_app_id", value: oneSignalAppId },
+        update: { value: oneSignalAppId },
+      });
+    }
 
-    return new Response(JSON.stringify(updated), { status: 200 });
+    if (oneSignalRestApiKey) {
+      await prisma.systemSetting.upsert({
+        where: { key: "onesignal_rest_api_key" },
+        create: { key: "onesignal_rest_api_key", value: oneSignalRestApiKey },
+        update: { value: oneSignalRestApiKey },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        oneSignalAppId,
+        oneSignalRestApiKey,
+      }),
+      { status: 200 }
+    );
   } catch (error) {
     console.error("[admin/settings] Error:", error);
     return new Response(JSON.stringify({ error: "Internal error" }), {
