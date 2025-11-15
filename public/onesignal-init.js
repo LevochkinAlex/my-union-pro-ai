@@ -1,6 +1,6 @@
 /**
  * OneSignal Initialization Script
- * Load this script BEFORE OneSignal SDK to prepare initialization
+ * Load BEFORE SDK to prepare initialization
  */
 (function() {
   if (typeof window === 'undefined') return;
@@ -8,97 +8,81 @@
   const appId = window.OneSignalAppId || window.NEXT_PUBLIC_ONESIGNAL_APP_ID;
   
   if (!appId) {
-    console.warn('[OneSignal-Init] No app ID configured');
+    console.warn('[OneSignal] No app ID configured');
     return;
   }
   
-  console.log('[OneSignal-Init] Configuration appId:', appId);
+  console.log('[OneSignal] Initializing with appId:', appId);
   
-  // Create queue if doesn't exist
+  // Create queue if needed
   if (!window.OneSignal) {
     window.OneSignal = [];
   }
   
-  // Store config globally
+  // Store config
   window.OneSignalConfig = {
     appId: appId,
     allowLocalhostAsSecureOrigin: true,
   };
   
-  // Function to perform initialization
-  const doInit = function(OneSignalInstance) {
-    if (!OneSignalInstance) {
-      console.warn('[OneSignal-Init] OneSignal instance is null');
-      return false;
-    }
-    
-    // Check if already initialized
-    if (OneSignalInstance.initialized) {
-      console.log('[OneSignal-Init] Already initialized');
-      return true;
-    }
-    
-    if (typeof OneSignalInstance.init !== 'function') {
-      console.warn('[OneSignal-Init] OneSignal.init is not a function');
-      return false;
-    }
-    
-    try {
-      console.log('[OneSignal-Init] Calling OneSignal.init...');
-      OneSignalInstance.init(window.OneSignalConfig);
-      console.log('[OneSignal-Init] ✅ OneSignal initialized');
-      return true;
-    } catch (error) {
-      console.error('[OneSignal-Init] Error during init:', error);
-      return false;
-    }
-  };
-  
-  // Wait for SDK to load
+  // Wait for SDK to load and initialize it
   let checkAttempts = 0;
-  const maxChecks = 200; // 20 seconds with 100ms interval
+  const maxChecks = 300; // 30 seconds
   
-  const checkAndInit = setInterval(function() {
+  const init = setInterval(function() {
     checkAttempts++;
     
-    const OneSignal = window.OneSignal;
+    const OS = window.OneSignal;
     
-    if (!OneSignal) {
+    if (!OS) {
       if (checkAttempts >= maxChecks) {
-        clearInterval(checkAndInit);
-        console.error('[OneSignal-Init] ❌ OneSignal never loaded');
+        clearInterval(init);
+        console.error('[OneSignal] ❌ SDK not loaded after 30 seconds');
       }
       return;
     }
     
-    // If SDK has loaded and transformed from array to object
-    if (!Array.isArray(OneSignal)) {
-      clearInterval(checkAndInit);
-      console.log('[OneSignal-Init] SDK loaded (not array anymore)');
-      doInit(OneSignal);
+    // Check if it's been initialized (no longer an array or has been converted)
+    if (!Array.isArray(OS)) {
+      if (OS.initialized === false) {
+        // Not yet initialized, SDK loaded but not called init yet
+        console.log('[OneSignal] SDK loaded, calling init...');
+        try {
+          OS.init(window.OneSignalConfig);
+          console.log('[OneSignal] ✅ Init called successfully');
+        } catch (error) {
+          console.error('[OneSignal] Error calling init:', error);
+        }
+      } else {
+        console.log('[OneSignal] ✅ SDK appears to be initialized already');
+      }
+      clearInterval(init);
       return;
     }
     
-    // If it's still array, try via push after SDK script loads (after ~2-3 seconds)
-    if (Array.isArray(OneSignal) && checkAttempts > 30) {
-      // Try push callback
-      if (typeof OneSignal.push === 'function') {
-        clearInterval(checkAndInit);
-        console.log('[OneSignal-Init] Using push callback for init');
-        
-        OneSignal.push(function() {
-          console.log('[OneSignal-Init] Push callback executed');
-          doInit(window.OneSignal);
+    // Still an array - SDK loading
+    if (checkAttempts === 50) {
+      // After 5 seconds, try via push if still array
+      console.log('[OneSignal] SDK loading, trying via push...');
+      if (typeof OS.push === 'function') {
+        OS.push(() => {
+          console.log('[OneSignal] Inside push callback');
+          const instance = window.OneSignal;
+          if (instance && typeof instance.init === 'function' && !instance.initialized) {
+            try {
+              instance.init(window.OneSignalConfig);
+              console.log('[OneSignal] ✅ Init via push successful');
+            } catch (error) {
+              console.error('[OneSignal] Error in push callback:', error);
+            }
+          }
         });
-        return;
       }
     }
     
     if (checkAttempts >= maxChecks) {
-      clearInterval(checkAndInit);
-      console.error('[OneSignal-Init] ❌ OneSignal SDK not ready after 20 seconds');
-      console.log('[OneSignal-Init] OneSignal type:', typeof OneSignal);
-      console.log('[OneSignal-Init] Is array:', Array.isArray(OneSignal));
+      clearInterval(init);
+      console.error('[OneSignal] ❌ Failed to initialize after 30 seconds');
     }
   }, 100);
 })();
