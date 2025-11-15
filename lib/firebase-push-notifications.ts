@@ -25,12 +25,23 @@ function getMessagingInstance(): Messaging | null {
     return null;
   }
 
+  // Check if Service Worker is supported
+  if (!("serviceWorker" in navigator)) {
+    console.warn("[Firebase] Service Worker not supported");
+    return null;
+  }
+
   if (messagingInstance) {
     return messagingInstance;
   }
 
   try {
     const app = getFirebaseApp();
+    // Check if messaging is supported
+    if (!("Notification" in window)) {
+      console.warn("[Firebase] Notifications not supported");
+      return null;
+    }
     messagingInstance = getMessaging(app);
     return messagingInstance;
   } catch (error) {
@@ -91,6 +102,17 @@ export async function syncPushSubscription(): Promise<void> {
     }
 
     console.log("[Firebase] Syncing for user:", userId);
+
+    // Wait for Service Worker to be ready
+    if ("serviceWorker" in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        console.log("[Firebase] Service Worker ready:", registration.scope);
+      } catch (error) {
+        console.warn("[Firebase] Service Worker not ready yet:", error);
+        // Continue anyway
+      }
+    }
 
     // Get FCM token
     const messaging = getMessagingInstance();
