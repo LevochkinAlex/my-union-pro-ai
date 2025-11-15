@@ -941,13 +941,13 @@ ID документа: ${uploadedDocument.documentId}
             }
 
             const pushResponse = await fetch(ONESIGNAL_API_URL, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json; charset=utf-8",
-              Authorization: `Basic ${ONESIGNAL_API_KEY}`,
-            },
-            body: JSON.stringify(notificationPayload),
-          });
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json; charset=utf-8",
+                Authorization: `Bearer ${ONESIGNAL_API_KEY}`, // OneSignal v2 API использует Bearer токен
+              },
+              body: JSON.stringify(notificationPayload),
+            });
 
             if (pushResponse.ok) {
               const result = await pushResponse.json();

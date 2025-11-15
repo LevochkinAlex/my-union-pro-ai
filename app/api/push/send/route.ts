@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json; charset=utf-8",
-        Authorization: `Basic ${ONESIGNAL_API_KEY}`,
+        Authorization: `Bearer ${ONESIGNAL_API_KEY}`, // OneSignal v2 API использует Bearer токен
       },
       body: JSON.stringify(notificationPayload),
     });
