@@ -24,16 +24,17 @@ export default function PushNotificationInit() {
       if (typeof window !== "undefined" && window.OneSignalDeferred) {
         window.OneSignalDeferred.push(async (OneSignal: any) => {
           try {
-            const permission = await OneSignal.Notifications.getNotificationPermission();
-            console.log("[OneSignal] Notification permission:", permission);
+            // v16 API для проверки разрешения
+            const permissionStatus = Notification.permission;
+            console.log("[OneSignal] Browser notification permission:", permissionStatus);
             
-            if (permission === "granted") {
+            if (permissionStatus === "granted") {
               console.log("[OneSignal] ✅ Notifications are allowed");
               syncPushSubscription();
-            } else if (permission === "default") {
-              console.log("[OneSignal] ⚠️ Notification permission not requested yet");
+            } else if (permissionStatus === "default") {
+              console.log("[OneSignal] ⚠️ Notification permission not requested yet - need to click button");
             } else {
-              console.log("[OneSignal] ❌ Notifications are blocked");
+              console.log("[OneSignal] ❌ Notifications are blocked by browser");
             }
           } catch (error) {
             console.error("[OneSignal] Error checking permission:", error);

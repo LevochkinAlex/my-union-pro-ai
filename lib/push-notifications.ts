@@ -43,18 +43,22 @@ export async function requestPushPermission(): Promise<boolean> {
     return new Promise((resolve) => {
       window.OneSignalDeferred!.push(async (OneSignal: any) => {
         try {
-          // v16 official API
-          const permission = await OneSignal.Notifications.requestPermission();
+          // v16 official API для запроса разрешения
+          await OneSignal.Notifications.requestPermission();
           
-          if (permission) {
+          // Проверяем результат
+          const permissionStatus = Notification.permission;
+          console.log("[OneSignal] Permission status after request:", permissionStatus);
+          
+          if (permissionStatus === "granted") {
             console.log("[OneSignal] ✅ Permission granted!");
             // Синхронизируем подписку после получения разрешения
             setTimeout(() => {
               syncPushSubscription();
-            }, 1000);
+            }, 1500);
             resolve(true);
           } else {
-            console.log("[OneSignal] ❌ Permission denied");
+            console.log("[OneSignal] ❌ Permission denied or dismissed");
             resolve(false);
           }
         } catch (error: any) {
