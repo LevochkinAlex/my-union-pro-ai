@@ -82,26 +82,25 @@ export async function initializePushNotifications() {
         window.OneSignal.push(() => {
           console.log("[Push] OneSignal SDK ready");
 
-          // Set external user ID (user ID from our database)
-          // This helps us identify users in OneSignal dashboard
-          window.OneSignal.setExternalUserId?.((userId: string | null) => {
-            if (userId) {
-              console.log("[Push] External user ID set:", userId);
+          // Set up event listeners using proper OneSignal API
+          // Check if OneSignal is fully initialized before using event listeners
+          if (window.OneSignal && typeof window.OneSignal.on === "function") {
+            try {
+              window.OneSignal.on("subscriptionChange", (isSubscribed: boolean) => {
+                console.log("[Push] Subscription changed:", isSubscribed);
+                if (isSubscribed) {
+                  // Wait a bit for subscription to be fully registered
+                  setTimeout(() => {
+                    syncPushSubscription();
+                  }, 500);
+                }
+              });
+            } catch (error) {
+              console.warn("[Push] Error setting up subscriptionChange listener:", error);
             }
-          });
+          }
 
-          // Set up event listeners
-          window.OneSignal.on("subscriptionChange", (isSubscribed: boolean) => {
-            console.log("[Push] Subscription changed:", isSubscribed);
-            if (isSubscribed) {
-              // Wait a bit for subscription to be fully registered
-              setTimeout(() => {
-                syncPushSubscription();
-              }, 500);
-            }
-          });
-
-          // Also sync when OneSignal is ready
+          // Also sync when OneSignal is ready (with delay to ensure SDK is fully loaded)
           setTimeout(() => {
             syncPushSubscription();
           }, 2000);
@@ -240,7 +239,15 @@ export async function getPushSubscriptionId(): Promise<string | null> {
 
 declare global {
   interface Window {
-    OneSignal?: any;
+    OneSignal?: {
+      push: (callback: () => void) => void;
+      init: (config: any) => void;
+      on?: (event: string, callback: (data: any) => void) => void;
+      getUserId?: (callback: (userId: string | null) => void) => void;
+      isPushNotificationsEnabled?: (callback: (isEnabled: boolean) => void) => void;
+      setExternalUserId?: (userId: string, callback?: (success: boolean) => void) => void;
+      showNativePrompt?: () => Promise<string>;
+    };
   }
 }
 
