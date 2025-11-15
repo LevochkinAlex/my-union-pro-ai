@@ -946,15 +946,22 @@ ID документа: ${uploadedDocument.documentId}
             // Добавляем звук для уведомлений
             // Для веб-уведомлений звук управляется браузером
             if (user?.pushSoundEnabled !== false) {
-              // Указываем звук для уведомления
-              // Для веб-уведомлений можно использовать "default" или URL к звуковому файлу
-              notificationPayload.sound = "default";
-              // Также можно добавить параметры для звука
+              // Для веб-уведомлений используем специальные параметры
+              // chrome_web_sound и firefox_sound работают для веб-уведомлений
               notificationPayload.chrome_web_sound = "default";
               notificationPayload.firefox_sound = "default";
+              notificationPayload.safari_sound = "default";
+              // Для мобильных приложений
+              notificationPayload.sound = "default";
+              // Дополнительно указываем, что уведомление должно воспроизводить звук
+              notificationPayload.chrome_web_notification = {
+                sound: "default",
+              };
             } else {
               // Если звук отключен, отправляем без звука
               notificationPayload.sound = null;
+              notificationPayload.chrome_web_sound = null;
+              notificationPayload.firefox_sound = null;
             }
 
             const pushResponse = await fetch(ONESIGNAL_API_URL, {
