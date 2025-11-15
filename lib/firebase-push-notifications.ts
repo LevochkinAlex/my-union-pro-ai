@@ -123,7 +123,7 @@ export async function syncPushSubscription(): Promise<void> {
       
       // Wait for Service Worker to be ready
       try {
-        await registration.ready;
+        await navigator.serviceWorker.ready;
         console.log("[Firebase] Service Worker ready:", registration.scope);
       } catch (error) {
         console.warn("[Firebase] Service Worker not ready yet:", error);
