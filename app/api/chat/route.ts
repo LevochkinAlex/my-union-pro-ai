@@ -956,17 +956,26 @@ ID документа: ${uploadedDocument.documentId}
               chrome_web_icon: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/logo.png`,
             };
 
-            // Добавляем звук - это ОБЯЗАТЕЛЬНО для веб-уведомлений
+            // Добавляем звук для уведомлений
+            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
+            
             if (user?.pushSoundEnabled !== false) {
-              // OneSignal v1 API - правильный формат для звука
+              // Базовый звук для мобильных приложений
               notificationPayload.sound = "default";
-              // Для веб-уведомлений Chrome/Firefox
-              notificationPayload.chrome_web_sound = "default";
-              notificationPayload.firefox_sound = "default";
-              // Для Safari
+              
+              // Для веб-уведомлений используем URL к звуковому файлу
+              // Chrome и Firefox поддерживают звук через URL
+              notificationPayload.chrome_web_sound = `${baseUrl}/notification-sound.mp3`;
+              notificationPayload.firefox_sound = `${baseUrl}/notification-sound.mp3`;
+              // Safari использует default
               notificationPayload.safari_sound = "default";
-              // Важно: добавляем параметр для веб-уведомлений
-              notificationPayload.web_push_topic = "notification";
+              
+              // Также добавляем в data для Service Worker
+              notificationPayload.data = {
+                ...notificationPayload.data,
+                playSound: true,
+                soundUrl: `${baseUrl}/notification-sound.mp3`,
+              };
             } else {
               notificationPayload.sound = null;
               notificationPayload.chrome_web_sound = null;
