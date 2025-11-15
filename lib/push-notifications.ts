@@ -178,40 +178,51 @@ export async function syncPushSubscription() {
           // Try to get player ID
           if (typeof OneSignalInstance.getUserId === "function") {
             try {
+              console.log("[Push] Calling getUserId...");
               OneSignalInstance.getUserId((playerId: string | null) => {
+                console.log("[Push] getUserId callback called with:", playerId);
                 if (!playerId) {
                   console.warn("[Push] No player ID available - user may not be subscribed");
+                  console.log("[Push] This usually means the user hasn't granted notification permission yet");
                   resolve();
                   return;
                 }
 
+                console.log("[Push] Player ID found:", playerId);
+
                 // Check if notifications are enabled (optional check)
                 if (typeof OneSignalInstance.isPushNotificationsEnabled === "function") {
                   try {
+                    console.log("[Push] Checking if push notifications are enabled...");
                     OneSignalInstance.isPushNotificationsEnabled((isEnabled: boolean) => {
+                      console.log("[Push] Push notifications enabled:", isEnabled);
                       if (!isEnabled) {
                         console.log("[Push] Push notifications not enabled by user");
                         resolve();
                         return;
                       }
+                      console.log("[Push] Notifications enabled, syncing to backend...");
                       syncToBackend(playerId);
                     });
                   } catch (error) {
                     console.warn("[Push] Error checking push notifications enabled:", error);
                     // Sync anyway if check fails
+                    console.log("[Push] Sync anyway after check error...");
                     syncToBackend(playerId);
                   }
                 } else {
                   // If check method not available, sync anyway
+                  console.log("[Push] isPushNotificationsEnabled not available, syncing anyway...");
                   syncToBackend(playerId);
                 }
               });
             } catch (error) {
-              console.warn("[Push] Error getting user ID:", error);
+              console.error("[Push] Error getting user ID:", error);
               resolve();
             }
           } else {
             console.warn("[Push] getUserId method not available");
+            console.log("[Push] OneSignalInstance methods:", Object.keys(OneSignalInstance));
             resolve();
           }
         });
