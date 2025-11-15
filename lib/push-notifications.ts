@@ -1,5 +1,6 @@
 /**
  * OneSignal v16 Push Notifications
+ * Uses official OneSignalDeferred API
  */
 
 export async function initializePushNotifications(): Promise<boolean> {
@@ -33,18 +34,24 @@ export async function requestPushPermission(): Promise<boolean> {
   try {
     console.log("[OneSignal] Requesting push permission...");
     
-    // v16 uses registerForPushNotifications which returns a promise
-    if (typeof OneSignal.registerForPushNotifications === "function") {
+    // v16 official API for requesting notifications
+    if (typeof OneSignal.Notifications?.requestPermission === "function") {
+      // Modern v16 API
+      await OneSignal.Notifications.requestPermission();
+      console.log("[OneSignal] ✅ Permission granted via Notifications API");
+      syncPushSubscription();
+      return true;
+    } else if (typeof OneSignal.registerForPushNotifications === "function") {
+      // Fallback
       await OneSignal.registerForPushNotifications();
-      console.log("[OneSignal] ✅ Permission granted");
+      console.log("[OneSignal] ✅ Permission granted via registerForPushNotifications");
       syncPushSubscription();
       return true;
     } else {
-      console.warn("[OneSignal] registerForPushNotifications not available");
+      console.warn("[OneSignal] No permission request method available");
       return false;
     }
   } catch (error: any) {
-    // In v16, it might throw errors on localhost or non-HTTPS
     if (error?.message?.includes("https://")) {
       console.warn("[OneSignal] HTTPS required for push notifications");
     } else {
@@ -85,7 +92,15 @@ export async function syncPushSubscription(): Promise<void> {
     console.log("[OneSignal] Syncing for user:", userId);
 
     // Set external user ID
-    if (typeof OneSignal.setExternalUserId === "function") {
+    if (typeof OneSignal.login === "function") {
+      try {
+        // v16 uses login() to set external ID
+        OneSignal.login(userId);
+        console.log("[OneSignal] External user ID set via login");
+      } catch (error) {
+        console.warn("[OneSignal] Error with login:", error);
+      }
+    } else if (typeof OneSignal.setExternalUserId === "function") {
       try {
         OneSignal.setExternalUserId(userId);
         console.log("[OneSignal] External user ID set");
@@ -94,37 +109,29 @@ export async function syncPushSubscription(): Promise<void> {
       }
     }
 
-    // Get player ID - v16 uses async method
-    if (typeof OneSignal.User !== "undefined" && OneSignal.User?.PushSubscription?.id) {
-      // v16 has User.PushSubscription API
-      const playerId = OneSignal.User.PushSubscription.id;
+    // Get subscription ID
+    let playerId: string | null = null;
+
+    // Try v16 official API first
+    if (OneSignal.User?.PushSubscription?.id) {
+      playerId = OneSignal.User.PushSubscription.id;
       console.log("[OneSignal] Player ID (v16 User API):", playerId);
-
-      if (!playerId) {
-        console.log("[OneSignal] No player ID - user not subscribed yet");
-        return;
-      }
-
-      // Save subscription to backend
-      await saveSubscription(playerId);
     } else if (typeof OneSignal.getUserId === "function") {
-      // Fallback to older API
       try {
-        const playerId = await OneSignal.getUserId();
-        console.log("[OneSignal] Player ID:", playerId);
-
-        if (!playerId) {
-          console.log("[OneSignal] No player ID - user not subscribed yet");
-          return;
-        }
-
-        await saveSubscription(playerId);
+        playerId = await OneSignal.getUserId();
+        console.log("[OneSignal] Player ID (getUserId):", playerId);
       } catch (error) {
         console.error("[OneSignal] Error getting player ID:", error);
       }
-    } else {
-      console.warn("[OneSignal] No method available to get player ID");
     }
+
+    if (!playerId) {
+      console.log("[OneSignal] No player ID - user not subscribed yet");
+      return;
+    }
+
+    // Save subscription to backend
+    await saveSubscription(playerId);
   } catch (error) {
     console.error("[OneSignal] Sync error:", error);
   }
