@@ -91,24 +91,6 @@ export async function syncPushSubscription(): Promise<void> {
 
     console.log("[OneSignal] Syncing for user:", userId);
 
-    // Set external user ID
-    if (typeof OneSignal.login === "function") {
-      try {
-        // v16 uses login() to set external ID
-        OneSignal.login(userId);
-        console.log("[OneSignal] External user ID set via login");
-      } catch (error) {
-        console.warn("[OneSignal] Error with login:", error);
-      }
-    } else if (typeof OneSignal.setExternalUserId === "function") {
-      try {
-        OneSignal.setExternalUserId(userId);
-        console.log("[OneSignal] External user ID set");
-      } catch (error) {
-        console.warn("[OneSignal] Error setting external user ID:", error);
-      }
-    }
-
     // Get subscription ID
     let playerId: string | null = null;
 
