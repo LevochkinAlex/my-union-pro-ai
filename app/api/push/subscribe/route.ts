@@ -57,14 +57,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    console.log("[push/subscribe] Subscription saved:", {
+    console.log("[push/subscribe] ✅ Subscription saved:", {
       userId: session.user.id,
       oneSignalId,
+      subscriptionId: subscription.id,
+      existing: !!existing,
     });
 
     return NextResponse.json({
       success: true,
-      subscription,
+      subscription: {
+        id: subscription.id,
+        oneSignalId: subscription.oneSignalId,
+        subscriptionId: subscription.subscriptionId,
+        lastSyncAt: subscription.lastSyncAt,
+      },
     });
   } catch (error) {
     console.error("[push/subscribe] Error:", error);
