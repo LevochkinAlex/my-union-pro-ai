@@ -119,10 +119,29 @@ export async function syncPushSubscription() {
       return;
     }
 
-    // Use OneSignal.push to ensure SDK is ready
-    console.log("[Push] About to call OneSignal.push()...");
+    // Try to access OneSignal directly first, then use push() as fallback
+    console.log("[Push] Checking OneSignal availability...");
+    console.log("[Push] OneSignal type:", typeof OneSignal);
+    console.log("[Push] OneSignal is array:", Array.isArray(OneSignal));
+    
     return new Promise<void>((resolve) => {
+      // Check if OneSignal is already initialized (not an array)
+      if (typeof OneSignal === "object" && !Array.isArray(OneSignal) && OneSignal !== null) {
+        console.log("[Push] OneSignal appears to be initialized, accessing directly");
+        trySyncDirectly(OneSignal, userId, resolve);
+        return;
+      }
+      
+      // If OneSignal is an array, use push() method
+      console.log("[Push] OneSignal is array, using push() method...");
       try {
+        if (typeof OneSignal.push !== "function") {
+          console.error("[Push] OneSignal.push is not a function!");
+          console.log("[Push] OneSignal:", OneSignal);
+          resolve();
+          return;
+        }
+        
         OneSignal.push(() => {
           console.log("[Push] Inside OneSignal.push() callback");
           const OneSignalInstance = (window as any).OneSignal;
@@ -137,24 +156,41 @@ export async function syncPushSubscription() {
           }
           
           console.log("[Push] OneSignalInstance methods:", Object.keys(OneSignalInstance).slice(0, 10));
+          
+          trySyncDirectly(OneSignalInstance, userId, resolve);
+        });
+      } catch (error) {
+        console.error("[Push] Error in OneSignal.push():", error);
+        resolve();
+      }
+    });
+  } catch (error) {
+    console.error("[Push] Error syncing subscription:", error);
+  }
+}
 
-          // Set external user ID first (non-blocking)
-          if (userId && typeof OneSignalInstance.setExternalUserId === "function") {
-            try {
-              OneSignalInstance.setExternalUserId(userId, (success: boolean) => {
-                if (success) {
-                  console.log("[Push] External user ID set:", userId);
-                } else {
-                  console.warn("[Push] Failed to set external user ID");
-                }
-              });
-            } catch (error) {
-              console.warn("[Push] Error setting external user ID:", error);
-            }
+// Helper function to try syncing directly
+function trySyncDirectly(OneSignalInstance: any, userId: string, resolve: () => void) {
+  try {
+    console.log("[Push] Trying to sync directly with OneSignalInstance");
+
+    // Set external user ID first (non-blocking)
+    if (userId && typeof OneSignalInstance.setExternalUserId === "function") {
+      try {
+        OneSignalInstance.setExternalUserId(userId, (success: boolean) => {
+          if (success) {
+            console.log("[Push] External user ID set:", userId);
+          } else {
+            console.warn("[Push] Failed to set external user ID");
           }
+        });
+      } catch (error) {
+        console.warn("[Push] Error setting external user ID:", error);
+      }
+    }
 
-          // Helper function to sync subscription to backend
-          const syncToBackend = (playerId: string) => {
+    // Helper function to sync subscription to backend
+    const syncToBackend = (playerId: string) => {
             fetch("/api/push/subscribe", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -182,64 +218,59 @@ export async function syncPushSubscription() {
               });
           };
 
-          // Try to get player ID
-          if (typeof OneSignalInstance.getUserId === "function") {
+    // Try to get player ID
+    if (typeof OneSignalInstance.getUserId === "function") {
+      try {
+        console.log("[Push] Calling getUserId...");
+        OneSignalInstance.getUserId((playerId: string | null) => {
+          console.log("[Push] getUserId callback called with:", playerId);
+          if (!playerId) {
+            console.warn("[Push] No player ID available - user may not be subscribed");
+            console.log("[Push] This usually means the user hasn't granted notification permission yet");
+            resolve();
+            return;
+          }
+
+          console.log("[Push] Player ID found:", playerId);
+
+          // Check if notifications are enabled (optional check)
+          if (typeof OneSignalInstance.isPushNotificationsEnabled === "function") {
             try {
-              console.log("[Push] Calling getUserId...");
-              OneSignalInstance.getUserId((playerId: string | null) => {
-                console.log("[Push] getUserId callback called with:", playerId);
-                if (!playerId) {
-                  console.warn("[Push] No player ID available - user may not be subscribed");
-                  console.log("[Push] This usually means the user hasn't granted notification permission yet");
+              console.log("[Push] Checking if push notifications are enabled...");
+              OneSignalInstance.isPushNotificationsEnabled((isEnabled: boolean) => {
+                console.log("[Push] Push notifications enabled:", isEnabled);
+                if (!isEnabled) {
+                  console.log("[Push] Push notifications not enabled by user");
                   resolve();
                   return;
                 }
-
-                console.log("[Push] Player ID found:", playerId);
-
-                // Check if notifications are enabled (optional check)
-                if (typeof OneSignalInstance.isPushNotificationsEnabled === "function") {
-                  try {
-                    console.log("[Push] Checking if push notifications are enabled...");
-                    OneSignalInstance.isPushNotificationsEnabled((isEnabled: boolean) => {
-                      console.log("[Push] Push notifications enabled:", isEnabled);
-                      if (!isEnabled) {
-                        console.log("[Push] Push notifications not enabled by user");
-                        resolve();
-                        return;
-                      }
-                      console.log("[Push] Notifications enabled, syncing to backend...");
-                      syncToBackend(playerId);
-                    });
-                  } catch (error) {
-                    console.warn("[Push] Error checking push notifications enabled:", error);
-                    // Sync anyway if check fails
-                    console.log("[Push] Sync anyway after check error...");
-                    syncToBackend(playerId);
-                  }
-                } else {
-                  // If check method not available, sync anyway
-                  console.log("[Push] isPushNotificationsEnabled not available, syncing anyway...");
-                  syncToBackend(playerId);
-                }
+                console.log("[Push] Notifications enabled, syncing to backend...");
+                syncToBackend(playerId);
               });
             } catch (error) {
-              console.error("[Push] Error getting user ID:", error);
-              resolve();
+              console.warn("[Push] Error checking push notifications enabled:", error);
+              // Sync anyway if check fails
+              console.log("[Push] Sync anyway after check error...");
+              syncToBackend(playerId);
             }
           } else {
-            console.warn("[Push] getUserId method not available");
-            console.log("[Push] OneSignalInstance methods:", Object.keys(OneSignalInstance));
-            resolve();
+            // If check method not available, sync anyway
+            console.log("[Push] isPushNotificationsEnabled not available, syncing anyway...");
+            syncToBackend(playerId);
           }
         });
       } catch (error) {
-        console.error("[Push] Error in push queue:", error);
+        console.error("[Push] Error getting user ID:", error);
         resolve();
       }
-    });
+    } else {
+      console.warn("[Push] getUserId method not available");
+      console.log("[Push] OneSignalInstance methods:", Object.keys(OneSignalInstance));
+      resolve();
+    }
   } catch (error) {
-    console.error("[Push] Error syncing subscription:", error);
+    console.error("[Push] Error in trySyncDirectly:", error);
+    resolve();
   }
 }
 
