@@ -240,14 +240,70 @@ export async function requestPushPermission(): Promise<boolean> {
     return false;
   }
 
-  try {
-    const permission = await OneSignal.showNativePrompt?.();
-    console.log("[Push] Permission requested:", permission);
-    return permission === "granted";
-  } catch (error) {
-    console.error("[Push] Error requesting permission:", error);
-    return false;
-  }
+  return new Promise<boolean>((resolve) => {
+    try {
+      OneSignal.push(() => {
+        const OneSignalInstance = (window as any).OneSignal;
+        
+        if (!OneSignalInstance) {
+          console.warn("[Push] OneSignal instance not available");
+          resolve(false);
+          return;
+        }
+
+        // Check if already subscribed
+        if (typeof OneSignalInstance.getUserId === "function") {
+          OneSignalInstance.getUserId((playerId: string | null) => {
+            if (playerId) {
+              console.log("[Push] Already subscribed with player ID:", playerId);
+              resolve(true);
+              return;
+            }
+
+            // Request permission using registerForPushNotifications
+            if (typeof OneSignalInstance.registerForPushNotifications === "function") {
+              OneSignalInstance.registerForPushNotifications()
+                .then(() => {
+                  console.log("[Push] Permission granted");
+                  // Sync subscription after permission is granted
+                  setTimeout(() => {
+                    syncPushSubscription();
+                  }, 1000);
+                  resolve(true);
+                })
+                .catch((error: any) => {
+                  console.error("[Push] Permission denied or error:", error);
+                  resolve(false);
+                });
+            } else if (typeof OneSignalInstance.showSlidedownPrompt === "function") {
+              // Alternative method: show slidedown prompt
+              OneSignalInstance.showSlidedownPrompt()
+                .then(() => {
+                  console.log("[Push] Slidedown prompt shown");
+                  setTimeout(() => {
+                    syncPushSubscription();
+                  }, 1000);
+                  resolve(true);
+                })
+                .catch((error: any) => {
+                  console.error("[Push] Error showing prompt:", error);
+                  resolve(false);
+                });
+            } else {
+              console.warn("[Push] No method available to request permission");
+              resolve(false);
+            }
+          });
+        } else {
+          console.warn("[Push] getUserId method not available");
+          resolve(false);
+        }
+      });
+    } catch (error) {
+      console.error("[Push] Error requesting permission:", error);
+      resolve(false);
+    }
+  });
 }
 
 /**
