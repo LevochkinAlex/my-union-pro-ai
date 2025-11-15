@@ -898,28 +898,50 @@ ID документа: ${uploadedDocument.documentId}
         });
 
         if (userSubs.length > 0) {
-          const recipientIds = userSubs.map((sub) => sub.oneSignalId);
-          const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
-          
-          const notificationPayload = {
-            app_id: ONESIGNAL_APP_ID,
-            include_external_user_ids: recipientIds,
-            headings: { en: bot.name || "AI Assistant", ru: bot.name || "AI Помощник" },
-            contents: { 
-              en: aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : ""),
-              ru: aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : ""),
+          // Проверяем настройки пользователя для push уведомлений
+          const user = await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: {
+              pushNotificationsEnabled: true,
+              pushSoundEnabled: true,
             },
-            data: {
-              type: "chat_message",
-              chatBotId: bot.id,
-              sessionId: chatSession.id,
-              url: `/dashboard?session=${chatSession.id}`,
-            },
-            priority: 10,
-            ttl: 86400, // 24 hours
-          };
+          });
 
-          const pushResponse = await fetch(ONESIGNAL_API_URL, {
+          // Если push уведомления отключены, не отправляем
+          if (user && user.pushNotificationsEnabled === false) {
+            console.log("[chat] Push notifications disabled for user");
+          } else {
+            const recipientIds = userSubs.map((sub) => sub.oneSignalId);
+            const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
+            
+            const notificationPayload: Record<string, any> = {
+              app_id: ONESIGNAL_APP_ID,
+              include_external_user_ids: recipientIds,
+              headings: { en: bot.name || "AI Assistant", ru: bot.name || "AI Помощник" },
+              contents: { 
+                en: aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : ""),
+                ru: aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : ""),
+              },
+              data: {
+                type: "chat_message",
+                chatBotId: bot.id,
+                sessionId: chatSession.id,
+                url: `/dashboard?session=${chatSession.id}`,
+              },
+              priority: 10,
+              ttl: 86400, // 24 hours
+            };
+
+            // Добавляем звук, если включен
+            if (user?.pushSoundEnabled !== false) {
+              // Используем приятный звук уведомления (можно использовать default или кастомный)
+              notificationPayload.sound = "default"; // Или можно указать URL к кастомному звуку
+            } else {
+              // Если звук отключен, отправляем без звука
+              notificationPayload.sound = null;
+            }
+
+            const pushResponse = await fetch(ONESIGNAL_API_URL, {
             method: "POST",
             headers: {
               "Content-Type": "application/json; charset=utf-8",
@@ -928,15 +950,17 @@ ID документа: ${uploadedDocument.documentId}
             body: JSON.stringify(notificationPayload),
           });
 
-          if (pushResponse.ok) {
-            const result = await pushResponse.json();
-            console.log("[chat] ✅ Push notification sent:", {
-              notificationId: result.id,
-              recipients: recipientIds.length,
-            });
-          } else {
-            const errorText = await pushResponse.text();
-            console.warn("[chat] ⚠️ Push notification failed:", errorText);
+            if (pushResponse.ok) {
+              const result = await pushResponse.json();
+              console.log("[chat] ✅ Push notification sent:", {
+                notificationId: result.id,
+                recipients: recipientIds.length,
+                soundEnabled: user?.pushSoundEnabled !== false,
+              });
+            } else {
+              const errorText = await pushResponse.text();
+              console.warn("[chat] ⚠️ Push notification failed:", errorText);
+            }
           }
         } else {
           console.log("[chat] ℹ️ No push subscriptions found for user");

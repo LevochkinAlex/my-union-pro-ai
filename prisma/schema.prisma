@@ -87,6 +87,12 @@ model User {
   // Push Notifications
   pushSubscriptions PushSubscription[]
 
+  // Настройки уведомлений
+  pushNotificationsEnabled Boolean @default(true) // Включены ли push уведомления
+  pushSoundEnabled         Boolean @default(true) // Включен ли звук в push уведомлениях
+  emailBotNotifications    Boolean @default(false) // Email уведомления от бота (по умолчанию выключено)
+  emailAppealNotifications  Boolean @default(true) // Email уведомления по обращениям (по умолчанию включено)
+
   // System Logs
   systemLogs SystemLog[]
   resolvedLogs SystemLog[] @relation("ResolvedLogs")
