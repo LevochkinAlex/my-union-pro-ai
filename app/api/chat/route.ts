@@ -932,12 +932,18 @@ ID документа: ${uploadedDocument.documentId}
               ttl: 86400, // 24 hours
             };
 
-            // Добавляем звук для веб-уведомлений
-            // Для веб-уведомлений звук управляется браузером, но можно указать в payload
+            // Добавляем звук для уведомлений
+            // Для веб-уведомлений звук управляется браузером
             if (user?.pushSoundEnabled !== false) {
-              // Для веб-уведомлений используем стандартный звук браузера
-              // OneSignal автоматически использует звук браузера, если не указан другой
+              // Указываем звук для уведомления
+              // Для веб-уведомлений можно использовать "default" или URL к звуковому файлу
               notificationPayload.sound = "default";
+              // Также можно добавить параметры для звука
+              notificationPayload.chrome_web_sound = "default";
+              notificationPayload.firefox_sound = "default";
+            } else {
+              // Если звук отключен, отправляем без звука
+              notificationPayload.sound = null;
             }
 
             const pushResponse = await fetch(ONESIGNAL_API_URL, {

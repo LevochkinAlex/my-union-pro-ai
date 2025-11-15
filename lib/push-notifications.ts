@@ -41,87 +41,80 @@ export async function initializePushNotifications() {
   }
 
   try {
-    // Initialize OneSignal using the array pattern
-    // This is the recommended way to initialize OneSignal SDK
-    (window as any).OneSignal = (window as any).OneSignal || [];
-
-    // Load OneSignal SDK script first
-    const script = document.createElement("script");
-    script.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
-    script.async = true;
-
-    script.onload = () => {
-      console.log("[Push] OneSignal SDK script loaded");
+    // OneSignal SDK should already be loaded via Script component in layout
+    // Just initialize it when ready
+    const checkAndInit = () => {
+      const OneSignal = (window as any).OneSignal;
       
-      // Wait a bit for SDK to process the queue and initialize
-      setTimeout(() => {
-        // Use push queue to ensure SDK is ready
-        (window as any).OneSignal.push(() => {
-          const OneSignal = (window as any).OneSignal;
-          
-          if (!OneSignal) {
-            console.error("[Push] OneSignal not available after load");
-            return;
-          }
+      if (!OneSignal) {
+        console.warn("[Push] OneSignal not available yet, retrying...");
+        setTimeout(checkAndInit, 500);
+        return false;
+      }
 
-          // Initialize OneSignal with config
-          if (typeof OneSignal.init === "function") {
-            try {
-              OneSignal.init({
-                appId: ONESIGNAL_APP_ID,
-                allowLocalhostAsSecureOrigin: true,
-                serviceWorkerPath: "/OneSignalSDKWorker.js",
-                serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
-                promptOptions: {
-                  slidedown: {
-                    prompts: [
-                      {
-                        type: "push",
-                        autoPrompt: true,
-                        text: {
-                          actionMessage:
-                            "Получайте уведомления о новых сообщениях от AI",
-                          acceptButton: "Разрешить",
-                          cancelButton: "Отклонить",
-                        },
-                        delay: {
-                          pageViews: 1,
-                          seconds: 10,
-                        },
+      // Use push queue to ensure SDK is ready
+      OneSignal.push(() => {
+        const OneSignalInstance = (window as any).OneSignal;
+        
+        if (!OneSignalInstance) {
+          console.error("[Push] OneSignal not available in push queue");
+          return;
+        }
+
+        // Initialize OneSignal with config
+        if (typeof OneSignalInstance.init === "function") {
+          try {
+            OneSignalInstance.init({
+              appId: ONESIGNAL_APP_ID,
+              allowLocalhostAsSecureOrigin: true,
+              serviceWorkerPath: "/OneSignalSDKWorker.js",
+              serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
+              promptOptions: {
+                slidedown: {
+                  prompts: [
+                    {
+                      type: "push",
+                      autoPrompt: true,
+                      text: {
+                        actionMessage:
+                          "Получайте уведомления о новых сообщениях от AI",
+                        acceptButton: "Разрешить",
+                        cancelButton: "Отклонить",
                       },
-                    ],
-                  },
+                      delay: {
+                        pageViews: 1,
+                        seconds: 10,
+                      },
+                    },
+                  ],
                 },
-              });
+              },
+            });
 
-              console.log("[Push] OneSignal.init called successfully");
+            console.log("[Push] OneSignal.init called successfully");
 
-              // Wait longer for SDK to fully initialize all methods
-              // Don't use .on() method as it may not be available immediately
-              // Instead, periodically check subscription status
-              setTimeout(() => {
+            // Wait for SDK to fully initialize
+            setTimeout(() => {
+              syncPushSubscription();
+              
+              // Set up periodic sync (every 30 seconds)
+              setInterval(() => {
                 syncPushSubscription();
-                
-                // Set up periodic sync (every 30 seconds) instead of event listener
-                setInterval(() => {
-                  syncPushSubscription();
-                }, 30000);
-              }, 3000);
-            } catch (error) {
-              console.error("[Push] Error initializing OneSignal:", error);
-            }
-          } else {
-            console.error("[Push] OneSignal.init is not a function. OneSignal object:", OneSignal);
+              }, 30000);
+            }, 3000);
+          } catch (error) {
+            console.error("[Push] Error initializing OneSignal:", error);
           }
-        });
-      }, 500);
+        } else {
+          console.error("[Push] OneSignal.init is not a function. OneSignal object:", OneSignalInstance);
+        }
+      });
+      
+      return true;
     };
 
-    script.onerror = () => {
-      console.error("[Push] Failed to load OneSignal SDK");
-    };
-
-    document.head.appendChild(script);
+    // Wait a bit for SDK to be loaded from Script component
+    setTimeout(checkAndInit, 1000);
     return true;
   } catch (error) {
     console.error("[Push] Error initializing OneSignal:", error);
@@ -138,15 +131,14 @@ export async function syncPushSubscription() {
     return;
   }
 
-  const OneSignal = (window as any).OneSignal;
-  if (!OneSignal) {
-    console.warn("[Push] OneSignal not available");
-    return;
-  }
-
   try {
-    // Get user ID from session
+    // Get user ID from session first
     const sessionResponse = await fetch("/api/auth/session");
+    if (!sessionResponse.ok) {
+      console.warn("[Push] Failed to get session");
+      return;
+    }
+    
     const session = await sessionResponse.json();
     const userId = session?.user?.id;
 
@@ -155,59 +147,138 @@ export async function syncPushSubscription() {
       return;
     }
 
+    // Try to get OneSignal instance
+    const OneSignal = (window as any).OneSignal;
+    if (!OneSignal) {
+      console.warn("[Push] OneSignal not available, will retry later");
+      return;
+    }
+
     // Use OneSignal.push to ensure SDK is ready
     return new Promise<void>((resolve) => {
-      window.OneSignal.push(() => {
-        // Set external user ID first
-        if (userId && window.OneSignal.setExternalUserId) {
-          window.OneSignal.setExternalUserId(userId, (success: boolean) => {
-            if (success) {
-              console.log("[Push] External user ID set:", userId);
-            } else {
-              console.warn("[Push] Failed to set external user ID");
-            }
-          });
-        }
-
-        OneSignal.getUserId((playerId: string | null) => {
-          if (!playerId) {
-            console.warn("[Push] No player ID available - user may not be subscribed");
+      try {
+        OneSignal.push(() => {
+          const OneSignalInstance = (window as any).OneSignal;
+          
+          if (!OneSignalInstance) {
+            console.warn("[Push] OneSignal instance not available in push queue");
             resolve();
             return;
           }
 
-          // Get subscription status
-          OneSignal.isPushNotificationsEnabled((isEnabled: boolean) => {
-            if (!isEnabled) {
-              console.log("[Push] Push notifications not enabled by user");
-              resolve();
-              return;
-            }
-
-            // Send to backend to store
-            fetch("/api/push/subscribe", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                oneSignalId: playerId,
-                subscriptionId: playerId, // OneSignal uses playerId as subscriptionId
-              }),
-            })
-              .then((response) => {
-                if (response.ok) {
-                  console.log("[Push] Subscription synced:", playerId);
+          // Set external user ID first
+          if (userId && typeof OneSignalInstance.setExternalUserId === "function") {
+            try {
+              OneSignalInstance.setExternalUserId(userId, (success: boolean) => {
+                if (success) {
+                  console.log("[Push] External user ID set:", userId);
                 } else {
-                  console.error("[Push] Failed to sync subscription:", response.statusText);
+                  console.warn("[Push] Failed to set external user ID");
                 }
-                resolve();
-              })
-              .catch((error) => {
-                console.error("[Push] Error syncing subscription:", error);
-                resolve();
               });
-          });
+            } catch (error) {
+              console.warn("[Push] Error setting external user ID:", error);
+            }
+          }
+
+          // Get player ID
+          if (typeof OneSignalInstance.getUserId === "function") {
+            try {
+              OneSignalInstance.getUserId((playerId: string | null) => {
+                if (!playerId) {
+                  console.warn("[Push] No player ID available - user may not be subscribed");
+                  resolve();
+                  return;
+                }
+
+                // Get subscription status
+                if (typeof OneSignalInstance.isPushNotificationsEnabled === "function") {
+                  try {
+                    OneSignalInstance.isPushNotificationsEnabled((isEnabled: boolean) => {
+                      if (!isEnabled) {
+                        console.log("[Push] Push notifications not enabled by user");
+                        resolve();
+                        return;
+                      }
+
+                      // Send to backend to store
+                      fetch("/api/push/subscribe", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          oneSignalId: playerId,
+                          subscriptionId: playerId,
+                        }),
+                      })
+                        .then(async (response) => {
+                          if (response.ok) {
+                            const data = await response.json();
+                            console.log("[Push] ✅ Subscription synced:", {
+                              playerId,
+                              subscriptionId: data.subscription?.id,
+                            });
+                          } else {
+                            const errorText = await response.text();
+                            console.error("[Push] Failed to sync subscription:", response.status, errorText);
+                          }
+                          resolve();
+                        })
+                        .catch((error) => {
+                          console.error("[Push] Error syncing subscription:", error);
+                          resolve();
+                        });
+                    });
+                  } catch (error) {
+                    console.warn("[Push] Error checking push notifications enabled:", error);
+                    // Try to sync anyway
+                    fetch("/api/push/subscribe", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        oneSignalId: playerId,
+                        subscriptionId: playerId,
+                      }),
+                    })
+                      .then(async (response) => {
+                        if (response.ok) {
+                          console.log("[Push] ✅ Subscription synced (without enabled check):", playerId);
+                        }
+                        resolve();
+                      })
+                      .catch(() => resolve());
+                  }
+                } else {
+                  // If isPushNotificationsEnabled is not available, try to sync anyway
+                  fetch("/api/push/subscribe", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      oneSignalId: playerId,
+                      subscriptionId: playerId,
+                    }),
+                  })
+                    .then(async (response) => {
+                      if (response.ok) {
+                        console.log("[Push] ✅ Subscription synced (without enabled check):", playerId);
+                      }
+                      resolve();
+                    })
+                    .catch(() => resolve());
+                }
+              });
+            } catch (error) {
+              console.warn("[Push] Error getting user ID:", error);
+              resolve();
+            }
+          } else {
+            console.warn("[Push] getUserId method not available");
+            resolve();
+          }
         });
-      });
+      } catch (error) {
+        console.error("[Push] Error in push queue:", error);
+        resolve();
+      }
     });
   } catch (error) {
     console.error("[Push] Error syncing subscription:", error);
