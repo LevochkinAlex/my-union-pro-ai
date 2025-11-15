@@ -928,16 +928,23 @@ ID документа: ${uploadedDocument.documentId}
             const notificationPayload: Record<string, any> = {
               app_id: ONESIGNAL_APP_ID,
               include_player_ids: recipientIds,
-              headings: { en: bot.name || "AI Assistant", ru: bot.name || "AI Помощник" },
+              headings: { 
+                en: bot.name || "AI Assistant", 
+                ru: bot.name || "AI Помощник" 
+              },
               contents: { 
                 en: aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : ""),
                 ru: aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : ""),
               },
-              // Важно для веб-уведомлений
-              web_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/dashboard?session=${chatSession.id}`,
-              ios_attachments: { id: "icon" },
-              big_picture: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/logo.png`,
-              large_icon: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/logo.png`,
+              // Параметры для веб-уведомлений
+              url: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/dashboard?session=${chatSession.id}`,
+              web_buttons: [
+                {
+                  id: "id1",
+                  text: "Открыть",
+                  url: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/dashboard?session=${chatSession.id}`,
+                }
+              ],
               data: {
                 type: "chat_message",
                 chatBotId: bot.id,
@@ -945,25 +952,30 @@ ID документа: ${uploadedDocument.documentId}
               },
               priority: 10,
               ttl: 86400,
+              // ВАЖНО: звук должен быть явно указан
+              chrome_web_icon: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/logo.png`,
             };
 
-            // Добавляем звук для уведомлений
+            // Добавляем звук - это ОБЯЗАТЕЛЬНО для веб-уведомлений
             if (user?.pushSoundEnabled !== false) {
-              // Для веб-уведомлений (Chrome, Firefox, Safari)
-              notificationPayload.chrome_web_sound = "/notification-sound.mp3";
-              notificationPayload.firefox_sound = "/notification-sound.mp3";
-              notificationPayload.safari_sound = "default";
-              // Для мобильных приложений
+              // OneSignal v1 API использует "sound" для веб-уведомлений
+              // Нужно просто указать "default" или путь к файлу
+              notificationPayload.chrome_web_sound = "default";
+              notificationPayload.firefox_sound = "default";
               notificationPayload.sound = "default";
-              // Дополнительно для веб-уведомлений
-              notificationPayload.web_push_topic = "notification_received";
+              notificationPayload.adm_small_icon = "icon_1";
+              notificationPayload.adm_sound = "default";
             } else {
-              // Если звук отключен, отправляем без звука
               notificationPayload.chrome_web_sound = null;
               notificationPayload.firefox_sound = null;
-              notificationPayload.safari_sound = null;
               notificationPayload.sound = null;
             }
+
+            console.log("[chat] 📢 Notification payload:", {
+              recipients: recipientIds.length,
+              sound: notificationPayload.chrome_web_sound,
+              url: notificationPayload.url,
+            });
 
             const pushResponse = await fetch(ONESIGNAL_API_URL, {
               method: "POST",

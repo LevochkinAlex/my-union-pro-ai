@@ -42,6 +42,8 @@ export default function RootLayout({
                       await OneSignal.init({
                         appId: "${ONESIGNAL_APP_ID}",
                         allowLocalhostAsSecureOrigin: true,
+                        serviceWorkerPath: "/OneSignalSDKWorker.js",
+                        serviceWorkerUpdaterPath: "/OneSignalSDKWorker.js",
                         notifyButton: {
                           enable: true,
                         },
