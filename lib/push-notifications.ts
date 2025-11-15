@@ -42,16 +42,18 @@ export async function initializePushNotifications() {
 
   try {
     // Dynamically load OneSignal script
-    window.OneSignal = window.OneSignal || [];
+    // OneSignal SDK uses array pattern for initialization
+    (window as any).OneSignal = (window as any).OneSignal || [];
     const script = document.createElement("script");
     script.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
     script.async = true;
 
     script.onload = () => {
-      window.OneSignal = window.OneSignal || [];
+      // OneSignal SDK initializes itself, we just need to use it
+      const OneSignal = (window as any).OneSignal;
 
-      if (window.OneSignal && typeof window.OneSignal.init === "function") {
-        window.OneSignal.init({
+      if (OneSignal && typeof OneSignal.init === "function") {
+        OneSignal.init({
           appId: ONESIGNAL_APP_ID,
           allowLocalhostAsSecureOrigin: true,
           serviceWorkerPath: "/OneSignalSDKWorker.js",
@@ -79,14 +81,14 @@ export async function initializePushNotifications() {
         });
 
         // Wait for OneSignal to be ready
-        window.OneSignal.push(() => {
+        OneSignal.push(() => {
           console.log("[Push] OneSignal SDK ready");
 
           // Set up event listeners using proper OneSignal API
           // Check if OneSignal is fully initialized before using event listeners
-          if (window.OneSignal && typeof window.OneSignal.on === "function") {
+          if (OneSignal && typeof OneSignal.on === "function") {
             try {
-              window.OneSignal.on("subscriptionChange", (isSubscribed: boolean) => {
+              OneSignal.on("subscriptionChange", (isSubscribed: boolean) => {
                 console.log("[Push] Subscription changed:", isSubscribed);
                 if (isSubscribed) {
                   // Wait a bit for subscription to be fully registered
@@ -157,7 +159,7 @@ export async function syncPushSubscription() {
           });
         }
 
-        window.OneSignal.getUserId((playerId: string | null) => {
+        OneSignal.getUserId((playerId: string | null) => {
           if (!playerId) {
             console.warn("[Push] No player ID available - user may not be subscribed");
             resolve();
@@ -165,7 +167,7 @@ export async function syncPushSubscription() {
           }
 
           // Get subscription status
-          window.OneSignal.isPushNotificationsEnabled((isEnabled: boolean) => {
+          OneSignal.isPushNotificationsEnabled((isEnabled: boolean) => {
             if (!isEnabled) {
               console.log("[Push] Push notifications not enabled by user");
               resolve();
@@ -225,12 +227,21 @@ export async function requestPushPermission(): Promise<boolean> {
  * Get push subscription ID for current user
  */
 export async function getPushSubscriptionId(): Promise<string | null> {
-  if (typeof window === "undefined" || !window.OneSignal) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const OneSignal = (window as any).OneSignal;
+  if (!OneSignal) {
     return null;
   }
 
   try {
-    return await window.OneSignal.getUserId?.();
+    return new Promise<string | null>((resolve) => {
+      OneSignal.getUserId?.((userId: string | null) => {
+        resolve(userId);
+      });
+    });
   } catch (error) {
     console.error("[Push] Error getting subscription ID:", error);
     return null;
