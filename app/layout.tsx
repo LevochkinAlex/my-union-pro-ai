@@ -32,9 +32,6 @@ export default function RootLayout({
             <Script
               src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
               strategy="afterInteractive"
-              onLoad={() => {
-                console.log("[Push] OneSignal SDK loaded via Script component");
-              }}
             />
           </>
         )}
