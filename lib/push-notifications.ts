@@ -91,21 +91,35 @@ export async function syncPushSubscription(): Promise<void> {
 
     console.log("[OneSignal] Syncing for user:", userId);
 
-    // Get subscription ID
+    // Get subscription ID using OneSignalDeferred pattern
     let playerId: string | null = null;
 
-    // Try v16 official API first
-    if (OneSignal.User?.PushSubscription?.id) {
-      playerId = OneSignal.User.PushSubscription.id;
-      console.log("[OneSignal] Player ID (v16 User API):", playerId);
-    } else if (typeof OneSignal.getUserId === "function") {
-      try {
-        playerId = await OneSignal.getUserId();
-        console.log("[OneSignal] Player ID (getUserId):", playerId);
-      } catch (error) {
-        console.error("[OneSignal] Error getting player ID:", error);
-      }
-    }
+    // For v16, we need to get subscription through the deferred API
+    const getPlayerId = (): Promise<string | null> => {
+      return new Promise((resolve) => {
+        if (typeof window !== "undefined" && window.OneSignalDeferred) {
+          window.OneSignalDeferred.push(async (OneSignal: any) => {
+            try {
+              const subscription = await OneSignal.User.PushSubscription.getSubscription();
+              if (subscription?.id) {
+                console.log("[OneSignal] Player ID (v16 getSubscription):", subscription.id);
+                resolve(subscription.id);
+              } else {
+                console.log("[OneSignal] No subscription found");
+                resolve(null);
+              }
+            } catch (error) {
+              console.error("[OneSignal] Error getting subscription:", error);
+              resolve(null);
+            }
+          });
+        } else {
+          resolve(null);
+        }
+      });
+    };
+
+    playerId = await getPlayerId();
 
     if (!playerId) {
       console.log("[OneSignal] No player ID - user not subscribed yet");
