@@ -32,38 +32,39 @@ export async function requestPushPermission(): Promise<boolean> {
     return false;
   }
 
-  const OneSignal = (window as any).OneSignal;
-  if (!OneSignal) {
-    console.log("[OneSignal] OneSignal SDK not available");
+  if (!window.OneSignalDeferred) {
+    console.log("[OneSignal] OneSignalDeferred not available");
     return false;
   }
 
   try {
     console.log("[OneSignal] Requesting push permission...");
     
-    // v16 official API for requesting notifications
-    if (typeof OneSignal.Notifications?.requestPermission === "function") {
-      // Modern v16 API
-      await OneSignal.Notifications.requestPermission();
-      console.log("[OneSignal] ✅ Permission granted via Notifications API");
-      syncPushSubscription();
-      return true;
-    } else if (typeof OneSignal.registerForPushNotifications === "function") {
-      // Fallback
-      await OneSignal.registerForPushNotifications();
-      console.log("[OneSignal] ✅ Permission granted via registerForPushNotifications");
-      syncPushSubscription();
-      return true;
-    } else {
-      console.warn("[OneSignal] No permission request method available");
-      return false;
-    }
+    return new Promise((resolve) => {
+      window.OneSignalDeferred!.push(async (OneSignal: any) => {
+        try {
+          // v16 official API
+          const permission = await OneSignal.Notifications.requestPermission();
+          
+          if (permission) {
+            console.log("[OneSignal] ✅ Permission granted!");
+            // Синхронизируем подписку после получения разрешения
+            setTimeout(() => {
+              syncPushSubscription();
+            }, 1000);
+            resolve(true);
+          } else {
+            console.log("[OneSignal] ❌ Permission denied");
+            resolve(false);
+          }
+        } catch (error: any) {
+          console.error("[OneSignal] Error requesting permission:", error);
+          resolve(false);
+        }
+      });
+    });
   } catch (error: any) {
-    if (error?.message?.includes("https://")) {
-      console.warn("[OneSignal] HTTPS required for push notifications");
-    } else {
-      console.error("[OneSignal] Error requesting permission:", error);
-    }
+    console.error("[OneSignal] Error:", error);
     return false;
   }
 }
