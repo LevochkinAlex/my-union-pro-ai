@@ -50,67 +50,83 @@ export async function initializePushNotifications() {
 
     script.onload = () => {
       // OneSignal SDK initializes itself, we just need to use it
-      const OneSignal = (window as any).OneSignal;
+      // Wait a bit for SDK to fully load
+      setTimeout(() => {
+        const OneSignal = (window as any).OneSignal;
 
-      if (OneSignal && typeof OneSignal.init === "function") {
-        OneSignal.init({
-          appId: ONESIGNAL_APP_ID,
-          allowLocalhostAsSecureOrigin: true,
-          serviceWorkerPath: "/OneSignalSDKWorker.js",
-          serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
-          promptOptions: {
-            slidedown: {
-              prompts: [
-                {
-                  type: "push", // Slide down style
-                  autoPrompt: true,
-                  text: {
-                    actionMessage:
-                      "Получайте уведомления о новых сообщениях от AI",
-                    acceptButton: "Разрешить",
-                    cancelButton: "Отклонить",
+        if (!OneSignal) {
+          console.error("[Push] OneSignal SDK not loaded");
+          return;
+        }
+
+        if (typeof OneSignal.init === "function") {
+          OneSignal.init({
+            appId: ONESIGNAL_APP_ID,
+            allowLocalhostAsSecureOrigin: true,
+            serviceWorkerPath: "/OneSignalSDKWorker.js",
+            serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
+            promptOptions: {
+              slidedown: {
+                prompts: [
+                  {
+                    type: "push", // Slide down style
+                    autoPrompt: true,
+                    text: {
+                      actionMessage:
+                        "Получайте уведомления о новых сообщениях от AI",
+                      acceptButton: "Разрешить",
+                      cancelButton: "Отклонить",
+                    },
+                    delay: {
+                      pageViews: 1,
+                      seconds: 10,
+                    },
                   },
-                  delay: {
-                    pageViews: 1,
-                    seconds: 10,
-                  },
-                },
-              ],
+                ],
+              },
             },
-          },
-        });
+          });
 
-        // Wait for OneSignal to be ready
-        OneSignal.push(() => {
-          console.log("[Push] OneSignal SDK ready");
+          // Wait for OneSignal to be ready using push queue
+          OneSignal.push(() => {
+            console.log("[Push] OneSignal SDK ready");
 
-          // Set up event listeners using proper OneSignal API
-          // Check if OneSignal is fully initialized before using event listeners
-          if (OneSignal && typeof OneSignal.on === "function") {
-            try {
-              OneSignal.on("subscriptionChange", (isSubscribed: boolean) => {
-                console.log("[Push] Subscription changed:", isSubscribed);
-                if (isSubscribed) {
-                  // Wait a bit for subscription to be fully registered
-                  setTimeout(() => {
-                    syncPushSubscription();
-                  }, 500);
+            // Wait additional time for SDK to fully initialize all methods
+            setTimeout(() => {
+              const OneSignalInstance = (window as any).OneSignal;
+              
+              // Set up event listeners only if method is available
+              if (OneSignalInstance && typeof OneSignalInstance.on === "function") {
+                try {
+                  OneSignalInstance.on("subscriptionChange", (isSubscribed: boolean) => {
+                    console.log("[Push] Subscription changed:", isSubscribed);
+                    if (isSubscribed) {
+                      // Wait a bit for subscription to be fully registered
+                      setTimeout(() => {
+                        syncPushSubscription();
+                      }, 500);
+                    }
+                  });
+                } catch (error) {
+                  console.warn("[Push] Error setting up subscriptionChange listener:", error);
                 }
-              });
-            } catch (error) {
-              console.warn("[Push] Error setting up subscriptionChange listener:", error);
-            }
-          }
+              } else {
+                console.warn("[Push] OneSignal.on method not available yet");
+              }
 
-          // Also sync when OneSignal is ready (with delay to ensure SDK is fully loaded)
-          setTimeout(() => {
-            syncPushSubscription();
-          }, 2000);
-        });
+              // Sync subscription after SDK is fully ready
+              setTimeout(() => {
+                syncPushSubscription();
+              }, 1000);
+            }, 1000);
+          });
 
-        console.log("[Push] OneSignal initialized successfully");
-        return true;
-      }
+          console.log("[Push] OneSignal initialized successfully");
+          return true;
+        } else {
+          console.error("[Push] OneSignal.init is not a function");
+        }
+      }, 100);
     };
 
     script.onerror = () => {
