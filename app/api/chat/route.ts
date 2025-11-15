@@ -957,14 +957,28 @@ ID документа: ${uploadedDocument.documentId}
 
             if (pushResponse.ok) {
               const result = await pushResponse.json();
-              console.log("[chat] ✅ Push notification sent:", {
+              console.log("[chat] ✅ Push notification sent successfully:", {
                 notificationId: result.id,
                 recipients: recipientIds.length,
+                recipientIds: recipientIds,
                 soundEnabled: user?.pushSoundEnabled !== false,
+                hasSound: !!notificationPayload.sound,
+                payload: {
+                  app_id: notificationPayload.app_id,
+                  include_player_ids: notificationPayload.include_player_ids?.length || 0,
+                  sound: notificationPayload.sound,
+                },
               });
             } else {
               const errorText = await pushResponse.text();
-              console.warn("[chat] ⚠️ Push notification failed:", errorText);
+              const errorStatus = pushResponse.status;
+              console.error("[chat] ❌ Push notification failed:", {
+                status: errorStatus,
+                error: errorText,
+                recipientIds: recipientIds,
+                appId: ONESIGNAL_APP_ID,
+                hasApiKey: !!ONESIGNAL_API_KEY,
+              });
             }
           }
         } else {
