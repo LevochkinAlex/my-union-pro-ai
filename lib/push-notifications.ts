@@ -107,28 +107,29 @@ export async function syncPushSubscription(): Promise<void> {
         if (typeof window !== "undefined" && window.OneSignalDeferred) {
           window.OneSignalDeferred.push(async (OneSignal: any) => {
             try {
-              // v16 official way - use getUserId for player ID
-              const userId = await OneSignal.User.getOnesignalId();
-              if (userId) {
-                console.log("[OneSignal] Player ID (v16 getOnesignalId):", userId);
-                resolve(userId);
-              } else {
-                // Fallback to checking if subscription exists
-                const isPushEnabled = await OneSignal.Notifications.isPushSupported();
-                if (isPushEnabled) {
-                  const hasPermission = await OneSignal.Notifications.getNotificationPermission();
-                  if (hasPermission) {
-                    // Get subscription ID from internal API
-                    const sub = OneSignal.User?.PushSubscription;
-                    if (sub?.id) {
-                      console.log("[OneSignal] Player ID (PushSubscription.id):", sub.id);
-                      resolve(sub.id);
-                    }
-                  }
-                }
-                console.log("[OneSignal] No player ID available");
-                resolve(null);
+              // v16 - просто получаем ID из PushSubscription напрямую
+              const subscription = OneSignal.User?.PushSubscription;
+              
+              if (subscription?.id) {
+                console.log("[OneSignal] Player ID (PushSubscription.id):", subscription.id);
+                resolve(subscription.id);
+                return;
               }
+
+              // Если нет ID, проверяем permission и ждём
+              const permission = await OneSignal.Notifications.getNotificationPermission();
+              if (permission === "granted") {
+                // После permission granted, ID должен появиться
+                const sub = OneSignal.User?.PushSubscription;
+                if (sub?.id) {
+                  console.log("[OneSignal] Player ID (after permission):", sub.id);
+                  resolve(sub.id);
+                  return;
+                }
+              }
+
+              console.log("[OneSignal] No player ID available yet");
+              resolve(null);
             } catch (error) {
               console.error("[OneSignal] Error getting player ID:", error);
               resolve(null);
