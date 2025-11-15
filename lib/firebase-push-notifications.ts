@@ -256,27 +256,7 @@ export async function setupForegroundMessageHandler() {
 
       console.log("[Firebase] ✅ Notification shown");
 
-      // Воспроизводим звук отдельно (если включен)
-      if (soundEnabled) {
-        try {
-          const audio = new Audio(`${baseUrl}/notification-sound.mp3`);
-          audio.volume = 0.7;
-          audio.preload = "auto";
-          
-          // Пробуем воспроизвести
-          const playPromise = audio.play();
-          if (playPromise !== undefined) {
-            await playPromise.catch((err) => {
-              console.warn("[Firebase] ⚠️ Failed to play sound:", err);
-              // Пробуем использовать встроенный звук браузера
-              notificationOptions.silent = false;
-            });
-          }
-        } catch (error) {
-          console.warn("[Firebase] ⚠️ Error playing sound:", error);
-          // Продолжаем без звука
-        }
-      }
+      // Звук воспроизводится браузером через silent: false
 
       notification.onclick = () => {
         console.log("[Firebase] 🔘 Notification clicked");
