@@ -20,7 +20,7 @@ function getFirebaseApp() {
 }
 
 // Get messaging instance
-function getMessagingInstance(): Messaging | null {
+async function getMessagingInstance(): Promise<Messaging | null> {
   if (typeof window === "undefined") {
     return null;
   }
@@ -42,7 +42,26 @@ function getMessagingInstance(): Messaging | null {
       console.warn("[Firebase] Notifications not supported");
       return null;
     }
-    messagingInstance = getMessaging(app);
+    
+    // Get Service Worker registration
+    let swRegistration = null;
+    if ("serviceWorker" in navigator) {
+      try {
+        swRegistration = await navigator.serviceWorker.getRegistration();
+        if (!swRegistration) {
+          console.warn("[Firebase] Service Worker not registered yet");
+          return null;
+        }
+        console.log("[Firebase] Service Worker found:", swRegistration.scope);
+      } catch (error) {
+        console.warn("[Firebase] Error getting Service Worker:", error);
+        return null;
+      }
+    }
+    
+    messagingInstance = getMessaging(app, {
+      serviceWorkerRegistration: swRegistration || undefined,
+    });
     return messagingInstance;
   } catch (error) {
     console.error("[Firebase] Error getting messaging:", error);
@@ -115,7 +134,7 @@ export async function syncPushSubscription(): Promise<void> {
     }
 
     // Get FCM token
-    const messaging = getMessagingInstance();
+    const messaging = await getMessagingInstance();
     if (!messaging) {
       console.warn("[Firebase] Messaging not available");
       return;
@@ -164,12 +183,12 @@ async function saveSubscription(fcmToken: string): Promise<void> {
 }
 
 // Listen for foreground messages
-export function setupForegroundMessageHandler() {
+export async function setupForegroundMessageHandler() {
   if (typeof window === "undefined") {
     return;
   }
 
-  const messaging = getMessagingInstance();
+  const messaging = await getMessagingInstance();
   if (!messaging) {
     return;
   }

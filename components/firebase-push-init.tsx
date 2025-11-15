@@ -18,8 +18,8 @@ export default function FirebasePushInit() {
 
     console.log("[Firebase] Session ready, initializing FCM...");
 
-    // Setup foreground message handler
-    setupForegroundMessageHandler();
+    // Setup foreground message handler (async)
+    setupForegroundMessageHandler().catch(console.error);
 
     // Check notification permission
     const checkPermission = async () => {

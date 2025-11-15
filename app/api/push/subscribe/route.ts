@@ -82,10 +82,16 @@ export async function POST(request: NextRequest) {
         lastSyncAt: subscription.lastSyncAt,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[push/subscribe] Error:", error);
+    console.error("[push/subscribe] Error details:", {
+      message: error?.message,
+      code: error?.code,
+      meta: error?.meta,
+      stack: error?.stack,
+    });
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Internal server error", details: error?.message || String(error) },
       { status: 500 }
     );
   }
