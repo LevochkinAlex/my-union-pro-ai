@@ -20,44 +20,27 @@ export default function RootLayout({
       <head>
         {ONESIGNAL_APP_ID && (
           <>
-            {/* Initialize OneSignal configuration before SDK loads */}
+            {/* Initialize OneSignal queue before SDK loads */}
             <Script
-              id="onesignal-config"
+              id="onesignal-queue"
               strategy="beforeInteractive"
               dangerouslySetInnerHTML={{
-                __html: `
-                  window.OneSignal = window.OneSignal || [];
-                  window.OneSignalConfig = {
-                    appId: "${ONESIGNAL_APP_ID}",
-                    allowLocalhostAsSecureOrigin: true,
-                  };
-                `,
+                __html: `window.OneSignal = window.OneSignal || []; window.OneSignalAppId = "${ONESIGNAL_APP_ID}";`,
               }}
             />
             
-            {/* Load OneSignal SDK and initialize */}
+            {/* Load OneSignal init script */}
+            <Script
+              id="onesignal-init"
+              src="/onesignal-init.js"
+              strategy="beforeInteractive"
+            />
+            
+            {/* Load OneSignal SDK */}
             <Script
               id="onesignal-sdk"
               src="https://cdn.onesignal.com/sdks/web/v15/OneSignalSDK.page.js"
               strategy="afterInteractive"
-              dangerouslySetInnerHTML={{
-                __html: `
-                  // This runs in parallel with loading the SDK script
-                  if (typeof OneSignal !== 'undefined' && OneSignal.init) {
-                    console.log("[OneSignal] SDK loaded, initializing...");
-                    OneSignal.init(window.OneSignalConfig);
-                    console.log("[OneSignal] ✅ Initialized");
-                  } else {
-                    // SDK might not be ready yet, queue the init
-                    window.OneSignal = window.OneSignal || [];
-                    window.OneSignal.push(() => {
-                      console.log("[OneSignal] SDK ready via push, initializing...");
-                      window.OneSignal.init(window.OneSignalConfig);
-                      console.log("[OneSignal] ✅ Initialized via push");
-                    });
-                  }
-                `,
-              }}
             />
           </>
         )}
