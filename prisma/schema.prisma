@@ -601,7 +601,7 @@ model PushSubscription {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Firebase Cloud Messaging token
-  fcmToken String @unique // FCM registration token
+  fcmToken String? @unique // FCM registration token (nullable for legacy records)
   subscriptionId String? // Legacy field (kept for compatibility)
 
   // Legacy OneSignal fields (deprecated, will be removed)
@@ -611,7 +611,6 @@ model PushSubscription {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  @@unique([userId, fcmToken])
   @@index([userId])
   @@index([fcmToken])
   @@index([oneSignalId]) // Legacy index

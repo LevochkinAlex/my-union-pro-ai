@@ -889,9 +889,12 @@ ID документа: ${uploadedDocument.documentId}
     try {
       // Firebase Cloud Messaging push notifications
       try {
-        // Get user's FCM subscriptions
+        // Get user's FCM subscriptions (only with valid fcmToken)
         const userSubs = await prisma.pushSubscription.findMany({
-          where: { userId: session.user.id },
+          where: { 
+            userId: session.user.id,
+            fcmToken: { not: null },
+          },
           select: { fcmToken: true },
         });
 
