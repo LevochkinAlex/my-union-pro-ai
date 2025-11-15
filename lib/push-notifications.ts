@@ -78,12 +78,25 @@ export async function initializePushNotifications() {
           },
         });
 
-        // Set up event listeners
-        window.OneSignal.on("subscriptionChange", (isSubscribed: boolean) => {
-          console.log("[Push] Subscription changed:", isSubscribed);
-          if (isSubscribed) {
+        // Wait for OneSignal to be ready
+        window.OneSignal.push(() => {
+          console.log("[Push] OneSignal SDK ready");
+
+          // Set up event listeners
+          window.OneSignal.on("subscriptionChange", (isSubscribed: boolean) => {
+            console.log("[Push] Subscription changed:", isSubscribed);
+            if (isSubscribed) {
+              // Wait a bit for subscription to be fully registered
+              setTimeout(() => {
+                syncPushSubscription();
+              }, 500);
+            }
+          });
+
+          // Also sync when OneSignal is ready
+          setTimeout(() => {
             syncPushSubscription();
-          }
+          }, 2000);
         });
 
         console.log("[Push] OneSignal initialized successfully");
@@ -108,29 +121,54 @@ export async function initializePushNotifications() {
  */
 export async function syncPushSubscription() {
   if (typeof window === "undefined" || !window.OneSignal) {
+    console.warn("[Push] OneSignal not available");
     return;
   }
 
   try {
-    const playerId = await window.OneSignal.getUserId?.();
-    const pushSubscriptionId = await window.OneSignal.getSubscriptionId?.();
+    // Use OneSignal.push to ensure SDK is ready
+    return new Promise<void>((resolve) => {
+      window.OneSignal.push(() => {
+        window.OneSignal.getUserId((playerId: string | null) => {
+          if (!playerId) {
+            console.warn("[Push] No player ID available - user may not be subscribed");
+            resolve();
+            return;
+          }
 
-    if (!playerId || !pushSubscriptionId) {
-      console.warn("[Push] No subscription ID available");
-      return;
-    }
+          // Get subscription status
+          window.OneSignal.isPushNotificationsEnabled((isEnabled: boolean) => {
+            if (!isEnabled) {
+              console.log("[Push] Push notifications not enabled by user");
+              resolve();
+              return;
+            }
 
-    // Send to backend to store
-    await fetch("/api/push/subscribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        oneSignalId: playerId,
-        subscriptionId: pushSubscriptionId,
-      }),
+            // Send to backend to store
+            fetch("/api/push/subscribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                oneSignalId: playerId,
+                subscriptionId: playerId, // OneSignal uses playerId as subscriptionId
+              }),
+            })
+              .then((response) => {
+                if (response.ok) {
+                  console.log("[Push] Subscription synced:", playerId);
+                } else {
+                  console.error("[Push] Failed to sync subscription:", response.statusText);
+                }
+                resolve();
+              })
+              .catch((error) => {
+                console.error("[Push] Error syncing subscription:", error);
+                resolve();
+              });
+          });
+        });
+      });
     });
-
-    console.log("[Push] Subscription synced:", playerId);
   } catch (error) {
     console.error("[Push] Error syncing subscription:", error);
   }

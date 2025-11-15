@@ -916,7 +916,7 @@ ID документа: ${uploadedDocument.documentId}
             
             const notificationPayload: Record<string, any> = {
               app_id: ONESIGNAL_APP_ID,
-              include_external_user_ids: recipientIds,
+              include_player_ids: recipientIds, // Используем include_player_ids вместо include_external_user_ids
               headings: { en: bot.name || "AI Assistant", ru: bot.name || "AI Помощник" },
               contents: { 
                 en: aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : ""),
@@ -932,13 +932,12 @@ ID документа: ${uploadedDocument.documentId}
               ttl: 86400, // 24 hours
             };
 
-            // Добавляем звук, если включен
+            // Добавляем звук для веб-уведомлений
+            // Для веб-уведомлений звук управляется браузером, но можно указать в payload
             if (user?.pushSoundEnabled !== false) {
-              // Используем приятный звук уведомления (можно использовать default или кастомный)
-              notificationPayload.sound = "default"; // Или можно указать URL к кастомному звуку
-            } else {
-              // Если звук отключен, отправляем без звука
-              notificationPayload.sound = null;
+              // Для веб-уведомлений используем стандартный звук браузера
+              // OneSignal автоматически использует звук браузера, если не указан другой
+              notificationPayload.sound = "default";
             }
 
             const pushResponse = await fetch(ONESIGNAL_API_URL, {
