@@ -23,25 +23,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Получаем OneSignal конфиг из системных настроек
-    const appIdSetting = await prisma.systemSetting.findUnique({
-      where: { key: "onesignal_app_id" },
-    });
-
-    const apiKeySetting = await prisma.systemSetting.findUnique({
-      where: { key: "onesignal_rest_api_key" },
-    });
-
-    const oneSignalAppId = appIdSetting?.value;
-    const oneSignalRestApiKey = apiKeySetting?.value;
-
-    if (!oneSignalAppId || !oneSignalRestApiKey) {
-      return new Response(
-        JSON.stringify({ error: "OneSignal not configured" }),
-        { status: 400 }
-      );
-    }
-
     // Получаем все подписки пользователей (опционально фильтруем по роли)
     const subscriptionsQuery: any = {};
     if (targetRole) {
@@ -52,8 +33,8 @@ export async function POST(request: Request) {
 
     const subscriptions = await prisma.pushSubscription.findMany({
       where: subscriptionsQuery,
-      select: { oneSignalId: true },
-      distinct: ["oneSignalId"],
+      select: { fcmToken: true },
+      distinct: ["fcmToken"],
     });
 
     if (subscriptions.length === 0) {
@@ -63,53 +44,67 @@ export async function POST(request: Request) {
       );
     }
 
-    const playerIds = subscriptions.map((sub) => sub.oneSignalId);
+    const fcmTokens = subscriptions.map((sub) => sub.fcmToken).filter(Boolean);
 
-    // Отправляем уведомление через OneSignal API
-    const notificationPayload = {
-      app_id: oneSignalAppId,
-      include_player_ids: playerIds,
-      headings: { ru: heading, en: heading },
-      contents: { ru: content, en: content },
-      chrome_web_sound: "default",
-      firefox_sound: "default",
-      sound: "default",
-      priority: 10,
-      ttl: 86400,
-    };
-
-    const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
-    const pushResponse = await fetch(ONESIGNAL_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        Authorization: `Bearer ${oneSignalRestApiKey}`,
-      },
-      body: JSON.stringify(notificationPayload),
-    });
-
-    if (!pushResponse.ok) {
-      const errorText = await pushResponse.text();
-      console.error("[admin/notifications] OneSignal error:", errorText);
+    if (fcmTokens.length === 0) {
       return new Response(
-        JSON.stringify({ error: "Failed to send notifications", details: errorText }),
-        { status: pushResponse.status }
+        JSON.stringify({ error: "No valid FCM tokens found", count: 0 }),
+        { status: 400 }
       );
     }
 
-    const result = await pushResponse.json();
+    // Import Firebase Admin
+    const { messaging } = await import("@/lib/firebase-admin");
 
-    console.log("[admin/notifications] ✅ Broadcast sent successfully:", {
-      notificationId: result.id,
-      recipients: playerIds.length,
+    // Send notification to all tokens
+    const message = {
+      notification: {
+        title: heading,
+        body: content,
+      },
+      webpush: {
+        notification: {
+          title: heading,
+          body: content,
+          icon: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/logo.png`,
+          badge: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/logo.png`,
+          sound: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/notification-sound.mp3`,
+        },
+      },
+      android: {
+        priority: "high" as const,
+        notification: {
+          sound: "default",
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+          },
+        },
+      },
+      tokens: fcmTokens,
+    };
+
+    console.log("[admin/notifications] 📢 Sending FCM broadcast:", {
+      recipients: fcmTokens.length,
+      heading,
+    });
+
+    const response = await messaging.sendEachForMulticast(message);
+
+    console.log("[admin/notifications] ✅ Broadcast sent:", {
+      successCount: response.successCount,
+      failureCount: response.failureCount,
       heading,
     });
 
     return new Response(
       JSON.stringify({
         success: true,
-        notificationId: result.id,
-        recipientCount: playerIds.length,
+        recipientCount: response.successCount,
+        failureCount: response.failureCount,
       }),
       { status: 200 }
     );

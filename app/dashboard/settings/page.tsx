@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { requestPushPermission } from "@/lib/push-notifications";
+import { requestPushPermission } from "@/lib/firebase-push-notifications";
 
 interface UserSettings {
   pushNotificationsEnabled: boolean;

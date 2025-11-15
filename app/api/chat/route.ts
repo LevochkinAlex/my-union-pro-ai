@@ -887,20 +887,17 @@ ID документа: ${uploadedDocument.documentId}
 
     // Send push notification to user with action buttons (only if user is not actively chatting)
     try {
-      const ONESIGNAL_API_KEY = process.env.ONESIGNAL_API_KEY;
-      const ONESIGNAL_APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
-      
-      if (ONESIGNAL_API_KEY && ONESIGNAL_APP_ID) {
-        // Get user's OneSignal subscriptions
+      // Firebase Cloud Messaging push notifications
+      try {
+        // Get user's FCM subscriptions
         const userSubs = await prisma.pushSubscription.findMany({
           where: { userId: session.user.id },
-          select: { oneSignalId: true },
+          select: { fcmToken: true },
         });
 
-        console.log("[chat] Checking push subscriptions:", {
+        console.log("[chat] Checking FCM subscriptions:", {
           userId: session.user.id,
           subscriptionsCount: userSubs.length,
-          subscriptions: userSubs.map(s => s.oneSignalId),
         });
 
         if (userSubs.length > 0) {
@@ -922,135 +919,92 @@ ID документа: ${uploadedDocument.documentId}
           if (user && user.pushNotificationsEnabled === false) {
             console.log("[chat] ⚠️ Push notifications disabled for user");
           } else {
-            const recipientIds = userSubs.map((sub) => sub.oneSignalId);
-            const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
+            const fcmTokens = userSubs.map((sub) => sub.fcmToken).filter(Boolean);
             
-            // OneSignal требует английский язык в содержимом (en обязателен!)
-            const messagePreview = aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : "");
-            
-            const notificationPayload: Record<string, any> = {
-              app_id: ONESIGNAL_APP_ID,
-              include_player_ids: recipientIds,
-              headings: { 
-                en: bot.name || "AI Assistant", 
-                ru: bot.name || "AI Помощник" 
-              },
-              contents: { 
-                en: "You have a new message", // ОБЯЗАТЕЛЬНО английский для OneSignal API
-                ru: messagePreview,
-              },
-              // Параметры для веб-уведомлений
-              url: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/dashboard?session=${chatSession.id}`,
-              web_buttons: [
-                {
-                  id: "id1",
-                  text: "Открыть",
-                  url: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/dashboard?session=${chatSession.id}`,
-                }
-              ],
-              data: {
-                type: "chat_message",
-                chatBotId: bot.id,
-                sessionId: chatSession.id,
-              },
-              priority: 10,
-              ttl: 86400,
-              // ВАЖНО: звук должен быть явно указан
-              chrome_web_icon: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/logo.png`,
-            };
-
-            // Добавляем звук для уведомлений
-            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
-            
-            if (user?.pushSoundEnabled !== false) {
-              // Базовый звук для мобильных приложений
-              notificationPayload.sound = "default";
+            if (fcmTokens.length > 0) {
+              // Import Firebase Admin dynamically
+              const { messaging } = await import("@/lib/firebase-admin");
               
-              // Для веб-уведомлений используем URL к звуковому файлу
-              // Chrome и Firefox поддерживают звук через URL
-              notificationPayload.chrome_web_sound = `${baseUrl}/notification-sound.mp3`;
-              notificationPayload.firefox_sound = `${baseUrl}/notification-sound.mp3`;
-              // Safari использует default
-              notificationPayload.safari_sound = "default";
+              const messagePreview = aiResponse.substring(0, 150) + (aiResponse.length > 150 ? "..." : "");
+              const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
               
-              // Также добавляем в data для Service Worker
-              notificationPayload.data = {
-                ...notificationPayload.data,
-                playSound: true,
-                soundUrl: `${baseUrl}/notification-sound.mp3`,
-              };
-            } else {
-              notificationPayload.sound = null;
-              notificationPayload.chrome_web_sound = null;
-              notificationPayload.firefox_sound = null;
-              notificationPayload.safari_sound = null;
-            }
-
-            console.log("[chat] 📢 Notification payload:", {
-              recipients: recipientIds.length,
-              recipientIds: recipientIds.slice(0, 3), // Первые 3 для логов
-              sound: notificationPayload.chrome_web_sound,
-              chrome_web_sound: notificationPayload.chrome_web_sound,
-              firefox_sound: notificationPayload.firefox_sound,
-              safari_sound: notificationPayload.safari_sound,
-              url: notificationPayload.url,
-              fullPayload: JSON.stringify(notificationPayload, null, 2),
-            });
-
-            const pushResponse = await fetch(ONESIGNAL_API_URL, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json; charset=utf-8",
-                Authorization: `Bearer ${ONESIGNAL_API_KEY}`, // OneSignal v2 API использует Bearer токен
-              },
-              body: JSON.stringify(notificationPayload),
-            });
-
-            if (pushResponse.ok) {
-              const result = await pushResponse.json();
-              console.log("[chat] ✅ Push notification sent successfully:", {
-                notificationId: result.id,
-                recipients: recipientIds.length,
-                recipientIds: recipientIds,
-                soundEnabled: user?.pushSoundEnabled !== false,
-                hasSound: !!notificationPayload.sound,
-                payload: {
-                  app_id: notificationPayload.app_id,
-                  include_player_ids: notificationPayload.include_player_ids?.length || 0,
-                  sound: notificationPayload.sound,
+              // Send notification to all user's devices
+              const message = {
+                notification: {
+                  title: bot.name || "AI Помощник",
+                  body: messagePreview,
                 },
-                oneSignalResponse: result,
+                data: {
+                  type: "chat_message",
+                  chatBotId: bot.id,
+                  sessionId: chatSession.id,
+                  url: `${baseUrl}/dashboard?session=${chatSession.id}`,
+                },
+                webpush: {
+                  notification: {
+                    title: bot.name || "AI Помощник",
+                    body: messagePreview,
+                    icon: `${baseUrl}/logo.png`,
+                    badge: `${baseUrl}/logo.png`,
+                    requireInteraction: false,
+                    ...(user?.pushSoundEnabled !== false && {
+                      sound: `${baseUrl}/notification-sound.mp3`,
+                    }),
+                  },
+                  fcmOptions: {
+                    link: `${baseUrl}/dashboard?session=${chatSession.id}`,
+                  },
+                },
+                android: {
+                  priority: "high" as const,
+                  notification: {
+                    sound: user?.pushSoundEnabled !== false ? "default" : undefined,
+                  },
+                },
+                apns: {
+                  payload: {
+                    aps: {
+                      sound: user?.pushSoundEnabled !== false ? "default" : undefined,
+                    },
+                  },
+                },
+                tokens: fcmTokens,
+              };
+
+              console.log("[chat] 📢 Sending FCM notification:", {
+                recipients: fcmTokens.length,
+                soundEnabled: user?.pushSoundEnabled !== false,
               });
+
+              // Send to all tokens
+              const response = await messaging.sendEachForMulticast(message);
               
-              // Проверяем есть ли ошибки в ответе OneSignal
-              if (result.errors && result.errors.length > 0) {
-                console.error("[chat] ⚠️ OneSignal returned errors:", result.errors);
-              }
-              
-              if (result.recipients === 0) {
-                console.error("[chat] ⚠️ OneSignal delivered to 0 recipients!");
-              }
-            } else {
-              const errorText = await pushResponse.text();
-              const errorStatus = pushResponse.status;
-              console.error("[chat] ❌ Push notification failed:", {
-                status: errorStatus,
-                error: errorText,
-                recipientIds: recipientIds,
-                recipientIdsFormatted: recipientIds.map(id => ({
-                  id,
-                  isValidUUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+              console.log("[chat] ✅ FCM notification sent:", {
+                successCount: response.successCount,
+                failureCount: response.failureCount,
+                responses: response.responses.map((r, i) => ({
+                  success: r.success,
+                  messageId: r.messageId,
+                  error: r.error?.code,
                 })),
-                appId: ONESIGNAL_APP_ID,
-                hasApiKey: !!ONESIGNAL_API_KEY,
               });
+
+              // Log failures
+              if (response.failureCount > 0) {
+                response.responses.forEach((resp, idx) => {
+                  if (!resp.success) {
+                    console.error(`[chat] ❌ FCM failed for token ${idx}:`, resp.error);
+                  }
+                });
+              }
             }
           }
         } else {
-          console.log("[chat] ℹ️ No push subscriptions found for user");
+          console.log("[chat] ℹ️ No FCM subscriptions found for user");
         }
-      } else {
-        console.log("[chat] ℹ️ OneSignal not configured, skipping push notification");
+      } catch (error) {
+        console.error("[chat] ❌ FCM notification error:", error);
+        // Don't fail the chat response if push fails
       }
     } catch (pushError) {
       console.warn("[chat] ⚠️ Push notification error:", pushError);

@@ -8,8 +8,6 @@ export const metadata: Metadata = {
   description: "Управляйте документами, участниками и уведомлениями в одном месте",
 };
 
-const ONESIGNAL_APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
-
 export default function RootLayout({
   children,
 }: {
@@ -18,52 +16,26 @@ export default function RootLayout({
   return (
     <html lang="ru" suppressHydrationWarning>
       <head>
-        {ONESIGNAL_APP_ID && (
-          <>
-            {/* OneSignal SDK v16 - Official recommended approach */}
-            <Script
-              id="onesignal-sdk"
-              src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
-              defer
-              strategy="afterInteractive"
-            />
-            
-            {/* OneSignal v16 Initialization using OneSignalDeferred */}
-            <Script
-              id="onesignal-init"
-              strategy="afterInteractive"
-              dangerouslySetInnerHTML={{
-                __html: `
-                  window.OneSignalDeferred = window.OneSignalDeferred || [];
-                  
-                  OneSignalDeferred.push(async function(OneSignal) {
-                    console.log('[OneSignal] v16 Deferred initialization starting...');
-                    try {
-                      // Register service workers explicitly
-                      if ('serviceWorker' in navigator) {
-                        try {
-                          await navigator.serviceWorker.register('/OneSignalSDKWorker.js', { scope: '/' });
-                          console.log('[OneSignal] ✅ Service Worker registered');
-                        } catch (error) {
-                          console.error('[OneSignal] Service Worker registration failed:', error);
-                        }
-                      }
-
-                      await OneSignal.init({
-                        appId: "${ONESIGNAL_APP_ID}",
-                        allowLocalhostAsSecureOrigin: true,
-                        serviceWorkerPath: '/OneSignalSDKWorker.js',
-                      });
-                      console.log('[OneSignal] ✅ v16 Initialized successfully');
-                    } catch (error) {
-                      console.error('[OneSignal] Initialization error:', error);
-                    }
-                  });
-                `,
-              }}
-            />
-          </>
-        )}
+        {/* Firebase Cloud Messaging Service Worker Registration */}
+        <Script
+          id="firebase-sw-register"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/firebase-messaging-sw.js')
+                    .then(function(registration) {
+                      console.log('[Firebase] ✅ Service Worker registered:', registration.scope);
+                    })
+                    .catch(function(error) {
+                      console.error('[Firebase] ❌ Service Worker registration failed:', error);
+                    });
+                });
+              }
+            `,
+          }}
+        />
       </head>
       <body className="font-sans">
         <Providers>{children}</Providers>

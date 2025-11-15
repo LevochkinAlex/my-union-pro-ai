@@ -593,24 +593,28 @@ model AppealAnalytics {
   @@index([periodStart])
 }
 
-// Push Notifications
+// Push Notifications (Firebase Cloud Messaging)
 model PushSubscription {
   id String @id @default(cuid())
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // OneSignal subscription data
-  oneSignalId   String // User ID in OneSignal
-  subscriptionId String? // Subscription ID for the device
+  // Firebase Cloud Messaging token
+  fcmToken String @unique // FCM registration token
+  subscriptionId String? // Legacy field (kept for compatibility)
+
+  // Legacy OneSignal fields (deprecated, will be removed)
+  oneSignalId   String? // Deprecated: OneSignal Player ID
 
   lastSyncAt DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  @@unique([userId, oneSignalId])
+  @@unique([userId, fcmToken])
   @@index([userId])
-  @@index([oneSignalId])
+  @@index([fcmToken])
+  @@index([oneSignalId]) // Legacy index
 }
 
 // Логирование системных ошибок и событий

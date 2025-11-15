@@ -2,7 +2,7 @@
 
 import { SessionProvider } from "next-auth/react";
 import { ThemeProvider } from "next-themes";
-import PushNotificationInit from "./push-notification-init";
+import FirebasePushInit from "./firebase-push-init";
 import { LanguageProvider } from "@/lib/language-context";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -15,7 +15,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         storageKey="myunion-theme"
       >
         <LanguageProvider>
-          <PushNotificationInit />
+          <FirebasePushInit />
           {children}
         </LanguageProvider>
       </ThemeProvider>

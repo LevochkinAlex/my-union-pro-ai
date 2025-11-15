@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 /**
- * Save or update push subscription for current user
+ * Save or update push subscription for current user (Firebase Cloud Messaging)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -17,41 +17,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { oneSignalId, subscriptionId } = await request.json();
+    const { fcmToken, subscriptionId } = await request.json();
 
-    if (!oneSignalId) {
+    if (!fcmToken) {
       return NextResponse.json(
-        { error: "OneSignal ID is required" },
+        { error: "FCM token is required" },
         { status: 400 }
       );
     }
 
-    // Check if subscription already exists
-    const existing = await prisma.pushSubscription.findFirst({
+    // Check if subscription already exists (by fcmToken)
+    const existing = await prisma.pushSubscription.findUnique({
       where: {
-        userId: session.user.id,
-        oneSignalId: oneSignalId,
+        fcmToken: fcmToken,
       },
     });
 
     let subscription;
 
     if (existing) {
-      // Update existing subscription
-      subscription = await prisma.pushSubscription.update({
-        where: { id: existing.id },
-        data: {
-          subscriptionId: subscriptionId,
-          lastSyncAt: new Date(),
-        },
-      });
+      // Update existing subscription (if user changed)
+      if (existing.userId !== session.user.id) {
+        subscription = await prisma.pushSubscription.update({
+          where: { id: existing.id },
+          data: {
+            userId: session.user.id,
+            subscriptionId: subscriptionId || fcmToken,
+            lastSyncAt: new Date(),
+          },
+        });
+      } else {
+        // Just update sync time
+        subscription = await prisma.pushSubscription.update({
+          where: { id: existing.id },
+          data: {
+            lastSyncAt: new Date(),
+          },
+        });
+      }
     } else {
       // Create new subscription
       subscription = await prisma.pushSubscription.create({
         data: {
           userId: session.user.id,
-          oneSignalId,
-          subscriptionId: subscriptionId,
+          fcmToken,
+          subscriptionId: subscriptionId || fcmToken,
           lastSyncAt: new Date(),
         },
       });
@@ -59,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     console.log("[push/subscribe] ✅ Subscription saved:", {
       userId: session.user.id,
-      oneSignalId,
+      fcmToken: fcmToken.substring(0, 20) + "...",
       subscriptionId: subscription.id,
       existing: !!existing,
     });
@@ -68,8 +78,7 @@ export async function POST(request: NextRequest) {
       success: true,
       subscription: {
         id: subscription.id,
-        oneSignalId: subscription.oneSignalId,
-        subscriptionId: subscription.subscriptionId,
+        fcmToken: subscription.fcmToken.substring(0, 20) + "...",
         lastSyncAt: subscription.lastSyncAt,
       },
     });
@@ -81,4 +90,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
