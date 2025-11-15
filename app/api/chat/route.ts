@@ -947,8 +947,8 @@ ID документа: ${uploadedDocument.documentId}
                   notification: {
                     title: bot.name || "AI Помощник",
                     body: messagePreview,
-                    icon: `${baseUrl}/logo.png`,
-                    badge: `${baseUrl}/logo.png`,
+                    icon: `${baseUrl}/icon.png`,
+                    badge: `${baseUrl}/icon.png`,
                     requireInteraction: false,
                     ...(user?.pushSoundEnabled !== false && {
                       sound: `${baseUrl}/notification-sound.mp3`,

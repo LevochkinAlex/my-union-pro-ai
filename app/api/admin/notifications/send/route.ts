@@ -66,8 +66,8 @@ export async function POST(request: Request) {
         notification: {
           title: heading,
           body: content,
-          icon: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/logo.png`,
-          badge: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/logo.png`,
+          icon: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/icon.png`,
+          badge: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/icon.png`,
           sound: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/notification-sound.mp3`,
         },
       },

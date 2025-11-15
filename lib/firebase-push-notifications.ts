@@ -208,18 +208,54 @@ export async function setupForegroundMessageHandler() {
     return;
   }
 
-  onMessage(messaging, (payload) => {
+  onMessage(messaging, async (payload) => {
     console.log("[Firebase] Foreground message received:", payload);
     
     // Show notification manually in foreground
     if (Notification.permission === "granted") {
-      const notification = new Notification(payload.notification?.title || "New message", {
+      // Проверяем настройки пользователя для звука
+      let soundEnabled = true;
+      try {
+        const settingsResponse = await fetch("/api/settings");
+        if (settingsResponse.ok) {
+          const settings = await settingsResponse.json();
+          soundEnabled = settings.pushSoundEnabled !== false;
+        }
+      } catch (error) {
+        console.warn("[Firebase] Failed to get user settings:", error);
+      }
+
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+      const notificationOptions: NotificationOptions = {
         body: payload.notification?.body,
-        icon: payload.notification?.icon || "/logo.png",
-        badge: "/logo.png",
+        icon: payload.notification?.icon || `${baseUrl}/icon.png`,
+        badge: `${baseUrl}/icon.png`,
         tag: payload.data?.sessionId,
         data: payload.data,
-      });
+        requireInteraction: false,
+      };
+
+      // Добавляем звук если включен
+      if (soundEnabled) {
+        notificationOptions.silent = false;
+        // Воспроизводим звук вручную
+        try {
+          const audio = new Audio(`${baseUrl}/notification-sound.mp3`);
+          audio.volume = 0.5;
+          await audio.play().catch((err) => {
+            console.warn("[Firebase] Failed to play sound:", err);
+          });
+        } catch (error) {
+          console.warn("[Firebase] Error playing sound:", error);
+        }
+      } else {
+        notificationOptions.silent = true;
+      }
+
+      const notification = new Notification(
+        payload.notification?.title || "New message",
+        notificationOptions
+      );
 
       notification.onclick = () => {
         window.focus();
