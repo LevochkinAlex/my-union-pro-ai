@@ -61,39 +61,21 @@ export async function initializePushNotifications() {
           return;
         }
 
-        // Initialize OneSignal with config
+        // Initialize OneSignal with minimal config to avoid SDK errors
         if (typeof OneSignalInstance.init === "function") {
           try {
+            // Use minimal config without promptOptions to avoid SDK initialization errors
             OneSignalInstance.init({
               appId: ONESIGNAL_APP_ID,
               allowLocalhostAsSecureOrigin: true,
               serviceWorkerPath: "/OneSignalSDKWorker.js",
               serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
-              promptOptions: {
-                slidedown: {
-                  prompts: [
-                    {
-                      type: "push",
-                      autoPrompt: true,
-                      text: {
-                        actionMessage:
-                          "Получайте уведомления о новых сообщениях от AI",
-                        acceptButton: "Разрешить",
-                        cancelButton: "Отклонить",
-                      },
-                      delay: {
-                        pageViews: 1,
-                        seconds: 10,
-                      },
-                    },
-                  ],
-                },
-              },
+              // Removed promptOptions to avoid SDK errors
             });
 
             console.log("[Push] OneSignal.init called successfully");
 
-            // Wait for SDK to fully initialize
+            // Wait longer for SDK to fully initialize all internal components
             setTimeout(() => {
               syncPushSubscription();
               
@@ -101,12 +83,20 @@ export async function initializePushNotifications() {
               setInterval(() => {
                 syncPushSubscription();
               }, 30000);
-            }, 3000);
+            }, 5000); // Increased delay to 5 seconds
           } catch (error) {
             console.error("[Push] Error initializing OneSignal:", error);
+            // Even if init fails, try to sync subscription after delay
+            setTimeout(() => {
+              syncPushSubscription();
+            }, 5000);
           }
         } else {
           console.error("[Push] OneSignal.init is not a function. OneSignal object:", OneSignalInstance);
+          // Try to sync anyway after delay
+          setTimeout(() => {
+            syncPushSubscription();
+          }, 5000);
         }
       });
       
@@ -166,7 +156,7 @@ export async function syncPushSubscription() {
             return;
           }
 
-          // Set external user ID first
+          // Set external user ID first (non-blocking)
           if (userId && typeof OneSignalInstance.setExternalUserId === "function") {
             try {
               OneSignalInstance.setExternalUserId(userId, (success: boolean) => {
@@ -181,7 +171,36 @@ export async function syncPushSubscription() {
             }
           }
 
-          // Get player ID
+          // Helper function to sync subscription to backend
+          const syncToBackend = (playerId: string) => {
+            fetch("/api/push/subscribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                oneSignalId: playerId,
+                subscriptionId: playerId,
+              }),
+            })
+              .then(async (response) => {
+                if (response.ok) {
+                  const data = await response.json();
+                  console.log("[Push] ✅ Subscription synced:", {
+                    playerId,
+                    subscriptionId: data.subscription?.id,
+                  });
+                } else {
+                  const errorText = await response.text();
+                  console.error("[Push] Failed to sync subscription:", response.status, errorText);
+                }
+                resolve();
+              })
+              .catch((error) => {
+                console.error("[Push] Error syncing subscription:", error);
+                resolve();
+              });
+          };
+
+          // Try to get player ID
           if (typeof OneSignalInstance.getUserId === "function") {
             try {
               OneSignalInstance.getUserId((playerId: string | null) => {
@@ -191,7 +210,7 @@ export async function syncPushSubscription() {
                   return;
                 }
 
-                // Get subscription status
+                // Check if notifications are enabled (optional check)
                 if (typeof OneSignalInstance.isPushNotificationsEnabled === "function") {
                   try {
                     OneSignalInstance.isPushNotificationsEnabled((isEnabled: boolean) => {
@@ -200,70 +219,16 @@ export async function syncPushSubscription() {
                         resolve();
                         return;
                       }
-
-                      // Send to backend to store
-                      fetch("/api/push/subscribe", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          oneSignalId: playerId,
-                          subscriptionId: playerId,
-                        }),
-                      })
-                        .then(async (response) => {
-                          if (response.ok) {
-                            const data = await response.json();
-                            console.log("[Push] ✅ Subscription synced:", {
-                              playerId,
-                              subscriptionId: data.subscription?.id,
-                            });
-                          } else {
-                            const errorText = await response.text();
-                            console.error("[Push] Failed to sync subscription:", response.status, errorText);
-                          }
-                          resolve();
-                        })
-                        .catch((error) => {
-                          console.error("[Push] Error syncing subscription:", error);
-                          resolve();
-                        });
+                      syncToBackend(playerId);
                     });
                   } catch (error) {
                     console.warn("[Push] Error checking push notifications enabled:", error);
-                    // Try to sync anyway
-                    fetch("/api/push/subscribe", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        oneSignalId: playerId,
-                        subscriptionId: playerId,
-                      }),
-                    })
-                      .then(async (response) => {
-                        if (response.ok) {
-                          console.log("[Push] ✅ Subscription synced (without enabled check):", playerId);
-                        }
-                        resolve();
-                      })
-                      .catch(() => resolve());
+                    // Sync anyway if check fails
+                    syncToBackend(playerId);
                   }
                 } else {
-                  // If isPushNotificationsEnabled is not available, try to sync anyway
-                  fetch("/api/push/subscribe", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      oneSignalId: playerId,
-                      subscriptionId: playerId,
-                    }),
-                  })
-                    .then(async (response) => {
-                      if (response.ok) {
-                        console.log("[Push] ✅ Subscription synced (without enabled check):", playerId);
-                      }
-                      resolve();
-                    })
-                    .catch(() => resolve());
+                  // If check method not available, sync anyway
+                  syncToBackend(playerId);
                 }
               });
             } catch (error) {
