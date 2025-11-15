@@ -122,14 +122,29 @@ export async function syncPushSubscription(): Promise<void> {
 
     console.log("[Firebase] Syncing for user:", userId);
 
-    // Wait for Service Worker to be ready
+    // Wait for Service Worker to be ready (with retry)
     if ("serviceWorker" in navigator) {
+      let registration = await navigator.serviceWorker.getRegistration();
+      
+      if (!registration) {
+        console.log("[Firebase] Service Worker not found, registering...");
+        try {
+          registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+          console.log("[Firebase] ✅ Service Worker registered:", registration.scope);
+        } catch (error) {
+          console.error("[Firebase] ❌ Service Worker registration failed:", error);
+          return;
+        }
+      }
+      
+      // Wait for Service Worker to be ready
       try {
-        const registration = await navigator.serviceWorker.ready;
+        await registration.ready;
         console.log("[Firebase] Service Worker ready:", registration.scope);
       } catch (error) {
         console.warn("[Firebase] Service Worker not ready yet:", error);
-        // Continue anyway
+        // Wait a bit more
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
