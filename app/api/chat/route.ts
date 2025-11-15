@@ -1016,7 +1016,17 @@ ID документа: ${uploadedDocument.documentId}
                   include_player_ids: notificationPayload.include_player_ids?.length || 0,
                   sound: notificationPayload.sound,
                 },
+                oneSignalResponse: result,
               });
+              
+              // Проверяем есть ли ошибки в ответе OneSignal
+              if (result.errors && result.errors.length > 0) {
+                console.error("[chat] ⚠️ OneSignal returned errors:", result.errors);
+              }
+              
+              if (result.recipients === 0) {
+                console.error("[chat] ⚠️ OneSignal delivered to 0 recipients!");
+              }
             } else {
               const errorText = await pushResponse.text();
               const errorStatus = pushResponse.status;
@@ -1024,6 +1034,10 @@ ID документа: ${uploadedDocument.documentId}
                 status: errorStatus,
                 error: errorText,
                 recipientIds: recipientIds,
+                recipientIdsFormatted: recipientIds.map(id => ({
+                  id,
+                  isValidUUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+                })),
                 appId: ONESIGNAL_APP_ID,
                 hasApiKey: !!ONESIGNAL_API_KEY,
               });
