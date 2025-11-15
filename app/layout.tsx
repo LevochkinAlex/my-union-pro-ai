@@ -39,9 +39,20 @@ export default function RootLayout({
                   OneSignalDeferred.push(async function(OneSignal) {
                     console.log('[OneSignal] v16 Deferred initialization starting...');
                     try {
+                      // Register service workers explicitly
+                      if ('serviceWorker' in navigator) {
+                        try {
+                          await navigator.serviceWorker.register('/OneSignalSDKWorker.js', { scope: '/' });
+                          console.log('[OneSignal] ✅ Service Worker registered');
+                        } catch (error) {
+                          console.error('[OneSignal] Service Worker registration failed:', error);
+                        }
+                      }
+
                       await OneSignal.init({
                         appId: "${ONESIGNAL_APP_ID}",
                         allowLocalhostAsSecureOrigin: true,
+                        serviceWorkerPath: '/OneSignalSDKWorker.js',
                       });
                       console.log('[OneSignal] ✅ v16 Initialized successfully');
                     } catch (error) {
