@@ -263,9 +263,9 @@ export default function DiscountsClient({
   const pageEnd = Math.min(totalItems, pageStart + perPage - 1);
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-        <div className="grid gap-4 lg:grid-cols-[1.2fr,auto,auto]">
+    <div className="space-y-6 w-full">
+      <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 w-full">
+        <div className="grid gap-4 lg:grid-cols-[1fr,auto,auto]">
           <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-gray-800/50 dark:bg-gray-800/40">
             <p className="text-sm font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">
               Фильтры и уведомления
@@ -398,7 +398,7 @@ function CityPanel({
   onChange: (updates: Partial<FilterState>) => void;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-gray-800/50 dark:bg-gray-800/40">
+    <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4 dark:border-gray-800/50 dark:bg-gray-800/40">
       <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Город</label>
       <select
         value={filters.cityId ?? ""}
@@ -409,7 +409,7 @@ function CityPanel({
             page: 1,
           })
         }
-        className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+        className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
       >
         <option value="">Все города</option>
         {cities.map((city) => (
@@ -465,23 +465,23 @@ function CategoryPanel({
   const isActive = (id: number) => selected.includes(id);
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-gray-800/50 dark:bg-gray-800/40">
+    <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4 dark:border-gray-800/50 dark:bg-gray-800/40">
       <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Категории</label>
       <div className="relative mt-3">
         {scrollPos > 8 && (
           <button
             type="button"
             onClick={() => scrollBy(-200)}
-            className="absolute left-0 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/90 p-2 shadow hover:bg-white dark:bg-gray-900/90"
+            className="absolute left-0 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/90 p-1.5 shadow hover:bg-white dark:bg-gray-900/90"
           >
-            <svg className="h-4 w-4 text-gray-600" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+            <svg className="h-3 w-3 text-gray-600" viewBox="0 0 20 20" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15L7 10l5-5" />
             </svg>
           </button>
         )}
         <div
           id={containerId}
-          className="flex gap-2 overflow-x-auto scroll-smooth pr-4 pl-10"
+          className="flex gap-2 overflow-x-auto scroll-smooth pr-3 pl-8"
         >
           {categories.map((category) => (
             <button
@@ -507,9 +507,9 @@ function CategoryPanel({
         <button
           type="button"
           onClick={() => scrollBy(200)}
-          className="absolute right-0 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/90 p-2 shadow hover:bg-white dark:bg-gray-900/90"
+          className="absolute right-0 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/90 p-1.5 shadow hover:bg-white dark:bg-gray-900/90"
         >
-          <svg className="h-4 w-4 text-gray-600" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+          <svg className="h-3 w-3 text-gray-600" viewBox="0 0 20 20" fill="none" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 5l5 5-5 5" />
           </svg>
         </button>
