@@ -39,8 +39,18 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
 
   // Extract and track active session ID from URL
   useEffect(() => {
-    const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-    setActiveSessionId(params.get("session") || params.get("appeal"));
+    if (typeof window === "undefined") return;
+    
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session") || params.get("appeal");
+    
+    // Also check if URL contains appeal ID in pathname (e.g., /dashboard/appeals/xyz)
+    if (!sessionId && pathname.includes("/appeals/")) {
+      const appealId = pathname.split("/appeals/")[1];
+      setActiveSessionId(appealId);
+    } else {
+      setActiveSessionId(sessionId);
+    }
   }, [pathname]);
 
   const loadSessions = useCallback(async () => {

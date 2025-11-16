@@ -263,9 +263,9 @@ export default function DiscountsClient({
   const pageEnd = Math.min(totalItems, pageStart + perPage - 1);
 
   return (
-    <div className="space-y-6 w-full">
-      <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 w-full">
-        <div className="grid gap-4 lg:grid-cols-[1fr,auto,auto]">
+    <div className="space-y-6 overflow-hidden">
+      <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 overflow-hidden">
+        <div className="grid gap-4 lg:grid-cols-[1fr,auto,auto] overflow-hidden">
           <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-gray-800/50 dark:bg-gray-800/40">
             <p className="text-sm font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">
               Фильтры и уведомления
@@ -583,7 +583,7 @@ function DiscountGrid({
   }
 
   return (
-    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2">
+    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 overflow-hidden">
       {data.discounts.map((discount) => (
         <DiscountCard
           key={discount.id}
