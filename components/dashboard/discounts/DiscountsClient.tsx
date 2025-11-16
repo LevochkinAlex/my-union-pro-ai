@@ -97,13 +97,13 @@ export default function DiscountsClient({
         if (nextFilters.page) params.set("page", String(nextFilters.page));
         if (nextFilters.view && nextFilters.view !== "all") {
           params.set("view", nextFilters.view);
+          const favList = listOverride?.favorites ?? favorites;
+          const claimedList = listOverride?.claimed ?? claimed;
           if (nextFilters.view === "favorites") {
-              const favoriteIds = listOverride?.favorites ?? favorites;
-              params.set("ids", favoriteIds.join(","));
+            params.set("ids", favList.join(","));
           }
           if (nextFilters.view === "claimed") {
-            const claimedIds = listOverride?.claimed ?? claimed;
-            params.set("ids", claimedIds.join(","));
+            params.set("ids", claimedList.join(","));
           }
         }
         if (nextFilters.nearMe && nextFilters.cityId === null) {
@@ -127,125 +127,129 @@ export default function DiscountsClient({
     [filters, favorites, claimed]
   );
 
-  const handleFilterChange = (updates: Partial<FilterState>) => {
-    setFilters((prev) => {
-      const next = { ...prev, ...updates };
-      fetchDiscounts(next);
-      return next;
-    });
+  const updateFilters = (updates: Partial<FilterState>) => {
+    const next = { ...filters, ...updates };
+    setFilters(next);
+    fetchDiscounts(next);
+    persistPreference(next);
   };
 
   const handleResetFilters = () => {
-    const defaults = { ...DEFAULT_FILTERS, view: filters.view };
+    const defaults: FilterState = {
+      ...DEFAULT_FILTERS,
+      view: "all" as ViewMode,
+    };
     setFilters(defaults);
     fetchDiscounts(defaults);
   };
 
-  const handlePushToggle = async () => {
-    try {
-      setError(null);
-      if (!pushEnabled) {
-        const granted = await requestPushPermission();
-        if (!granted) {
-          setError("Разрешите отправку уведомлений в браузере");
-          return;
+  const handleTogglePush = async () => {
+    if (!pushEnabled) {
+      try {
+        const allowed = await requestPushPermission();
+        if (allowed) {
+          await syncPushSubscription();
+          setPushEnabled(true);
+          await fetch("/api/discounts/preferences", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pushEnabled: true }),
+          });
         }
-        await syncPushSubscription();
+      } catch (error) {
+        console.error("Failed to enable push", error);
       }
+    } else {
+      setPushEnabled(false);
+      await fetch("/api/discounts/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pushEnabled: false }),
+      });
+    }
+  };
 
-      const response = await fetch("/api/discounts/preferences", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+  const handleFavoriteToggle = async (discountId: number) => {
+    const nextFavorites = favorites.includes(discountId)
+      ? favorites.filter((id) => id !== discountId)
+      : [...favorites, discountId];
+    setFavorites(nextFavorites);
+
+    try {
+      await fetch("/api/discounts/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          pushEnabled: !pushEnabled,
           filters: {
-            cityId: filters.cityId,
-            categoryIds: filters.categoryIds,
-            premiumOnly: filters.premiumOnly,
-            radiusKm: filters.radiusKm,
+            favorites: nextFavorites,
+            claimed,
           },
         }),
       });
-
-      if (!response.ok) {
-        throw new Error("Не удалось обновить настройки");
+      if (filters.view === "favorites") {
+        fetchDiscounts(filters, { favorites: nextFavorites, claimed });
       }
+    } catch (error) {
+      console.error("Failed to update favorites", error);
+    }
+  };
 
-      setPushEnabled(!pushEnabled);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка включения уведомлений");
+  const handleClaim = async (discountId: number) => {
+    if (claimed.includes(discountId)) return;
+    const nextClaimed = [...claimed, discountId];
+    setClaimed(nextClaimed);
+
+    try {
+      await fetch("/api/discounts/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filters: {
+            favorites,
+            claimed: nextClaimed,
+          },
+        }),
+      });
+      if (filters.view === "claimed") {
+        fetchDiscounts(filters, { favorites, claimed: nextClaimed });
+      }
+    } catch (error) {
+      console.error("Failed to update claimed", error);
     }
   };
 
   const handleUseGeolocation = async () => {
-    if (!geoSupport) {
-      setError("Ваш браузер не поддерживает геолокацию.");
-      return;
-    }
-
     try {
-      setIsLoading(true);
       const position = await getCurrentPosition();
-      const response = await fetch("/api/discounts?nearMe=1&radiusKm=" + filters.radiusKm + `&lat=${position.coords.latitude}&lng=${position.coords.longitude}`);
-      if (!response.ok) {
-        throw new Error("Не удалось получить ближайшие скидки");
-      }
-      const payload = (await response.json()) as DiscountSearchResult;
-      setData(payload);
-      setFilters((prev) => ({
-        ...prev,
+      updateFilters({
         nearMe: true,
-        search: "",
         cityId: null,
-      }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось получить геолокацию");
-    } finally {
-      setIsLoading(false);
+        page: 1,
+      });
+    } catch (error) {
+      alert("Не удалось определить местоположение");
     }
   };
 
   const handleTabChange = (view: ViewMode) => {
-    handleFilterChange({ view, page: 1 });
-  };
-
-  const handleFavoriteToggle = (id: number) => {
-    setFavorites((prev) => {
-      const next = prev.includes(id) ? prev.filter((fav) => fav !== id) : [...prev, id];
-      persistPreference({ favorites: next });
-      if (filters.view === "favorites") {
-        fetchDiscounts({ ...filters, page: 1 }, { favorites: next });
-      }
-      return next;
-    });
-  };
-
-  const handleClaim = (id: number) => {
-    setClaimed((prev) => {
-      if (prev.includes(id)) return prev;
-      const next = [...prev, id];
-      persistPreference({ claimed: next });
-      if (filters.view === "claimed") {
-        fetchDiscounts({ ...filters, page: 1 }, { claimed: next });
-      }
-      return next;
-    });
+    updateFilters({ view, page: 1 });
   };
 
   const persistPreference = useCallback(
-    async (overrides: Partial<Record<"favorites" | "claimed", number[]>>) => {
+    async (nextFilters: FilterState) => {
       try {
         await fetch("/api/discounts/preferences", {
-          method: "PUT",
+          method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            pushEnabled,
             filters: {
-              ...filters,
-              favorites: overrides.favorites ?? favorites,
-              claimed: overrides.claimed ?? claimed,
+              cityId: nextFilters.cityId,
+              categoryIds: nextFilters.categoryIds,
+              premiumOnly: nextFilters.premiumOnly,
+              radiusKm: nextFilters.radiusKm,
+              view: nextFilters.view,
+              favorites,
+              claimed,
             },
           }),
         });
@@ -253,7 +257,7 @@ export default function DiscountsClient({
         console.error("[discounts] Failed to persist preference", err);
       }
     },
-    [filters, favorites, claimed, pushEnabled]
+    [favorites, claimed]
   );
 
   const totalItems = data.meta?.total ?? data.discounts.length;
@@ -263,97 +267,169 @@ export default function DiscountsClient({
   const pageEnd = Math.min(totalItems, pageStart + perPage - 1);
 
   return (
-    <div className="space-y-6 overflow-hidden">
-      <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 overflow-hidden">
-        <div className="grid gap-4 lg:grid-cols-[1fr,auto,auto] overflow-hidden">
-          <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-gray-800/50 dark:bg-gray-800/40">
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">
-              Фильтры и уведомления
-            </p>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Сохраняйте подборки, подписывайтесь на уведомления и не пропускайте новые предложения.
-            </p>
+    <div className="space-y-6">
+      {/* Tabs */}
+      <Tabs
+        view={filters.view}
+        onChange={handleTabChange}
+        favorites={favorites.length}
+        claimed={claimed.length}
+      />
+
+      {/* Filters */}
+      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
+        {/* Row 1: Search + City */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Поиск по скидкам..."
+              value={filters.search}
+              onChange={(e) => updateFilters({ search: e.target.value, page: 1 })}
+              className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 pl-10 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+            />
+            <svg
+              className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
           </div>
-          <label className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-gray-50/70 px-4 py-3 text-sm font-medium text-gray-700 dark:border-gray-800/50 dark:bg-gray-800/40 dark:text-gray-300">
+
+          <select
+            value={filters.cityId ?? ""}
+            onChange={(e) =>
+              updateFilters({
+                cityId: e.target.value ? Number(e.target.value) : null,
+                nearMe: false,
+                page: 1,
+              })
+            }
+            className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+          >
+            <option value="">Все города</option>
+            {data.cities.map((city) => (
+              <option key={city.id} value={city.id}>
+                {city.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Row 2: Categories */}
+        {data.categories.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {data.categories.map((cat) => {
+              const isActive = filters.categoryIds.includes(cat.id);
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    const next = isActive
+                      ? filters.categoryIds.filter((id) => id !== cat.id)
+                      : [...filters.categoryIds, cat.id];
+                    updateFilters({ categoryIds: next, page: 1 });
+                  }}
+                  className={clsx(
+                    "inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium transition",
+                    isActive
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  )}
+                >
+                  {cat.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Row 3: Actions */}
+        <div className="flex flex-wrap items-center gap-3">
+          {geoSupport && (
+            <button
+              onClick={handleUseGeolocation}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Найти рядом
+            </button>
+          )}
+
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
             <input
               type="checkbox"
               checked={pushEnabled}
-              onChange={handlePushToggle}
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              onChange={handleTogglePush}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-600"
             />
-            Уведомлять о новых скидках
+            Уведомления
           </label>
-          <button
-            type="button"
-            onClick={handleResetFilters}
-            disabled={!hasActiveFilters}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-blue-600 shadow-sm transition hover:border-blue-300 hover:text-blue-700 disabled:border-gray-200 disabled:text-gray-400 dark:border-gray-700 dark:bg-gray-900"
-          >
-            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4l12 12M16 4L4 16" />
-            </svg>
-            Сбросить фильтры
-          </button>
-        </div>
 
-        <Tabs view={filters.view} onChange={handleTabChange} favorites={favorites.length} claimed={claimed.length} />
-
-        <div className="mt-4 space-y-4">
-          <div className="grid gap-4 lg:grid-cols-2">
-            <SearchPanel filters={filters} onChange={handleFilterChange} />
-            <CityPanel
-              filters={filters}
-              cities={data.cities}
-              geoAvailable={geoSupport}
-              onLocate={handleUseGeolocation}
-              onChange={handleFilterChange}
-            />
-          </div>
-          <CategoryPanel
-            categories={data.categories}
-            selected={filters.categoryIds}
-            onChange={(categoryIds) => handleFilterChange({ categoryIds, page: 1 })}
-          />
+          {hasActiveFilters && (
+            <button
+              onClick={handleResetFilters}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Сбросить
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Error */}
       {error && (
-        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
           {error}
         </div>
       )}
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      {/* Results */}
+      <div className="space-y-4">
+        {/* Pagination Header */}
+        <div className="flex items-center justify-between">
           <div className="text-sm text-gray-500 dark:text-gray-400">
-            {pageStart}-{pageEnd} из {totalItems}
+            {totalItems > 0 ? `${pageStart}-${pageEnd} из ${totalItems}` : "Нет результатов"}
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleFilterChange({ page: Math.max(1, filters.page - 1) })}
-              disabled={filters.page === 1}
-              className="rounded-full border border-gray-200 p-2 text-gray-500 transition hover:text-blue-600 disabled:opacity-50 dark:border-gray-700 dark:text-gray-400"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15L7 10l5-5" />
-              </svg>
-            </button>
-            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">{filters.page} / {totalPages}</span>
-            <button
-              onClick={() => handleFilterChange({ page: Math.min(totalPages, filters.page + 1) })}
-              disabled={filters.page >= totalPages}
-              className="rounded-full border border-gray-200 p-2 text-gray-500 transition hover:text-blue-600 disabled:opacity-50 dark:border-gray-700 dark:text-gray-400"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 5l5 5-5 5" />
-              </svg>
-            </button>
-          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => updateFilters({ page: Math.max(1, filters.page - 1) })}
+                disabled={filters.page === 1}
+                className="rounded-lg border border-gray-200 p-2 text-gray-500 transition hover:bg-gray-50 disabled:opacity-30 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                {filters.page} / {totalPages}
+              </span>
+              <button
+                onClick={() => updateFilters({ page: Math.min(totalPages, filters.page + 1) })}
+                disabled={filters.page >= totalPages}
+                className="rounded-lg border border-gray-200 p-2 text-gray-500 transition hover:bg-gray-50 disabled:opacity-30 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
 
+        {/* Grid */}
         {isLoading ? (
-          <div className="grid place-items-center rounded-2xl border border-dashed border-gray-200 p-12 text-gray-500 dark:border-gray-800 dark:text-gray-400">
-            Загрузка актуальных предложений…
+          <div className="flex min-h-[400px] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-gray-500 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400">
+            Загрузка...
           </div>
         ) : (
           <DiscountGrid
@@ -364,155 +440,6 @@ export default function DiscountsClient({
             onClaim={handleClaim}
           />
         )}
-      </div>
-    </div>
-  );
-}
-
-function SearchPanel({ filters, onChange }: { filters: FilterState; onChange: (updates: Partial<FilterState>) => void }) {
-  return (
-    <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-gray-800/50 dark:bg-gray-800/40">
-      <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Поиск</label>
-      <input
-        type="text"
-        value={filters.search}
-        onChange={(event) => onChange({ search: event.target.value, page: 1 })}
-        placeholder="Например, доставка еды или Skyeng"
-        className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-      />
-    </div>
-  );
-}
-
-function CityPanel({
-  filters,
-  cities,
-  geoAvailable,
-  onLocate,
-  onChange,
-}: {
-  filters: FilterState;
-  cities: DiscountSearchResult["cities"];
-  geoAvailable: boolean;
-  onLocate: () => void;
-  onChange: (updates: Partial<FilterState>) => void;
-}) {
-  return (
-    <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4 dark:border-gray-800/50 dark:bg-gray-800/40">
-      <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Город</label>
-      <select
-        value={filters.cityId ?? ""}
-        onChange={(event) =>
-          onChange({
-            cityId: event.target.value ? Number(event.target.value) : null,
-            nearMe: false,
-            page: 1,
-          })
-        }
-        className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-      >
-        <option value="">Все города</option>
-        {cities.map((city) => (
-          <option key={city.id} value={city.id}>
-            {city.name} {city.count ? `(${city.count})` : ""}
-          </option>
-        ))}
-      </select>
-      <button
-        type="button"
-        onClick={onLocate}
-        disabled={!geoAvailable}
-        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-blue-300 bg-white px-3 py-2 text-sm font-medium text-blue-600 transition hover:border-blue-400 hover:text-blue-700 disabled:border-gray-200 disabled:text-gray-400 dark:bg-gray-900"
-      >
-        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 2.5v1.8M10 15.7v1.8M3.5 10h1.8m9.4 0h1.8M5.6 5.6l1.3 1.3m6.2 6.2l1.3 1.3M5.6 14.4l1.3-1.3m6.2-6.2l1.3-1.3" />
-          <circle cx="10" cy="10" r="3.5" strokeWidth={1.5} />
-        </svg>
-        {geoAvailable ? "Найти рядом" : "Геолокация недоступна"}
-      </button>
-    </div>
-  );
-}
-
-function CategoryPanel({
-  categories,
-  selected,
-  onChange,
-}: {
-  categories: DiscountSearchResult["categories"];
-  selected: number[];
-  onChange: (categoryIds: number[]) => void;
-}) {
-  const [scrollPos, setScrollPos] = useState(0);
-  const containerId = "discount-categories-scroll";
-
-  useEffect(() => {
-    const el = document.getElementById(containerId);
-    if (!el) return;
-    const handleScroll = () => {
-      setScrollPos(el.scrollLeft);
-    };
-    el.addEventListener("scroll", handleScroll);
-    return () => el.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  const scrollBy = (delta: number) => {
-    const el = document.getElementById(containerId);
-    if (!el) return;
-    el.scrollBy({ left: delta, behavior: "smooth" });
-  };
-
-  const isActive = (id: number) => selected.includes(id);
-
-  return (
-    <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4 dark:border-gray-800/50 dark:bg-gray-800/40">
-      <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Категории</label>
-      <div className="relative mt-3">
-        {scrollPos > 8 && (
-          <button
-            type="button"
-            onClick={() => scrollBy(-200)}
-            className="absolute left-0 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/90 p-1.5 shadow hover:bg-white dark:bg-gray-900/90"
-          >
-            <svg className="h-3 w-3 text-gray-600" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15L7 10l5-5" />
-            </svg>
-          </button>
-        )}
-        <div
-          id={containerId}
-          className="flex gap-2 overflow-x-auto scroll-smooth pr-3 pl-8"
-        >
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              type="button"
-              onClick={() => {
-                const nextCategories = isActive(category.id)
-                  ? selected.filter((id) => id !== category.id)
-                  : [...selected, category.id];
-                onChange(nextCategories);
-              }}
-              className={clsx(
-                "shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition",
-                isActive(category.id)
-                  ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-500/10 dark:text-blue-200"
-                  : "border-gray-200 bg-white text-gray-600 hover:border-blue-300 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
-              )}
-            >
-              {category.name}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => scrollBy(200)}
-          className="absolute right-0 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/90 p-1.5 shadow hover:bg-white dark:bg-gray-900/90"
-        >
-          <svg className="h-3 w-3 text-gray-600" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 5l5 5-5 5" />
-          </svg>
-        </button>
       </div>
     </div>
   );
@@ -536,22 +463,22 @@ function Tabs({
   ];
 
   return (
-    <div className="mt-6 flex gap-2 overflow-x-auto">
+    <div className="flex gap-2 overflow-x-auto">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           type="button"
           onClick={() => onChange(tab.id)}
           className={clsx(
-            "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition shadow-sm",
+            "inline-flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition",
             view === tab.id
-              ? "bg-blue-600 text-white"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
           )}
         >
           {tab.label}
-          {typeof tab.count === "number" && (
-            <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs text-white dark:bg-gray-900/40">
+          {typeof tab.count === "number" && tab.count > 0 && (
+            <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs dark:bg-black/20">
               {tab.count}
             </span>
           )}
@@ -576,14 +503,17 @@ function DiscountGrid({
 }) {
   if (data.discounts.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
-        К сожалению, по выбранным фильтрам пока нет предложений. Попробуйте расширить поиск.
+      <div className="flex min-h-[300px] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400">
+        <div>
+          <p className="text-lg font-medium">Нет предложений</p>
+          <p className="mt-1 text-sm">Попробуйте изменить фильтры</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 overflow-hidden">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       {data.discounts.map((discount) => (
         <DiscountCard
           key={discount.id}
@@ -612,4 +542,3 @@ function getCurrentPosition(): Promise<GeolocationPosition> {
     });
   });
 }
-

@@ -14,6 +14,10 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'bestbenefits.ru',
       },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+      },
     ],
   },
   experimental: {
