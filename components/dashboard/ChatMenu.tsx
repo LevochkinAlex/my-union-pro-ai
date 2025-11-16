@@ -31,16 +31,17 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [renameSessionId, setRenameSessionId] = useState<string | null>(null);
   const [newSessionName, setNewSessionName] = useState("");
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const router = useRouter();
   const pathname = usePathname();
   const menuRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
-  // Extract session ID from pathname (e.g., /dashboard?session=xyz or /dashboard?appeal=xyz)
-  const getActiveSessionId = useCallback(() => {
+  // Extract and track active session ID from URL
+  useEffect(() => {
     const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-    return params.get("session") || params.get("appeal");
-  }, []);
+    setActiveSessionId(params.get("session") || params.get("appeal"));
+  }, [pathname]);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -276,7 +277,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
             <div
               onClick={() => handleOpenSession(sessions.find(s => s.type === "STATEMENT")!.id, "chat")}
               className={`flex items-center gap-2 px-3 py-2 text-sm rounded cursor-pointer transition-colors group ${
-                getActiveSessionId() === sessions.find(s => s.type === "STATEMENT")?.id
+                activeSessionId === sessions.find(s => s.type === "STATEMENT")?.id
                   ? "bg-blue-100 text-blue-700 font-semibold dark:bg-blue-900/30 dark:text-blue-300"
                   : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
               }`}
@@ -313,7 +314,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                   <div
                     onClick={() => handleOpenSession(appeal.id, "appeal")}
                     className={`flex items-center gap-2 px-3 py-2 text-sm rounded cursor-pointer transition-colors ${
-                      getActiveSessionId() === appeal.id
+                      activeSessionId === appeal.id
                         ? "bg-blue-100 text-blue-700 font-semibold dark:bg-blue-900/30 dark:text-blue-300"
                         : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                     }`}
