@@ -93,25 +93,44 @@ export async function syncPushSubscription(): Promise<void> {
     }
 
     // Wait for Service Worker to be ready (with retry)
+    let registration: ServiceWorkerRegistration | null = null;
     if ("serviceWorker" in navigator) {
-      let registration = await navigator.serviceWorker.getRegistration();
-      
-      if (!registration) {
+      try {
+        registration = await navigator.serviceWorker.getRegistration();
+        
+        if (!registration) {
+          try {
+            registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+            console.log("[Firebase] Service Worker registered:", registration.scope);
+          } catch (error) {
+            console.error("[Firebase] ❌ Service Worker registration failed:", error);
+            return;
+          }
+        }
+        
+        // Wait for Service Worker to be ready
         try {
-          registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+          registration = await navigator.serviceWorker.ready;
+          console.log("[Firebase] Service Worker ready:", registration.scope);
         } catch (error) {
-          console.error("[Firebase] ❌ Service Worker registration failed:", error);
+          console.warn("[Firebase] Service Worker not ready yet:", error);
+          // Wait a bit more and retry
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          registration = await navigator.serviceWorker.ready;
+        }
+        
+        // Verify that registration has pushManager (required for FCM)
+        if (!registration || !registration.pushManager) {
+          console.warn("[Firebase] Service Worker registration does not have pushManager");
           return;
         }
-      }
-      
-      // Wait for Service Worker to be ready
-      try {
-        await navigator.serviceWorker.ready;
       } catch (error) {
-        // Wait a bit more
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.error("[Firebase] ❌ Error setting up Service Worker:", error);
+        return;
       }
+    } else {
+      console.warn("[Firebase] Service Worker not supported in this browser");
+      return;
     }
 
     // Respect notification permission status
@@ -129,17 +148,32 @@ export async function syncPushSubscription(): Promise<void> {
       return;
     }
 
+    // Verify registration is still available before getting token
+    if (!registration) {
+      console.warn("[Firebase] ⚠️ Service Worker registration is not available");
+      return;
+    }
+
     // Get FCM token
     const messaging = await getMessagingInstance();
     if (!messaging) {
+      console.warn("[Firebase] ⚠️ Messaging instance is not available");
       return;
     }
 
     let token: string | null = null;
     try {
       console.log("[Firebase] Requesting FCM token with VAPID key...");
+      // Ensure we have a valid service worker registration before calling getToken
+      const currentRegistration = await navigator.serviceWorker.ready;
+      if (!currentRegistration || !currentRegistration.pushManager) {
+        console.warn("[Firebase] ⚠️ Service Worker registration or pushManager not available");
+        return;
+      }
+      
       token = await getToken(messaging, {
         vapidKey: VAPID_PUBLIC_KEY,
+        serviceWorkerRegistration: currentRegistration,
       });
       console.log("[Firebase] ✅ FCM token obtained:", {
         tokenPrefix: token ? token.substring(0, 20) + "..." : "null",
