@@ -48,17 +48,39 @@ export async function GET(
 
     // Если сессия пустая, создаем приветственное сообщение в зависимости от типа
     if (messages.length === 0) {
-      const defaultBot = await prisma.chatBot.findFirst({
-        where: {
-          isActive: true,
-          isDefault: true,
-        },
-      });
+      // Выбираем бота в зависимости от типа сессии
+      let bot = null;
+      if (chatSession.type === "APPEAL") {
+        // Для обращений используем Appeal Bot
+        bot = await prisma.chatBot.findFirst({
+          where: {
+            isActive: true,
+            name: "Appeal Bot",
+          },
+        });
+        // Если Appeal Bot не найден, используем default bot как fallback
+        if (!bot) {
+          bot = await prisma.chatBot.findFirst({
+            where: {
+              isActive: true,
+              isDefault: true,
+            },
+          });
+        }
+      } else {
+        // Для заявлений используем default bot
+        bot = await prisma.chatBot.findFirst({
+          where: {
+            isActive: true,
+            isDefault: true,
+          },
+        });
+      }
 
       let welcomeMessageContent: string;
       if (chatSession.type === "APPEAL") {
         // Приветствие для обращений
-        welcomeMessageContent = "Здравствуйте! Я ваш помощник по обращениям в профсоюз. Я могу помочь вам с вопросами по различным направлениям: бухгалтерия, юридические вопросы, технические вопросы и другие. Опишите, пожалуйста, ваше обращение или вопрос, и я постараюсь вам помочь.";
+        welcomeMessageContent = "Здравствуйте! Я ваш помощник по обращениям в профсоюз. Я могу помочь вам с вопросами и проблемами, связанными с профсоюзом, трудовыми отношениями и правами работников. При ответах я опираюсь на законы Российской Федерации, устав и положения профсоюза. Опишите, пожалуйста, ваше обращение или вопрос, и я постараюсь вам помочь.";
       } else {
         // Приветствие для заявлений
         welcomeMessageContent = "Здравствуйте! Я ваш помощник для вступления в Профсоюз работников здравоохранения РФ. Я помогу вам заполнить профиль и подготовить необходимые документы для этого. Давайте начнем. Укажите регион России, в которой вы находитесь.";
@@ -70,7 +92,7 @@ export async function GET(
           role: "assistant",
           userId: session.user.id,
           sessionId: chatSession.id,
-          chatBotId: defaultBot?.id || null,
+          chatBotId: bot?.id || null,
         },
       });
 
