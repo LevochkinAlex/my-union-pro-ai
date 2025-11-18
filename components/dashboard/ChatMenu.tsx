@@ -115,7 +115,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     }
   };
 
-  const handleDeleteAppeal = async (e: React.MouseEvent, appealId: string) => {
+  const handleDeleteAppeal = async (e: React.MouseEvent | React.KeyboardEvent, appealId: string) => {
     e.stopPropagation();
     if (!confirm("Вы уверены, что хотите удалить это обращение?")) return;
 
@@ -334,7 +334,13 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
                               e.stopPropagation();
-                              handleDeleteAppeal(e, appeal.id);
+                              // Create a synthetic mouse event for handleDeleteAppeal
+                              const syntheticEvent = {
+                                ...e,
+                                stopPropagation: () => e.stopPropagation(),
+                                preventDefault: () => e.preventDefault(),
+                              } as unknown as React.MouseEvent;
+                              handleDeleteAppeal(syntheticEvent, appeal.id);
                             }
                           }}
                         >
