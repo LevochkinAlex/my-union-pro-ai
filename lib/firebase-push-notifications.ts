@@ -257,7 +257,7 @@ export async function setupForegroundMessageHandler() {
       // Check sound from payload data first, then from settings
       const payloadSoundEnabled = payload.data?.soundEnabled !== "false";
       const finalSoundEnabled = payloadSoundEnabled && soundEnabled;
-      const soundUrl = payload.data?.sound || payload.notification?.sound || `${baseUrl}/notification-sound.mp3`;
+      const soundUrl = payload.data?.sound || (payload.notification as any)?.sound || `${baseUrl}/notification-sound.mp3`;
       
       const notificationOptions: NotificationOptions = {
         body: payload.notification?.body || payload.data?.body || "Новое сообщение",
