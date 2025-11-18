@@ -17,37 +17,57 @@ export async function GET() {
 
     console.log("[settings] Fetching settings for user:", session.user.id);
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        pushNotificationsEnabled: true,
-        pushSoundEnabled: true,
-        emailBotNotifications: true,
-        emailAppealNotifications: true,
-      },
-    });
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          pushNotificationsEnabled: true,
+          pushSoundEnabled: true,
+          emailBotNotifications: true,
+          emailAppealNotifications: true,
+        },
+      });
 
-    if (!user) {
-      console.error("[settings] User not found:", session.user.id);
-      return NextResponse.json(
-        { error: "Пользователь не найден" },
-        { status: 404 }
-      );
+      if (!user) {
+        console.error("[settings] User not found:", session.user.id);
+        return NextResponse.json(
+          { error: "Пользователь не найден" },
+          { status: 404 }
+        );
+      }
+
+      console.log("[settings] User settings retrieved:", {
+        pushNotificationsEnabled: user.pushNotificationsEnabled,
+        pushSoundEnabled: user.pushSoundEnabled,
+        emailBotNotifications: user.emailBotNotifications,
+        emailAppealNotifications: user.emailAppealNotifications,
+      });
+
+      // Безопасное извлечение значений с дефолтами
+      const settings = {
+        pushNotificationsEnabled: user.pushNotificationsEnabled !== null && user.pushNotificationsEnabled !== undefined 
+          ? user.pushNotificationsEnabled 
+          : true,
+        pushSoundEnabled: user.pushSoundEnabled !== null && user.pushSoundEnabled !== undefined 
+          ? user.pushSoundEnabled 
+          : true,
+        emailBotNotifications: user.emailBotNotifications !== null && user.emailBotNotifications !== undefined 
+          ? user.emailBotNotifications 
+          : false,
+        emailAppealNotifications: user.emailAppealNotifications !== null && user.emailAppealNotifications !== undefined 
+          ? user.emailAppealNotifications 
+          : true,
+      };
+
+      return NextResponse.json(settings);
+    } catch (dbError: any) {
+      console.error("[settings] Database error:", {
+        message: dbError?.message,
+        code: dbError?.code,
+        meta: dbError?.meta,
+      });
+      throw dbError;
     }
-
-    console.log("[settings] User settings retrieved:", {
-      pushNotificationsEnabled: user.pushNotificationsEnabled,
-      pushSoundEnabled: user.pushSoundEnabled,
-      emailBotNotifications: user.emailBotNotifications,
-      emailAppealNotifications: user.emailAppealNotifications,
-    });
-
-    return NextResponse.json({
-      pushNotificationsEnabled: user.pushNotificationsEnabled ?? true,
-      pushSoundEnabled: user.pushSoundEnabled ?? true,
-      emailBotNotifications: user.emailBotNotifications ?? false,
-      emailAppealNotifications: user.emailAppealNotifications ?? true,
-    });
   } catch (error: any) {
     console.error("[settings] Error fetching settings:", {
       message: error?.message,
