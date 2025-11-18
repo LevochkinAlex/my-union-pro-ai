@@ -15,6 +15,8 @@ export async function GET() {
       );
     }
 
+    console.log("[settings] Fetching settings for user:", session.user.id);
+
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: {
@@ -26,11 +28,19 @@ export async function GET() {
     });
 
     if (!user) {
+      console.error("[settings] User not found:", session.user.id);
       return NextResponse.json(
         { error: "Пользователь не найден" },
         { status: 404 }
       );
     }
+
+    console.log("[settings] User settings retrieved:", {
+      pushNotificationsEnabled: user.pushNotificationsEnabled,
+      pushSoundEnabled: user.pushSoundEnabled,
+      emailBotNotifications: user.emailBotNotifications,
+      emailAppealNotifications: user.emailAppealNotifications,
+    });
 
     return NextResponse.json({
       pushNotificationsEnabled: user.pushNotificationsEnabled ?? true,
@@ -38,10 +48,19 @@ export async function GET() {
       emailBotNotifications: user.emailBotNotifications ?? false,
       emailAppealNotifications: user.emailAppealNotifications ?? true,
     });
-  } catch (error) {
-    console.error("[settings] Error fetching settings:", error);
+  } catch (error: any) {
+    console.error("[settings] Error fetching settings:", {
+      message: error?.message,
+      code: error?.code,
+      meta: error?.meta,
+      stack: error?.stack,
+      error: error,
+    });
     return NextResponse.json(
-      { error: "Ошибка загрузки настроек" },
+      { 
+        error: "Ошибка загрузки настроек",
+        details: process.env.NODE_ENV === "development" ? error?.message : undefined,
+      },
       { status: 500 }
     );
   }
@@ -97,10 +116,19 @@ export async function PUT(request: NextRequest) {
       success: true,
       message: "Настройки успешно сохранены",
     });
-  } catch (error) {
-    console.error("[settings] Error updating settings:", error);
+  } catch (error: any) {
+    console.error("[settings] Error updating settings:", {
+      message: error?.message,
+      code: error?.code,
+      meta: error?.meta,
+      stack: error?.stack,
+      error: error,
+    });
     return NextResponse.json(
-      { error: "Ошибка сохранения настроек" },
+      { 
+        error: "Ошибка сохранения настроек",
+        details: process.env.NODE_ENV === "development" ? error?.message : undefined,
+      },
       { status: 500 }
     );
   }
