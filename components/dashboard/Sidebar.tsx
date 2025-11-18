@@ -17,9 +17,10 @@ interface NavItem {
 interface SidebarProps {
   items: NavItem[];
   userInitial: string;
+  isAdmin?: boolean;
 }
 
-export default function Sidebar({ items, userInitial }: SidebarProps) {
+export default function Sidebar({ items, userInitial, isAdmin = false }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
 
@@ -47,7 +48,7 @@ export default function Sidebar({ items, userInitial }: SidebarProps) {
         {/* Logo */}
         <div className="flex items-center flex-shrink-0 px-4 py-4 border-b border-gray-200 dark:border-gray-700">
           <Link
-            href="/dashboard"
+            href={isAdmin ? "/admin/dashboard" : "/dashboard"}
             className={`flex items-center gap-2 ${isCollapsed ? "justify-center" : ""}`}
           >
             <LogoIcon className="h-8 w-8" size="sm" />
@@ -61,8 +62,8 @@ export default function Sidebar({ items, userInitial }: SidebarProps) {
 
         {/* Navigation */}
         <nav className={`flex-1 py-4 space-y-2 overflow-y-auto ${isCollapsed ? "px-3" : "px-4"}`}>
-          {/* Chat menu with history and appeals */}
-          <ChatMenu isCollapsed={isCollapsed} />
+          {/* Chat menu with history and appeals - только для обычных пользователей */}
+          {!isAdmin && <ChatMenu isCollapsed={isCollapsed} />}
 
           {/* Other menu items */}
           {items.map((item) => {
@@ -71,8 +72,8 @@ export default function Sidebar({ items, userInitial }: SidebarProps) {
               return null;
             }
 
-            const isActive = item.href === "/dashboard"
-              ? pathname === "/dashboard"
+            const isActive = item.href === "/admin/dashboard" || item.href === "/dashboard"
+              ? pathname === item.href
               : pathname === item.href || pathname.startsWith(item.href + "/");
 
             return (
@@ -126,9 +127,9 @@ export default function Sidebar({ items, userInitial }: SidebarProps) {
               <div className={`flex items-center gap-2 ${isCollapsed ? "flex-col" : "justify-between"}`}>
                 {/* Account icon */}
                 <Link
-                  href="/dashboard/profile"
+                  href={isAdmin ? "/admin/users" : "/dashboard/profile"}
                   className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
-                  title={isCollapsed ? "Профиль" : undefined}
+                  title={isCollapsed ? (isAdmin ? "Пользователи" : "Профиль") : undefined}
                 >
                   <span className="text-sm font-semibold">{userInitial}</span>
                 </Link>

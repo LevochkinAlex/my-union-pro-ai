@@ -10,24 +10,27 @@ export default async function AdminDashboard() {
   const organizationCount = await prisma.organization.count();
 
   return (
-    <div className="p-8">
-      <h1 className="mb-8 text-3xl font-bold text-gray-900 dark:text-white">
-        Dashboard
-      </h1>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+        <p className="mt-2 text-gray-600 dark:text-gray-400">
+          Панель управления системой MyUnion
+        </p>
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
                 Всего пользователей
               </p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">
+              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
                 {userCount}
               </p>
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
               <svg
                 className="h-6 w-6 text-blue-600 dark:text-blue-400"
                 fill="none"
@@ -45,17 +48,17 @@ export default async function AdminDashboard() {
           </div>
         </div>
 
-        <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
                 Всего документов
               </p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">
+              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
                 {documentCount}
               </p>
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
               <svg
                 className="h-6 w-6 text-green-600 dark:text-green-400"
                 fill="none"
@@ -73,17 +76,17 @@ export default async function AdminDashboard() {
           </div>
         </div>
 
-        <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
                 Всего организаций
               </p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">
+              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
                 {organizationCount}
               </p>
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30">
               <svg
                 className="h-6 w-6 text-purple-600 dark:text-purple-400"
                 fill="none"
@@ -103,8 +106,8 @@ export default async function AdminDashboard() {
       </div>
 
       {/* Welcome */}
-      <div className="mt-8 rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-        <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <h2 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
           Добро пожаловать, {session?.user?.name || "администратор"}!
         </h2>
         <p className="text-gray-600 dark:text-gray-400">
