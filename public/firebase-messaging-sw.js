@@ -23,16 +23,30 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
   
-  const notificationTitle = payload.notification?.title || 'New message';
+  const notificationTitle = payload.notification?.title || payload.data?.title || 'New message';
+  const notificationBody = payload.notification?.body || payload.data?.body || '';
+  
+  // Check if sound should be enabled (default to true if not specified)
+  const soundEnabled = payload.data?.soundEnabled !== 'false';
+  const soundUrl = payload.data?.sound || payload.notification?.sound || '/notification-sound.mp3';
+  
   const notificationOptions = {
-    body: payload.notification?.body,
-    icon: payload.notification?.icon || '/icon.png',
+    body: notificationBody,
+    icon: payload.notification?.icon || payload.data?.icon || '/icon.png',
     badge: '/icon.png',
-    tag: payload.data?.sessionId,
-    data: payload.data,
+    tag: payload.data?.sessionId || 'chat-message',
+    data: payload.data || {},
     requireInteraction: false,
-    silent: false,
+    silent: !soundEnabled,
+    ...(soundEnabled && { sound: soundUrl }),
   };
+
+  console.log('[firebase-messaging-sw.js] Showing notification:', {
+    title: notificationTitle,
+    body: notificationBody,
+    soundEnabled,
+    sound: soundUrl,
+  });
 
   return self.registration.showNotification(notificationTitle, notificationOptions);
 });

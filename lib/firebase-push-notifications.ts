@@ -137,22 +137,34 @@ export async function syncPushSubscription(): Promise<void> {
 
     let token: string | null = null;
     try {
+      console.log("[Firebase] Requesting FCM token with VAPID key...");
       token = await getToken(messaging, {
         vapidKey: VAPID_PUBLIC_KEY,
       });
+      console.log("[Firebase] ✅ FCM token obtained:", {
+        tokenPrefix: token ? token.substring(0, 20) + "..." : "null",
+        tokenLength: token?.length || 0,
+      });
     } catch (tokenError: any) {
       if (tokenError?.code === "messaging/permission-blocked") {
-        console.warn("[Firebase] Browser blocked notification permission request");
+        console.warn("[Firebase] ⚠️ Browser blocked notification permission request");
         return;
       }
+      console.error("[Firebase] ❌ Error getting FCM token:", {
+        code: tokenError?.code,
+        message: tokenError?.message,
+        error: tokenError,
+      });
       throw tokenError;
     }
 
     if (!token) {
+      console.warn("[Firebase] ⚠️ No FCM token received");
       return;
     }
 
     // Save subscription to backend
+    console.log("[Firebase] Saving token to backend...");
     await saveSubscription(token);
   } catch (error) {
     console.error("[Firebase] Sync error:", error);
@@ -162,6 +174,11 @@ export async function syncPushSubscription(): Promise<void> {
 // Save subscription to backend
 async function saveSubscription(fcmToken: string): Promise<void> {
   try {
+    console.log("[Firebase] Saving subscription to backend...", {
+      tokenPrefix: fcmToken.substring(0, 20) + "...",
+      tokenLength: fcmToken.length,
+    });
+    
     const response = await fetch("/api/push/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -172,11 +189,38 @@ async function saveSubscription(fcmToken: string): Promise<void> {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[Firebase] Failed to sync subscription:", response.status, errorText);
+      let errorText = "";
+      try {
+        errorText = await response.text();
+      } catch (e) {
+        errorText = `Failed to read error response: ${e}`;
+      }
+      
+      console.error("[Firebase] ❌ Failed to sync subscription:", {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText,
+        url: "/api/push/subscribe",
+      });
+      
+      // Don't throw - just log the error, subscription sync is not critical
+      return;
+    }
+
+    let result;
+    try {
+      result = await response.json();
+      console.log("[Firebase] ✅ Subscription saved successfully:", {
+        subscriptionId: result.subscription?.id,
+        lastSyncAt: result.subscription?.lastSyncAt,
+        success: result.success,
+      });
+    } catch (jsonError) {
+      console.error("[Firebase] ❌ Failed to parse subscription response:", jsonError);
+      return;
     }
   } catch (error) {
-    console.error("[Firebase] Error saving subscription:", error);
+    console.error("[Firebase] ❌ Error saving subscription:", error);
   }
 }
 
@@ -209,14 +253,21 @@ export async function setupForegroundMessageHandler() {
       }
 
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+      
+      // Check sound from payload data first, then from settings
+      const payloadSoundEnabled = payload.data?.soundEnabled !== "false";
+      const finalSoundEnabled = payloadSoundEnabled && soundEnabled;
+      const soundUrl = payload.data?.sound || payload.notification?.sound || `${baseUrl}/notification-sound.mp3`;
+      
       const notificationOptions: NotificationOptions = {
         body: payload.notification?.body || payload.data?.body || "Новое сообщение",
-        icon: payload.notification?.icon || `${baseUrl}/icon.png`,
+        icon: payload.notification?.icon || payload.data?.icon || `${baseUrl}/icon.png`,
         badge: `${baseUrl}/icon.png`,
         tag: payload.data?.sessionId || "chat-message",
         data: payload.data || {},
         requireInteraction: false,
-        silent: !soundEnabled,
+        silent: !finalSoundEnabled,
+        ...(finalSoundEnabled && { sound: soundUrl }),
       };
 
       try {

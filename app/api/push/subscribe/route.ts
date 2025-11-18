@@ -26,45 +26,81 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if subscription already exists (by fcmToken)
-    const existing = await prisma.pushSubscription.findUnique({
-      where: {
-        fcmToken: fcmToken,
-      },
-    });
+    // Check if subscription already exists (by fcmToken or userId)
+    // First try to find by fcmToken (if it's not null)
+    let existing = null;
+    if (fcmToken) {
+      try {
+        existing = await prisma.pushSubscription.findFirst({
+          where: {
+            fcmToken: fcmToken,
+          },
+        });
+      } catch (error) {
+        // If findUnique fails (e.g., fcmToken is null in DB), try findFirst
+        console.warn("[push/subscribe] findUnique failed, trying findFirst:", error);
+      }
+    }
+
+    // If not found by fcmToken, check if user already has a subscription
+    if (!existing) {
+      existing = await prisma.pushSubscription.findFirst({
+        where: {
+          userId: session.user.id,
+        },
+      });
+    }
 
     let subscription;
 
     if (existing) {
-      // Update existing subscription (if user changed)
-      if (existing.userId !== session.user.id) {
-        subscription = await prisma.pushSubscription.update({
-          where: { id: existing.id },
-          data: {
-            userId: session.user.id,
-            subscriptionId: subscriptionId || fcmToken,
-            lastSyncAt: new Date(),
-          },
-        });
-      } else {
-        // Just update sync time
-        subscription = await prisma.pushSubscription.update({
-          where: { id: existing.id },
-          data: {
-            lastSyncAt: new Date(),
-          },
-        });
-      }
-    } else {
-      // Create new subscription
-      subscription = await prisma.pushSubscription.create({
+      // Update existing subscription
+      subscription = await prisma.pushSubscription.update({
+        where: { id: existing.id },
         data: {
           userId: session.user.id,
-          fcmToken,
+          fcmToken: fcmToken, // Update token
           subscriptionId: subscriptionId || fcmToken,
           lastSyncAt: new Date(),
         },
       });
+    } else {
+      // Create new subscription
+      try {
+        subscription = await prisma.pushSubscription.create({
+          data: {
+            userId: session.user.id,
+            fcmToken,
+            subscriptionId: subscriptionId || fcmToken,
+            lastSyncAt: new Date(),
+          },
+        });
+      } catch (createError: any) {
+        // If creation fails due to unique constraint, try to update existing
+        if (createError?.code === 'P2002' && fcmToken) {
+          console.log("[push/subscribe] Unique constraint violation, trying to find and update...");
+          const existingByToken = await prisma.pushSubscription.findFirst({
+            where: {
+              fcmToken: fcmToken,
+            },
+          });
+          
+          if (existingByToken) {
+            subscription = await prisma.pushSubscription.update({
+              where: { id: existingByToken.id },
+              data: {
+                userId: session.user.id,
+                subscriptionId: subscriptionId || fcmToken,
+                lastSyncAt: new Date(),
+              },
+            });
+          } else {
+            throw createError;
+          }
+        } else {
+          throw createError;
+        }
+      }
     }
 
     console.log("[push/subscribe] ✅ Subscription saved:", {

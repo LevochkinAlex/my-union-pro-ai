@@ -1021,6 +1021,11 @@ ID документа: ${uploadedDocument.documentId}
                   chatBotId: bot.id,
                   sessionId: chatSession.id,
                   url: `${baseUrl}/dashboard?session=${chatSession.id}`,
+                  title: bot.name || "AI Помощник",
+                  body: messagePreview,
+                  icon: `${baseUrl}/icon.png`,
+                  soundEnabled: user?.pushSoundEnabled !== false ? "true" : "false",
+                  sound: user?.pushSoundEnabled !== false ? `${baseUrl}/notification-sound.mp3` : undefined,
                 },
                 webpush: {
                   notification: {

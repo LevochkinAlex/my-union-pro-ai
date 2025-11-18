@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { trackAppealQuestion, detectAppealType, extractKeywords } from "@/lib/analytics";
 
 interface ChatMessage {
@@ -560,9 +562,124 @@ function ChatContent() {
                           : "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 rounded-bl-md"
                       }`}
                     >
-                      <p className="whitespace-pre-wrap text-[15px] leading-relaxed">
-                        {message.content.replace(/\[PROFILE_COMPLETE\]/g, "")}
-                      </p>
+                      <div className="text-[15px] leading-relaxed">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            p: ({ children }) => (
+                              <p className={`mb-2 last:mb-0 ${
+                                message.role === "user" ? "text-white" : "text-gray-900 dark:text-gray-100"
+                              }`}>
+                                {children}
+                              </p>
+                            ),
+                            ul: ({ children }) => (
+                              <ul className={`mb-2 ml-4 list-disc ${
+                                message.role === "user" ? "text-white" : "text-gray-900 dark:text-gray-100"
+                              }`}>
+                                {children}
+                              </ul>
+                            ),
+                            ol: ({ children }) => (
+                              <ol className={`mb-2 ml-4 list-decimal ${
+                                message.role === "user" ? "text-white" : "text-gray-900 dark:text-gray-100"
+                              }`}>
+                                {children}
+                              </ol>
+                            ),
+                            li: ({ children }) => (
+                              <li className={`mb-1 ${
+                                message.role === "user" ? "text-white" : "text-gray-900 dark:text-gray-100"
+                              }`}>
+                                {children}
+                              </li>
+                            ),
+                            strong: ({ children }) => (
+                              <strong className={`font-semibold ${
+                                message.role === "user" ? "text-white" : "text-gray-900 dark:text-gray-100"
+                              }`}>
+                                {children}
+                              </strong>
+                            ),
+                            em: ({ children }) => (
+                              <em className={`italic ${
+                                message.role === "user" ? "text-white" : "text-gray-900 dark:text-gray-100"
+                              }`}>
+                                {children}
+                              </em>
+                            ),
+                            code: ({ children, className }) => {
+                              const isInline = !className;
+                              return isInline ? (
+                                <code className={`rounded px-1.5 py-0.5 text-sm font-mono ${
+                                  message.role === "user"
+                                    ? "bg-white/20 text-white"
+                                    : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                }`}>
+                                  {children}
+                                </code>
+                              ) : (
+                                <code className={className}>{children}</code>
+                              );
+                            },
+                            pre: ({ children }) => (
+                              <pre className={`mb-2 overflow-x-auto rounded-lg p-3 text-sm ${
+                                message.role === "user"
+                                  ? "bg-white/10 text-white"
+                                  : "bg-gray-900 text-gray-100"
+                              }`}>
+                                {children}
+                              </pre>
+                            ),
+                            a: ({ href, children }) => (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`underline hover:no-underline ${
+                                  message.role === "user"
+                                    ? "text-blue-200 hover:text-blue-100"
+                                    : "text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                                }`}
+                              >
+                                {children}
+                              </a>
+                            ),
+                            blockquote: ({ children }) => (
+                              <blockquote className={`my-2 border-l-4 pl-4 italic ${
+                                message.role === "user"
+                                  ? "border-white/30 text-white"
+                                  : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
+                              }`}>
+                                {children}
+                              </blockquote>
+                            ),
+                            h1: ({ children }) => (
+                              <h1 className={`mb-2 text-2xl font-bold ${
+                                message.role === "user" ? "text-white" : "text-gray-900 dark:text-gray-100"
+                              }`}>
+                                {children}
+                              </h1>
+                            ),
+                            h2: ({ children }) => (
+                              <h2 className={`mb-2 text-xl font-bold ${
+                                message.role === "user" ? "text-white" : "text-gray-900 dark:text-gray-100"
+                              }`}>
+                                {children}
+                              </h2>
+                            ),
+                            h3: ({ children }) => (
+                              <h3 className={`mb-2 text-lg font-semibold ${
+                                message.role === "user" ? "text-white" : "text-gray-900 dark:text-gray-100"
+                              }`}>
+                                {children}
+                              </h3>
+                            ),
+                          }}
+                        >
+                          {message.content.replace(/\[PROFILE_COMPLETE\]/g, "")}
+                        </ReactMarkdown>
+                      </div>
                     </div>
                   </div>
 

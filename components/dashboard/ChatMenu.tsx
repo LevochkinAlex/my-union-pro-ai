@@ -245,7 +245,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                   </svg>
                   <span className="flex-1 truncate text-left">{session.title || "Обращение"}</span>
                   {isHovered && (
-                    <button
+                    <div
                       onClick={(e) => {
                         e.stopPropagation();
                         if (confirm("Вы уверены, что хотите удалить это обращение?")) {
@@ -254,13 +254,26 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                             .catch(console.error);
                         }
                       }}
-                      className="flex-shrink-0 rounded p-0.5 text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                      className="flex-shrink-0 cursor-pointer rounded p-0.5 text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                       title="Удалить"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (confirm("Вы уверены, что хотите удалить это обращение?")) {
+                            fetch(`/api/chat/sessions/${session.id}`, { method: "DELETE" })
+                              .then(() => loadSessions())
+                              .catch(console.error);
+                          }
+                        }
+                      }}
                     >
                       <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
-                    </button>
+                    </div>
                   )}
                 </button>
               </div>
@@ -308,18 +321,27 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                       </svg>
                       <span className="flex-1 truncate text-left">Обращение {appeal.publicId}</span>
                       {isHovered && (
-                        <button
+                        <div
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDeleteAppeal(e, appeal.id);
                           }}
-                          className="flex-shrink-0 rounded p-0.5 text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                          className="flex-shrink-0 cursor-pointer rounded p-0.5 text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                           title="Удалить"
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDeleteAppeal(e, appeal.id);
+                            }
+                          }}
                         >
                           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
-                        </button>
+                        </div>
                       )}
                     </button>
                   </div>
