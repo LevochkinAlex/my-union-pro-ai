@@ -39,19 +39,23 @@ export default function MyDiscountsPage() {
     
     setIsSyncing(true);
     try {
-      console.log("[MyDiscounts] Starting sync with BestBenefits...");
+      console.log("[MyDiscounts] Starting sync with BestBenefits...", { force });
       
       // Используем менеджер синхронизации с кэшированием
       const { syncManager } = await import("@/lib/sync-manager");
       const result = await syncManager.sync(force);
       
-      if (result.success) {
-        console.log("[MyDiscounts] Sync result:", result);
+      if (result.success && !result.cached) {
+        console.log("[MyDiscounts] ✅ Sync completed, reloading discounts...", result);
+        // Перезагружаем скидки после успешной синхронизации (не кэшированной)
+        await loadMyDiscounts();
+      } else if (result.cached) {
+        console.log("[MyDiscounts] ⏭️ Using cached result:", result.message);
       } else {
-        console.error("[MyDiscounts] Sync failed:", result.message);
+        console.error("[MyDiscounts] ❌ Sync failed:", result.message);
       }
     } catch (error) {
-      console.error("[MyDiscounts] Sync error:", error);
+      console.error("[MyDiscounts] ❌ Sync error:", error);
     } finally {
       setIsSyncing(false);
     }
