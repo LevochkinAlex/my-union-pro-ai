@@ -79,28 +79,12 @@ export async function POST(request: NextRequest) {
       ? existingFilters.favorites
       : [];
 
-    // Merge BestBenefits activated discounts with local claimed
-    const claimedMap = new Map<number, { id: number; promoCode?: string }>();
-    
-    // Add existing claimed
-    for (const item of existingClaimed) {
-      if (typeof item === 'object' && item.id) {
-        claimedMap.set(item.id, item);
-      } else if (typeof item === 'number') {
-        claimedMap.set(item, { id: item });
-      }
-    }
-    
-    // Add BestBenefits activated (overwrite promo codes if available)
-    for (const bbItem of bbActivated) {
-      const existing = claimedMap.get(bbItem.id);
-      claimedMap.set(bbItem.id, {
-        id: bbItem.id,
-        promoCode: bbItem.promoCode || existing?.promoCode,
-      });
-    }
-
-    const updatedClaimed = Array.from(claimedMap.values());
+    // Replace local claimed with BestBenefits activated discounts (single source of truth)
+    // Синхронизация ЗАМЕНЯЕТ локальные данные на данные из BestBenefits
+    const updatedClaimed = bbActivated.map(bbItem => ({
+      id: bbItem.id,
+      promoCode: bbItem.promoCode,
+    }));
 
     // Save merged preferences
     await prisma.discountPreference.upsert({
