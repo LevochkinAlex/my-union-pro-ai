@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { trackAppealQuestion, detectAppealType, extractKeywords } from "@/lib/analytics";
+import { notifyBotResponse, requestNotificationPermission, markUserInteracted } from "@/lib/chat-notifications";
 
 interface ChatMessage {
   id: string;
@@ -33,6 +34,7 @@ function ChatContent() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shouldAutoScrollRef = useRef(false); // Флаг для контроля автоскролла
   const isInitialLoadRef = useRef(true); // Флаг для первой загрузки
+  const lastNotifiedMessageIdRef = useRef<string | null>(null); // ID последнего сообщения, для которого было показано уведомление
 
   const loadMessages = useCallback(async () => {
     try {
@@ -92,10 +94,15 @@ function ChatContent() {
       // Явно очищаем ошибку при успешной загрузке
       setError(null);
       
-      // Скроллим вниз только при первой загрузке
+      // НЕ скроллим автоматически при загрузке истории - пользователь может читать старые сообщения
+      // Скролл будет только при новых сообщениях (отправка/получение)
+      shouldAutoScrollRef.current = false;
+      
+      // Отмечаем первую загрузку для других целей (например, уведомления)
       if (isInitialLoadRef.current) {
-        shouldAutoScrollRef.current = true;
         isInitialLoadRef.current = false;
+        // Только при первой загрузке скроллим вниз, чтобы показать последние сообщения
+        shouldAutoScrollRef.current = true;
       }
     } catch (error) {
       console.error("Ошибка загрузки сообщений:", error);
@@ -124,6 +131,25 @@ function ChatContent() {
       loadAppealBot();
     }
   }, [mode]);
+
+  // Запрос разрешения на уведомления при первой загрузке
+  useEffect(() => {
+    requestNotificationPermission().then((granted) => {
+      if (granted) {
+        console.log("[Chat] Notification permission granted");
+      } else {
+        console.log("[Chat] Notification permission not granted");
+      }
+    });
+  }, []);
+
+  // Сброс refs при смене сессии (переключение между чатами)
+  useEffect(() => {
+    // Сбрасываем счетчики уведомлений при смене сессии
+    lastNotifiedMessageIdRef.current = null;
+    isInitialLoadRef.current = true;
+    console.log("[Chat] Session changed, reset notification refs for session:", currentSessionId);
+  }, [currentSessionId]);
 
   // Load message history
   useEffect(() => {
@@ -202,14 +228,65 @@ function ChatContent() {
 
   // Прокрутка вниз только при новых сообщениях от пользователя или бота
   useEffect(() => {
-    if (shouldAutoScrollRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      shouldAutoScrollRef.current = false;
+    if (shouldAutoScrollRef.current && messages.length > 0) {
+      // Используем requestAnimationFrame чтобы убедиться, что DOM обновился
+      requestAnimationFrame(() => {
+        // Дополнительная задержка для гарантии отрисовки
+        setTimeout(() => {
+          if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+            // Сбрасываем флаг сразу после скролла, чтобы не скроллить повторно
+            shouldAutoScrollRef.current = false;
+          }
+        }, 50);
+      });
     }
   }, [messages]);
 
+  // Отслеживание новых сообщений от бота для показа уведомлений
+  useEffect(() => {
+    // Находим последнее сообщение от бота
+    const lastBotMessage = [...messages]
+      .reverse()
+      .find((msg) => msg.role === "assistant");
+
+    if (!lastBotMessage) {
+      return;
+    }
+
+    // Проверяем, было ли уже показано уведомление для этого сообщения
+    if (lastBotMessage.id === lastNotifiedMessageIdRef.current) {
+      return;
+    }
+
+    // При первой загрузке показываем уведомление только если сообщение свежее (менее 5 минут назад)
+    if (isInitialLoadRef.current) {
+      const messageAge = Date.now() - new Date(lastBotMessage.createdAt).getTime();
+      const fiveMinutesInMs = 5 * 60 * 1000;
+      
+      if (messageAge <= fiveMinutesInMs) {
+        // Свежее сообщение - показываем уведомление
+        console.log(`[Chat] Showing notification for fresh message (${Math.round(messageAge / 1000)}s old) in session ${currentSessionId || 'none'}, type: ${sessionType || 'none'}`);
+        lastNotifiedMessageIdRef.current = lastBotMessage.id;
+        notifyBotResponse(lastBotMessage.content, sessionType || null);
+      } else {
+        console.log(`[Chat] Skipping notification for old message (${Math.round(messageAge / 1000)}s old) on initial load`);
+      }
+      // Для старых сообщений не показываем уведомление при первой загрузке
+      return;
+    }
+
+    // Для новых сообщений (после первой загрузки) всегда показываем уведомление
+    console.log(`[Chat] Showing notification for new bot message in session ${currentSessionId || 'none'}, type: ${sessionType || 'none'}`);
+    lastNotifiedMessageIdRef.current = lastBotMessage.id;
+    notifyBotResponse(lastBotMessage.content, sessionType || null);
+  }, [messages, sessionType]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Гарантируем, что флаг взаимодействия установлен при отправке формы
+    markUserInteracted();
     
     if (!input.trim() || isLoading) return;
 
@@ -423,6 +500,7 @@ function ChatContent() {
             content: chatData.message,
             createdAt: new Date(),
           };
+          
           setMessages((prev) => [...prev, aiMessage]);
           shouldAutoScrollRef.current = true;
         }

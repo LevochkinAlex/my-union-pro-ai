@@ -1,0 +1,1592 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "BestBenefits API",
+    "description": "",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://bestbenefits.ru/api/",
+      "description": "BestBenefits API"
+    }
+  ],
+  "paths": {
+    "/company/login": {
+      "post": {
+        "tags": [
+          "Ссылка для аутентификации"
+        ],
+        "summary": "Аутентификация пользователя по ссылке",
+        "description": "Ссылка одноразовая и живет 3 минуты",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/wp_login_body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Успешный ответ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_200"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Ошибка авторизации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_401"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/auth": {
+      "post": {
+        "tags": [
+          "Аутентификация"
+        ],
+        "summary": "Аутентификация пользователя",
+        "description": "Принимает email и password, возвращает токен для авторизации.",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/auth_body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Успешная аутентификация",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_200_1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Ошибка аутентификации (неправильные данные)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_401"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Токен истек",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_403"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/categories": {
+      "get": {
+        "tags": [
+          "Категории"
+        ],
+        "summary": "Получить список категорий",
+        "description": "Возвращает все категории и подкатегории",
+        "operationId": "getCategories",
+        "responses": {
+          "200": {
+            "description": "Все категории",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoriesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products": {
+      "get": {
+        "tags": [
+          "Предложения"
+        ],
+        "summary": "Получить список предложений",
+        "description": "Возвращает список продуктов с поддержкой пагинации. Пользователь должен быть аутентифицирован через Bearer токен.",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "description": "ID категории для фильтрации",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "city",
+            "in": "query",
+            "description": "Название города для фильтрации",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный ответ с данными предложений",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_200_2"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Bearer токен не найден или недействителен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_401"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "tags": [
+          "Предложения"
+        ],
+        "summary": "Получение подробной информации о предложении",
+        "description": "Возвращает подробные данные о товаре по указанному ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID предложения",
+            "required": true,
+            "style": "simple",
+            "explode": false,
+            "schema": {
+              "type": "integer",
+              "example": 1436
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный ответ с данными предложения",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_200_3"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ошибка, товар не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_400"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Ошибка аутентификации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_401"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search": {
+      "get": {
+        "tags": [
+          "Предложения"
+        ],
+        "summary": "Поиск предложений по запросу",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Поисковый запрос",
+            "required": true,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "city",
+            "in": "query",
+            "description": "Название города для фильтрации (например, Москва, Санкт-Петербург, Казань)",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Результаты поиска",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_200_4"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": 17,
+                      "name": "Готовая правильная еда с доставкой от justfood",
+                      "image": "iVBORw0KGgoAAAANSUhEUg...",
+                      "main_category": {
+                        "id": 18,
+                        "name": "Рестораны и доставка"
+                      },
+                      "categories": [
+                        {
+                          "id": 18,
+                          "name": "Рестораны и доставка"
+                        }
+                      ],
+                      "isFavorite": true
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Bearer токен не найден или недействителен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_401"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/favorites": {
+      "get": {
+        "tags": [
+          "Избранное"
+        ],
+        "summary": "Получение избранных предложений",
+        "description": "Возвращает список избранных предложений. Пользователь должен быть аутентифицирован через Bearer токен.",
+        "responses": {
+          "200": {
+            "description": "Успешное получение данных",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_200_5"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Bearer токен не найден или недействителен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_401"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Избранное"
+        ],
+        "summary": "Добавление или удаление из избранного",
+        "description": "Добавляет или удаляет товар из избранного. Пользователь должен быть аутентифицирован через Bearer токен.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "description": "ID предложения, которое нужно добавить или удалить из избранного",
+            "required": true,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "integer",
+              "example": 17
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешное добавление или удаление из избранного",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_200_6"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ошибка, товар не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_400"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Bearer токен не найден или недействителен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_401"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/viewed": {
+      "get": {
+        "tags": [
+          "Предложения"
+        ],
+        "summary": "Недавно просмотренные предложения",
+        "description": "Возвращает информацию о недавно просмотренных предложениях. Пользователь должен быть аутентифицирован через Bearer токен.",
+        "responses": {
+          "200": {
+            "description": "Успешное получение данных",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_200_7"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Bearer токен не найден или недействителен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_401"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/received": {
+      "get": {
+        "tags": [
+          "Купоны"
+        ],
+        "summary": "Получение подробной информации о взятых купонах по предложениям",
+        "description": "Возвращает информацию о взятых купонах по предложениям. Пользователь должен быть аутентифицирован через Bearer токен.",
+        "responses": {
+          "200": {
+            "description": "Успешное получение данных",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_200_8"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Bearer токен не найден или недействителен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_401"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/promo": {
+      "post": {
+        "tags": [
+          "Купоны"
+        ],
+        "summary": "Получить купон",
+        "description": "Позволяет пользователю получить промокод. Пользователь должен быть аутентифицирован через Bearer токен.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/promo_body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Успешное получение промокода",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_200_9"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ошибка при получении промокода",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_400_1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Bearer токен не найден или недействителен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_401"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/cities": {
+      "get": {
+        "tags": [
+          "Города"
+        ],
+        "summary": "Получить список городов по запросу",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Часть названия города для фильтрации",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список городов, соответствующих запросу",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inline_response_200_10"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Subcategory": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 4
+          },
+          "order": {
+            "type": "integer",
+            "example": 2
+          },
+          "name": {
+            "type": "string",
+            "example": "Бытовая техника"
+          }
+        }
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 3
+          },
+          "order": {
+            "type": "integer",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Техника и Электроника"
+          },
+          "subcategory": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Subcategory"
+            }
+          }
+        }
+      },
+      "CategoriesResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            }
+          }
+        }
+      },
+      "wp_login_body": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID пользователя",
+            "example": "123"
+          },
+          "city": {
+            "type": "integer",
+            "description": "ID города",
+            "example": 1
+          }
+        }
+      },
+      "inline_response_200": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "url": {
+            "type": "string",
+            "example": "https://bestbenefits.ru/code?q=example_string"
+          }
+        }
+      },
+      "inline_response_401": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "error"
+          },
+          "message": {
+            "type": "string",
+            "example": "Unauthorized"
+          }
+        }
+      },
+      "auth_body": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "example": "yourpassword"
+          }
+        }
+      },
+      "inline_response_200_1": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "example": "your_access_token"
+          }
+        }
+      },
+      "inline_response_403": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "expired"
+          },
+          "token": {
+            "type": "string",
+            "example": "new_access_token"
+          },
+          "message": {
+            "type": "string",
+            "example": "Токен истек"
+          }
+        }
+      },
+      "inline_response_200_2": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_2_data"
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/inline_response_200_2_links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/inline_response_200_2_meta"
+          }
+        }
+      },
+      "inline_response_200_3": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1436
+          },
+          "name": {
+            "type": "string",
+            "example": "Сервис доставки САМОКАТ"
+          },
+          "image": {
+            "type": "string",
+            "example": "base64"
+          },
+          "description": {
+            "type": "string",
+            "example": "<p dir=\"ltr\" style=\"line-height: 1.656; margin-top: 0pt; margin-bottom: 0pt;\"><span style=\"font-size: 13pt; font-family: 'Open Sans',sans-serif; color: #000000; background-color: transparent; font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;\">● Скидки в сервисе доставки</span></p>"
+          },
+          "main_category": {
+            "$ref": "#/components/schemas/inline_response_200_2_main_category"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_3_categories"
+            }
+          },
+          "isFavorite": {
+            "type": "boolean",
+            "example": false
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_3_options"
+            }
+          },
+          "cities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_2_cities"
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-10-03T07:21:08Z"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-12-31T20:30:00Z"
+          }
+        }
+      },
+      "inline_response_400": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "error"
+          },
+          "message": {
+            "type": "string",
+            "example": "Не найдено"
+          }
+        }
+      },
+      "inline_response_200_4": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_2_data"
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/inline_response_200_4_links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/inline_response_200_4_meta"
+          }
+        }
+      },
+      "inline_response_200_5": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_5_data"
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/inline_response_200_5_links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/inline_response_200_5_meta"
+          }
+        }
+      },
+      "inline_response_200_6": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "Товар добавлен в избранное"
+          },
+          "added": {
+            "type": "integer",
+            "description": "1 - товар добавлен в избранное, 0 - товар удален",
+            "example": 1
+          }
+        }
+      },
+      "inline_response_200_7": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_7_data"
+            }
+          }
+        }
+      },
+      "inline_response_200_8": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_8_data"
+            }
+          }
+        }
+      },
+      "promo_body": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "ID предложения или ID вложенного предложения из options",
+            "example": 123
+          }
+        }
+      },
+      "inline_response_200_9": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "Промокод получен"
+          },
+          "data": {
+            "$ref": "#/components/schemas/inline_response_200_9_data"
+          }
+        }
+      },
+      "inline_response_400_1": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "error"
+          },
+          "message": {
+            "type": "string",
+            "example": "У вас достигнут лимит Premium купонов",
+            "enum": [
+              "У вас достигнут лимит Premium купонов",
+              "Вы достигли лимита купонов на одного пользователя",
+              "Коды закончились"
+            ]
+          }
+        }
+      },
+      "inline_response_200_10": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_10_data"
+            }
+          }
+        }
+      },
+      "inline_response_200_2_main_category": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 6
+          },
+          "order": {
+            "type": "integer",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Товары"
+          }
+        }
+      },
+      "inline_response_200_2_categories": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 55
+          },
+          "order": {
+            "type": "integer",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Страхование и банки"
+          }
+        }
+      },
+      "inline_response_200_2_cities": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Москва"
+          }
+        }
+      },
+      "inline_response_200_2_data": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 11
+          },
+          "name": {
+            "type": "string",
+            "example": "АльфаСтрахование"
+          },
+          "image": {
+            "type": "string",
+            "description": "Изображение в формате base64",
+            "format": "base64"
+          },
+          "main_category": {
+            "$ref": "#/components/schemas/inline_response_200_2_main_category"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_2_categories"
+            }
+          },
+          "cities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_2_cities"
+            }
+          },
+          "isFavorite": {
+            "type": "boolean",
+            "example": false
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-10-07T07:50:37Z"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-12-31T14:55:00Z"
+          }
+        }
+      },
+      "inline_response_200_2_links": {
+        "type": "object",
+        "properties": {
+          "first": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://bestbenefits.ru/api/products?page=1"
+          },
+          "last": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://bestbenefits.ru/api/products?page=140"
+          },
+          "prev": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          },
+          "next": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://bestbenefits.ru/api/products?page=2"
+          }
+        }
+      },
+      "inline_response_200_2_meta_links": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true,
+            "example": "https://bestbenefits.ru/api/products?page=1"
+          },
+          "label": {
+            "type": "string",
+            "example": "1"
+          },
+          "active": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "inline_response_200_2_meta": {
+        "type": "object",
+        "properties": {
+          "current_page": {
+            "type": "integer",
+            "example": 1
+          },
+          "from": {
+            "type": "integer",
+            "example": 1
+          },
+          "last_page": {
+            "type": "integer",
+            "example": 140
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_2_meta_links"
+            }
+          },
+          "path": {
+            "type": "string",
+            "example": "https://bestbenefits.ru/api/products"
+          },
+          "per_page": {
+            "type": "integer",
+            "example": 15
+          },
+          "to": {
+            "type": "integer",
+            "example": 15
+          },
+          "total": {
+            "type": "integer",
+            "example": 2092
+          }
+        }
+      },
+      "inline_response_200_3_categories": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 7
+          },
+          "order": {
+            "type": "integer",
+            "example": 11
+          },
+          "name": {
+            "type": "string",
+            "example": "Продукты питания"
+          }
+        }
+      },
+      "inline_response_200_3_options": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1436
+          },
+          "name": {
+            "type": "string",
+            "example": "Скидка 25% на первый заказ от 700 рублей. Самокат"
+          }
+        }
+      },
+      "inline_response_200_4_links": {
+        "type": "object",
+        "properties": {
+          "first": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://bestbenefits.ru/api/search?page=1"
+          },
+          "last": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://bestbenefits.ru/api/search?page=140"
+          },
+          "prev": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          },
+          "next": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://bestbenefits.ru/api/search?page=2"
+          }
+        }
+      },
+      "inline_response_200_4_meta_links": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true,
+            "example": "https://bestbenefits.ru/api/search?page=1"
+          },
+          "label": {
+            "type": "string",
+            "example": "1"
+          },
+          "active": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "inline_response_200_4_meta": {
+        "type": "object",
+        "properties": {
+          "current_page": {
+            "type": "integer",
+            "example": 1
+          },
+          "from": {
+            "type": "integer",
+            "example": 1
+          },
+          "last_page": {
+            "type": "integer",
+            "example": 140
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_4_meta_links"
+            }
+          },
+          "path": {
+            "type": "string",
+            "example": "https://bestbenefits.ru/api/search"
+          },
+          "per_page": {
+            "type": "integer",
+            "example": 15
+          },
+          "to": {
+            "type": "integer",
+            "example": 15
+          },
+          "total": {
+            "type": "integer",
+            "example": 2092
+          }
+        }
+      },
+      "inline_response_200_5_main_category": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "ID основной категории",
+            "example": 18
+          },
+          "order": {
+            "type": "integer",
+            "description": "Порядок в основной категории",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "Название основной категории",
+            "example": "Рестораны и доставка"
+          }
+        },
+        "description": "Основная категория предложения"
+      },
+      "inline_response_200_5_categories": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "ID категории",
+            "example": 18
+          },
+          "order": {
+            "type": "integer",
+            "description": "Порядок в категории",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "Название категории",
+            "example": "Рестораны и доставка"
+          }
+        }
+      },
+      "inline_response_200_5_cities": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "ID города",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "Название города",
+            "example": "Москва"
+          }
+        }
+      },
+      "inline_response_200_5_data": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "ID предложения",
+            "example": 17
+          },
+          "name": {
+            "type": "string",
+            "description": "Имя предложения",
+            "example": "Готовая правильная еда с доставкой от justfood"
+          },
+          "image": {
+            "type": "string",
+            "description": "Изображение в формате base64",
+            "example": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+          },
+          "main_category": {
+            "$ref": "#/components/schemas/inline_response_200_5_main_category"
+          },
+          "categories": {
+            "type": "array",
+            "description": "Список дополнительных категорий, если они есть",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_5_categories"
+            }
+          },
+          "cities": {
+            "type": "array",
+            "description": "Список городов, в которых доступно предложение",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_5_cities"
+            }
+          },
+          "isFavorite": {
+            "type": "boolean",
+            "description": "Флаг, указывающий, является ли предложение избранным",
+            "example": true
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "Дата и время последнего обновления предложения",
+            "format": "date-time",
+            "example": "2024-07-09T09:45:53Z"
+          },
+          "end": {
+            "type": "string",
+            "description": "Дата окончания предложения",
+            "format": "date-time",
+            "example": "2024-12-31T14:55:00Z"
+          }
+        }
+      },
+      "inline_response_200_5_links": {
+        "type": "object",
+        "properties": {
+          "first": {
+            "type": "string",
+            "example": "https://bestbenefits.ru/api/favorites?page=1"
+          },
+          "last": {
+            "type": "string",
+            "example": "https://bestbenefits.ru/api/favorites?page=2"
+          },
+          "prev": {
+            "type": "string",
+            "nullable": true
+          },
+          "next": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://bestbenefits.ru/api/favorites?page=2"
+          }
+        },
+        "description": "Пагинация ссылок"
+      },
+      "inline_response_200_5_meta_links": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://bestbenefits.ru/api/favorites?page=1"
+          },
+          "label": {
+            "type": "string",
+            "example": "1"
+          },
+          "active": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "inline_response_200_5_meta": {
+        "type": "object",
+        "properties": {
+          "current_page": {
+            "type": "integer",
+            "example": 1
+          },
+          "from": {
+            "type": "integer",
+            "example": 1
+          },
+          "last_page": {
+            "type": "integer",
+            "example": 2
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_5_meta_links"
+            }
+          },
+          "path": {
+            "type": "string",
+            "example": "https://bestbenefits.ru/api/favorites"
+          },
+          "per_page": {
+            "type": "integer",
+            "example": 15
+          },
+          "to": {
+            "type": "integer",
+            "example": 15
+          },
+          "total": {
+            "type": "integer",
+            "example": 18
+          }
+        },
+        "description": "Информация о пагинации"
+      },
+      "inline_response_200_7_main_category": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "ID основной категории",
+            "example": 1
+          },
+          "order": {
+            "type": "integer",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "Название основной категории",
+            "example": "Товары"
+          }
+        },
+        "description": "Основная категория предложения"
+      },
+      "inline_response_200_7_categories": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "ID категории",
+            "example": 55
+          },
+          "order": {
+            "type": "integer",
+            "example": 2
+          },
+          "name": {
+            "type": "string",
+            "description": "Название категории",
+            "example": "Страхование"
+          }
+        }
+      },
+      "inline_response_200_7_data": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "ID предложения",
+            "example": 1120
+          },
+          "name": {
+            "type": "string",
+            "description": "Имя предложения",
+            "example": "Сеть ресторанов ТОКИО-CITY"
+          },
+          "image": {
+            "type": "string",
+            "description": "Изображение в формате base64",
+            "example": "iVBORw0KGgoAAAANSUhEUgAA..."
+          },
+          "main_category": {
+            "$ref": "#/components/schemas/inline_response_200_7_main_category"
+          },
+          "categories": {
+            "type": "array",
+            "description": "Список остальных категорий, если они есть",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_7_categories"
+            }
+          },
+          "isFavorite": {
+            "type": "boolean",
+            "description": "Флаг избранного статуса",
+            "example": false
+          }
+        }
+      },
+      "inline_response_200_8_codes": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "ID купона",
+            "example": 501
+          },
+          "code": {
+            "type": "string",
+            "description": "Код купона, действующий 7 дней; если срок истек, возвращает 'Купон деактивирован'",
+            "example": "ABCD1234"
+          },
+          "end_date": {
+            "type": "string",
+            "description": "Дата истечения срока действия купона (7 дней с момента получения)",
+            "format": "date-time",
+            "example": "2024-11-19T10:00:00Z"
+          }
+        }
+      },
+      "inline_response_200_8_data": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "ID предложения",
+            "example": 101
+          },
+          "name": {
+            "type": "string",
+            "description": "Имя предложения",
+            "example": "Сеть ресторанов ТОКИО-CITY"
+          },
+          "image": {
+            "type": "string",
+            "description": "Изображение в формате base64",
+            "example": "iVBORw0KGgoAAAANSUhEUgAA..."
+          },
+          "codes": {
+            "type": "array",
+            "description": "Список взятых купонов по этому предложению",
+            "items": {
+              "$ref": "#/components/schemas/inline_response_200_8_codes"
+            }
+          }
+        }
+      },
+      "inline_response_200_9_data": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "ID полученного промокода",
+            "example": 456
+          },
+          "code": {
+            "type": "string",
+            "description": "Код промокода, если он активен; если истек, возвращает 'Промокод деактивирован'",
+            "example": "ABCD1234"
+          },
+          "end_date": {
+            "type": "string",
+            "description": "Дата истечения срока действия промокода (7 дней с момента получения)",
+            "format": "date-time",
+            "example": "2024-11-19T10:00:00Z"
+          }
+        }
+      },
+      "inline_response_200_10_data": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Идентификатор города",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "Название города",
+            "example": "Москва"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "Bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

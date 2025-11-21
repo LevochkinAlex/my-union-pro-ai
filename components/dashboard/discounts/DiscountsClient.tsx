@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DiscountCard from "./DiscountCard";
+import CityFilter from "./CityFilter";
 import type {
   DiscountPreferenceResponse,
   DiscountSearchResult,
@@ -22,6 +23,8 @@ type FilterState = {
   premiumOnly: boolean;
   nearMe: boolean;
   radiusKm: number;
+  lat: number | null;
+  lng: number | null;
   page: number;
   view: ViewMode;
 };
@@ -35,6 +38,8 @@ const DEFAULT_FILTERS: FilterState = {
   premiumOnly: false,
   nearMe: false,
   radiusKm: 25,
+  lat: null,
+  lng: null,
   page: 1,
   view: "all",
 };
@@ -64,8 +69,15 @@ export default function DiscountsClient({
     return ((initialPreference.filters as any)?.favorites as number[] | undefined) ?? [];
   });
   const [claimed, setClaimed] = useState<number[]>(() => {
-    return ((initialPreference.filters as any)?.claimed as number[] | undefined) ?? [];
+    const claimedData = (initialPreference.filters as any)?.claimed;
+    if (!Array.isArray(claimedData)) return [];
+    
+    // Extract IDs from objects or numbers
+    return claimedData.map((item: any) => 
+      typeof item === 'object' && item.id ? item.id : item
+    ).filter(Boolean);
   });
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const hasActiveFilters = useMemo(() => {
     return (
@@ -82,6 +94,41 @@ export default function DiscountsClient({
     if (typeof window === "undefined") return;
     setGeoSupport("geolocation" in navigator);
   }, []);
+
+  // Синхронизация активированных скидок с BestBenefits при загрузке
+  useEffect(() => {
+    const syncWithBestBenefits = async () => {
+      if (isSyncing) return;
+      
+      setIsSyncing(true);
+      try {
+        // Используем менеджер синхронизации с кэшированием
+        const { syncManager } = await import("@/lib/sync-manager");
+        const result = await syncManager.sync(); // Не форсируем, используем кэш
+        
+        if (result.success && !result.cached) {
+          console.log("[DiscountsClient] Synced with BestBenefits:", result);
+          
+          // Reload preferences to get updated claimed discounts
+          const prefsResponse = await fetch("/api/discounts/preferences");
+          if (prefsResponse.ok) {
+            const prefsData = await prefsResponse.json();
+            const claimedItems = (prefsData.filters?.claimed || [])
+              .map((item: any) => (typeof item === 'object' ? item.id : item));
+            setClaimed(claimedItems);
+          }
+        } else if (result.cached) {
+          console.log("[DiscountsClient] ⏭️ Using cached sync result");
+        }
+      } catch (error) {
+        console.warn("[DiscountsClient] Failed to sync with BestBenefits:", error);
+      } finally {
+        setIsSyncing(false);
+      }
+    };
+    
+    syncWithBestBenefits();
+  }, []); // Run once on mount
 
   const fetchDiscounts = useCallback(
     async (nextFilters: FilterState = filters, listOverride?: { favorites?: number[]; claimed?: number[] }) => {
@@ -109,6 +156,8 @@ export default function DiscountsClient({
         if (nextFilters.nearMe && nextFilters.cityId === null) {
           params.set("nearMe", "1");
           params.set("radiusKm", String(nextFilters.radiusKm));
+          if (nextFilters.lat !== null) params.set("lat", String(nextFilters.lat));
+          if (nextFilters.lng !== null) params.set("lng", String(nextFilters.lng));
         }
 
         const response = await fetch(`/api/discounts?${params.toString()}`);
@@ -200,34 +249,43 @@ export default function DiscountsClient({
     setClaimed(nextClaimed);
 
     try {
-      await fetch("/api/discounts/preferences", {
+      // Save to local preferences AND activate on BestBenefits
+      await fetch("/api/discounts/activate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          filters: {
-            favorites,
-            claimed: nextClaimed,
-          },
+          discountId,
+          claimed: nextClaimed,
+          favorites,
         }),
       });
+      
       if (filters.view === "claimed") {
         fetchDiscounts(filters, { favorites, claimed: nextClaimed });
       }
     } catch (error) {
-      console.error("Failed to update claimed", error);
+      console.error("Failed to activate discount", error);
+      // Don't revert UI - user can still access discount via link
     }
   };
 
   const handleUseGeolocation = async () => {
     try {
       const position = await getCurrentPosition();
-      updateFilters({
+      const nextFilters = {
+        ...filters,
         nearMe: true,
         cityId: null,
         page: 1,
-      });
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        radiusKm: filters.radiusKm || 25,
+      };
+      setFilters(nextFilters);
+      fetchDiscounts(nextFilters);
     } catch (error) {
-      alert("Не удалось определить местоположение");
+      console.error("Geolocation error:", error);
+      alert("Не удалось определить местоположение. Проверьте разрешения браузера.");
     }
   };
 
@@ -278,45 +336,37 @@ export default function DiscountsClient({
 
       {/* Filters */}
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
-        {/* Row 1: Search + City */}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Поиск по скидкам..."
-              value={filters.search}
-              onChange={(e) => updateFilters({ search: e.target.value, page: 1 })}
-              className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 pl-10 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
-            />
-            <svg
-              className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-
-          <select
-            value={filters.cityId ?? ""}
-            onChange={(e) =>
-              updateFilters({
-                cityId: e.target.value ? Number(e.target.value) : null,
-                nearMe: false,
-                page: 1,
-              })
-            }
-            className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+        {/* Row 1: Search */}
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Поиск по скидкам..."
+            value={filters.search}
+            onChange={(e) => updateFilters({ search: e.target.value, page: 1 })}
+            className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 pl-10 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+          />
+          <svg
+            className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
-            <option value="">Все города</option>
-            {data.cities.map((city) => (
-              <option key={city.id} value={city.id}>
-                {city.name}
-              </option>
-            ))}
-          </select>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
         </div>
+
+        {/* Row 2: City Filter (Country → Region → City) */}
+        <CityFilter
+          cities={data.cities}
+          value={filters.cityId}
+          onChange={(cityId) =>
+            updateFilters({
+              cityId,
+              nearMe: false,
+              page: 1,
+            })
+          }
+        />
 
         {/* Row 2: Categories */}
         {data.categories.length > 0 && (
@@ -438,6 +488,7 @@ export default function DiscountsClient({
             claimed={claimed}
             onFavorite={handleFavoriteToggle}
             onClaim={handleClaim}
+            selectedCityId={filters.cityId}
           />
         )}
       </div>
@@ -494,12 +545,14 @@ function DiscountGrid({
   claimed,
   onFavorite,
   onClaim,
+  selectedCityId,
 }: {
   data: DiscountSearchResult;
   favorites: number[];
   claimed: number[];
   onFavorite: (id: number) => void;
   onClaim: (id: number) => void;
+  selectedCityId?: number | null;
 }) {
   if (data.discounts.length === 0) {
     return (
@@ -513,7 +566,7 @@ function DiscountGrid({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20">
       {data.discounts.map((discount) => (
         <DiscountCard
           key={discount.id}
@@ -523,6 +576,7 @@ function DiscountGrid({
           onToggleFavorite={onFavorite}
           onClaim={onClaim}
           forceShowImage
+          selectedCityId={selectedCityId}
         />
       ))}
     </div>

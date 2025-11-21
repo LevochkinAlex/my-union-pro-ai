@@ -12,7 +12,17 @@ const preferenceSchema = z.object({
       categoryIds: z.array(z.number()).optional(),
       premiumOnly: z.boolean().optional(),
       radiusKm: z.number().min(1).max(500).nullable().optional(),
+      claimed: z.array(z.union([
+        z.number(),
+        z.object({
+          id: z.number(),
+          promoCode: z.string().nullable().optional(),
+        }),
+      ])).optional(),
+      favorites: z.array(z.number()).optional(),
+      view: z.string().optional(),
     })
+    .passthrough() // Разрешаем дополнительные поля (claimed, favorites и т.д.)
     .optional(),
   geolocation: z
     .object({
@@ -60,7 +70,7 @@ export async function GET() {
   }
 }
 
-export async function PUT(request: NextRequest) {
+async function updatePreferences(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -68,27 +78,54 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const parsed = preferenceSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Неверный формат данных", details: parsed.error.flatten() },
-        { status: 400 }
-      );
+    
+    // Получаем существующие preferences для мерджа
+    const existingPreference = await prisma.discountPreference.findUnique({
+      where: { userId: session.user.id },
+    });
+
+    const existingFilters = (existingPreference?.filters as any) || {};
+    
+    // Мерджим filters из запроса с существующими
+    const updatedFilters = body.filters 
+      ? { ...existingFilters, ...body.filters }
+      : existingFilters;
+
+    // Валидируем только pushEnabled и geolocation через схему
+    const parsed = preferenceSchema.partial().safeParse({
+      pushEnabled: body.pushEnabled,
+      geolocation: body.geolocation,
+    });
+
+    const updateData: any = {
+      filters: updatedFilters,
+    };
+
+    if (parsed.success) {
+      if (parsed.data.pushEnabled !== undefined) {
+        updateData.pushEnabled = parsed.data.pushEnabled;
+      }
+      if (parsed.data.geolocation !== undefined) {
+        updateData.geolocation = parsed.data.geolocation;
+      }
+    } else if (body.pushEnabled !== undefined) {
+      updateData.pushEnabled = body.pushEnabled;
     }
 
     const preference = await prisma.discountPreference.upsert({
       where: { userId: session.user.id },
-      update: {
-        pushEnabled: parsed.data.pushEnabled ?? false,
-        filters: parsed.data.filters ?? null,
-        geolocation: parsed.data.geolocation ?? null,
-      },
+      update: updateData,
       create: {
         userId: session.user.id,
-        pushEnabled: parsed.data.pushEnabled ?? false,
-        filters: parsed.data.filters ?? null,
-        geolocation: parsed.data.geolocation ?? null,
+        pushEnabled: updateData.pushEnabled ?? false,
+        filters: updateData.filters ?? null,
+        geolocation: updateData.geolocation ?? null,
       },
+    });
+
+    console.log("[api/discounts/preferences] Updated preferences:", {
+      userId: session.user.id,
+      filters: preference.filters,
     });
 
     return NextResponse.json({
@@ -104,5 +141,13 @@ export async function PUT(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+export async function PUT(request: NextRequest) {
+  return updatePreferences(request);
+}
+
+export async function POST(request: NextRequest) {
+  return updatePreferences(request);
 }
 

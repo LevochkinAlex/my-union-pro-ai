@@ -12,6 +12,7 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
+  subItems?: { href: string; label: string }[];
 }
 
 interface SidebarProps {
@@ -22,6 +23,7 @@ interface SidebarProps {
 
 export default function Sidebar({ items, userInitial, isAdmin = false }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const pathname = usePathname();
 
   // Обновляем отступ контента при изменении состояния sidebar
@@ -72,28 +74,117 @@ export default function Sidebar({ items, userInitial, isAdmin = false }: Sidebar
               return null;
             }
 
-            const isActive = item.href === "/admin/dashboard" || item.href === "/dashboard"
-              ? pathname === item.href
-              : pathname === item.href || pathname.startsWith(item.href + "/");
+            const hasSubItems = item.subItems && item.subItems.length > 0;
+            
+            // Check if any sub-item is active
+            const isSubItemActive = hasSubItems && item.subItems!.some(
+              (subItem) => pathname === subItem.href || pathname.startsWith(subItem.href + "/")
+            );
+            
+            // Main item is active ONLY if we're exactly on it AND it's not duplicated in sub-items
+            // This prevents double highlighting when a sub-item is active
+            const isMainItemActive = !isSubItemActive && pathname === item.href;
+            
+            // Show as active if main item is active OR any sub-item is active
+            const isActive = isMainItemActive || isSubItemActive;
+            
+            // Auto-expand if any sub-item is active
+            const isExpanded = expandedItems.includes(item.href) || isSubItemActive;
 
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                } ${
-                  isCollapsed
-                    ? "h-10 w-10 justify-center"
-                    : "px-3 py-2.5"
-                }`}
-                title={isCollapsed ? item.label : undefined}
-              >
-                <span className="flex-shrink-0">{item.icon}</span>
-                {!isCollapsed && <span>{item.label}</span>}
-              </Link>
+              <div key={item.href}>
+                {/* Main item */}
+                {hasSubItems ? (
+                  <button
+                    onClick={() => {
+                      if (isCollapsed) {
+                        // If collapsed, navigate to main item
+                        window.location.href = item.href;
+                      } else {
+                        // If expanded, toggle submenu
+                        setExpandedItems(prev =>
+                          prev.includes(item.href)
+                            ? prev.filter(h => h !== item.href)
+                            : [...prev, item.href]
+                        );
+                      }
+                    }}
+                    className={`flex w-full items-center gap-3 rounded-lg text-sm font-medium transition-colors ${
+                      isMainItemActive
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                    } ${
+                      isCollapsed
+                        ? "h-10 w-10 justify-center"
+                        : "px-3 py-2.5"
+                    }`}
+                    title={isCollapsed ? item.label : undefined}
+                  >
+                    <span className="flex-shrink-0">{item.icon}</span>
+                    {!isCollapsed && (
+                      <>
+                        <span className="flex-1 text-left">{item.label}</span>
+                        <svg
+                          className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <Link
+                    href={item.href}
+                    className={`flex items-center gap-3 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                    } ${
+                      isCollapsed
+                        ? "h-10 w-10 justify-center"
+                        : "px-3 py-2.5"
+                    }`}
+                    title={isCollapsed ? item.label : undefined}
+                  >
+                    <span className="flex-shrink-0">{item.icon}</span>
+                    {!isCollapsed && <span>{item.label}</span>}
+                  </Link>
+                )}
+
+                {/* Sub items */}
+                {hasSubItems && isExpanded && !isCollapsed && (
+                  <div className="mt-1 ml-3 space-y-1 border-l-2 border-gray-200 pl-4 dark:border-gray-700">
+                    {item.subItems!.map((subItem) => {
+                      // Exact match or child pages of this specific sub-item
+                      // But NOT if it matches another sub-item's path
+                      const isExactMatch = pathname === subItem.href;
+                      const isChildPage = pathname.startsWith(subItem.href + "/") && 
+                                         !item.subItems!.some(other => 
+                                           other.href !== subItem.href && 
+                                           (pathname === other.href || pathname.startsWith(other.href + "/"))
+                                         );
+                      const subIsActive = isExactMatch || isChildPage;
+                      
+                      return (
+                        <Link
+                          key={subItem.href}
+                          href={subItem.href}
+                          className={`block rounded-lg px-3 py-2 text-sm transition-colors ${
+                            subIsActive
+                              ? "bg-blue-50 font-medium text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                              : "text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-700/50"
+                          }`}
+                        >
+                          {subItem.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>

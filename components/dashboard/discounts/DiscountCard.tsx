@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import type { DiscountItem } from "@/types/discounts";
 
@@ -11,6 +12,7 @@ interface DiscountCardProps {
   onToggleFavorite?: (id: number) => void;
   onClaim?: (id: number) => void;
   forceShowImage?: boolean;
+  selectedCityId?: number | null; // ID выбранного города для фильтрации отображения
 }
 
 export default function DiscountCard({
@@ -20,10 +22,19 @@ export default function DiscountCard({
   onToggleFavorite,
   onClaim,
   forceShowImage = false,
+  selectedCityId = null,
 }: DiscountCardProps) {
+  const router = useRouter();
   const [copied, setCopied] = useState(false);
+  
+  // Определяем города для отображения
+  const displayCities = selectedCityId
+    ? discount.cities.filter(city => city.id === selectedCityId)
+    : discount.cities;
 
-  const handleCopyPromo = async () => {
+  const handleCopyPromo = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click when copying promo
+    
     if (!discount.promoCode || !navigator?.clipboard) {
       return;
     }
@@ -37,27 +48,40 @@ export default function DiscountCard({
     }
   };
 
-  const handleFavoriteToggle = () => {
+  const handleFavoriteToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
     onToggleFavorite?.(discount.id);
   };
 
-  const handleClaim = () => {
+  const handleClaim = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click when clicking button
     onClaim?.(discount.id);
+    // Link will naturally open in new tab (target="_blank")
+  };
+
+  const handleCardClick = () => {
+    // Передаем выбранный город через query параметр
+    const url = selectedCityId 
+      ? `/dashboard/discounts/${discount.id}?cityId=${selectedCityId}`
+      : `/dashboard/discounts/${discount.id}`;
+    router.push(url);
   };
 
   return (
-    <div className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
+    <div 
+      onClick={handleCardClick}
+      className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer dark:border-gray-700 dark:bg-gray-800">
       {/* Image/Header */}
-      <div className="relative h-32 sm:h-40 w-full overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800">
+      <div className="relative w-full h-48 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800">
         {discount.imageUrl ? (
           <img
             src={discount.imageUrl}
             alt={discount.title}
             loading="lazy"
-            className="h-full w-full object-cover"
+            className="w-full h-full object-cover"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 p-3 sm:p-6 text-center text-white dark:from-blue-600 dark:via-purple-600 dark:to-pink-600">
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 p-3 sm:p-6 text-center text-white dark:from-blue-600 dark:via-purple-600 dark:to-pink-600">
             <div className="max-w-full px-2">
               <p className="text-xs sm:text-sm font-semibold uppercase tracking-wide opacity-80 truncate">Скидки BestBenefits</p>
               <p className="mt-1 sm:mt-2 text-sm sm:text-lg font-bold line-clamp-2">{discount.title}</p>
@@ -136,7 +160,12 @@ export default function DiscountCard({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.105 0 2-.672 2-1.5S13.105 8 12 8s-2 .672-2 1.5.895 1.5 2 1.5z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 22s7-4.35 7-11.5S16.418 2 12 2 5 5.35 5 10.5 12 22 12 22z" />
             </svg>
-            <span className="truncate flex-1">{discount.cities.map((city) => city.name).join(", ")}</span>
+            <span className="truncate flex-1">
+              {displayCities.length <= 3 
+                ? displayCities.map((city) => city.name).join(", ")
+                : `${displayCities.slice(0, 3).map((city) => city.name).join(", ")} и ещё ${displayCities.length - 3}`
+              }
+            </span>
             {discount.distanceKm && (
               <span className="text-xs text-gray-400 dark:text-gray-500 flex-none">~{discount.distanceKm} км</span>
             )}
@@ -199,12 +228,15 @@ export default function DiscountCard({
               onClick={handleClaim}
               className={clsx(
                 "flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:ring-offset-gray-800",
-                isClaimed ? "bg-gray-600 hover:bg-gray-700" : "bg-blue-600 hover:bg-blue-700"
+                isClaimed 
+                  ? "bg-emerald-600 hover:bg-emerald-700" 
+                  : "bg-blue-600 hover:bg-blue-700"
               )}
             >
-              <span>{isClaimed ? "Открыть" : "Получить скидку"}</span>
+              <span>{isClaimed ? "Открыть на BestBenefits" : "Использовать скидку"}</span>
               <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M12.293 2.293a1 1 0 011.414 0l4 4A1 1 0 0117.414 8H15v6a2 2 0 01-2 2H5a3 3 0 01-3-3V7a1 1 0 112 0v6a1 1 0 001 1h8V8H9.414a1 1 0 01-.707-1.707l4-4z" />
+                <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
               </svg>
             </a>
           )}

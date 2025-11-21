@@ -88,6 +88,12 @@ model User {
   pushSubscriptions PushSubscription[]
   discountPreference DiscountPreference?
 
+  // BestBenefits Integration
+  bestBenefitsUserId String? @unique // ID пользователя в системе BestBenefits
+  bestBenefitsStatus String? // Статус в BestBenefits (active, blocked и т.д.)
+  bestBenefitsCreatedAt DateTime? // Дата создания в BestBenefits
+  bestBenefitsPassword String? // Пароль для BestBenefits (зашифрован AES-256-GCM)
+
   // Настройки уведомлений
   pushNotificationsEnabled Boolean @default(true) // Включены ли push уведомления
   pushSoundEnabled         Boolean @default(true) // Включен ли звук в push уведомлениях

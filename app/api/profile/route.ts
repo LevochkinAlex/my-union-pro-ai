@@ -4,6 +4,9 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
+import { syncUserToBestBenefits } from "@/lib/best-benefits-users";
+import { decryptPassword } from "@/lib/best-benefits-password";
+import crypto from "crypto";
 
 function normalizeString(value: unknown): string | null {
   if (value === null || value === undefined) {
@@ -106,6 +109,15 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // Получаем пользователя с bestBenefitsPassword перед обновлением
+    const userBeforeUpdate = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        bestBenefitsUserId: true,
+        bestBenefitsPassword: true,
+      },
+    });
+
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
       data: {
@@ -120,6 +132,64 @@ export async function PUT(request: NextRequest) {
         dateOfBirth,
       },
     });
+
+    // Синхронизация с BestBenefits при первом заполнении ФИО
+    if (
+      process.env.USE_REAL_BB_API === "true" &&
+      firstName &&
+      lastName &&
+      !userBeforeUpdate?.bestBenefitsUserId // Ещё не синхронизирован
+    ) {
+      console.log("[profile] User filled profile with name, syncing to BestBenefits...");
+      
+      // Используем сохраненный пароль из БД (тот же, что и в нашей системе)
+      let bbPassword: string;
+      
+      if (userBeforeUpdate?.bestBenefitsPassword) {
+        try {
+          // Расшифровываем сохраненный пароль
+          bbPassword = decryptPassword(userBeforeUpdate.bestBenefitsPassword);
+          console.log("[profile] Using saved password from database for BestBenefits");
+        } catch (error) {
+          console.error("[profile] Failed to decrypt password, generating new one:", error);
+          // Если не удалось расшифровать, генерируем новый (fallback)
+          bbPassword = crypto.randomBytes(12).toString("base64").slice(0, 12);
+        }
+      } else {
+        // Если пароля нет в БД, генерируем новый (для старых пользователей)
+        console.log("[profile] No saved password found, generating new one");
+        bbPassword = crypto.randomBytes(12).toString("base64").slice(0, 12);
+      }
+      
+      syncUserToBestBenefits({
+        id: updatedUser.id,
+        email: updatedUser.email,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        password: bbPassword,
+        city_id: null,
+      })
+        .then(async (bbData) => {
+          await prisma.user.update({
+            where: { id: updatedUser.id },
+            data: {
+              bestBenefitsUserId: bbData.bestBenefitsUserId,
+              bestBenefitsStatus: bbData.status,
+              bestBenefitsCreatedAt: new Date(),
+            },
+          });
+          console.log(
+            `[profile] User ${updatedUser.id} synced to BestBenefits:`,
+            bbData.bestBenefitsUserId
+          );
+        })
+        .catch((error) => {
+          console.error(
+            `[profile] Failed to sync user ${updatedUser.id} to BestBenefits:`,
+            error
+          );
+        });
+    }
 
     return NextResponse.json({
       success: true,

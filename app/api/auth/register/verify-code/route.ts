@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sendWelcomeEmail } from "@/lib/email";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { encryptPassword } from "@/lib/best-benefits-password";
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,6 +43,9 @@ export async function POST(request: NextRequest) {
     // Генерируем случайный пароль
     const generatedPassword = crypto.randomBytes(12).toString("base64").slice(0, 12);
     const hashedPassword = await bcrypt.hash(generatedPassword, 10);
+    
+    // Шифруем пароль для BestBenefits (будет использован при синхронизации)
+    const encryptedBbPassword = encryptPassword(generatedPassword);
 
     // Обновляем пользователя: подтверждаем email, устанавливаем пароль
     const updatedUser = await prisma.user.update({
@@ -49,11 +53,15 @@ export async function POST(request: NextRequest) {
       data: {
         emailVerified: new Date(),
         password: hashedPassword,
+        bestBenefitsPassword: encryptedBbPassword, // Сохраняем зашифрованный пароль для BestBenefits
         verificationToken: null,
         verificationExpires: null,
         membershipStatus: "PROFILE_INCOMPLETE", // Email подтвержден, профиль не заполнен
       },
     });
+
+    // Синхронизация с BestBenefits будет выполнена ПОСЛЕ заполнения профиля (ФИО)
+    // в /api/profile при первом обновлении профиля с firstName и lastName
 
     // Создаем начальный чат "Заявление" с ChatSession
     try {
