@@ -48,3 +48,8 @@ server.log
 
 # temp files
 check-bot.mjs
+
+# Deploy credentials
+.deploy/
+*.deploy.env
+deploy-config.sh

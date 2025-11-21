@@ -49,7 +49,7 @@ async function syncUser(email) {
       console.log(`   Дата синхронизации: ${user.bestBenefitsCreatedAt || 'N/A'}`);
       
       const answer = await askQuestion('\nПересоздать пользователя в BestBenefits? (y/N): ');
-      if (answer.toLowerCase() !== 'y') {
+      if (String(answer).toLowerCase() !== 'y') {
         console.log('Отменено');
         process.exit(0);
       }
@@ -118,8 +118,8 @@ async function syncUser(email) {
   }
 }
 
-function askQuestion(question) {
-  return new Promise((resolve) => {
+function askQuestion(question: string): Promise<string> {
+  return new Promise<string>((resolve) => {
     const readline = require('readline').createInterface({
       input: process.stdin,
       output: process.stdout,
