@@ -538,16 +538,25 @@ export async function POST(request: NextRequest) {
       });
       
       // Проверяем, есть ли у пользователя сгенерированные документы
+      // Учитываем все статусы кроме DRAFT (черновик)
       const documents = await prisma.document.findMany({
         where: {
           userId: session.user.id,
           type: {
             in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
           },
+          status: {
+            not: "DRAFT",
+          },
         },
         take: 1,
       });
       hasGeneratedDocuments = documents.length > 0;
+      
+      // Логируем для отладки
+      if (hasGeneratedDocuments) {
+        console.log(`[chat] User ${session.user.id} has ${documents.length} generated documents`);
+      }
     }
 
     // Если в сообщении пользователя есть адрес, валидируем его через Dadata ДО отправки к AI
