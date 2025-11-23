@@ -215,7 +215,22 @@ async function buildSystemPrompt(
       }
       
       // Не добавляем инструкции по сбору основного профиля
-      return includeKnowledgeBase(prompt, chunks);
+      // Добавляем базу знаний к промпту
+      if (chunks.length > 0) {
+        const kbNameMap = new Map(
+          (bot.knowledgeBases || []).map((relation) => [
+            relation.knowledgeBaseId,
+            relation.knowledgeBase?.name ?? "База знаний",
+          ])
+        );
+
+        prompt += `\n\nАктуальные материалы (используй их как факты, указывай их происхождение при ответе):\n`;
+        chunks.forEach((chunk, index) => {
+          const kbName = kbNameMap.get(chunk.knowledgeBaseId) ?? "База знаний";
+          prompt += `\n[${index + 1}] ${kbName} (релевантность ${chunk.similarity.toFixed(2)}):\n${chunk.content}\n`;
+        });
+      }
+      return prompt;
     }
     
     // ПРИОРИТЕТ 2: Документы НЕ сгенерированы - собираем основной профиль
