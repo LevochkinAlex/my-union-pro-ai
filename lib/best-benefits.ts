@@ -322,21 +322,21 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
   }
 
   const data = (await response.json()) as BestBenefitsResponse;
-  console.log("[best-benefits] Fetched", data?.data?.length ?? 0, "discounts from API");
+  // console.log("[best-benefits] Fetched", data?.data?.length ?? 0, "discounts from API");
   
-  // Логируем первый элемент для проверки наличия описания
-  if (data?.data?.length > 0) {
-    const first = data.data[0];
-    console.log("[best-benefits] Sample discount fields:", {
-      id: first.id,
-      hasDescription: !!first.description,
-      descriptionLength: first.description?.length || 0,
-      hasShortDescription: !!first.short_description,
-      shortDescriptionLength: first.short_description?.length || 0,
-      hasPromoCode: !!first.promo_code,
-      promoCode: first.promo_code,
-    });
-  }
+  // Логируем первый элемент для проверки наличия описания (закомментировано для production)
+  // if (data?.data?.length > 0) {
+  //   const first = data.data[0];
+  //   console.log("[best-benefits] Sample discount fields:", {
+  //     id: first.id,
+  //     hasDescription: !!first.description,
+  //     descriptionLength: first.description?.length || 0,
+  //     hasShortDescription: !!first.short_description,
+  //     shortDescriptionLength: first.short_description?.length || 0,
+  //     hasPromoCode: !!first.promo_code,
+  //     promoCode: first.promo_code,
+  //   });
+  // }
   
   return data;
 }
@@ -543,15 +543,15 @@ function normalizeDiscount(discount: BestBenefitsDiscount): DiscountItem {
   const shortDescription = discount.short_description || null;
   
   // console.log(`[best-benefits] Discount ${discount.id} "${discount.name}":`, {
-    hasPromoCode: !!discount.promo_code,
-    promoCode: discount.promo_code,
-    hasDescription: !!description,
-    descriptionLength: description?.length || 0,
-    hasShortDescription: !!shortDescription,
-    shortDescriptionLength: shortDescription?.length || 0,
-    hasCtaUrl: !!discount.cta_url,
-    ctaUrl: discount.cta_url,
-  });
+  //   hasPromoCode: !!discount.promo_code,
+  //   promoCode: discount.promo_code,
+  //   hasDescription: !!description,
+  //   descriptionLength: description?.length || 0,
+  //   hasShortDescription: !!shortDescription,
+  //   shortDescriptionLength: shortDescription?.length || 0,
+  //   hasCtaUrl: !!discount.cta_url,
+  //   ctaUrl: discount.cta_url,
+  // });
 
   return {
     id: discount.id,
