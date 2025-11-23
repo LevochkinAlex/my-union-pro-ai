@@ -143,7 +143,6 @@ export default async function AdminLayout({
   // Get user avatar
   const user = await prisma.user.findUnique({
     where: { email: session.user?.email || "" },
-    select: { avatarUrl: true },
   });
 
   return (
