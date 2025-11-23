@@ -1089,8 +1089,13 @@ ID документа: ${uploadedDocument.documentId}
             }
           }
           
-          // Обновляем профиль с извлеченными данными (даже если данные уже есть, перезаписываем)
+          // Обновляем профиль с извлеченными данными
           if (Object.keys(extractedData).length > 0) {
+            // Получаем текущие данные пользователя для проверки
+            const currentUser = await prisma.user.findUnique({
+              where: { id: session.user.id },
+            });
+            
             // Убираем пустые значения и organizationName (это не поле в User)
             const cleanData = Object.fromEntries(
               Object.entries(extractedData).filter(
@@ -1102,6 +1107,45 @@ ID документа: ${uploadedDocument.documentId}
                   !(typeof value === "number" && Number.isNaN(value))
               )
             );
+            
+            // ЗАЩИТА: Не перезаписываем ФИО географическими названиями
+            const geoWords = [
+              'Республика', 'Область', 'Край', 'Округ', 'Регион', 'Город',
+              'Татарстан', 'Башкортостан', 'Москва', 'Казань', 'Санкт', 'Петербург'
+            ];
+            
+            // Проверяем firstName
+            if (cleanData.firstName && currentUser?.firstName) {
+              const isGeoName = geoWords.some(word => 
+                cleanData.firstName.includes(word) || word.includes(cleanData.firstName)
+              );
+              if (isGeoName) {
+                console.log("[chat] ⚠️ Skipping firstName update - looks like a geographic name:", cleanData.firstName);
+                delete cleanData.firstName;
+              }
+            }
+            
+            // Проверяем lastName
+            if (cleanData.lastName && currentUser?.lastName) {
+              const isGeoName = geoWords.some(word => 
+                cleanData.lastName.includes(word) || word.includes(cleanData.lastName)
+              );
+              if (isGeoName) {
+                console.log("[chat] ⚠️ Skipping lastName update - looks like a geographic name:", cleanData.lastName);
+                delete cleanData.lastName;
+              }
+            }
+            
+            // Проверяем middleName
+            if (cleanData.middleName && currentUser?.middleName) {
+              const isGeoName = geoWords.some(word => 
+                cleanData.middleName.includes(word) || word.includes(cleanData.middleName)
+              );
+              if (isGeoName) {
+                console.log("[chat] ⚠️ Skipping middleName update - looks like a geographic name:", cleanData.middleName);
+                delete cleanData.middleName;
+              }
+            }
             
             if (Object.keys(cleanData).length > 0) {
               await prisma.user.update({

@@ -125,16 +125,61 @@ export async function extractProfileDataFromMessages(
   }
 
   // Extract name patterns (ФИО)
-  const fioPattern = /([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/;
-  const fioMatch = allText.match(fioPattern);
-  if (fioMatch) {
-    if (fioMatch[3]) {
-      profileData.lastName = fioMatch[1].trim();
-      profileData.firstName = fioMatch[2].trim();
-      profileData.middleName = fioMatch[3].trim();
-    } else if (fioMatch[2]) {
-      profileData.firstName = fioMatch[1].trim();
-      profileData.lastName = fioMatch[2].trim();
+  // Сначала ищем по явным меткам
+  const fioLabelPattern = /(?:\*\*(?:ФИО|Фамилия|Имя)\*\*|ФИО|Фамилия\s+Имя\s+Отчество)[^:\n]*[:\-–]\s*([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/i;
+  const fioLabelMatch = allText.match(fioLabelPattern);
+  
+  if (fioLabelMatch) {
+    // Найдено по метке
+    if (fioLabelMatch[3]) {
+      profileData.lastName = fioLabelMatch[1].trim();
+      profileData.firstName = fioLabelMatch[2].trim();
+      profileData.middleName = fioLabelMatch[3].trim();
+    } else if (fioLabelMatch[2]) {
+      profileData.firstName = fioLabelMatch[1].trim();
+      profileData.lastName = fioLabelMatch[2].trim();
+    }
+  } else {
+    // Если не найдено по метке, ищем паттерн, НО исключаем географические названия
+    const fioPattern = /([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/g;
+    const excludeWords = [
+      'Республика', 'Область', 'Край', 'Округ', 'Регион', 'Город', 'Федерация',
+      'Татарстан', 'Башкортостан', 'Чувашия', 'Удмуртия', 'Мордовия', 'Марий', 'Эл',
+      'Москва', 'Петербург', 'Санкт', 'Новгород', 'Нижний', 'Казань', 'Екатеринбург',
+      'Челябинск', 'Самара', 'Уфа', 'Ростов', 'Омск', 'Красноярск', 'Воронеж', 'Пермь',
+      'Волгоград', 'Саратов', 'Краснодар', 'Тольятти', 'Тюмень', 'Ижевск', 'Барнаул',
+      'Ульяновск', 'Иркутск', 'Хабаровск', 'Ярославль', 'Владивосток', 'Махачкала',
+      'Томск', 'Оренбург', 'Кемерово', 'Новокузнецк', 'Рязань', 'Астрахань', 'Набережные',
+      'Челны', 'Пенза', 'Липецк', 'Киров', 'Чебоксары', 'Калининград', 'Тула', 'Курск',
+      'Сочи', 'Ставрополь', 'Улан', 'Удэ', 'Магнитогорск', 'Брянск', 'Иваново', 'Белгород',
+      'Сургут', 'Владимир', 'Чита', 'Нижневартовск', 'Архангельск', 'Симферополь', 'Калуга',
+      'Смоленск', 'Волжский', 'Якутск', 'Саранск', 'Череповец', 'Вологда', 'Севастополь',
+      'Владикавказ', 'Грозный', 'Мурманск', 'Тамбов', 'Стерлитамак', 'Кострома', 'Петрозаводск'
+    ];
+    
+    let fioMatch;
+    while ((fioMatch = fioPattern.exec(allText)) !== null) {
+      const word1 = fioMatch[1];
+      const word2 = fioMatch[2];
+      const word3 = fioMatch[3];
+      
+      // Проверяем, что это не географическое название
+      if (!excludeWords.includes(word1) && !excludeWords.includes(word2) && 
+          (!word3 || !excludeWords.includes(word3))) {
+        // Дополнительная проверка: исключаем если после идут слова "область", "край", "республика"
+        const contextAfter = allText.substring(fioMatch.index + fioMatch[0].length, fioMatch.index + fioMatch[0].length + 50);
+        if (!/(?:область|край|республика|округ|регион|город|г\.|улица|ул\.|проспект|пр\.)/i.test(contextAfter.substring(0, 20))) {
+          if (word3) {
+            profileData.lastName = word1.trim();
+            profileData.firstName = word2.trim();
+            profileData.middleName = word3.trim();
+          } else if (word2) {
+            profileData.firstName = word1.trim();
+            profileData.lastName = word2.trim();
+          }
+          break; // Берем первое подходящее совпадение
+        }
+      }
     }
   }
 
