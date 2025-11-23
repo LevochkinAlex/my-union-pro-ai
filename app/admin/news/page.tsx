@@ -92,18 +92,18 @@ export default function AdminNewsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
             Управление новостями
           </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
+          <p className="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400">
             Создавайте и управляйте новостями для всех пользователей
           </p>
         </div>
         <Link
           href="/admin/news/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
           <svg
             className="h-5 w-5"
@@ -118,7 +118,8 @@ export default function AdminNewsPage() {
               d="M12 4v16m8-8H4"
             />
           </svg>
-          Создать новость
+          <span className="hidden sm:inline">Создать новость</span>
+          <span className="sm:hidden">Создать</span>
         </Link>
       </div>
 
