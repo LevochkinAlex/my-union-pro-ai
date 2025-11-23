@@ -19,7 +19,7 @@ export default function ImageUploadWithCrop({
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
-  const [aspectRatio, setAspectRatio] = useState<16 / 9 | 4 / 3>(16 / 9);
+  const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
   const [uploading, setUploading] = useState(false);
   const [showCropper, setShowCropper] = useState(false);
 
