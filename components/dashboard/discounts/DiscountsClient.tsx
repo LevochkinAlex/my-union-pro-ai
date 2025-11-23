@@ -60,7 +60,10 @@ export default function DiscountsClient({
   });
   const [data, setData] = useState<DiscountSearchResult>(initialData);
   const [allDiscounts, setAllDiscounts] = useState(initialData.discounts);
-  const [hasMore, setHasMore] = useState(initialData.discounts.length >= 20);
+  const [hasMore, setHasMore] = useState(
+    initialData.meta.hasMore ?? 
+    (initialData.meta.total ? initialData.discounts.length < initialData.meta.total : initialData.discounts.length >= 20)
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -177,19 +180,23 @@ export default function DiscountsClient({
         setData(payload);
         
         if (append) {
-          // Добавляем новые скидки к существующим
-          setAllDiscounts(prev => [...prev, ...payload.discounts]);
+          // Добавляем новые скидки к существующим и обновляем hasMore
+          setAllDiscounts(prev => {
+            const updated = [...prev, ...payload.discounts];
+            const totalLoaded = updated.length;
+            const hasMoreFromAPI = payload.meta.hasMore ?? false;
+            const hasMoreFromTotal = payload.meta.total ? totalLoaded < payload.meta.total : payload.discounts.length >= 20;
+            setHasMore(hasMoreFromAPI || hasMoreFromTotal);
+            return updated;
+          });
         } else {
-          // Заменяем все скидки
+          // Заменяем все скидки и обновляем hasMore
           setAllDiscounts(payload.discounts);
+          const totalLoaded = payload.discounts.length;
+          const hasMoreFromAPI = payload.meta.hasMore ?? false;
+          const hasMoreFromTotal = payload.meta.total ? totalLoaded < payload.meta.total : payload.discounts.length >= 20;
+          setHasMore(hasMoreFromAPI || hasMoreFromTotal);
         }
-        
-        // Проверяем, есть ли еще скидки для загрузки
-        // Используем hasMore из API, или вычисляем на основе total и текущей страницы
-        const totalLoaded = append ? allDiscounts.length + payload.discounts.length : payload.discounts.length;
-        const hasMoreFromAPI = payload.meta.hasMore ?? false;
-        const hasMoreFromTotal = payload.meta.total ? totalLoaded < payload.meta.total : payload.discounts.length >= 20;
-        setHasMore(hasMoreFromAPI || hasMoreFromTotal);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Ошибка загрузки");
       } finally {
@@ -202,12 +209,13 @@ export default function DiscountsClient({
 
   // Загрузка следующей страницы для бесконечного скролла
   const loadMore = useCallback(() => {
-    if (isLoadingMore || !hasMore) return;
+    if (isLoadingMore || !hasMore || isLoading) return;
     
-    const nextFilters = { ...filters, page: filters.page + 1 };
+    const nextPage = filters.page + 1;
+    const nextFilters = { ...filters, page: nextPage };
     setFilters(nextFilters);
     fetchDiscounts(nextFilters, undefined, true);
-  }, [filters, isLoadingMore, hasMore, fetchDiscounts]);
+  }, [filters, isLoadingMore, hasMore, isLoading, fetchDiscounts]);
 
   const updateFilters = (updates: Partial<FilterState>) => {
     const next = { ...filters, ...updates, page: 1 }; // Сбрасываем на первую страницу

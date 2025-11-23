@@ -178,6 +178,11 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
   }
 
   // Используем /products endpoint с правильными параметрами
+  // ВАЖНО: BestBenefits API НЕ поддерживает фильтрацию по регионам
+  // API поддерживает только:
+  // - category (ID категории, один параметр, не массив)
+  // - city (название города, строка, не ID)
+  // Фильтрация по регионам делается на клиенте
   const searchParams = new URLSearchParams();
   
   // API поддерживает только один category (не массив)
@@ -262,6 +267,11 @@ function normalizeResponse(
   const rawDiscounts = raw?.data ?? [];
 
   const discounts: DiscountItem[] = rawDiscounts.map((discount) => normalizeDiscount(discount));
+  
+  // Извлекаем города и категории из ВСЕХ загруженных скидок (до фильтрации)
+  // Это нужно, чтобы в фильтре показывались все доступные города, даже если они отфильтрованы
+  const allCategories = extractCategories(discounts);
+  const allCities = extractCities(discounts);
   
   // Apply all filters for fallback data
   let filtered = discounts;
@@ -351,8 +361,9 @@ function normalizeResponse(
   // Apply view filter (favorites/claimed) - это уже не нужно если ids указаны
   const filteredByView = params.ids ? filteredByRadius : applyViewFilter(filteredByRadius, params);
 
-  const categories = extractCategories(discounts); // Use all discounts for category list
-  const cities = extractCities(discounts); // Use all discounts for city list
+  // Используем города и категории из всех загруженных скидок (извлечены выше, до фильтрации)
+  const categories = allCategories;
+  const cities = allCities;
 
   // Если данные пришли из реального API, всегда используем метаданные пагинации из API
   // API всегда возвращает пагинированные данные, даже без фильтров

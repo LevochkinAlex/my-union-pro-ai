@@ -15,6 +15,19 @@ function serializeProvider(provider: ApiProvider) {
     }
   }
 
+  // Если модели - это объекты с полем 'id', извлекаем только ID (строки)
+  let modelStrings: string[] = [];
+  if (Array.isArray(parsedModels)) {
+    modelStrings = parsedModels.map((model: any) => {
+      if (typeof model === 'string') {
+        return model;
+      } else if (typeof model === 'object' && model !== null && 'id' in model) {
+        return model.id; // Извлекаем ID из объекта
+      }
+      return String(model); // Fallback
+    });
+  }
+
   let parsedCapabilities: unknown = null;
   if (typeof capabilities === "string" && capabilities.trim().length > 0) {
     try {
@@ -29,7 +42,7 @@ function serializeProvider(provider: ApiProvider) {
 
   return {
     ...rest,
-    availableModels: Array.isArray(parsedModels) ? parsedModels : [],
+    availableModels: modelStrings, // Теперь всегда массив строк
     capabilities: parsedCapabilities,
   };
 }
