@@ -1049,13 +1049,15 @@ ID документа: ${uploadedDocument.documentId}
           console.warn("[chat] Error extracting data:", extractError);
         }
 
-        // Теперь проверяем полноту профиля
-        const user = await prisma.user.findUnique({
-          where: { id: session.user.id },
-        });
+        // Проверяем полноту профиля ТОЛЬКО если документы еще не сгенерированы
+        if (!hasGeneratedDocuments) {
+          // Теперь проверяем полноту профиля
+          const user = await prisma.user.findUnique({
+            where: { id: session.user.id },
+          });
 
-        // Проверяем, заполнены ли все необходимые поля профиля
-        const profileIsComplete = isProfileComplete(user);
+          // Проверяем, заполнены ли все необходимые поля профиля
+          const profileIsComplete = isProfileComplete(user);
 
         console.log("[chat] Profile completeness check:", {
           firstName: !!user?.firstName,
@@ -1179,8 +1181,11 @@ ID документа: ${uploadedDocument.documentId}
           }
         } else if (!profileIsComplete) {
           console.log("[chat] ❌ Profile still incomplete after extraction");
+          } else {
+            console.log("[chat] Profile complete marker already exists");
+          }
         } else {
-          console.log("[chat] Profile complete marker already exists");
+          console.log("[chat] ⏭️  Skipping profile check - documents already generated");
         }
       } catch (error) {
         console.error("[chat] Error checking profile completeness:", error);
