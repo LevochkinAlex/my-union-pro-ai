@@ -479,15 +479,19 @@ function extractCategories(discounts: DiscountItem[]): DiscountCategory[] {
 
 function extractCities(discounts: DiscountItem[]): DiscountCity[] {
   const map = new Map<number, DiscountCity & { count: number }>();
+  const russianCitiesSet = new Set(getAllRussianCities().map(c => c.toLowerCase()));
   
-  // Собираем ВСЕ уникальные города из скидок (без фильтрации)
+  // Собираем только российские города из скидок
   discounts.forEach((discount) => {
     discount.cities.forEach((city) => {
       if (city.name && city.name.trim().length > 0) {
-        map.set(city.id, {
-          ...city,
-          count: (map.get(city.id)?.count ?? 0) + 1,
-        });
+        // Фильтруем только российские города
+        if (russianCitiesSet.has(city.name.toLowerCase())) {
+          map.set(city.id, {
+            ...city,
+            count: (map.get(city.id)?.count ?? 0) + 1,
+          });
+        }
       }
     });
   });

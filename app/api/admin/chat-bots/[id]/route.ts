@@ -120,6 +120,12 @@ export async function PUT(
       updateData.context = context?.trim() || null;
     }
     if (model !== undefined) {
+      if (typeof model !== "string" || model.trim().length === 0) {
+        return NextResponse.json(
+          { error: "Модель должна быть непустой строкой" },
+          { status: 400 }
+        );
+      }
       updateData.model = model.trim();
     }
     if (apiProviderId !== undefined) {
