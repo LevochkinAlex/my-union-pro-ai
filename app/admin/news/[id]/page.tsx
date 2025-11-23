@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import ImageUploadWithCrop from "@/components/admin/ImageUploadWithCrop";
+import RichTextEditor from "@/components/admin/RichTextEditor";
 
 interface PollOption {
   id: string;
@@ -256,24 +257,16 @@ export default function EditNewsPage() {
             />
 
             <div>
-              <label
-                htmlFor="content"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-              >
-                Содержание * (HTML)
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Содержание *
               </label>
-              <textarea
-                id="content"
+              <RichTextEditor
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
-                rows={12}
-                className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-mono text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
-                placeholder="Введите содержание новости. Можно использовать HTML теги: &lt;p&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;ul&gt;, &lt;ol&gt;, &lt;li&gt;, &lt;a&gt;, &lt;br&gt; и т.д."
-                required
+                onChange={setContent}
+                placeholder="Введите содержание новости..."
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Поддерживается HTML разметка. Используйте теги для форматирования
-                текста.
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Используйте панель инструментов для форматирования текста
               </p>
             </div>
 

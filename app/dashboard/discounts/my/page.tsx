@@ -16,7 +16,8 @@ export default function MyDiscountsPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [downloading, setDownloading] = useState<number | null>(null);
   const [copiedPromoId, setCopiedPromoId] = useState<number | null>(null);
-  const [regenerating, setRegenerating] = useState<number | null>(null);
+  const [showPromoCardModal, setShowPromoCardModal] = useState(false);
+  const [promoCardData, setPromoCardData] = useState<{ dataUrl: string; blob: Blob; discount: DiscountItem } | null>(null);
 
   useEffect(() => {
     // Синхронизация с BestBenefits при загрузке страницы, затем загрузка скидок
@@ -138,76 +139,52 @@ export default function MyDiscountsPage() {
     }
   };
 
-  const handleRegeneratePromoCode = async (discountId: number) => {
-    setRegenerating(discountId);
-    
-    try {
-      // Генерируем новый промокод (можно использовать любую логику)
-      const newPromoCode = `bb${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-      
-      console.log("[handleRegeneratePromoCode] Generating new promo code:", newPromoCode);
-      
-      // Обновляем промокод в preferences
-      const prefsResponse = await fetch("/api/discounts/preferences");
-      const prefsData = await prefsResponse.json();
-      const currentFilters = prefsData.filters || {};
-      const claimedData = currentFilters.claimed || [];
-      
-      // Обновляем промокод для этой скидки
-      const updatedClaimed = claimedData.map((item: any) => {
-        const itemId = typeof item === 'object' && item.id ? item.id : item;
-        if (itemId === discountId) {
-          return { id: discountId, promoCode: newPromoCode };
-        }
-        return item;
-      });
-      
-      // Сохраняем обновленные preferences
-      await fetch("/api/discounts/preferences", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filters: {
-            ...currentFilters,
-            claimed: updatedClaimed,
-          },
-        }),
-      });
-      
-      // Обновляем локальное состояние
-      setDiscounts(prev => prev.map(d => 
-        d.id === discountId ? { ...d, promoCode: newPromoCode } : d
-      ));
-      
-      console.log("[handleRegeneratePromoCode] Promo code regenerated successfully");
-      
-      // Показываем уведомление
-      alert(`Новый промокод: ${newPromoCode}`);
-    } catch (error) {
-      console.error("[handleRegeneratePromoCode] Failed to regenerate promo code:", error);
-      alert("Не удалось перегенерировать промокод. Попробуйте еще раз.");
-    } finally {
-      setRegenerating(null);
-    }
-  };
-
   const handleDownloadPromoCard = async (discount: DiscountItem) => {
     setDownloading(discount.id);
     
     try {
       console.log("[handleDownloadPromoCard] Starting generation for discount:", discount.id);
       
-      // Получаем данные пользователя
-      const userResponse = await fetch("/api/profile");
-      if (!userResponse.ok) {
-        throw new Error(`Failed to fetch user profile: ${userResponse.status}`);
+      // Функция для проверки, что имя не является географическим названием
+      const isValidName = (name: string | null | undefined): boolean => {
+        if (!name) return false;
+        const geographicNames = [
+          "татарстан", "башкортостан", "чувашия", "удмуртия", "мордовия",
+          "москва", "петербург", "санкт", "новгород", "казань", "екатеринбург",
+          "отлично", "хорошо", "плохо", "да", "нет"
+        ];
+        const lowerName = name.toLowerCase().trim();
+        return !geographicNames.some(geo => lowerName.includes(geo));
+      };
+      
+      // Получаем имя пользователя
+      let userName = "Пользователь";
+      
+      // 1. Пробуем использовать имя из сессии
+      if (session?.user?.name && isValidName(session.user.name)) {
+        userName = session.user.name;
+        console.log("[handleDownloadPromoCard] Using name from session:", userName);
+      } else {
+        // 2. Пробуем получить из профиля
+        const userResponse = await fetch("/api/profile");
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          const firstName = userData.user?.firstName;
+          const lastName = userData.user?.lastName;
+          
+          // Проверяем валидность имени и фамилии
+          if (firstName && lastName && isValidName(firstName) && isValidName(lastName)) {
+            userName = `${firstName} ${lastName}`;
+            console.log("[handleDownloadPromoCard] Using name from profile:", userName);
+          } else if (userData.user?.email) {
+            // Используем email как fallback
+            userName = userData.user.email.split("@")[0];
+            console.log("[handleDownloadPromoCard] Using email as fallback:", userName);
+          }
+        }
       }
-      const userData = await userResponse.json();
-      const userName = userData.user?.firstName && userData.user?.lastName
-        ? `${userData.user.firstName} ${userData.user.lastName}`
-        : userData.user?.email || "Пользователь";
 
-      console.log("[handleDownloadPromoCard] User data:", { userName });
+      console.log("[handleDownloadPromoCard] Final user name:", userName);
       console.log("[handleDownloadPromoCard] Discount data:", {
         promoCode: discount.promoCode,
         title: discount.title,
@@ -215,7 +192,7 @@ export default function MyDiscountsPage() {
       });
 
       // Генерируем карточку
-      const blob = await generatePromoCard({
+      const { blob, dataUrl } = await generatePromoCard({
         promoCode: discount.promoCode, // может быть undefined
         userName: userName,
         discountName: discount.title,
@@ -224,24 +201,48 @@ export default function MyDiscountsPage() {
         validUntil: discount.validUntil ? new Date(discount.validUntil) : undefined,
       });
 
-      console.log("[handleDownloadPromoCard] Blob generated:", { size: blob.size, type: blob.type });
+      console.log("[handleDownloadPromoCard] Card generated:", { size: blob.size, type: blob.type });
 
-      // Скачиваем файл
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `promo-card-${discount.id}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Открываем модалку с превью
+      setPromoCardData({ dataUrl, blob, discount });
+      setShowPromoCardModal(true);
       
-      console.log("[handleDownloadPromoCard] Download triggered successfully");
     } catch (error) {
       console.error("[handleDownloadPromoCard] Failed to generate promo card:", error);
       alert(`Не удалось создать карточку: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
     } finally {
       setDownloading(null);
+    }
+  };
+
+  const handleDownloadFromModal = () => {
+    if (!promoCardData) return;
+    
+    const url = URL.createObjectURL(promoCardData.blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `promo-card-${promoCardData.discount.id}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleAddToWallet = () => {
+    // Определяем платформу
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/.test(navigator.userAgent);
+    
+    if (isIOS) {
+      // Для iOS - добавление в Apple Wallet требует .pkpass файл
+      // Это сложный процесс, требующий серверного API
+      alert("Функция добавления в Apple Wallet будет доступна в ближайшее время");
+    } else if (isAndroid) {
+      // Для Android - Google Pay Passes API
+      alert("Функция добавления в Google Pay будет доступна в ближайшее время");
+    } else {
+      // Для десктопа - просто скачиваем
+      handleDownloadFromModal();
     }
   };
 
@@ -411,20 +412,6 @@ export default function MyDiscountsPage() {
                               </svg>
                             )}
                           </button>
-                          <button
-                            onClick={() => handleRegeneratePromoCode(discount.id)}
-                            disabled={regenerating === discount.id}
-                            className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Перегенерировать промокод"
-                          >
-                            {regenerating === discount.id ? (
-                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
-                            ) : (
-                              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                              </svg>
-                            )}
-                          </button>
                         </div>
                       </div>
                     )}
@@ -474,6 +461,69 @@ export default function MyDiscountsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Promo Card Modal */}
+      {showPromoCardModal && promoCardData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="relative max-w-4xl w-full max-h-[90vh] overflow-auto rounded-xl bg-white shadow-2xl dark:bg-gray-800">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Промокарта
+              </h3>
+              <button
+                onClick={() => setShowPromoCardModal(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <svg className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* Preview */}
+              <div className="mb-6 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+                <img
+                  src={promoCardData.dataUrl}
+                  alt="Promo Card Preview"
+                  className="w-full h-auto"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button
+                  onClick={handleDownloadFromModal}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-3 text-base font-semibold text-white transition hover:bg-blue-700"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                  Скачать
+                </button>
+                <button
+                  onClick={handleAddToWallet}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg border-2 border-blue-600 bg-white px-6 py-3 text-base font-semibold text-blue-600 transition hover:bg-blue-50 dark:bg-gray-800 dark:hover:bg-gray-700"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
+                    <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
+                  </svg>
+                  Добавить в кошелек
+                </button>
+              </div>
+
+              <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
+                {/iPad|iPhone|iPod/.test(navigator.userAgent) 
+                  ? "Скоро вы сможете добавить эту карту в Apple Wallet" 
+                  : /Android/.test(navigator.userAgent)
+                  ? "Скоро вы сможете добавить эту карту в Google Pay"
+                  : "Скачайте карту и используйте промокод в магазине"}
+              </p>
+            </div>
+          </div>
         </div>
       )}
     </div>
