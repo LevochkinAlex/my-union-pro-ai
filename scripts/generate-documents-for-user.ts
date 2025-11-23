@@ -1,26 +1,7 @@
 import { PrismaClient } from '@prisma/client';
+import { generateMembershipApplication, generateContributionsApplication } from '../lib/documents';
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Динамический импорт для TypeScript модулей
-async function importDocuments() {
-  try {
-    // Пробуем импортировать из скомпилированного JS
-    const documents = await import('../lib/documents.js');
-    return documents;
-  } catch (e) {
-    // Если не работает, используем tsx для запуска TypeScript
-    console.log('⚠️  Using tsx to run TypeScript...');
-    const { execSync } = await import('child_process');
-    // Альтернатива: используем API endpoint
-    throw new Error('Please use API endpoint instead');
-  }
-}
 
 const prisma = new PrismaClient();
 
@@ -85,7 +66,8 @@ async function generateDocuments() {
     console.log('\n📝 Generating documents...');
     
     // Генерируем заявление о вступлении
-    const membershipPath = await generateMembershipApplication(user);
+    const ppoChairman = user.organization?.chairmanName || 'Председатель ППО';
+    const membershipPath = await generateMembershipApplication(user, ppoChairman);
     console.log('✅ Membership application:', membershipPath);
     
     // Генерируем заявление о взносах
@@ -103,6 +85,10 @@ async function generateDocuments() {
     const membershipStats = await fs.stat(membershipFullPath);
     const contributionsStats = await fs.stat(contributionsFullPath);
     
+    // Читаем файлы в base64
+    const membershipBuffer = await fs.readFile(membershipFullPath);
+    const contributionsBuffer = await fs.readFile(contributionsFullPath);
+    
     // Сохраняем в базу
     await prisma.document.create({
       data: {
@@ -110,6 +96,7 @@ async function generateDocuments() {
         type: 'MEMBERSHIP_APPLICATION',
         status: 'GENERATED',
         title: 'Заявление о вступлении в профсоюз',
+        content: membershipBuffer.toString('base64'),
         filePath: membershipPath,
         fileName: path.basename(membershipPath),
         fileSize: membershipStats.size,
@@ -124,6 +111,7 @@ async function generateDocuments() {
         type: 'CONTRIBUTION_APPLICATION',
         status: 'GENERATED',
         title: 'Заявление о взносах',
+        content: contributionsBuffer.toString('base64'),
         filePath: contributionsPath,
         fileName: path.basename(contributionsPath),
         fileSize: contributionsStats.size,
@@ -140,7 +128,7 @@ async function generateDocuments() {
     
   } catch (error) {
     console.error('❌ Error:', error);
-    if (error.stack) {
+    if (error instanceof Error && error.stack) {
       console.error(error.stack);
     }
     process.exit(1);
