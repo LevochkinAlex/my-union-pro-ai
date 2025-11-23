@@ -21,9 +21,31 @@ export default function MiniChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(false); // Флаг для контроля автоскролла
   const isInitialLoadRef = useRef(true); // Флаг первой загрузки
+
+  // Загружаем аватарку пользователя
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    const loadUserAvatar = async () => {
+      try {
+        const response = await fetch('/api/profile');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.user?.avatarUrl) {
+            setUserAvatar(data.user.avatarUrl);
+          }
+        }
+      } catch (error) {
+        console.error('[MiniChat] Failed to load user avatar:', error);
+      }
+    };
+
+    loadUserAvatar();
+  }, [session?.user?.id]);
 
   // Загружаем сессию "Мой чат" (STATEMENT)
   useEffect(() => {
@@ -274,9 +296,17 @@ export default function MiniChat() {
                   </div>
                   {message.role === "user" && (
                     <div className="flex-shrink-0">
-                      <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold shadow-sm">
-                        {session?.user?.name?.charAt(0).toUpperCase() || "B"}
-                      </div>
+                      {userAvatar ? (
+                        <img
+                          src={userAvatar}
+                          alt="User Avatar"
+                          className="h-8 w-8 rounded-full object-cover shadow-sm"
+                        />
+                      ) : (
+                        <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold shadow-sm">
+                          {session?.user?.name?.charAt(0).toUpperCase() || "U"}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
