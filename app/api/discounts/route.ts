@@ -105,9 +105,8 @@ async function enrichParamsWithPreference(params: DiscountSearchParams, userId: 
       params.view === "favorites" ? filters?.favorites : filters?.claimed;
     if (list?.length) {
       params.ids = list.join(",");
-    } else {
-      params.ids = "";
     }
+    // Если список пустой, не устанавливаем params.ids - вернется пустой результат
   } catch (error) {
     console.warn("[api/discounts] Failed to load preference filters:", error);
   }

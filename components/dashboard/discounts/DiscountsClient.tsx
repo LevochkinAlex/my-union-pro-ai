@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DiscountCard from "./DiscountCard";
 import CityFilter from "./CityFilter";
 import type {
@@ -158,10 +158,30 @@ export default function DiscountsClient({
           const favList = listOverride?.favorites ?? favorites;
           const claimedList = listOverride?.claimed ?? claimed;
           if (nextFilters.view === "favorites") {
-            params.set("ids", favList.join(","));
+            // Если список избранного пустой, не передаем ids (вернется пустой результат)
+            if (favList.length > 0) {
+              params.set("ids", favList.join(","));
+            } else {
+              // Если избранное пустое, возвращаем пустой результат сразу
+              setAllDiscounts([]);
+              setHasMore(false);
+              setIsLoading(false);
+              setIsLoadingMore(false);
+              return;
+            }
           }
           if (nextFilters.view === "claimed") {
-            params.set("ids", claimedList.join(","));
+            // Если список полученных пустой, не передаем ids
+            if (claimedList.length > 0) {
+              params.set("ids", claimedList.join(","));
+            } else {
+              // Если полученные пустые, возвращаем пустой результат сразу
+              setAllDiscounts([]);
+              setHasMore(false);
+              setIsLoading(false);
+              setIsLoadingMore(false);
+              return;
+            }
           }
         }
         if (nextFilters.nearMe && nextFilters.cityId === null) {
@@ -184,18 +204,35 @@ export default function DiscountsClient({
           setAllDiscounts(prev => {
             const updated = [...prev, ...payload.discounts];
             const totalLoaded = updated.length;
-            const hasMoreFromAPI = payload.meta.hasMore ?? false;
-            const hasMoreFromTotal = payload.meta.total ? totalLoaded < payload.meta.total : payload.discounts.length >= 20;
-            setHasMore(hasMoreFromAPI || hasMoreFromTotal);
+            
+            // Используем hasMore из API, если он есть
+            if (payload.meta.hasMore !== undefined) {
+              setHasMore(payload.meta.hasMore);
+            } else if (payload.meta.total !== undefined) {
+              // Если есть total, проверяем, загружены ли все
+              setHasMore(totalLoaded < payload.meta.total);
+            } else {
+              // Если нет метаданных, проверяем, пришло ли полное количество (20)
+              setHasMore(payload.discounts.length >= 20);
+            }
+            
             return updated;
           });
         } else {
           // Заменяем все скидки и обновляем hasMore
           setAllDiscounts(payload.discounts);
           const totalLoaded = payload.discounts.length;
-          const hasMoreFromAPI = payload.meta.hasMore ?? false;
-          const hasMoreFromTotal = payload.meta.total ? totalLoaded < payload.meta.total : payload.discounts.length >= 20;
-          setHasMore(hasMoreFromAPI || hasMoreFromTotal);
+          
+          // Используем hasMore из API, если он есть
+          if (payload.meta.hasMore !== undefined) {
+            setHasMore(payload.meta.hasMore);
+          } else if (payload.meta.total !== undefined) {
+            // Если есть total, проверяем, загружены ли все
+            setHasMore(totalLoaded < payload.meta.total);
+          } else {
+            // Если нет метаданных, проверяем, пришло ли полное количество (20)
+            setHasMore(payload.discounts.length >= 20);
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Ошибка загрузки");
@@ -207,20 +244,84 @@ export default function DiscountsClient({
     [filters, favorites, claimed]
   );
 
+  // Ref для отслеживания, идет ли уже загрузка (защита от повторных вызовов)
+  const isLoadingMoreRef = useRef(false);
+  const loadMoreTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Загрузка следующей страницы для бесконечного скролла
   const loadMore = useCallback(() => {
-    if (isLoadingMore || !hasMore || isLoading) return;
+    // Проверяем все условия, включая ref
+    if (isLoadingMoreRef.current || isLoadingMore || !hasMore || isLoading) {
+      return;
+    }
     
-    const nextPage = filters.page + 1;
-    const nextFilters = { ...filters, page: nextPage };
-    setFilters(nextFilters);
-    fetchDiscounts(nextFilters, undefined, true);
+    // Очищаем предыдущий timeout, если он есть
+    if (loadMoreTimeoutRef.current) {
+      clearTimeout(loadMoreTimeoutRef.current);
+    }
+    
+    // Debounce: задержка 150ms перед загрузкой (уменьшено для более быстрой загрузки)
+    loadMoreTimeoutRef.current = setTimeout(() => {
+      // Повторная проверка после debounce
+      if (isLoadingMoreRef.current || isLoadingMore || !hasMore || isLoading) {
+        return;
+      }
+      
+      // Сохраняем позицию скролла относительно последнего элемента
+      const sentinel = document.getElementById('scroll-sentinel');
+      const sentinelTop = sentinel ? sentinel.getBoundingClientRect().top + window.scrollY : 0;
+      const scrollPosition = window.scrollY;
+      const scrollHeight = document.documentElement.scrollHeight;
+      
+      // Устанавливаем флаг загрузки
+      isLoadingMoreRef.current = true;
+      
+      const nextPage = filters.page + 1;
+      const nextFilters = { ...filters, page: nextPage };
+      
+      // Обновляем filters сразу, чтобы избежать рассинхронизации
+      setFilters(nextFilters);
+      
+      // Вызываем fetchDiscounts с append=true для добавления к существующим скидкам
+      fetchDiscounts(nextFilters, undefined, true).finally(() => {
+        // Восстанавливаем позицию скролла после добавления новых элементов
+        // Используем несколько requestAnimationFrame для надежности
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const newScrollHeight = document.documentElement.scrollHeight;
+            const heightDiff = newScrollHeight - scrollHeight;
+            
+            // Восстанавливаем позицию относительно sentinel элемента
+            if (sentinel) {
+              const newSentinelTop = sentinel.getBoundingClientRect().top + window.scrollY;
+              const sentinelDiff = newSentinelTop - sentinelTop;
+              
+              // Корректируем позицию с учетом смещения sentinel
+              window.scrollTo({
+                top: scrollPosition + sentinelDiff,
+                behavior: 'auto' as ScrollBehavior
+              });
+            } else if (heightDiff > 0) {
+              // Fallback: используем разницу высоты
+              window.scrollTo({
+                top: scrollPosition + heightDiff,
+                behavior: 'auto' as ScrollBehavior
+              });
+            }
+            
+            // Сбрасываем флаг после завершения загрузки
+            isLoadingMoreRef.current = false;
+          });
+        });
+      });
+    }, 300);
   }, [filters, isLoadingMore, hasMore, isLoading, fetchDiscounts]);
 
   const updateFilters = (updates: Partial<FilterState>) => {
     const next = { ...filters, ...updates, page: 1 }; // Сбрасываем на первую страницу
     setFilters(next);
     setAllDiscounts([]); // Очищаем накопленные скидки
+    isLoadingMoreRef.current = false; // Сбрасываем флаг загрузки при изменении фильтров
     fetchDiscounts(next, undefined, false);
     persistPreference(next);
   };
@@ -331,8 +432,55 @@ export default function DiscountsClient({
     }
   };
 
-  const handleTabChange = (view: ViewMode) => {
-    updateFilters({ view, page: 1 });
+  const handleTabChange = async (view: ViewMode) => {
+    // При переключении вкладок загружаем актуальные preferences
+    if (view === "favorites" || view === "claimed") {
+      try {
+        const prefsResponse = await fetch("/api/discounts/preferences");
+        if (prefsResponse.ok) {
+          const prefsData = await prefsResponse.json();
+          const favList = (prefsData.filters?.favorites || [])
+            .map((item: any) => typeof item === 'object' ? item.id : item)
+            .filter(Boolean);
+          const claimedList = (prefsData.filters?.claimed || [])
+            .map((item: any) => typeof item === 'object' ? item.id : item)
+            .filter(Boolean);
+          
+          setFavorites(favList);
+          setClaimed(claimedList);
+          
+          // Обновляем фильтры с актуальными списками
+          const nextFilters = { 
+            ...filters,
+            view, 
+            page: 1,
+            search: "",
+            cityId: null,
+            categoryIds: [],
+            premiumOnly: false,
+            nearMe: false,
+          };
+          setFilters(nextFilters);
+          setAllDiscounts([]);
+          await fetchDiscounts(nextFilters, { favorites: favList, claimed: claimedList }, false);
+          persistPreference(nextFilters);
+          return;
+        }
+      } catch (error) {
+        console.error("Failed to load preferences:", error);
+      }
+    }
+    
+    // Если не favorites/claimed или не удалось загрузить preferences, используем стандартное обновление
+    updateFilters({ 
+      view, 
+      page: 1,
+      search: "",
+      cityId: null,
+      categoryIds: [],
+      premiumOnly: false,
+      nearMe: false,
+    });
   };
 
   const persistPreference = useCallback(
@@ -362,13 +510,28 @@ export default function DiscountsClient({
 
   // IntersectionObserver для бесконечного скролла
   useEffect(() => {
+    // Не создаем observer, если уже идет загрузка или нет больше данных
+    if (isLoadingMore || isLoading || !hasMore) {
+      return;
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoadingMore && !isLoading) {
+        // Дополнительная проверка перед вызовом loadMore
+        if (
+          entries[0].isIntersecting && 
+          hasMore && 
+          !isLoadingMore && 
+          !isLoading &&
+          !isLoadingMoreRef.current
+        ) {
           loadMore();
         }
       },
-      { threshold: 0.1, rootMargin: '100px' }
+      { 
+        threshold: 0.01, // Уменьшаем threshold для более раннего срабатывания
+        rootMargin: '800px' // Увеличиваем rootMargin еще больше для более раннего срабатывания
+      }
     );
 
     const sentinel = document.getElementById('scroll-sentinel');
@@ -379,6 +542,10 @@ export default function DiscountsClient({
     return () => {
       if (sentinel) {
         observer.unobserve(sentinel);
+      }
+      // Очищаем timeout при размонтировании
+      if (loadMoreTimeoutRef.current) {
+        clearTimeout(loadMoreTimeoutRef.current);
       }
     };
   }, [hasMore, isLoadingMore, isLoading, loadMore]);

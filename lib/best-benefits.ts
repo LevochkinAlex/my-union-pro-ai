@@ -22,6 +22,107 @@ type FetchContext = {
   fetchedAt: string;
 };
 
+// Кэш для всех городов (чтобы не загружать их каждый раз)
+let allCitiesCache: DiscountCity[] | null = null;
+let allCitiesCacheTimestamp: number = 0;
+const ALL_CITIES_CACHE_TTL = 5 * 60 * 1000; // 5 минут
+let citiesLoadingPromise: Promise<DiscountCity[]> | null = null;
+
+/**
+ * Загружает все города из всех скидок для фильтра
+ * Использует кэш, чтобы не делать лишние запросы
+ * Ограничиваем до 3 страниц, чтобы не перегружать сервер
+ */
+async function fetchAllCitiesForFilter(): Promise<DiscountCity[]> {
+  // Проверяем кэш
+  if (allCitiesCache && Date.now() - allCitiesCacheTimestamp < ALL_CITIES_CACHE_TTL) {
+    return allCitiesCache;
+  }
+
+  // Если уже идет загрузка, возвращаем тот же промис
+  if (citiesLoadingPromise) {
+    return citiesLoadingPromise;
+  }
+
+  if (!USE_REAL_API) {
+    return [];
+  }
+
+  citiesLoadingPromise = (async () => {
+    try {
+      const token = await getBestBenefitsToken();
+      const allCitiesMap = new Map<number, DiscountCity>();
+      
+      // Загружаем только первые 3 страницы для извлечения основных городов
+      // Это достаточно для большинства случаев и не перегружает сервер
+      const maxPages = 3;
+      let currentPage = 1;
+      let hasMore = true;
+
+      while (hasMore && currentPage <= maxPages) {
+        const url = `${API_BASE_URL}?per_page=100&page=${currentPage}`;
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          console.warn(`[best-benefits] Failed to fetch page ${currentPage} for cities`);
+          break;
+        }
+
+        const data = (await response.json()) as BestBenefitsResponse;
+        const discounts = data?.data ?? [];
+
+        // Извлекаем города из этой страницы
+        discounts.forEach((discount: any) => {
+          const cities = discount.cities ?? [];
+          cities.forEach((city: any) => {
+            if (city.name && city.name.trim().length > 0 && city.id) {
+              allCitiesMap.set(city.id, {
+                id: city.id,
+                name: city.name,
+                slug: city.slug ?? null,
+                coordinates: getCityCoordinates(city.name),
+              });
+            }
+          });
+        });
+
+        // Проверяем, есть ли еще страницы
+        hasMore = data?.meta?.current_page && data?.meta?.last_page 
+          ? data.meta.current_page < data.meta.last_page 
+          : false;
+        
+        currentPage++;
+      }
+
+      const cities = Array.from(allCitiesMap.values()).sort((a, b) => 
+        a.name.localeCompare(b.name, 'ru-RU')
+      );
+
+      // Обновляем кэш
+      allCitiesCache = cities;
+      allCitiesCacheTimestamp = Date.now();
+      citiesLoadingPromise = null; // Сбрасываем промис после завершения
+
+      // console.log(`[best-benefits] Loaded ${cities.length} unique cities from ${currentPage - 1} pages`);
+      return cities;
+    } catch (error) {
+      citiesLoadingPromise = null; // Сбрасываем промис при ошибке
+      console.error("[best-benefits] Failed to fetch all cities:", error);
+      return [];
+    }
+  })();
+
+  return citiesLoadingPromise;
+}
+
 export async function fetchBestBenefitsDiscounts(
   params: DiscountSearchParams = {}
 ): Promise<DiscountSearchResult> {
@@ -32,52 +133,52 @@ export async function fetchBestBenefitsDiscounts(
   };
 
   // Если передан cityId, но нет cityName, нужно получить название города
-  // Для этого сначала загружаем первую страницу всех скидок
+  // Сначала пробуем использовать кэш, если его нет - будем искать в текущем ответе после загрузки
   if (USE_REAL_API && sanitizedParams.cityId && !sanitizedParams.cityName) {
-    try {
-      // Загружаем первую страницу без фильтров, чтобы получить список городов
-      const tempParams = { ...sanitizedParams, cityId: null, cityName: null, page: 1, limit: 50 };
-      const tempData = await fetchFromRemote(tempParams);
-      const tempDiscounts = tempData?.data ?? [];
-      
-      // Ищем название города по ID
-      for (const discount of tempDiscounts) {
-        const cities = discount.cities ?? [];
-        const city = cities.find((c: any) => c.id === sanitizedParams.cityId);
-        if (city?.name) {
-          sanitizedParams.cityName = city.name;
-          console.log(`[best-benefits] Found city name for ID ${sanitizedParams.cityId}: ${city.name}`);
-          break;
-        }
+    if (allCitiesCache) {
+      // Используем кэш, если он есть
+      const city = allCitiesCache.find(c => c.id === sanitizedParams.cityId);
+      if (city?.name) {
+        sanitizedParams.cityName = city.name;
+        // console.log(`[best-benefits] Found city name for ID ${sanitizedParams.cityId} from cache: ${city.name}`);
       }
-      
-      // Если не нашли в первой странице, пробуем загрузить больше
-      if (!sanitizedParams.cityName && tempData?.meta?.last_page && tempData.meta.last_page > 1) {
-        for (let page = 2; page <= Math.min(tempData.meta.last_page, 5); page++) {
-          const moreData = await fetchFromRemote({ ...tempParams, page });
-          const moreDiscounts = moreData?.data ?? [];
-          for (const discount of moreDiscounts) {
-            const cities = discount.cities ?? [];
-            const city = cities.find((c: any) => c.id === sanitizedParams.cityId);
-            if (city?.name) {
-              sanitizedParams.cityName = city.name;
-              console.log(`[best-benefits] Found city name for ID ${sanitizedParams.cityId}: ${city.name} (page ${page})`);
-              break;
-            }
-          }
-          if (sanitizedParams.cityName) break;
-        }
-      }
-    } catch (error) {
-      console.warn("[best-benefits] Failed to resolve city name, will filter on client:", error);
     }
+    // Если кэша нет, будем искать в текущем ответе после загрузки (см. ниже)
   }
 
   // Use real API if configured
   if (USE_REAL_API) {
     try {
       const remoteData = await fetchFromRemote(sanitizedParams);
-      return normalizeResponse(remoteData, sanitizedParams, { source: "remote", fetchedAt: new Date().toISOString() });
+      const result = normalizeResponse(remoteData, sanitizedParams, { source: "remote", fetchedAt: new Date().toISOString() });
+      
+      // Обогащаем список городов из кэша для фильтра (только если кэш уже есть)
+      // Загрузка всех городов делается в фоне, чтобы не блокировать основной запрос
+      if (allCitiesCache && allCitiesCache.length > 0) {
+        // Объединяем города из текущего ответа с городами из кэша
+        const citiesMap = new Map<number, DiscountCity>();
+        result.cities.forEach(city => citiesMap.set(city.id, city));
+        allCitiesCache.forEach(city => {
+          if (!citiesMap.has(city.id)) {
+            citiesMap.set(city.id, city);
+          }
+        });
+        result.cities = Array.from(citiesMap.values()).sort((a, b) => 
+          a.name.localeCompare(b.name, 'ru-RU')
+        );
+        // console.log(`[best-benefits] Enriched cities list: ${result.cities.length} total (${allCitiesCache.length} from cache)`);
+      }
+      
+      // Загружаем города в фоне для следующего запроса (не блокируем текущий)
+      // Только при первой загрузке без фильтров
+      const isFirstLoad = !sanitizedParams.cityId && !sanitizedParams.cityName && !sanitizedParams.search && sanitizedParams.page === 1;
+      if (isFirstLoad && !allCitiesCache) {
+        fetchAllCitiesForFilter().catch(err => {
+          console.warn("[best-benefits] Failed to load cities in background:", err);
+        });
+      }
+      
+      return result;
     } catch (error) {
       console.error("[best-benefits] Real API fetch failed:", error);
       // Fallback to sample data if real API fails
@@ -87,7 +188,7 @@ export async function fetchBestBenefitsDiscounts(
   }
 
   // Use sample data by default (for testing)
-  console.log("[best-benefits] Using sample data (USE_REAL_BB_API not enabled)");
+  // console.log("[best-benefits] Using sample data (USE_REAL_BB_API not enabled)");
   const fallbackData = await fetchFromSample();
   return normalizeResponse(fallbackData, sanitizedParams, { source: "fallback", fetchedAt: new Date().toISOString() });
 }
@@ -105,7 +206,7 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
     const singleId = params.ids.trim();
     try {
       const singleUrl = `${API_BASE_URL}/${singleId}`;
-      console.log("[best-benefits] Fetching single discount from API:", singleUrl);
+      // console.log("[best-benefits] Fetching single discount from API:", singleUrl);
       
       const singleResponse = await fetch(singleUrl, {
         method: "GET",
@@ -122,7 +223,7 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
         // Если API возвращает один объект, оборачиваем в массив
         const discount = singleData.data || singleData;
         if (discount) {
-          console.log("[best-benefits] Fetched single discount with full details");
+          // console.log("[best-benefits] Fetched single discount with full details");
           return {
             data: Array.isArray(discount) ? discount : [discount],
             meta: {
@@ -134,10 +235,10 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
           } as BestBenefitsResponse;
         }
       } else {
-        console.log("[best-benefits] Single discount endpoint not available, falling back to list");
+        // console.log("[best-benefits] Single discount endpoint not available, falling back to list");
       }
     } catch (error) {
-      console.log("[best-benefits] Error fetching single discount, falling back to list:", error);
+      // console.log("[best-benefits] Error fetching single discount, falling back to list:", error);
     }
   }
 
@@ -156,7 +257,7 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
     if (params.limit) searchParams.set("per_page", String(params.limit));
 
     const url = `${searchUrl}?${searchParams.toString()}`;
-    console.log("[best-benefits] Using /search endpoint:", url);
+    // console.log("[best-benefits] Using /search endpoint:", url);
 
     const response = await fetch(url, {
       method: "GET",
@@ -170,7 +271,7 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
 
     if (response.ok) {
       const data = (await response.json()) as BestBenefitsResponse;
-      console.log("[best-benefits] Fetched", data?.data?.length ?? 0, "discounts from /search");
+      // console.log("[best-benefits] Fetched", data?.data?.length ?? 0, "discounts from /search");
       return data;
     } else {
       console.warn("[best-benefits] /search endpoint failed, falling back to /products");
@@ -201,7 +302,7 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
   if (params.page) searchParams.set("page", String(params.page));
 
   const url = `${API_BASE_URL}?${searchParams.toString()}`;
-  console.log("[best-benefits] Fetching from API:", url);
+  // console.log("[best-benefits] Fetching from API:", url);
 
   const response = await fetch(url, {
     method: "GET",
@@ -286,13 +387,13 @@ function normalizeResponse(
     const globalDiscounts = discounts.filter(d => d.cities.length === 0).length;
     const citySpecificDiscounts = discounts.filter(d => d.cities.length > 0).length;
     
-    console.log(`[best-benefits] 🔍 Filtering by cityId: ${params.cityId} (${selectedCityName})`);
-    console.log(`[best-benefits] 📊 Before filter: ${discounts.length} discounts (${globalDiscounts} global, ${citySpecificDiscounts} city-specific)`);
+    // console.log(`[best-benefits] 🔍 Filtering by cityId: ${params.cityId} (${selectedCityName})`);
+    // console.log(`[best-benefits] 📊 Before filter: ${discounts.length} discounts (${globalDiscounts} global, ${citySpecificDiscounts} city-specific)`);
     
     filtered = filtered.filter((discount) => {
       // Если у скидки нет городов - она доступна везде (глобальная)
       if (discount.cities.length === 0) {
-        console.log(`[best-benefits] 🌍 Discount ${discount.id} "${discount.title}" INCLUDED (global discount, no cities)`);
+        // console.log(`[best-benefits] 🌍 Discount ${discount.id} "${discount.title}" INCLUDED (global discount, no cities)`);
         return true;
       }
       
@@ -301,16 +402,16 @@ function normalizeResponse(
       const cityNames = discount.cities.map(c => c.name);
       const hasCity = cityIds.includes(params.cityId!);
       
-      if (hasCity) {
-        console.log(`[best-benefits] ✅ Discount ${discount.id} "${discount.title}" INCLUDED. Cities: ${cityNames.join(', ')} (IDs: ${cityIds.join(', ')})`);
-      } else {
-        console.log(`[best-benefits] ❌ Discount ${discount.id} "${discount.title}" FILTERED OUT. Cities: ${cityNames.join(', ')} (IDs: ${cityIds.join(', ')})`);
-      }
+      // if (hasCity) {
+      //   console.log(`[best-benefits] ✅ Discount ${discount.id} "${discount.title}" INCLUDED. Cities: ${cityNames.join(', ')} (IDs: ${cityIds.join(', ')})`);
+      // } else {
+      //   console.log(`[best-benefits] ❌ Discount ${discount.id} "${discount.title}" FILTERED OUT. Cities: ${cityNames.join(', ')} (IDs: ${cityIds.join(', ')})`);
+      // }
       
       return hasCity;
     });
     
-    console.log(`[best-benefits] 📊 After city filter: ${filtered.length} discounts (was ${discounts.length})`);
+    // console.log(`[best-benefits] 📊 After city filter: ${filtered.length} discounts (was ${discounts.length})`);
     
     if (filtered.length === 0 && discounts.length > 0) {
       console.warn(`[best-benefits] ⚠️ WARNING: No discounts found for cityId ${params.cityId} (${selectedCityName})!`);
@@ -441,7 +542,7 @@ function normalizeDiscount(discount: BestBenefitsDiscount): DiscountItem {
   const description = discount.description || null;
   const shortDescription = discount.short_description || null;
   
-  console.log(`[best-benefits] Discount ${discount.id} "${discount.name}":`, {
+  // console.log(`[best-benefits] Discount ${discount.id} "${discount.name}":`, {
     hasPromoCode: !!discount.promo_code,
     promoCode: discount.promo_code,
     hasDescription: !!description,
