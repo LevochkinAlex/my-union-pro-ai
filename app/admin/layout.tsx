@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/dashboard/Sidebar";
 
 export default async function AdminLayout({
@@ -139,12 +140,19 @@ export default async function AdminLayout({
     },
   ];
 
+  // Get user avatar
+  const user = await prisma.user.findUnique({
+    where: { email: session.user?.email || "" },
+    select: { avatarUrl: true },
+  });
+
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
       <Sidebar
         items={adminMenuItems}
         userInitial={session.user?.name?.charAt(0).toUpperCase() || "A"}
+        avatarUrl={user?.avatarUrl || null}
         isAdmin={true}
       />
 

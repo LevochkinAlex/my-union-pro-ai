@@ -18,10 +18,11 @@ interface NavItem {
 interface SidebarProps {
   items: NavItem[];
   userInitial: string;
+  avatarUrl?: string | null;
   isAdmin?: boolean;
 }
 
-export default function Sidebar({ items, userInitial, isAdmin = false }: SidebarProps) {
+export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const pathname = usePathname();
@@ -219,10 +220,18 @@ export default function Sidebar({ items, userInitial, isAdmin = false }: Sidebar
                 {/* Account icon */}
                 <Link
                   href={isAdmin ? "/admin/users" : "/dashboard/profile"}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  className="flex h-9 w-9 items-center justify-center rounded-full overflow-hidden bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
                   title={isCollapsed ? (isAdmin ? "Пользователи" : "Профиль") : undefined}
                 >
-                  <span className="text-sm font-semibold">{userInitial}</span>
+                  {avatarUrl ? (
+                    <img 
+                      src={avatarUrl} 
+                      alt="Avatar" 
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-sm font-semibold">{userInitial}</span>
+                  )}
                 </Link>
 
                 {/* Theme toggle */}

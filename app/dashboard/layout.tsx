@@ -2,6 +2,7 @@ import React from "react";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/dashboard/Sidebar";
 import MiniChatWrapper from "@/components/dashboard/MiniChatWrapper";
 
@@ -98,12 +99,19 @@ export default async function DashboardLayout({
     }
   );
 
+  // Get user avatar
+  const user = await prisma.user.findUnique({
+    where: { email: session.user?.email || "" },
+    select: { avatarUrl: true },
+  });
+
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
       <Sidebar
         items={menuItems}
         userInitial={session.user?.name?.charAt(0).toUpperCase() || "U"}
+        avatarUrl={user?.avatarUrl || null}
       />
 
       {/* Main content */}

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import ImageUploadWithCrop from "@/components/admin/ImageUploadWithCrop";
 
 interface PollOption {
   id: string;
@@ -24,7 +25,7 @@ export default function EditNewsPage() {
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [coverImage, setCoverImage] = useState("");
+  const [coverImage, setCoverImage] = useState<string | null>(null);
   const [isPublished, setIsPublished] = useState(false);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,7 +176,7 @@ export default function EditNewsPage() {
         body: JSON.stringify({
           title: title.trim(),
           content: content.trim(),
-          coverImage: coverImage.trim() || null,
+          coverImage: coverImage || null,
           isPublished,
           polls: polls.length > 0 ? polls : [],
         }),
@@ -203,7 +204,7 @@ export default function EditNewsPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-4 sm:space-y-6 pb-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
@@ -248,34 +249,11 @@ export default function EditNewsPage() {
               />
             </div>
 
-            <div>
-              <label
-                htmlFor="coverImage"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-              >
-                URL изображения обложки
-              </label>
-              <input
-                type="url"
-                id="coverImage"
-                value={coverImage}
-                onChange={(e) => setCoverImage(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
-                placeholder="https://example.com/image.jpg"
-              />
-              {coverImage && (
-                <div className="mt-2">
-                  <img
-                    src={coverImage}
-                    alt="Preview"
-                    className="h-32 w-auto rounded-lg border border-gray-200 dark:border-gray-700"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
-                  />
-                </div>
-              )}
-            </div>
+            <ImageUploadWithCrop
+              value={coverImage}
+              onChange={setCoverImage}
+              label="Изображение обложки"
+            />
 
             <div>
               <label
