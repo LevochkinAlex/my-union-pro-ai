@@ -11,7 +11,7 @@ interface CityFilterProps {
 }
 
 export default function CityFilter({ cities, value, onChange }: CityFilterProps) {
-  const [selectedCountry, setSelectedCountry] = useState<string>("all");
+  const [selectedCountry, setSelectedCountry] = useState<string>("russia"); // Дефолт: Россия
   const [selectedRegion, setSelectedRegion] = useState<string>("all");
 
   // Группируем ВСЕ города по регионам для анализа
@@ -62,8 +62,10 @@ export default function CityFilter({ cities, value, onChange }: CityFilterProps)
     let citiesByCountry: DiscountCity[];
     if (selectedCountry === "russia") {
       citiesByCountry = citiesAnalysis.russianCities;
+    } else if (selectedCountry === "other") {
+      citiesByCountry = citiesAnalysis.otherCities;
     } else {
-      // "all" - все города (теперь только российские, так как extractCities фильтрует)
+      // "all" - все города
       citiesByCountry = cities;
     }
 
@@ -98,8 +100,11 @@ export default function CityFilter({ cities, value, onChange }: CityFilterProps)
         onChange={(e) => handleCountryChange(e.target.value)}
         className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
       >
-        <option value="all">Все города ({cities.length})</option>
+        <option value="all">Все страны ({cities.length})</option>
         <option value="russia">Россия ({citiesAnalysis.russianCities.length})</option>
+        {citiesAnalysis.hasOtherCountries && (
+          <option value="other">Другие страны ({citiesAnalysis.otherCities.length})</option>
+        )}
       </select>
 
       {/* Регион (показываем только для России) */}

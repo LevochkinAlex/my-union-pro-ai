@@ -354,27 +354,29 @@ function normalizeResponse(
   const categories = extractCategories(discounts); // Use all discounts for category list
   const cities = extractCities(discounts); // Use all discounts for city list
 
-  // Если фильтрация была сделана на стороне API (например, через cityName),
-  // используем метаданные из API. Иначе делаем клиентскую пагинацию.
-  const wasFilteredByAPI = params.cityName || (params.search && context.source === "remote");
-  
-  if (wasFilteredByAPI && raw.meta) {
+  // Если данные пришли из реального API, всегда используем метаданные пагинации из API
+  // API всегда возвращает пагинированные данные, даже без фильтров
+  if (context.source === "remote" && raw.meta) {
     // Используем метаданные из API
+    // API уже отпагинировал данные, но мы можем применить дополнительные клиентские фильтры
+    // (например, по cityId, если он не был передан в API)
     return {
-      discounts: filteredByView, // API уже отфильтровал и отпагинировал
+      discounts: filteredByView, // Применяем клиентские фильтры к данным от API
       categories,
       cities: attachCoordinatesToCities(cities),
       meta: {
         total: raw.meta.total ?? filteredByView.length,
         page: raw.meta.current_page ?? params.page ?? 1,
         perPage: raw.meta.per_page ?? params.limit ?? 15,
-        hasMore: raw.meta.current_page ? raw.meta.current_page < raw.meta.last_page : false,
+        hasMore: raw.meta.current_page && raw.meta.last_page 
+          ? raw.meta.current_page < raw.meta.last_page 
+          : false,
       },
       fetchedAt: context.fetchedAt,
       source: context.source,
     };
   } else {
-    // Клиентская пагинация
+    // Клиентская пагинация для fallback данных
     const paginated = paginate(filteredByView, params.page ?? 1, params.limit ?? filteredByView.length);
     
     return {
@@ -479,19 +481,15 @@ function extractCategories(discounts: DiscountItem[]): DiscountCategory[] {
 
 function extractCities(discounts: DiscountItem[]): DiscountCity[] {
   const map = new Map<number, DiscountCity & { count: number }>();
-  const russianCitiesSet = new Set(getAllRussianCities().map(c => c.toLowerCase()));
   
-  // Собираем только российские города из скидок
+  // Собираем ВСЕ уникальные города из скидок (включая города из других стран)
   discounts.forEach((discount) => {
     discount.cities.forEach((city) => {
       if (city.name && city.name.trim().length > 0) {
-        // Фильтруем только российские города
-        if (russianCitiesSet.has(city.name.toLowerCase())) {
-          map.set(city.id, {
-            ...city,
-            count: (map.get(city.id)?.count ?? 0) + 1,
-          });
-        }
+        map.set(city.id, {
+          ...city,
+          count: (map.get(city.id)?.count ?? 0) + 1,
+        });
       }
     });
   });

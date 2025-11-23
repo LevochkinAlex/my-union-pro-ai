@@ -185,7 +185,11 @@ export default function DiscountsClient({
         }
         
         // Проверяем, есть ли еще скидки для загрузки
-        setHasMore(payload.meta.hasMore ?? payload.discounts.length >= 20);
+        // Используем hasMore из API, или вычисляем на основе total и текущей страницы
+        const totalLoaded = append ? allDiscounts.length + payload.discounts.length : payload.discounts.length;
+        const hasMoreFromAPI = payload.meta.hasMore ?? false;
+        const hasMoreFromTotal = payload.meta.total ? totalLoaded < payload.meta.total : payload.discounts.length >= 20;
+        setHasMore(hasMoreFromAPI || hasMoreFromTotal);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Ошибка загрузки");
       } finally {
