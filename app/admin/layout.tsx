@@ -140,18 +140,13 @@ export default async function AdminLayout({
     },
   ];
 
-  // Get user avatar
-  const user = await prisma.user.findUnique({
-    where: { email: session.user?.email || "" },
-  });
-
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
       <Sidebar
         items={adminMenuItems}
         userInitial={session.user?.name?.charAt(0).toUpperCase() || "A"}
-        avatarUrl={user?.avatarUrl || null}
+        avatarUrl={null}
         isAdmin={true}
       />
 
