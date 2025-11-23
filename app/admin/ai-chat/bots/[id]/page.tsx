@@ -403,8 +403,8 @@ export default function BotDetailsPage() {
                 {!selectedProviderId ? (
                   <option>Сначала выберите провайдера</option>
                 ) : (
-                  providerModels.map((m: string) => (
-                    <option key={m} value={m}>
+                  providerModels.map((m: string, index: number) => (
+                    <option key={`${m}-${index}`} value={m}>
                       {m}
                     </option>
                   ))
