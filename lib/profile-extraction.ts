@@ -1,5 +1,97 @@
 import { validateAddressWithDaData } from "./dadata";
 
+/**
+ * Извлекает структурированные данные из сообщений бота
+ * Бот перечисляет собранные данные в формате:
+ * "1. **ФИО**: Иванов Иван Иванович"
+ * "2. **Дата рождения**: 12.02.1970"
+ * и т.д.
+ */
+function extractStructuredDataFromBot(
+  botMessages: Array<{ role: string; content: string }>
+): Record<string, any> {
+  const extracted: any = {};
+  
+  // Ищем последнее сообщение бота с подтверждением данных
+  // Обычно это сообщение со словами "Спасибо за информацию" или "Мы собрали"
+  const confirmationMessage = botMessages
+    .reverse()
+    .find(msg => 
+      msg.content.includes('собрали') || 
+      msg.content.includes('подтверд') ||
+      msg.content.includes('данные готовы')
+    );
+  
+  if (!confirmationMessage) {
+    return extracted;
+  }
+  
+  const text = confirmationMessage.content;
+  
+  // ФИО: "**ФИО**: Иванов Иван Иванович" или "1. **ФИО**: Иванов Иван Иванович"
+  const fioPattern = /\*\*ФИО\*\*[:\s]+([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/;
+  const fioMatch = text.match(fioPattern);
+  if (fioMatch) {
+    extracted.lastName = fioMatch[1].trim();
+    extracted.firstName = fioMatch[2].trim();
+    if (fioMatch[3]) {
+      extracted.middleName = fioMatch[3].trim();
+    }
+  }
+  
+  // Дата рождения: "**Дата рождения**: 12.02.1970"
+  const dobPattern = /\*\*Дата рождения\*\*[:\s]+(\d{1,2}\.\d{1,2}\.\d{4})/;
+  const dobMatch = text.match(dobPattern);
+  if (dobMatch) {
+    const [day, month, year] = dobMatch[1].split('.').map(Number);
+    extracted.dateOfBirth = new Date(year, month - 1, day);
+  }
+  
+  // Адрес: "**Адрес**: Производственная 8к2, Москва"
+  const addressPattern = /\*\*Адрес\*\*[:\s]+([^\n]+)/;
+  const addressMatch = text.match(addressPattern);
+  if (addressMatch) {
+    extracted.address = addressMatch[1].trim();
+  }
+  
+  // Телефон: "**Телефон**: +7 (963) 977-12-86"
+  const phonePattern = /\*\*Телефон\*\*[:\s]+(\+7[^\n]+)/;
+  const phoneMatch = text.match(phonePattern);
+  if (phoneMatch) {
+    extracted.phone = phoneMatch[1].trim();
+  }
+  
+  // Должность: "**Должность**: Зампред"
+  const jobPattern = /\*\*Должность\*\*[:\s]+([^\n]+)/;
+  const jobMatch = text.match(jobPattern);
+  if (jobMatch) {
+    extracted.jobTitle = jobMatch[1].trim();
+  }
+  
+  // Профессия: "**Профессия**: Сторож высшего разряда"
+  const professionPattern = /\*\*Профессия\*\*[:\s]+([^\n]+)/;
+  const professionMatch = text.match(professionPattern);
+  if (professionMatch) {
+    extracted.profession = professionMatch[1].trim();
+  }
+  
+  // Образование: "**Образование**: Основное общее (9 классов)"
+  const educationPattern = /\*\*Образование\*\*[:\s]+([^\n]+)/;
+  const educationMatch = text.match(educationPattern);
+  if (educationMatch) {
+    extracted.education = educationMatch[1].trim();
+  }
+  
+  // Организация: "**Организация**: МООП РЗ РФ"
+  const orgPattern = /\*\*Организация\*\*[:\s]+([^\n]+)/;
+  const orgMatch = text.match(orgPattern);
+  if (orgMatch) {
+    extracted.organizationName = orgMatch[1].trim();
+  }
+  
+  return extracted;
+}
+
 // Русские месяцы для разбора естественных дат
 const RUSSIAN_MONTHS: Record<string, number> = {
   январь: 1, янв: 1,
@@ -92,7 +184,17 @@ export async function extractProfileDataFromMessages(
 ): Promise<Record<string, any>> {
   const profileData: any = {};
 
-  // Join all text for analysis
+  // ВАЖНО: Сначала пытаемся найти структурированные данные из сообщений бота
+  // Бот перечисляет собранные данные в формате "1. **ФИО**: Иванов Иван Иванович"
+  const botMessages = messages.filter(msg => msg.role === 'assistant');
+  const structuredData = extractStructuredDataFromBot(botMessages);
+  
+  if (Object.keys(structuredData).length > 0) {
+    console.log('[profile-extraction] Found structured data from bot:', structuredData);
+    Object.assign(profileData, structuredData);
+  }
+
+  // Join all text for analysis (fallback если структурированные данные не найдены)
   const allText = messages
     .map((msg) => msg.content)
     .join("\n");
@@ -124,60 +226,67 @@ export async function extractProfileDataFromMessages(
     }
   }
 
-  // Extract name patterns (ФИО)
-  // Сначала ищем по явным меткам
-  const fioLabelPattern = /(?:\*\*(?:ФИО|Фамилия|Имя)\*\*|ФИО|Фамилия\s+Имя\s+Отчество)[^:\n]*[:\-–]\s*([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/i;
-  const fioLabelMatch = allText.match(fioLabelPattern);
-  
-  if (fioLabelMatch) {
-    // Найдено по метке
-    if (fioLabelMatch[3]) {
-      profileData.lastName = fioLabelMatch[1].trim();
-      profileData.firstName = fioLabelMatch[2].trim();
-      profileData.middleName = fioLabelMatch[3].trim();
-    } else if (fioLabelMatch[2]) {
-      profileData.firstName = fioLabelMatch[1].trim();
-      profileData.lastName = fioLabelMatch[2].trim();
-    }
-  } else {
-    // Если не найдено по метке, ищем паттерн, НО исключаем географические названия
-    const fioPattern = /([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/g;
-    const excludeWords = [
-      'Республика', 'Область', 'Край', 'Округ', 'Регион', 'Город', 'Федерация',
-      'Татарстан', 'Башкортостан', 'Чувашия', 'Удмуртия', 'Мордовия', 'Марий', 'Эл',
-      'Москва', 'Петербург', 'Санкт', 'Новгород', 'Нижний', 'Казань', 'Екатеринбург',
-      'Челябинск', 'Самара', 'Уфа', 'Ростов', 'Омск', 'Красноярск', 'Воронеж', 'Пермь',
-      'Волгоград', 'Саратов', 'Краснодар', 'Тольятти', 'Тюмень', 'Ижевск', 'Барнаул',
-      'Ульяновск', 'Иркутск', 'Хабаровск', 'Ярославль', 'Владивосток', 'Махачкала',
-      'Томск', 'Оренбург', 'Кемерово', 'Новокузнецк', 'Рязань', 'Астрахань', 'Набережные',
-      'Челны', 'Пенза', 'Липецк', 'Киров', 'Чебоксары', 'Калининград', 'Тула', 'Курск',
-      'Сочи', 'Ставрополь', 'Улан', 'Удэ', 'Магнитогорск', 'Брянск', 'Иваново', 'Белгород',
-      'Сургут', 'Владимир', 'Чита', 'Нижневартовск', 'Архангельск', 'Симферополь', 'Калуга',
-      'Смоленск', 'Волжский', 'Якутск', 'Саранск', 'Череповец', 'Вологда', 'Севастополь',
-      'Владикавказ', 'Грозный', 'Мурманск', 'Тамбов', 'Стерлитамак', 'Кострома', 'Петрозаводск'
-    ];
+  // Extract name patterns (ФИО) - только если не извлечено из структурированных данных
+  if (!profileData.firstName || !profileData.lastName) {
+    // Сначала ищем по явным меткам
+    const fioLabelPattern = /(?:\*\*(?:ФИО|Фамилия|Имя)\*\*|ФИО|Фамилия\s+Имя\s+Отчество)[^:\n]*[:\-–]\s*([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/i;
+    const fioLabelMatch = allText.match(fioLabelPattern);
     
-    let fioMatch;
-    while ((fioMatch = fioPattern.exec(allText)) !== null) {
-      const word1 = fioMatch[1];
-      const word2 = fioMatch[2];
-      const word3 = fioMatch[3];
+    if (fioLabelMatch) {
+      // Найдено по метке
+      if (fioLabelMatch[3]) {
+        profileData.lastName = fioLabelMatch[1].trim();
+        profileData.firstName = fioLabelMatch[2].trim();
+        profileData.middleName = fioLabelMatch[3].trim();
+      } else if (fioLabelMatch[2]) {
+        profileData.firstName = fioLabelMatch[1].trim();
+        profileData.lastName = fioLabelMatch[2].trim();
+      }
+    } else {
+      // Если не найдено по метке, ищем паттерн, НО исключаем географические названия и служебные слова
+      const fioPattern = /([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/g;
+      const excludeWords = [
+        // Географические названия
+        'Республика', 'Область', 'Край', 'Округ', 'Регион', 'Город', 'Федерация', 'России', 'Российской',
+        'Татарстан', 'Башкортостан', 'Чувашия', 'Удмуртия', 'Мордовия', 'Марий', 'Эл',
+        'Москва', 'Петербург', 'Санкт', 'Новгород', 'Нижний', 'Казань', 'Екатеринбург',
+        'Челябинск', 'Самара', 'Уфа', 'Ростов', 'Омск', 'Красноярск', 'Воронеж', 'Пермь',
+        'Волгоград', 'Саратов', 'Краснодар', 'Тольятти', 'Тюмень', 'Ижевск', 'Барнаул',
+        'Ульяновск', 'Иркутск', 'Хабаровск', 'Ярославль', 'Владивосток', 'Махачкала',
+        'Томск', 'Оренбург', 'Кемерово', 'Новокузнецк', 'Рязань', 'Астрахань', 'Набережные',
+        'Челны', 'Пенза', 'Липецк', 'Киров', 'Чебоксары', 'Калининград', 'Тула', 'Курск',
+        'Сочи', 'Ставрополь', 'Улан', 'Удэ', 'Магнитогорск', 'Брянск', 'Иваново', 'Белгород',
+        'Сургут', 'Владимир', 'Чита', 'Нижневартовск', 'Архангельск', 'Симферополь', 'Калуга',
+        'Смоленск', 'Волжский', 'Якутск', 'Саранск', 'Череповец', 'Вологда', 'Севастополь',
+        'Владикавказ', 'Грозный', 'Мурманск', 'Тамбов', 'Стерлитамак', 'Кострома', 'Петрозаводск',
+        // Служебные слова
+        'Отлично', 'Хорошо', 'Прекрасно', 'Замечательно', 'Спасибо', 'Пожалуйста',
+        'Здравствуйте', 'Добрый', 'День', 'Вечер', 'Утро', 'Привет', 'Пока',
+        'Большое', 'Огромное', 'Сердечное', 'Искреннее'
+      ];
       
-      // Проверяем, что это не географическое название
-      if (!excludeWords.includes(word1) && !excludeWords.includes(word2) && 
-          (!word3 || !excludeWords.includes(word3))) {
-        // Дополнительная проверка: исключаем если после идут слова "область", "край", "республика"
-        const contextAfter = allText.substring(fioMatch.index + fioMatch[0].length, fioMatch.index + fioMatch[0].length + 50);
-        if (!/(?:область|край|республика|округ|регион|город|г\.|улица|ул\.|проспект|пр\.)/i.test(contextAfter.substring(0, 20))) {
-          if (word3) {
-            profileData.lastName = word1.trim();
-            profileData.firstName = word2.trim();
-            profileData.middleName = word3.trim();
-          } else if (word2) {
-            profileData.firstName = word1.trim();
-            profileData.lastName = word2.trim();
+      let fioMatch;
+      while ((fioMatch = fioPattern.exec(allText)) !== null) {
+        const word1 = fioMatch[1];
+        const word2 = fioMatch[2];
+        const word3 = fioMatch[3];
+        
+        // Проверяем, что это не географическое название или служебное слово
+        if (!excludeWords.includes(word1) && !excludeWords.includes(word2) && 
+            (!word3 || !excludeWords.includes(word3))) {
+          // Дополнительная проверка: исключаем если после идут слова "область", "край", "республика"
+          const contextAfter = allText.substring(fioMatch.index + fioMatch[0].length, fioMatch.index + fioMatch[0].length + 50);
+          if (!/(?:область|край|республика|округ|регион|город|г\.|улица|ул\.|проспект|пр\.)/i.test(contextAfter.substring(0, 20))) {
+            if (word3) {
+              profileData.lastName = word1.trim();
+              profileData.firstName = word2.trim();
+              profileData.middleName = word3.trim();
+            } else if (word2) {
+              profileData.firstName = word1.trim();
+              profileData.lastName = word2.trim();
+            }
+            break; // Берем первое подходящее совпадение
           }
-          break; // Берем первое подходящее совпадение
         }
       }
     }
@@ -306,7 +415,140 @@ export async function extractProfileDataFromMessages(
     }
   }
 
-  return profileData;
+  // Финальная валидация извлеченных данных
+  return validateExtractedProfile(profileData);
+}
+
+/**
+ * Валидация извлеченных данных профиля
+ */
+function validateExtractedProfile(data: Record<string, any>): Record<string, any> {
+  const validated: Record<string, any> = {};
+  
+  // Список запрещенных слов для ФИО
+  const forbiddenWords = [
+    'Отлично', 'Хорошо', 'Прекрасно', 'Замечательно', 'Спасибо', 'Пожалуйста',
+    'Здравствуйте', 'Привет', 'Пока', 'Да', 'Нет', 'Может', 'Быть',
+    'Республика', 'Область', 'Край', 'Округ', 'Регион', 'Город', 'Федерация', 'России', 'Российской',
+    'Татарстан', 'Башкортостан', 'Москва', 'Петербург', 'Казань'
+  ];
+  
+  // Валидация firstName
+  if (data.firstName && typeof data.firstName === 'string') {
+    const fn = data.firstName.trim();
+    if (fn.length >= 2 && fn.length <= 50 && !forbiddenWords.includes(fn)) {
+      validated.firstName = fn;
+    } else {
+      console.warn('[profile-extraction] Invalid firstName:', fn);
+    }
+  }
+  
+  // Валидация lastName
+  if (data.lastName && typeof data.lastName === 'string') {
+    const ln = data.lastName.trim();
+    if (ln.length >= 2 && ln.length <= 50 && !forbiddenWords.includes(ln)) {
+      validated.lastName = ln;
+    } else {
+      console.warn('[profile-extraction] Invalid lastName:', ln);
+    }
+  }
+  
+  // Валидация middleName
+  if (data.middleName && typeof data.middleName === 'string') {
+    const mn = data.middleName.trim();
+    if (mn.length >= 2 && mn.length <= 50 && !forbiddenWords.includes(mn)) {
+      validated.middleName = mn;
+    } else {
+      console.warn('[profile-extraction] Invalid middleName:', mn);
+    }
+  }
+  
+  // Валидация dateOfBirth
+  if (data.dateOfBirth instanceof Date && !isNaN(data.dateOfBirth.getTime())) {
+    const now = new Date();
+    const age = now.getFullYear() - data.dateOfBirth.getFullYear();
+    if (age >= 14 && age <= 100) {
+      validated.dateOfBirth = data.dateOfBirth;
+    } else {
+      console.warn('[profile-extraction] Invalid dateOfBirth (age out of range):', data.dateOfBirth);
+    }
+  }
+  
+  // Валидация phone
+  if (data.phone && typeof data.phone === 'string') {
+    const phoneClean = data.phone.replace(/\D/g, '');
+    if (phoneClean.length >= 10 && phoneClean.length <= 12) {
+      validated.phone = data.phone;
+    } else {
+      console.warn('[profile-extraction] Invalid phone:', data.phone);
+    }
+  }
+  
+  // Валидация address
+  if (data.address && typeof data.address === 'string') {
+    const addr = data.address.trim();
+    if (addr.length >= 5 && addr.length <= 500) {
+      validated.address = addr;
+    } else {
+      console.warn('[profile-extraction] Invalid address:', addr);
+    }
+  }
+  
+  // Валидация region
+  if (data.region && typeof data.region === 'string') {
+    const reg = data.region.trim();
+    if (reg.length >= 2 && reg.length <= 100) {
+      validated.region = reg;
+    }
+  }
+  
+  // Валидация preferredDiscountCity
+  if (data.preferredDiscountCity && typeof data.preferredDiscountCity === 'string') {
+    const city = data.preferredDiscountCity.trim();
+    if (city.length >= 2 && city.length <= 100) {
+      validated.preferredDiscountCity = city;
+    }
+  }
+  
+  // Валидация jobTitle
+  if (data.jobTitle && typeof data.jobTitle === 'string') {
+    const jt = data.jobTitle.trim();
+    if (jt.length >= 2 && jt.length <= 200) {
+      validated.jobTitle = jt;
+    }
+  }
+  
+  // Валидация profession
+  if (data.profession && typeof data.profession === 'string') {
+    const prof = data.profession.trim();
+    if (prof.length >= 2 && prof.length <= 200) {
+      validated.profession = prof;
+    }
+  }
+  
+  // Валидация education
+  if (data.education && typeof data.education === 'string') {
+    const edu = data.education.trim();
+    if (edu.length >= 2 && edu.length <= 300) {
+      validated.education = edu;
+    }
+  }
+  
+  // Валидация organizationName
+  if (data.organizationName && typeof data.organizationName === 'string') {
+    const org = data.organizationName.trim();
+    if (org.length >= 2 && org.length <= 500) {
+      validated.organizationName = org;
+    }
+  }
+  
+  console.log('[profile-extraction] Validation result:', {
+    input: Object.keys(data).length,
+    validated: Object.keys(validated).length,
+    rejected: Object.keys(data).filter(k => !validated[k]).join(', ')
+  });
+  
+  return validated;
 }
 
 /**
