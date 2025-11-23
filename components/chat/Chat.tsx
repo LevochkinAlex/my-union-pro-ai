@@ -510,7 +510,7 @@ function ChatContent() {
 
       setMessages((prev) => [...prev, fileMessage]);
 
-      // Отправляем сообщение боту о загруженном файле
+      // Отправляем сообщение боту о загруженном файле с информацией о документе
       if (currentSessionId) {
         const chatResponse = await fetch("/api/chat", {
           method: "POST",
@@ -518,8 +518,13 @@ function ChatContent() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            message: `Я загрузил файл: ${file.name}. Это мое подписанное заявление. Пожалуйста, проверь его правильность заполнения.`,
+            message: `Я загрузил файл: ${file.name}`,
             sessionId: currentSessionId,
+            uploadedDocument: {
+              fileName: data.fileName,
+              documentId: data.documentId,
+              type: data.documentType,
+            },
           }),
         });
 
