@@ -182,24 +182,34 @@ function normalizeResponse(
   // Apply all filters for fallback data
   let filtered = discounts;
   
-  // Filter by city - ВАЖНО: фильтруем строго по ID города
+  // Filter by city - ВАЖНО: фильтруем строго по ID города + включаем глобальные скидки
   if (params.cityId) {
     // Находим название выбранного города для логирования
     const selectedCityName = discounts
       .flatMap(d => d.cities)
       .find(c => c.id === params.cityId)?.name || `ID:${params.cityId}`;
     
+    const globalDiscounts = discounts.filter(d => d.cities.length === 0).length;
+    const citySpecificDiscounts = discounts.filter(d => d.cities.length > 0).length;
+    
     console.log(`[best-benefits] 🔍 Filtering by cityId: ${params.cityId} (${selectedCityName})`);
-    console.log(`[best-benefits] 📊 Before filter: ${discounts.length} discounts`);
+    console.log(`[best-benefits] 📊 Before filter: ${discounts.length} discounts (${globalDiscounts} global, ${citySpecificDiscounts} city-specific)`);
     
     filtered = filtered.filter((discount) => {
+      // Если у скидки нет городов - она доступна везде (глобальная)
+      if (discount.cities.length === 0) {
+        console.log(`[best-benefits] 🌍 Discount ${discount.id} "${discount.title}" INCLUDED (global discount, no cities)`);
+        return true;
+      }
+      
+      // Иначе проверяем наличие выбранного города
       const cityIds = discount.cities.map(c => c.id);
       const cityNames = discount.cities.map(c => c.name);
       const hasCity = cityIds.includes(params.cityId!);
       
       if (hasCity) {
         console.log(`[best-benefits] ✅ Discount ${discount.id} "${discount.title}" INCLUDED. Cities: ${cityNames.join(', ')} (IDs: ${cityIds.join(', ')})`);
-      } else if (discount.cities.length > 0) {
+      } else {
         console.log(`[best-benefits] ❌ Discount ${discount.id} "${discount.title}" FILTERED OUT. Cities: ${cityNames.join(', ')} (IDs: ${cityIds.join(', ')})`);
       }
       
