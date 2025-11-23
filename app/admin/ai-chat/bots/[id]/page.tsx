@@ -403,11 +403,16 @@ export default function BotDetailsPage() {
                 {!selectedProviderId ? (
                   <option>Сначала выберите провайдера</option>
                 ) : (
-                  providerModels.map((m: string, index: number) => (
-                    <option key={`${m}-${index}`} value={m}>
-                      {m}
-                    </option>
-                  ))
+                  providerModels.map((m: any, index: number) => {
+                    // Если модель - это объект с id, используем только id
+                    const modelId = typeof m === 'object' && m !== null && 'id' in m ? m.id : m;
+                    const modelName = typeof m === 'object' && m !== null && 'name' in m ? m.name : modelId;
+                    return (
+                      <option key={`${modelId}-${index}`} value={modelId}>
+                        {modelName}
+                      </option>
+                    );
+                  })
                 )}
               </Select>
             ) : (

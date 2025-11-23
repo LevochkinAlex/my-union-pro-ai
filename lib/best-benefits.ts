@@ -31,6 +31,48 @@ export async function fetchBestBenefitsDiscounts(
     page: params.page ?? 1,
   };
 
+  // Если передан cityId, но нет cityName, нужно получить название города
+  // Для этого сначала загружаем первую страницу всех скидок
+  if (USE_REAL_API && sanitizedParams.cityId && !sanitizedParams.cityName) {
+    try {
+      // Загружаем первую страницу без фильтров, чтобы получить список городов
+      const tempParams = { ...sanitizedParams, cityId: null, cityName: null, page: 1, limit: 50 };
+      const tempData = await fetchFromRemote(tempParams);
+      const tempDiscounts = tempData?.data ?? [];
+      
+      // Ищем название города по ID
+      for (const discount of tempDiscounts) {
+        const cities = discount.cities ?? [];
+        const city = cities.find((c: any) => c.id === sanitizedParams.cityId);
+        if (city?.name) {
+          sanitizedParams.cityName = city.name;
+          console.log(`[best-benefits] Found city name for ID ${sanitizedParams.cityId}: ${city.name}`);
+          break;
+        }
+      }
+      
+      // Если не нашли в первой странице, пробуем загрузить больше
+      if (!sanitizedParams.cityName && tempData?.meta?.last_page && tempData.meta.last_page > 1) {
+        for (let page = 2; page <= Math.min(tempData.meta.last_page, 5); page++) {
+          const moreData = await fetchFromRemote({ ...tempParams, page });
+          const moreDiscounts = moreData?.data ?? [];
+          for (const discount of moreDiscounts) {
+            const cities = discount.cities ?? [];
+            const city = cities.find((c: any) => c.id === sanitizedParams.cityId);
+            if (city?.name) {
+              sanitizedParams.cityName = city.name;
+              console.log(`[best-benefits] Found city name for ID ${sanitizedParams.cityId}: ${city.name} (page ${page})`);
+              break;
+            }
+          }
+          if (sanitizedParams.cityName) break;
+        }
+      }
+    } catch (error) {
+      console.warn("[best-benefits] Failed to resolve city name, will filter on client:", error);
+    }
+  }
+
   // Use real API if configured
   if (USE_REAL_API) {
     try {
@@ -99,17 +141,59 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
     }
   }
 
+  // Если есть поисковый запрос, используем /search endpoint
+  if (params.search && params.search.trim().length > 0) {
+    const searchUrl = "https://bestbenefits.ru/api/search";
+    const searchParams = new URLSearchParams();
+    searchParams.set("query", params.search.trim());
+    
+    // Для поиска можно передать город (название, не ID)
+    if (params.cityName) {
+      searchParams.set("city", params.cityName);
+    }
+    
+    if (params.page) searchParams.set("page", String(params.page));
+    if (params.limit) searchParams.set("per_page", String(params.limit));
+
+    const url = `${searchUrl}?${searchParams.toString()}`;
+    console.log("[best-benefits] Using /search endpoint:", url);
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    });
+
+    if (response.ok) {
+      const data = (await response.json()) as BestBenefitsResponse;
+      console.log("[best-benefits] Fetched", data?.data?.length ?? 0, "discounts from /search");
+      return data;
+    } else {
+      console.warn("[best-benefits] /search endpoint failed, falling back to /products");
+    }
+  }
+
+  // Используем /products endpoint с правильными параметрами
   const searchParams = new URLSearchParams();
-  // Передаем параметры, которые API точно поддерживает
-  // НЕ передаем cityId - API не фильтрует правильно, делаем клиентскую фильтрацию
-  if (params.search) searchParams.set("search", params.search);
-  // if (params.cityId) searchParams.set("city_id", String(params.cityId)); // Отключено - API не фильтрует правильно
-  if (params.categoryIds?.length) searchParams.set("category_ids", params.categoryIds.join(","));
-  if (params.premiumOnly) searchParams.set("premium", "1");
+  
+  // API поддерживает только один category (не массив)
+  if (params.categoryIds && params.categoryIds.length > 0) {
+    // Берем первую категорию (API не поддерживает множественный выбор)
+    searchParams.set("category", String(params.categoryIds[0]));
+  }
+  
+  // API принимает название города (строка), а не ID
+  if (params.cityName) {
+    searchParams.set("city", params.cityName);
+  }
+  
+  // Пагинация
   if (params.limit) searchParams.set("per_page", String(params.limit));
   if (params.page) searchParams.set("page", String(params.page));
-  // Попытка использовать ids для favorites/claimed (если API поддерживает)
-  if (params.ids) searchParams.set("ids", params.ids);
 
   const url = `${API_BASE_URL}?${searchParams.toString()}`;
   console.log("[best-benefits] Fetching from API:", url);
@@ -270,20 +354,43 @@ function normalizeResponse(
   const categories = extractCategories(discounts); // Use all discounts for category list
   const cities = extractCities(discounts); // Use all discounts for city list
 
-  const paginated = paginate(filteredByView, params.page ?? 1, params.limit ?? filteredByView.length);
-
-  return {
-    discounts: paginated.items,
-    categories,
-    cities: attachCoordinatesToCities(cities),
-    meta: {
-      total: filteredByView.length,
-      page: paginated.page,
-      perPage: paginated.perPage,
-    },
-    fetchedAt: context.fetchedAt,
-    source: context.source,
-  };
+  // Если фильтрация была сделана на стороне API (например, через cityName),
+  // используем метаданные из API. Иначе делаем клиентскую пагинацию.
+  const wasFilteredByAPI = params.cityName || (params.search && context.source === "remote");
+  
+  if (wasFilteredByAPI && raw.meta) {
+    // Используем метаданные из API
+    return {
+      discounts: filteredByView, // API уже отфильтровал и отпагинировал
+      categories,
+      cities: attachCoordinatesToCities(cities),
+      meta: {
+        total: raw.meta.total ?? filteredByView.length,
+        page: raw.meta.current_page ?? params.page ?? 1,
+        perPage: raw.meta.per_page ?? params.limit ?? 15,
+        hasMore: raw.meta.current_page ? raw.meta.current_page < raw.meta.last_page : false,
+      },
+      fetchedAt: context.fetchedAt,
+      source: context.source,
+    };
+  } else {
+    // Клиентская пагинация
+    const paginated = paginate(filteredByView, params.page ?? 1, params.limit ?? filteredByView.length);
+    
+    return {
+      discounts: paginated.items,
+      categories,
+      cities: attachCoordinatesToCities(cities),
+      meta: {
+        total: filteredByView.length,
+        page: paginated.page,
+        perPage: paginated.perPage,
+        hasMore: paginated.items.length >= (params.limit ?? 15) && paginated.items.length < filteredByView.length,
+      },
+      fetchedAt: context.fetchedAt,
+      source: context.source,
+    };
+  }
 }
 
 function paginate<T>(items: T[], page: number, perPage: number) {

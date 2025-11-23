@@ -71,6 +71,9 @@ export async function PUT(
     const resolvedParams = await Promise.resolve(params);
     const id = resolvedParams.id;
 
+    const body = await request.json();
+    console.log("[admin/chat-bots] PUT body:", JSON.stringify(body, null, 2));
+
     const {
       name,
       description,
@@ -86,7 +89,7 @@ export async function PUT(
       knowledgeBaseIds,
       isActive,
       isDefault,
-    } = await request.json();
+    } = body;
 
     const updateData: Record<string, unknown> = {};
     if (name !== undefined) {
@@ -177,6 +180,7 @@ export async function PUT(
 
     // Обновляем связи с базами знаний, если предоставлены
     if (knowledgeBaseIds !== undefined && Array.isArray(knowledgeBaseIds)) {
+      console.log("[admin/chat-bots] Updating knowledge bases:", knowledgeBaseIds);
       await prisma.chatBotKnowledgeBase.deleteMany({
         where: { chatBotId: id },
       });
@@ -191,6 +195,8 @@ export async function PUT(
       }
     }
 
+    console.log("[admin/chat-bots] updateData:", JSON.stringify(updateData, null, 2));
+    
     const bot = await prisma.chatBot.update({
       where: { id },
       data: updateData,

@@ -185,7 +185,7 @@ export default function DiscountsClient({
         }
         
         // Проверяем, есть ли еще скидки для загрузки
-        setHasMore(payload.discounts.length >= 20);
+        setHasMore(payload.meta.hasMore ?? payload.discounts.length >= 20);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Ошибка загрузки");
       } finally {

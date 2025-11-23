@@ -85,6 +85,7 @@ export interface DiscountItem {
 export interface DiscountSearchParams {
   search?: string;
   cityId?: number | null;
+  cityName?: string | null; // Название города для API (BestBenefits принимает строку, не ID)
   categoryIds?: number[];
   premiumOnly?: boolean;
   page?: number;
@@ -105,6 +106,7 @@ export interface DiscountSearchResult {
     total: number;
     page: number;
     perPage: number;
+    hasMore?: boolean; // Есть ли еще страницы для загрузки
   };
   fetchedAt: string;
   source: "remote" | "fallback";

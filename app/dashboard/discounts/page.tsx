@@ -15,7 +15,7 @@ export default async function DiscountsPage() {
   const userId = session.user.id;
 
   const [initialData, preference] = await Promise.all([
-    fetchBestBenefitsDiscounts({ limit: 100 }),
+    fetchBestBenefitsDiscounts({ limit: 20, page: 1 }), // Загружаем первую страницу, остальное через пагинацию
     getDiscountPreferenceSafe(userId),
   ]);
 
