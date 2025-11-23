@@ -505,7 +505,7 @@ export default function MyDiscountsPage() {
                 </button>
                 
                 {/* Copy Promo Code Button - only if promo code exists */}
-                {promoCardData.discount.promo_code && (
+                {promoCardData.discount.promoCode && (
                   <button
                     onClick={() => handleCopyPromoCode(promoCardData.discount)}
                     className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-6 py-3 text-base font-semibold transition ${
