@@ -59,7 +59,10 @@ export default function DiscountsClient({
     }),
   });
   const [data, setData] = useState<DiscountSearchResult>(initialData);
+  const [allDiscounts, setAllDiscounts] = useState(initialData.discounts);
+  const [hasMore, setHasMore] = useState(initialData.discounts.length >= 20);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState<boolean>(
     Boolean(initialPreference.pushEnabled)
@@ -131,8 +134,12 @@ export default function DiscountsClient({
   }, []); // Run once on mount
 
   const fetchDiscounts = useCallback(
-    async (nextFilters: FilterState = filters, listOverride?: { favorites?: number[]; claimed?: number[] }) => {
-      setIsLoading(true);
+    async (nextFilters: FilterState = filters, listOverride?: { favorites?: number[]; claimed?: number[] }, append = false) => {
+      if (append) {
+        setIsLoadingMore(true);
+      } else {
+        setIsLoading(true);
+      }
       setError(null);
 
       try {
@@ -141,7 +148,8 @@ export default function DiscountsClient({
         if (nextFilters.cityId) params.set("cityId", String(nextFilters.cityId));
         if (nextFilters.categoryIds.length > 0) params.set("categoryIds", nextFilters.categoryIds.join(","));
         if (nextFilters.premiumOnly) params.set("premiumOnly", "1");
-        if (nextFilters.page) params.set("page", String(nextFilters.page));
+        params.set("page", String(nextFilters.page));
+        params.set("limit", "20"); // Загружаем по 20 за раз для бесконечного скролла
         if (nextFilters.view && nextFilters.view !== "all") {
           params.set("view", nextFilters.view);
           const favList = listOverride?.favorites ?? favorites;
@@ -167,19 +175,41 @@ export default function DiscountsClient({
 
         const payload = (await response.json()) as DiscountSearchResult;
         setData(payload);
+        
+        if (append) {
+          // Добавляем новые скидки к существующим
+          setAllDiscounts(prev => [...prev, ...payload.discounts]);
+        } else {
+          // Заменяем все скидки
+          setAllDiscounts(payload.discounts);
+        }
+        
+        // Проверяем, есть ли еще скидки для загрузки
+        setHasMore(payload.discounts.length >= 20);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Ошибка загрузки");
       } finally {
         setIsLoading(false);
+        setIsLoadingMore(false);
       }
     },
     [filters, favorites, claimed]
   );
 
+  // Загрузка следующей страницы для бесконечного скролла
+  const loadMore = useCallback(() => {
+    if (isLoadingMore || !hasMore) return;
+    
+    const nextFilters = { ...filters, page: filters.page + 1 };
+    setFilters(nextFilters);
+    fetchDiscounts(nextFilters, undefined, true);
+  }, [filters, isLoadingMore, hasMore, fetchDiscounts]);
+
   const updateFilters = (updates: Partial<FilterState>) => {
-    const next = { ...filters, ...updates };
+    const next = { ...filters, ...updates, page: 1 }; // Сбрасываем на первую страницу
     setFilters(next);
-    fetchDiscounts(next);
+    setAllDiscounts([]); // Очищаем накопленные скидки
+    fetchDiscounts(next, undefined, false);
     persistPreference(next);
   };
 
@@ -318,11 +348,28 @@ export default function DiscountsClient({
     [favorites, claimed]
   );
 
-  const totalItems = data.meta?.total ?? data.discounts.length;
-  const perPage = data.meta?.perPage ?? (data.discounts.length || 1);
-  const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
-  const pageStart = (filters.page - 1) * perPage + 1;
-  const pageEnd = Math.min(totalItems, pageStart + perPage - 1);
+  // IntersectionObserver для бесконечного скролла
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore && !isLoading) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1, rootMargin: '100px' }
+    );
+
+    const sentinel = document.getElementById('scroll-sentinel');
+    if (sentinel) {
+      observer.observe(sentinel);
+    }
+
+    return () => {
+      if (sentinel) {
+        observer.unobserve(sentinel);
+      }
+    };
+  }, [hasMore, isLoadingMore, isLoading, loadMore]);
 
   return (
     <div className="space-y-6">
@@ -444,52 +491,43 @@ export default function DiscountsClient({
 
       {/* Results */}
       <div className="space-y-4">
-        {/* Pagination Header */}
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            {totalItems > 0 ? `${pageStart}-${pageEnd} из ${totalItems}` : "Нет результатов"}
+        {/* Info Bar */}
+        {allDiscounts.length > 0 && (
+          <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+            <p>
+              Показано <span className="font-semibold text-gray-900 dark:text-white">{allDiscounts.length}</span> {hasMore && 'из доступных'}
+            </p>
           </div>
-          {totalPages > 1 && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => updateFilters({ page: Math.max(1, filters.page - 1) })}
-                disabled={filters.page === 1}
-                className="rounded-lg border border-gray-200 p-2 text-gray-500 transition hover:bg-gray-50 disabled:opacity-30 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                {filters.page} / {totalPages}
-              </span>
-              <button
-                onClick={() => updateFilters({ page: Math.min(totalPages, filters.page + 1) })}
-                disabled={filters.page >= totalPages}
-                className="rounded-lg border border-gray-200 p-2 text-gray-500 transition hover:bg-gray-50 disabled:opacity-30 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            </div>
-          )}
-        </div>
+        )}
 
         {/* Grid */}
-        {isLoading ? (
+        {isLoading && allDiscounts.length === 0 ? (
           <div className="flex min-h-[400px] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-gray-500 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400">
             Загрузка...
           </div>
         ) : (
-          <DiscountGrid
-            data={data}
-            favorites={favorites}
-            claimed={claimed}
-            onFavorite={handleFavoriteToggle}
-            onClaim={handleClaim}
-            selectedCityId={filters.cityId}
-          />
+          <>
+            <DiscountGrid
+              discounts={allDiscounts}
+              favorites={favorites}
+              claimed={claimed}
+              onFavorite={handleFavoriteToggle}
+              onClaim={handleClaim}
+              selectedCityId={filters.cityId}
+            />
+            
+            {/* Sentinel для бесконечного скролла */}
+            {hasMore && (
+              <div id="scroll-sentinel" className="flex justify-center py-8">
+                {isLoadingMore && (
+                  <div className="text-center text-gray-500 dark:text-gray-400">
+                    <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-solid border-blue-500 border-r-transparent"></div>
+                    <p className="mt-2 text-sm">Загрузка ещё...</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -540,21 +578,21 @@ function Tabs({
 }
 
 function DiscountGrid({
-  data,
+  discounts,
   favorites,
   claimed,
   onFavorite,
   onClaim,
   selectedCityId,
 }: {
-  data: DiscountSearchResult;
+  discounts: any[];
   favorites: number[];
   claimed: number[];
   onFavorite: (id: number) => void;
   onClaim: (id: number) => void;
   selectedCityId?: number | null;
 }) {
-  if (data.discounts.length === 0) {
+  if (discounts.length === 0) {
     return (
       <div className="flex min-h-[300px] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400">
         <div>
@@ -567,7 +605,7 @@ function DiscountGrid({
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 pb-20">
-      {data.discounts.map((discount) => (
+      {discounts.map((discount) => (
         <DiscountCard
           key={discount.id}
           discount={discount}
