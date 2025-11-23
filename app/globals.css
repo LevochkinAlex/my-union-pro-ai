@@ -746,3 +746,103 @@ span.flatpickr-weekday,
   opacity: 0.8;
   cursor: grabbing; /* Changes the cursor to indicate dragging */
 }
+
+/* News content styles */
+.news-content {
+  line-height: 1.6;
+}
+
+.news-content p {
+  margin-bottom: 1rem;
+}
+
+.news-content p:last-child {
+  margin-bottom: 0;
+}
+
+.news-content h1,
+.news-content h2,
+.news-content h3,
+.news-content h4,
+.news-content h5,
+.news-content h6 {
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.25;
+}
+
+.news-content h1 {
+  font-size: 1.875rem;
+}
+
+.news-content h2 {
+  font-size: 1.5rem;
+}
+
+.news-content h3 {
+  font-size: 1.25rem;
+}
+
+.news-content ul,
+.news-content ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+
+.news-content ul {
+  list-style-type: disc;
+}
+
+.news-content ol {
+  list-style-type: decimal;
+}
+
+.news-content li {
+  margin-bottom: 0.5rem;
+}
+
+.news-content a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.news-content a:hover {
+  color: #1d4ed8;
+}
+
+.news-content strong {
+  font-weight: 600;
+}
+
+.news-content em {
+  font-style: italic;
+}
+
+.news-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+}
+
+.news-content blockquote {
+  border-left: 4px solid #e5e7eb;
+  padding-left: 1rem;
+  margin: 1rem 0;
+  font-style: italic;
+  color: #6b7280;
+}
+
+.dark .news-content a {
+  color: #60a5fa;
+}
+
+.dark .news-content a:hover {
+  color: #93c5fd;
+}
+
+.dark .news-content blockquote {
+  border-left-color: #4b5563;
+  color: #9ca3af;
+}

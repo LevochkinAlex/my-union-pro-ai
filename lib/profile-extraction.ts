@@ -317,6 +317,28 @@ export async function extractProfileDataFromMessages(
         break;
       }
     }
+    
+    // Extract children birth dates (даты рождения детей)
+    const birthDatePatterns = [
+      /(?:родил[ао]сь|дата рождения|возраст|лет)[:\s]*([^\n]{5,200})/gi,
+      /(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4})/g, // DD.MM.YYYY или DD/MM/YYYY
+      /(\d{1,2})\s+(?:лет|года|год)/gi, // возраст в годах
+    ];
+    
+    let birthDatesText = '';
+    for (const pattern of birthDatePatterns) {
+      const matches = allText.matchAll(pattern);
+      for (const match of matches) {
+        if (match[1] || match[0]) {
+          birthDatesText += (match[1] || match[0]) + '; ';
+        }
+      }
+      if (birthDatesText) break;
+    }
+    
+    if (birthDatesText) {
+      profileData.childrenBirthDates = birthDatesText.trim();
+    }
   } else if (allText.match(/(?:нет детей|без детей|детей нет)/i)) {
     profileData.hasChildren = false;
   }

@@ -46,6 +46,7 @@ interface AdditionalInfo {
   aboutMe: string;
   hasChildren: boolean | null;
   childrenInfo: string;
+  childrenBirthDates: string;
   maritalStatus: string;
   spouseInfo: string;
   additionalInfo: string;
@@ -87,6 +88,7 @@ export default function ProfilePage() {
     aboutMe: "",
     hasChildren: null,
     childrenInfo: "",
+    childrenBirthDates: "",
     maritalStatus: "",
     spouseInfo: "",
     additionalInfo: "",
@@ -149,6 +151,7 @@ export default function ProfilePage() {
           aboutMe: data.aboutMe ?? "",
           hasChildren: data.hasChildren,
           childrenInfo: data.childrenInfo ?? "",
+          childrenBirthDates: data.childrenBirthDates ?? "",
           maritalStatus: displayMaritalStatus,
           spouseInfo: data.spouseInfo ?? "",
           additionalInfo: data.additionalInfo ?? "",
@@ -586,17 +589,38 @@ export default function ProfilePage() {
             </div>
 
             {additionalInfo.hasChildren && (
-              <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Информация о детях</label>
-                <textarea
-                  name="childrenInfo"
-                  value={additionalInfo.childrenInfo}
-                  onChange={handleAdditionalInfoChange}
-                  placeholder="Имена, возраст, другая информация о детях"
-                  rows={3}
-                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                />
-              </div>
+              <>
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Информация о детях</label>
+                  <textarea
+                    name="childrenInfo"
+                    value={additionalInfo.childrenInfo}
+                    onChange={handleAdditionalInfoChange}
+                    placeholder="Имена, возраст, другая информация о детях"
+                    rows={3}
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                    Даты рождения детей
+                    <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                      (нужны для подарков к праздникам 🎁)
+                    </span>
+                  </label>
+                  <textarea
+                    name="childrenBirthDates"
+                    value={additionalInfo.childrenBirthDates}
+                    onChange={handleAdditionalInfoChange}
+                    placeholder="Например: Фекла - 12.05.2015, Степан - 20.08.2018"
+                    rows={2}
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Укажите имена и даты рождения в любом формате (например: "Имя - ДД.ММ.ГГГГ" или "Имя, возраст лет")
+                  </p>
+                </div>
+              </>
             )}
 
             <div className="md:col-span-2">

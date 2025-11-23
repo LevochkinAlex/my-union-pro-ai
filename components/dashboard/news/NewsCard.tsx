@@ -1,0 +1,263 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import clsx from "clsx";
+import NewsComments from "./NewsComments";
+
+interface NewsPost {
+  id: string;
+  title: string;
+  content: string;
+  coverImage: string | null;
+  publishedAt: string | null;
+  author: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+  };
+  _count: {
+    likes: number;
+    comments: number;
+  };
+  isLiked: boolean;
+  polls: Array<{
+    id: string;
+    question: string;
+    options: Array<{
+      id: string;
+      text: string;
+      voteCount?: number;
+      percentage?: number;
+    }>;
+    totalVotes: number;
+    userVote: string | null;
+    isClosed: boolean;
+  }>;
+}
+
+interface NewsCardProps {
+  post: NewsPost;
+  onLikeToggle: (newsId: string) => void;
+  onPollVote: (pollId: string, optionId: string) => void;
+}
+
+export default function NewsCard({
+  post,
+  onLikeToggle,
+  onPollVote,
+}: NewsCardProps) {
+  const router = useRouter();
+  const [showComments, setShowComments] = useState(false);
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "недавно";
+    const date = new Date(dateString);
+    const diffMs = Date.now() - date.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMinutes < 60) {
+      return `${diffMinutes || 1} мин назад`;
+    }
+    if (diffHours < 24) {
+      return `${diffHours} ч назад`;
+    }
+    if (diffDays < 7) {
+      return `${diffDays} дн назад`;
+    }
+    return date.toLocaleDateString("ru-RU", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  };
+
+  const authorName =
+    post.author.firstName && post.author.lastName
+      ? `${post.author.firstName} ${post.author.lastName}`
+      : post.author.email;
+
+  return (
+    <article className="rounded-xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
+      {/* Header */}
+      <div className="p-4 sm:p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
+              />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+              {authorName}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {formatDate(post.publishedAt)}
+            </p>
+          </div>
+        </div>
+
+        {/* Cover Image */}
+        {post.coverImage && (
+          <div className="mb-4 -mx-4 sm:-mx-6">
+            <img
+              src={post.coverImage}
+              alt={post.title}
+              className="w-full h-auto max-h-96 object-cover"
+            />
+          </div>
+        )}
+
+        {/* Title */}
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
+          {post.title}
+        </h2>
+
+        {/* Content */}
+        <div
+          className="news-content mb-4 text-gray-700 dark:text-gray-300"
+          dangerouslySetInnerHTML={{ __html: post.content }}
+        />
+
+        {/* Polls */}
+        {post.polls.length > 0 && (
+          <div className="space-y-4 mb-4">
+            {post.polls.map((poll) => (
+              <div
+                key={poll.id}
+                className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900"
+              >
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                  {poll.question}
+                </h3>
+                <div className="space-y-2">
+                  {poll.options.map((option) => {
+                    const isVoted = poll.userVote === option.id;
+                    const percentage = option.percentage || 0;
+                    const voteCount = option.voteCount || 0;
+
+                    return (
+                      <button
+                        key={option.id}
+                        onClick={() => {
+                          if (!poll.isClosed && !poll.userVote) {
+                            onPollVote(poll.id, option.id);
+                          }
+                        }}
+                        disabled={poll.isClosed || !!poll.userVote}
+                        className={clsx(
+                          "relative w-full rounded-lg border p-3 text-left text-sm transition",
+                          isVoted
+                            ? "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20"
+                            : poll.userVote
+                            ? "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+                            : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-600",
+                          (poll.isClosed || poll.userVote) && "cursor-default"
+                        )}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {option.text}
+                          </span>
+                          {poll.totalVotes > 0 && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {percentage}% ({voteCount})
+                            </span>
+                          )}
+                        </div>
+                        {poll.totalVotes > 0 && (
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                            <div
+                              className="h-full bg-blue-500 transition-all dark:bg-blue-400"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {poll.totalVotes > 0 && (
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    Всего голосов: {poll.totalVotes}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => onLikeToggle(post.id)}
+            className={clsx(
+              "flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition",
+              post.isLiked
+                ? "text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/20"
+                : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+            )}
+          >
+            <svg
+              className={clsx("h-5 w-5", {
+                "fill-current": post.isLiked,
+              })}
+              fill={post.isLiked ? "currentColor" : "none"}
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+              />
+            </svg>
+            <span>{post._count.likes}</span>
+          </button>
+
+          <button
+            onClick={() => setShowComments(!showComments)}
+            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+          >
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+              />
+            </svg>
+            <span>{post._count.comments}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Comments Section */}
+      {showComments && (
+        <div className="border-t border-gray-200 dark:border-gray-700">
+          <NewsComments newsId={post.id} />
+        </div>
+      )}
+    </article>
+  );
+}
+

@@ -52,6 +52,7 @@ export async function GET() {
         aboutMe: true,
         hasChildren: true,
         childrenInfo: true,
+        childrenBirthDates: true,
         maritalStatus: true,
         spouseInfo: true,
         additionalInfo: true,
@@ -91,6 +92,7 @@ export async function PUT(request: NextRequest) {
     const aboutMe = normalizeString(body.aboutMe);
     const hasChildren = normalizeBoolean(body.hasChildren);
     const childrenInfo = normalizeString(body.childrenInfo);
+    const childrenBirthDates = normalizeString(body.childrenBirthDates);
     const maritalStatus = normalizeString(body.maritalStatus);
     const spouseInfo = normalizeString(body.spouseInfo);
     const additionalInfo = normalizeString(body.additionalInfo);
@@ -103,6 +105,7 @@ export async function PUT(request: NextRequest) {
         aboutMe,
         hasChildren,
         childrenInfo,
+        childrenBirthDates,
         maritalStatus,
         spouseInfo,
         additionalInfo,
@@ -113,6 +116,7 @@ export async function PUT(request: NextRequest) {
         aboutMe: true,
         hasChildren: true,
         childrenInfo: true,
+        childrenBirthDates: true,
         maritalStatus: true,
         spouseInfo: true,
         additionalInfo: true,

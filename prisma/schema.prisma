@@ -50,7 +50,7 @@ model User {
   phone       String?
   address     String?
   region      String? // Регион России
-  
+
   // Предпочтения для скидок
   preferredDiscountCity String? // Предпочтительный город для фильтра скидок (название города)
 
@@ -60,14 +60,15 @@ model User {
   education  String? // Образование
 
   // Дополнительная информация профиля
-  occupation     String? // Род занятий (более общее)
-  hobbies        String? @db.Text // Хобби и увлечения
-  aboutMe        String? @db.Text // О себе
-  hasChildren    Boolean? // Есть ли дети
-  childrenInfo   String? @db.Text // Информация о детях
-  maritalStatus  String? // Семейное положение (холост/замужем/женат/в разводе)
-  spouseInfo     String? @db.Text // Информация о супруге/супруге
-  additionalInfo String? @db.Text // Дополнительная информация (свободный текст)
+  occupation         String? // Род занятий (более общее)
+  hobbies            String?  @db.Text // Хобби и увлечения
+  aboutMe            String?  @db.Text // О себе
+  hasChildren        Boolean? // Есть ли дети
+  childrenInfo       String?  @db.Text // Информация о детях
+  childrenBirthDates String?  @db.Text // Даты рождения детей в формате JSON: [{"name": "Имя", "birthDate": "YYYY-MM-DD"}] для подарков
+  maritalStatus      String? // Семейное положение (холост/замужем/женат/в разводе)
+  spouseInfo         String?  @db.Text // Информация о супруге/супруге
+  additionalInfo     String?  @db.Text // Дополнительная информация (свободный текст)
 
   // Подпись (путь к файлу на сервере)
   signaturePath String?
@@ -98,24 +99,30 @@ model User {
   appeals UserAppeal[]
 
   // Push Notifications
-  pushSubscriptions PushSubscription[]
+  pushSubscriptions  PushSubscription[]
   discountPreference DiscountPreference?
 
   // BestBenefits Integration
-  bestBenefitsUserId String? @unique // ID пользователя в системе BestBenefits
-  bestBenefitsStatus String? // Статус в BestBenefits (active, blocked и т.д.)
+  bestBenefitsUserId    String?   @unique // ID пользователя в системе BestBenefits
+  bestBenefitsStatus    String? // Статус в BestBenefits (active, blocked и т.д.)
   bestBenefitsCreatedAt DateTime? // Дата создания в BestBenefits
-  bestBenefitsPassword String? // Пароль для BestBenefits (зашифрован AES-256-GCM)
+  bestBenefitsPassword  String? // Пароль для BestBenefits (зашифрован AES-256-GCM)
 
   // Настройки уведомлений
   pushNotificationsEnabled Boolean @default(true) // Включены ли push уведомления
   pushSoundEnabled         Boolean @default(true) // Включен ли звук в push уведомлениях
   emailBotNotifications    Boolean @default(false) // Email уведомления от бота (по умолчанию выключено)
-  emailAppealNotifications  Boolean @default(true) // Email уведомления по обращениям (по умолчанию включено)
+  emailAppealNotifications Boolean @default(true) // Email уведомления по обращениям (по умолчанию включено)
 
   // System Logs
-  systemLogs SystemLog[]
+  systemLogs   SystemLog[]
   resolvedLogs SystemLog[] @relation("ResolvedLogs")
+
+  // Новости
+  newsPosts     NewsPost[]     @relation("NewsPostAuthor")
+  newsLikes     NewsLike[]     @relation("NewsLikeUser")
+  newsComments  NewsComment[]  @relation("NewsCommentUser")
+  newsPollVotes NewsPollVote[] @relation("NewsPollVoteUser")
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -228,7 +235,7 @@ model Document {
 // Сессии чата
 enum ChatSessionType {
   STATEMENT // Чат для создания заявления
-  APPEAL    // Чат для обращения
+  APPEAL // Чат для обращения
 }
 
 model ChatSession {
@@ -363,9 +370,9 @@ enum ProcessingStatus {
 }
 
 model KnowledgeSource {
-  id              String               @id @default(cuid())
+  id              String                @id @default(cuid())
   knowledgeBaseId String
-  knowledgeBase   KnowledgeBase        @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  knowledgeBase   KnowledgeBase         @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
   type            KnowledgeSourceType
   url             String?
   title           String?
@@ -373,8 +380,8 @@ model KnowledgeSource {
   status          KnowledgeSourceStatus @default(PENDING)
   lastFetchedAt   DateTime?
   documents       KnowledgeDocument[]
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
 
   @@index([knowledgeBaseId])
   @@index([status])
@@ -382,32 +389,32 @@ model KnowledgeSource {
 }
 
 model KnowledgeDocument {
-  id              String        @id @default(cuid())
+  id              String           @id @default(cuid())
   knowledgeBaseId String
-  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  knowledgeBase   KnowledgeBase    @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
   sourceId        String?
   source          KnowledgeSource? @relation(fields: [sourceId], references: [id])
 
   // Метаданные файла
-  fileName   String?
+  fileName     String?
   originalName String
-  filePath   String?
-  mimeType   String?
-  fileType   String?
-  fileSize   Int?
-  checksum   String?
-  contentType DocumentContentType @default(TEXT)
+  filePath     String?
+  mimeType     String?
+  fileType     String?
+  fileSize     Int?
+  checksum     String?
+  contentType  DocumentContentType @default(TEXT)
 
   // Обработка
   processingStatus ProcessingStatus @default(UPLOADED)
   processedAt      DateTime?
-  extractedText    String? @db.Text
+  extractedText    String?          @db.Text
   meta             Json?
 
   uploadedByUserId String?
   uploadedBy       User?   @relation("KnowledgeDocumentUploadedBy", fields: [uploadedByUserId], references: [id])
 
-  chunks    KnowledgeChunk[]
+  chunks KnowledgeChunk[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -419,16 +426,16 @@ model KnowledgeDocument {
 }
 
 model KnowledgeChunk {
-  id              String        @id @default(cuid())
+  id              String             @id @default(cuid())
   knowledgeBaseId String
-  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  knowledgeBase   KnowledgeBase      @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
   documentId      String?
   document        KnowledgeDocument? @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  content         String @db.Text
+  content         String             @db.Text
   tokens          Int?
   embedding       Float[]
   metadata        Json?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime           @default(now())
 
   @@index([knowledgeBaseId])
   @@index([documentId])
@@ -466,7 +473,7 @@ model ChatBot {
   maxTokens Int @default(1000)
 
   // Базы знаний, используемые этим ботом
-  knowledgeBases ChatBotKnowledgeBase[]
+  knowledgeBases  ChatBotKnowledgeBase[]
   retrievalConfig Json?
 
   // Сообщения, созданные этим ботом
@@ -516,7 +523,7 @@ model ApiProvider {
 
   // Доступные модели для этого провайдера (JSON массив)
   availableModels String? @db.Text // JSON массив моделей
-  capabilities   Json?
+  capabilities    Json?
 
   // Активен ли провайдер
   isActive Boolean @default(true)
@@ -621,11 +628,11 @@ model PushSubscription {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Firebase Cloud Messaging token
-  fcmToken String? @unique // FCM registration token (nullable for legacy records)
+  fcmToken       String? @unique // FCM registration token (nullable for legacy records)
   subscriptionId String? // Legacy field (kept for compatibility)
 
   // Legacy OneSignal fields (deprecated, will be removed)
-  oneSignalId   String? // Deprecated: OneSignal Player ID
+  oneSignalId String? // Deprecated: OneSignal Player ID
 
   lastSyncAt DateTime @default(now())
   createdAt  DateTime @default(now())
@@ -665,24 +672,24 @@ enum LogLevel {
 model SystemLog {
   id String @id @default(cuid())
 
-  level LogLevel @default(INFO)
-  source String // API endpoint, component name, etc
-  message String
-  details Json?
+  level      LogLevel @default(INFO)
+  source     String // API endpoint, component name, etc
+  message    String
+  details    Json?
   stackTrace String?
 
   // Связь с пользователем (если ошибка произошла в контексте пользователя)
   userId String?
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   // Метаданные для анализа
   metadata Json?
 
   // Статус разрешения ошибки
-  resolved Boolean @default(false)
-  resolvedAt DateTime?
-  resolvedBy String?
-  resolvedByUser User? @relation("ResolvedLogs", fields: [resolvedBy], references: [id], onDelete: SetNull)
+  resolved       Boolean   @default(false)
+  resolvedAt     DateTime?
+  resolvedBy     String?
+  resolvedByUser User?     @relation("ResolvedLogs", fields: [resolvedBy], references: [id], onDelete: SetNull)
 
   // Уведомление отправлено?
   notificationSent Boolean @default(false)
@@ -697,3 +704,122 @@ model SystemLog {
   @@index([userId])
 }
 
+// Новости
+model NewsPost {
+  id String @id @default(cuid())
+
+  // Автор (супер-админ)
+  authorId String
+  author   User   @relation("NewsPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  // Основная информация
+  title      String
+  content    String  @db.Text // HTML контент с WYSIWYG
+  coverImage String? // URL изображения обложки
+
+  // Опубликовано ли
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+
+  // Связи
+  likes    NewsLike[]
+  comments NewsComment[]
+  polls    NewsPoll[]
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([authorId])
+  @@index([isPublished])
+  @@index([publishedAt])
+  @@index([createdAt])
+}
+
+// Лайки новостей
+model NewsLike {
+  id String @id @default(cuid())
+
+  newsPostId String
+  newsPost   NewsPost @relation(fields: [newsPostId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation("NewsLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([newsPostId, userId])
+  @@index([newsPostId])
+  @@index([userId])
+}
+
+// Комментарии к новостям
+model NewsComment {
+  id String @id @default(cuid())
+
+  newsPostId String
+  newsPost   NewsPost @relation(fields: [newsPostId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation("NewsCommentUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Ответ на другой комментарий (для вложенных комментариев)
+  parentId String?
+  parent   NewsComment?  @relation("NewsCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  NewsComment[] @relation("NewsCommentReplies")
+
+  content String @db.Text
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([newsPostId])
+  @@index([userId])
+  @@index([parentId])
+  @@index([createdAt])
+}
+
+// Опросы в новостях
+model NewsPoll {
+  id String @id @default(cuid())
+
+  newsPostId String
+  newsPost   NewsPost @relation(fields: [newsPostId], references: [id], onDelete: Cascade)
+
+  question String
+  options  Json // Массив вариантов ответов: [{id: string, text: string}]
+
+  // Завершен ли опрос
+  isClosed Boolean   @default(false)
+  closesAt DateTime?
+
+  // Голоса
+  votes NewsPollVote[]
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([newsPostId])
+  @@index([isClosed])
+}
+
+// Голоса в опросах
+model NewsPollVote {
+  id String @id @default(cuid())
+
+  pollId String
+  poll   NewsPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation("NewsPollVoteUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  optionId String // ID выбранного варианта ответа
+
+  createdAt DateTime @default(now())
+
+  @@unique([pollId, userId])
+  @@index([pollId])
+  @@index([userId])
+}
