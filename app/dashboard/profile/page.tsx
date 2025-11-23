@@ -7,6 +7,20 @@ import DateInput from "@/components/form/DateInput";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
 
+// Маппинг между enum значениями в БД и человекочитаемыми значениями
+const MARITAL_STATUS_MAP = {
+  SINGLE: "Не женат/Не замужем",
+  MARRIED: "Женат/Замужем",
+  DIVORCED: "В разводе",
+  WIDOWED: "Вдовец/Вдова",
+  CIVIL_UNION: "В гражданском браке",
+} as const;
+
+// Обратный маппинг
+const MARITAL_STATUS_REVERSE_MAP = Object.fromEntries(
+  Object.entries(MARITAL_STATUS_MAP).map(([key, value]) => [value, key])
+) as Record<string, string>;
+
 interface ProfileData {
   firstName: string;
   lastName: string;
@@ -123,13 +137,19 @@ export default function ProfilePage() {
           throw new Error("Не удалось загрузить дополнительную информацию");
         }
         const data = await response.json();
+        
+        // Конвертируем enum значение в человекочитаемое
+        const displayMaritalStatus = data.maritalStatus 
+          ? (MARITAL_STATUS_MAP[data.maritalStatus as keyof typeof MARITAL_STATUS_MAP] || data.maritalStatus)
+          : "";
+        
         setAdditionalInfo({
           occupation: data.occupation ?? "",
           hobbies: data.hobbies ?? "",
           aboutMe: data.aboutMe ?? "",
           hasChildren: data.hasChildren,
           childrenInfo: data.childrenInfo ?? "",
-          maritalStatus: data.maritalStatus ?? "",
+          maritalStatus: displayMaritalStatus,
           spouseInfo: data.spouseInfo ?? "",
           additionalInfo: data.additionalInfo ?? "",
         });
@@ -251,12 +271,22 @@ export default function ProfilePage() {
     e.preventDefault();
     setSavingAdditionalInfo(true);
     try {
+      // Конвертируем человекочитаемое значение обратно в enum
+      const enumMaritalStatus = additionalInfo.maritalStatus 
+        ? (MARITAL_STATUS_REVERSE_MAP[additionalInfo.maritalStatus] || additionalInfo.maritalStatus)
+        : "";
+      
+      const dataToSend = {
+        ...additionalInfo,
+        maritalStatus: enumMaritalStatus,
+      };
+      
       const response = await fetch("/api/profile/additional-info", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(additionalInfo),
+        body: JSON.stringify(dataToSend),
       });
 
       if (!response.ok) {
