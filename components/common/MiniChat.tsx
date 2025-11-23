@@ -231,7 +231,7 @@ export default function MiniChat() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-white">Мой чат</h3>
+                <h3 className="text-sm font-semibold text-white">Мой бот</h3>
                 <p className="text-xs text-blue-100">AI Ассистент</p>
               </div>
             </div>
