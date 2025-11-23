@@ -1056,29 +1056,8 @@ ID документа: ${uploadedDocument.documentId}
           
           console.log("[chat] Extracted data:", extractedData);
           
-          // Если в сообщении пользователя есть адрес, валидируем его через Dadata
-          if (message && (message.toLowerCase().includes("адрес") || message.toLowerCase().includes("живу") || message.toLowerCase().includes("проживаю") || extractedData.address)) {
-            const addressToValidate = extractedData.address || message;
-            if (addressToValidate && addressToValidate.length > 5) {
-              try {
-                console.log("[chat] Validating address via Dadata:", addressToValidate);
-                const validatedAddress = await validateAddressWithDaData(addressToValidate);
-                if (validatedAddress) {
-                  extractedData.address = validatedAddress;
-                  console.log("[chat] Address validated via Dadata:", validatedAddress);
-                  // Обновляем адрес в профиле сразу
-                  await prisma.user.update({
-                    where: { id: session.user.id },
-                    data: { address: validatedAddress },
-                  });
-                } else {
-                  console.log("[chat] Address could not be validated via Dadata, using original");
-                }
-              } catch (dadataError) {
-                console.warn("[chat] Error validating address with Dadata:", dadataError);
-              }
-            }
-          }
+          // Валидация адреса уже произошла ДО отправки к AI (см. строку ~720)
+          // Этот блок больше не нужен, валидация перенесена выше
           
           // Если организация уже была найдена до отправки к AI, используем её
           if (foundOrganization) {
