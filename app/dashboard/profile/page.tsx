@@ -18,6 +18,7 @@ interface ProfileData {
   profession: string;
   education: string;
   email: string;
+  preferredDiscountCity: string; // Предпочтительный город для скидок
   organization?: {
     id: string;
     name: string;
@@ -56,6 +57,7 @@ export default function ProfilePage() {
     profession: "",
     education: "",
     email: "",
+    preferredDiscountCity: "",
     organization: null,
   });
 
@@ -99,6 +101,7 @@ export default function ProfilePage() {
           profession: user.profession ?? "",
           education: user.education ?? "",
           email: user.email,
+          preferredDiscountCity: user.preferredDiscountCity ?? "",
           organization: user.organization,
         });
       } catch (error) {
@@ -396,6 +399,20 @@ export default function ProfilePage() {
                 name="address"
                 value={profileData.address}
                 onChange={handleProfileChange}
+                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Предпочтительный город для скидок
+                <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">(управляет фильтром скидок)</span>
+              </label>
+              <input
+                type="text"
+                name="preferredDiscountCity"
+                value={profileData.preferredDiscountCity}
+                onChange={handleProfileChange}
+                placeholder="Например: Москва, Санкт-Петербург, Казань..."
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>

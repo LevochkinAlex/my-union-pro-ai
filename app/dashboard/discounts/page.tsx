@@ -14,14 +14,52 @@ export default async function DiscountsPage() {
 
   const userId = session.user.id;
 
-  const [initialData, preference] = await Promise.all([
+  const [initialData, preference, user] = await Promise.all([
     fetchBestBenefitsDiscounts({ limit: 20, page: 1 }), // Загружаем первую страницу, остальное через пагинацию
     getDiscountPreferenceSafe(userId),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { address: true, region: true, preferredDiscountCity: true }
+    }),
   ]);
+
+  // Определяем город для фильтра из профиля пользователя
+  let autoCityId: number | null = null;
+  
+  // 1. Приоритет: preferredDiscountCity (явно установленный пользователем)
+  if (user?.preferredDiscountCity) {
+    const city = initialData.cities?.find(c => 
+      c.name.toLowerCase().includes(user.preferredDiscountCity!.toLowerCase()) ||
+      user.preferredDiscountCity!.toLowerCase().includes(c.name.toLowerCase())
+    );
+    if (city) {
+      autoCityId = city.id;
+      console.log(`[discounts] Using preferred city from profile: ${city.name} (ID: ${city.id})`);
+    }
+  }
+  
+  // 2. Fallback: пытаемся извлечь из адреса/региона (если preferredDiscountCity не установлен)
+  if (!autoCityId && (user?.address || user?.region)) {
+    const cityName = extractCityFromAddress(user.address, user.region);
+    if (cityName && initialData.cities) {
+      const city = initialData.cities.find(c => 
+        c.name.toLowerCase().includes(cityName.toLowerCase()) ||
+        cityName.toLowerCase().includes(c.name.toLowerCase())
+      );
+      if (city) {
+        autoCityId = city.id;
+        console.log(`[discounts] Auto-detected city from address: ${city.name} (ID: ${city.id})`);
+      }
+    }
+  }
 
   const preferencePayload: DiscountPreferenceResponse = {
     pushEnabled: preference?.pushEnabled ?? false,
-    filters: (preference?.filters as DiscountPreferenceResponse["filters"]) ?? null,
+    filters: {
+      ...(preference?.filters as DiscountPreferenceResponse["filters"]),
+      // Устанавливаем город из профиля если не было сохранено ранее
+      cityId: (preference?.filters as any)?.cityId ?? autoCityId,
+    },
     geolocation: (preference?.geolocation as DiscountPreferenceResponse["geolocation"]) ?? null,
     updatedAt: preference?.updatedAt?.toISOString() ?? null,
   };
@@ -62,5 +100,47 @@ async function getDiscountPreferenceSafe(userId: string) {
     }
     throw error;
   }
+}
+
+/**
+ * Извлекает название города из адреса или региона
+ */
+function extractCityFromAddress(address: string | null, region: string | null): string | null {
+  if (!address && !region) return null;
+  
+  const text = (address || region || '').toLowerCase();
+  
+  // Паттерны для извлечения города
+  const patterns = [
+    /г\.?\s*([а-яё\-]+)/i,           // г. Казань, г.Москва
+    /город\s+([а-яё\-]+)/i,          // город Казань
+    /([а-яё\-]+)\s+г\.?$/i,          // Казань г.
+    /^([а-яё\-]+)\s*,/i,             // Казань, ...
+    /,\s*([а-яё\-]+)\s*,/i,          // ..., Казань, ...
+  ];
+  
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      const city = match[1].trim();
+      // Фильтруем служебные слова
+      if (!['область', 'республика', 'край', 'район', 'улица', 'проспект', 'дом'].includes(city)) {
+        return city.charAt(0).toUpperCase() + city.slice(1); // Capitalize
+      }
+    }
+  }
+  
+  // Если не нашли через паттерны, пробуем использовать регион напрямую
+  if (region) {
+    // Убираем "область", "республика" и т.д.
+    const cleanRegion = region
+      .replace(/область|республика|край|округ/gi, '')
+      .trim();
+    if (cleanRegion) {
+      return cleanRegion.charAt(0).toUpperCase() + cleanRegion.slice(1);
+    }
+  }
+  
+  return null;
 }
 

@@ -104,6 +104,26 @@ export async function extractProfileDataFromMessages(
     profileData.region = regionMatch[1].trim();
   }
 
+  // Extract preferred discount city (город для скидок)
+  // Ищем упоминания городов: "из Казани", "живу в Москве", "г. Санкт-Петербург" и т.д.
+  const cityPatterns = [
+    /(?:из|живу в|нахожусь в|город)\s+г?\.?\s*([А-ЯЁ][а-яё\-]+)/i,
+    /г\.?\s*([А-ЯЁ][а-яё\-]+)/i,
+    /город\s+([А-ЯЁ][а-яё\-]+)/i,
+  ];
+  
+  for (const pattern of cityPatterns) {
+    const cityMatch = allText.match(pattern);
+    if (cityMatch && cityMatch[1]) {
+      const city = cityMatch[1].trim();
+      // Фильтруем служебные слова
+      if (!['Россия', 'Федерация', 'Область', 'Край', 'Республика'].includes(city)) {
+        profileData.preferredDiscountCity = city;
+        break; // Берем первое найденное упоминание города
+      }
+    }
+  }
+
   // Extract name patterns (ФИО)
   const fioPattern = /([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/;
   const fioMatch = allText.match(fioPattern);

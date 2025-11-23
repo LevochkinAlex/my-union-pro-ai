@@ -64,6 +64,7 @@ export async function GET() {
         phone: user.phone,
         dateOfBirth: user.dateOfBirth,
         address: user.address,
+        preferredDiscountCity: user.preferredDiscountCity,
         jobTitle: user.jobTitle,
         profession: user.profession,
         education: user.education,
@@ -105,6 +106,7 @@ export async function PUT(request: NextRequest) {
     const middleName = normalizeString(body.middleName);
     const phone = normalizeString(body.phone);
     const address = normalizeString(body.address);
+    const preferredDiscountCity = normalizeString(body.preferredDiscountCity);
     const jobTitle = normalizeString(body.jobTitle);
     const profession = normalizeString(body.profession);
     const education = normalizeEducation(body.education);
@@ -134,6 +136,7 @@ export async function PUT(request: NextRequest) {
         middleName: middleName ? capitalizeName(middleName) : null,
         phone,
         address,
+        preferredDiscountCity: preferredDiscountCity ? capitalizeName(preferredDiscountCity) : null,
         jobTitle,
         profession,
         education,
