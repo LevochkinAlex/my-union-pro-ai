@@ -26,8 +26,54 @@ type OpenRouterModelPayload = {
   updated_at?: string | null;
 };
 
+// Белый список РЕАЛЬНЫХ провайдеров моделей (блокируем фейки)
+const ALLOWED_MODEL_PREFIXES = [
+  "openai/",
+  "anthropic/",
+  "google/",
+  "meta-llama/",
+  "mistralai/",
+  "cohere/",
+  "perplexity/",
+  "nvidia/",
+  "deepseek/",
+  "qwen/",
+];
+
+// Черный список фейковых моделей и паттернов
+const BLOCKED_MODEL_PATTERNS = [
+  /gpt-5/i,              // GPT-5 не существует
+  /gpt-6/i,              // GPT-6 не существует  
+  /gpt-7/i,              // GPT-7 не существует
+  /sherlock/i,           // Фейковые Sherlock модели
+  /dash.*alpha/i,        // Dash Alpha - фейк
+  /think.*alpha/i,       // Think Alpha - фейк
+  /^openai:.*gpt-5/i,    // Любые GPT-5 с OpenAI:
+  /kwaipilot/i,          // KwaiPilot - сомнительная модель
+  /^moonshot/i,          // MoonshotAI - часто фейки
+];
+
+function isValidModel(modelId: string): boolean {
+  // Проверка на черный список паттернов
+  if (BLOCKED_MODEL_PATTERNS.some(pattern => pattern.test(modelId))) {
+    console.log(`[openrouter/models] Blocked fake model: ${modelId}`);
+    return false;
+  }
+  
+  // Проверка на белый список префиксов
+  const isAllowed = ALLOWED_MODEL_PREFIXES.some(prefix => modelId.startsWith(prefix));
+  if (!isAllowed) {
+    console.log(`[openrouter/models] Blocked unknown provider: ${modelId}`);
+  }
+  return isAllowed;
+}
+
 function serializeModels(models: OpenRouterModelPayload[]): SerializedModel[] {
-  return models.map((model) => ({
+  const validModels = models.filter(model => isValidModel(model.id));
+  
+  console.log(`[openrouter/models] Filtered ${models.length - validModels.length} fake models, ${validModels.length} valid remaining`);
+  
+  return validModels.map((model) => ({
     id: model.id,
     name: model.name ?? model.id,
     description: model.description ?? null,
