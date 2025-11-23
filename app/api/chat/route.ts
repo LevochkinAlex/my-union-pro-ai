@@ -348,8 +348,15 @@ ${profileComplete ? '' : `
      * Улицы, проспекта, бульвара
      * Номера дома
      * Номера квартиры/офиса (если применимо)
-   - Адрес будет автоматически валидирован и стандартизирован
-   - После валидации адреса скажи: "Отлично! Ваш адрес сохранен: [адрес]. Теперь, пожалуйста, укажите ваш номер телефона."
+   - ⚠️ ВАЖНО: Если в сообщении пользователя есть маркер [VALIDATED_ADDRESS: адрес], это означает что адрес был проверен и стандартизирован
+   - ОБЯЗАТЕЛЬНО покажи валидированный адрес пользователю и спроси подтверждение:
+     "Отлично! Я проверил ваш адрес через базу данных адресов. Вот стандартизированный вариант:
+     
+     **[валидированный адрес из маркера]**
+     
+     Это правильный адрес? (да/нет)"
+   - Если пользователь подтверждает (да/верно/правильно), переходи к следующему шагу (телефон)
+   - Если пользователь говорит "нет", попроси уточнить адрес заново
 
 6. **ТЕЛЕФОН**: Спроси: "Теперь, пожалуйста, укажите ваш номер телефона."
    - Ожидаются российские номера в формате +7 или 8 с 10 цифрами
@@ -697,23 +704,39 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Если в сообщении пользователя есть адрес, валидируем его через Dadata ДО отправки к AI
+    // Валидация адреса через DaData ДО отправки к AI
     let validatedAddress: string | null = null;
     let userMessage = message;
-    if (message && (message.toLowerCase().includes("адрес") || message.toLowerCase().includes("живу") || message.toLowerCase().includes("проживаю"))) {
+    if (chatSession.type === "STATEMENT" && message && (
+      message.toLowerCase().includes("адрес") || 
+      message.toLowerCase().includes("живу") || 
+      message.toLowerCase().includes("проживаю") ||
+      message.toLowerCase().includes("ул.") ||
+      message.toLowerCase().includes("улица") ||
+      message.toLowerCase().includes("дом") ||
+      /\d{6}/.test(message) // индекс
+    )) {
       try {
-        console.log("[chat] Pre-validating address via Dadata:", message);
-        validatedAddress = await validateAddressWithDaData(message);
-        if (validatedAddress) {
-          console.log("[chat] Address pre-validated via Dadata:", validatedAddress);
-          // Сохраняем валидированный адрес в профиль сразу (без добавления метки в сообщение)
-          await prisma.user.update({
-            where: { id: session.user.id },
-            data: { address: validatedAddress },
-          });
+        console.log("[chat] 📍 Attempting to validate address BEFORE AI:", message);
+        const potentialAddress = message.trim();
+        if (potentialAddress.length > 10) { // Минимальная длина для адреса
+          validatedAddress = await validateAddressWithDaData(potentialAddress);
+          if (validatedAddress) {
+            console.log("[chat] ✅ Address validated via DaData BEFORE AI:", validatedAddress);
+            // Добавляем валидированный адрес в контекст для AI
+            userMessage = `${message}\n\n[VALIDATED_ADDRESS: ${validatedAddress}]`;
+            
+            // Сразу сохраняем валидированный адрес в профиль
+            await prisma.user.update({
+              where: { id: session.user.id },
+              data: { address: validatedAddress },
+            });
+          } else {
+            console.log("[chat] ⚠️ Address could not be validated via DaData");
+          }
         }
       } catch (dadataError) {
-        console.warn("[chat] Error pre-validating address with Dadata:", dadataError);
+        console.warn("[chat] ❌ Error validating address with DaData BEFORE AI:", dadataError);
       }
     }
 
