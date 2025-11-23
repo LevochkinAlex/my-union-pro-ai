@@ -94,15 +94,13 @@ function ChatContent() {
       // Явно очищаем ошибку при успешной загрузке
       setError(null);
       
-      // НЕ скроллим автоматически при загрузке истории - пользователь может читать старые сообщения
-      // Скролл будет только при новых сообщениях (отправка/получение)
-      shouldAutoScrollRef.current = false;
+      // ВСЕГДА скроллим вниз при загрузке истории чата
+      // Пользователь ожидает увидеть последние сообщения
+      shouldAutoScrollRef.current = true;
       
       // Отмечаем первую загрузку для других целей (например, уведомления)
       if (isInitialLoadRef.current) {
         isInitialLoadRef.current = false;
-        // Только при первой загрузке скроллим вниз, чтобы показать последние сообщения
-        shouldAutoScrollRef.current = true;
       }
     } catch (error) {
       console.error("Ошибка загрузки сообщений:", error);
@@ -172,14 +170,24 @@ function ChatContent() {
       });
 
       let data: any = null;
+      let responseText = '';
+      
       try {
-        data = await response.json();
+        responseText = await response.text();
+        if (responseText) {
+          data = JSON.parse(responseText);
+        }
       } catch (jsonError) {
-        console.warn("[chat] Response is not JSON:", jsonError);
+        console.warn("[chat] Response parsing error:", {
+          error: jsonError,
+          status: response.status,
+          statusText: response.statusText,
+          responseText: responseText.substring(0, 200) // Первые 200 символов
+        });
       }
       
       if (response.ok) {
-        console.log("[chat] ✅ Documents generated successfully");
+        console.log("[chat] ✅ Documents generated successfully", data);
         // Обновляем сообщения чтобы показать кнопку скачивания
         if (sessionId || currentSessionId) {
           const url = (sessionId || currentSessionId) ? `/api/chat/session/${sessionId || currentSessionId}` : "/api/chat";
@@ -189,20 +197,31 @@ function ChatContent() {
             setMessages(messagesData.messages || []);
           }
         }
-      } else if (response.status === 400 && data) {
-        console.log("[chat] ⚠️ Profile not yet complete", data.missingFields || []);
+      } else if (response.status === 400) {
+        console.log("[chat] ⚠️ Profile not yet complete", data?.missingFields || [], data?.error);
         // Это нормально - профиль еще не заполнен
+      } else if (response.status === 401) {
+        console.warn("[chat] ⚠️ Not authenticated - skipping document generation");
+        // Пользователь не авторизован - это может быть нормально при первой загрузке
       } else {
-        // Другие ошибки - логируем подробнее
-        console.error("[chat] ❌ Error generating documents:", {
+        // Другие ошибки - логируем подробнее, но НЕ как error (это может быть нормально)
+        console.warn("[chat] ⚠️ Document generation check failed:", {
           status: response.status,
           statusText: response.statusText,
-          data: data,
+          error: data?.error || 'Unknown error',
+          responsePreview: responseText ? responseText.substring(0, 200) : 'No response text'
         });
-        // Не показываем ошибку пользователю, так как документы могут быть уже сгенерированы в /api/chat
+        // Не показываем ошибку пользователю - документы генерируются автоматически на сервере
+        // Этот запрос - просто дополнительная проверка
       }
     } catch (error) {
       console.error("[chat] ❌ Error checking profile:", error);
+      if (error instanceof Error) {
+        console.error("[chat] Error details:", {
+          message: error.message,
+          stack: error.stack
+        });
+      }
       // Не показываем ошибку пользователю
     }
   }, [sessionId, currentSessionId]);
@@ -210,21 +229,33 @@ function ChatContent() {
   // Auto-run document generation check after chat is loaded (только для STATEMENT)
   // Проверяем только если есть маркер [PROFILE_COMPLETE] но документы могут быть не сгенерированы
   useEffect(() => {
-    if (messages.length > 0 && sessionType === "STATEMENT" && mode !== "appeal") {
+    if (messages.length > 0 && sessionType === "STATEMENT" && mode !== "appeal" && session?.user?.id) {
       const lastMessage = messages[messages.length - 1];
       const hasProfileCompleteMarker = lastMessage?.content?.includes("[PROFILE_COMPLETE]");
       
-      // Проверяем документы только если есть маркер завершения профиля
-      if (hasProfileCompleteMarker) {
+      // Проверяем кнопку скачивания документов
+      const hasDownloadButton = messages.some(msg => 
+        msg.content?.includes("Скачать документы") || 
+        msg.content?.includes("[DOCUMENTS_READY]")
+      );
+      
+      // Проверяем документы только если:
+      // 1. Есть маркер завершения профиля
+      // 2. НЕТ кнопки скачивания (документы не были сгенерированы)
+      if (hasProfileCompleteMarker && !hasDownloadButton) {
+        console.log("[chat] Profile complete marker found, checking if documents need generation...");
+        
         // Небольшая задержка чтобы дать время серверу сгенерировать документы
         const timeoutId = setTimeout(() => {
           checkAndGenerateDocuments();
-        }, 2000);
+        }, 3000);
         
         return () => clearTimeout(timeoutId);
+      } else if (hasProfileCompleteMarker && hasDownloadButton) {
+        console.log("[chat] Documents already generated, skipping check");
       }
     }
-  }, [messages, mode, sessionType, checkAndGenerateDocuments]);
+  }, [messages, mode, sessionType, session, checkAndGenerateDocuments]);
 
   // Прокрутка вниз только при новых сообщениях от пользователя или бота
   useEffect(() => {
