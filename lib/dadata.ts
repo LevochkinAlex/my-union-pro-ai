@@ -3,10 +3,15 @@
  * For address validation and standardization
  */
 
-const DADATA_API_URL = "https://cleaner.dadata.ru/api/v1/clean/address";
+const DADATA_CLEAN_ADDRESS_URL = "https://cleaner.dadata.ru/api/v1/clean/address";
+const DADATA_CLEAN_NAME_URL = "https://cleaner.dadata.ru/api/v1/clean/name";
 
 function getDaDataToken(): string {
   return process.env.DADATA_API_KEY || "";
+}
+
+function getDaDataSecret(): string {
+  return process.env.DADATA_SECRET_KEY || "";
 }
 
 /**
@@ -64,7 +69,7 @@ export async function validateAddressWithDaData(address: string): Promise<string
   try {
     console.log(`[dadata] Validating address: ${address}`);
 
-    const response = await fetch(DADATA_API_URL, {
+    const response = await fetch(DADATA_CLEAN_ADDRESS_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -125,5 +130,122 @@ export function formatAddressFromComponents(data: DaDataResponse): string {
   if (data.flat) parts.push(`кв. ${data.flat}`);
 
   return parts.join(", ");
+}
+
+/**
+ * Интерфейс для ответа DaData по ФИО
+ */
+interface DaDataNameResponse {
+  source?: string;
+  result?: string;
+  result_genitive?: string; // Родительный падеж (кого? чего?)
+  result_dative?: string;    // Дательный падеж (кому? чему?)
+  result_ablative?: string;  // Творительный падеж (кем? чем?)
+  surname?: string;
+  name?: string;
+  patronymic?: string;
+  gender?: string;
+  qc?: string;
+}
+
+/**
+ * Склоняет ФИО в родительный падеж через DaData
+ * @param lastName Фамилия
+ * @param firstName Имя
+ * @param middleName Отчество
+ * @returns ФИО в родительном падеже
+ */
+export async function declineNameToGenitive(
+  lastName: string,
+  firstName: string,
+  middleName?: string | null
+): Promise<string> {
+  const token = getDaDataToken();
+  const secret = getDaDataSecret();
+  
+  const fullName = `${lastName} ${firstName}${middleName ? ` ${middleName}` : ""}`.trim();
+  
+  if (!token || !secret) {
+    console.warn("[dadata] No API token or secret provided, using fallback declension");
+    return fallbackDeclension(lastName, firstName, middleName);
+  }
+
+  try {
+    console.log(`[dadata] Declining name to genitive: ${fullName}`);
+
+    const response = await fetch(DADATA_CLEAN_NAME_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Token ${token}`,
+        "X-Secret": secret,
+      },
+      body: JSON.stringify([fullName]),
+    });
+
+    if (!response.ok) {
+      console.warn(`[dadata] Name API error: ${response.status}, using fallback`);
+      return fallbackDeclension(lastName, firstName, middleName);
+    }
+
+    const data: DaDataNameResponse[] = await response.json();
+    
+    if (data.length > 0 && data[0].result_genitive) {
+      console.log(`[dadata] Name declined successfully: ${data[0].result_genitive}`);
+      return data[0].result_genitive;
+    } else {
+      console.warn(`[dadata] Could not decline name, using fallback`);
+      return fallbackDeclension(lastName, firstName, middleName);
+    }
+  } catch (error) {
+    console.error("[dadata] Error declining name:", error);
+    return fallbackDeclension(lastName, firstName, middleName);
+  }
+}
+
+/**
+ * Упрощенное склонение ФИО (fallback если DaData недоступен)
+ */
+function fallbackDeclension(
+  lastName: string,
+  firstName: string,
+  middleName?: string | null
+): string {
+  // Фамилия
+  let lastNameGenitive = lastName;
+  if (lastName.endsWith("ов") || lastName.endsWith("ев") || lastName.endsWith("ин")) {
+    lastNameGenitive = lastName + "а";
+  } else if (lastName.endsWith("ский") || lastName.endsWith("ской") || lastName.endsWith("цкий")) {
+    lastNameGenitive = lastName.slice(0, -2) + "ого";
+  } else if (lastName.endsWith("о") || lastName.endsWith("ко") || lastName.endsWith("енко")) {
+    // Украинские фамилии не склоняются
+    lastNameGenitive = lastName;
+  } else if (lastName.endsWith("а") || lastName.endsWith("я")) {
+    lastNameGenitive = lastName.slice(0, -1) + "ой";
+  }
+  
+  // Имя
+  let firstNameGenitive = firstName;
+  if (firstName.endsWith("а") || firstName.endsWith("я")) {
+    firstNameGenitive = firstName.slice(0, -1) + (firstName.endsWith("ия") ? "и" : "ы");
+  } else if (firstName.endsWith("й")) {
+    firstNameGenitive = firstName.slice(0, -1) + "я";
+  } else {
+    firstNameGenitive = firstName + "а";
+  }
+  
+  // Отчество
+  let middleNameGenitive = "";
+  if (middleName) {
+    if (middleName.endsWith("ич")) {
+      middleNameGenitive = middleName + "а";
+    } else if (middleName.endsWith("на")) {
+      middleNameGenitive = middleName.slice(0, -1) + "ы";
+    } else {
+      middleNameGenitive = middleName;
+    }
+  }
+  
+  return `${lastNameGenitive} ${firstNameGenitive}${middleNameGenitive ? ` ${middleNameGenitive}` : ""}`.trim();
 }
 

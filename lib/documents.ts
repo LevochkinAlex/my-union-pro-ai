@@ -2,6 +2,7 @@ import { User, Organization } from "@prisma/client";
 import fs from "fs/promises";
 import path from "path";
 import puppeteer from "puppeteer";
+import { declineNameToGenitive } from "./dadata";
 
 const DOCUMENTS_DIR = path.join(process.cwd(), "public", "uploads", "documents");
 
@@ -27,39 +28,45 @@ function getCurrentDate(): string {
   return formatDate(new Date());
 }
 
-// Получение ФИО в родительном падеже (упрощенная версия)
-function getFullNameGenitive(user: { firstName?: string | null; lastName?: string | null; middleName?: string | null }): string {
+/**
+ * Получение ФИО в родительном падеже через DaData API
+ */
+async function getFullNameGenitive(user: { 
+  firstName?: string | null; 
+  lastName?: string | null; 
+  middleName?: string | null 
+}): Promise<string> {
   if (!user.lastName || !user.firstName) return "";
   
-  const lastNameGenitive = user.lastName.endsWith("ов") || user.lastName.endsWith("ев") || user.lastName.endsWith("ин")
-    ? user.lastName + "а"
-    : user.lastName.endsWith("а") || user.lastName.endsWith("я")
-    ? user.lastName.slice(0, -1) + "ы"
-    : user.lastName + "а";
-  
-  const firstNameGenitive = user.firstName.endsWith("а") || user.firstName.endsWith("я")
-    ? user.firstName.slice(0, -1) + "ы"
-    : user.firstName + "а";
-  
-  const middleNameGenitive = user.middleName
-    ? user.middleName.endsWith("ич")
-      ? user.middleName + "а"
-      : user.middleName.endsWith("на")
-      ? user.middleName.slice(0, -1) + "ы"
-      : user.middleName + "а"
-    : "";
-  
-  return `${lastNameGenitive} ${firstNameGenitive}${middleNameGenitive ? ` ${middleNameGenitive}` : ""}`;
+  try {
+    return await declineNameToGenitive(
+      user.lastName,
+      user.firstName,
+      user.middleName
+    );
+  } catch (error) {
+    console.error("[documents] Error declining name:", error);
+    // Если DaData не сработал, вернем просто ФИО без склонения
+    return `${user.lastName} ${user.firstName}${user.middleName ? ` ${user.middleName}` : ""}`;
+  }
+}
+
+/**
+ * Форматирует должность с приставкой "работающего(ей)"
+ */
+function formatJobTitle(jobTitle?: string | null): string {
+  if (!jobTitle) return "";
+  return `работающего(ей) ${jobTitle}`;
 }
 
 // Генерация HTML для заявления о вступлении (согласно образцу PDF)
-function generateMembershipApplicationHTML(
+async function generateMembershipApplicationHTML(
   user: User & { organization?: Organization | null },
   ppoChairman: string = "Председатель ППО"
-): string {
+): Promise<string> {
   const fullName = `${user.lastName || ""} ${user.firstName || ""} ${user.middleName || ""}`.trim();
-  const fullNameGenitive = getFullNameGenitive(user);
-  const jobTitle = user.jobTitle || "";
+  const fullNameGenitive = await getFullNameGenitive(user);
+  const jobTitle = formatJobTitle(user.jobTitle);
   const ppoName = user.organization?.name || "первичной профсоюзной организации";
   const currentDate = getCurrentDate();
 
@@ -146,16 +153,16 @@ function generateMembershipApplicationHTML(
 }
 
 // Генерация HTML для заявления о взносах (согласно новому образцу PDF)
-function generateContributionsApplicationHTML(
+async function generateContributionsApplicationHTML(
   user: User & { organization?: Organization | null },
   employerName?: string,
   employerFullName?: string
-): string {
+): Promise<string> {
   const fullName = `${user.lastName || ""} ${user.firstName || ""} ${user.middleName || ""}`.trim();
-  const fullNameGenitive = getFullNameGenitive(user);
+  const fullNameGenitive = await getFullNameGenitive(user);
   const organizationName = user.organization?.name || employerName || "организации работодателя";
   const employerFIO = employerFullName || "";
-  const jobTitle = user.jobTitle || "";
+  const jobTitle = formatJobTitle(user.jobTitle);
   const currentDate = getCurrentDate();
 
   return `
@@ -272,7 +279,7 @@ export async function generateMembershipApplication(
   user: User & { organization?: Organization | null },
   ppoChairman?: string
 ): Promise<string> {
-  const html = generateMembershipApplicationHTML(user, ppoChairman);
+  const html = await generateMembershipApplicationHTML(user, ppoChairman);
   const fileName = `membership_${user.id}_${Date.now()}.pdf`;
   const filePath = path.join(DOCUMENTS_DIR, fileName);
   
@@ -287,7 +294,7 @@ export async function generateContributionsApplication(
   employerName?: string,
   employerFullName?: string
 ): Promise<string> {
-  const html = generateContributionsApplicationHTML(user, employerName, employerFullName);
+  const html = await generateContributionsApplicationHTML(user, employerName, employerFullName);
   const fileName = `contributions_${user.id}_${Date.now()}.pdf`;
   const filePath = path.join(DOCUMENTS_DIR, fileName);
   
