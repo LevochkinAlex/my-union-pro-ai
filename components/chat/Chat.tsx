@@ -518,7 +518,7 @@ function ChatContent() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            message: `Я загрузил файл: ${file.name}`,
+            message: `Я загрузил файл: ${file.name}. Это мое подписанное заявление. Пожалуйста, проверь его правильность заполнения.`,
             sessionId: currentSessionId,
             uploadedDocument: {
               fileName: data.fileName,
