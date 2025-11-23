@@ -14,12 +14,19 @@ export default async function DiscountsPage() {
 
   const userId = session.user.id;
 
+  if (!userId || typeof userId !== 'string') {
+    redirect("/login");
+  }
+
   const [initialData, preference, user] = await Promise.all([
     fetchBestBenefitsDiscounts({ limit: 20, page: 1 }), // Загружаем первую страницу, остальное через пагинацию
     getDiscountPreferenceSafe(userId),
     prisma.user.findUnique({
       where: { id: userId },
       select: { address: true, region: true, preferredDiscountCity: true }
+    }).catch((error) => {
+      console.error("[discounts] Error fetching user:", error);
+      return null;
     }),
   ]);
 
