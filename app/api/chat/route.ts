@@ -412,12 +412,33 @@ ${profileComplete ? `- ПРОФИЛЬ УЖЕ ЗАПОЛНЕН - НЕ запра�
   * Если вопрос не про заявление, вежливо предложи: "Для решения других вопросов и обращений создайте новое обращение через кнопку 'Новый чат' в меню"
   * Не переключайся на другие темы - оставайся в рамках помощи с заявлением`}
 
+### ИСПРАВЛЕНИЕ ДАННЫХ:
+Если пользователь замечает ошибку в данных ПОСЛЕ того как они уже собраны:
+- Внимательно слушай что именно пользователь хочет исправить
+- Примеры фраз для исправления:
+  * "Неправильно указал адрес, правильный: [новый адрес]"
+  * "Ошибка в дате рождения, должно быть [новая дата]"
+  * "Моя должность не [старая], а [новая]"
+  * "Исправьте фамилию на [новая фамилия]"
+  * "Хочу изменить телефон на [новый телефон]"
+- Когда распознаешь исправление:
+  1. Определи какое поле нужно исправить (firstName, lastName, dateOfBirth, address, phone, jobTitle, profession, education)
+  2. Извлеки новое значение
+  3. Добавь в свой ответ специальный маркер:
+     [UPDATE_FIELD: поле=новое_значение]
+     Например: [UPDATE_FIELD: address=Москва, ул. Ленина 10]
+  4. Подтверди пользователю: "Хорошо, я исправил [поле] на [новое значение]. Проверьте правильность."
+- После исправления НЕ нужно собирать все данные заново
+- Просто обновляется конкретное поле
+- Если пользователь хочет исправить несколько полей, обрабатывай их по очереди
+
 ### ВАЖНО:
 - Парси естественный язык пользователя и не требуй строгих форматов
 - НЕ предлагай создавать обращения - для этого есть отдельный чат
 - Всегда создавай заявление, даже если организации нет в базе
 - Будь вежливым и профессиональным
-- Будь терпеливым и понимающим, если пользователь отвечает не так, как ожидается`;
+- Будь терпеливым и понимающим, если пользователь отвечает не так, как ожидается
+- Умей распознавать и обрабатывать исправления данных`;
     
     // Если заявление уже сгенерировано, проверяем дополнительную информацию
     if (hasGeneratedDocuments && !additionalInfoComplete) {
@@ -1303,6 +1324,62 @@ ID документа: ${uploadedDocument.documentId}
         console.error("[chat] Error checking profile completeness:", error);
         // Don't fail the chat if profile check fails
       }
+    }
+
+    // ОБРАБОТКА ИСПРАВЛЕНИЙ ПРОФИЛЯ
+    // Проверяем есть ли маркер [UPDATE_FIELD: ...] в ответе бота
+    const updateFieldPattern = /\[UPDATE_FIELD:\s*(\w+)=([^\]]+)\]/g;
+    let updateFieldMatch;
+    const fieldsToUpdate: Array<{field: string, value: string}> = [];
+    
+    while ((updateFieldMatch = updateFieldPattern.exec(aiResponse)) !== null) {
+      const field = updateFieldMatch[1];
+      const value = updateFieldMatch[2].trim();
+      fieldsToUpdate.push({ field, value });
+      console.log(`[chat] 🔄 Detected field update request: ${field} = ${value}`);
+    }
+    
+    // Если есть поля для обновления - обновляем их
+    if (fieldsToUpdate.length > 0) {
+      for (const { field, value } of fieldsToUpdate) {
+        try {
+          // Валидация и преобразование значения
+          let validatedValue: any = value;
+          
+          if (field === 'dateOfBirth') {
+            // Парсим дату
+            const datePattern = /(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/;
+            const match = value.match(datePattern);
+            if (match) {
+              const [, day, month, year] = match;
+              validatedValue = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            }
+          }
+          
+          // Проверяем что поле разрешено для обновления
+          const allowedFields = [
+            'firstName', 'lastName', 'middleName', 'dateOfBirth',
+            'phone', 'address', 'region', 'jobTitle', 'profession', 'education'
+          ];
+          
+          if (allowedFields.includes(field)) {
+            const updateData: any = {};
+            updateData[field] = validatedValue;
+            
+            await prisma.user.update({
+              where: { id: session.user.id },
+              data: updateData,
+            });
+            
+            console.log(`[chat] ✅ Field ${field} updated to: ${validatedValue}`);
+          }
+        } catch (updateError) {
+          console.error(`[chat] ⚠️ Error updating field ${field}:`, updateError);
+        }
+      }
+      
+      // Удаляем маркеры из ответа перед сохранением
+      aiResponse = aiResponse.replace(updateFieldPattern, '').trim();
     }
 
     // Сохраняем ответ AI с привязкой к сессии
