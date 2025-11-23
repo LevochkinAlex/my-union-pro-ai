@@ -226,6 +226,113 @@ export async function extractProfileDataFromMessages(
     }
   }
 
+  // ========== ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ ==========
+  
+  // Extract occupation (род занятий)
+  const occupationPatterns = [
+    /(?:занимаюсь|занимаетесь|работаю|профессия|род занятий)[:\s]+([^\n.!?]{5,100})/i,
+    /(?:я|по профессии)\s+([а-яё\s,]{3,50})(?:\.|,|!|\n)/i,
+  ];
+  for (const pattern of occupationPatterns) {
+    const match = allText.match(pattern);
+    if (match && match[1]) {
+      profileData.occupation = match[1].trim();
+      break;
+    }
+  }
+
+  // Extract aboutMe (о себе)
+  const aboutMePatterns = [
+    /(?:о себе|о вас|вдохновляет|характер)[:\s]+([^\n]{10,500})/i,
+    /(?:я|меня)\s+(?:вдохновляет|интересует|увлекает)[^\n]{10,300}/i,
+  ];
+  for (const pattern of aboutMePatterns) {
+    const match = allText.match(pattern);
+    if (match) {
+      const text = match[0] || match[1];
+      if (text && text.length > 10) {
+        profileData.aboutMe = text.trim();
+        break;
+      }
+    }
+  }
+
+  // Extract hobbies (хобби и увлечения)
+  const hobbiesPatterns = [
+    /(?:хобби|увлечения|увлекаюсь|интересы)[:\s]+([^\n.!?]{5,300})/i,
+  ];
+  for (const pattern of hobbiesPatterns) {
+    const match = allText.match(pattern);
+    if (match && match[1]) {
+      profileData.hobbies = match[1].trim();
+      break;
+    }
+  }
+
+  // Extract marital status (семейное положение)
+  const maritalPatterns = [
+    /(?:семейное положение|замужем|женат|холост|в браке|не замужем)[:\s]*([^\n.!?]{3,50})/i,
+  ];
+  for (const pattern of maritalPatterns) {
+    const match = allText.match(pattern);
+    if (match) {
+      const status = (match[1] || match[0]).trim().toLowerCase();
+      if (status.includes('замужем') || status.includes('женат') || status.includes('в браке')) {
+        profileData.maritalStatus = 'MARRIED';
+      } else if (status.includes('холост') || status.includes('не замужем') || status.includes('не женат')) {
+        profileData.maritalStatus = 'SINGLE';
+      } else if (status.includes('развод')) {
+        profileData.maritalStatus = 'DIVORCED';
+      } else if (status.includes('вдов')) {
+        profileData.maritalStatus = 'WIDOWED';
+      }
+      break;
+    }
+  }
+
+  // Extract spouse info (информация о супруге)
+  const spousePatterns = [
+    /(?:супруг|супруга|муж|жена|партнер)[:\s]+([^\n]{10,200})/i,
+  ];
+  for (const pattern of spousePatterns) {
+    const match = allText.match(pattern);
+    if (match && match[1]) {
+      profileData.spouseInfo = match[1].trim();
+      break;
+    }
+  }
+
+  // Extract children info (информация о детях)
+  if (allText.match(/(?:есть дети|у меня есть|дети|ребенок|сын|дочь)/i)) {
+    profileData.hasChildren = true;
+    
+    const childrenPatterns = [
+      /(?:дети|ребенок|сын|дочь)[:\s]+([^\n]{10,300})/i,
+      /(?:детей|ребенка)\s+(?:зовут|имена|возраст)[:\s]*([^\n]{10,200})/i,
+    ];
+    for (const pattern of childrenPatterns) {
+      const match = allText.match(pattern);
+      if (match && match[1]) {
+        profileData.childrenInfo = match[1].trim();
+        break;
+      }
+    }
+  } else if (allText.match(/(?:нет детей|без детей|детей нет)/i)) {
+    profileData.hasChildren = false;
+  }
+
+  // Extract additional info (дополнительная информация)
+  const additionalPatterns = [
+    /(?:дополнительная информация|еще|также|кроме того)[:\s]+([^\n]{10,500})/i,
+  ];
+  for (const pattern of additionalPatterns) {
+    const match = allText.match(pattern);
+    if (match && match[1]) {
+      profileData.additionalInfo = match[1].trim();
+      break;
+    }
+  }
+
   // Extract name patterns (ФИО) - только если не извлечено из структурированных данных
   if (!profileData.firstName || !profileData.lastName) {
     // Сначала ищем по явным меткам
