@@ -28,6 +28,7 @@ function ChatContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -160,6 +161,22 @@ function ChatContent() {
       loadMessages();
     }
   }, [session, loadMessages, mode, sessionId]);
+
+  // Load user avatar
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetch("/api/profile")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.user?.avatarUrl) {
+            setUserAvatarUrl(data.user.avatarUrl);
+          }
+        })
+        .catch((error) => {
+          console.error("[chat] Failed to load user avatar:", error);
+        });
+    }
+  }, [session?.user?.id]);
 
   // Проверяем статус профиля и генерируем заявления если нужно
   const checkAndGenerateDocuments = useCallback(async () => {
@@ -799,9 +816,17 @@ function ChatContent() {
 
                   {message.role === "user" && (
                     <div className="flex-shrink-0">
-                      <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold text-sm shadow-sm">
-                        {session?.user?.name?.charAt(0).toUpperCase() || "U"}
-                      </div>
+                      {userAvatarUrl ? (
+                        <img 
+                          src={userAvatarUrl} 
+                          alt="Avatar" 
+                          className="h-8 w-8 rounded-full object-cover shadow-sm"
+                        />
+                      ) : (
+                        <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold text-sm shadow-sm">
+                          {session?.user?.name?.charAt(0).toUpperCase() || "U"}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
