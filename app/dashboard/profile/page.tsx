@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import PhoneInput from "@/components/form/PhoneInput";
 import AddressInput from "@/components/form/AddressInput";
 import DateInput from "@/components/form/DateInput";
+import AvatarUpload from "@/components/profile/AvatarUpload";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
 
@@ -33,6 +34,7 @@ interface ProfileData {
   education: string;
   email: string;
   preferredDiscountCity: string; // Предпочтительный город для скидок
+  avatarUrl: string | null;
   organization?: {
     id: string;
     name: string;
@@ -73,6 +75,7 @@ export default function ProfilePage() {
     education: "",
     email: "",
     preferredDiscountCity: "",
+    avatarUrl: null,
     organization: null,
   });
 
@@ -118,6 +121,7 @@ export default function ProfilePage() {
           education: user.education ?? "",
           email: user.email,
           preferredDiscountCity: user.preferredDiscountCity ?? "",
+          avatarUrl: user.avatarUrl ?? null,
           organization: user.organization,
         });
       } catch (error) {
@@ -306,6 +310,31 @@ export default function ProfilePage() {
     }
   };
 
+  const handleAvatarSave = async (croppedImageBlob: Blob) => {
+    try {
+      const formData = new FormData();
+      formData.append("avatar", croppedImageBlob, "avatar.jpg");
+
+      const response = await fetch("/api/profile/avatar", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Не удалось загрузить фото");
+      }
+
+      const data = await response.json();
+      setProfileData(prev => ({ ...prev, avatarUrl: data.avatarUrl }));
+      setMessage({ type: "success", text: "Фото профиля успешно обновлено" });
+    } catch (error) {
+      console.error(error);
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка загрузки фото" });
+      throw error; // Re-throw to let AvatarUpload handle it
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -376,6 +405,12 @@ export default function ProfilePage() {
       {activeTab === "profile" && (
       <div className="w-full max-w-5xl rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Информация о профиле</h3>
+        
+        {/* Avatar Upload */}
+        <div className="mt-6 mb-8 border-b border-gray-200 pb-6 dark:border-gray-700">
+          <AvatarUpload currentAvatarUrl={profileData.avatarUrl} onSave={handleAvatarSave} />
+        </div>
+        
         <form onSubmit={handleProfileSubmit} className="mt-4 space-y-6">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>

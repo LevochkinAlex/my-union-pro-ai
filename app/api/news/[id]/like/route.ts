@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 // POST /api/news/[id]/like - поставить/убрать лайк
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -15,7 +15,8 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
+    const resolvedParams = await Promise.resolve(params);
+    const { id } = resolvedParams;
 
     // Проверяем существование новости
     const newsPost = await prisma.newsPost.findUnique({

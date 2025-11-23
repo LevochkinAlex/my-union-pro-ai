@@ -6,11 +6,12 @@ import { prisma } from "@/lib/prisma";
 // GET /api/news/[id] - получить одну новость
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
-    const { id } = params;
+    const resolvedParams = await Promise.resolve(params);
+    const { id } = resolvedParams;
 
     const newsPost = await prisma.newsPost.findUnique({
       where: { id },

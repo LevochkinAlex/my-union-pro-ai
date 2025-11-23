@@ -65,6 +65,7 @@ export async function GET() {
         dateOfBirth: user.dateOfBirth,
         address: user.address,
         preferredDiscountCity: user.preferredDiscountCity,
+        avatarUrl: user.avatarUrl,
         jobTitle: user.jobTitle,
         profession: user.profession,
         education: user.education,

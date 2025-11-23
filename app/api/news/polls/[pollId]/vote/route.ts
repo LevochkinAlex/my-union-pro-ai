@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 // POST /api/news/polls/[pollId]/vote - проголосовать в опросе
 export async function POST(
   request: NextRequest,
-  { params }: { params: { pollId: string } }
+  { params }: { params: Promise<{ pollId: string }> | { pollId: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -15,7 +15,8 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { pollId } = params;
+    const resolvedParams = await Promise.resolve(params);
+    const { pollId } = resolvedParams;
     const { optionId } = await request.json();
 
     if (!optionId) {
