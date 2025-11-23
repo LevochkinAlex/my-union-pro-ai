@@ -25,7 +25,18 @@ interface ProfileData {
   } | null;
 }
 
-type TabKey = "profile" | "security";
+interface AdditionalInfo {
+  occupation: string;
+  hobbies: string;
+  aboutMe: string;
+  hasChildren: boolean | null;
+  childrenInfo: string;
+  maritalStatus: string;
+  spouseInfo: string;
+  additionalInfo: string;
+}
+
+type TabKey = "profile" | "additional" | "security";
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
@@ -53,6 +64,19 @@ export default function ProfilePage() {
     newPassword: "",
     confirmPassword: "",
   });
+
+  const [additionalInfo, setAdditionalInfo] = useState<AdditionalInfo>({
+    occupation: "",
+    hobbies: "",
+    aboutMe: "",
+    hasChildren: null,
+    childrenInfo: "",
+    maritalStatus: "",
+    spouseInfo: "",
+    additionalInfo: "",
+  });
+
+  const [savingAdditionalInfo, setSavingAdditionalInfo] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -86,6 +110,32 @@ export default function ProfilePage() {
     };
 
     loadProfile();
+  }, []);
+
+  useEffect(() => {
+    const loadAdditionalInfo = async () => {
+      try {
+        const response = await fetch("/api/profile/additional-info");
+        if (!response.ok) {
+          throw new Error("Не удалось загрузить дополнительную информацию");
+        }
+        const data = await response.json();
+        setAdditionalInfo({
+          occupation: data.occupation ?? "",
+          hobbies: data.hobbies ?? "",
+          aboutMe: data.aboutMe ?? "",
+          hasChildren: data.hasChildren,
+          childrenInfo: data.childrenInfo ?? "",
+          maritalStatus: data.maritalStatus ?? "",
+          spouseInfo: data.spouseInfo ?? "",
+          additionalInfo: data.additionalInfo ?? "",
+        });
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    loadAdditionalInfo();
   }, []);
 
   useEffect(() => {
@@ -177,6 +227,49 @@ export default function ProfilePage() {
     }
   };
 
+  const handleAdditionalInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    
+    if (type === "checkbox") {
+      const checked = (e.target as HTMLInputElement).checked;
+      setAdditionalInfo((prev) => ({
+        ...prev,
+        [name]: checked,
+      }));
+    } else {
+      setAdditionalInfo((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    }
+  };
+
+  const handleAdditionalInfoSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setSavingAdditionalInfo(true);
+    try {
+      const response = await fetch("/api/profile/additional-info", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(additionalInfo),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Не удалось обновить дополнительную информацию");
+      }
+
+      setMessage({ type: "success", text: "Дополнительная информация успешно обновлена" });
+    } catch (error) {
+      console.error(error);
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка обновления данных" });
+    } finally {
+      setSavingAdditionalInfo(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -220,6 +313,16 @@ export default function ProfilePage() {
             }`}
           >
             Профиль
+          </button>
+          <button
+            onClick={() => setActiveTab("additional")}
+            className={`whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium ${
+              activeTab === "additional"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Дополнительная информация
           </button>
           <button
             onClick={() => setActiveTab("security")}
@@ -360,6 +463,139 @@ export default function ProfilePage() {
               className="inline-flex items-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {savingProfile ? "Сохранение..." : "Сохранить изменения"}
+            </button>
+          </div>
+        </form>
+      </div>
+      )}
+
+      {activeTab === "additional" && (
+      <div className="w-full max-w-5xl rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Дополнительная информация</h3>
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          Заполните дополнительные сведения о себе для более персонализированного общения с AI-ботом
+        </p>
+        <form onSubmit={handleAdditionalInfoSubmit} className="mt-6 space-y-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Род занятий</label>
+              <input
+                type="text"
+                name="occupation"
+                value={additionalInfo.occupation}
+                onChange={handleAdditionalInfoChange}
+                placeholder="Например: врач, учитель, инженер"
+                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Семейное положение</label>
+              <select
+                name="maritalStatus"
+                value={additionalInfo.maritalStatus}
+                onChange={handleAdditionalInfoChange}
+                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              >
+                <option value="">Выберите</option>
+                <option value="Не женат/Не замужем">Не женат/Не замужем</option>
+                <option value="Женат/Замужем">Женат/Замужем</option>
+                <option value="В разводе">В разводе</option>
+                <option value="Вдовец/Вдова">Вдовец/Вдова</option>
+                <option value="В гражданском браке">В гражданском браке</option>
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Информация о супруге/супруге</label>
+              <textarea
+                name="spouseInfo"
+                value={additionalInfo.spouseInfo}
+                onChange={handleAdditionalInfoChange}
+                placeholder="Имя, род занятий и другая информация о супруге"
+                rows={3}
+                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              />
+            </div>
+
+            <div className="flex items-center md:col-span-2">
+              <input
+                type="checkbox"
+                id="hasChildren"
+                name="hasChildren"
+                checked={additionalInfo.hasChildren === true}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setAdditionalInfo((prev) => ({
+                    ...prev,
+                    hasChildren: checked,
+                  }));
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
+              />
+              <label htmlFor="hasChildren" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+                У меня есть дети
+              </label>
+            </div>
+
+            {additionalInfo.hasChildren && (
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Информация о детях</label>
+                <textarea
+                  name="childrenInfo"
+                  value={additionalInfo.childrenInfo}
+                  onChange={handleAdditionalInfoChange}
+                  placeholder="Имена, возраст, другая информация о детях"
+                  rows={3}
+                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                />
+              </div>
+            )}
+
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Хобби и увлечения</label>
+              <textarea
+                name="hobbies"
+                value={additionalInfo.hobbies}
+                onChange={handleAdditionalInfoChange}
+                placeholder="Ваши хобби, интересы и увлечения"
+                rows={3}
+                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">О себе</label>
+              <textarea
+                name="aboutMe"
+                value={additionalInfo.aboutMe}
+                onChange={handleAdditionalInfoChange}
+                placeholder="Расскажите о себе: характер, привычки, что вас вдохновляет"
+                rows={4}
+                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Дополнительная информация</label>
+              <textarea
+                name="additionalInfo"
+                value={additionalInfo.additionalInfo}
+                onChange={handleAdditionalInfoChange}
+                placeholder="Любая другая информация, которой хотите поделиться"
+                rows={4}
+                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={savingAdditionalInfo}
+              className="inline-flex items-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {savingAdditionalInfo ? "Сохранение..." : "Сохранить изменения"}
             </button>
           </div>
         </form>

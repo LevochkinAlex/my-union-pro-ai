@@ -56,6 +56,16 @@ model User {
   profession String? // Основная профессия
   education  String? // Образование
 
+  // Дополнительная информация профиля
+  occupation     String? // Род занятий (более общее)
+  hobbies        String? @db.Text // Хобби и увлечения
+  aboutMe        String? @db.Text // О себе
+  hasChildren    Boolean? // Есть ли дети
+  childrenInfo   String? @db.Text // Информация о детях
+  maritalStatus  String? // Семейное положение (холост/замужем/женат/в разводе)
+  spouseInfo     String? @db.Text // Информация о супруге/супруге
+  additionalInfo String? @db.Text // Дополнительная информация (свободный текст)
+
   // Подпись (путь к файлу на сервере)
   signaturePath String?
 
