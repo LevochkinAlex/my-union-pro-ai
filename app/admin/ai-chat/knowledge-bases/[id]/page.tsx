@@ -73,6 +73,16 @@ export default function KnowledgeBaseDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Для добавления текста
+  const [showTextForm, setShowTextForm] = useState(false);
+  const [textTitle, setTextTitle] = useState("");
+  const [textContent, setTextContent] = useState("");
+  
+  // Для добавления URL
+  const [showUrlForm, setShowUrlForm] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [urlTitle, setUrlTitle] = useState("");
 
   const loadKnowledgeBase = useCallback(async () => {
     if (!id) return;
@@ -151,7 +161,7 @@ export default function KnowledgeBaseDetailsPage() {
   };
 
   const handleRetry = async (documentId: string) => {
-    setSaving(true); // Changed from setRetryingId to setSaving
+    setSaving(true);
     setError("");
     try {
       const response = await fetch(`/api/admin/knowledge-documents/${documentId}/retry`, {
@@ -167,7 +177,73 @@ export default function KnowledgeBaseDetailsPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Произошла ошибка");
     } finally {
-      setSaving(false); // Changed from setRetryingId to setSaving
+      setSaving(false);
+    }
+  };
+  
+  const handleAddText = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!textTitle.trim() || !textContent.trim()) {
+      setError("Название и текст обязательны");
+      return;
+    }
+    
+    setSaving(true);
+    setError("");
+    
+    try {
+      const response = await fetch(`/api/admin/knowledge-bases/${id}/text`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: textTitle, content: textContent }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Не удалось добавить текст");
+      }
+      
+      setTextTitle("");
+      setTextContent("");
+      setShowTextForm(false);
+      await loadKnowledgeBase();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Произошла ошибка");
+    } finally {
+      setSaving(false);
+    }
+  };
+  
+  const handleAddUrl = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!urlInput.trim()) {
+      setError("URL обязателен");
+      return;
+    }
+    
+    setSaving(true);
+    setError("");
+    
+    try {
+      const response = await fetch(`/api/admin/knowledge-bases/${id}/url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: urlInput, title: urlTitle || undefined }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Не удалось добавить URL");
+      }
+      
+      setUrlInput("");
+      setUrlTitle("");
+      setShowUrlForm(false);
+      await loadKnowledgeBase();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Произошла ошибка");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -247,7 +323,7 @@ export default function KnowledgeBaseDetailsPage() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-3">
         {/* Форма редактирования */}
         <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
           <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">
@@ -305,28 +381,140 @@ export default function KnowledgeBaseDetailsPage() {
         </div>
 
         {/* Документы */}
-        <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+        <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800 lg:col-span-2">
           <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">
             Документы ({kb._count.documents})
           </h2>
 
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Загрузить документ
+          {/* Кнопки добавления */}
+          <div className="mb-4 flex gap-2">
+            <label className="flex-1">
+              <span className="sr-only">Загрузить файл</span>
+              <input
+                type="file"
+                accept=".pdf,.docx,.doc,.txt,.md,.csv,.xlsx,.xls,.json,.html,.htm,.ppt,.pptx"
+                onChange={handleFileUpload}
+                disabled={saving}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/20 dark:file:text-blue-300"
+              />
             </label>
-            <input
-              type="file"
-              accept=".pdf,.docx,.doc,.txt,.md,.csv,.xlsx,.xls,.json,.html,.htm,.ppt,.pptx"
-              onChange={handleFileUpload}
-              disabled={saving}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/20 dark:file:text-blue-300"
-            />
-            {saving && (
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Загрузка и обработка...
-              </p>
-            )}
+            <Button
+              type="button"
+              onClick={() => {
+                setShowTextForm(!showTextForm);
+                setShowUrlForm(false);
+              }}
+              variant="outline"
+            >
+              📝 Добавить текст
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setShowUrlForm(!showUrlForm);
+                setShowTextForm(false);
+              }}
+              variant="outline"
+            >
+              🔗 Добавить URL
+            </Button>
           </div>
+          
+          {/* Форма добавления текста */}
+          {showTextForm && (
+            <form onSubmit={handleAddText} className="mb-4 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/50">
+              <div>
+                <Label htmlFor="text-title">Название</Label>
+                <InputField
+                  id="text-title"
+                  type="text"
+                  value={textTitle}
+                  onChange={(e) => setTextTitle(e.target.value)}
+                  placeholder="Например: Устав профсоюза"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="text-content">Текст</Label>
+                <TextArea
+                  id="text-content"
+                  value={textContent}
+                  onChange={(e) => setTextContent(e.target.value)}
+                  placeholder="Вставьте текст документа..."
+                  rows={8}
+                  required
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={saving}>
+                  {saving ? "Добавление..." : "Добавить"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowTextForm(false);
+                    setTextTitle("");
+                    setTextContent("");
+                  }}
+                >
+                  Отмена
+                </Button>
+              </div>
+            </form>
+          )}
+          
+          {/* Форма добавления URL */}
+          {showUrlForm && (
+            <form onSubmit={handleAddUrl} className="mb-4 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/50">
+              <div>
+                <Label htmlFor="url-title">Название (необязательно)</Label>
+                <InputField
+                  id="url-title"
+                  type="text"
+                  value={urlTitle}
+                  onChange={(e) => setUrlTitle(e.target.value)}
+                  placeholder="Например: Сайт профсоюза"
+                />
+              </div>
+              <div>
+                <Label htmlFor="url-input">URL</Label>
+                <InputField
+                  id="url-input"
+                  type="url"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  placeholder="https://example.com"
+                  required
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Контент будет автоматически извлечен из URL
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={saving}>
+                  {saving ? "Добавление..." : "Добавить"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowUrlForm(false);
+                    setUrlInput("");
+                    setUrlTitle("");
+                  }}
+                >
+                  Отмена
+                </Button>
+              </div>
+            </form>
+          )}
+          
+          {saving && (
+            <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+              Обработка...
+            </p>
+          )}
 
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {kb.documents.length === 0 ? (
@@ -404,46 +592,6 @@ export default function KnowledgeBaseDetailsPage() {
                   </div>
                 );
               })
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-          <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">
-            Источники ({kb._count.sources})
-          </h2>
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {kb.sources.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400">Источники не добавлены</p>
-            ) : (
-              kb.sources.map((source) => (
-                <div
-                  key={source.id}
-                  className="rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700"
-                >
-                  <p className="font-medium text-gray-900 dark:text-white">
-                    {source.type}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Статус: {source.status}
-                  </p>
-                  {source.lastFetchedAt && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Обновлено: {new Date(source.lastFetchedAt).toLocaleString("ru-RU")}
-                    </p>
-                  )}
-                  {isJsonObject(source.metadata) && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Размер: {Number(source.metadata["size"] ?? 0)} B
-                    </p>
-                  )}
-                  {isJsonObject(source.metadata) && source.metadata.description && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {String(source.metadata["description"])}
-                    </p>
-                  )}
-                </div>
-              ))
             )}
           </div>
         </div>
