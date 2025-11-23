@@ -83,12 +83,74 @@ export async function generatePromoCard(data: PromoCardData): Promise<Blob> {
   canvas.width = width;
   canvas.height = height;
 
-  // Фон с градиентом
-  const gradient = ctx.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, '#667eea');
-  gradient.addColorStop(1, '#764ba2');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, width, height);
+  // Фон с картинкой скидки (размытой) или градиентом
+  let backgroundLoaded = false;
+  if (imageUrl) {
+    try {
+      console.log('[promo-card] Loading background image:', imageUrl.substring(0, 100));
+      const bgImg = new Image();
+      
+      // Для base64 изображений не нужен crossOrigin
+      if (!imageUrl.startsWith('data:')) {
+        bgImg.crossOrigin = 'anonymous';
+      }
+      
+      await new Promise<void>((resolve, reject) => {
+        bgImg.onload = () => {
+          console.log('[promo-card] Background image loaded successfully');
+          resolve();
+        };
+        bgImg.onerror = (err) => {
+          console.error('[promo-card] Background image load error:', err);
+          reject(new Error('Failed to load background image'));
+        };
+        bgImg.src = imageUrl;
+        // Таймаут для загрузки изображения
+        setTimeout(() => reject(new Error('Image load timeout')), 5000);
+      });
+      
+      if (bgImg.complete && bgImg.naturalWidth > 0) {
+        console.log('[promo-card] Drawing background:', { width: bgImg.naturalWidth, height: bgImg.naturalHeight });
+        // Рисуем картинку на весь фон с соблюдением пропорций (cover)
+        const imgRatio = bgImg.naturalWidth / bgImg.naturalHeight;
+        const canvasRatio = width / height;
+        let drawWidth, drawHeight, offsetX, offsetY;
+        
+        if (imgRatio > canvasRatio) {
+          // Изображение шире - обрезаем по бокам
+          drawHeight = height;
+          drawWidth = height * imgRatio;
+          offsetX = (width - drawWidth) / 2;
+          offsetY = 0;
+        } else {
+          // Изображение выше - обрезаем сверху/снизу
+          drawWidth = width;
+          drawHeight = width / imgRatio;
+          offsetX = 0;
+          offsetY = (height - drawHeight) / 2;
+        }
+        
+        ctx.filter = 'blur(20px) brightness(0.6)'; // Размытие и затемнение
+        ctx.drawImage(bgImg, offsetX, offsetY, drawWidth, drawHeight);
+        ctx.filter = 'none'; // Сбрасываем фильтр
+        backgroundLoaded = true;
+      } else {
+        throw new Error('Image not loaded properly');
+      }
+    } catch (error) {
+      console.warn('[promo-card] Failed to load background image, using gradient:', error);
+    }
+  }
+  
+  // Fallback на градиент если картинка не загрузилась
+  if (!backgroundLoaded) {
+    console.log('[promo-card] Using gradient background');
+    const gradient = ctx.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, '#667eea');
+    gradient.addColorStop(1, '#764ba2');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+  }
 
   // Белая карточка с тенью
   ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
@@ -164,21 +226,34 @@ export async function generatePromoCard(data: PromoCardData): Promise<Blob> {
     const codeY = promoY + 55;
     const codeX = cardX + 30;
     const codeBoxWidth = cardWidth - 300;
-    const codeBoxHeight = 80;
+    const codeBoxHeight = 90;
     
-    ctx.fillStyle = '#f7fafc';
-    ctx.roundRect(codeX, codeY, codeBoxWidth, codeBoxHeight, 10);
+    // Белый фон с тенью для промокода
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 4;
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.roundRect(codeX, codeY, codeBoxWidth, codeBoxHeight, 12);
     ctx.fill();
     
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    
+    // Рамка вокруг промокода
     ctx.strokeStyle = '#667eea';
-    ctx.lineWidth = 3;
-    ctx.roundRect(codeX, codeY, codeBoxWidth, codeBoxHeight, 10);
+    ctx.lineWidth = 4;
+    ctx.roundRect(codeX, codeY, codeBoxWidth, codeBoxHeight, 12);
     ctx.stroke();
     
+    // Текст промокода
     ctx.fillStyle = '#667eea';
-    ctx.font = 'bold 42px "Courier New", Courier, monospace';
+    ctx.font = 'bold 48px "Courier New", Courier, monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(promoCode, codeX + codeBoxWidth / 2, codeY + 55);
+    ctx.fillText(promoCode, codeX + codeBoxWidth / 2, codeY + 60);
 
   } else {
     // РЕЖИМ БЕЗ ПРОМОКОДА: Картинка + описание

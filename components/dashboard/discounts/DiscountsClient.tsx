@@ -212,8 +212,21 @@ export default function DiscountsClient({
               // Если есть total, проверяем, загружены ли все
               setHasMore(totalLoaded < payload.meta.total);
             } else {
-              // Если нет метаданных, проверяем, пришло ли полное количество (20)
-              setHasMore(payload.discounts.length >= 20);
+              // Для избранного и полученных: если мы загрузили все IDs, то больше нет данных
+              if (nextFilters.view === "favorites" || nextFilters.view === "claimed") {
+                const listToCheck = nextFilters.view === "favorites" 
+                  ? (listOverride?.favorites ?? favorites)
+                  : (listOverride?.claimed ?? claimed);
+                // Если загружено столько же или больше, чем IDs, то больше нет данных
+                const newHasMore = totalLoaded < listToCheck.length;
+                console.log("[DiscountsClient] Setting hasMore for filtered view:", { view: nextFilters.view, totalLoaded, listLength: listToCheck.length, hasMore: newHasMore });
+                setHasMore(newHasMore);
+              } else {
+                // Для обычного просмотра: проверяем, пришло ли полное количество (20)
+                const newHasMore = payload.discounts.length >= 20;
+                console.log("[DiscountsClient] Setting hasMore for all view:", { discountsLength: payload.discounts.length, hasMore: newHasMore });
+                setHasMore(newHasMore);
+              }
             }
             
             return updated;
@@ -230,8 +243,17 @@ export default function DiscountsClient({
             // Если есть total, проверяем, загружены ли все
             setHasMore(totalLoaded < payload.meta.total);
           } else {
-            // Если нет метаданных, проверяем, пришло ли полное количество (20)
-            setHasMore(payload.discounts.length >= 20);
+            // Для избранного и полученных: если мы загрузили все IDs, то больше нет данных
+            if (nextFilters.view === "favorites" || nextFilters.view === "claimed") {
+              const listToCheck = nextFilters.view === "favorites" 
+                ? (listOverride?.favorites ?? favorites)
+                : (listOverride?.claimed ?? claimed);
+              // Если загружено столько же, сколько IDs, то больше нет данных
+              setHasMore(totalLoaded < listToCheck.length);
+            } else {
+              // Для обычного просмотра: проверяем, пришло ли полное количество (20)
+              setHasMore(payload.discounts.length >= 20);
+            }
           }
         }
       } catch (err) {
@@ -252,6 +274,7 @@ export default function DiscountsClient({
   const loadMore = useCallback(() => {
     // Проверяем все условия, включая ref
     if (isLoadingMoreRef.current || isLoadingMore || !hasMore || isLoading) {
+      console.log("[DiscountsClient] loadMore skipped:", { isLoadingMoreRef: isLoadingMoreRef.current, isLoadingMore, hasMore, isLoading });
       return;
     }
     
@@ -264,8 +287,11 @@ export default function DiscountsClient({
     loadMoreTimeoutRef.current = setTimeout(() => {
       // Повторная проверка после debounce
       if (isLoadingMoreRef.current || isLoadingMore || !hasMore || isLoading) {
+        console.log("[DiscountsClient] loadMore debounced check failed:", { isLoadingMoreRef: isLoadingMoreRef.current, isLoadingMore, hasMore, isLoading });
         return;
       }
+      
+      console.log("[DiscountsClient] Starting loadMore, page:", filters.page + 1);
       
       // Сохраняем позицию скролла относительно последнего элемента
       const sentinel = document.getElementById('scroll-sentinel');
@@ -283,9 +309,8 @@ export default function DiscountsClient({
       setFilters(nextFilters);
       
       // Вызываем fetchDiscounts с append=true для добавления к существующим скидкам
-      fetchDiscounts(nextFilters, undefined, true).finally(() => {
-        // Восстанавливаем позицию скролла после добавления новых элементов
-        // Используем несколько requestAnimationFrame для надежности
+      fetchDiscounts(nextFilters, undefined, true).then(() => {
+        // Проверяем hasMore перед сбросом флага - может быть обновлен в fetchDiscounts
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             const newScrollHeight = document.documentElement.scrollHeight;
@@ -313,6 +338,9 @@ export default function DiscountsClient({
             isLoadingMoreRef.current = false;
           });
         });
+      }).catch(() => {
+        // В случае ошибки тоже сбрасываем флаг
+        isLoadingMoreRef.current = false;
       });
     }, 300);
   }, [filters, isLoadingMore, hasMore, isLoading, fetchDiscounts]);
@@ -322,6 +350,7 @@ export default function DiscountsClient({
     setFilters(next);
     setAllDiscounts([]); // Очищаем накопленные скидки
     isLoadingMoreRef.current = false; // Сбрасываем флаг загрузки при изменении фильтров
+    setIsLoadingMore(false); // Явно сбрасываем state загрузки
     fetchDiscounts(next, undefined, false);
     persistPreference(next);
   };
@@ -433,6 +462,10 @@ export default function DiscountsClient({
   };
 
   const handleTabChange = async (view: ViewMode) => {
+    // Явно сбрасываем флаги загрузки при смене вкладки
+    isLoadingMoreRef.current = false;
+    setIsLoadingMore(false);
+    
     // При переключении вкладок загружаем актуальные preferences
     if (view === "favorites" || view === "claimed") {
       try {
@@ -525,12 +558,15 @@ export default function DiscountsClient({
           !isLoading &&
           !isLoadingMoreRef.current
         ) {
+          console.log("[DiscountsClient] IntersectionObserver triggered, calling loadMore");
           loadMore();
+        } else if (entries[0].isIntersecting) {
+          console.log("[DiscountsClient] IntersectionObserver triggered but conditions not met:", { hasMore, isLoadingMore, isLoading, isLoadingMoreRef: isLoadingMoreRef.current });
         }
       },
       { 
-        threshold: 0.01, // Уменьшаем threshold для более раннего срабатывания
-        rootMargin: '800px' // Увеличиваем rootMargin еще больше для более раннего срабатывания
+        threshold: 0.1, // Увеличиваем threshold чтобы не срабатывать слишком рано
+        rootMargin: '200px' // Уменьшаем rootMargin чтобы избежать преждевременных срабатываний
       }
     );
 

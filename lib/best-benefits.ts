@@ -201,44 +201,95 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
   // Get authentication token
   const token = await getBestBenefitsToken();
 
-  // Если запрашивается конкретная скидка по ID, пробуем получить её отдельно
-  if (params.ids && params.ids.split(",").length === 1) {
-    const singleId = params.ids.trim();
-    try {
-      const singleUrl = `${API_BASE_URL}/${singleId}`;
-      // console.log("[best-benefits] Fetching single discount from API:", singleUrl);
-      
-      const singleResponse = await fetch(singleUrl, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        cache: "no-store",
-      });
+  // Если запрашиваются конкретные скидки по IDs (для favorites/claimed)
+  if (params.ids) {
+    const idList = params.ids.split(",").map(id => id.trim()).filter(Boolean);
+    
+    // Если один ID - запрашиваем через /products/{id}
+    if (idList.length === 1) {
+      try {
+        const singleUrl = `${API_BASE_URL}/${idList[0]}`;
+        // console.log("[best-benefits] Fetching single discount from API:", singleUrl);
+        
+        const singleResponse = await fetch(singleUrl, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          cache: "no-store",
+        });
 
-      if (singleResponse.ok) {
-        const singleData = await singleResponse.json();
-        // Если API возвращает один объект, оборачиваем в массив
-        const discount = singleData.data || singleData;
-        if (discount) {
-          // console.log("[best-benefits] Fetched single discount with full details");
-          return {
-            data: Array.isArray(discount) ? discount : [discount],
-            meta: {
-              total: 1,
-              per_page: 1,
-              current_page: 1,
-              last_page: 1,
-            },
-          } as BestBenefitsResponse;
+        if (singleResponse.ok) {
+          const singleData = await singleResponse.json();
+          const discount = singleData.data || singleData;
+          if (discount) {
+            return {
+              data: Array.isArray(discount) ? discount : [discount],
+              meta: {
+                total: 1,
+                per_page: 1,
+                current_page: 1,
+                last_page: 1,
+              },
+            } as BestBenefitsResponse;
+          }
         }
-      } else {
-        // console.log("[best-benefits] Single discount endpoint not available, falling back to list");
+      } catch (error) {
+        console.warn("[best-benefits] Error fetching single discount:", error);
       }
-    } catch (error) {
-      // console.log("[best-benefits] Error fetching single discount, falling back to list:", error);
+    }
+    
+    // Если несколько IDs - запрашиваем каждую скидку по отдельности и собираем результаты
+    // Это нужно для корректной работы favorites/claimed views
+    if (idList.length > 1) {
+      console.log(`[best-benefits] Fetching ${idList.length} discounts by IDs for filtered view`);
+      const discounts: any[] = [];
+      
+      // Загружаем все скидки параллельно (максимум 10 одновременно для избежания перегрузки)
+      const batchSize = 10;
+      for (let i = 0; i < idList.length; i += batchSize) {
+        const batch = idList.slice(i, i + batchSize);
+        const batchPromises = batch.map(async (id) => {
+          try {
+            const url = `${API_BASE_URL}/${id}`;
+            const response = await fetch(url, {
+              method: "GET",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+                Accept: "application/json",
+              },
+              cache: "no-store",
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              return data.data || data;
+            }
+            return null;
+          } catch (error) {
+            console.warn(`[best-benefits] Failed to fetch discount ${id}:`, error);
+            return null;
+          }
+        });
+        
+        const batchResults = await Promise.all(batchPromises);
+        discounts.push(...batchResults.filter(Boolean));
+      }
+      
+      console.log(`[best-benefits] Fetched ${discounts.length} out of ${idList.length} requested discounts`);
+      
+      return {
+        data: discounts,
+        meta: {
+          total: discounts.length,
+          per_page: discounts.length,
+          current_page: 1,
+          last_page: 1,
+        },
+      } as BestBenefitsResponse;
     }
   }
 
@@ -466,14 +517,33 @@ function normalizeResponse(
   const categories = allCategories;
   const cities = allCities;
 
-  // Если данные пришли из реального API, всегда используем метаданные пагинации из API
-  // API всегда возвращает пагинированные данные, даже без фильтров
+  // Если данные пришли из реального API
   if (context.source === "remote" && raw.meta) {
-    // Используем метаданные из API
+    // Если запрашивались конкретные IDs (favorites/claimed), делаем клиентскую пагинацию
+    // потому что все скидки уже загружены, нужно только разбить на страницы
+    if (params.ids) {
+      const paginated = paginate(filteredByView, params.page ?? 1, params.limit ?? 15);
+      console.log(`[best-benefits] Client-side pagination for IDs: page ${paginated.page}, showing ${paginated.items.length} of ${filteredByView.length} total`);
+      
+      return {
+        discounts: paginated.items,
+        categories,
+        cities: attachCoordinatesToCities(cities),
+        meta: {
+          total: filteredByView.length,
+          page: paginated.page,
+          perPage: paginated.perPage,
+          hasMore: paginated.hasMore,
+        },
+        fetchedAt: context.fetchedAt,
+        source: context.source,
+      };
+    }
+    
+    // Для обычных запросов используем метаданные из API
     // API уже отпагинировал данные, но мы можем применить дополнительные клиентские фильтры
-    // (например, по cityId, если он не был передан в API)
     return {
-      discounts: filteredByView, // Применяем клиентские фильтры к данным от API
+      discounts: filteredByView,
       categories,
       cities: attachCoordinatesToCities(cities),
       meta: {
@@ -499,7 +569,7 @@ function normalizeResponse(
         total: filteredByView.length,
         page: paginated.page,
         perPage: paginated.perPage,
-        hasMore: paginated.items.length >= (params.limit ?? 15) && paginated.items.length < filteredByView.length,
+        hasMore: paginated.hasMore,
       },
       fetchedAt: context.fetchedAt,
       source: context.source,
@@ -510,10 +580,12 @@ function normalizeResponse(
 function paginate<T>(items: T[], page: number, perPage: number) {
   const start = (page - 1) * perPage;
   const end = start + perPage;
+  const paginatedItems = items.slice(start, end);
   return {
-    items: items.slice(start, end),
+    items: paginatedItems,
     page,
     perPage,
+    hasMore: end < items.length, // Есть ли еще элементы после текущей страницы
   };
 }
 

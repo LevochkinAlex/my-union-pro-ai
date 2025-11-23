@@ -16,6 +16,7 @@ export default function MyDiscountsPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [downloading, setDownloading] = useState<number | null>(null);
   const [copiedPromoId, setCopiedPromoId] = useState<number | null>(null);
+  const [regenerating, setRegenerating] = useState<number | null>(null);
 
   useEffect(() => {
     // Синхронизация с BestBenefits при загрузке страницы, затем загрузка скидок
@@ -91,18 +92,30 @@ export default function MyDiscountsPage() {
       const discountsData = await discountsResponse.json();
       
       // Добавляем промокоды из preferences к данным скидок
+      console.log("[MyDiscounts] Raw claimed data:", claimedData);
+      console.log("[MyDiscounts] Discounts from API:", discountsData.discounts);
+      
       const discountsWithPromoCodes = (discountsData.discounts || []).map((discount: DiscountItem) => {
         if (activeTab === "claimed") {
           const claimedItem = claimedData.find((item: any) => {
             const itemId = typeof item === 'object' && item.id ? item.id : item;
             return itemId === discount.id;
           });
+          
+          console.log(`[MyDiscounts] Discount ${discount.id}:`, { 
+            title: discount.title, 
+            claimedItem, 
+            hasPromoCode: claimedItem && typeof claimedItem === 'object' && !!claimedItem.promoCode 
+          });
+          
           if (claimedItem && typeof claimedItem === 'object' && claimedItem.promoCode) {
             return { ...discount, promoCode: claimedItem.promoCode };
           }
         }
         return discount;
       });
+      
+      console.log("[MyDiscounts] Discounts with promo codes:", discountsWithPromoCodes.map(d => ({ id: d.id, title: d.title, promoCode: d.promoCode })));
       
       setDiscounts(discountsWithPromoCodes);
     } catch (error) {
@@ -125,16 +138,81 @@ export default function MyDiscountsPage() {
     }
   };
 
+  const handleRegeneratePromoCode = async (discountId: number) => {
+    setRegenerating(discountId);
+    
+    try {
+      // Генерируем новый промокод (можно использовать любую логику)
+      const newPromoCode = `bb${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      
+      console.log("[handleRegeneratePromoCode] Generating new promo code:", newPromoCode);
+      
+      // Обновляем промокод в preferences
+      const prefsResponse = await fetch("/api/discounts/preferences");
+      const prefsData = await prefsResponse.json();
+      const currentFilters = prefsData.filters || {};
+      const claimedData = currentFilters.claimed || [];
+      
+      // Обновляем промокод для этой скидки
+      const updatedClaimed = claimedData.map((item: any) => {
+        const itemId = typeof item === 'object' && item.id ? item.id : item;
+        if (itemId === discountId) {
+          return { id: discountId, promoCode: newPromoCode };
+        }
+        return item;
+      });
+      
+      // Сохраняем обновленные preferences
+      await fetch("/api/discounts/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filters: {
+            ...currentFilters,
+            claimed: updatedClaimed,
+          },
+        }),
+      });
+      
+      // Обновляем локальное состояние
+      setDiscounts(prev => prev.map(d => 
+        d.id === discountId ? { ...d, promoCode: newPromoCode } : d
+      ));
+      
+      console.log("[handleRegeneratePromoCode] Promo code regenerated successfully");
+      
+      // Показываем уведомление
+      alert(`Новый промокод: ${newPromoCode}`);
+    } catch (error) {
+      console.error("[handleRegeneratePromoCode] Failed to regenerate promo code:", error);
+      alert("Не удалось перегенерировать промокод. Попробуйте еще раз.");
+    } finally {
+      setRegenerating(null);
+    }
+  };
+
   const handleDownloadPromoCard = async (discount: DiscountItem) => {
     setDownloading(discount.id);
     
     try {
+      console.log("[handleDownloadPromoCard] Starting generation for discount:", discount.id);
+      
       // Получаем данные пользователя
       const userResponse = await fetch("/api/profile");
+      if (!userResponse.ok) {
+        throw new Error(`Failed to fetch user profile: ${userResponse.status}`);
+      }
       const userData = await userResponse.json();
       const userName = userData.user?.firstName && userData.user?.lastName
         ? `${userData.user.firstName} ${userData.user.lastName}`
         : userData.user?.email || "Пользователь";
+
+      console.log("[handleDownloadPromoCard] User data:", { userName });
+      console.log("[handleDownloadPromoCard] Discount data:", {
+        promoCode: discount.promoCode,
+        title: discount.title,
+        imageUrl: discount.imageUrl ? discount.imageUrl.substring(0, 100) + '...' : 'null',
+      });
 
       // Генерируем карточку
       const blob = await generatePromoCard({
@@ -142,9 +220,11 @@ export default function MyDiscountsPage() {
         userName: userName,
         discountName: discount.title,
         discountDescription: discount.shortDescription,
-        imageUrl: discount.imageUrl,
+        imageUrl: discount.imageUrl ?? undefined,
         validUntil: discount.validUntil ? new Date(discount.validUntil) : undefined,
       });
+
+      console.log("[handleDownloadPromoCard] Blob generated:", { size: blob.size, type: blob.type });
 
       // Скачиваем файл
       const url = URL.createObjectURL(blob);
@@ -155,9 +235,11 @@ export default function MyDiscountsPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      
+      console.log("[handleDownloadPromoCard] Download triggered successfully");
     } catch (error) {
-      console.error("Failed to generate promo card:", error);
-      alert("Не удалось создать карточку. Попробуйте еще раз.");
+      console.error("[handleDownloadPromoCard] Failed to generate promo card:", error);
+      alert(`Не удалось создать карточку: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
     } finally {
       setDownloading(null);
     }
@@ -303,7 +385,7 @@ export default function MyDiscountsPage() {
                     </h3>
 
                     {/* Promo Code */}
-                    {discount.promoCode && (
+                    {discount.promoCode && activeTab === "claimed" && (
                       <div className="mt-2">
                         <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                           Код:
@@ -326,6 +408,20 @@ export default function MyDiscountsPage() {
                               <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                 <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
                                 <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                              </svg>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleRegeneratePromoCode(discount.id)}
+                            disabled={regenerating === discount.id}
+                            className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Перегенерировать промокод"
+                          >
+                            {regenerating === discount.id ? (
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
+                            ) : (
+                              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
                               </svg>
                             )}
                           </button>
