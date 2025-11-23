@@ -307,21 +307,11 @@ function normalizeDiscount(discount: BestBenefitsDiscount): DiscountItem {
       order: category.order,
     }));
 
-  // Фильтруем только российские города
-  const russianCityNames = getAllRussianCities();
+  // Включаем ВСЕ города из API (не фильтруем)
   const cityList: DiscountCity[] = (discount.cities ?? [])
-    .filter((city) => {
-      // Проверяем, является ли город российским
-      const isRussian = russianCityNames.some(
-        (ruCity) => ruCity.toLowerCase() === city.name.toLowerCase()
-      );
-      if (!isRussian && city.name) {
-        console.log(`[best-benefits] Filtered out non-Russian city: ${city.name} (ID: ${city.id})`);
-      }
-      return isRussian;
-    })
+    .filter((city) => city.name && city.name.trim().length > 0) // Только непустые названия
     .map((city) => ({
-      id: city.id, // Сохраняем оригинальный ID из API
+      id: city.id,
       name: city.name,
       coordinates: getCityCoordinates(city.name),
     }));
@@ -383,38 +373,10 @@ function extractCategories(discounts: DiscountItem[]): DiscountCategory[] {
 function extractCities(discounts: DiscountItem[]): DiscountCity[] {
   const map = new Map<number, DiscountCity & { count: number }>();
   
-  // Используем единый список российских городов из константы
-  const russianCityNames = getAllRussianCities();
-  const russianCitiesSet = new Set(russianCityNames.map(name => name.toLowerCase()));
-  
-  // Список городов Казахстана и других стран СНГ для исключения
-  const excludedCities = new Set([
-    'алматы', 'астана', 'нур-султан', 'шымкент', 'караганда', 'актобе',
-    'тараз', 'павлодар', 'усть-каменогорск', 'семей', 'атырау', 'костанай',
-    'кызылорда', 'петропавловск', 'туркестан', 'кокшетау', 'талдыкорган',
-    'экибастуз', 'рудный', 'казалинск', 'жезказган', 'балхаш', 'сатпаев',
-    'минск', 'гомель', 'могилёв', 'витебск', 'гродно', 'брест',
-    'ташкент', 'самарканд', 'наманган', 'андижан', 'фергана',
-    'киев', 'харьков', 'одесса', 'днепр', 'донецк', 'запорожье',
-    'кишинёв', 'бельцы', 'тирасполь',
-    'баку', 'гянджа', 'сумгаит',
-    'ереван', 'гюмри', 'ванадзор',
-    'тбилиси', 'батуми', 'кутаиси',
-    'бишкек', 'ош', 'джалал-абад',
-    'душанбе', 'худжанд', 'куляб'
-  ]);
-  
+  // Собираем ВСЕ уникальные города из скидок (без фильтрации)
   discounts.forEach((discount) => {
     discount.cities.forEach((city) => {
-      const cityNameLower = city.name.toLowerCase();
-      
-      // Исключаем города из Казахстана и других стран СНГ
-      if (excludedCities.has(cityNameLower)) {
-        return;
-      }
-      
-      // Фильтруем только российские города
-      if (russianCitiesSet.has(cityNameLower)) {
+      if (city.name && city.name.trim().length > 0) {
         map.set(city.id, {
           ...city,
           count: (map.get(city.id)?.count ?? 0) + 1,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { RUSSIAN_REGIONS, getRegionByCity, getAllRussianCities } from "@/lib/constants/russian-regions";
+import { RUSSIAN_REGIONS, getRegionByCity } from "@/lib/constants/russian-regions";
 import type { DiscountCity } from "@/types/discounts";
 
 interface CityFilterProps {
@@ -11,61 +11,81 @@ interface CityFilterProps {
 }
 
 export default function CityFilter({ cities, value, onChange }: CityFilterProps) {
-  const [selectedCountry, setSelectedCountry] = useState<string>("russia");
+  const [selectedCountry, setSelectedCountry] = useState<string>("all");
   const [selectedRegion, setSelectedRegion] = useState<string>("all");
 
-  // Фильтруем только российские города
-  const russianCities = useMemo(() => {
-    const allRussianCityNames = getAllRussianCities();
-    return cities.filter(city => 
-      allRussianCityNames.some(ruCity => ruCity.toLowerCase() === city.name.toLowerCase())
-    );
-  }, [cities]);
+  // Группируем ВСЕ города по регионам для анализа
+  const citiesAnalysis = useMemo(() => {
+    const russianCities: DiscountCity[] = [];
+    const otherCities: DiscountCity[] = [];
+    const regionMap = new Map<string, DiscountCity[]>();
 
-  // Получаем города выбранного региона
-  const regionCities = useMemo(() => {
-    if (selectedRegion === "all") {
-      return russianCities;
-    }
-    const region = RUSSIAN_REGIONS.find(r => r.id === selectedRegion);
-    if (!region) return russianCities;
-    
-    return russianCities.filter(city =>
-      region.cities.some(regionCity => regionCity.toLowerCase() === city.name.toLowerCase())
-    );
-  }, [russianCities, selectedRegion]);
-
-  // Группируем города по регионам для отображения
-  const citiesByRegion = useMemo(() => {
-    const grouped = new Map<string, DiscountCity[]>();
-    
-    russianCities.forEach(city => {
+    cities.forEach(city => {
       const region = getRegionByCity(city.name);
       if (region) {
-        if (!grouped.has(region.id)) {
-          grouped.set(region.id, []);
+        // Российский город - добавляем в его регион
+        russianCities.push(city);
+        if (!regionMap.has(region.id)) {
+          regionMap.set(region.id, []);
         }
-        grouped.get(region.id)!.push(city);
+        regionMap.get(region.id)!.push(city);
+      } else {
+        // Неизвестный город - возможно из другой страны
+        otherCities.push(city);
       }
     });
 
-    // Сортируем города в каждом регионе по алфавиту
-    grouped.forEach((cityList, regionId) => {
+    // Сортируем города в каждом регионе
+    regionMap.forEach((cityList) => {
       cityList.sort((a, b) => a.name.localeCompare(b.name, 'ru-RU'));
     });
+    otherCities.sort((a, b) => a.name.localeCompare(b.name, 'ru-RU'));
 
-    return grouped;
-  }, [russianCities]);
+    return {
+      russianCities,
+      otherCities,
+      regionMap,
+      hasOtherCountries: otherCities.length > 0
+    };
+  }, [cities]);
+
+  // Получаем регионы, в которых есть города
+  const availableRegions = useMemo(() => {
+    return RUSSIAN_REGIONS.filter(region => 
+      citiesAnalysis.regionMap.has(region.id)
+    );
+  }, [citiesAnalysis]);
+
+  // Фильтруем города по выбранной стране и региону
+  const filteredCities = useMemo(() => {
+    // Фильтр по стране
+    let citiesByCountry: DiscountCity[];
+    if (selectedCountry === "russia") {
+      citiesByCountry = citiesAnalysis.russianCities;
+    } else if (selectedCountry === "other") {
+      citiesByCountry = citiesAnalysis.otherCities;
+    } else {
+      // "all" - все города
+      citiesByCountry = cities;
+    }
+
+    // Фильтр по региону (только для России)
+    if (selectedCountry === "russia" && selectedRegion !== "all") {
+      return citiesAnalysis.regionMap.get(selectedRegion) || [];
+    }
+
+    return citiesByCountry;
+  }, [selectedCountry, selectedRegion, citiesAnalysis, cities]);
 
   const handleCountryChange = (country: string) => {
     setSelectedCountry(country);
     setSelectedRegion("all");
-    onChange(null); // Сбрасываем выбор города при смене страны
+    onChange(null);
   };
 
   const handleRegionChange = (regionId: string) => {
     setSelectedRegion(regionId);
-    onChange(null); // Сбрасываем выбор города при смене региона
+    onChange(null);
   };
 
   const handleCityChange = (cityId: string) => {
@@ -80,21 +100,31 @@ export default function CityFilter({ cities, value, onChange }: CityFilterProps)
         onChange={(e) => handleCountryChange(e.target.value)}
         className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
       >
-        <option value="russia">Россия</option>
+        <option value="all">Все страны ({cities.length})</option>
+        <option value="russia">Россия ({citiesAnalysis.russianCities.length})</option>
+        {citiesAnalysis.hasOtherCountries && (
+          <option value="other">Другие страны ({citiesAnalysis.otherCities.length})</option>
+        )}
       </select>
 
-      {/* Регион */}
+      {/* Регион (показываем только для России) */}
       <select
         value={selectedRegion}
         onChange={(e) => handleRegionChange(e.target.value)}
-        className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+        disabled={selectedCountry !== "russia"}
+        className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
       >
-        <option value="all">Все регионы</option>
-        {RUSSIAN_REGIONS.map((region) => (
-          <option key={region.id} value={region.id}>
-            {region.name}
-          </option>
-        ))}
+        <option value="all">
+          {selectedCountry === "russia" ? `Все регионы` : "Выберите Россию"}
+        </option>
+        {selectedCountry === "russia" && availableRegions.map((region) => {
+          const cityCount = citiesAnalysis.regionMap.get(region.id)?.length || 0;
+          return (
+            <option key={region.id} value={region.id}>
+              {region.name} ({cityCount})
+            </option>
+          );
+        })}
       </select>
 
       {/* Город */}
@@ -104,13 +134,11 @@ export default function CityFilter({ cities, value, onChange }: CityFilterProps)
         className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
       >
         <option value="">Все города</option>
-        {regionCities
-          .sort((a, b) => a.name.localeCompare(b.name, 'ru-RU'))
-          .map((city) => (
-            <option key={city.id} value={city.id}>
-              {city.name}
-            </option>
-          ))}
+        {filteredCities.map((city) => (
+          <option key={city.id} value={city.id}>
+            {city.name}
+          </option>
+        ))}
       </select>
     </div>
   );
