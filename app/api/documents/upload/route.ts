@@ -195,16 +195,16 @@ export async function POST(request: NextRequest) {
     }
     
     // Валидация что в документе есть необходимые элементы
+    // НЕ блокируем если текст не извлечен - может быть сканированный документ (изображения)
+    // Главное что файл является валидным PDF
     if (documentType === "MEMBERSHIP_APPLICATION" || documentType === "CONTRIBUTION_APPLICATION") {
-      const hasUserData = pdfText.toLowerCase().includes(session.user.email?.split('@')[0] || '') || 
-                          pdfText.length > 100; // Хотя бы какой-то текст есть
-      
-      if (!hasUserData) {
-        console.warn('[upload] Document seems empty or invalid');
-        return NextResponse.json(
-          { error: "Документ кажется пустым или поврежденным. Проверьте что вы загрузили правильный файл." },
-          { status: 400 }
-        );
+      // Проверяем только что PDF валидный (уже проверили выше)
+      // Если текст извлечен - хорошо, если нет - возможно это сканированный документ
+      if (pdfText.length > 0) {
+        console.log(`[upload] PDF text extracted: ${pdfText.length} characters`);
+      } else {
+        console.log('[upload] No text extracted from PDF - possibly scanned document (images only)');
+        // Это нормально для сканированных документов - не блокируем
       }
     }
 
