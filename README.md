@@ -60,6 +60,8 @@ pnpm dev
 
 - [ORGANIZATION_VALIDATION.md](./ORGANIZATION_VALIDATION.md) - 🏢 Проверка организаций по ЕГРЮЛ/Минюст РФ
 - [PROFILE_UPDATE_AND_REGENERATION.md](./PROFILE_UPDATE_AND_REGENERATION.md) - 🔄 Проверка профиля и перегенерация документов
+- [PROFILE_FIELDS_ANALYSIS.md](./PROFILE_FIELDS_ANALYSIS.md) - 📊 Анализ полей профиля пользователя
+- [BOT_TRAINING_UPDATE.md](./BOT_TRAINING_UPDATE.md) - 🤖 Обучение бота для сбора профиля
 - [APPEAL_BOT_FEATURES.md](./APPEAL_BOT_FEATURES.md) - AI бот для обращений
 - [KNOWLEDGE_BASE_GUIDE.md](./KNOWLEDGE_BASE_GUIDE.md) - База знаний профсоюза
 - [BEST_BENEFITS_API.md](./BEST_BENEFITS_API.md) - Интеграция со скидками
