@@ -33,7 +33,8 @@ function extractStructuredDataFromBot(
   const text = confirmationMessage.content;
   
   // ФИО: "1. **ФИО**: Иванов Иван Иванович" или "**ФИО**: Иванов Иван Иванович"
-  const fioPattern = /(?:\d+\.\s*)?\*\*ФИО\*\*[:\s]+([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/;
+  // Поддержка тюркских суффиксов: оглы, кызы, улы, кызы (с маленькой буквы)
+  const fioPattern = /(?:\d+\.\s*)?\*\*ФИО\*\*[:\s]+([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+(?:\s+(?:оглы|улы|кызы))?))?/;
   const fioMatch = text.match(fioPattern);
   if (fioMatch) {
     extracted.lastName = fioMatch[1].trim();
@@ -254,160 +255,132 @@ export async function extractProfileDataFromMessages(
 
   // ========== ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ ==========
   
-  // Extract occupation (род занятий)
-  const occupationPatterns = [
-    /(?:занимаюсь|занимаетесь|работаю|профессия|род занятий)[:\s]+([^\n.!?]{5,100})/i,
-    /(?:я|по профессии)\s+([а-яё\s,]{3,50})(?:\.|,|!|\n)/i,
-  ];
-  for (const pattern of occupationPatterns) {
-    const match = allText.match(pattern);
-    if (match && match[1]) {
-      profileData.occupation = match[1].trim();
-      break;
-    }
-  }
-
-  // Extract aboutMe (о себе)
-  const aboutMePatterns = [
-    /(?:о себе|о вас|вдохновляет|характер)[:\s]+([^\n]{10,500})/i,
-    /(?:я|меня)\s+(?:вдохновляет|интересует|увлекает)[^\n]{10,300}/i,
-  ];
-  for (const pattern of aboutMePatterns) {
-    const match = allText.match(pattern);
-    if (match) {
-      const text = match[0] || match[1];
-      if (text && text.length > 10) {
-        profileData.aboutMe = text.trim();
-        break;
+  // 🔥 НОВЫЙ ПОДХОД: Контекстный анализ диалога (вопрос бота -> ответ пользователя)
+  // Ищем пары: бот спрашивает -> пользователь отвечает
+  
+  for (let i = 0; i < messages.length - 1; i++) {
+    const currentMsg = messages[i];
+    const nextMsg = messages[i + 1];
+    
+    // Пропускаем если это не диалог бот->пользователь
+    if (currentMsg.role !== 'assistant' || nextMsg.role !== 'user') continue;
+    
+    const botQuestion = currentMsg.content.toLowerCase();
+    const userAnswer = nextMsg.content.trim();
+    
+    // ЗАНЯТОСТЬ (employmentStatus)
+    if (botQuestion.includes('занятость') && (botQuestion.includes('работа') || botQuestion.includes('учеба') || botQuestion.includes('пенсия'))) {
+      const answer = userAnswer.toLowerCase();
+      if (answer.includes('работа') || answer.includes('работаю')) {
+        profileData.employmentStatus = 'WORK';
+        console.log('[profile-extraction] ✅ Extracted employmentStatus: WORK');
+      } else if (answer.includes('учеба') || answer.includes('учусь') || answer.includes('студент')) {
+        profileData.employmentStatus = 'STUDY';
+        console.log('[profile-extraction] ✅ Extracted employmentStatus: STUDY');
+      } else if (answer.includes('пенси') || answer.includes('на пенсии') || answer.includes('пенсионер')) {
+        profileData.employmentStatus = 'RETIREMENT';
+        console.log('[profile-extraction] ✅ Extracted employmentStatus: RETIREMENT');
       }
     }
-  }
-
-  // Extract hobbies (хобби и увлечения)
-  const hobbiesPatterns = [
-    /(?:хобби|увлечения|увлекаюсь|интересы)[:\s]+([^\n.!?]{5,300})/i,
-  ];
-  for (const pattern of hobbiesPatterns) {
-    const match = allText.match(pattern);
-    if (match && match[1]) {
-      profileData.hobbies = match[1].trim();
-      break;
-    }
-  }
-
-  // Extract marital status (семейное положение)
-  const maritalPatterns = [
-    /(?:семейное положение|замужем|женат|холост|в браке|не замужем)[:\s]*([^\n.!?]{3,50})/i,
-  ];
-  for (const pattern of maritalPatterns) {
-    const match = allText.match(pattern);
-    if (match) {
-      const status = (match[1] || match[0]).trim().toLowerCase();
-      if (status.includes('замужем') || status.includes('женат') || status.includes('в браке')) {
+    
+    // СЕМЕЙНОЕ ПОЛОЖЕНИЕ (maritalStatus)
+    if (botQuestion.includes('семейное положение') || (botQuestion.includes('женат') && botQuestion.includes('замужем'))) {
+      const answer = userAnswer.toLowerCase();
+      if (answer.includes('замужем') || answer.includes('женат') || answer.includes('в браке')) {
         profileData.maritalStatus = 'MARRIED';
-      } else if (status.includes('холост') || status.includes('не замужем') || status.includes('не женат')) {
+        console.log('[profile-extraction] ✅ Extracted maritalStatus: MARRIED');
+      } else if (answer.includes('холост') || answer.includes('не замужем') || answer.includes('не женат')) {
         profileData.maritalStatus = 'SINGLE';
-      } else if (status.includes('развод')) {
+        console.log('[profile-extraction] ✅ Extracted maritalStatus: SINGLE');
+      } else if (answer.includes('развод')) {
         profileData.maritalStatus = 'DIVORCED';
-      } else if (status.includes('вдов')) {
+        console.log('[profile-extraction] ✅ Extracted maritalStatus: DIVORCED');
+      } else if (answer.includes('вдов')) {
         profileData.maritalStatus = 'WIDOWED';
-      }
-      break;
-    }
-  }
-
-  // Extract spouse info (информация о супруге)
-  const spousePatterns = [
-    /(?:супруг|супруга|муж|жена|партнер)[:\s]+([^\n]{10,200})/i,
-  ];
-  for (const pattern of spousePatterns) {
-    const match = allText.match(pattern);
-    if (match && match[1]) {
-      profileData.spouseInfo = match[1].trim();
-      break;
-    }
-  }
-
-  // Extract children info (информация о детях)
-  if (allText.match(/(?:есть дети|у меня есть|дети|ребенок|сын|дочь)/i)) {
-    profileData.hasChildren = true;
-    
-    const childrenPatterns = [
-      /(?:дети|ребенок|сын|дочь)[:\s]+([^\n]{10,300})/i,
-      /(?:детей|ребенка)\s+(?:зовут|имена|возраст)[:\s]*([^\n]{10,200})/i,
-    ];
-    for (const pattern of childrenPatterns) {
-      const match = allText.match(pattern);
-      if (match && match[1]) {
-        profileData.childrenInfo = match[1].trim();
-        break;
+        console.log('[profile-extraction] ✅ Extracted maritalStatus: WIDOWED');
+      } else if (answer.includes('гражданск')) {
+        profileData.maritalStatus = 'CIVIL_MARRIAGE';
+        console.log('[profile-extraction] ✅ Extracted maritalStatus: CIVIL_MARRIAGE');
       }
     }
     
-    // Extract children birth dates (даты рождения детей)
-    const birthDatePatterns = [
-      /(?:родил[ао]сь|дата рождения|возраст|лет)[:\s]*([^\n]{5,200})/gi,
-      /(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4})/g, // DD.MM.YYYY или DD/MM/YYYY
-      /(\d{1,2})\s+(?:лет|года|год)/gi, // возраст в годах
-    ];
+    // ИНФОРМАЦИЯ О СУПРУГЕ (spouseInfo)
+    if (botQuestion.includes('супруг') && userAnswer.length > 5 && !userAnswer.toLowerCase().includes('нет') && !userAnswer.toLowerCase().includes('одинок')) {
+      profileData.spouseInfo = userAnswer;
+      console.log('[profile-extraction] ✅ Extracted spouseInfo:', userAnswer.substring(0, 50));
+    }
     
-    let birthDatesText = '';
-    for (const pattern of birthDatePatterns) {
-      const matches = allText.matchAll(pattern);
-      for (const match of matches) {
-        if (match[1] || match[0]) {
-          birthDatesText += (match[1] || match[0]) + '; ';
-        }
+    // ЕСТЬ ЛИ ДЕТИ (hasChildren)
+    if (botQuestion.includes('есть ли у вас дети') || botQuestion.includes('дети есть')) {
+      const answer = userAnswer.toLowerCase();
+      if (answer.includes('да') || answer.includes('есть') || answer.match(/^\d+/)) {
+        profileData.hasChildren = true;
+        console.log('[profile-extraction] ✅ Extracted hasChildren: true');
+      } else if (answer.includes('нет')) {
+        profileData.hasChildren = false;
+        console.log('[profile-extraction] ✅ Extracted hasChildren: false');
       }
-      if (birthDatesText) break;
     }
     
-    if (birthDatesText) {
-      profileData.childrenBirthDates = birthDatesText.trim();
-    }
-    
-    // Try to parse structured children data from bot messages
-    // Format: "Имя: Фекла, Дата рождения: 12.05.2015"
-    const childrenStructuredPattern = /(?:имя|ребенка?)[:\s]*([А-ЯЁ][а-яё]+)(?:.*?)(?:дата рождения|родил[ао]сь)[:\s]*(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4})/gi;
-    const childrenMatches = allText.matchAll(childrenStructuredPattern);
-    const childrenArray: Array<{name: string, birthDate: string, gender: string}> = [];
-    
-    for (const match of childrenMatches) {
-      const name = match[1].trim();
-      const dateStr = match[2];
-      
-      // Parse date from DD.MM.YYYY or DD/MM/YYYY to YYYY-MM-DD
-      const dateParts = dateStr.split(/[.\/-]/);
-      if (dateParts.length === 3) {
-        const birthDate = `${dateParts[2]}-${dateParts[1].padStart(2, '0')}-${dateParts[0].padStart(2, '0')}`;
+    // ИНФОРМАЦИЯ О ДЕТЯХ - ИМЯ И ДАТА РОЖДЕНИЯ
+    if ((botQuestion.includes('имя') && botQuestion.includes('дата рождения') && botQuestion.includes('ребенка')) ||
+        (botQuestion.includes('укажите') && botQuestion.includes('ребенка'))) {
+      // Формат: "Рома 01 07 2000" или "Рома, 01.07.2000" или "Рома 01.07.2000"
+      const match = userAnswer.match(/([А-ЯЁ][а-яё]+)\s*,?\s*(\d{1,2})\s*[.\s\/-]?\s*(\d{1,2})\s*[.\s\/-]?\s*(\d{4})/);
+      if (match) {
+        const name = match[1];
+        const day = match[2].padStart(2, '0');
+        const month = match[3].padStart(2, '0');
+        const year = match[4];
+        const birthDate = `${year}-${month}-${day}`;
         const gender = detectGenderByName(name);
         
-        childrenArray.push({
-          name,
-          birthDate,
-          gender,
-        });
+        const childData = { name, birthDate, gender };
+        
+        // Если уже есть дети в массиве, добавляем к ним
+        if (profileData.childrenBirthDates) {
+          try {
+            const existingChildren = JSON.parse(profileData.childrenBirthDates);
+            if (Array.isArray(existingChildren)) {
+              existingChildren.push(childData);
+              profileData.childrenBirthDates = JSON.stringify(existingChildren);
+            } else {
+              profileData.childrenBirthDates = JSON.stringify([childData]);
+            }
+          } catch {
+            profileData.childrenBirthDates = JSON.stringify([childData]);
+          }
+        } else {
+          profileData.childrenBirthDates = JSON.stringify([childData]);
+        }
+        
+        profileData.childrenInfo = (profileData.childrenInfo ? profileData.childrenInfo + '; ' : '') + `${name} (${day}.${month}.${year})`;
+        console.log('[profile-extraction] ✅ Extracted child:', name, birthDate);
       }
     }
     
-    // If we successfully parsed children, save as JSON
-    if (childrenArray.length > 0) {
-      profileData.childrenBirthDates = JSON.stringify(childrenArray);
-      console.log('[profile-extraction] Parsed structured children data:', childrenArray);
+    // ХОББИ И УВЛЕЧЕНИЯ (hobbies)
+    if (botQuestion.includes('хобби') || botQuestion.includes('увлечения')) {
+      if (userAnswer.length > 3 && !userAnswer.toLowerCase().includes('нет') && !userAnswer.toLowerCase().includes('пока нет')) {
+        profileData.hobbies = userAnswer;
+        console.log('[profile-extraction] ✅ Extracted hobbies:', userAnswer.substring(0, 50));
+      }
     }
-  } else if (allText.match(/(?:нет детей|без детей|детей нет)/i)) {
-    profileData.hasChildren = false;
-  }
-
-  // Extract additional info (дополнительная информация)
-  const additionalPatterns = [
-    /(?:дополнительная информация|еще|также|кроме того)[:\s]+([^\n]{10,500})/i,
-  ];
-  for (const pattern of additionalPatterns) {
-    const match = allText.match(pattern);
-    if (match && match[1]) {
-      profileData.additionalInfo = match[1].trim();
-      break;
+    
+    // О СЕБЕ (aboutMe)
+    if ((botQuestion.includes('о себе') || botQuestion.includes('характер')) && botQuestion.includes('вдохновляет')) {
+      if (userAnswer.length > 5 && !userAnswer.toLowerCase().includes('нет') && !userAnswer.toLowerCase().includes('пока нет')) {
+        profileData.aboutMe = userAnswer;
+        console.log('[profile-extraction] ✅ Extracted aboutMe:', userAnswer.substring(0, 50));
+      }
+    }
+    
+    // ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ (additionalInfo)
+    if (botQuestion.includes('еще') && botQuestion.includes('рассказать')) {
+      if (userAnswer.length > 5 && !userAnswer.toLowerCase().includes('нет') && !userAnswer.toLowerCase().includes('пока нет')) {
+        profileData.additionalInfo = userAnswer;
+        console.log('[profile-extraction] ✅ Extracted additionalInfo:', userAnswer.substring(0, 50));
+      }
     }
   }
 
@@ -415,7 +388,8 @@ export async function extractProfileDataFromMessages(
   // Если есть структурированные данные, НЕ перезаписываем их fallback-поиском
   if ((!profileData.firstName || !profileData.lastName) && !hasStructuredData) {
     // Сначала ищем по явным меткам
-    const fioLabelPattern = /(?:\*\*(?:ФИО|Фамилия|Имя)\*\*|ФИО|Фамилия\s+Имя\s+Отчество)[^:\n]*[:\-–]\s*([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/i;
+    // Поддержка тюркских суффиксов: оглы, улы, кызы (с маленькой буквы)
+    const fioLabelPattern = /(?:\*\*(?:ФИО|Фамилия|Имя)\*\*|ФИО|Фамилия\s+Имя\s+Отчество)[^:\n]*[:\-–]\s*([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+(?:\s+(?:оглы|улы|кызы))?))?/i;
     const fioLabelMatch = allText.match(fioLabelPattern);
     
     if (fioLabelMatch) {
@@ -430,7 +404,8 @@ export async function extractProfileDataFromMessages(
       }
     } else {
       // Если не найдено по метке, ищем паттерн, НО исключаем географические названия и служебные слова
-      const fioPattern = /([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+))?/g;
+      // Поддержка тюркских суффиксов
+      const fioPattern = /([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+(?:\s+(?:оглы|улы|кызы))?))?/g;
       const excludeWords = [
         // Географические названия
         'Республика', 'Область', 'Край', 'Округ', 'Регион', 'Город', 'Федерация', 'России', 'Российской',
@@ -743,6 +718,77 @@ function validateExtractedProfile(data: Record<string, any>): Record<string, any
     const org = data.organizationName.trim();
     if (org.length >= 2 && org.length <= 500) {
       validated.organizationName = org;
+    }
+  }
+  
+  // ========== ВАЛИДАЦИЯ ДОПОЛНИТЕЛЬНЫХ ПОЛЕЙ ==========
+  
+  // Валидация employmentStatus
+  if (data.employmentStatus && typeof data.employmentStatus === 'string') {
+    const status = data.employmentStatus.toUpperCase();
+    if (['WORK', 'STUDY', 'RETIREMENT'].includes(status)) {
+      validated.employmentStatus = status;
+    }
+  }
+  
+  // Валидация maritalStatus
+  if (data.maritalStatus && typeof data.maritalStatus === 'string') {
+    const status = data.maritalStatus.toUpperCase();
+    if (['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED', 'CIVIL_MARRIAGE'].includes(status)) {
+      validated.maritalStatus = status;
+    }
+  }
+  
+  // Валидация spouseInfo
+  if (data.spouseInfo && typeof data.spouseInfo === 'string') {
+    const info = data.spouseInfo.trim();
+    if (info.length >= 2 && info.length <= 500) {
+      validated.spouseInfo = info;
+    }
+  }
+  
+  // Валидация hasChildren
+  if (data.hasChildren !== undefined && typeof data.hasChildren === 'boolean') {
+    validated.hasChildren = data.hasChildren;
+  }
+  
+  // Валидация childrenInfo
+  if (data.childrenInfo && typeof data.childrenInfo === 'string') {
+    const info = data.childrenInfo.trim();
+    if (info.length >= 2 && info.length <= 1000) {
+      validated.childrenInfo = info;
+    }
+  }
+  
+  // Валидация childrenBirthDates
+  if (data.childrenBirthDates && typeof data.childrenBirthDates === 'string') {
+    const dates = data.childrenBirthDates.trim();
+    if (dates.length >= 2 && dates.length <= 2000) {
+      validated.childrenBirthDates = dates;
+    }
+  }
+  
+  // Валидация hobbies
+  if (data.hobbies && typeof data.hobbies === 'string') {
+    const hobbies = data.hobbies.trim();
+    if (hobbies.length >= 2 && hobbies.length <= 1000) {
+      validated.hobbies = hobbies;
+    }
+  }
+  
+  // Валидация aboutMe
+  if (data.aboutMe && typeof data.aboutMe === 'string') {
+    const about = data.aboutMe.trim();
+    if (about.length >= 2 && about.length <= 2000) {
+      validated.aboutMe = about;
+    }
+  }
+  
+  // Валидация additionalInfo
+  if (data.additionalInfo && typeof data.additionalInfo === 'string') {
+    const info = data.additionalInfo.trim();
+    if (info.length >= 2 && info.length <= 2000) {
+      validated.additionalInfo = info;
     }
   }
   
