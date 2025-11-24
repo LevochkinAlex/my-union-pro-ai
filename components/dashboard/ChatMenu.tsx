@@ -316,7 +316,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
           {appeals.length > 0 && (
             <>
               <div className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                Обращения
+                Обр.
               </div>
               {appeals.map((appeal) => {
                 const isActive = activeSessionId === appeal.id;
@@ -340,7 +340,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                       <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <span className="flex-1 truncate text-left">Обращение {appeal.publicId}</span>
+                      <span className="flex-1 truncate text-left">№{appeal.publicId}</span>
                       {isHovered && (
                         <div
                           onClick={(e) => {
