@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, memo } from "react";
 import Link from "next/link";
 
 interface Member {
@@ -13,25 +13,35 @@ interface Member {
   } | null;
 }
 
-export default function UnionMembers() {
+function UnionMembersComponent() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
+  const isLoadingRef = useRef(false);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
-    loadMembers();
+    // Загружаем только один раз
+    if (!hasLoadedRef.current && !isLoadingRef.current) {
+      loadMembers();
+    }
   }, []);
 
   const loadMembers = async () => {
+    if (isLoadingRef.current || hasLoadedRef.current) return;
+    
+    isLoadingRef.current = true;
     try {
       const response = await fetch("/api/union-members?limit=5");
       if (response.ok) {
         const data = await response.json();
         setMembers(data.members || []);
+        hasLoadedRef.current = true;
       }
     } catch (error) {
       console.error("Failed to load members:", error);
     } finally {
       setLoading(false);
+      isLoadingRef.current = false;
     }
   };
 
@@ -111,4 +121,7 @@ export default function UnionMembers() {
     </div>
   );
 }
+
+// Мемоизируем компонент, чтобы избежать лишних рендеров
+export default memo(UnionMembersComponent);
 

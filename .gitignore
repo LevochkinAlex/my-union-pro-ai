@@ -54,6 +54,7 @@ check-bot.mjs
 .deploy/
 *.deploy.env
 deploy-config.sh
+SERVER_ACCESS.md
 
 # Uploaded files (но сохраняем структуру папок)
 /public/uploads/news/*

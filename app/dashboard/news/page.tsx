@@ -42,10 +42,7 @@ export default function NewsPage() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
   const isLoadingRef = useRef(false); // Ref для предотвращения дублирования
-
-  useEffect(() => {
-    loadNews();
-  }, []);
+  const loadNewsRef = useRef<(pageNum?: number) => Promise<void>>();
 
   const loadNews = useCallback(async (pageNum = 1) => {
     // Предотвращаем повторные запросы через ref
@@ -81,30 +78,41 @@ export default function NewsPage() {
     }
   }, []);
 
+  // Сохраняем функцию в ref для использования в IntersectionObserver
+  useEffect(() => {
+    loadNewsRef.current = loadNews;
+  }, [loadNews]);
+
+  // Загружаем первую страницу только один раз
+  useEffect(() => {
+    loadNews();
+  }, []);
+
   // Infinite scroll с Intersection Observer
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         // Если элемент виден И есть еще новости И не идет загрузка
-        if (entries[0].isIntersecting && hasMore && !loading && !isLoadingMore) {
+        if (entries[0].isIntersecting && hasMore && !loading && !isLoadingMore && !isLoadingRef.current) {
           const nextPage = page + 1;
           setPage(nextPage);
-          loadNews(nextPage);
+          loadNewsRef.current?.(nextPage);
         }
       },
       { threshold: 0.1 } // Срабатывает когда 10% элемента видно
     );
 
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
     }
 
     return () => {
-      if (observerTarget.current) {
-        observer.unobserve(observerTarget.current);
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
       }
     };
-  }, [hasMore, loading, isLoadingMore, page, loadNews]);
+  }, [hasMore, loading, isLoadingMore, page]); // Убрали loadNews из зависимостей
 
   const handleLikeToggle = async (newsId: string) => {
     try {

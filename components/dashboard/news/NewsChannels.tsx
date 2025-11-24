@@ -1,6 +1,8 @@
 "use client";
 
-export default function NewsChannels() {
+import { memo } from "react";
+
+function NewsChannelsComponent() {
   const channels = [
     {
       id: "1",
@@ -92,4 +94,7 @@ export default function NewsChannels() {
     </div>
   );
 }
+
+// Мемоизируем компонент, чтобы избежать лишних рендеров
+export default memo(NewsChannelsComponent);
 
