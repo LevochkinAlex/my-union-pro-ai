@@ -89,6 +89,45 @@ export async function PUT(request: NextRequest) {
 
     const body = await request.json();
 
+    // Валидация возраста детей (до 18 лет включительно)
+    if (body.childrenBirthDates) {
+      try {
+        const children = JSON.parse(body.childrenBirthDates);
+        if (Array.isArray(children)) {
+          const today = new Date();
+          for (const child of children) {
+            if (child.birthDate) {
+              const birthDate = new Date(child.birthDate);
+              if (isNaN(birthDate.getTime())) {
+                return NextResponse.json(
+                  { error: `Неверный формат даты рождения для ребенка: ${child.name || "неизвестно"}` },
+                  { status: 400 }
+                );
+              }
+              
+              let age = today.getFullYear() - birthDate.getFullYear();
+              const monthDiff = today.getMonth() - birthDate.getMonth();
+              if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+              }
+              
+              if (age > 18) {
+                return NextResponse.json(
+                  { error: `Возраст ребенка "${child.name || "неизвестно"}" не может быть больше 18 лет. Текущий возраст: ${age} лет` },
+                  { status: 400 }
+                );
+              }
+            }
+          }
+        }
+      } catch (error) {
+        // Если не удалось распарсить JSON, пропускаем валидацию (может быть пустая строка)
+        if (body.childrenBirthDates.trim() !== "") {
+          console.error("[additional-info] Failed to parse childrenBirthDates:", error);
+        }
+      }
+    }
+
     const employmentStatus = normalizeString(body.employmentStatus);
     const hobbies = normalizeString(body.hobbies);
     const aboutMe = normalizeString(body.aboutMe);

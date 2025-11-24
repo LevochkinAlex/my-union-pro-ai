@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import clsx from "clsx";
@@ -54,6 +54,48 @@ export default function NewsCard({
   const router = useRouter();
   const [showComments, setShowComments] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [localViewCount, setLocalViewCount] = useState(post.viewCount);
+  const cardRef = useRef<HTMLElement>(null);
+  const hasIncrementedView = useRef(false);
+
+  // Отслеживание видимости карточки для инкремента просмотров
+  useEffect(() => {
+    if (!cardRef.current || hasIncrementedView.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          // Когда карточка становится видимой (более 50% в видимой области)
+          if (entry.isIntersecting && !hasIncrementedView.current) {
+            hasIncrementedView.current = true;
+            
+            // Увеличиваем счётчик просмотров
+            fetch(`/api/news/${post.id}/view`, {
+              method: "POST",
+            })
+              .then((res) => res.json())
+              .then((data) => {
+                if (data.viewCount) {
+                  setLocalViewCount(data.viewCount);
+                }
+              })
+              .catch((err) => {
+                console.error("Failed to increment view count:", err);
+              });
+          }
+        });
+      },
+      {
+        threshold: 0.5, // Срабатывает когда 50% карточки видно
+      }
+    );
+
+    observer.observe(cardRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [post.id]);
 
   // Функция для извлечения текста из HTML
   const getTextFromHTML = (html: string) => {
@@ -114,7 +156,7 @@ export default function NewsCard({
       : post.author.email;
 
   return (
-    <article className="rounded-xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
+    <article ref={cardRef} className="rounded-xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
       {/* Header */}
       <div className="p-4 sm:p-6">
         <div className="flex items-center gap-3 mb-4">
@@ -327,7 +369,7 @@ export default function NewsCard({
                 d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
               />
             </svg>
-            <span>{post.viewCount.toLocaleString()}</span>
+            <span>{localViewCount.toLocaleString()}</span>
           </div>
         </div>
       </div>

@@ -127,6 +127,7 @@ export default function ProfilePage() {
   const [children, setChildren] = useState<Child[]>([]);
   const [awards, setAwards] = useState<Award[]>([]);
   const [training, setTraining] = useState<Training[]>([]);
+  const [childErrors, setChildErrors] = useState<Record<number, string>>({});
   
   // Данные о членстве
   const [membershipData, setMembershipData] = useState<{
@@ -170,27 +171,53 @@ export default function ProfilePage() {
   // Удалить ребенка
   const removeChild = (index: number) => {
     setChildren(children.filter((_, i) => i !== index));
+    // Удаляем ошибку для удаленного ребенка
+    const updatedErrors = { ...childErrors };
+    delete updatedErrors[index];
+    // Сдвигаем индексы ошибок для оставшихся детей
+    const newErrors: Record<number, string> = {};
+    Object.keys(updatedErrors).forEach((key) => {
+      const oldIndex = parseInt(key);
+      if (oldIndex > index) {
+        newErrors[oldIndex - 1] = updatedErrors[oldIndex];
+      } else if (oldIndex < index) {
+        newErrors[oldIndex] = updatedErrors[oldIndex];
+      }
+    });
+    setChildErrors(newErrors);
   };
   
   // Обновить данные ребенка
   const updateChild = (index: number, field: keyof Child, value: string) => {
     const updatedChildren = [...children];
+    const updatedErrors = { ...childErrors };
+    
     updatedChildren[index] = {
       ...updatedChildren[index],
       [field]: value,
     };
     
-    // Если обновляется дата рождения, пересчитываем возраст
+    // Если обновляется дата рождения, пересчитываем возраст и проверяем
     if (field === "birthDate" && value) {
       try {
         const birthDate = new Date(value);
-        updatedChildren[index].age = calculateAge(birthDate);
+        const age = calculateAge(birthDate);
+        updatedChildren[index].age = age;
+        
+        // Проверка возраста: до 18 лет включительно
+        if (age > 18) {
+          updatedErrors[index] = "Возраст ребенка не может быть больше 18 лет";
+        } else {
+          delete updatedErrors[index];
+        }
       } catch (error) {
         console.error("Invalid date:", error);
+        updatedErrors[index] = "Неверный формат даты";
       }
     }
     
     setChildren(updatedChildren);
+    setChildErrors(updatedErrors);
   };
 
   // Добавить награду
@@ -304,13 +331,24 @@ export default function ProfilePage() {
           try {
             const parsedChildren = JSON.parse(data.childrenBirthDates);
             if (Array.isArray(parsedChildren)) {
-              const childrenWithAge = parsedChildren.map((child: any) => ({
-                name: child.name || "",
-                birthDate: child.birthDate || "",
-                gender: child.gender || "",
-                age: child.birthDate ? calculateAge(new Date(child.birthDate)) : undefined,
-              }));
+              const errors: Record<number, string> = {};
+              const childrenWithAge = parsedChildren.map((child: any, index: number) => {
+                const age = child.birthDate ? calculateAge(new Date(child.birthDate)) : undefined;
+                // Проверяем возраст при загрузке
+                if (age !== undefined && age > 18) {
+                  errors[index] = "Возраст ребенка не может быть больше 18 лет";
+                }
+                return {
+                  name: child.name || "",
+                  birthDate: child.birthDate || "",
+                  gender: child.gender || "",
+                  age,
+                };
+              });
               setChildren(childrenWithAge);
+              if (Object.keys(errors).length > 0) {
+                setChildErrors(errors);
+              }
             }
           } catch (error) {
             console.error("Failed to parse children data:", error);
@@ -593,6 +631,30 @@ export default function ProfilePage() {
 
   const handleAdditionalInfoSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Проверка возраста детей перед сохранением
+    const hasErrors = children.some((child, index) => {
+      if (child.birthDate) {
+        try {
+          const birthDate = new Date(child.birthDate);
+          const age = calculateAge(birthDate);
+          if (age > 18) {
+            setChildErrors(prev => ({ ...prev, [index]: "Возраст ребенка не может быть больше 18 лет" }));
+            return true;
+          }
+        } catch (error) {
+          setChildErrors(prev => ({ ...prev, [index]: "Неверный формат даты" }));
+          return true;
+        }
+      }
+      return false;
+    });
+    
+    if (hasErrors) {
+      setMessage({ type: "error", text: "Пожалуйста, исправьте ошибки в данных о детях" });
+      return;
+    }
+    
     setSavingAdditionalInfo(true);
     try {
       // Конвертируем человекочитаемое значение обратно в enum
@@ -1111,8 +1173,15 @@ export default function ProfilePage() {
                               value={child.birthDate}
                               onChange={(e) => updateChild(index, "birthDate", e.target.value)}
                               max={new Date().toISOString().split('T')[0]}
-                              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                              className={`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 dark:bg-gray-800 dark:text-white ${
+                                childErrors[index]
+                                  ? "border-red-500 bg-red-50 text-gray-900 focus:border-red-500 focus:ring-red-500 dark:border-red-500 dark:bg-red-900/20"
+                                  : "border-gray-300 bg-white text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600"
+                              }`}
                             />
+                            {childErrors[index] && (
+                              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{childErrors[index]}</p>
+                            )}
                           </div>
                           
                           <div className="flex items-center gap-2">

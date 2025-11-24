@@ -280,9 +280,9 @@ export async function extractProfileDataFromMessages(
       } else if (answer.includes('пенси') || answer.includes('на пенсии') || answer.includes('пенсионер')) {
         profileData.employmentStatus = 'RETIREMENT';
         console.log('[profile-extraction] ✅ Extracted employmentStatus: RETIREMENT');
-      }
     }
-    
+  }
+
     // СЕМЕЙНОЕ ПОЛОЖЕНИЕ (maritalStatus)
     if (botQuestion.includes('семейное положение') || (botQuestion.includes('женат') && botQuestion.includes('замужем'))) {
       const answer = userAnswer.toLowerCase();
@@ -308,8 +308,8 @@ export async function extractProfileDataFromMessages(
     if (botQuestion.includes('супруг') && userAnswer.length > 5 && !userAnswer.toLowerCase().includes('нет') && !userAnswer.toLowerCase().includes('одинок')) {
       profileData.spouseInfo = userAnswer;
       console.log('[profile-extraction] ✅ Extracted spouseInfo:', userAnswer.substring(0, 50));
-    }
-    
+  }
+
     // ЕСТЬ ЛИ ДЕТИ (hasChildren)
     if (botQuestion.includes('есть ли у вас дети') || botQuestion.includes('дети есть')) {
       const answer = userAnswer.toLowerCase();
@@ -364,7 +364,7 @@ export async function extractProfileDataFromMessages(
       if (userAnswer.length > 3 && !userAnswer.toLowerCase().includes('нет') && !userAnswer.toLowerCase().includes('пока нет')) {
         profileData.hobbies = userAnswer;
         console.log('[profile-extraction] ✅ Extracted hobbies:', userAnswer.substring(0, 50));
-      }
+    }
     }
     
     // О СЕБЕ (aboutMe)
@@ -373,8 +373,8 @@ export async function extractProfileDataFromMessages(
         profileData.aboutMe = userAnswer;
         console.log('[profile-extraction] ✅ Extracted aboutMe:', userAnswer.substring(0, 50));
       }
-    }
-    
+  }
+
     // ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ (additionalInfo)
     if (botQuestion.includes('еще') && botQuestion.includes('рассказать')) {
       if (userAnswer.length > 5 && !userAnswer.toLowerCase().includes('нет') && !userAnswer.toLowerCase().includes('пока нет')) {

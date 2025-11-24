@@ -233,12 +233,20 @@ export async function generatePromoCard(data: PromoCardData): Promise<{ blob: Bl
     // Картинка скидки (если есть)
     if (imageUrl) {
       try {
+        // Используем прокси для обхода CORS
+        let imageSrc = imageUrl;
+        if (!imageUrl.startsWith('data:') && !imageUrl.startsWith('/')) {
+          imageSrc = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+        }
+        
         const img = new Image();
-        img.crossOrigin = 'anonymous';
+        if (!imageUrl.startsWith('data:')) {
+          img.crossOrigin = 'anonymous';
+        }
         await new Promise((resolve, reject) => {
           img.onload = resolve;
           img.onerror = () => resolve(null); // Игнорируем ошибки загрузки
-          img.src = imageUrl;
+          img.src = imageSrc;
         });
         
         if (img.complete && img.naturalWidth > 0) {
