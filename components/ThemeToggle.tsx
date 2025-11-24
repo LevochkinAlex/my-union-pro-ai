@@ -16,16 +16,23 @@ export default function ThemeToggle({ collapsed = false }: ThemeToggleProps) {
   }, []);
 
   useEffect(() => {
-    console.log('[ThemeToggle] Theme changed:', { theme, resolvedTheme });
+    if (!mounted) return;
     
-    // Проверяем, что класс правильно применяется на html
-    const htmlClass = document.documentElement.classList.contains("dark") ? "dark" : "light";
-    console.log('[ThemeToggle] HTML class:', htmlClass, 'Expected:', resolvedTheme || theme);
+    const currentTheme = resolvedTheme || theme;
+    const shouldBeDark = currentTheme === "dark";
+    const htmlHasDark = document.documentElement.classList.contains("dark");
     
-    if (htmlClass !== (resolvedTheme || theme)) {
-      console.warn('[ThemeToggle] Mismatch! HTML class is', htmlClass, 'but theme is', resolvedTheme || theme);
+    console.log('[ThemeToggle] Theme changed:', { theme, resolvedTheme, currentTheme, shouldBeDark, htmlHasDark });
+    
+    // Синхронизируем класс на HTML с темой
+    if (shouldBeDark && !htmlHasDark) {
+      console.log('[ThemeToggle] Adding dark class');
+      document.documentElement.classList.add("dark");
+    } else if (!shouldBeDark && htmlHasDark) {
+      console.log('[ThemeToggle] Removing dark class');
+      document.documentElement.classList.remove("dark");
     }
-  }, [theme, resolvedTheme]);
+  }, [theme, resolvedTheme, mounted]);
 
   const handleToggle = () => {
     if (!setTheme) {
@@ -44,38 +51,23 @@ export default function ThemeToggle({ collapsed = false }: ThemeToggleProps) {
     
     const newTheme = actualTheme === "dark" ? "light" : "dark";
     
-    console.log('[ThemeToggle] Before toggle:', { 
+    console.log('[ThemeToggle] Toggling theme:', { 
       currentTheme, 
       actualTheme, 
       newTheme, 
       theme, 
-      resolvedTheme,
-      htmlHasDark: document.documentElement.classList.contains("dark")
+      resolvedTheme
     });
     
-    // Явно устанавливаем тему, не "system"
-    setTheme(newTheme);
+    // Применяем класс сразу, до вызова setTheme
+    if (newTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
     
-    // Проверяем через небольшую задержку, что класс применился
-    setTimeout(() => {
-      const htmlHasDark = document.documentElement.classList.contains("dark");
-      console.log('[ThemeToggle] After toggle:', { 
-        newTheme, 
-        htmlHasDark, 
-        expectedDark: newTheme === "dark",
-        match: htmlHasDark === (newTheme === "dark")
-      });
-      
-      // Если класс не применился, применяем вручную
-      if (htmlHasDark !== (newTheme === "dark")) {
-        console.warn('[ThemeToggle] Class mismatch! Manually applying class...');
-        if (newTheme === "dark") {
-          document.documentElement.classList.add("dark");
-        } else {
-          document.documentElement.classList.remove("dark");
-        }
-      }
-    }, 100);
+    // Устанавливаем тему
+    setTheme(newTheme);
   };
 
   if (typeof window === 'undefined' || !mounted) {
