@@ -128,7 +128,7 @@ export async function fetchBestBenefitsDiscounts(
 ): Promise<DiscountSearchResult> {
   const sanitizedParams = {
     ...params,
-    limit: params.limit ?? 15,
+    limit: params.limit ?? 20, // Увеличиваем с 15 до 20 для соответствия клиенту
     page: params.page ?? 1,
   };
 
@@ -150,7 +150,7 @@ export async function fetchBestBenefitsDiscounts(
   if (USE_REAL_API) {
     try {
       const remoteData = await fetchFromRemote(sanitizedParams);
-      const result = normalizeResponse(remoteData, sanitizedParams, { source: "remote", fetchedAt: new Date().toISOString() });
+      const result = await normalizeResponse(remoteData, sanitizedParams, { source: "remote", fetchedAt: new Date().toISOString() });
       
       // Обогащаем список городов из кэша для фильтра (только если кэш уже есть)
       // Загрузка всех городов делается в фоне, чтобы не блокировать основной запрос
@@ -183,14 +183,14 @@ export async function fetchBestBenefitsDiscounts(
       console.error("[best-benefits] Real API fetch failed:", error);
       // Fallback to sample data if real API fails
       const fallbackData = await fetchFromSample();
-      return normalizeResponse(fallbackData, sanitizedParams, { source: "fallback", fetchedAt: new Date().toISOString() });
+      return await normalizeResponse(fallbackData, sanitizedParams, { source: "fallback", fetchedAt: new Date().toISOString() });
     }
   }
 
   // Use sample data by default (for testing)
   // console.log("[best-benefits] Using sample data (USE_REAL_BB_API not enabled)");
   const fallbackData = await fetchFromSample();
-  return normalizeResponse(fallbackData, sanitizedParams, { source: "fallback", fetchedAt: new Date().toISOString() });
+  return await normalizeResponse(fallbackData, sanitizedParams, { source: "fallback", fetchedAt: new Date().toISOString() });
 }
 
 async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefitsResponse> {
@@ -299,16 +299,18 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
     const searchParams = new URLSearchParams();
     searchParams.set("query", params.search.trim());
     
-    // Для поиска можно передать город (название, не ID)
-    if (params.cityName) {
-      searchParams.set("city", params.cityName);
-    }
+    // ⚠️ НЕ применяем фильтр по городу при поиске
+    // API поиска вернет все релевантные скидки, включая глобальные
+    // Фильтрация по городу (если нужна) произойдет на клиенте
+    // if (params.cityName) {
+    //   searchParams.set("city", params.cityName);
+    // }
     
     if (params.page) searchParams.set("page", String(params.page));
     if (params.limit) searchParams.set("per_page", String(params.limit));
 
     const url = `${searchUrl}?${searchParams.toString()}`;
-    // console.log("[best-benefits] Using /search endpoint:", url);
+    console.log("[best-benefits] Using /search endpoint:", url);
 
     const response = await fetch(url, {
       method: "GET",
@@ -322,7 +324,16 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
 
     if (response.ok) {
       const data = (await response.json()) as BestBenefitsResponse;
-      // console.log("[best-benefits] Fetched", data?.data?.length ?? 0, "discounts from /search");
+      console.log("[best-benefits] Search результаты:", {
+        query: params.search,
+        found: data?.data?.length ?? 0,
+        total: data?.meta?.total,
+        page: data?.meta?.current_page,
+        lastPage: data?.meta?.last_page,
+        hasMore: data?.meta?.current_page && data?.meta?.last_page 
+          ? data?.meta?.current_page < data?.meta?.last_page 
+          : false,
+      });
       return data;
     } else {
       console.warn("[best-benefits] /search endpoint failed, falling back to /products");
@@ -353,7 +364,7 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
   if (params.page) searchParams.set("page", String(params.page));
 
   const url = `${API_BASE_URL}?${searchParams.toString()}`;
-  // console.log("[best-benefits] Fetching from API:", url);
+  console.log("[best-benefits] Fetching from API:", url);
 
   const response = await fetch(url, {
     method: "GET",
@@ -411,25 +422,40 @@ async function fetchFromSample(): Promise<BestBenefitsResponse> {
   }
 }
 
-function normalizeResponse(
+async function normalizeResponse(
   raw: BestBenefitsResponse,
   params: DiscountSearchParams,
   context: FetchContext
-): DiscountSearchResult {
+): Promise<DiscountSearchResult> {
   const rawDiscounts = raw?.data ?? [];
 
   const discounts: DiscountItem[] = rawDiscounts.map((discount) => normalizeDiscount(discount));
   
-  // Извлекаем города и категории из ВСЕХ загруженных скидок (до фильтрации)
-  // Это нужно, чтобы в фильтре показывались все доступные города, даже если они отфильтрованы
+  // Извлекаем категории из ВСЕХ загруженных скидок (до фильтрации)
   const allCategories = extractCategories(discounts);
-  const allCities = extractCities(discounts);
+  
+  // ⚠️ Для городов: если это поиск, используем полный кэшированный список всех городов,
+  // а не только города из результатов поиска (т.к. поиск может вернуть глобальные скидки без городов)
+  let allCities: DiscountCity[];
+  if (params.search && USE_REAL_API) {
+    // При поиске берем ВСЕ города из кэша, чтобы фильтр показывал правильные счетчики
+    try {
+      allCities = await fetchAllCities();
+    } catch (error) {
+      console.warn("[best-benefits] Failed to fetch cached cities for search, using cities from results:", error);
+      allCities = extractCities(discounts);
+    }
+  } else {
+    // Для обычных запросов берем города из текущих результатов
+    allCities = extractCities(discounts);
+  }
   
   // Apply all filters for fallback data
   let filtered = discounts;
   
   // Filter by city - ВАЖНО: фильтруем строго по ID города + включаем глобальные скидки
-  if (params.cityId) {
+  // ⚠️ НЕ фильтруем по городу, если это поиск - показываем все результаты
+  if (params.cityId && !params.search) {
     // Находим название выбранного города для логирования
     const selectedCityName = discounts
       .flatMap(d => d.cities)
@@ -479,8 +505,9 @@ function normalizeResponse(
     );
   }
   
-  // Filter by search
-  if (params.search) {
+  // Filter by search - только для локальных данных (fallback)
+  // Если данные пришли из remote API с поиском, то API уже выполнил поиск
+  if (params.search && context.source !== "remote") {
     const searchLower = params.search.toLowerCase();
     filtered = filtered.filter(
       (discount) =>

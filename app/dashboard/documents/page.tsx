@@ -161,10 +161,10 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Мои документы</h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
+    <div className="space-y-6 md:space-y-8">
+      <div className="mb-6 md:mb-8">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white md:text-3xl">Мои документы</h1>
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 md:text-base">
           Здесь хранятся все ваши документы: заявления, обращения и другие файлы
         </p>
       </div>
@@ -176,9 +176,9 @@ export default function DocumentsPage() {
       )}
 
       {documents.length === 0 ? (
-        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-700 dark:bg-gray-800">
+        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800 md:p-12">
           <svg
-            className="mx-auto h-12 w-12 text-gray-400"
+            className="mx-auto h-10 w-10 text-gray-400 md:h-12 md:w-12"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -190,10 +190,10 @@ export default function DocumentsPage() {
               d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
             />
           </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">
+          <h3 className="mt-4 text-base font-medium text-gray-900 dark:text-white md:text-lg">
             Документов пока нет
           </h3>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 md:text-sm">
             Заполните профиль через AI чат, чтобы система сгенерировала ваши заявления
           </p>
         </div>
@@ -202,41 +202,41 @@ export default function DocumentsPage() {
           {documents.map((doc) => (
             <div
               key={doc.id}
-              className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
+              className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800 md:p-6"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-white md:text-lg">
                       {doc.title}
                     </h3>
                     {getStatusBadge(doc.status)}
                   </div>
-                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  <p className="mt-1 text-xs text-gray-600 dark:text-gray-400 md:text-sm">
                     {getTypeLabel(doc.type)}
                   </p>
                   {doc.description && (
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 md:text-sm">
                       {doc.description}
                     </p>
                   )}
-                  <div className="mt-4 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-gray-400">
-                    <span>Создан: {formatDate(doc.createdAt)}</span>
-                    <span>•</span>
-                    <span>Размер: {formatFileSize(doc.fileSize)}</span>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400 md:mt-4 md:gap-4">
+                    <span className="whitespace-nowrap">Создан: {formatDate(doc.createdAt)}</span>
+                    <span className="hidden md:inline">•</span>
+                    <span className="whitespace-nowrap">Размер: {formatFileSize(doc.fileSize)}</span>
                     {doc.fileName && (
                       <>
-                        <span>•</span>
-                        <span>{doc.fileName}</span>
+                        <span className="hidden md:inline">•</span>
+                        <span className="truncate max-w-full md:max-w-xs">{doc.fileName}</span>
                       </>
                     )}
                   </div>
                 </div>
-                <div className="ml-4 flex flex-col gap-2">
+                <div className="flex flex-col gap-2 md:ml-4 md:flex-shrink-0">
                   {doc.filePath && (
                     <button
                       onClick={() => handleDownload(doc.id, doc.fileName)}
-                      className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                     >
                       <svg
                         className="h-4 w-4"
@@ -279,10 +279,10 @@ export default function DocumentsPage() {
                           alert("Не удалось скачать подписанное заявление");
                         }
                       }}
-                      className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                     >
                       <svg
-                        className="h-4 w-4"
+                        className="h-4 w-4 flex-shrink-0"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -294,7 +294,8 @@ export default function DocumentsPage() {
                           d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                         />
                       </svg>
-                      Скачать подписанное заявление
+                      <span className="hidden md:inline">Скачать подписанное заявление</span>
+                      <span className="md:hidden">Подписанное</span>
                     </button>
                   )}
                 </div>

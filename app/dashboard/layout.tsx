@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/dashboard/Sidebar";
 import MiniChatWrapper from "@/components/dashboard/MiniChatWrapper";
+import MobileLayout from "@/components/dashboard/MobileLayout";
 
 export default async function DashboardLayout({
   children,
@@ -107,7 +108,14 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
-      {/* Sidebar */}
+      {/* Mobile Header and Menu */}
+      <MobileLayout
+        items={menuItems}
+        userInitial={session.user?.name?.charAt(0).toUpperCase() || "U"}
+        avatarUrl={user?.avatarUrl || null}
+      />
+
+      {/* Desktop Sidebar */}
       <Sidebar
         items={menuItems}
         userInitial={session.user?.name?.charAt(0).toUpperCase() || "U"}
@@ -117,7 +125,7 @@ export default async function DashboardLayout({
       {/* Main content */}
       <div id="main-content" className="flex flex-col flex-1 md:pl-64 transition-all duration-300">
         <main className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden">
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto pt-16 md:pt-0">
             <div className="px-4 py-8 sm:px-8 lg:px-12 h-full">
               {children}
             </div>

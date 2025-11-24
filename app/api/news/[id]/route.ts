@@ -13,6 +13,16 @@ export async function GET(
     const resolvedParams = await Promise.resolve(params);
     const { id } = resolvedParams;
 
+    // Увеличиваем счётчик просмотров
+    await prisma.newsPost.update({
+      where: { id },
+      data: {
+        viewCount: {
+          increment: 1
+        }
+      }
+    });
+
     const newsPost = await prisma.newsPost.findUnique({
       where: { id },
       include: {

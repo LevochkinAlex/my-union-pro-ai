@@ -84,6 +84,13 @@ export default function DiscountsClient({
     ).filter(Boolean);
   });
   const [isSyncing, setIsSyncing] = useState(false);
+  const [searchInput, setSearchInput] = useState(filters.search); // Локальное состояние для поля ввода
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Синхронизируем searchInput с filters.search (при сбросе фильтров)
+  useEffect(() => {
+    setSearchInput(filters.search);
+  }, [filters.search]);
 
   const hasActiveFilters = useMemo(() => {
     return (
@@ -147,12 +154,27 @@ export default function DiscountsClient({
 
       try {
         const params = new URLSearchParams();
+        
+        // При поиске НЕ добавляем cityId в параметры запроса
+        const isSearching = nextFilters.search && nextFilters.search.trim().length > 0;
+        
         if (nextFilters.search) params.set("search", nextFilters.search);
-        if (nextFilters.cityId) params.set("cityId", String(nextFilters.cityId));
+        if (!isSearching && nextFilters.cityId) params.set("cityId", String(nextFilters.cityId));
         if (nextFilters.categoryIds.length > 0) params.set("categoryIds", nextFilters.categoryIds.join(","));
         if (nextFilters.premiumOnly) params.set("premiumOnly", "1");
         params.set("page", String(nextFilters.page));
         params.set("limit", "20"); // Загружаем по 20 за раз для бесконечного скролла
+        
+        // Логируем параметры поиска
+        console.log("[DiscountsClient] Поиск с параметрами:", {
+          search: nextFilters.search,
+          cityId: nextFilters.cityId,
+          cityIdInRequest: !isSearching && nextFilters.cityId ? nextFilters.cityId : null,
+          isSearching: isSearching,
+          categoryIds: nextFilters.categoryIds,
+          page: nextFilters.page,
+          url: `/api/discounts?${params.toString()}`
+        });
         if (nextFilters.view && nextFilters.view !== "all") {
           params.set("view", nextFilters.view);
           const favList = listOverride?.favorites ?? favorites;
@@ -197,6 +219,38 @@ export default function DiscountsClient({
         }
 
         const payload = (await response.json()) as DiscountSearchResult;
+        
+        // Логируем полученные результаты
+        console.log("[DiscountsClient] Получены результаты:", {
+          search: nextFilters.search,
+          found: payload.discounts.length,
+          total: payload.meta.total,
+          hasMore: payload.meta.hasMore,
+          page: payload.meta.page,
+          source: payload.source,
+          cities: payload.cities?.length,
+          categories: payload.categories?.length
+        });
+        
+        // Если поиск вернул результаты, но discounts пустой - логируем проблему
+        if (nextFilters.search && payload.meta.total > 0 && payload.discounts.length === 0) {
+          console.error("[DiscountsClient] ❌ Проблема: API вернул total > 0, но discounts пустой!", {
+            total: payload.meta.total,
+            discounts: payload.discounts,
+            meta: payload.meta
+          });
+        }
+        
+        // Логируем первую скидку для отладки
+        if (payload.discounts.length > 0 && nextFilters.search) {
+          console.log("[DiscountsClient] Первая найденная скидка:", {
+            id: payload.discounts[0].id,
+            title: payload.discounts[0].title,
+            cities: payload.discounts[0].cities,
+            mainCategory: payload.discounts[0].mainCategory
+          });
+        }
+        
         setData(payload);
         
         if (append) {
@@ -346,7 +400,24 @@ export default function DiscountsClient({
   }, [filters, isLoadingMore, hasMore, isLoading, fetchDiscounts]);
 
   const updateFilters = (updates: Partial<FilterState>) => {
-    const next = { ...filters, ...updates, page: 1 }; // Сбрасываем на первую страницу
+    // При поиске сбрасываем фильтр по городу, чтобы показать все результаты
+    const isSearching = updates.search !== undefined && updates.search.trim().length > 0;
+    const next = { 
+      ...filters, 
+      ...updates, 
+      page: 1, // Сбрасываем на первую страницу
+      // Сбрасываем cityId при поиске, чтобы не фильтровать результаты
+      ...(isSearching ? { cityId: null } : {})
+    };
+    
+    console.log("[updateFilters] Обновление фильтров:", {
+      isSearching,
+      searchValue: updates.search,
+      oldCityId: filters.cityId,
+      newCityId: next.cityId,
+      willResetCity: isSearching
+    });
+    
     setFilters(next);
     setAllDiscounts([]); // Очищаем накопленные скидки
     isLoadingMoreRef.current = false; // Сбрасываем флаг загрузки при изменении фильтров
@@ -442,6 +513,12 @@ export default function DiscountsClient({
   };
 
   const handleUseGeolocation = async () => {
+    // Проверяем поддержку геолокации
+    if (!navigator.geolocation) {
+      alert("Ваш браузер не поддерживает геолокацию.");
+      return;
+    }
+
     try {
       const position = await getCurrentPosition();
       const nextFilters = {
@@ -455,9 +532,31 @@ export default function DiscountsClient({
       };
       setFilters(nextFilters);
       fetchDiscounts(nextFilters);
-    } catch (error) {
-      console.error("Geolocation error:", error);
-      alert("Не удалось определить местоположение. Проверьте разрешения браузера.");
+    } catch (error: any) {
+      // Обрабатываем разные типы ошибок геолокации
+      let errorMessage = "Не удалось определить местоположение.";
+      
+      if (error.code) {
+        switch (error.code) {
+          case 1: // PERMISSION_DENIED
+            errorMessage = "Вы запретили доступ к геолокации. Разрешите доступ в настройках браузера.";
+            break;
+          case 2: // POSITION_UNAVAILABLE
+            errorMessage = "Не удалось определить местоположение. Проверьте подключение к интернету.";
+            break;
+          case 3: // TIMEOUT
+            errorMessage = "Время ожидания истекло. Попробуйте еще раз.";
+            break;
+        }
+      }
+      
+      console.error("Geolocation error:", {
+        code: error.code,
+        message: error.message,
+        error: error
+      });
+      
+      alert(errorMessage);
     }
   };
 
@@ -603,8 +702,21 @@ export default function DiscountsClient({
           <input
             type="text"
             placeholder="Поиск по скидкам..."
-            value={filters.search}
-            onChange={(e) => updateFilters({ search: e.target.value, page: 1 })}
+            value={searchInput}
+            onChange={(e) => {
+              const value = e.target.value;
+              setSearchInput(value); // Обновляем локальное состояние немедленно
+              
+              // Отменяем предыдущий таймер
+              if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+              }
+              
+              // Устанавливаем новый таймер для debounce (500ms)
+              searchTimeoutRef.current = setTimeout(() => {
+                updateFilters({ search: value, page: 1 });
+              }, 500);
+            }}
             className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 pl-10 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
           />
           <svg

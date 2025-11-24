@@ -387,6 +387,9 @@ export default function DiscountDetailPage() {
                 src={discount.imageUrl}
                 alt={discount.title}
                 className="w-full h-auto max-h-96 object-contain"
+                loading="lazy"
+                decoding="async"
+                fetchPriority="high"
               />
               {/* Badges */}
               <div className="absolute right-2 top-2 flex flex-col gap-2 sm:right-4 sm:top-4">

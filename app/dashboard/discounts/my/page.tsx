@@ -265,35 +265,13 @@ export default function MyDiscountsPage() {
   return (
     <div className="h-full">
       {/* Header */}
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white md:text-3xl">
-            Мои скидки и льготы
-          </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Управляйте вашими активированными скидками и избранным
-          </p>
-        </div>
-        <button
-          onClick={() => syncWithBestBenefits(true)} // true = форсировать синхронизацию
-          disabled={isSyncing}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-          title="Синхронизировать с BestBenefits"
-        >
-          {isSyncing ? (
-            <>
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-              <span>Синхронизация...</span>
-            </>
-          ) : (
-            <>
-              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-              </svg>
-              <span>Синхронизировать</span>
-            </>
-          )}
-        </button>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white md:text-3xl">
+          Мои скидки и льготы
+        </h1>
+        <p className="mt-2 text-gray-600 dark:text-gray-400">
+          Управляйте вашими активированными скидками и избранным
+        </p>
       </div>
 
       {/* Tabs */}
@@ -374,6 +352,9 @@ export default function MyDiscountsPage() {
                       src={discount.imageUrl}
                       alt={discount.title}
                       className="w-full h-auto object-contain"
+                      loading="lazy"
+                      decoding="async"
+                      fetchPriority="low"
                     />
                   </div>
                 )}

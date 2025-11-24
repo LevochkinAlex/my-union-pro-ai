@@ -11,6 +11,7 @@ interface NewsPost {
   content: string;
   coverImage: string | null;
   publishedAt: string | null;
+  viewCount: number;
   author: {
     id: string;
     firstName: string | null;
@@ -50,6 +51,36 @@ export default function NewsCard({
 }: NewsCardProps) {
   const router = useRouter();
   const [showComments, setShowComments] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Функция для извлечения текста из HTML
+  const getTextFromHTML = (html: string) => {
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    return div.textContent || div.innerText || "";
+  };
+
+  // Проверяем, нужно ли сокращение (больше 300 символов)
+  const textContent = getTextFromHTML(post.content);
+  const needsTruncation = textContent.length > 300;
+
+  // Функция для сокращения HTML контента
+  const getTruncatedHTML = (html: string, maxLength: number) => {
+    const text = getTextFromHTML(html);
+    if (text.length <= maxLength) return html;
+    
+    // Обрезаем текст
+    const truncatedText = text.substring(0, maxLength);
+    // Ищем последний пробел чтобы не обрезать слово
+    const lastSpace = truncatedText.lastIndexOf(' ');
+    const finalText = lastSpace > 0 ? truncatedText.substring(0, lastSpace) : truncatedText;
+    
+    return `<p>${finalText}...</p>`;
+  };
+
+  const displayContent = needsTruncation && !isExpanded
+    ? getTruncatedHTML(post.content, 300)
+    : post.content;
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "недавно";
@@ -128,9 +159,19 @@ export default function NewsCard({
 
         {/* Content */}
         <div
-          className="news-content mb-4 text-gray-700 dark:text-gray-300"
-          dangerouslySetInnerHTML={{ __html: post.content }}
+          className="news-content mb-2 text-gray-700 dark:text-gray-300"
+          dangerouslySetInnerHTML={{ __html: displayContent }}
         />
+
+        {/* Кнопка "показать больше" / "скрыть" */}
+        {needsTruncation && (
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 mb-4"
+          >
+            {isExpanded ? "Скрыть" : "Показать полностью"}
+          </button>
+        )}
 
         {/* Polls */}
         {post.polls.length > 0 && (
@@ -248,6 +289,30 @@ export default function NewsCard({
             </svg>
             <span>{post._count.comments}</span>
           </button>
+
+          {/* Просмотры */}
+          <div className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-500 dark:text-gray-500">
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+              />
+            </svg>
+            <span>{post.viewCount.toLocaleString()}</span>
+          </div>
         </div>
       </div>
 

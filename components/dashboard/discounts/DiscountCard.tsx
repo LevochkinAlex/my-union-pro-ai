@@ -79,6 +79,8 @@ export default function DiscountCard({
             alt={discount.title}
             loading="lazy"
             className="w-full h-full object-cover"
+            decoding="async"
+            fetchPriority="low"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 p-3 sm:p-6 text-center text-white dark:from-blue-600 dark:via-purple-600 dark:to-pink-600">

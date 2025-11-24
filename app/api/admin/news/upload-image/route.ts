@@ -1,19 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
 import { UserRole } from "@prisma/client";
-
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "news");
-
-async function ensureUploadDir() {
-  try {
-    await mkdir(UPLOAD_DIR, { recursive: true });
-  } catch (error) {
-    console.error("[upload-image] Failed to create upload directory:", error);
-  }
-}
 
 // POST /api/admin/news/upload-image - загрузка изображения для новости
 export async function POST(request: NextRequest) {
@@ -52,27 +40,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await ensureUploadDir();
-
-    // Генерируем уникальное имя файла
-    const timestamp = Date.now();
-    const randomStr = Math.random().toString(36).substring(2, 15);
-    const extension = path.extname(file.name);
-    const fileName = `news-${timestamp}-${randomStr}${extension}`;
-    const filePath = path.join(UPLOAD_DIR, fileName);
-
-    // Сохраняем файл
+    // Конвертируем в base64 для сохранения в БД
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    await writeFile(filePath, buffer);
-
-    // Возвращаем публичный URL
-    const publicUrl = `/uploads/news/${fileName}`;
+    const base64 = buffer.toString('base64');
+    
+    // Определяем MIME type
+    const mimeType = file.type;
+    
+    // Создаем data URL для прямого использования в src
+    const dataUrl = `data:${mimeType};base64,${base64}`;
 
     return NextResponse.json({
       success: true,
-      url: publicUrl,
-      fileName,
+      url: dataUrl,
+      fileName: file.name,
     });
   } catch (error) {
     console.error("[upload-image] Error:", error);

@@ -347,10 +347,10 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Профиль пользователя</h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white md:text-3xl">Профиль пользователя</h1>
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 md:text-base">
           Здесь вы можете обновить свои данные и настроить безопасность аккаунта
         </p>
       </div>
@@ -368,10 +368,10 @@ export default function ProfilePage() {
       )}
 
       <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-8">
+        <nav className="-mb-px flex space-x-4 overflow-x-auto md:space-x-8">
           <button
             onClick={() => setActiveTab("profile")}
-            className={`whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium ${
+            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
               activeTab === "profile"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -381,7 +381,7 @@ export default function ProfilePage() {
           </button>
           <button
             onClick={() => setActiveTab("additional")}
-            className={`whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium ${
+            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
               activeTab === "additional"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -391,7 +391,7 @@ export default function ProfilePage() {
           </button>
           <button
             onClick={() => setActiveTab("security")}
-            className={`whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium ${
+            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
               activeTab === "security"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -403,11 +403,11 @@ export default function ProfilePage() {
       </div>
 
       {activeTab === "profile" && (
-      <div className="w-full max-w-5xl rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Информация о профиле</h3>
+      <div className="w-full max-w-5xl rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 md:p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white md:text-lg">Информация о профиле</h3>
         
         {/* Avatar Upload */}
-        <div className="mt-6 mb-8 border-b border-gray-200 pb-6 dark:border-gray-700">
+        <div className="mt-4 mb-6 border-b border-gray-200 pb-4 dark:border-gray-700 md:mt-6 md:mb-8 md:pb-6">
           <AvatarUpload currentAvatarUrl={profileData.avatarUrl} onSave={handleAvatarSave} />
         </div>
         
@@ -555,9 +555,9 @@ export default function ProfilePage() {
       )}
 
       {activeTab === "additional" && (
-      <div className="w-full max-w-5xl rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Дополнительная информация</h3>
-        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+      <div className="w-full max-w-5xl rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 md:p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white md:text-lg">Дополнительная информация</h3>
+        <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 md:text-sm">
           Заполните дополнительные сведения о себе для более персонализированного общения с AI-ботом
         </p>
         <form onSubmit={handleAdditionalInfoSubmit} className="mt-6 space-y-6">
@@ -709,8 +709,8 @@ export default function ProfilePage() {
       )}
 
       {activeTab === "security" && (
-      <div className="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Изменение пароля</h3>
+      <div className="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 md:p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white md:text-lg">Изменение пароля</h3>
         <form onSubmit={handlePasswordSubmit} className="mt-4 space-y-6">
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Текущий пароль</label>

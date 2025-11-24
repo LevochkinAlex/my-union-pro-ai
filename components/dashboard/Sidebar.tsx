@@ -228,6 +228,16 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                       src={avatarUrl} 
                       alt="Avatar" 
                       className="h-full w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                      onError={(e) => {
+                        // Если изображение не загрузилось, скрываем его и показываем плейсхолдер
+                        e.currentTarget.style.display = 'none';
+                        const parent = e.currentTarget.parentElement;
+                        if (parent) {
+                          parent.innerHTML = `<span class="text-sm font-semibold">${userInitial}</span>`;
+                        }
+                      }}
                     />
                   ) : (
                     <span className="text-sm font-semibold">{userInitial}</span>

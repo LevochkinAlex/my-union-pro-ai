@@ -716,11 +716,14 @@ model NewsPost {
   // Основная информация
   title      String
   content    String  @db.Text // HTML контент с WYSIWYG
-  coverImage String? // URL изображения обложки
+  coverImage String? @db.Text // Data URL изображения (base64) или внешний URL
 
   // Опубликовано ли
   isPublished Boolean   @default(false)
   publishedAt DateTime?
+
+  // Статистика
+  viewCount Int @default(0)
 
   // Связи
   likes    NewsLike[]

@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import Cropper from "react-easy-crop";
 import { Area } from "react-easy-crop";
-import { Camera, X, Check, Upload } from "lucide-react";
+import { Camera, X, Check, Upload, Pencil } from "lucide-react";
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null;
@@ -105,7 +105,8 @@ export default function AvatarUpload({ currentAvatarUrl, onSave }: AvatarUploadP
   return (
     <div className="space-y-4">
       {/* Avatar Preview */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col items-center gap-4 md:flex-row md:items-center">
+        {/* Avatar with mobile edit button */}
         <div className="relative">
           {currentAvatarUrl ? (
             <img
@@ -118,8 +119,20 @@ export default function AvatarUpload({ currentAvatarUrl, onSave }: AvatarUploadP
               <Camera className="h-10 w-10 text-gray-400 dark:text-gray-500" />
             </div>
           )}
+          
+          {/* Mobile: Circular pencil button overlaying avatar */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 md:hidden"
+            aria-label="Изменить фото"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
         </div>
-        <div>
+        
+        {/* Desktop: Button with text */}
+        <div className="hidden md:block">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
