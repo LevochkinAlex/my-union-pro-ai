@@ -167,11 +167,15 @@ export default function AdminNewsPage() {
               <div className="p-4 sm:p-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:gap-4">
                   {post.coverImage && (
-                    <div className="h-32 w-full sm:h-24 sm:w-24 flex-shrink-0 overflow-hidden rounded-lg">
+                    <div className="h-32 w-full sm:h-24 sm:w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700">
                       <img
                         src={post.coverImage}
                         alt={post.title}
                         className="h-full w-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                        }}
                       />
                     </div>
                   )}

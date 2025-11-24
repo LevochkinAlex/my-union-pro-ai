@@ -26,6 +26,7 @@ export default function DiscountCard({
 }: DiscountCardProps) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
+  const [imageError, setImageError] = useState(false);
   
   // Определяем города для отображения
   const displayCities = selectedCityId
@@ -73,7 +74,7 @@ export default function DiscountCard({
       className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer dark:border-gray-700 dark:bg-gray-800">
       {/* Image/Header */}
       <div className="relative w-full h-48 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800">
-        {discount.imageUrl ? (
+        {discount.imageUrl && !imageError ? (
           <img
             src={discount.imageUrl}
             alt={discount.title}
@@ -81,6 +82,7 @@ export default function DiscountCard({
             className="w-full h-full object-cover"
             decoding="async"
             fetchPriority="low"
+            onError={() => setImageError(true)}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 p-3 sm:p-6 text-center text-white dark:from-blue-600 dark:via-purple-600 dark:to-pink-600">

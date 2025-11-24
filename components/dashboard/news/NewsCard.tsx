@@ -143,11 +143,15 @@ export default function NewsCard({
 
         {/* Cover Image */}
         {post.coverImage && (
-          <div className="mb-4 -mx-4 sm:-mx-6">
+          <div className="mb-4 -mx-4 sm:-mx-6 bg-gray-100 dark:bg-gray-700">
             <img
               src={post.coverImage}
               alt={post.title}
               className="w-full h-auto max-h-96 object-cover"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+              }}
             />
           </div>
         )}
