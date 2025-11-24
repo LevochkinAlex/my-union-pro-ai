@@ -1281,16 +1281,16 @@ export async function POST(request: NextRequest) {
           // Валидация адреса уже произошла ДО отправки к AI (см. строку ~720)
           // Этот блок больше не нужен, валидация перенесена выше
           
-          // Если организация уже была найдена до отправки к AI, используем её
-          if (foundOrganization) {
-            if (foundOrganization.foundInDatabase && foundOrganization.id) {
+          // Используем организацию из валидации, если она была найдена до отправки к AI
+          if (validatedData.organization) {
+            if (validatedData.organization.foundInDatabase && validatedData.organization.id) {
               // Организация найдена в базе - привязываем к пользователю
-              extractedData.organizationId = foundOrganization.id;
-              console.log("[chat] Using organization found before AI (in database):", foundOrganization.name);
-            } else {
+              extractedData.organizationId = validatedData.organization.id;
+              console.log("[chat] Using organization found before AI (in database):", validatedData.organization.name);
+            } else if (validatedData.organization.name) {
               // Организация найдена в Минюсте, но не в базе - сохраняем название
-              extractedData.organizationName = foundOrganization.name;
-              console.log("[chat] Using organization found before AI (in Minjust):", foundOrganization.name);
+              extractedData.organizationName = validatedData.organization.name;
+              console.log("[chat] Using organization found before AI (in Minjust):", validatedData.organization.name);
             }
           } else if (extractedData.organizationName || message.includes("организац") || message.includes("работаю")) {
             // Если организация не была найдена до AI, пытаемся найти её сейчас
