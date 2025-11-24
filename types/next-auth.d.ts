@@ -13,6 +13,9 @@ declare module "next-auth" {
       name: string;
       role: UserRole;
       membershipStatus: MembershipStatus;
+      firstName?: string | null;
+      lastName?: string | null;
+      avatarUrl?: string | null;
     };
   }
 }
@@ -22,5 +25,8 @@ declare module "next-auth/jwt" {
     id: string;
     role: UserRole;
     membershipStatus: MembershipStatus;
+    firstName?: string | null;
+    lastName?: string | null;
+    avatarUrl?: string | null;
   }
 }

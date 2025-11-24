@@ -9,6 +9,7 @@ interface UserProfile {
   firstName: string | null;
   lastName: string | null;
   email: string;
+  avatarUrl: string | null;
   phone: string | null;
   createdAt: string;
   organization?: {

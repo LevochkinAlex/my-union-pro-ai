@@ -335,6 +335,8 @@ ${profileComplete ? '' : `
 
 3. **ФИО**: Спроси: "Здорово! Пожалуйста, укажите вашу фамилию, имя и отчество."
    - Извлеки фамилию, имя, отчество
+   - **ВАЖНО**: Тюркские суффиксы "оглы" и "кызы" пишутся с МАЛЕНЬКОЙ буквы (например: "Иванов Иван Петрович оглы", а НЕ "Иванов Иван Петрович Оглы")
+   - При исправлении форматирования имени НЕ меняй "оглы" и "кызы" на заглавные буквы
 
 4. **ДАТА РОЖДЕНИЯ**: Спроси: "Теперь, пожалуйста, укажите вашу дату рождения в формате ДД.ММ.ГГГГ."
    - Пользователь может указать дату в любом формате:
@@ -367,7 +369,20 @@ ${profileComplete ? '' : `
 
 8. **ПРОФЕССИЯ**: Если не указана, спроси профессию
 
-9. **ОБРАЗОВАНИЕ**: Если не указано, спроси образование
+9. **ОБРАЗОВАНИЕ**: Если не указано, спроси: "Теперь, пожалуйста, напишите ваш уровень образования."
+   - Доступные варианты:
+     * Начальное общее
+     * Основное общее (9 классов)
+     * Среднее общее (11 классов)
+     * Среднее профессиональное
+     * Неполное высшее
+     * Высшее (бакалавриат)
+     * Высшее (специалитет)
+     * Высшее (магистратура)
+     * Аспирантура
+     * Докторантура
+   - ВАЖНО: Говори "напишите", а НЕ "выберите" (пользователь НЕ может выбрать из списка в чате)
+   - Покажи список вариантов для справки, но попроси НАПИСАТЬ один из них
 `}
 
 ### ПОСЛЕ ЗАПОЛНЕНИЯ ВСЕХ ДАННЫХ:
@@ -786,16 +801,16 @@ export async function POST(request: NextRequest) {
         const potentialAddress = message.trim();
         if (potentialAddress.length > 10) { // Минимальная длина для адреса
           validatedAddress = await validateAddressWithDaData(potentialAddress);
-          if (validatedAddress) {
+        if (validatedAddress) {
             console.log("[chat] ✅ Address validated via DaData BEFORE AI:", validatedAddress);
             // Добавляем валидированный адрес в контекст для AI
             userMessage = `${message}\n\n[VALIDATED_ADDRESS: ${validatedAddress}]`;
             
             // Сразу сохраняем валидированный адрес в профиль
-            await prisma.user.update({
-              where: { id: session.user.id },
-              data: { address: validatedAddress },
-            });
+          await prisma.user.update({
+            where: { id: session.user.id },
+            data: { address: validatedAddress },
+          });
           } else {
             console.log("[chat] ⚠️ Address could not be validated via DaData");
           }
@@ -854,7 +869,7 @@ export async function POST(request: NextRequest) {
           userId: session.user.id,
           OR: [
             {
-              createdAt: {
+          createdAt: {
                 gte: new Date(Date.now() - 10 * 60 * 1000), // За последние 10 минут
               },
             },
@@ -1278,13 +1293,13 @@ export async function POST(request: NextRequest) {
 
         // Проверяем полноту профиля ТОЛЬКО если документы еще не сгенерированы
         if (!hasGeneratedDocuments) {
-          // Теперь проверяем полноту профиля
-          const user = await prisma.user.findUnique({
-            where: { id: session.user.id },
-          });
+        // Теперь проверяем полноту профиля
+        const user = await prisma.user.findUnique({
+          where: { id: session.user.id },
+        });
 
-          // Проверяем, заполнены ли все необходимые поля профиля
-          const profileIsComplete = isProfileComplete(user);
+        // Проверяем, заполнены ли все необходимые поля профиля
+        const profileIsComplete = isProfileComplete(user);
 
         console.log("[chat] Profile completeness check:", {
           firstName: !!user?.firstName,
@@ -1408,8 +1423,8 @@ export async function POST(request: NextRequest) {
           }
         } else if (!profileIsComplete) {
           console.log("[chat] ❌ Profile still incomplete after extraction");
-          } else {
-            console.log("[chat] Profile complete marker already exists");
+        } else {
+          console.log("[chat] Profile complete marker already exists");
           }
         } else {
           console.log("[chat] ⏭️  Skipping profile check - documents already generated");

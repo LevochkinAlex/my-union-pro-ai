@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
               firstName: true,
               lastName: true,
               email: true,
+              avatarUrl: true,
             },
           },
           _count: {

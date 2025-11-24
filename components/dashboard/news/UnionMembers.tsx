@@ -2,12 +2,14 @@
 
 import { useEffect, useState, useRef, memo } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 interface Member {
   id: string;
   firstName: string | null;
   lastName: string | null;
   email: string;
+  avatarUrl: string | null;
   organization?: {
     name: string;
   } | null;
@@ -84,9 +86,31 @@ function UnionMembersComponent() {
               key={member.id}
               className="group flex items-center gap-3 rounded-lg p-3 transition hover:bg-gray-50 dark:hover:bg-gray-700/50"
             >
-              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-white font-semibold text-sm">
-                {getInitials(member)}
-              </div>
+              {/* Avatar */}
+              {member.avatarUrl ? (
+                member.avatarUrl.startsWith('data:') ? (
+                  <div className="h-12 w-12 rounded-full overflow-hidden flex-shrink-0">
+                    <img
+                      src={member.avatarUrl}
+                      alt={getMemberName(member)}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="relative h-12 w-12 rounded-full overflow-hidden flex-shrink-0">
+                    <Image
+                      src={member.avatarUrl}
+                      alt={getMemberName(member)}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                )
+              ) : (
+                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-white font-semibold text-sm">
+                  {getInitials(member)}
+                </div>
+              )}
 
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">

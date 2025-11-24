@@ -41,6 +41,9 @@ export const authOptions: NextAuthOptions = {
             name: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim(),
             role: user.role,
             membershipStatus: user.membershipStatus,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            avatarUrl: user.avatarUrl,
           };
         } catch (error) {
           console.error("[NextAuth] Authorize error:", error);
@@ -55,6 +58,9 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.role = user.role;
         token.membershipStatus = user.membershipStatus;
+        token.firstName = user.firstName;
+        token.lastName = user.lastName;
+        token.avatarUrl = user.avatarUrl;
       }
       return token;
     },
@@ -63,6 +69,9 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id;
         session.user.role = token.role;
         session.user.membershipStatus = token.membershipStatus;
+        session.user.firstName = token.firstName;
+        session.user.lastName = token.lastName;
+        session.user.avatarUrl = token.avatarUrl;
       }
       return session;
     },

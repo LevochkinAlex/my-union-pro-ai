@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import Image from "next/image";
 
 interface Comment {
   id: string;
@@ -12,6 +13,7 @@ interface Comment {
     firstName: string | null;
     lastName: string | null;
     email: string;
+    avatarUrl: string | null;
   };
   replies: Comment[];
   _count: {
@@ -151,6 +153,54 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
     return user.email;
   };
 
+  // Компонент аватара с поддержкой base64
+  const Avatar = ({ user, size = 8 }: { user: Comment["user"]; size?: number }) => {
+    const name = userName(user);
+    const sizeClass = `h-${size} w-${size}`;
+    
+    if (user.avatarUrl) {
+      // Проверяем, является ли изображение data URL (base64)
+      const isDataUrl = user.avatarUrl.startsWith('data:');
+      
+      if (isDataUrl) {
+        // Для base64 используем обычный img тег
+        return (
+          <div className={`${sizeClass} rounded-full overflow-hidden flex-shrink-0`}>
+            <img
+              src={user.avatarUrl}
+              alt={name}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        );
+      } else {
+        // Для обычных URL используем Next Image
+        return (
+          <div className={`relative ${sizeClass} rounded-full overflow-hidden flex-shrink-0`}>
+            <Image
+              src={user.avatarUrl}
+              alt={name}
+              fill
+              className="object-cover"
+            />
+          </div>
+        );
+      }
+    }
+    
+    // Фолбэк - круг с первой буквой
+    const textSize = size === 8 ? 'text-sm' : 'text-xs';
+    const bgColor = size === 8 
+      ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400';
+    
+    return (
+      <div className={`flex ${sizeClass} items-center justify-center rounded-full ${bgColor} ${textSize} font-semibold flex-shrink-0`}>
+        {name.charAt(0).toUpperCase()}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -164,22 +214,36 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
       {/* Comment Form */}
       {session?.user?.id ? (
         <form onSubmit={handleSubmitComment} className="mb-6">
-          <textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            placeholder="Написать комментарий..."
-            rows={3}
-            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
-            required
-          />
-          <div className="mt-2 flex justify-end">
-            <button
-              type="submit"
-              disabled={submitting || !newComment.trim()}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitting ? "Отправка..." : "Отправить"}
-            </button>
+          <div className="flex gap-3">
+            <Avatar 
+              user={{
+                id: session.user.id,
+                firstName: session.user.firstName,
+                lastName: session.user.lastName,
+                email: session.user.email || "",
+                avatarUrl: session.user.avatarUrl,
+              }} 
+              size={8} 
+            />
+            <div className="flex-1">
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Написать комментарий..."
+                rows={3}
+                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                required
+              />
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={submitting || !newComment.trim()}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? "Отправка..." : "Отправить"}
+                </button>
+              </div>
+            </div>
           </div>
         </form>
       ) : (
@@ -198,9 +262,7 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
           {comments.map((comment) => (
             <div key={comment.id} className="space-y-3">
               <div className="flex gap-3">
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                  {userName(comment.user).charAt(0).toUpperCase()}
-                </div>
+                <Avatar user={comment.user} size={8} />
                 <div className="flex-1 min-w-0">
                   <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
                     <div className="mb-1 flex items-center gap-2">
@@ -261,9 +323,7 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
                 <div className="ml-11 space-y-3 border-l-2 border-gray-200 pl-4 dark:border-gray-700">
                   {comment.replies.map((reply) => (
                     <div key={reply.id} className="flex gap-3">
-                      <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
-                        {userName(reply.user).charAt(0).toUpperCase()}
-                      </div>
+                      <Avatar user={reply.user} size={6} />
                       <div className="flex-1 min-w-0">
                         <div className="rounded-lg bg-gray-50 p-2 dark:bg-gray-900">
                           <div className="mb-1 flex items-center gap-2">
