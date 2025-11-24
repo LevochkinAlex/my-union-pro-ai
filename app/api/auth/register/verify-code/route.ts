@@ -4,6 +4,8 @@ import { sendWelcomeEmail } from "@/lib/email";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { encryptPassword } from "@/lib/best-benefits-password";
+import fs from "fs";
+import path from "path";
 
 export async function POST(request: NextRequest) {
   try {
@@ -113,6 +115,18 @@ export async function POST(request: NextRequest) {
       });
 
       if (!existingCharter) {
+        // Вычисляем размер файла устава
+        let fileSize: number | null = null;
+        try {
+          const fullPath = path.join(process.cwd(), "public", charterPath);
+          const stats = fs.statSync(fullPath);
+          fileSize = stats.size;
+          console.log("[register] Размер файла устава:", fileSize, "байт");
+        } catch (fsError) {
+          console.error("[register] ⚠️ Не удалось получить размер файла устава:", fsError);
+          // Продолжаем создание документа без размера
+        }
+
         const charterDoc = await prisma.document.create({
           data: {
             userId: updatedUser.id,
@@ -122,6 +136,7 @@ export async function POST(request: NextRequest) {
             description: "Устав Профсоюза работников здравоохранения РФ (принят на VII съезде, апрель 2021)",
             filePath: charterPath,
             fileName: "Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx",
+            fileSize: fileSize,
             mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           },
         });

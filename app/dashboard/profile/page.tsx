@@ -42,6 +42,12 @@ interface ProfileData {
   } | null;
 }
 
+interface Child {
+  name: string;
+  birthDate: string;
+  age?: number;
+}
+
 interface AdditionalInfo {
   occupation: string;
   hobbies: string;
@@ -52,6 +58,10 @@ interface AdditionalInfo {
   maritalStatus: string;
   spouseInfo: string;
   additionalInfo: string;
+}
+
+interface ChildrenState {
+  children: Child[];
 }
 
 type TabKey = "profile" | "additional" | "security";
@@ -96,6 +106,50 @@ export default function ProfilePage() {
     spouseInfo: "",
     additionalInfo: "",
   });
+  
+  const [children, setChildren] = useState<Child[]>([]);
+  
+  // Вычисление возраста
+  const calculateAge = (birthDate: Date): number => {
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+  
+  // Добавить ребенка
+  const addChild = () => {
+    setChildren([...children, { name: "", birthDate: "" }]);
+  };
+  
+  // Удалить ребенка
+  const removeChild = (index: number) => {
+    setChildren(children.filter((_, i) => i !== index));
+  };
+  
+  // Обновить данные ребенка
+  const updateChild = (index: number, field: keyof Child, value: string) => {
+    const updatedChildren = [...children];
+    updatedChildren[index] = {
+      ...updatedChildren[index],
+      [field]: value,
+    };
+    
+    // Если обновляется дата рождения, пересчитываем возраст
+    if (field === "birthDate" && value) {
+      try {
+        const birthDate = new Date(value);
+        updatedChildren[index].age = calculateAge(birthDate);
+      } catch (error) {
+        console.error("Invalid date:", error);
+      }
+    }
+    
+    setChildren(updatedChildren);
+  };
 
   const [savingAdditionalInfo, setSavingAdditionalInfo] = useState(false);
 
@@ -160,6 +214,23 @@ export default function ProfilePage() {
           spouseInfo: data.spouseInfo ?? "",
           additionalInfo: data.additionalInfo ?? "",
         });
+        
+        // Парсим детей из JSON
+        if (data.childrenBirthDates) {
+          try {
+            const parsedChildren = JSON.parse(data.childrenBirthDates);
+            if (Array.isArray(parsedChildren)) {
+              const childrenWithAge = parsedChildren.map((child: any) => ({
+                name: child.name || "",
+                birthDate: child.birthDate || "",
+                age: child.birthDate ? calculateAge(new Date(child.birthDate)) : undefined,
+              }));
+              setChildren(childrenWithAge);
+            }
+          } catch (error) {
+            console.error("Failed to parse children data:", error);
+          }
+        }
       } catch (error) {
         console.error(error);
       }
@@ -189,9 +260,54 @@ export default function ProfilePage() {
   };
 
   const handleNameChange = (name: "firstName" | "lastName" | "middleName") => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    
+    // Для отчества применяем особую логику
+    if (name === "middleName") {
+      // Разбиваем отчество на части
+      const parts = value.trim().toLowerCase().split(/\s+/);
+      
+      // Форматируем каждую часть
+      const formatted = parts.map(part => {
+        // Тюркские суффиксы остаются с маленькой буквы
+        if (["оглы", "кызы", "улы", "гызы", "огли", "кизи"].includes(part)) {
+          return part;
+        }
+        // Остальные части с заглавной буквы
+        return capitalizeName(part);
+      }).join(" ");
+      
+      setProfileData((prev) => ({
+        ...prev,
+        [name]: formatted,
+      }));
+    } else {
+      setProfileData((prev) => ({
+        ...prev,
+        [name]: capitalizeName(value),
+      }));
+    }
+  };
+  
+  // Проверяем, есть ли тюркский суффикс в отчестве
+  const hasTurkicSuffix = (middleName: string): boolean => {
+    const lower = middleName.toLowerCase();
+    return /\s(оглы|кызы|улы|гызы|огли|кизи)$/.test(lower) || 
+           ["оглы", "кызы", "улы", "гызы", "огли", "кизи"].some(suffix => lower === suffix);
+  };
+  
+  // Добавить тюркский суффикс к отчеству
+  const addTurkicSuffix = (suffix: string) => {
+    const currentMiddleName = profileData.middleName.trim();
+    if (!currentMiddleName) return;
+    
+    // Удаляем существующий суффикс, если есть
+    const withoutSuffix = currentMiddleName.replace(/\s+(оглы|кызы|улы|гызы|огли|кизи)$/i, '');
+    
+    // Добавляем новый суффикс
     setProfileData((prev) => ({
       ...prev,
-      [name]: capitalizeName(e.target.value),
+      middleName: `${withoutSuffix} ${suffix}`,
     }));
   };
 
@@ -283,9 +399,19 @@ export default function ProfilePage() {
         ? (MARITAL_STATUS_REVERSE_MAP[additionalInfo.maritalStatus] || additionalInfo.maritalStatus)
         : "";
       
+      // Преобразуем детей в JSON формат
+      const childrenJSON = children.length > 0 
+        ? JSON.stringify(children.map(child => ({
+            name: child.name,
+            birthDate: child.birthDate,
+          })))
+        : "";
+      
       const dataToSend = {
         ...additionalInfo,
         maritalStatus: enumMaritalStatus,
+        childrenBirthDates: childrenJSON,
+        hasChildren: children.length > 0 ? true : additionalInfo.hasChildren,
       };
       
       const response = await fetch("/api/profile/additional-info", {
@@ -441,7 +567,46 @@ export default function ProfilePage() {
                 value={profileData.middleName}
                 onChange={handleNameChange("middleName")}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                placeholder="Например: Петрович или Ахмедович оглы"
               />
+              {/* Подсказка для тюркских суффиксов */}
+              {profileData.middleName && !hasTurkicSuffix(profileData.middleName) && (
+                <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
+                  <p className="mb-2 text-xs text-blue-800 dark:text-blue-300">
+                    Если ваше отчество тюркского происхождения, добавьте суффикс:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => addTurkicSuffix("оглы")}
+                      className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 transition"
+                    >
+                      + оглы (сын)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addTurkicSuffix("кызы")}
+                      className="rounded-md bg-pink-600 px-3 py-1 text-xs font-medium text-white hover:bg-pink-700 transition"
+                    >
+                      + кызы (дочь)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addTurkicSuffix("улы")}
+                      className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 transition"
+                    >
+                      + улы (сын, каз.)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addTurkicSuffix("гызы")}
+                      className="rounded-md bg-purple-600 px-3 py-1 text-xs font-medium text-white hover:bg-purple-700 transition"
+                    >
+                      + гызы (дочь, азерб.)
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Дата рождения</label>
@@ -624,38 +789,102 @@ export default function ProfilePage() {
             </div>
 
             {additionalInfo.hasChildren && (
-              <>
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Информация о детях</label>
-                  <textarea
-                    name="childrenInfo"
-                    value={additionalInfo.childrenInfo}
-                    onChange={handleAdditionalInfoChange}
-                    placeholder="Имена, возраст, другая информация о детях"
-                    rows={3}
-                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                    Даты рождения детей
+              <div className="md:col-span-2">
+                <div className="mb-4 flex items-center justify-between">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                    Информация о детях
                     <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
                       (нужны для подарков к праздникам 🎁)
                     </span>
                   </label>
-                  <textarea
-                    name="childrenBirthDates"
-                    value={additionalInfo.childrenBirthDates}
-                    onChange={handleAdditionalInfoChange}
-                    placeholder="Например: Фекла - 12.05.2015, Степан - 20.08.2018"
-                    rows={2}
-                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                  />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Укажите имена и даты рождения в любом формате (например: "Имя - ДД.ММ.ГГГГ" или "Имя, возраст лет")
-                  </p>
+                  <button
+                    type="button"
+                    onClick={addChild}
+                    className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Добавить ребенка
+                  </button>
                 </div>
-              </>
+                
+                {children.length === 0 ? (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center dark:border-gray-700 dark:bg-gray-900">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Нажмите "Добавить ребенка" чтобы указать имя и дату рождения
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {children.map((child, index) => (
+                      <div
+                        key={index}
+                        className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900 sm:flex-row sm:items-center"
+                      >
+                        <div className="flex-1">
+                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                            Имя
+                          </label>
+                          <input
+                            type="text"
+                            value={child.name}
+                            onChange={(e) => updateChild(index, "name", e.target.value)}
+                            placeholder="Например: Фекла"
+                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                          />
+                        </div>
+                        
+                        <div className="flex-1">
+                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                            Дата рождения
+                          </label>
+                          <input
+                            type="date"
+                            value={child.birthDate}
+                            onChange={(e) => updateChild(index, "birthDate", e.target.value)}
+                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                          />
+                        </div>
+                        
+                        {child.age !== undefined && (
+                          <div className="flex items-center justify-center rounded-lg bg-blue-100 px-3 py-2 dark:bg-blue-900">
+                            <span className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+                              {child.age} {child.age === 1 ? 'год' : child.age < 5 ? 'года' : 'лет'}
+                            </span>
+                          </div>
+                        )}
+                        
+                        <button
+                          type="button"
+                          onClick={() => removeChild(index)}
+                          className="inline-flex items-center justify-center rounded-lg bg-red-600 p-2 text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                          title="Удалить"
+                        >
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Старое поле для текстовой информации (опционально) */}
+                <div className="mt-4">
+                  <label className="mb-2 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                    Дополнительная информация о детях (опционально)
+                  </label>
+                  <textarea
+                    name="childrenInfo"
+                    value={additionalInfo.childrenInfo}
+                    onChange={handleAdditionalInfoChange}
+                    placeholder="Например: особенности, интересы, увлечения..."
+                    rows={2}
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                  />
+                </div>
+              </div>
             )}
 
             <div className="md:col-span-2">

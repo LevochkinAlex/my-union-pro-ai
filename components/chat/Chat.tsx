@@ -36,8 +36,26 @@ function ChatContent() {
   const shouldAutoScrollRef = useRef(false); // Флаг для контроля автоскролла
   const isInitialLoadRef = useRef(true); // Флаг для первой загрузки
   const lastNotifiedMessageIdRef = useRef<string | null>(null); // ID последнего сообщения, для которого было показано уведомление
+  const loadMessagesRef = useRef<() => Promise<void>>();
+  const isLoadingMessagesRef = useRef(false);
+  const lastLoadedSessionIdRef = useRef<string | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const loadMessages = useCallback(async () => {
+    // Защита от дублирующихся запросов
+    if (isLoadingMessagesRef.current) {
+      console.log("[chat] Already loading messages, skipping...");
+      return;
+    }
+    
+    // Проверяем, загружали ли мы уже эту сессию
+    if (lastLoadedSessionIdRef.current === (sessionId || 'default')) {
+      console.log("[chat] Session already loaded, skipping...");
+      return;
+    }
+    
+    isLoadingMessagesRef.current = true;
+    
     try {
       setIsLoadingHistory(true);
       setError(null);
@@ -95,19 +113,18 @@ function ChatContent() {
       // Явно очищаем ошибку при успешной загрузке
       setError(null);
       
-      // ВСЕГДА скроллим вниз при загрузке истории чата
+      // ВСЕГДА скроллим вниз при загрузке чата (первый раз или переключение между сессиями)
       // Пользователь ожидает увидеть последние сообщения
       shouldAutoScrollRef.current = true;
       
-      // Отмечаем первую загрузку для других целей (например, уведомления)
-      if (isInitialLoadRef.current) {
-        isInitialLoadRef.current = false;
-      }
+      // Запоминаем что эту сессию уже загрузили
+      lastLoadedSessionIdRef.current = sessionId || 'default';
     } catch (error) {
       console.error("Ошибка загрузки сообщений:", error);
       setError(error instanceof Error ? error.message : "Не удалось загрузить историю чата");
     } finally {
       setIsLoadingHistory(false);
+      isLoadingMessagesRef.current = false;
     }
   }, [sessionId]);
 
@@ -142,29 +159,37 @@ function ChatContent() {
     });
   }, []);
 
+  // Сохраняем loadMessages в ref
+  useEffect(() => {
+    loadMessagesRef.current = loadMessages;
+  }, [loadMessages]);
+
   // Сброс refs при смене сессии (переключение между чатами)
   useEffect(() => {
-    // Сбрасываем счетчики уведомлений при смене сессии
+    // Сбрасываем счетчики при смене сессии
     lastNotifiedMessageIdRef.current = null;
     isInitialLoadRef.current = true;
-    console.log("[Chat] Session changed, reset notification refs for session:", currentSessionId);
-  }, [currentSessionId]);
+    lastLoadedSessionIdRef.current = null; // Разрешаем загрузку новой сессии
+    console.log("[Chat] Session changed, reset refs for session:", sessionId);
+  }, [sessionId]);
 
-  // Load message history
+  // Load message history ТОЛЬКО ОДИН РАЗ при монтировании или смене sessionId
   useEffect(() => {
-    if (session?.user?.id) {
+    if (session?.user?.id && loadMessagesRef.current) {
       if (sessionId) {
         setCurrentSessionId(sessionId);
       }
       // Очищаем тип сессии при смене sessionId
       setSessionType(null);
-      loadMessages();
+      loadMessagesRef.current();
     }
-  }, [session, loadMessages, mode, sessionId]);
+  }, [session?.user?.id, sessionId]); // Убрали loadMessages, mode из зависимостей
 
-  // Load user avatar
+  // Load user avatar ТОЛЬКО ОДИН РАЗ
+  const avatarLoadedRef = useRef(false);
   useEffect(() => {
-    if (session?.user?.id) {
+    if (session?.user?.id && !avatarLoadedRef.current) {
+      avatarLoadedRef.current = true;
       fetch("/api/profile")
         .then((res) => res.json())
         .then((data) => {
@@ -274,22 +299,48 @@ function ChatContent() {
     }
   }, [messages, mode, sessionType, session, checkAndGenerateDocuments]);
 
-  // Прокрутка вниз только при новых сообщениях от пользователя или бота
+  // Проверяем, находится ли пользователь внизу чата
+  const isUserAtBottom = useCallback(() => {
+    if (!messagesContainerRef.current) return false;
+    
+    const container = messagesContainerRef.current;
+    const threshold = 100; // Пикселей от низа
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    
+    return distanceFromBottom < threshold;
+  }, []);
+
+  // Прокрутка вниз при загрузке истории чата или новых сообщениях
   useEffect(() => {
     if (shouldAutoScrollRef.current && messages.length > 0) {
-      // Используем requestAnimationFrame чтобы убедиться, что DOM обновился
-      requestAnimationFrame(() => {
-        // Дополнительная задержка для гарантии отрисовки
-        setTimeout(() => {
-          if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-            // Сбрасываем флаг сразу после скролла, чтобы не скроллить повторно
-            shouldAutoScrollRef.current = false;
-          }
-        }, 50);
-      });
+      // Проверяем: либо пользователь уже внизу, либо это первая загрузка сессии
+      const wasAtBottom = isUserAtBottom();
+      const isFirstLoad = isInitialLoadRef.current;
+      
+      // Скроллим если:
+      // 1. Первая загрузка приложения (isFirstLoad = true)
+      // 2. Пользователь уже был внизу (wasAtBottom = true) - natural flow при получении новых сообщений
+      if (isFirstLoad || wasAtBottom) {
+        // Используем requestAnimationFrame чтобы убедиться, что DOM обновился
+        requestAnimationFrame(() => {
+          // Дополнительная задержка для гарантии отрисовки
+          setTimeout(() => {
+            if (messagesEndRef.current) {
+              messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+            }
+          }, 50);
+        });
+        
+        // После первого скролла сбрасываем флаг первой загрузки
+        if (isFirstLoad) {
+          isInitialLoadRef.current = false;
+        }
+      }
+      
+      // Сбрасываем флаг автоскролла после проверки
+      shouldAutoScrollRef.current = false;
     }
-  }, [messages]);
+  }, [messages, isUserAtBottom]);
 
   // Отслеживание новых сообщений от бота для показа уведомлений
   useEffect(() => {
@@ -648,7 +699,7 @@ function ChatContent() {
       )}
 
       {/* Область сообщений */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-4xl px-4 py-6">
           {messages.length === 0 ? (
             <div className="flex h-full min-h-[60vh] items-center justify-center">

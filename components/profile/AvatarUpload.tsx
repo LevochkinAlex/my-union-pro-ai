@@ -17,15 +17,41 @@ export default function AvatarUpload({ currentAvatarUrl, onSave }: AvatarUploadP
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [showCropper, setShowCropper] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
   const onFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
+      
+      // Validate file size
+      if (file.size > MAX_FILE_SIZE) {
+        setError(`Размер файла не должен превышать 10MB. Выбранный файл: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        return;
+      }
+
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        setError("Файл должен быть изображением");
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        return;
+      }
+
+      setError(null);
       const reader = new FileReader();
       reader.addEventListener("load", () => {
         setImageSrc(reader.result as string);
         setShowCropper(true);
+      });
+      reader.addEventListener("error", () => {
+        setError("Ошибка при чтении файла");
       });
       reader.readAsDataURL(file);
     }
@@ -84,9 +110,12 @@ export default function AvatarUpload({ currentAvatarUrl, onSave }: AvatarUploadP
       await onSave(croppedImageBlob);
       setShowCropper(false);
       setImageSrc(null);
+      setError(null);
     } catch (error) {
       console.error("Error uploading avatar:", error);
-      alert("Ошибка при загрузке фото");
+      const errorMessage = error instanceof Error ? error.message : "Ошибка при загрузке фото";
+      setError(errorMessage);
+      // Don't close cropper on error so user can try again
     } finally {
       setIsUploading(false);
     }
@@ -97,6 +126,7 @@ export default function AvatarUpload({ currentAvatarUrl, onSave }: AvatarUploadP
     setImageSrc(null);
     setCrop({ x: 0, y: 0 });
     setZoom(1);
+    setError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -142,10 +172,16 @@ export default function AvatarUpload({ currentAvatarUrl, onSave }: AvatarUploadP
             {currentAvatarUrl ? "Изменить фото" : "Загрузить фото"}
           </button>
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            JPG, PNG или GIF. Максимум 5MB.
+            JPG, PNG или GIF. Максимум 10MB.
           </p>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200">
+          {error}
+        </div>
+      )}
 
       <input
         ref={fileInputRef}
