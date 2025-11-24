@@ -192,6 +192,15 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
 
           {/* Bottom section */}
           <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
+            {/* Version info */}
+            {!isCollapsed && (
+              <div className="px-4 py-3 text-center">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Версия {process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0'}
+                </p>
+              </div>
+            )}
+            
             {/* Collapse button */}
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}

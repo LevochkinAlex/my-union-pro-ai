@@ -1,6 +1,6 @@
 {
   "name": "my-union-pro",
-  "version": "0.1.0",
+  "version": "1.2.0",
   "private": true,
   "scripts": {
     "dev": "dotenv -e .env.local -- next dev -p 3004",

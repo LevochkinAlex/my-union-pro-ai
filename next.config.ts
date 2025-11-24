@@ -1,8 +1,13 @@
 require('dotenv').config({ path: './.env.local' });
 
+const packageJson = require('./package.json');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  env: {
+    NEXT_PUBLIC_APP_VERSION: packageJson.version,
+  },
   images: {
     remotePatterns: [
       {
