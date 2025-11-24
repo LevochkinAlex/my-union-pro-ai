@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
           not: session.user.id,
         },
         role: {
-          in: ["MEMBER", "LOCAL_ADMIN", "SUPER_ADMIN"],
+          in: ["MEMBER", "PPO_HEAD", "SUPER_ADMIN"],
         },
       },
       select: {

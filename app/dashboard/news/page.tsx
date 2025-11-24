@@ -17,6 +17,7 @@ interface NewsPost {
     firstName: string | null;
     lastName: string | null;
     email: string;
+    avatarUrl: string | null;
   };
   _count: {
     likes: number;

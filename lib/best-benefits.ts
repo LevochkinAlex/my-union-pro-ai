@@ -440,7 +440,7 @@ async function normalizeResponse(
   if (params.search && USE_REAL_API) {
     // При поиске берем ВСЕ города из кэша, чтобы фильтр показывал правильные счетчики
     try {
-      allCities = await fetchAllCities();
+      allCities = await fetchAllCitiesForFilter();
     } catch (error) {
       console.warn("[best-benefits] Failed to fetch cached cities for search, using cities from results:", error);
       allCities = extractCities(discounts);

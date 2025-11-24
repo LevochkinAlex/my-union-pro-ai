@@ -4,6 +4,9 @@ declare module "next-auth" {
   interface User {
     role: UserRole;
     membershipStatus: MembershipStatus;
+    firstName?: string | null;
+    lastName?: string | null;
+    avatarUrl?: string | null;
   }
 
   interface Session {

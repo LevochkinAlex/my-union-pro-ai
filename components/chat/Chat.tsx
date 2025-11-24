@@ -36,7 +36,7 @@ function ChatContent() {
   const shouldAutoScrollRef = useRef(false); // Флаг для контроля автоскролла
   const isInitialLoadRef = useRef(true); // Флаг для первой загрузки
   const lastNotifiedMessageIdRef = useRef<string | null>(null); // ID последнего сообщения, для которого было показано уведомление
-  const loadMessagesRef = useRef<() => Promise<void>>();
+  const loadMessagesRef = useRef<(() => Promise<void>) | null>(null);
   const isLoadingMessagesRef = useRef(false);
   const lastLoadedSessionIdRef = useRef<string | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
