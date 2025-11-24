@@ -13,6 +13,7 @@ import { ensureSuperAdmin } from "@/lib/admin-auth";
 import { findOrganization } from "@/lib/organization-search";
 import { validateAddressWithDaData } from "@/lib/dadata";
 import { detectGenderByName } from "@/lib/utils/genderDetector";
+import { detectBotQuestionContext, enhanceUserMessageWithContext, requiresValidation, logContext } from "@/lib/chat-context-helpers";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -864,71 +865,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Валидация адреса через DaData ДО отправки к AI
-    let validatedAddress: string | null = null;
-    let userMessage = message;
-    if (chatSession.type === "STATEMENT" && message && (
-      message.toLowerCase().includes("адрес") || 
-      message.toLowerCase().includes("живу") || 
-      message.toLowerCase().includes("проживаю") ||
-      message.toLowerCase().includes("ул.") ||
-      message.toLowerCase().includes("улица") ||
-      message.toLowerCase().includes("дом") ||
-      /\d{6}/.test(message) // индекс
-    )) {
-      try {
-        console.log("[chat] 📍 Attempting to validate address BEFORE AI:", message);
-        const potentialAddress = message.trim();
-        if (potentialAddress.length > 10) { // Минимальная длина для адреса
-          const validatedData = await validateAddressWithDaData(potentialAddress);
-        if (validatedData) {
-            console.log("[chat] ✅ Address validated via DaData BEFORE AI:", validatedData.address, "City:", validatedData.city);
-            // Добавляем валидированный адрес в контекст для AI - делаем ОЧЕНЬ заметным
-            validatedAddress = validatedData.address;
-            userMessage = `${message}\n\n---\n⚠️ СИСТЕМА ПРОВЕРИЛА АДРЕС ⚠️\nВалидированный адрес из базы данных адресов:\n[VALIDATED_ADDRESS: ${validatedData.address}]\nПокажи этот адрес пользователю!\n---`;
-            
-            // Сразу сохраняем валидированный адрес и город в профиль
-          await prisma.user.update({
-            where: { id: session.user.id },
-            data: { 
-              address: validatedData.address,
-              preferredDiscountCity: validatedData.city || undefined, // Автоматически подставляем город из DaData
-            },
-          });
-          } else {
-            console.log("[chat] ⚠️ Address could not be validated via DaData");
-          }
-        }
-      } catch (dadataError) {
-        console.warn("[chat] ❌ Error validating address with DaData BEFORE AI:", dadataError);
-      }
-    }
-
-    // Если в сообщении пользователя есть название организации, ищем её ДО отправки к AI
-    let foundOrganization: { name: string; foundInDatabase: boolean; id?: string } | null = null;
-    if (chatSession.type === "STATEMENT" && message && (message.toLowerCase().includes("организац") || message.toLowerCase().includes("работаю") || message.toLowerCase().includes("работа"))) {
-      try {
-        // Получаем регион пользователя для более точного поиска
-        const user = await prisma.user.findUnique({
-          where: { id: session.user.id },
-          select: { region: true },
-        });
-        
-        console.log("[chat] Searching organization before AI:", message);
-        foundOrganization = await findOrganization(message, user?.region || undefined);
-        
-        if (foundOrganization) {
-          console.log("[chat] Organization found:", foundOrganization.name, "in DB:", foundOrganization.foundInDatabase);
-          // Добавляем метку в сообщение для AI, чтобы он мог показать найденную организацию пользователю
-          userMessage = `${message}\n\n[НАЙДЕНА ОРГАНИЗАЦИЯ: ${foundOrganization.name}${foundOrganization.foundInDatabase ? " (в базе МойСоюз)" : " (в реестре Минюста РФ)"}]`;
-        } else {
-          console.log("[chat] Organization not found");
-        }
-      } catch (orgError) {
-        console.warn("[chat] Error searching organization before AI:", orgError);
-      }
-    }
-
     // Формируем системный промпт с учетом настроек бота и типа сессии
     const systemPrompt = await buildSystemPrompt(bot, relevantChunks, chatSession.type, user, hasGeneratedDocuments);
 
@@ -943,6 +879,75 @@ export async function POST(request: NextRequest) {
       },
       take: 50, // Последние 50 сообщений
     });
+
+    // ========== УНИВЕРСАЛЬНАЯ КОНТЕКСТНАЯ ОБРАБОТКА ==========
+    // Определяем контекст: о чем спрашивал бот в последнем сообщении?
+    const lastBotMessage = chatHistory.length > 0 ? chatHistory[chatHistory.length - 1] : null;
+    const questionContext = detectBotQuestionContext(lastBotMessage);
+    
+    // Логируем для отладки
+    if (chatSession.type === "STATEMENT" && message) {
+      logContext(questionContext, message);
+    }
+
+    // Валидируем данные если требуется
+    let userMessage = message;
+    const validatedData: {
+      address?: { address: string; city: string | null };
+      organization?: { name: string; foundInDatabase: boolean; id?: string };
+    } = {};
+
+    if (chatSession.type === "STATEMENT" && message && requiresValidation(questionContext)) {
+      try {
+        // Получаем регион пользователя для более точного поиска
+        const userForValidation = await prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: { region: true },
+        });
+
+        // ВАЛИДАЦИЯ АДРЕСА
+        if (questionContext === "ADDRESS" && message.length > 10) {
+          console.log("[chat] 📍 Validating address via DaData:", message);
+          const addressResult = await validateAddressWithDaData(message.trim());
+          
+          if (addressResult) {
+            console.log("[chat] ✅ Address validated:", addressResult.address, "| City:", addressResult.city);
+            validatedData.address = addressResult;
+            
+            // Сразу сохраняем в профиль
+            await prisma.user.update({
+              where: { id: session.user.id },
+              data: {
+                address: addressResult.address,
+                preferredDiscountCity: addressResult.city || undefined,
+              },
+            });
+          } else {
+            console.log("[chat] ⚠️ Address validation failed");
+          }
+        }
+
+        // ВАЛИДАЦИЯ ОРГАНИЗАЦИИ
+        if (questionContext === "ORGANIZATION") {
+          console.log("[chat] 🔍 Searching organization in Minjust registry:", message, "| Region:", userForValidation?.region || "not specified");
+          const orgResult = await findOrganization(message, userForValidation?.region || undefined);
+          
+          if (orgResult) {
+            console.log("[chat] ✅ Organization found:", orgResult.name, "| In DB:", orgResult.foundInDatabase);
+            validatedData.organization = orgResult;
+          } else {
+            console.log("[chat] ⚠️ Organization not found in registry");
+          }
+        }
+      } catch (validationError) {
+        console.warn("[chat] ❌ Validation error:", validationError);
+      }
+    }
+
+    // Улучшаем сообщение пользователя с учетом контекста и валидированных данных
+    if (chatSession.type === "STATEMENT" && message) {
+      userMessage = enhanceUserMessageWithContext(message, questionContext, validatedData);
+    }
 
     // Проверяем, был ли недавно загружен документ (в последних сообщениях пользователя)
     let uploadedDocument: { type: string; fileName: string; documentId: string } | null = null;
