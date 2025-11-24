@@ -17,6 +17,14 @@ export default function ThemeToggle({ collapsed = false }: ThemeToggleProps) {
 
   useEffect(() => {
     console.log('[ThemeToggle] Theme changed:', { theme, resolvedTheme });
+    
+    // Проверяем, что класс правильно применяется на html
+    const htmlClass = document.documentElement.classList.contains("dark") ? "dark" : "light";
+    console.log('[ThemeToggle] HTML class:', htmlClass, 'Expected:', resolvedTheme || theme);
+    
+    if (htmlClass !== (resolvedTheme || theme)) {
+      console.warn('[ThemeToggle] Mismatch! HTML class is', htmlClass, 'but theme is', resolvedTheme || theme);
+    }
   }, [theme, resolvedTheme]);
 
   const handleToggle = () => {
@@ -36,10 +44,38 @@ export default function ThemeToggle({ collapsed = false }: ThemeToggleProps) {
     
     const newTheme = actualTheme === "dark" ? "light" : "dark";
     
-    console.log('[ThemeToggle] Toggling theme:', { currentTheme, actualTheme, newTheme, theme, resolvedTheme });
+    console.log('[ThemeToggle] Before toggle:', { 
+      currentTheme, 
+      actualTheme, 
+      newTheme, 
+      theme, 
+      resolvedTheme,
+      htmlHasDark: document.documentElement.classList.contains("dark")
+    });
     
     // Явно устанавливаем тему, не "system"
     setTheme(newTheme);
+    
+    // Проверяем через небольшую задержку, что класс применился
+    setTimeout(() => {
+      const htmlHasDark = document.documentElement.classList.contains("dark");
+      console.log('[ThemeToggle] After toggle:', { 
+        newTheme, 
+        htmlHasDark, 
+        expectedDark: newTheme === "dark",
+        match: htmlHasDark === (newTheme === "dark")
+      });
+      
+      // Если класс не применился, применяем вручную
+      if (htmlHasDark !== (newTheme === "dark")) {
+        console.warn('[ThemeToggle] Class mismatch! Manually applying class...');
+        if (newTheme === "dark") {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+      }
+    }, 100);
   };
 
   if (typeof window === 'undefined' || !mounted) {

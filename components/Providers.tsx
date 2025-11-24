@@ -10,9 +10,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <SessionProvider basePath="/api/auth">
       <ThemeProvider
         attribute="class"
-        defaultTheme="system"
-        enableSystem={true}
+        defaultTheme="dark"
+        enableSystem={false}
         storageKey="myunion-theme"
+        disableTransitionOnChange={false}
       >
         <LanguageProvider>
           <FirebasePushInit />
