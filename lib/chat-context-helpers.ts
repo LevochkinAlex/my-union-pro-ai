@@ -71,9 +71,12 @@ export function detectBotQuestionContext(lastBotMessage: ChatMessage | null): Bo
     content.includes("адрес прожива") ||
     content.includes("полный адрес") ||
     content.includes("укажите ваш адрес") ||
+    content.includes("укажите адрес") ||
     content.includes("где вы проживаете") ||
     content.includes("ваш адрес") ||
-    (content.includes("адрес") && (content.includes("укажите") || content.includes("полный")))
+    content.includes("не удалось распознать адрес") ||
+    content.includes("попробуйте указать") && content.includes("город") ||
+    (content.includes("адрес") && (content.includes("укажите") || content.includes("полный") || content.includes("детализац")))
   ) {
     return "ADDRESS";
   }
