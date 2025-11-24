@@ -8,80 +8,24 @@ interface ThemeToggleProps {
 }
 
 export default function ThemeToggle({ collapsed = false }: ThemeToggleProps) {
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (!mounted) return;
-    
-    const currentTheme = resolvedTheme || theme;
-    const shouldBeDark = currentTheme === "dark";
-    const htmlHasDark = document.documentElement.classList.contains("dark");
-    
-    console.log('[ThemeToggle] Theme changed:', { theme, resolvedTheme, currentTheme, shouldBeDark, htmlHasDark });
-    
-    // Синхронизируем класс на HTML с темой
-    if (shouldBeDark && !htmlHasDark) {
-      console.log('[ThemeToggle] Adding dark class');
-      document.documentElement.classList.add("dark");
-    } else if (!shouldBeDark && htmlHasDark) {
-      console.log('[ThemeToggle] Removing dark class');
-      document.documentElement.classList.remove("dark");
-    }
-  }, [theme, resolvedTheme, mounted]);
-
-  const handleToggle = () => {
-    if (!setTheme) {
-      console.error('[ThemeToggle] setTheme is not available');
-      return;
-    }
-    
-    // Используем resolvedTheme для определения текущей темы
-    const currentTheme = resolvedTheme || theme;
-    
-    // Если тема "system", определяем по классу на html
-    let actualTheme = currentTheme;
-    if (currentTheme === "system" || !currentTheme) {
-      actualTheme = document.documentElement.classList.contains("dark") ? "dark" : "light";
-    }
-    
-    const newTheme = actualTheme === "dark" ? "light" : "dark";
-    
-    console.log('[ThemeToggle] Toggling theme:', { 
-      currentTheme, 
-      actualTheme, 
-      newTheme, 
-      theme, 
-      resolvedTheme
-    });
-    
-    // Применяем класс сразу, до вызова setTheme
-    if (newTheme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-    
-    // Устанавливаем тему
-    setTheme(newTheme);
-  };
-
-  if (typeof window === 'undefined' || !mounted) {
+  if (!mounted) {
     return (
       <div className="h-9 w-9 rounded-full bg-gray-200 dark:bg-gray-700" />
     );
   }
 
-  const currentTheme = resolvedTheme || theme;
-  const isDark = currentTheme === "dark";
+  const isDark = resolvedTheme === "dark";
 
   return (
     <button
-      onClick={handleToggle}
+      onClick={() => setTheme(isDark ? "light" : "dark")}
       className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
       aria-label="Toggle theme"
       title={collapsed ? (isDark ? "Светлая тема" : "Темная тема") : undefined}
@@ -119,4 +63,3 @@ export default function ThemeToggle({ collapsed = false }: ThemeToggleProps) {
     </button>
   );
 }
-
