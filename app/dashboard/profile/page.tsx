@@ -45,6 +45,7 @@ interface ProfileData {
 interface Child {
   name: string;
   birthDate: string;
+  gender: "М" | "Ж" | "";
   age?: number;
 }
 
@@ -122,7 +123,7 @@ export default function ProfilePage() {
   
   // Добавить ребенка
   const addChild = () => {
-    setChildren([...children, { name: "", birthDate: "" }]);
+    setChildren([...children, { name: "", birthDate: "", gender: "" }]);
   };
   
   // Удалить ребенка
@@ -223,6 +224,7 @@ export default function ProfilePage() {
               const childrenWithAge = parsedChildren.map((child: any) => ({
                 name: child.name || "",
                 birthDate: child.birthDate || "",
+                gender: child.gender || "",
                 age: child.birthDate ? calculateAge(new Date(child.birthDate)) : undefined,
               }));
               setChildren(childrenWithAge);
@@ -404,6 +406,7 @@ export default function ProfilePage() {
         ? JSON.stringify(children.map(child => ({
             name: child.name,
             birthDate: child.birthDate,
+            gender: child.gender,
           })))
         : "";
       
@@ -820,51 +823,71 @@ export default function ProfilePage() {
                     {children.map((child, index) => (
                       <div
                         key={index}
-                        className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900 sm:flex-row sm:items-center"
+                        className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900"
                       >
-                        <div className="flex-1">
-                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                            Имя
-                          </label>
-                          <input
-                            type="text"
-                            value={child.name}
-                            onChange={(e) => updateChild(index, "name", e.target.value)}
-                            placeholder="Например: Фекла"
-                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                          />
-                        </div>
-                        
-                        <div className="flex-1">
-                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                            Дата рождения
-                          </label>
-                          <input
-                            type="date"
-                            value={child.birthDate}
-                            onChange={(e) => updateChild(index, "birthDate", e.target.value)}
-                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                          />
-                        </div>
-                        
-                        {child.age !== undefined && (
-                          <div className="flex items-center justify-center rounded-lg bg-blue-100 px-3 py-2 dark:bg-blue-900">
-                            <span className="text-sm font-semibold text-blue-800 dark:text-blue-200">
-                              {child.age} {child.age === 1 ? 'год' : child.age < 5 ? 'года' : 'лет'}
-                            </span>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                          <div className="flex-1">
+                            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                              Имя
+                            </label>
+                            <input
+                              type="text"
+                              value={child.name}
+                              onChange={(e) => updateChild(index, "name", e.target.value)}
+                              placeholder="Например: Фекла"
+                              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                            />
                           </div>
-                        )}
-                        
-                        <button
-                          type="button"
-                          onClick={() => removeChild(index)}
-                          className="inline-flex items-center justify-center rounded-lg bg-red-600 p-2 text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-                          title="Удалить"
-                        >
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
+                          
+                          <div className="w-full sm:w-24">
+                            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                              Пол
+                            </label>
+                            <select
+                              value={child.gender}
+                              onChange={(e) => updateChild(index, "gender", e.target.value)}
+                              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                            >
+                              <option value="">-</option>
+                              <option value="М">М</option>
+                              <option value="Ж">Ж</option>
+                            </select>
+                          </div>
+                          
+                          <div className="flex-1">
+                            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                              Дата рождения
+                            </label>
+                            <input
+                              type="date"
+                              value={child.birthDate}
+                              onChange={(e) => updateChild(index, "birthDate", e.target.value)}
+                              max={new Date().toISOString().split('T')[0]}
+                              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                            />
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            {child.age !== undefined && (
+                              <div className="flex items-center justify-center rounded-lg bg-blue-100 px-3 py-2 dark:bg-blue-900 h-[38px]">
+                                <span className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+                                  {child.age} {child.age === 1 ? 'год' : child.age < 5 ? 'года' : 'лет'}
+                                </span>
+                              </div>
+                            )}
+                            
+                            <button
+                              type="button"
+                              onClick={() => removeChild(index)}
+                              className="inline-flex items-center justify-center rounded-lg bg-red-600 p-2 text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 h-[38px] w-[38px]"
+                              title="Удалить"
+                            >
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>

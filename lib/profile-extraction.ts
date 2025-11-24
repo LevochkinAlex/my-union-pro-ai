@@ -1,4 +1,5 @@
 import { validateAddressWithDaData } from "./dadata";
+import { detectGenderByName } from "./utils/genderDetector";
 
 /**
  * Извлекает структурированные данные из сообщений бота
@@ -355,6 +356,36 @@ export async function extractProfileDataFromMessages(
     
     if (birthDatesText) {
       profileData.childrenBirthDates = birthDatesText.trim();
+    }
+    
+    // Try to parse structured children data from bot messages
+    // Format: "Имя: Фекла, Дата рождения: 12.05.2015"
+    const childrenStructuredPattern = /(?:имя|ребенка?)[:\s]*([А-ЯЁ][а-яё]+)(?:.*?)(?:дата рождения|родил[ао]сь)[:\s]*(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4})/gi;
+    const childrenMatches = allText.matchAll(childrenStructuredPattern);
+    const childrenArray: Array<{name: string, birthDate: string, gender: string}> = [];
+    
+    for (const match of childrenMatches) {
+      const name = match[1].trim();
+      const dateStr = match[2];
+      
+      // Parse date from DD.MM.YYYY or DD/MM/YYYY to YYYY-MM-DD
+      const dateParts = dateStr.split(/[.\/-]/);
+      if (dateParts.length === 3) {
+        const birthDate = `${dateParts[2]}-${dateParts[1].padStart(2, '0')}-${dateParts[0].padStart(2, '0')}`;
+        const gender = detectGenderByName(name);
+        
+        childrenArray.push({
+          name,
+          birthDate,
+          gender,
+        });
+      }
+    }
+    
+    // If we successfully parsed children, save as JSON
+    if (childrenArray.length > 0) {
+      profileData.childrenBirthDates = JSON.stringify(childrenArray);
+      console.log('[profile-extraction] Parsed structured children data:', childrenArray);
     }
   } else if (allText.match(/(?:нет детей|без детей|детей нет)/i)) {
     profileData.hasChildren = false;

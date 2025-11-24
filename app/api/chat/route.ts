@@ -12,6 +12,7 @@ import type { Prisma } from "@prisma/client";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
 import { findOrganization } from "@/lib/organization-search";
 import { validateAddressWithDaData } from "@/lib/dadata";
+import { detectGenderByName } from "@/lib/utils/genderDetector";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -551,10 +552,13 @@ ${profileComplete ? `- ПРОФИЛЬ УЖЕ ЗАПОЛНЕН - НЕ запра�
      * Для КАЖДОГО ребенка запроси ОТДЕЛЬНО:
        - Имя ребенка
        - Дату рождения (формат ДД.ММ.ГГГГ или ГГГГ-ММ-ДД)
+     * Пример: "Укажите имя и дату рождения первого ребенка"
    - **КРИТИЧЕСКИ ВАЖНО**: 
      * Если пользователь говорит "2 детей", ОБЯЗАТЕЛЬНО спроси про КАЖДОГО отдельно
      * Не принимай общую информацию - нужны ИМЕНА и ТОЧНЫЕ ДАТЫ рождения
      * Даты нужны для подарков к праздникам 🎁
+     * Пол ребенка определяется АВТОМАТИЧЕСКИ по имени (не спрашивай пол!)
+     * Сохраняй в формате: [{name: "Имя", birthDate: "ГГГГ-ММ-ДД", gender: "М"/"Ж"}]
 
 5. **ХОББИ И УВЛЕЧЕНИЯ**: Спроси: "Какие у вас хобби и увлечения?"
    - Интересы, хобби, чем любит заниматься в свободное время
