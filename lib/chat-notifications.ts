@@ -82,11 +82,26 @@ function playSoundFromFile(): void {
 }
 
 // Воспроизведение звука уведомления
-export function playNotificationSound() {
+export async function playNotificationSound() {
   // Проверяем, взаимодействовал ли пользователь с документом
   if (!userInteracted) {
     console.warn("[Chat] Cannot play sound - user hasn't interacted with document yet");
     return;
+  }
+
+  // Проверяем настройки пользователя
+  try {
+    const settingsResponse = await fetch("/api/settings");
+    if (settingsResponse.ok) {
+      const settings = await settingsResponse.json();
+      if (settings.pushSoundEnabled === false) {
+        console.log("[Chat] Sound disabled in user settings");
+        return;
+      }
+    }
+  } catch (error) {
+    console.error("[Chat] Error loading notification settings:", error);
+    // Продолжаем воспроизведение если не удалось загрузить настройки
   }
 
   // Используем Web Audio API (не требует файл)
@@ -94,8 +109,23 @@ export function playNotificationSound() {
 }
 
 // Показ веб-уведомления для ответа бота
-export function showChatNotification(message: string, sessionType?: "STATEMENT" | "APPEAL" | null) {
+export async function showChatNotification(message: string, sessionType?: "STATEMENT" | "APPEAL" | null) {
   console.log("[Chat] 🔔 Attempting to show notification, permission:", Notification.permission);
+  
+  // Проверяем настройки пользователя для push уведомлений
+  try {
+    const settingsResponse = await fetch("/api/settings");
+    if (settingsResponse.ok) {
+      const settings = await settingsResponse.json();
+      if (settings.pushNotificationsEnabled === false) {
+        console.log("[Chat] Push notifications disabled in user settings");
+        return;
+      }
+    }
+  } catch (error) {
+    console.error("[Chat] Error loading notification settings:", error);
+    // Продолжаем показ уведомления если не удалось загрузить настройки
+  }
   
   // Проверяем поддержку уведомлений
   if (!("Notification" in window)) {
@@ -191,8 +221,8 @@ export async function requestNotificationPermission(): Promise<boolean> {
 }
 
 // Комбинированная функция: звук + уведомление
-export function notifyBotResponse(message: string, sessionType?: "STATEMENT" | "APPEAL" | null) {
-  playNotificationSound();
-  showChatNotification(message, sessionType);
+export async function notifyBotResponse(message: string, sessionType?: "STATEMENT" | "APPEAL" | null) {
+  await playNotificationSound();
+  await showChatNotification(message, sessionType);
 }
 

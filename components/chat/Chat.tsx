@@ -367,7 +367,9 @@ function ChatContent() {
         // Свежее сообщение - показываем уведомление
         console.log(`[Chat] Showing notification for fresh message (${Math.round(messageAge / 1000)}s old) in session ${currentSessionId || 'none'}, type: ${sessionType || 'none'}`);
         lastNotifiedMessageIdRef.current = lastBotMessage.id;
-        notifyBotResponse(lastBotMessage.content, sessionType || null);
+        notifyBotResponse(lastBotMessage.content, sessionType || null).catch(err => {
+          console.error("[Chat] Error showing notification:", err);
+        });
       } else {
         console.log(`[Chat] Skipping notification for old message (${Math.round(messageAge / 1000)}s old) on initial load`);
       }
@@ -378,7 +380,9 @@ function ChatContent() {
     // Для новых сообщений (после первой загрузки) всегда показываем уведомление
     console.log(`[Chat] Showing notification for new bot message in session ${currentSessionId || 'none'}, type: ${sessionType || 'none'}`);
     lastNotifiedMessageIdRef.current = lastBotMessage.id;
-    notifyBotResponse(lastBotMessage.content, sessionType || null);
+    notifyBotResponse(lastBotMessage.content, sessionType || null).catch(err => {
+      console.error("[Chat] Error showing notification:", err);
+    });
   }, [messages, sessionType]);
 
   const handleSubmit = async (e: React.FormEvent) => {

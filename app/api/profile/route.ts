@@ -77,7 +77,7 @@ export async function GET() {
         maritalStatus: user.maritalStatus,
         spouseInfo: user.spouseInfo,
         additionalInfo: user.additionalInfo,
-        membershipStatus: user.membershipStatus,
+        membershipStatus: user.membershipStatus, // Статус верификации (PENDING_VERIFICATION, APPROVED и т.д.)
         organization: user.organization,
         profileChangedAfterDocuments: user.profileChangedAfterDocuments,
         profileLastModified: user.profileLastModified,

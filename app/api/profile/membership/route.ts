@@ -37,13 +37,14 @@ export async function GET() {
         },
         membershipHistory: {
           include: {
-            organization: {
-              select: {
-                id: true,
-                name: true,
-                inn: true,
-              },
-            },
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            inn: true,
+            chairmanName: true,
+          },
+        },
           },
           orderBy: {
             statusDate: "desc",
