@@ -25,10 +25,25 @@ export default function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [profileChanged, setProfileChanged] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   useEffect(() => {
     loadDocuments();
+    loadProfileStatus();
   }, []);
+
+  const loadProfileStatus = async () => {
+    try {
+      const response = await fetch("/api/profile");
+      if (response.ok) {
+        const data = await response.json();
+        setProfileChanged(data.user?.profileChangedAfterDocuments || false);
+      }
+    } catch (err) {
+      console.error("Ошибка загрузки статуса профиля:", err);
+    }
+  };
 
   const loadDocuments = async () => {
     try {
@@ -65,6 +80,37 @@ export default function DocumentsPage() {
       setError(err instanceof Error ? err.message : "Не удалось загрузить документы");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRegenerateDocuments = async () => {
+    if (!confirm("Вы уверены, что хотите перегенерировать документы? Старые документы будут заменены.")) {
+      return;
+    }
+
+    try {
+      setIsRegenerating(true);
+      setError(null);
+
+      const response = await fetch("/api/documents/regenerate", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Ошибка перегенерации документов");
+      }
+
+      // Перезагружаем документы и статус профиля
+      await loadDocuments();
+      await loadProfileStatus();
+
+      alert("Документы успешно перегенерированы! Проверьте их и скачайте обновленные версии.");
+    } catch (err) {
+      console.error("Ошибка перегенерации:", err);
+      setError(err instanceof Error ? err.message : "Не удалось перегенерировать документы");
+    } finally {
+      setIsRegenerating(false);
     }
   };
 
@@ -172,6 +218,60 @@ export default function DocumentsPage() {
       {error && (
         <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200">
           {error}
+        </div>
+      )}
+
+      {/* Баннер об изменении профиля */}
+      {profileChanged && (
+        <div className="mb-6 rounded-lg border-2 border-orange-200 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-900/20">
+          <div className="p-4 md:p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <svg className="h-6 w-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-semibold text-orange-900 dark:text-orange-200 md:text-lg">
+                  Вы изменили данные профиля
+                </h3>
+                <p className="mt-2 text-sm text-orange-800 dark:text-orange-300">
+                  Обнаружены изменения в ваших личных данных (ФИО, дата рождения, адрес, должность и т.д.), которые влияют на содержимое документов. 
+                  Рекомендуем перегенерировать документы, чтобы они соответствовали актуальным данным.
+                </p>
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <button
+                    onClick={handleRegenerateDocuments}
+                    disabled={isRegenerating}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isRegenerating ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                        Перегенерация...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Перегенерировать документы
+                      </>
+                    )}
+                  </button>
+                  <a
+                    href="/dashboard/profile"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border-2 border-orange-300 bg-white dark:bg-gray-800 dark:border-orange-700 px-4 py-2.5 text-sm font-medium text-orange-900 dark:text-orange-200 transition-colors hover:bg-orange-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    Проверить профиль
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

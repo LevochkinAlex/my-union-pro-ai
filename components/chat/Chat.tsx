@@ -886,7 +886,7 @@ function ChatContent() {
               {/* Download Documents Button - показываем только для STATEMENT сессий после завершения профиля */}
               {sessionType === "STATEMENT" && messages.length > 0 && messages[messages.length - 1].content.includes("[PROFILE_COMPLETE]") && !isLoading && (
                 <div className="flex items-center justify-center px-4 py-6">
-                  <div className="text-center max-w-md">
+                  <div className="text-center max-w-2xl">
                     <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
                       <svg className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -896,17 +896,28 @@ function ChatContent() {
                       Профиль заполнен!
                     </h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                      Ваши документы готовы к скачиванию
+                      Ваши документы готовы к скачиванию. Проверьте правильность данных перед печатью.
                     </p>
-                    <button
-                      onClick={() => window.open("/dashboard/documents", "_blank")}
-                      className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      Скачать документы
-                    </button>
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                      <button
+                        onClick={() => window.open("/dashboard/documents", "_blank")}
+                        className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Скачать документы
+                      </button>
+                      <button
+                        onClick={() => window.open("/dashboard/profile", "_blank")}
+                        className="inline-flex items-center gap-2 rounded-lg bg-gray-100 dark:bg-gray-700 px-6 py-2.5 text-sm font-medium text-gray-900 dark:text-white transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        Проверить профиль
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

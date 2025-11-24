@@ -64,7 +64,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
               </option>
             ))}
           </select>
-          <div className="absolute inset-y-0 flex items-center text-gray-700 pointer-events-none bg-none right-3 dark:text-gray-400">
+          <div className="absolute inset-y-0 flex items-center text-gray-700 pointer-events-none bg-none right-4 dark:text-gray-400">
             <svg
               className="stroke-current"
               width="20"
@@ -114,7 +114,7 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
               </option>
             ))}
           </select>
-          <div className="absolute inset-y-0 flex items-center text-gray-700 pointer-events-none right-3 dark:text-gray-400">
+          <div className="absolute inset-y-0 flex items-center text-gray-700 pointer-events-none right-4 dark:text-gray-400">
             <svg
               className="stroke-current"
               width="20"

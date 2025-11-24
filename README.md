@@ -17,8 +17,12 @@ pnpm dev
 ✅ Prisma схема с моделями  
 ✅ Email отправка через SMTP  
 ✅ TailAdmin UI компоненты интегрированы  
+✅ AI чат для сбора данных профиля  
+✅ Генерация заявлений в PDF  
+✅ Проверка организаций по ЕГРЮЛ/Минюст РФ (DaData)  
+✅ Проверка профиля и перегенерация документов  
 
-🔄 В процессе: AI чат для сбора данных профиля
+🔄 В процессе: Интеграция со скидками Best Benefits
 
 ## 📁 Основные файлы
 
@@ -29,25 +33,39 @@ pnpm dev
 - `lib/auth.ts` - конфигурация NextAuth
 - `lib/email.ts` - функции отправки email
 
-## 🔑 Важные переменные окружения
+## 🔑 Переменные окружения
 
-Все в `.env.local`:
+Все настройки в `.env.local`:
 - `DATABASE_URL` - PostgreSQL
 - `NEXTAUTH_SECRET` - секрет для NextAuth
 - `OPENROUTER_API_KEY` - для AI чата
 - `SMTP_*` - настройки email
-- `DADATA_API_KEY`, `DADATA_SECRET_KEY` - поиск организаций
+- `DADATA_API_KEY` - **⚠️ Обязательно!** Проверка организаций по ЕГРЮЛ/Минюст РФ
+
+📖 **Полная документация по настройке:**
+- [ENV_QUICKSTART.md](./ENV_QUICKSTART.md) - Быстрый старт (5 минут)
+- [ENV_CONFIGURATION.md](./ENV_CONFIGURATION.md) - Полное описание всех переменных
 
 ## 📚 Документация
 
-**Смотри `PROJECT_STATUS.md` для полной информации!**
+**Смотри `PROJECT_STATUS.md` для полной информации о проекте!**
 
-Там описано:
-- Что сделано
-- Что нужно сделать дальше
-- Структура проекта
-- Процесс регистрации
-- Технические детали
+### 📋 Основные документы
+
+- **[PROJECT_STATUS.md](./PROJECT_STATUS.md)** - Полный статус проекта
+- **[ENV_QUICKSTART.md](./ENV_QUICKSTART.md)** - 🚀 Быстрая настройка окружения
+- **[ENV_CONFIGURATION.md](./ENV_CONFIGURATION.md)** - 📖 Все переменные окружения
+
+### 🔍 Специальные темы
+
+- [ORGANIZATION_VALIDATION.md](./ORGANIZATION_VALIDATION.md) - 🏢 Проверка организаций по ЕГРЮЛ/Минюст РФ
+- [PROFILE_UPDATE_AND_REGENERATION.md](./PROFILE_UPDATE_AND_REGENERATION.md) - 🔄 Проверка профиля и перегенерация документов
+- [APPEAL_BOT_FEATURES.md](./APPEAL_BOT_FEATURES.md) - AI бот для обращений
+- [KNOWLEDGE_BASE_GUIDE.md](./KNOWLEDGE_BASE_GUIDE.md) - База знаний профсоюза
+- [BEST_BENEFITS_API.md](./BEST_BENEFITS_API.md) - Интеграция со скидками
+- [TESTING_GUIDE.md](./TESTING_GUIDE.md) - Тестирование функционала
+- [TESTING_PLAN_REGENERATION.md](./TESTING_PLAN_REGENERATION.md) - 🧪 План тестирования перегенерации
+- [ENV_CHEATSHEET.md](./ENV_CHEATSHEET.md) - ⚡ Шпаргалка по настройкам
 
 ## 🎯 Следующие шаги
 

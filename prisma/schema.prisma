@@ -61,18 +61,24 @@ model User {
   education  String? // Образование
 
   // Дополнительная информация профиля
-  occupation         String? // Род занятий (более общее)
+  employmentStatus   String? // Занятость: WORK (работа), STUDY (учеба), RETIREMENT (пенсия)
   hobbies            String?  @db.Text // Хобби и увлечения
   aboutMe            String?  @db.Text // О себе
   hasChildren        Boolean? // Есть ли дети
   childrenInfo       String?  @db.Text // Информация о детях
-  childrenBirthDates String?  @db.Text // Даты рождения детей в формате JSON: [{"name": "Имя", "birthDate": "YYYY-MM-DD"}] для подарков
+  childrenBirthDates String?  @db.Text // Даты рождения детей в формате JSON: [{"name": "Имя", "birthDate": "YYYY-MM-DD", "gender": "М"|"Ж"}] для подарков
   maritalStatus      String? // Семейное положение (холост/замужем/женат/в разводе)
   spouseInfo         String?  @db.Text // Информация о супруге/супруге
+  awards             String?  @db.Text // Награды в формате JSON: [{"type": "ведомственная"|"государственная"|"профсоюзная", "year": "YYYY", "description": "описание"}] 
+  training           String?  @db.Text // Обучение в формате JSON: [{"name": "название", "year": "YYYY", "description": "описание"}]
   additionalInfo     String?  @db.Text // Дополнительная информация (свободный текст)
 
   // Подпись (путь к файлу на сервере)
   signaturePath String?
+
+  // Флаг изменения профиля после генерации документов
+  profileChangedAfterDocuments Boolean @default(false)
+  profileLastModified          DateTime? // Дата последнего изменения профиля
 
   // Организация
   organizationId String?
@@ -109,6 +115,14 @@ model User {
   bestBenefitsCreatedAt DateTime? // Дата создания в BestBenefits
   bestBenefitsPassword  String? // Пароль для BestBenefits (зашифрован AES-256-GCM)
 
+  // Профсоюзное членство
+  unionCardNumber       String?   @unique // Номер профсоюзной карточки (16-значный код формата XXXX XXXX XXXX XXXX)
+  membershipJoinedAt    DateTime? // Дата вступления в профсоюз (если принят вышестоящим органом)
+  unionMembershipStatus String?   @default("NOT_ACCEPTED") // Статус членства: ACCEPTED (принят на учет), NOT_ACCEPTED (не принят), REMOVED (снят с учета)
+  
+  // История членства
+  membershipHistory     MembershipHistory[]
+
   // Настройки уведомлений
   pushNotificationsEnabled Boolean @default(true) // Включены ли push уведомления
   pushSoundEnabled         Boolean @default(true) // Включен ли звук в push уведомлениях
@@ -133,6 +147,8 @@ model User {
   @@index([organizationId])
   @@index([verificationToken])
   @@index([resetToken])
+  @@index([unionCardNumber])
+  @@index([unionMembershipStatus])
 }
 
 // Организация (ППО, региональные, федерация)
@@ -161,6 +177,9 @@ model Organization {
   // Документы организации
   documents Document[]
 
+  // История членства
+  membershipHistory MembershipHistory[]
+
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -174,6 +193,8 @@ model Organization {
 enum DocumentType {
   MEMBERSHIP_APPLICATION // Заявление о вступлении в ППО
   CONTRIBUTION_APPLICATION // Заявление о взносах
+  MEMBERSHIP_REMOVAL_APPLICATION // Заявление о снятии с учета
+  MEMBERSHIP_TRANSFER_APPLICATION // Заявление о переходе в другой профсоюз
   APPEAL // Обращение
   OTHER // Прочее
 }
@@ -755,6 +776,32 @@ model NewsLike {
   @@unique([newsPostId, userId])
   @@index([newsPostId])
   @@index([userId])
+}
+
+// История членства в профсоюзе
+model MembershipHistory {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Организация, в которой состоял на учете
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  organizationName String? // Название организации (для истории, если организация удалена)
+
+  // Статус в этой организации
+  status String // ACCEPTED (принят на учет), REMOVED (снят с учета), TRANSFERRED (переведен)
+
+  // Даты
+  statusDate DateTime // Дата изменения статуса
+  notes      String?  @db.Text // Дополнительные заметки
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([statusDate])
 }
 
 // Комментарии к новостям

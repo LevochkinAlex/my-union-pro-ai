@@ -47,7 +47,7 @@ export async function GET() {
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: {
-        occupation: true,
+        employmentStatus: true,
         hobbies: true,
         aboutMe: true,
         hasChildren: true,
@@ -55,6 +55,8 @@ export async function GET() {
         childrenBirthDates: true,
         maritalStatus: true,
         spouseInfo: true,
+        awards: true,
+        training: true,
         additionalInfo: true,
       },
     });
@@ -87,7 +89,7 @@ export async function PUT(request: NextRequest) {
 
     const body = await request.json();
 
-    const occupation = normalizeString(body.occupation);
+    const employmentStatus = normalizeString(body.employmentStatus);
     const hobbies = normalizeString(body.hobbies);
     const aboutMe = normalizeString(body.aboutMe);
     const hasChildren = normalizeBoolean(body.hasChildren);
@@ -95,12 +97,14 @@ export async function PUT(request: NextRequest) {
     const childrenBirthDates = normalizeString(body.childrenBirthDates);
     const maritalStatus = normalizeString(body.maritalStatus);
     const spouseInfo = normalizeString(body.spouseInfo);
+    const awards = normalizeString(body.awards);
+    const training = normalizeString(body.training);
     const additionalInfo = normalizeString(body.additionalInfo);
 
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
       data: {
-        occupation,
+        employmentStatus,
         hobbies,
         aboutMe,
         hasChildren,
@@ -108,10 +112,12 @@ export async function PUT(request: NextRequest) {
         childrenBirthDates,
         maritalStatus,
         spouseInfo,
+        awards,
+        training,
         additionalInfo,
       },
       select: {
-        occupation: true,
+        employmentStatus: true,
         hobbies: true,
         aboutMe: true,
         hasChildren: true,
@@ -119,6 +125,8 @@ export async function PUT(request: NextRequest) {
         childrenBirthDates: true,
         maritalStatus: true,
         spouseInfo: true,
+        awards: true,
+        training: true,
         additionalInfo: true,
       },
     });

@@ -69,7 +69,7 @@ export async function GET() {
         jobTitle: user.jobTitle,
         profession: user.profession,
         education: user.education,
-        occupation: user.occupation,
+        employmentStatus: user.employmentStatus,
         hobbies: user.hobbies,
         aboutMe: user.aboutMe,
         hasChildren: user.hasChildren,
@@ -79,6 +79,8 @@ export async function GET() {
         additionalInfo: user.additionalInfo,
         membershipStatus: user.membershipStatus,
         organization: user.organization,
+        profileChangedAfterDocuments: user.profileChangedAfterDocuments,
+        profileLastModified: user.profileLastModified,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       },
@@ -124,10 +126,45 @@ export async function PUT(request: NextRequest) {
     const userBeforeUpdate = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: {
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        dateOfBirth: true,
+        phone: true,
+        address: true,
+        jobTitle: true,
+        profession: true,
+        education: true,
         bestBenefitsUserId: true,
         bestBenefitsPassword: true,
       },
     });
+
+    // Проверяем, изменились ли ключевые поля профиля, которые влияют на документы
+    const documentsAffectingFields = [
+      { old: userBeforeUpdate?.firstName, new: firstName ? capitalizeName(firstName) : null },
+      { old: userBeforeUpdate?.lastName, new: lastName ? capitalizeName(lastName) : null },
+      { old: userBeforeUpdate?.middleName, new: middleName ? capitalizeName(middleName) : null },
+      { old: userBeforeUpdate?.dateOfBirth?.toISOString(), new: dateOfBirth?.toISOString() },
+      { old: userBeforeUpdate?.phone, new: phone },
+      { old: userBeforeUpdate?.address, new: address },
+      { old: userBeforeUpdate?.jobTitle, new: jobTitle },
+      { old: userBeforeUpdate?.profession, new: profession },
+      { old: userBeforeUpdate?.education, new: education },
+    ];
+
+    const hasProfileChanges = documentsAffectingFields.some(
+      (field) => field.old !== field.new && (field.old || field.new)
+    );
+
+    // Проверяем, есть ли сгенерированные документы
+    const hasGeneratedDocuments = await prisma.document.count({
+      where: {
+        userId: session.user.id,
+        type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
+        status: { in: ["GENERATED", "SIGNED"] },
+      },
+    }) > 0;
 
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
@@ -142,6 +179,9 @@ export async function PUT(request: NextRequest) {
         profession,
         education,
         dateOfBirth,
+        // Устанавливаем флаг изменения профиля, если есть документы и данные изменились
+        profileChangedAfterDocuments: hasGeneratedDocuments && hasProfileChanges ? true : undefined,
+        profileLastModified: hasProfileChanges ? new Date() : undefined,
       },
     });
 

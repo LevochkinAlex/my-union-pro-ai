@@ -1,0 +1,118 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+/**
+ * Генерирует 16-значный номер профсоюзной карточки в формате XXXX XXXX XXXX XXXX
+ */
+function generateUnionCardNumber(): string {
+  const digits = Array.from({ length: 16 }, () => Math.floor(Math.random() * 10)).join("");
+  // Форматируем как XXXX XXXX XXXX XXXX
+  return `${digits.slice(0, 4)} ${digits.slice(4, 8)} ${digits.slice(8, 12)} ${digits.slice(12, 16)}`;
+}
+
+/**
+ * GET /api/profile/membership
+ * Получает информацию о членстве пользователя
+ */
+export async function GET() {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: {
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            inn: true,
+            chairmanName: true,
+          },
+        },
+        membershipHistory: {
+          include: {
+            organization: {
+              select: {
+                id: true,
+                name: true,
+                inn: true,
+              },
+            },
+          },
+          orderBy: {
+            statusDate: "desc",
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+    }
+
+    // Генерируем номер карточки, если его еще нет
+    let unionCardNumber = user.unionCardNumber;
+    if (!unionCardNumber) {
+      // Генерируем уникальный номер
+      let attempts = 0;
+      do {
+        unionCardNumber = generateUnionCardNumber();
+        const existing = await prisma.user.findUnique({
+          where: { unionCardNumber },
+        });
+        if (!existing) break;
+        attempts++;
+        if (attempts > 10) {
+          return NextResponse.json(
+            { error: "Не удалось сгенерировать уникальный номер карточки" },
+            { status: 500 }
+          );
+        }
+      } while (true);
+
+      // Сохраняем номер карточки
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { unionCardNumber },
+      });
+    }
+
+    // Форматируем историю членства
+    const history = user.membershipHistory.map((entry) => ({
+      id: entry.id,
+      organizationName: entry.organizationName || entry.organization?.name || "Не указано",
+      organizationId: entry.organizationId,
+      status: entry.status,
+      statusDate: entry.statusDate,
+      notes: entry.notes,
+    }));
+
+    return NextResponse.json({
+      unionCardNumber,
+      membershipJoinedAt: user.membershipJoinedAt,
+      membershipStatus: user.unionMembershipStatus || "NOT_ACCEPTED",
+      currentOrganization: user.organization
+        ? {
+            id: user.organization.id,
+            name: user.organization.name,
+            inn: user.organization.inn,
+            chairmanName: user.organization.chairmanName,
+          }
+        : null,
+      history,
+    });
+  } catch (error) {
+    console.error("[profile/membership] GET error:", error);
+    return NextResponse.json(
+      { error: "Не удалось загрузить информацию о членстве" },
+      { status: 500 }
+    );
+  }
+}
+

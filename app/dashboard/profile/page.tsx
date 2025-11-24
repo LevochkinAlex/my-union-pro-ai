@@ -50,7 +50,7 @@ interface Child {
 }
 
 interface AdditionalInfo {
-  occupation: string;
+  employmentStatus: string;
   hobbies: string;
   aboutMe: string;
   hasChildren: boolean | null;
@@ -58,14 +58,28 @@ interface AdditionalInfo {
   childrenBirthDates: string;
   maritalStatus: string;
   spouseInfo: string;
+  awards: string;
+  training: string;
   additionalInfo: string;
+}
+
+interface Award {
+  type: "ведомственная" | "государственная" | "профсоюзная";
+  year: string;
+  description: string;
+}
+
+interface Training {
+  name: string;
+  year: string;
+  description: string;
 }
 
 interface ChildrenState {
   children: Child[];
 }
 
-type TabKey = "profile" | "additional" | "security";
+type TabKey = "profile" | "additional" | "membership" | "security";
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
@@ -97,7 +111,7 @@ export default function ProfilePage() {
   });
 
   const [additionalInfo, setAdditionalInfo] = useState<AdditionalInfo>({
-    occupation: "",
+    employmentStatus: "",
     hobbies: "",
     aboutMe: "",
     hasChildren: null,
@@ -105,10 +119,37 @@ export default function ProfilePage() {
     childrenBirthDates: "",
     maritalStatus: "",
     spouseInfo: "",
+    awards: "",
+    training: "",
     additionalInfo: "",
   });
   
   const [children, setChildren] = useState<Child[]>([]);
+  const [awards, setAwards] = useState<Award[]>([]);
+  const [training, setTraining] = useState<Training[]>([]);
+  
+  // Данные о членстве
+  const [membershipData, setMembershipData] = useState<{
+    unionCardNumber: string | null;
+    membershipJoinedAt: string | null;
+    membershipStatus: string;
+    currentOrganization: {
+      id: string;
+      name: string;
+      inn: string | null;
+      chairmanName: string | null;
+    } | null;
+    history: Array<{
+      id: string;
+      organizationName: string;
+      organizationId: string | null;
+      status: string;
+      statusDate: string;
+      notes: string | null;
+    }>;
+  } | null>(null);
+  const [loadingMembership, setLoadingMembership] = useState(false);
+  const [generatingDocument, setGeneratingDocument] = useState<"removal" | "transfer" | null>(null);
   
   // Вычисление возраста
   const calculateAge = (birthDate: Date): number => {
@@ -150,6 +191,46 @@ export default function ProfilePage() {
     }
     
     setChildren(updatedChildren);
+  };
+
+  // Добавить награду
+  const addAward = () => {
+    setAwards([...awards, { type: "ведомственная", year: "", description: "" }]);
+  };
+
+  // Удалить награду
+  const removeAward = (index: number) => {
+    setAwards(awards.filter((_, i) => i !== index));
+  };
+
+  // Обновить данные награды
+  const updateAward = (index: number, field: keyof Award, value: string) => {
+    const updatedAwards = [...awards];
+    updatedAwards[index] = {
+      ...updatedAwards[index],
+      [field]: value,
+    };
+    setAwards(updatedAwards);
+  };
+
+  // Добавить обучение
+  const addTraining = () => {
+    setTraining([...training, { name: "", year: "", description: "" }]);
+  };
+
+  // Удалить обучение
+  const removeTraining = (index: number) => {
+    setTraining(training.filter((_, i) => i !== index));
+  };
+
+  // Обновить данные обучения
+  const updateTraining = (index: number, field: keyof Training, value: string) => {
+    const updatedTraining = [...training];
+    updatedTraining[index] = {
+      ...updatedTraining[index],
+      [field]: value,
+    };
+    setTraining(updatedTraining);
   };
 
   const [savingAdditionalInfo, setSavingAdditionalInfo] = useState(false);
@@ -205,7 +286,7 @@ export default function ProfilePage() {
           : "";
         
         setAdditionalInfo({
-          occupation: data.occupation ?? "",
+          employmentStatus: data.employmentStatus ?? "",
           hobbies: data.hobbies ?? "",
           aboutMe: data.aboutMe ?? "",
           hasChildren: data.hasChildren,
@@ -213,6 +294,8 @@ export default function ProfilePage() {
           childrenBirthDates: data.childrenBirthDates ?? "",
           maritalStatus: displayMaritalStatus,
           spouseInfo: data.spouseInfo ?? "",
+          awards: data.awards ?? "",
+          training: data.training ?? "",
           additionalInfo: data.additionalInfo ?? "",
         });
         
@@ -233,6 +316,30 @@ export default function ProfilePage() {
             console.error("Failed to parse children data:", error);
           }
         }
+
+        // Парсим награды из JSON
+        if (data.awards) {
+          try {
+            const parsedAwards = JSON.parse(data.awards);
+            if (Array.isArray(parsedAwards)) {
+              setAwards(parsedAwards);
+            }
+          } catch (error) {
+            console.error("Failed to parse awards data:", error);
+          }
+        }
+
+        // Парсим обучение из JSON
+        if (data.training) {
+          try {
+            const parsedTraining = JSON.parse(data.training);
+            if (Array.isArray(parsedTraining)) {
+              setTraining(parsedTraining);
+            }
+          } catch (error) {
+            console.error("Failed to parse training data:", error);
+          }
+        }
       } catch (error) {
         console.error(error);
       }
@@ -240,6 +347,98 @@ export default function ProfilePage() {
 
     loadAdditionalInfo();
   }, []);
+
+  // Загрузка данных о членстве
+  useEffect(() => {
+    const loadMembershipData = async () => {
+      try {
+        setLoadingMembership(true);
+        const response = await fetch("/api/profile/membership");
+        if (!response.ok) {
+          throw new Error("Не удалось загрузить информацию о членстве");
+        }
+        const data = await response.json();
+        setMembershipData(data);
+      } catch (error) {
+        console.error(error);
+        setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка загрузки данных о членстве" });
+      } finally {
+        setLoadingMembership(false);
+      }
+    };
+
+    if (activeTab === "membership") {
+      loadMembershipData();
+    }
+  }, [activeTab]);
+
+  // Обработчик генерации заявления о снятии с учета
+  const handleGenerateRemoval = async () => {
+    if (!confirm("Вы уверены, что хотите сгенерировать заявление о снятии с учета?")) {
+      return;
+    }
+
+    setGeneratingDocument("removal");
+    try {
+      const response = await fetch("/api/profile/membership/generate-removal", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Не удалось сгенерировать заявление");
+      }
+
+      const data = await response.json();
+      setMessage({ type: "success", text: "Заявление о снятии с учета успешно сгенерировано и добавлено в документы" });
+      
+      // Перезагружаем данные о членстве
+      const membershipResponse = await fetch("/api/profile/membership");
+      if (membershipResponse.ok) {
+        const membershipData = await membershipResponse.json();
+        setMembershipData(membershipData);
+      }
+    } catch (error) {
+      console.error(error);
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка генерации заявления" });
+    } finally {
+      setGeneratingDocument(null);
+    }
+  };
+
+  // Обработчик генерации заявления о переходе
+  const handleGenerateTransfer = async () => {
+    if (!confirm("Вы уверены, что хотите сгенерировать заявление о переходе в другой профсоюз?")) {
+      return;
+    }
+
+    setGeneratingDocument("transfer");
+    try {
+      const response = await fetch("/api/profile/membership/generate-transfer", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Не удалось сгенерировать заявление");
+      }
+
+      const data = await response.json();
+      setMessage({ type: "success", text: "Заявление о переходе в другой профсоюз успешно сгенерировано и добавлено в документы" });
+      
+      // Перезагружаем данные о членстве
+      const membershipResponse = await fetch("/api/profile/membership");
+      if (membershipResponse.ok) {
+        const membershipData = await membershipResponse.json();
+        setMembershipData(membershipData);
+      }
+    } catch (error) {
+      console.error(error);
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка генерации заявления" });
+    } finally {
+      setGeneratingDocument(null);
+    }
+  };
 
   useEffect(() => {
     if (message) {
@@ -410,10 +609,18 @@ export default function ProfilePage() {
           })))
         : "";
       
+      // Преобразуем награды в JSON формат
+      const awardsJSON = awards.length > 0 ? JSON.stringify(awards) : "";
+      
+      // Преобразуем обучение в JSON формат
+      const trainingJSON = training.length > 0 ? JSON.stringify(training) : "";
+      
       const dataToSend = {
         ...additionalInfo,
         maritalStatus: enumMaritalStatus,
         childrenBirthDates: childrenJSON,
+        awards: awardsJSON,
+        training: trainingJSON,
         hasChildren: children.length > 0 ? true : additionalInfo.hasChildren,
       };
       
@@ -517,6 +724,16 @@ export default function ProfilePage() {
             }`}
           >
             Дополнительная информация
+          </button>
+          <button
+            onClick={() => setActiveTab("membership")}
+            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
+              activeTab === "membership"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Членство
           </button>
           <button
             onClick={() => setActiveTab("security")}
@@ -674,19 +891,26 @@ export default function ProfilePage() {
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Образование</label>
-              <select
-                name="education"
-                value={profileData.education}
-                onChange={handleProfileChange}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              >
-                <option value="">Выберите уровень образования</option>
-                {EDUCATION_LEVELS.map((level) => (
-                  <option key={level} value={level}>
-                    {level}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  name="education"
+                  value={profileData.education}
+                  onChange={handleProfileChange}
+                  className="block w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2.5 pr-12 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                >
+                  <option value="">Выберите уровень образования</option>
+                  {EDUCATION_LEVELS.map((level) => (
+                    <option key={level} value={level}>
+                      {level}
+                    </option>
+                  ))}
+                </select>
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 dark:text-gray-400">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </span>
+              </div>
             </div>
           </div>
 
@@ -731,32 +955,49 @@ export default function ProfilePage() {
         <form onSubmit={handleAdditionalInfoSubmit} className="mt-6 space-y-6">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Род занятий</label>
-              <input
-                type="text"
-                name="occupation"
-                value={additionalInfo.occupation}
-                onChange={handleAdditionalInfoChange}
-                placeholder="Например: врач, учитель, инженер"
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              />
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Занятость</label>
+              <div className="relative">
+                <select
+                  name="employmentStatus"
+                  value={additionalInfo.employmentStatus}
+                  onChange={handleAdditionalInfoChange}
+                  className="block w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2.5 pr-12 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                >
+                  <option value="">Выберите</option>
+                  <option value="WORK">Работа</option>
+                  <option value="STUDY">Учеба</option>
+                  <option value="RETIREMENT">Пенсия</option>
+                </select>
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 dark:text-gray-400">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </span>
+              </div>
             </div>
 
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Семейное положение</label>
-              <select
-                name="maritalStatus"
-                value={additionalInfo.maritalStatus}
-                onChange={handleAdditionalInfoChange}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              >
-                <option value="">Выберите</option>
-                <option value="Не женат/Не замужем">Не женат/Не замужем</option>
-                <option value="Женат/Замужем">Женат/Замужем</option>
-                <option value="В разводе">В разводе</option>
-                <option value="Вдовец/Вдова">Вдовец/Вдова</option>
-                <option value="В гражданском браке">В гражданском браке</option>
-              </select>
+              <div className="relative">
+                <select
+                  name="maritalStatus"
+                  value={additionalInfo.maritalStatus}
+                  onChange={handleAdditionalInfoChange}
+                  className="block w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2.5 pr-12 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                >
+                  <option value="">Выберите</option>
+                  <option value="Не женат/Не замужем">Не женат/Не замужем</option>
+                  <option value="Женат/Замужем">Женат/Замужем</option>
+                  <option value="В разводе">В разводе</option>
+                  <option value="Вдовец/Вдова">Вдовец/Вдова</option>
+                  <option value="В гражданском браке">В гражданском браке</option>
+                </select>
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 dark:text-gray-400">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </span>
+              </div>
             </div>
 
             <div className="md:col-span-2">
@@ -843,15 +1084,22 @@ export default function ProfilePage() {
                             <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
                               Пол
                             </label>
-                            <select
-                              value={child.gender}
-                              onChange={(e) => updateChild(index, "gender", e.target.value)}
-                              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                            >
-                              <option value="">-</option>
-                              <option value="М">М</option>
-                              <option value="Ж">Ж</option>
-                            </select>
+                            <div className="relative">
+                              <select
+                                value={child.gender}
+                                onChange={(e) => updateChild(index, "gender", e.target.value)}
+                                className="block w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2 pr-12 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                              >
+                                <option value="">-</option>
+                                <option value="М">М</option>
+                                <option value="Ж">Ж</option>
+                              </select>
+                              <span className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 dark:text-gray-400">
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </span>
+                            </div>
                           </div>
                           
                           <div className="flex-1">
@@ -910,6 +1158,190 @@ export default function ProfilePage() {
               </div>
             )}
 
+            {/* Награды */}
+            <div className="md:col-span-2">
+              <div className="mb-4 flex items-center justify-between">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                  Награды (ведомственные, государственные, профсоюзные)
+                </label>
+                <button
+                  type="button"
+                  onClick={addAward}
+                  className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Добавить награду
+                </button>
+              </div>
+              
+              {awards.length === 0 ? (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center dark:border-gray-700 dark:bg-gray-900">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Нажмите "Добавить награду" чтобы указать информацию о награде
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {awards.map((award, index) => (
+                    <div
+                      key={index}
+                      className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                        <div className="w-full sm:w-48">
+                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                            Тип награды
+                          </label>
+                          <select
+                            value={award.type}
+                            onChange={(e) => updateAward(index, "type", e.target.value as Award["type"])}
+                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                          >
+                            <option value="ведомственная">Ведомственная</option>
+                            <option value="государственная">Государственная</option>
+                            <option value="профсоюзная">Профсоюзная</option>
+                          </select>
+                        </div>
+                        
+                        <div className="w-full sm:w-32">
+                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                            Год
+                          </label>
+                          <input
+                            type="text"
+                            value={award.year}
+                            onChange={(e) => updateAward(index, "year", e.target.value)}
+                            placeholder="YYYY"
+                            maxLength={4}
+                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                          />
+                        </div>
+                        
+                        <div className="flex-1">
+                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                            Описание
+                          </label>
+                          <input
+                            type="text"
+                            value={award.description}
+                            onChange={(e) => updateAward(index, "description", e.target.value)}
+                            placeholder="Описание награды"
+                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                          />
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => removeAward(index)}
+                            className="inline-flex items-center justify-center rounded-lg bg-red-600 p-2 text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 h-[38px] w-[38px]"
+                            title="Удалить"
+                          >
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Обучение */}
+            <div className="md:col-span-2">
+              <div className="mb-4 flex items-center justify-between">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                  Обучение (семинары, школы актива, курсы повышения квалификации)
+                </label>
+                <button
+                  type="button"
+                  onClick={addTraining}
+                  className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Добавить обучение
+                </button>
+              </div>
+              
+              {training.length === 0 ? (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center dark:border-gray-700 dark:bg-gray-900">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Нажмите "Добавить обучение" чтобы указать информацию об обучении
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {training.map((item, index) => (
+                    <div
+                      key={index}
+                      className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                        <div className="flex-1">
+                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                            Название
+                          </label>
+                          <input
+                            type="text"
+                            value={item.name}
+                            onChange={(e) => updateTraining(index, "name", e.target.value)}
+                            placeholder="Название семинара/курса"
+                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                          />
+                        </div>
+                        
+                        <div className="w-full sm:w-32">
+                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                            Год
+                          </label>
+                          <input
+                            type="text"
+                            value={item.year}
+                            onChange={(e) => updateTraining(index, "year", e.target.value)}
+                            placeholder="YYYY"
+                            maxLength={4}
+                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                          />
+                        </div>
+                        
+                        <div className="flex-1">
+                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                            Описание
+                          </label>
+                          <input
+                            type="text"
+                            value={item.description}
+                            onChange={(e) => updateTraining(index, "description", e.target.value)}
+                            placeholder="Описание обучения"
+                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                          />
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => removeTraining(index)}
+                            className="inline-flex items-center justify-center rounded-lg bg-red-600 p-2 text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 h-[38px] w-[38px]"
+                            title="Удалить"
+                          >
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="md:col-span-2">
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Хобби и увлечения</label>
               <textarea
@@ -957,6 +1389,165 @@ export default function ProfilePage() {
             </button>
           </div>
         </form>
+      </div>
+      )}
+
+      {activeTab === "membership" && (
+      <div className="w-full max-w-5xl rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 md:p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white md:text-lg">Профсоюзное членство</h3>
+        <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 md:text-sm">
+          Информация о вашем членстве в профсоюзе
+        </p>
+
+        {loadingMembership ? (
+          <div className="mt-6 flex items-center justify-center py-8">
+            <div className="text-center">
+              <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+              <p className="text-gray-600 dark:text-gray-400">Загрузка данных о членстве...</p>
+            </div>
+          </div>
+        ) : membershipData ? (
+          <div className="mt-6 space-y-6">
+            {/* Номер профсоюзной карточки */}
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Номер профсоюзной карточки
+              </label>
+              <p className="text-lg font-mono font-semibold text-gray-900 dark:text-white">
+                {membershipData.unionCardNumber || "Не назначен"}
+              </p>
+            </div>
+
+            {/* Статус членства */}
+            <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Статус членства
+              </label>
+              <div className="flex items-center gap-3">
+                {membershipData.membershipStatus === "ACCEPTED" ? (
+                  <>
+                    <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800 dark:bg-green-900/30 dark:text-green-200">
+                      Принят на учет
+                    </span>
+                    {membershipData.membershipJoinedAt && (
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        с {new Date(membershipData.membershipJoinedAt).toLocaleDateString("ru-RU")}
+                      </span>
+                    )}
+                  </>
+                ) : membershipData.membershipStatus === "REMOVED" ? (
+                  <span className="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-800 dark:bg-red-900/30 dark:text-red-200">
+                    Снят с учета
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
+                    Пока не принят
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Текущая организация */}
+            {membershipData.currentOrganization && (
+              <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                  Текущая организация
+                </label>
+                <p className="text-base font-medium text-gray-900 dark:text-white">
+                  {membershipData.currentOrganization.name}
+                </p>
+                {membershipData.currentOrganization.inn && (
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                    ИНН: {membershipData.currentOrganization.inn}
+                  </p>
+                )}
+                {membershipData.currentOrganization.chairmanName && (
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                    Председатель: {membershipData.currentOrganization.chairmanName}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* История членства */}
+            {membershipData.history && membershipData.history.length > 0 && (
+              <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+                <label className="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                  История членства
+                </label>
+                <div className="space-y-3">
+                  {membershipData.history.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                            {entry.organizationName}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                            {entry.status === "ACCEPTED"
+                              ? "Принят на учет"
+                              : entry.status === "REMOVED"
+                              ? "Снят с учета"
+                              : entry.status === "TRANSFERRED"
+                              ? "Переведен"
+                              : entry.status}
+                          </p>
+                          {entry.notes && (
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">{entry.notes}</p>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                          {new Date(entry.statusDate).toLocaleDateString("ru-RU")}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Кнопки действий */}
+            {membershipData.membershipStatus === "ACCEPTED" && (
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button
+                  onClick={handleGenerateRemoval}
+                  disabled={generatingDocument === "removal"}
+                  className="inline-flex items-center justify-center rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {generatingDocument === "removal" ? (
+                    <>
+                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                      Генерация...
+                    </>
+                  ) : (
+                    "Снять с учета"
+                  )}
+                </button>
+                <button
+                  onClick={handleGenerateTransfer}
+                  disabled={generatingDocument === "transfer"}
+                  className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {generatingDocument === "transfer" ? (
+                    <>
+                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                      Генерация...
+                    </>
+                  ) : (
+                    "Перейти в другой профсоюз"
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200">
+            Не удалось загрузить данные о членстве
+          </div>
+        )}
       </div>
       )}
 
