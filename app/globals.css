@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+@theme {
+  --color-scheme: light dark;
+}
+
+@variant dark (&:where(.dark, .dark *));
+
 /* News content styles */
 .news-content h1 {
   font-size: 2rem;
@@ -132,27 +138,25 @@
 }
 
 /* Dark mode */
-@media (prefers-color-scheme: dark) {
-  .news-content {
-    --tw-prose-headings: #f3f4f6;
-  }
+.dark .news-content {
+  --tw-prose-headings: #f3f4f6;
+}
 
-  .news-content blockquote {
-    border-left-color: #374151;
-    color: #9ca3af;
-  }
+.dark .news-content blockquote {
+  border-left-color: #374151;
+  color: #9ca3af;
+}
 
-  .news-content pre,
-  .news-content code {
-    background-color: #1f2937;
-  }
+.dark .news-content pre,
+.dark .news-content code {
+  background-color: #1f2937;
+}
 
-  .news-content th,
-  .news-content td {
-    border-color: #374151;
-  }
+.dark .news-content th,
+.dark .news-content td {
+  border-color: #374151;
+}
 
-  .news-content th {
-    background-color: #1f2937;
-  }
+.dark .news-content th {
+  background-color: #1f2937;
 }
