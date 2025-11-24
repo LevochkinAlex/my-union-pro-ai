@@ -10,8 +10,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <SessionProvider basePath="/api/auth">
       <ThemeProvider
         attribute="class"
-        defaultTheme="dark"
-        enableSystem={false}
+        defaultTheme="system"
+        enableSystem={true}
         storageKey="myunion-theme"
         disableTransitionOnChange={false}
       >
