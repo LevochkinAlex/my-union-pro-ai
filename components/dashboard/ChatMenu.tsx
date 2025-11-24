@@ -43,7 +43,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
 
   const isLoadingRef = useRef(false);
   const hasLoadedRef = useRef(false);
-  const loadSessionsRef = useRef<() => Promise<void>>();
+  const loadSessionsRef = useRef<(() => Promise<void>) | null>(null);
 
   const loadSessions = useCallback(async () => {
     // Защита от дублирующихся запросов
