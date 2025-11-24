@@ -25,10 +25,13 @@ export default function MiniChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(false); // Флаг для контроля автоскролла
   const isInitialLoadRef = useRef(true); // Флаг первой загрузки
+  const avatarLoadedRef = useRef(false);
+  const sessionLoadedRef = useRef(false);
 
-  // Загружаем аватарку пользователя
+  // Загружаем аватарку пользователя (только один раз)
   useEffect(() => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id || avatarLoadedRef.current) return;
+    avatarLoadedRef.current = true;
 
     const loadUserAvatar = async () => {
       try {
@@ -47,9 +50,10 @@ export default function MiniChat() {
     loadUserAvatar();
   }, [session?.user?.id]);
 
-  // Загружаем сессию "Мой чат" (STATEMENT)
+  // Загружаем сессию "Мой чат" (STATEMENT) только один раз
   useEffect(() => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id || sessionLoadedRef.current) return;
+    sessionLoadedRef.current = true;
 
     const loadStatementSession = async () => {
       try {
@@ -82,7 +86,7 @@ export default function MiniChat() {
     };
 
     loadStatementSession();
-  }, [session]);
+  }, [session?.user?.id]);
 
   // Загружаем историю сообщений
   const loadMessages = async (sid: string) => {

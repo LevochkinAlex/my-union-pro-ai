@@ -41,7 +41,15 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   // Get active session ID from URL
   const activeSessionId = searchParams.get("session") || searchParams.get("appeal") || null;
 
+  const isLoadingRef = useRef(false);
+  const hasLoadedRef = useRef(false);
+  const loadSessionsRef = useRef<() => Promise<void>>();
+
   const loadSessions = useCallback(async () => {
+    // Защита от дублирующихся запросов
+    if (isLoadingRef.current) return;
+    isLoadingRef.current = true;
+    
     try {
       setIsLoading(true);
       const [sessionsRes, appealsRes] = await Promise.all([
@@ -58,32 +66,45 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
         const data = await appealsRes.json();
         setAppeals(data.appeals || []);
       }
+      
+      hasLoadedRef.current = true;
     } catch (error) {
       console.error("Error loading chat sessions:", error);
     } finally {
       setIsLoading(false);
+      isLoadingRef.current = false;
     }
   }, []);
 
+  // Сохраняем функцию в ref
   useEffect(() => {
-    if (isExpanded) {
+    loadSessionsRef.current = loadSessions;
+  }, [loadSessions]);
+
+  // Загружаем только ОДИН раз при монтировании
+  useEffect(() => {
+    if (!hasLoadedRef.current) {
+      loadSessions();
+    }
+  }, [loadSessions]);
+
+  // Перезагружаем при разворачивании меню (но не при первом монтировании)
+  useEffect(() => {
+    if (isExpanded && hasLoadedRef.current) {
       loadSessions();
     }
   }, [isExpanded, loadSessions]);
 
+  // Обновляем при возврате фокуса на окно
   useEffect(() => {
     const handleFocus = () => {
-      if (isExpanded) {
-        loadSessions();
+      if (isExpanded && hasLoadedRef.current) {
+        loadSessionsRef.current?.();
       }
     };
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
-  }, [isExpanded, loadSessions]);
-
-  useEffect(() => {
-    loadSessions();
-  }, []);
+  }, [isExpanded]);
 
   const handleNewAppeal = async () => {
     try {

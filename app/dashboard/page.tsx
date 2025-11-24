@@ -1,7 +1,7 @@
 "use client";
 
 import Chat from "@/components/chat/Chat";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 function ChatLoading() {
@@ -10,9 +10,19 @@ function ChatLoading() {
 
 function ChatRedirectLogic({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
+    // Если уже есть session/mode в URL, не делаем запрос
+    if (searchParams.has("session") || searchParams.has("mode") || hasLoadedRef.current) {
+      setIsLoading(false);
+      return;
+    }
+    
+    hasLoadedRef.current = true;
+
     async function getLatestSession() {
       try {
         const response = await fetch("/api/chat/sessions");
@@ -36,7 +46,7 @@ function ChatRedirectLogic({ children }: { children: React.ReactNode }) {
     }
 
     getLatestSession();
-  }, [router]);
+  }, [router, searchParams]);
 
   if (isLoading) {
     return <ChatLoading />;
