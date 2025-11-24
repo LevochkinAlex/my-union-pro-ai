@@ -4,6 +4,7 @@
  */
 
 const DADATA_CLEAN_ADDRESS_URL = "https://cleaner.dadata.ru/api/v1/clean/address";
+const DADATA_SUGGEST_ADDRESS_URL = "https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address";
 const DADATA_CLEAN_NAME_URL = "https://cleaner.dadata.ru/api/v1/clean/name";
 
 function getDaDataToken(): string {
@@ -77,13 +78,14 @@ export async function validateAddressWithDaData(address: string): Promise<Valida
   try {
     console.log(`[dadata] Validating address: ${address}`);
 
-    const response = await fetch(DADATA_CLEAN_ADDRESS_URL, {
+    // Используем Suggestions API (более доступный)
+    const response = await fetch(DADATA_SUGGEST_ADDRESS_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Token ${token}`,
       },
-      body: JSON.stringify({ query: address }),
+      body: JSON.stringify({ query: address, count: 1 }),
     });
 
     if (!response.ok) {
@@ -91,11 +93,17 @@ export async function validateAddressWithDaData(address: string): Promise<Valida
       return null;
     }
 
-    const data: DaDataResponse = await response.json();
+    const result = await response.json();
+    
+    if (!result.suggestions || result.suggestions.length === 0) {
+      console.warn(`[dadata] Address not found: ${address}`);
+      return null;
+    }
 
-    // Проверяем что адрес был распарсен успешно
-    if (!data.result || data.qc === "4") {
-      // qc = 4 означает что адрес не найден
+    const data = result.suggestions[0].data;
+
+    // Проверяем что адрес найден
+    if (!data || data.qc === "4") {
       console.warn(`[dadata] Address not found or invalid: ${address}`);
       return null;
     }
@@ -118,14 +126,14 @@ export async function validateAddressWithDaData(address: string): Promise<Valida
     // Извлекаем город (приоритет: city_with_type, затем settlement_with_type)
     let city: string | null = null;
     if (data.city_with_type) {
-      // Убираем тип (г., гор. и т.д.), оставляем только название города
+      // Убираем тип (г, г., город, гор. и т.д.), оставляем только название города
       city = data.city_with_type
-        .replace(/^(г\.|город|гор\.)\s*/i, "")
+        .replace(/^(г\s+|г\.|город\s+|гор\.\s*)/i, "")
         .trim();
     } else if (data.settlement_with_type) {
       // Если города нет, берем населенный пункт
       city = data.settlement_with_type
-        .replace(/^(п\.|пос\.|село|с\.|деревня|д\.)\s*/i, "")
+        .replace(/^(п\s+|п\.|пос\.\s*|село\s+|с\.\s*|деревня\s+|д\.\s*)/i, "")
         .trim();
     }
 

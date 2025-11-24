@@ -186,7 +186,7 @@ export function enhanceUserMessageWithContext(
       if (validatedData?.address) {
         enhanced = `${userMessage}\n\n[✅ СИСТЕМА ПРОВЕРИЛА АДРЕС: "${validatedData.address.address}", город: ${validatedData.address.city || "не определен"}. Покажи пользователю полный адрес и спроси "Верно? (да/нет)"]`;
       } else {
-        enhanced = `${userMessage}\n\n[⚠️ АДРЕС НЕ ВАЛИДЕН. Попроси указать адрес полнее (регион, город, улица, дом, квартира).]`;
+        enhanced = `${userMessage}\n\n[⚠️ АДРЕС НЕ РАСПОЗНАН. ❌ НЕ перечисляй компоненты списком! Скажи: "Не могу распознать адрес. Попробуйте добавить регион: Татарстан, Набережные Челны, Чулман 11, квартира 141" - дай один пример с регионом.]`;
       }
       break;
 
