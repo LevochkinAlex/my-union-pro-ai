@@ -59,7 +59,10 @@ pnpm dev
 ### 🔍 Специальные темы
 
 - [ORGANIZATION_VALIDATION.md](./ORGANIZATION_VALIDATION.md) - 🏢 Проверка организаций по ЕГРЮЛ/Минюст РФ
+- [DADATA_CITY_EXTRACTION.md](./DADATA_CITY_EXTRACTION.md) - 🏙️ Автоматическое извлечение города из DaData
 - [PROFILE_UPDATE_AND_REGENERATION.md](./PROFILE_UPDATE_AND_REGENERATION.md) - 🔄 Проверка профиля и перегенерация документов
+- [PROFILE_CONFIRMATION_FIX.md](./PROFILE_CONFIRMATION_FIX.md) - ✅ Логика подтверждения профиля перед генерацией
+- [CHAT_UX_IMPROVEMENTS.md](./CHAT_UX_IMPROVEMENTS.md) - 🎯 Улучшение UX чата и подтверждения данных
 - [PROFILE_FIELDS_ANALYSIS.md](./PROFILE_FIELDS_ANALYSIS.md) - 📊 Анализ полей профиля пользователя
 - [BOT_TRAINING_UPDATE.md](./BOT_TRAINING_UPDATE.md) - 🤖 Обучение бота для сбора профиля
 - [APPEAL_BOT_FEATURES.md](./APPEAL_BOT_FEATURES.md) - AI бот для обращений

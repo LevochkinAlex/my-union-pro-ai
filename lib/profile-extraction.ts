@@ -213,7 +213,15 @@ export async function extractProfileDataFromMessages(
   }
 
   // Join all text for analysis (fallback если структурированные данные не найдены)
+  // ⚠️ ВАЖНО: Для fallback используем ТОЛЬКО сообщения пользователя,
+  // чтобы избежать извлечения данных из списков вариантов, которые перечисляет бот
   const allText = messages
+    .map((msg) => msg.content)
+    .join("\n");
+  
+  // Для fallback-извлечения используем только сообщения пользователя
+  const userOnlyText = messages
+    .filter((msg) => msg.role === "user")
     .map((msg) => msg.content)
     .join("\n");
 
@@ -526,10 +534,14 @@ export async function extractProfileDataFromMessages(
 
       try {
         console.log(`[profile-extraction] Validating address via DaData: ${addressCandidate}`);
-        const validatedAddress = await validateAddressWithDaData(addressCandidate);
-        if (validatedAddress) {
-          profileData.address = validatedAddress;
-          console.log(`[profile-extraction] Address validated: ${validatedAddress}`);
+        const validatedData = await validateAddressWithDaData(addressCandidate);
+        if (validatedData) {
+          profileData.address = validatedData.address;
+          // Автоматически подставляем город из DaData
+          if (validatedData.city) {
+            profileData.preferredDiscountCity = validatedData.city;
+          }
+          console.log(`[profile-extraction] Address validated: ${validatedData.address}, city: ${validatedData.city}`);
         } else {
           profileData.address = addressCandidate;
           console.log(`[profile-extraction] Address not validated by DaData, using as-is: ${addressCandidate}`);
@@ -543,23 +555,24 @@ export async function extractProfileDataFromMessages(
 
   // Extract job title and profession - только если не извлечено из структурированных данных
   if ((!profileData.jobTitle || !profileData.profession) && !hasStructuredData) {
+    // Используем userOnlyText чтобы не извлекать из текста бота
     const jobLabelPattern = /(?:\*\*Должность\*\*|Должность)[^:\n]*[:\-–]\s*(.+)/i;
     const professionLabelPattern = /(?:\*\*Профессия\*\*|Профессия)[^:\n]*[:\-–]\s*(.+)/i;
 
-    const jobLabelMatch = allText.match(jobLabelPattern);
+    const jobLabelMatch = userOnlyText.match(jobLabelPattern);
     if (jobLabelMatch && !profileData.jobTitle) {
       profileData.jobTitle = jobLabelMatch[1].split(/\n/)[0].trim();
     }
 
-    const professionLabelMatch = allText.match(professionLabelPattern);
+    const professionLabelMatch = userOnlyText.match(professionLabelPattern);
     if (professionLabelMatch && !profileData.profession) {
       profileData.profession = professionLabelMatch[1].split(/\n/)[0].trim();
     }
 
     if (!profileData.jobTitle || !profileData.profession) {
       const jobPattern =
-        /(должност[а-яё]*|специалист[а-яё]*|инженер[а-яё]*|программист[а-яё]*|бухгалтер[а-яё]*|юрист[а-яё]*|менеджер[а-яё]*|директор[а-яё]*|учитель|врач|продавец|водитель).+?(?=\.|\n|,|$)/i;
-      const jobMatch = allText.match(jobPattern);
+        /(должност[а-яё]*|специалист[а-яё]*|инженер[а-яё]*|программист[а-яё]*|бухгалтер[а-яё]*|бухгалтер[а-яё]*|юрист[а-яё]*|менеджер[а-яё]*|директор[а-яё]*|учитель|врач|продавец|водитель).+?(?=\.|\n|,|$)/i;
+      const jobMatch = userOnlyText.match(jobPattern);
       if (jobMatch) {
         const jobValue = jobMatch[0].trim();
         if (!profileData.jobTitle) profileData.jobTitle = jobValue;
@@ -570,8 +583,9 @@ export async function extractProfileDataFromMessages(
 
   // Extract education - только если не извлечено из структурированных данных
   if (!profileData.education && !hasStructuredData) {
+    // Используем userOnlyText чтобы не извлекать из списков вариантов бота
     const educationLabelPattern = /(?:\*\*Образование\*\*|Образование)[^:\n]*[:\-–]\s*(.+)/i;
-    const educationLabelMatch = allText.match(educationLabelPattern);
+    const educationLabelMatch = userOnlyText.match(educationLabelPattern);
 
     if (educationLabelMatch) {
       profileData.education = educationLabelMatch[1].split(/\n/)[0].trim();
@@ -580,7 +594,7 @@ export async function extractProfileDataFromMessages(
     if (!profileData.education) {
       const educationPattern =
         /(высшее|среднее|начальное|бакалавриат|магистратура|специалитет|аспирантура|среднее профессиональное|начальное профессиональное).+?(?=\.|\n|$)/i;
-      const educationMatch = allText.match(educationPattern);
+      const educationMatch = userOnlyText.match(educationPattern);
       if (educationMatch) {
         profileData.education = educationMatch[0].trim();
       }

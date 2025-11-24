@@ -55,10 +55,18 @@ interface DaDataResponse {
 }
 
 /**
- * Валидирует и стандартизирует адрес через DaData
- * Возвращает полный корректный адрес или null если не удалось распарсить
+ * Результат валидации адреса
  */
-export async function validateAddressWithDaData(address: string): Promise<string | null> {
+export interface ValidatedAddress {
+  address: string;
+  city: string | null;
+}
+
+/**
+ * Валидирует и стандартизирует адрес через DaData
+ * Возвращает полный корректный адрес и город или null если не удалось распарсить
+ */
+export async function validateAddressWithDaData(address: string): Promise<ValidatedAddress | null> {
   const token = getDaDataToken();
   
   if (!address || !token) {
@@ -107,8 +115,25 @@ export async function validateAddressWithDaData(address: string): Promise<string
 
     const fullAddress = addressParts.join(", ");
 
-    console.log(`[dadata] Address validated successfully: ${fullAddress}`);
-    return fullAddress;
+    // Извлекаем город (приоритет: city_with_type, затем settlement_with_type)
+    let city: string | null = null;
+    if (data.city_with_type) {
+      // Убираем тип (г., гор. и т.д.), оставляем только название города
+      city = data.city_with_type
+        .replace(/^(г\.|город|гор\.)\s*/i, "")
+        .trim();
+    } else if (data.settlement_with_type) {
+      // Если города нет, берем населенный пункт
+      city = data.settlement_with_type
+        .replace(/^(п\.|пос\.|село|с\.|деревня|д\.)\s*/i, "")
+        .trim();
+    }
+
+    console.log(`[dadata] Address validated successfully: ${fullAddress}, city: ${city}`);
+    return {
+      address: fullAddress,
+      city
+    };
   } catch (error) {
     console.error("[dadata] Error validating address:", error);
     return null;

@@ -317,10 +317,17 @@ function ChatContent() {
       const wasAtBottom = isUserAtBottom();
       const isFirstLoad = isInitialLoadRef.current;
       
+      // Проверяем тип последнего сообщения
+      const lastMessage = messages[messages.length - 1];
+      const isBotResponse = lastMessage?.role === "assistant";
+      const isUserMessage = lastMessage?.role === "user";
+      
       // Скроллим если:
       // 1. Первая загрузка приложения (isFirstLoad = true)
       // 2. Пользователь уже был внизу (wasAtBottom = true) - natural flow при получении новых сообщений
-      if (isFirstLoad || wasAtBottom) {
+      // 3. Это ответ бота (isBotResponse = true) - ВСЕГДА скроллим к ответу бота
+      // 4. Это сообщение пользователя (isUserMessage = true) - ВСЕГДА скроллим к своему сообщению
+      if (isFirstLoad || wasAtBottom || isBotResponse || isUserMessage) {
         // Используем requestAnimationFrame чтобы убедиться, что DOM обновился
         requestAnimationFrame(() => {
           // Дополнительная задержка для гарантии отрисовки
@@ -863,7 +870,10 @@ function ChatContent() {
                             ),
                           }}
                         >
-                          {message.content.replace(/\[PROFILE_COMPLETE\]/g, "")}
+                          {message.content
+                            .replace(/\[PROFILE_COMPLETE\]/g, "")
+                            .replace(/\[PROFILE_AWAITING_CONFIRMATION\]/g, "")
+                          }
                         </ReactMarkdown>
                       </div>
                     </div>
