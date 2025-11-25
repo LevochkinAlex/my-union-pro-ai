@@ -1477,11 +1477,10 @@ export async function POST(request: NextRequest) {
               where: { id: session.user.id },
             });
             
-            // Убираем пустые значения и organizationName (это не поле в User)
+            // Убираем только пустые значения
             const cleanData = Object.fromEntries(
               Object.entries(extractedData).filter(
                 ([key, value]) =>
-                  key !== "organizationName" && // organizationName не сохраняем напрямую
                   value !== undefined &&
                   value !== null &&
                   value !== "" &&
