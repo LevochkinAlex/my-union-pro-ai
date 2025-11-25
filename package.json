@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "dotenv -e .env.local -- next dev -p 3004",
-    "build": "pnpm prisma:generate && dotenv -e .env.local -- next build",
+    "prebuild": "pnpm prisma:generate",
+    "build": "dotenv -e .env.local -- next build",
     "start": "dotenv -e .env.local -- next start -p 3004",
     "lint": "next lint",
     "prisma:migrate": "dotenv -e .env.local -- pnpm prisma migrate dev",
