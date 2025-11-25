@@ -66,9 +66,19 @@ export default function MyDiscountsPage() {
   const loadMyDiscounts = async () => {
     setLoading(true);
     try {
+      console.log("[MyDiscounts] Loading preferences...");
+      
       // Load user preferences
       const prefsResponse = await fetch("/api/discounts/preferences");
+      
+      if (!prefsResponse.ok) {
+        console.error("[MyDiscounts] Failed to load preferences:", prefsResponse.status);
+        throw new Error(`Failed to load preferences: ${prefsResponse.status}`);
+      }
+      
       const prefsData = await prefsResponse.json();
+      console.log("[MyDiscounts] Preferences loaded:", prefsData);
+      
       const filters = prefsData.filters || {};
       
       // Extract IDs from claimed (может быть массив объектов или чисел)
@@ -79,18 +89,34 @@ export default function MyDiscountsPage() {
       
       const favoriteIds = filters.favorites || [];
       
+      console.log("[MyDiscounts] IDs to fetch:", {
+        activeTab,
+        claimedIds: claimedIds.length,
+        favoriteIds: favoriteIds.length,
+      });
+      
       // Determine which IDs to fetch
       const idsToFetch = activeTab === "claimed" ? claimedIds : favoriteIds;
       
       if (idsToFetch.length === 0) {
+        console.log("[MyDiscounts] No discounts to fetch");
         setDiscounts([]);
         setLoading(false);
         return;
       }
 
+      console.log("[MyDiscounts] Fetching discounts for IDs:", idsToFetch);
+      
       // Fetch discounts by IDs
       const discountsResponse = await fetch(`/api/discounts?ids=${idsToFetch.join(",")}`);
+      
+      if (!discountsResponse.ok) {
+        console.error("[MyDiscounts] Failed to fetch discounts:", discountsResponse.status);
+        throw new Error(`Failed to fetch discounts: ${discountsResponse.status}`);
+      }
+      
       const discountsData = await discountsResponse.json();
+      console.log("[MyDiscounts] Fetched", discountsData.discounts?.length || 0, "discounts");
       
       // Добавляем промокоды из preferences к данным скидок
       console.log("[MyDiscounts] Raw claimed data:", claimedData);
@@ -120,7 +146,9 @@ export default function MyDiscountsPage() {
       
       setDiscounts(discountsWithPromoCodes);
     } catch (error) {
-      console.error("Failed to load my discounts:", error);
+      console.error("[MyDiscounts] Failed to load my discounts:", error);
+      // Показываем пустой список вместо вечной загрузки
+      setDiscounts([]);
     } finally {
       setLoading(false);
     }
