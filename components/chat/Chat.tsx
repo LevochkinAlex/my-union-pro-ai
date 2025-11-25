@@ -40,19 +40,12 @@ function ChatContent() {
   const lastNotifiedMessageIdRef = useRef<string | null>(null); // ID последнего сообщения, для которого было показано уведомление
   const loadMessagesRef = useRef<(() => Promise<void>) | null>(null);
   const isLoadingMessagesRef = useRef(false);
-  const lastLoadedSessionIdRef = useRef<string | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const loadMessages = useCallback(async () => {
     // Защита от дублирующихся запросов
     if (isLoadingMessagesRef.current) {
       console.log("[chat] Already loading messages, skipping...");
-      return;
-    }
-    
-    // Проверяем, загружали ли мы уже эту сессию
-    if (lastLoadedSessionIdRef.current === (sessionId || 'default')) {
-      console.log("[chat] Session already loaded, skipping...");
       return;
     }
     
@@ -118,9 +111,6 @@ function ChatContent() {
       // ВСЕГДА скроллим вниз при загрузке чата (первый раз или переключение между сессиями)
       // Пользователь ожидает увидеть последние сообщения
       shouldAutoScrollRef.current = true;
-      
-      // Запоминаем что эту сессию уже загрузили
-      lastLoadedSessionIdRef.current = sessionId || 'default';
     } catch (error) {
       console.error("Ошибка загрузки сообщений:", error);
       setError(error instanceof Error ? error.message : "Не удалось загрузить историю чата");
@@ -171,7 +161,6 @@ function ChatContent() {
     // Сбрасываем счетчики при смене сессии
     lastNotifiedMessageIdRef.current = null;
     isInitialLoadRef.current = true;
-    lastLoadedSessionIdRef.current = null; // Разрешаем загрузку новой сессии
     console.log("[Chat] Session changed, reset refs for session:", sessionId);
   }, [sessionId]);
 
