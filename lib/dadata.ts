@@ -34,12 +34,14 @@ interface DaDataResponse {
   area_with_type?: string;
   city_fias_id?: string;
   city_kladr_id?: string;
+  city?: string; // Название города без префикса (Suggestions API)
   city_with_type?: string;
   city_district_fias_id?: string;
   city_district_kladr_id?: string;
   city_district_with_type?: string;
   settlement_fias_id?: string;
   settlement_kladr_id?: string;
+  settlement?: string; // Название населенного пункта без префикса (Suggestions API)
   settlement_with_type?: string;
   street_fias_id?: string;
   street_kladr_id?: string;
@@ -133,18 +135,28 @@ export async function validateAddressWithDaData(address: string): Promise<Valida
 
     const fullAddress = addressParts.join(", ");
 
-    // Извлекаем город (приоритет: city_with_type, затем settlement_with_type)
+    // Извлекаем город (приоритет: прямое поле city, затем city_with_type, затем settlement)
     let city: string | null = null;
-    if (data.city_with_type) {
-      // Убираем тип (г, г., город, гор. и т.д.), оставляем только название города
+    
+    // 1. Сначала пробуем поле city (без префикса) - самый надежный вариант
+    if (data.city && typeof data.city === 'string' && data.city.trim()) {
+      city = data.city.trim();
+    }
+    // 2. Если нет - пробуем city_with_type и убираем префикс
+    else if (data.city_with_type) {
       city = data.city_with_type
         .replace(/^(г\s+|г\.|город\s+|гор\.\s*)/i, "")
         .trim();
-    } else if (data.settlement_with_type) {
-      // Если города нет, берем населенный пункт
+    }
+    // 3. Если города нет - берем settlement_with_type
+    else if (data.settlement_with_type) {
       city = data.settlement_with_type
         .replace(/^(п\s+|п\.|пос\.\s*|село\s+|с\.\s*|деревня\s+|д\.\s*)/i, "")
         .trim();
+    }
+    // 4. Если и settlement нет - пробуем прямое поле settlement
+    else if (data.settlement && typeof data.settlement === 'string' && data.settlement.trim()) {
+      city = data.settlement.trim();
     }
 
     console.log(`[dadata] Address validated successfully: ${fullAddress}, city: ${city}`);
