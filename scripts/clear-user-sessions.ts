@@ -49,7 +49,6 @@ async function clearSessions() {
       profession: null,
       education: null,
       region: null,
-      city: null,
       organizationId: null,
       organizationName: null,
     },
