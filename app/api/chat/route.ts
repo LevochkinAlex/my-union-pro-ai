@@ -1110,11 +1110,6 @@ export async function POST(request: NextRequest) {
 
     if (chatSession.type === "STATEMENT" && message && requiresValidation(questionContext)) {
       try {
-        // Получаем регион пользователя для более точного поиска
-        const userForValidation = await prisma.user.findUnique({
-          where: { id: session.user.id },
-          select: { region: true },
-        });
 
         // ВАЛИДАЦИЯ ФИО
         if (questionContext === "FIO" && message.length >= 5) {
@@ -1151,8 +1146,8 @@ export async function POST(request: NextRequest) {
 
         // ВАЛИДАЦИЯ ОРГАНИЗАЦИИ
         if (questionContext === "ORGANIZATION") {
-          console.log("[chat] 🔍 Searching organization in Minjust registry:", message, "| Region:", userForValidation?.region || "not specified");
-          const orgResult = await findOrganization(message, userForValidation?.region || undefined);
+          console.log("[chat] 🔍 Searching organization in Minjust registry:", message);
+          const orgResult = await findOrganization(message);
           
           if (orgResult) {
             console.log("[chat] ✅ Organization found:", orgResult.name, "| In DB:", orgResult.foundInDatabase);
