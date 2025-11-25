@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import PhoneInput from "@/components/form/PhoneInput";
+import AddressInput from "@/components/form/AddressInput";
+import Autocomplete from "@/components/form/Autocomplete";
 
 interface ProfileSelfFillModalProps {
   isOpen: boolean;
@@ -19,6 +22,10 @@ export function ProfileSelfFillModal({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showCloseWarning, setShowCloseWarning] = useState(false);
 
+  // Справочники профессий и должностей
+  const [jobTitles, setJobTitles] = useState<string[]>([]);
+  const [professions, setProfessions] = useState<string[]>([]);
+
   // Данные формы
   const [profileData, setProfileData] = useState({
     firstName: "",
@@ -32,6 +39,26 @@ export function ProfileSelfFillModal({
     education: "",
     organizationName: "",
   });
+
+  // Загрузка справочников
+  useEffect(() => {
+    const loadDictionaries = async () => {
+      try {
+        const response = await fetch("/api/dictionaries");
+        if (response.ok) {
+          const data = await response.json();
+          setJobTitles(data.jobTitles || []);
+          setProfessions(data.professions || []);
+        }
+      } catch (error) {
+        console.error("Failed to load dictionaries:", error);
+      }
+    };
+
+    if (isOpen) {
+      loadDictionaries();
+    }
+  }, [isOpen]);
 
   const [additionalData, setAdditionalData] = useState({
     employmentStatus: "",
@@ -259,6 +286,8 @@ export function ProfileSelfFillModal({
                 setProfileData(data);
                 setHasUnsavedChanges(true);
               }}
+              jobTitles={jobTitles}
+              professions={professions}
             />
           )}
 
@@ -337,10 +366,18 @@ export function ProfileSelfFillModal({
 function Step1ProfileForm({
   data,
   onChange,
+  jobTitles,
+  professions,
 }: {
   data: any;
   onChange: (data: any) => void;
+  jobTitles: string[];
+  professions: string[];
 }) {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    onChange({ ...data, [e.target.name]: e.target.value });
+  };
+
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold mb-4">Основные данные профиля</h3>
@@ -350,8 +387,9 @@ function Step1ProfileForm({
           <label className="block text-sm font-medium mb-1">Фамилия *</label>
           <input
             type="text"
+            name="lastName"
             value={data.lastName}
-            onChange={(e) => onChange({ ...data, lastName: e.target.value })}
+            onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
           />
         </div>
@@ -360,8 +398,9 @@ function Step1ProfileForm({
           <label className="block text-sm font-medium mb-1">Имя *</label>
           <input
             type="text"
+            name="firstName"
             value={data.firstName}
-            onChange={(e) => onChange({ ...data, firstName: e.target.value })}
+            onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
           />
         </div>
@@ -370,8 +409,9 @@ function Step1ProfileForm({
           <label className="block text-sm font-medium mb-1">Отчество</label>
           <input
             type="text"
+            name="middleName"
             value={data.middleName}
-            onChange={(e) => onChange({ ...data, middleName: e.target.value })}
+            onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
           />
         </div>
@@ -380,18 +420,19 @@ function Step1ProfileForm({
           <label className="block text-sm font-medium mb-1">Дата рождения *</label>
           <input
             type="date"
+            name="dateOfBirth"
             value={data.dateOfBirth}
-            onChange={(e) => onChange({ ...data, dateOfBirth: e.target.value })}
+            onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">Телефон *</label>
-          <input
-            type="tel"
+          <PhoneInput
+            name="phone"
             value={data.phone}
-            onChange={(e) => onChange({ ...data, phone: e.target.value })}
+            onChange={handleChange}
             placeholder="+7 (___) ___-__-__"
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
           />
@@ -399,10 +440,10 @@ function Step1ProfileForm({
 
         <div className="col-span-2">
           <label className="block text-sm font-medium mb-1">Адрес *</label>
-          <input
-            type="text"
+          <AddressInput
+            name="address"
             value={data.address}
-            onChange={(e) => onChange({ ...data, address: e.target.value })}
+            onChange={handleChange}
             placeholder="Регион, город, улица, дом, квартира"
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
           />
@@ -412,28 +453,33 @@ function Step1ProfileForm({
           <label className="block text-sm font-medium mb-1">Организация</label>
           <input
             type="text"
+            name="organizationName"
             value={data.organizationName}
-            onChange={(e) => onChange({ ...data, organizationName: e.target.value })}
+            onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">Должность *</label>
-          <input
-            type="text"
+          <Autocomplete
+            name="jobTitle"
             value={data.jobTitle}
-            onChange={(e) => onChange({ ...data, jobTitle: e.target.value })}
+            onChange={(value) => onChange({ ...data, jobTitle: value })}
+            options={jobTitles}
+            placeholder="Начните вводить должность..."
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">Профессия *</label>
-          <input
-            type="text"
+          <Autocomplete
+            name="profession"
             value={data.profession}
-            onChange={(e) => onChange({ ...data, profession: e.target.value })}
+            onChange={(value) => onChange({ ...data, profession: value })}
+            options={professions}
+            placeholder="Начните вводить профессию..."
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
           />
         </div>

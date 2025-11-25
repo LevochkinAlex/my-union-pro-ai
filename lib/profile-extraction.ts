@@ -819,7 +819,9 @@ export function isProfileComplete(user: any): boolean {
     !!user?.address &&
     !!user?.jobTitle &&
     !!user?.profession &&
-    !!user?.education
+    !!user?.education &&
+    // Организация ОБЯЗАТЕЛЬНА - либо связь с БД, либо название
+    (!!user?.organizationId || !!user?.organizationName)
   );
 }
 
