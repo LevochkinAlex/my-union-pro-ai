@@ -49,7 +49,6 @@ model User {
   dateOfBirth DateTime?
   phone       String?
   address     String?
-  region      String? // Регион России
   avatarUrl   String? // URL фотографии профиля
 
   // Предпочтения для скидок
