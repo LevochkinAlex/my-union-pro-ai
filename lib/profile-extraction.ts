@@ -576,18 +576,43 @@ export async function extractProfileDataFromMessages(
 
   // Extract organization name - только если не извлечено из структурированных данных
   if (!profileData.organizationName && !hasStructuredData) {
-    const orgLabelPattern = /(?:\*\*Организация\*\*|Организация|работаю|работает)[^:\n]*[:\-–]\s*(.+)/i;
-    const orgLabelMatch = userOnlyText.match(orgLabelPattern);
-    if (orgLabelMatch) {
-      profileData.organizationName = orgLabelMatch[1].split(/\n/)[0].trim();
+    // СНАЧАЛА ищем в сообщениях БОТА - когда он показывает найденную организацию
+    const botText = messages
+      .filter((msg) => msg.role === "assistant")
+      .map((msg) => msg.content)
+      .join("\n");
+    
+    // Паттерн для найденной организации через DaData/Минюст
+    const botOrgPatterns = [
+      /Я нашел вашу организацию[^:]*:\s*([А-ЯЁ][^\n]+?)(?:\.|Это правильная)/i,
+      /организацию в реестре:\s*([А-ЯЁ][^\n]+?)(?:\.|К сожалению)/i,
+      /НАЙДЕНА ОРГАНИЗАЦИЯ[^:]*:\s*([А-ЯЁ][^\]]+?)\]/i,
+    ];
+    
+    for (const pattern of botOrgPatterns) {
+      const match = botText.match(pattern);
+      if (match && match[1]) {
+        profileData.organizationName = match[1].trim();
+        console.log('[profile-extraction] ✅ Extracted organizationName from bot message:', profileData.organizationName);
+        break;
+      }
     }
-
-    // Также пытаемся найти название организации в контексте работы
+    
+    // Если не нашли в сообщениях бота, ищем в сообщениях пользователя
     if (!profileData.organizationName) {
-      const orgPattern = /(?:работаю|работает|организация|место работы)[\s:]+([А-ЯЁ][А-ЯЁа-яё\s"«»-]+(?:ООО|ЗАО|ОАО|ИП|ГБУЗ|ГБУ|МБУ|МУП|АО|ПАО|НКО|ОО|ППО|профсоюз)?)/i;
-      const orgMatch = userOnlyText.match(orgPattern);
-      if (orgMatch) {
-        profileData.organizationName = orgMatch[1].trim();
+      const orgLabelPattern = /(?:\*\*Организация\*\*|Организация|работаю|работает)[^:\n]*[:\-–]\s*(.+)/i;
+      const orgLabelMatch = userOnlyText.match(orgLabelPattern);
+      if (orgLabelMatch) {
+        profileData.organizationName = orgLabelMatch[1].split(/\n/)[0].trim();
+      }
+
+      // Также пытаемся найти название организации в контексте работы
+      if (!profileData.organizationName) {
+        const orgPattern = /(?:работаю|работает|организация|место работы)[\s:]+([А-ЯЁ][А-ЯЁа-яё\s"«»-]+(?:ООО|ЗАО|ОАО|ИП|ГБУЗ|ГБУ|МБУ|МУП|АО|ПАО|НКО|ОО|ППО|профсоюз)?)/i;
+        const orgMatch = userOnlyText.match(orgPattern);
+        if (orgMatch) {
+          profileData.organizationName = orgMatch[1].trim();
+        }
       }
     }
   }

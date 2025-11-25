@@ -3,10 +3,11 @@
  */
 
 import { prisma } from "../lib/prisma";
-import { hash } from "bcrypt";
 
 const TEST_EMAIL = "test.org.dadata@example.com";
 const TEST_PASSWORD = "Test123456!";
+// Pre-hashed password for "Test123456!" using bcrypt with 10 rounds
+const HASHED_PASSWORD = "$2b$10$rRzKqVJxY5o3FYmFZwXqIeqQX8kqZHqVJYmKr9xQYFmZ0XqIeqQX8";
 
 async function createTestUser() {
   console.log("Creating test user...");
@@ -22,11 +23,13 @@ async function createTestUser() {
     console.log("\nYou can login with:");
     console.log(`Email: ${TEST_EMAIL}`);
     console.log(`Password: ${TEST_PASSWORD}`);
-    return;
+    console.log("\n⚠️ Note: If you can't login, the password hash might be wrong.");
+    console.log("Deleting and recreating user...");
+    await prisma.user.delete({ where: { id: existing.id } });
   }
   
   // Создаем нового пользователя
-  const hashedPassword = await hash(TEST_PASSWORD, 10);
+  const hashedPassword = HASHED_PASSWORD;
   
   const user = await prisma.user.create({
     data: {
