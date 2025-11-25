@@ -1082,9 +1082,64 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ============================================================
+    // 3. ОРГАНИЗАЦИЯ - Поиск через DaData/Минюст РФ
+    // ============================================================
+    let organizationSearchResult: string | null = null;
+    
+    // Проверяем, не является ли это подтверждением найденной организации
+    const isOrganizationConfirmation = questionContext === "CONFIRMATION" && 
+                                       chatHistory.length > 0 &&
+                                       chatHistory[chatHistory.length - 1].content.toLowerCase().includes("организаци");
+    
+    if (
+      chatSession.type === "STATEMENT" &&
+      questionContext === "ORGANIZATION" &&
+      !isOrganizationConfirmation // Не ищем повторно, если это подтверждение
+    ) {
+      try {
+        console.log("[chat] 🏢 Detecting organization search context...");
+        
+        // Импортируем функции поиска организации
+        const { searchOrganizationInDatabase, searchOrganizationInMinjust } = await import("@/lib/organization-search");
+        
+        // Извлекаем регион из профиля пользователя
+        const userRegion = user?.region || user?.city;
+        
+        // Сначала ищем в собственной базе данных
+        console.log(`[chat] 🔍 Searching organization in database: ${message}, region: ${userRegion}`);
+        const dbResult = await searchOrganizationInDatabase(message, userRegion);
+        
+        if (dbResult) {
+          console.log(`[chat] ✅ Organization found in database: ${dbResult.name}`);
+          organizationSearchResult = `[НАЙДЕНА ОРГАНИЗАЦИЯ В БАЗЕ МОЙСОЮЗ: ${dbResult.name}]`;
+        } else {
+          // Если не найдено в базе, ищем в Минюсте через DaData
+          console.log(`[chat] 🔍 Organization not in database, searching in Minjust/DaData...`);
+          const minjustResult = await searchOrganizationInMinjust(message, userRegion);
+          
+          if (minjustResult) {
+            console.log(`[chat] ✅ Organization found in Minjust/DaData: ${minjustResult.name}`);
+            organizationSearchResult = `[НАЙДЕНА ОРГАНИЗАЦИЯ В РЕЕСТРЕ МИНЮСТА: ${minjustResult.name}]`;
+          } else {
+            console.log(`[chat] ❌ Organization not found in Minjust/DaData`);
+            organizationSearchResult = `[ОРГАНИЗАЦИЯ НЕ НАЙДЕНА В РЕЕСТРАХ]`;
+          }
+        }
+      } catch (orgSearchError) {
+        console.error("[chat] ❌ Organization search error:", orgSearchError);
+        // Продолжаем работу без поиска организации
+      }
+    }
+
     // Улучшаем сообщение пользователя с учетом контекста и валидированных данных
     if (chatSession.type === "STATEMENT" && message) {
       userMessage = enhanceUserMessageWithContext(message, questionContext, validatedData);
+      
+      // Добавляем результат поиска организации, если он есть
+      if (organizationSearchResult) {
+        userMessage = `${userMessage}\n\n${organizationSearchResult}`;
+      }
     }
 
     // Проверяем, был ли недавно загружен документ (в последних сообщениях пользователя)
