@@ -5,6 +5,7 @@ import PhoneInput from "@/components/form/PhoneInput";
 import AddressInput from "@/components/form/AddressInput";
 import DateInput from "@/components/form/DateInput";
 import AvatarUpload from "@/components/profile/AvatarUpload";
+import Autocomplete from "@/components/form/Autocomplete";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
 
@@ -87,6 +88,10 @@ export default function ProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  
+  // Справочники профессий и должностей
+  const [jobTitles, setJobTitles] = useState<string[]>([]);
+  const [professions, setProfessions] = useState<string[]>([]);
 
   const [profileData, setProfileData] = useState<ProfileData>({
     firstName: "",
@@ -296,6 +301,24 @@ export default function ProfilePage() {
     };
 
     loadProfile();
+  }, []);
+
+  // Загрузка справочников профессий и должностей
+  useEffect(() => {
+    const loadDictionaries = async () => {
+      try {
+        const response = await fetch("/api/dictionaries");
+        if (response.ok) {
+          const data = await response.json();
+          setJobTitles(data.jobTitles || []);
+          setProfessions(data.professions || []);
+        }
+      } catch (error) {
+        console.error("Failed to load dictionaries:", error);
+      }
+    };
+
+    loadDictionaries();
   }, []);
 
   useEffect(() => {
@@ -933,21 +956,23 @@ export default function ProfilePage() {
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Должность</label>
-              <input
-                type="text"
+              <Autocomplete
                 name="jobTitle"
                 value={profileData.jobTitle}
-                onChange={handleProfileChange}
+                onChange={(value) => setProfileData({ ...profileData, jobTitle: value })}
+                options={jobTitles}
+                placeholder="Начните вводить должность..."
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Профессия</label>
-              <input
-                type="text"
+              <Autocomplete
                 name="profession"
                 value={profileData.profession}
-                onChange={handleProfileChange}
+                onChange={(value) => setProfileData({ ...profileData, profession: value })}
+                options={professions}
+                placeholder="Начните вводить профессию..."
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>

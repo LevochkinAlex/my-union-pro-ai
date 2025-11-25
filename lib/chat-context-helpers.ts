@@ -66,17 +66,30 @@ export function detectBotQuestionContext(lastBotMessage: ChatMessage | null): Bo
     return "DATE_OF_BIRTH";
   }
 
-  // АДРЕС
+  // ПОДТВЕРЖДЕНИЕ (проверяем РАНЬШЕ ADDRESS, чтобы не перепутать!)
+  // Если бот спросил "Верно?" или "Это правильный адрес? (да/нет)", это CONFIRMATION, не ADDRESS
+  if (
+    content.includes("правильная организация") ||
+    content.includes("верно?") ||
+    content.includes("все верно") ||
+    content.includes("правильно?") ||
+    (content.includes("это правильный") && (content.includes("адрес") || content.includes("организац"))) ||
+    (content.includes("(да/нет)") && (content.includes("адрес") || content.includes("верно")))
+  ) {
+    return "CONFIRMATION";
+  }
+
+  // АДРЕС (проверяем ПОСЛЕ CONFIRMATION!)
   if (
     content.includes("адрес прожива") ||
-    content.includes("полный адрес") ||
     content.includes("укажите ваш адрес") ||
     content.includes("укажите адрес") ||
     content.includes("где вы проживаете") ||
-    content.includes("ваш адрес") ||
     content.includes("не удалось распознать адрес") ||
     content.includes("попробуйте указать") && content.includes("город") ||
-    (content.includes("адрес") && (content.includes("укажите") || content.includes("полный") || content.includes("детализац")))
+    (content.includes("адрес") && (content.includes("укажите") || content.includes("полный") || content.includes("детализац"))) &&
+    !content.includes("правильный адрес") && // Исключаем подтверждения
+    !content.includes("верно?") // Исключаем подтверждения
   ) {
     return "ADDRESS";
   }
@@ -144,16 +157,6 @@ export function detectBotQuestionContext(lastBotMessage: ChatMessage | null): Bo
     return "ADDITIONAL_INFO";
   }
 
-  // ПОДТВЕРЖДЕНИЕ (да/нет)
-  if (
-    content.includes("правильная организация") ||
-    content.includes("верно?") ||
-    content.includes("все верно") ||
-    content.includes("правильно?")
-  ) {
-    return "CONFIRMATION";
-  }
-
   return "UNKNOWN";
 }
 
@@ -169,6 +172,8 @@ export function enhanceUserMessageWithContext(
     fio?: { lastName: string; firstName: string; middleName?: string };
     dateOfBirth?: Date;
     phone?: string;
+    jobTitle?: string;
+    profession?: string;
   }
 ): string {
   let enhanced = userMessage;
@@ -203,11 +208,19 @@ export function enhanceUserMessageWithContext(
       break;
 
     case "JOB_TITLE":
-      enhanced = `${userMessage}\n\n[КОНТЕКСТ: Должность. Это ответ на твой вопрос о должности. Покажи должность и спроси "Ваша должность: [должность]. Верно?"]`;
+      if (validatedData?.jobTitle) {
+        enhanced = `${userMessage}\n\n[✅ СИСТЕМА НАШЛА В СПРАВОЧНИКЕ: "${validatedData.jobTitle}". Покажи пользователю это название и спроси "Ваша должность: ${validatedData.jobTitle}. Верно?"]`;
+      } else {
+        enhanced = `${userMessage}\n\n[⚠️ ДОЛЖНОСТЬ НЕ НАЙДЕНА В СПРАВОЧНИКЕ. Попроси уточнить или подтверди то, что написал пользователь.]`;
+      }
       break;
 
     case "PROFESSION":
-      enhanced = `${userMessage}\n\n[КОНТЕКСТ: Профессия. Это ответ на твой вопрос о профессии. Покажи профессию и спроси "Ваша профессия: [профессия]. Верно?"]`;
+      if (validatedData?.profession) {
+        enhanced = `${userMessage}\n\n[✅ СИСТЕМА НАШЛА В СПРАВОЧНИКЕ: "${validatedData.profession}". Покажи пользователю это название и спроси "Ваша профессия: ${validatedData.profession}. Верно?"]`;
+      } else {
+        enhanced = `${userMessage}\n\n[⚠️ ПРОФЕССИЯ НЕ НАЙДЕНА В СПРАВОЧНИКЕ. Попроси уточнить или подтверди то, что написал пользователь.]`;
+      }
       break;
 
     case "EDUCATION":
@@ -232,7 +245,7 @@ export function enhanceUserMessageWithContext(
  * Проверяет, нужна ли валидация для данного контекста
  */
 export function requiresValidation(context: BotQuestionContext): boolean {
-  return context === "ORGANIZATION" || context === "ADDRESS";
+  return context === "ORGANIZATION" || context === "ADDRESS" || context === "JOB_TITLE" || context === "PROFESSION";
 }
 
 /**
