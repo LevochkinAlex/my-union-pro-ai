@@ -98,7 +98,6 @@ export async function POST(request: NextRequest) {
         dateOfBirth: updatedUser.dateOfBirth,
         phone: updatedUser.phone,
         address: updatedUser.address,
-        region: updatedUser.region,
         jobTitle: updatedUser.jobTitle,
         profession: updatedUser.profession,
         education: updatedUser.education,
