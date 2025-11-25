@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { trackAppealQuestion, detectAppealType, extractKeywords } from "@/lib/analytics";
 import { notifyBotResponse, requestNotificationPermission, markUserInteracted } from "@/lib/chat-notifications";
+import { ProfileSelfFillModal } from "./ProfileSelfFillModal";
 
 interface ChatMessage {
   id: string;
@@ -30,6 +31,7 @@ function ChatContent() {
   const [error, setError] = useState<string | null>(null);
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [showSelfFillModal, setShowSelfFillModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -901,8 +903,26 @@ function ChatContent() {
                           {message.content
                             .replace(/\[PROFILE_COMPLETE\]/g, "")
                             .replace(/\[PROFILE_AWAITING_CONFIRMATION\]/g, "")
+                            .replace(/\[SHOW_SELF_FILL_BUTTON\]/g, "")
                           }
                         </ReactMarkdown>
+
+                        {/* Кнопка "Я заполню сам" - показываем в первом сообщении бота для STATEMENT */}
+                        {message.role === "assistant" && 
+                         message.content.includes("[SHOW_SELF_FILL_BUTTON]") && 
+                         sessionType === "STATEMENT" && (
+                          <div className="mt-4">
+                            <button
+                              onClick={() => setShowSelfFillModal(true)}
+                              className="inline-flex items-center gap-2 rounded-lg border-2 border-blue-600 bg-transparent px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 transition-colors hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                              Я заполню сам
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1107,6 +1127,19 @@ function ChatContent() {
           </form>
         </div>
       </div>
+
+      {/* Modal для самостоятельного заполнения */}
+      {showSelfFillModal && currentSessionId && (
+        <ProfileSelfFillModal
+          isOpen={showSelfFillModal}
+          onClose={() => {
+            setShowSelfFillModal(false);
+            // Перезагружаем чат после закрытия модалки
+            loadMessages();
+          }}
+          sessionId={currentSessionId}
+        />
+      )}
     </div>
   );
 }

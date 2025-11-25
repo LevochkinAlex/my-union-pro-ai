@@ -1,0 +1,623 @@
+"use client";
+
+import { useState, useCallback } from "react";
+import { XMarkIcon } from "@heroicons/react/24/outline";
+
+interface ProfileSelfFillModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  sessionId: string;
+}
+
+type Step = 1 | 2 | 3;
+
+export function ProfileSelfFillModal({
+  isOpen,
+  onClose,
+  sessionId,
+}: ProfileSelfFillModalProps) {
+  const [currentStep, setCurrentStep] = useState<Step>(1);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showCloseWarning, setShowCloseWarning] = useState(false);
+
+  // Данные формы
+  const [profileData, setProfileData] = useState({
+    firstName: "",
+    lastName: "",
+    middleName: "",
+    dateOfBirth: "",
+    phone: "",
+    address: "",
+    jobTitle: "",
+    profession: "",
+    education: "",
+    organizationName: "",
+  });
+
+  const [additionalData, setAdditionalData] = useState({
+    employmentStatus: "",
+    maritalStatus: "",
+    spouseInfo: "",
+    hasChildren: false,
+    hobbies: "",
+    aboutMe: "",
+    additionalInfo: "",
+  });
+
+  const [uploadedDocs, setUploadedDocs] = useState<{
+    membership?: File;
+    contribution?: File;
+  }>({});
+
+  const handleClose = useCallback(() => {
+    if (hasUnsavedChanges && currentStep < 3) {
+      setShowCloseWarning(true);
+    } else {
+      onClose();
+    }
+  }, [hasUnsavedChanges, currentStep, onClose]);
+
+  const handleConfirmClose = () => {
+    setShowCloseWarning(false);
+    onClose();
+  };
+
+  const handleNextStep = async () => {
+    if (currentStep === 1) {
+      // Валидация и сохранение основных данных
+      const isValid = validateStep1();
+      if (!isValid) return;
+      
+      await saveProfileData();
+      setCurrentStep(2);
+    } else if (currentStep === 2) {
+      // Проверка загрузки документов
+      const isValid = validateStep2();
+      if (!isValid) return;
+      
+      await uploadDocuments();
+      setCurrentStep(3);
+    } else if (currentStep === 3) {
+      // Сохранение дополнительной информации
+      await saveAdditionalData();
+      setHasUnsavedChanges(false);
+      
+      // Закрываем модалку и отправляем сообщение в чат
+      await sendCompletionMessage();
+      onClose();
+    }
+  };
+
+  const validateStep1 = (): boolean => {
+    // Проверка обязательных полей шага 1
+    if (
+      !profileData.firstName ||
+      !profileData.lastName ||
+      !profileData.dateOfBirth ||
+      !profileData.phone ||
+      !profileData.address ||
+      !profileData.jobTitle ||
+      !profileData.profession ||
+      !profileData.education
+    ) {
+      alert("Заполните все обязательные поля");
+      return false;
+    }
+    return true;
+  };
+
+  const validateStep2 = (): boolean => {
+    if (!uploadedDocs.membership || !uploadedDocs.contribution) {
+      alert("Загрузите оба документа");
+      return false;
+    }
+    return true;
+  };
+
+  const saveProfileData = async () => {
+    try {
+      const response = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profileData),
+      });
+
+      if (!response.ok) throw new Error("Failed to save profile");
+    } catch (error) {
+      console.error("Error saving profile:", error);
+      alert("Ошибка при сохранении профиля");
+      throw error;
+    }
+  };
+
+  const uploadDocuments = async () => {
+    try {
+      const formData = new FormData();
+      if (uploadedDocs.membership) {
+        formData.append("membership", uploadedDocs.membership);
+      }
+      if (uploadedDocs.contribution) {
+        formData.append("contribution", uploadedDocs.contribution);
+      }
+
+      const response = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error("Failed to upload documents");
+    } catch (error) {
+      console.error("Error uploading documents:", error);
+      alert("Ошибка при загрузке документов");
+      throw error;
+    }
+  };
+
+  const saveAdditionalData = async () => {
+    try {
+      const response = await fetch("/api/profile/additional-info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(additionalData),
+      });
+
+      if (!response.ok) throw new Error("Failed to save additional info");
+    } catch (error) {
+      console.error("Error saving additional info:", error);
+      alert("Ошибка при сохранении дополнительной информации");
+      throw error;
+    }
+  };
+
+  const sendCompletionMessage = async () => {
+    try {
+      await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: "[SELF_FILL_COMPLETED]",
+          sessionId,
+        }),
+      });
+    } catch (error) {
+      console.error("Error sending completion message:", error);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <>
+      {/* Overlay */}
+      <div className="fixed inset-0 bg-black/50 z-50" onClick={handleClose} />
+
+      {/* Modal */}
+      <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-4xl max-h-[90vh] overflow-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl">
+        {/* Header */}
+        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Самостоятельное заполнение профиля
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Шаг {currentStep} из 3
+            </p>
+          </div>
+          <button
+            onClick={handleClose}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <XMarkIcon className="h-6 w-6" />
+          </button>
+        </div>
+
+        {/* Stepper */}
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            {[1, 2, 3].map((step) => (
+              <div key={step} className="flex items-center flex-1">
+                <div
+                  className={`
+                    w-10 h-10 rounded-full flex items-center justify-center font-semibold
+                    ${
+                      currentStep >= step
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                    }
+                  `}
+                >
+                  {step}
+                </div>
+                <div className="ml-3 flex-1">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {step === 1 && "Основные данные"}
+                    {step === 2 && "Документы"}
+                    {step === 3 && "Дополнительно"}
+                  </p>
+                </div>
+                {step < 3 && (
+                  <div
+                    className={`h-1 flex-1 mx-4 ${
+                      currentStep > step
+                        ? "bg-blue-600"
+                        : "bg-gray-200 dark:bg-gray-700"
+                    }`}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="px-6 py-6">
+          {currentStep === 1 && (
+            <Step1ProfileForm
+              data={profileData}
+              onChange={(data) => {
+                setProfileData(data);
+                setHasUnsavedChanges(true);
+              }}
+            />
+          )}
+
+          {currentStep === 2 && (
+            <Step2DocumentsUpload
+              docs={uploadedDocs}
+              onChange={(docs) => {
+                setUploadedDocs(docs);
+                setHasUnsavedChanges(true);
+              }}
+            />
+          )}
+
+          {currentStep === 3 && (
+            <Step3AdditionalInfo
+              data={additionalData}
+              onChange={(data) => {
+                setAdditionalData(data);
+                setHasUnsavedChanges(true);
+              }}
+            />
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="sticky bottom-0 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+          <button
+            onClick={() => currentStep > 1 && setCurrentStep((s) => (s - 1) as Step)}
+            disabled={currentStep === 1}
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Назад
+          </button>
+
+          <button
+            onClick={handleNextStep}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+          >
+            {currentStep === 3 ? "Завершить" : "Далее"}
+          </button>
+        </div>
+      </div>
+
+      {/* Close Warning Modal */}
+      {showCloseWarning && (
+        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+              Закрыть форму?
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              Все несохраненные данные будут потеряны. Вы уверены?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCloseWarning(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleConfirmClose}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// Компоненты для каждого шага
+function Step1ProfileForm({
+  data,
+  onChange,
+}: {
+  data: any;
+  onChange: (data: any) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold mb-4">Основные данные профиля</h3>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Фамилия *</label>
+          <input
+            type="text"
+            value={data.lastName}
+            onChange={(e) => onChange({ ...data, lastName: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Имя *</label>
+          <input
+            type="text"
+            value={data.firstName}
+            onChange={(e) => onChange({ ...data, firstName: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Отчество</label>
+          <input
+            type="text"
+            value={data.middleName}
+            onChange={(e) => onChange({ ...data, middleName: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Дата рождения *</label>
+          <input
+            type="date"
+            value={data.dateOfBirth}
+            onChange={(e) => onChange({ ...data, dateOfBirth: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Телефон *</label>
+          <input
+            type="tel"
+            value={data.phone}
+            onChange={(e) => onChange({ ...data, phone: e.target.value })}
+            placeholder="+7 (___) ___-__-__"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          />
+        </div>
+
+        <div className="col-span-2">
+          <label className="block text-sm font-medium mb-1">Адрес *</label>
+          <input
+            type="text"
+            value={data.address}
+            onChange={(e) => onChange({ ...data, address: e.target.value })}
+            placeholder="Регион, город, улица, дом, квартира"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Организация</label>
+          <input
+            type="text"
+            value={data.organizationName}
+            onChange={(e) => onChange({ ...data, organizationName: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Должность *</label>
+          <input
+            type="text"
+            value={data.jobTitle}
+            onChange={(e) => onChange({ ...data, jobTitle: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Профессия *</label>
+          <input
+            type="text"
+            value={data.profession}
+            onChange={(e) => onChange({ ...data, profession: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Образование *</label>
+          <select
+            value={data.education}
+            onChange={(e) => onChange({ ...data, education: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          >
+            <option value="">Выберите</option>
+            <option value="Начальное общее">Начальное общее</option>
+            <option value="Основное общее (9 классов)">Основное общее (9 классов)</option>
+            <option value="Среднее общее (11 классов)">Среднее общее (11 классов)</option>
+            <option value="Среднее профессиональное">Среднее профессиональное</option>
+            <option value="Высшее (бакалавриат)">Высшее (бакалавриат)</option>
+            <option value="Высшее (специалитет)">Высшее (специалитет)</option>
+            <option value="Высшее (магистратура)">Высшее (магистратура)</option>
+            <option value="Аспирантура">Аспирантура</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Step2DocumentsUpload({
+  docs,
+  onChange,
+}: {
+  docs: any;
+  onChange: (docs: any) => void;
+}) {
+  return (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold mb-4">Загрузка документов</h3>
+      
+      <div className="space-y-4">
+        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6">
+          <label className="block text-sm font-medium mb-2">
+            Заявление о вступлении *
+          </label>
+          <input
+            type="file"
+            accept=".pdf"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onChange({ ...docs, membership: file });
+            }}
+            className="w-full"
+          />
+          {docs.membership && (
+            <p className="text-sm text-green-600 mt-2">
+              ✓ {docs.membership.name}
+            </p>
+          )}
+        </div>
+
+        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6">
+          <label className="block text-sm font-medium mb-2">
+            Заявление о взносах *
+          </label>
+          <input
+            type="file"
+            accept=".pdf"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onChange({ ...docs, contribution: file });
+            }}
+            className="w-full"
+          />
+          {docs.contribution && (
+            <p className="text-sm text-green-600 mt-2">
+              ✓ {docs.contribution.name}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <p className="text-sm text-blue-800 dark:text-blue-200">
+          💡 Скачайте пустые бланки, заполните их, подпишите и загрузите обратно
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Step3AdditionalInfo({
+  data,
+  onChange,
+}: {
+  data: any;
+  onChange: (data: any) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold mb-4">Дополнительная информация</h3>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Занятость</label>
+          <select
+            value={data.employmentStatus}
+            onChange={(e) => onChange({ ...data, employmentStatus: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          >
+            <option value="">Выберите</option>
+            <option value="WORK">Работа</option>
+            <option value="STUDY">Учеба</option>
+            <option value="RETIREMENT">Пенсия</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Семейное положение</label>
+          <select
+            value={data.maritalStatus}
+            onChange={(e) => onChange({ ...data, maritalStatus: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          >
+            <option value="">Выберите</option>
+            <option value="SINGLE">Не женат/Не замужем</option>
+            <option value="MARRIED">Женат/Замужем</option>
+            <option value="DIVORCED">В разводе</option>
+            <option value="WIDOWED">Вдовец/Вдова</option>
+            <option value="CIVIL_UNION">В гражданском браке</option>
+          </select>
+        </div>
+
+        <div className="col-span-2">
+          <label className="block text-sm font-medium mb-1">Информация о супруге</label>
+          <input
+            type="text"
+            value={data.spouseInfo}
+            onChange={(e) => onChange({ ...data, spouseInfo: e.target.value })}
+            placeholder="Имя, профессия"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          />
+        </div>
+
+        <div className="col-span-2">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={data.hasChildren}
+              onChange={(e) => onChange({ ...data, hasChildren: e.target.checked })}
+              className="rounded"
+            />
+            <span className="text-sm font-medium">У меня есть дети</span>
+          </label>
+        </div>
+
+        <div className="col-span-2">
+          <label className="block text-sm font-medium mb-1">Хобби и увлечения</label>
+          <textarea
+            value={data.hobbies}
+            onChange={(e) => onChange({ ...data, hobbies: e.target.value })}
+            rows={2}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          />
+        </div>
+
+        <div className="col-span-2">
+          <label className="block text-sm font-medium mb-1">О себе</label>
+          <textarea
+            value={data.aboutMe}
+            onChange={(e) => onChange({ ...data, aboutMe: e.target.value })}
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          />
+        </div>
+
+        <div className="col-span-2">
+          <label className="block text-sm font-medium mb-1">Дополнительная информация</label>
+          <textarea
+            value={data.additionalInfo}
+            onChange={(e) => onChange({ ...data, additionalInfo: e.target.value })}
+            rows={2}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
