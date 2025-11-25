@@ -335,6 +335,10 @@ function ChatContent() {
             if (messagesEndRef.current) {
               messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
             }
+            // Возвращаем фокус в поле ввода после скролла (только для новых сообщений, не при загрузке истории)
+            if (!isFirstLoad && (isBotResponse || isUserMessage)) {
+              textareaRef.current?.focus();
+            }
           }, 50);
         });
         
@@ -521,6 +525,10 @@ function ChatContent() {
       setTimeout(() => setError(null), 5000);
     } finally {
       setIsLoading(false);
+      // Возвращаем фокус в поле ввода после отправки (с небольшой задержкой для обновления DOM)
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 0);
     }
   };
 
