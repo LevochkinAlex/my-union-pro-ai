@@ -992,30 +992,22 @@ export async function POST(request: NextRequest) {
         orderBy: {
           updatedAt: "desc", // Берем самую недавно обновленную
         },
-        include: {
-          messages: {
-            take: 1, // Проверяем, есть ли хотя бы одно сообщение
-            orderBy: {
-              createdAt: "desc",
-            },
-          },
-        },
       });
       
-      if (lastActiveSession && lastActiveSession.messages.length > 0) {
-        // Используем существующую активную сессию
+      if (lastActiveSession) {
+        // ВСЕГДА используем существующую сессию STATEMENT, даже если она пустая
         chatSession = lastActiveSession;
-        console.log(`[chat] ✅ Reusing existing session: ${chatSession.id}`);
+        console.log(`[chat] ✅ Reusing existing STATEMENT session: ${chatSession.id}`);
       } else {
-        // Создаем новую сессию только если нет активных
+        // Создаем новую сессию ТОЛЬКО если у пользователя вообще нет сессий STATEMENT
         chatSession = await prisma.chatSession.create({
           data: {
             userId: session.user.id,
-            title: "Мой чат",
+            title: "Заявление",
             type: "STATEMENT",
           },
         });
-        console.log(`[chat] 🆕 Created new session: ${chatSession.id}`);
+        console.log(`[chat] 🆕 Created first STATEMENT session: ${chatSession.id}`);
       }
     }
 
@@ -2266,35 +2258,20 @@ export async function GET() {
     
     // Ищем последнюю активную сессию заявления (STATEMENT) с сообщениями
     // Сначала ищем сессии с сообщениями, отсортированные по updatedAt
+    // Находим последнюю сессию STATEMENT (ВСЕГДА используем существующую)
     let chatSession = await prisma.chatSession.findFirst({
       where: {
         userId: session.user.id,
         type: "STATEMENT",
-        messages: {
-          some: {}, // Есть хотя бы одно сообщение
-        },
       },
       orderBy: {
         updatedAt: "desc", // Берем самую недавно обновленную
       },
     });
 
-    // Если нет активной сессии с сообщениями, ищем любую последнюю сессию
+    // Создаем новую сессию ТОЛЬКО если у пользователя вообще нет сессий STATEMENT
     if (!chatSession) {
-      chatSession = await prisma.chatSession.findFirst({
-        where: {
-          userId: session.user.id,
-          type: "STATEMENT",
-        },
-        orderBy: {
-          updatedAt: "desc",
-        },
-      });
-    }
-
-    // Если нет сессии заявления, создаем новую
-    if (!chatSession) {
-      console.log("GET /api/chat: Сессии заявления нет, создаем новую...");
+      console.log("GET /api/chat: Сессии STATEMENT нет, создаем первую...");
       chatSession = await prisma.chatSession.create({
         data: {
           userId: session.user.id,
@@ -2302,8 +2279,9 @@ export async function GET() {
           type: "STATEMENT",
         },
       });
+      console.log(`GET /api/chat: 🆕 Создана первая сессия STATEMENT: ${chatSession.id}`);
     } else {
-      console.log(`GET /api/chat: ✅ Используем существующую сессию: ${chatSession.id}`);
+      console.log(`GET /api/chat: ✅ Используем существующую сессию STATEMENT: ${chatSession.id}`);
     }
     
     console.log(`GET /api/chat: Поиск сообщений для сессии ${chatSession.id}...`);

@@ -2,16 +2,26 @@
 
 import { signIn } from "next-auth/react";
 import Link from "next/link";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [callbackUrl, setCallbackUrl] = useState("/dashboard");
+
+  // Получаем callbackUrl из query параметров при монтировании
+  useEffect(() => {
+    const callback = searchParams.get("callbackUrl");
+    if (callback) {
+      setCallbackUrl(decodeURIComponent(callback));
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +38,8 @@ export default function LoginPage() {
       if (result?.error || !result?.ok) {
         setError("Неверный email или пароль");
       } else {
-        router.push("/dashboard");
+        // Перенаправляем на callbackUrl, сохраняя query параметры
+        router.push(callbackUrl);
         router.refresh();
       }
     } catch {

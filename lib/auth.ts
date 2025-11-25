@@ -75,6 +75,18 @@ export const authOptions: NextAuthOptions = {
       }
       return session;
     },
+    async redirect({ url, baseUrl }) {
+      // Если URL начинается с baseUrl, возвращаем его как есть
+      if (url.startsWith(baseUrl)) {
+        return url;
+      }
+      // Если URL начинается с "/", добавляем baseUrl
+      if (url.startsWith("/")) {
+        return `${baseUrl}${url}`;
+      }
+      // По умолчанию редиректим на baseUrl
+      return baseUrl;
+    },
   },
   pages: {
     signIn: "/login",
