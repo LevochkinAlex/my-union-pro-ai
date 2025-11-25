@@ -161,12 +161,16 @@ function ChatContent() {
     // Сбрасываем счетчики при смене сессии
     lastNotifiedMessageIdRef.current = null;
     isInitialLoadRef.current = true;
+    // Сбрасываем состояние загрузки на случай если оно застряло
+    setIsLoading(false);
     console.log("[Chat] Session changed, reset refs for session:", sessionId);
   }, [sessionId]);
 
   // Load message history ТОЛЬКО ОДИН РАЗ при монтировании или смене sessionId
   useEffect(() => {
     if (session?.user?.id && loadMessagesRef.current) {
+      // Сбрасываем isLoading при загрузке новой сессии
+      setIsLoading(false);
       if (sessionId) {
         setCurrentSessionId(sessionId);
       }
@@ -390,10 +394,15 @@ function ChatContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log("[Chat] handleSubmit called, input:", input, "isLoading:", isLoading);
+    
     // Гарантируем, что флаг взаимодействия установлен при отправке формы
     markUserInteracted();
     
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading) {
+      console.log("[Chat] handleSubmit blocked: input empty or loading", { inputTrim: input.trim(), isLoading });
+      return;
+    }
 
     const userMessage = input.trim();
     setInput("");
@@ -1037,7 +1046,10 @@ function ChatContent() {
               <textarea
                 ref={textareaRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  console.log("[Chat] Input changed:", e.target.value);
+                  setInput(e.target.value);
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder={
                   sessionType === "APPEAL" 
