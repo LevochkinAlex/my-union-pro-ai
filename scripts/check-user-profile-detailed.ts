@@ -17,7 +17,6 @@ async function checkUserProfileDetailed() {
     where: { email: TEST_EMAIL },
     include: {
       organization: true,
-      children: true,
     },
   });
 
