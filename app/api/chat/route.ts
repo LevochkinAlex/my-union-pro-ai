@@ -1969,6 +1969,24 @@ export async function GET() {
         : "Здравствуйте! Я ваш помощник для вступления в Профсоюз работников здравоохранения РФ. Я помогу вам заполнить профиль и подготовить необходимые документы для этого. Давайте начнем. Укажите регион России, в которой вы находитесь.";
       
       console.log("GET /api/chat: Создание приветственного сообщения в БД...");
+      
+      // Защита от race condition: проверяем еще раз перед созданием
+      const doubleCheck = await prisma.chatMessage.findFirst({
+        where: { sessionId: chatSession.id },
+      });
+      
+      if (doubleCheck) {
+        console.log("GET /api/chat: Приветствие уже создано другим запросом, возвращаем существующее");
+        return NextResponse.json({ 
+          session: {
+            id: chatSession.id,
+            title: chatSession.title,
+            type: chatSession.type,
+          },
+          messages: [doubleCheck] 
+        });
+      }
+      
       const welcomeMessage = await prisma.chatMessage.create({
         data: {
           content: welcomeMessageContent,

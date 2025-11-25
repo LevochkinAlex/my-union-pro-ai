@@ -548,6 +548,26 @@ function ChatContent() {
     }
   }, [input]);
 
+  // Агрессивное поддержание фокуса в поле ввода
+  useEffect(() => {
+    // Возвращаем фокус после завершения загрузки
+    if (!isLoading && !isLoadingHistory) {
+      const timer = setTimeout(() => {
+        // Проверяем, что фокус не в другом input элементе
+        const activeElement = document.activeElement;
+        const isInputFocused = activeElement?.tagName === 'INPUT' || 
+                               activeElement?.tagName === 'TEXTAREA';
+        
+        // Если фокус не в поле ввода чата, возвращаем его туда
+        if (textareaRef.current && activeElement !== textareaRef.current && !isInputFocused) {
+          textareaRef.current.focus();
+        }
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, isLoadingHistory]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
