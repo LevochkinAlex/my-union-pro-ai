@@ -66,20 +66,7 @@ export function detectBotQuestionContext(lastBotMessage: ChatMessage | null): Bo
     return "DATE_OF_BIRTH";
   }
 
-  // ПОДТВЕРЖДЕНИЕ (проверяем РАНЬШЕ ADDRESS, чтобы не перепутать!)
-  // Если бот спросил "Верно?" или "Это правильный адрес? (да/нет)", это CONFIRMATION, не ADDRESS
-  if (
-    content.includes("правильная организация") ||
-    content.includes("верно?") ||
-    content.includes("все верно") ||
-    content.includes("правильно?") ||
-    (content.includes("это правильный") && (content.includes("адрес") || content.includes("организац"))) ||
-    (content.includes("(да/нет)") && (content.includes("адрес") || content.includes("верно")))
-  ) {
-    return "CONFIRMATION";
-  }
-
-  // АДРЕС (проверяем ПОСЛЕ CONFIRMATION!)
+  // АДРЕС (проверяем ДО подтверждения, чтобы правильно определить контекст)
   if (
     content.includes("адрес прожива") ||
     content.includes("укажите ваш адрес") ||
@@ -99,19 +86,34 @@ export function detectBotQuestionContext(lastBotMessage: ChatMessage | null): Bo
     return "PHONE";
   }
 
-  // ДОЛЖНОСТЬ
+  // ДОЛЖНОСТЬ - ПРИОРИТЕТ! Проверяем ДО подтверждения
+  // Даже если есть "верно?", но также есть "должность" - это JOB_TITLE
   if (content.includes("должность") && !content.includes("семейное")) {
     return "JOB_TITLE";
   }
 
-  // ПРОФЕССИЯ
+  // ПРОФЕССИЯ - ПРИОРИТЕТ! Проверяем ДО подтверждения
+  // Даже если есть "верно?", но также есть "профессия" - это PROFESSION
   if (content.includes("профессия") || content.includes("специальность")) {
     return "PROFESSION";
   }
 
-  // ОБРАЗОВАНИЕ
+  // ОБРАЗОВАНИЕ - ПРИОРИТЕТ! Проверяем ДО подтверждения
   if (content.includes("образование") || content.includes("какое у вас образование")) {
     return "EDUCATION";
+  }
+
+  // ПОДТВЕРЖДЕНИЕ - проверяем ПОСЛЕ должности/профессии/образования!
+  // Если бот спросил "Верно?" или "Это правильный адрес? (да/нет)", это CONFIRMATION
+  if (
+    content.includes("правильная организация") ||
+    content.includes("верно?") ||
+    content.includes("все верно") ||
+    content.includes("правильно?") ||
+    (content.includes("это правильный") && (content.includes("адрес") || content.includes("организац"))) ||
+    (content.includes("(да/нет)") && (content.includes("адрес") || content.includes("верно")))
+  ) {
+    return "CONFIRMATION";
   }
 
   // ЗАНЯТОСТЬ
