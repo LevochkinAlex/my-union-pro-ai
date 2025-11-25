@@ -16,6 +16,37 @@ export async function GET(request: NextRequest) {
     await enrichParamsWithPreference(params, session.user.id);
     const payload = await fetchBestBenefitsDiscounts(params);
 
+    // Обогащаем скидки промокодами из сохраненных preferences
+    const preferences = await prisma.discountPreference.findUnique({
+      where: { userId: session.user.id },
+    });
+
+    if (preferences && payload.discounts) {
+      const filters = (preferences.filters as any) || {};
+      const claimed = Array.isArray(filters.claimed) ? filters.claimed : [];
+      
+      // Создаем Map для быстрого поиска промокодов
+      const promoCodesMap = new Map<number, string>();
+      claimed.forEach((item: any) => {
+        if (typeof item === 'object' && item.id && item.promoCode) {
+          promoCodesMap.set(item.id, item.promoCode);
+        }
+      });
+
+      // Добавляем промокоды к скидкам
+      payload.discounts = payload.discounts.map((discount: any) => {
+        const savedPromoCode = promoCodesMap.get(discount.id);
+        if (savedPromoCode && (!discount.promoCode || discount.promoCode.trim().length === 0)) {
+          console.log(`[api/discounts] Enriching discount ${discount.id} with saved promo code:`, savedPromoCode);
+          return {
+            ...discount,
+            promoCode: savedPromoCode,
+          };
+        }
+        return discount;
+      });
+    }
+
     return NextResponse.json(payload, {
       status: 200,
       headers: {
