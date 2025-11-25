@@ -32,7 +32,15 @@ function extractStructuredDataFromBot(
   console.log('[profile-extraction] Found confirmation message:', confirmationMessage.content.substring(0, 200));
   const text = confirmationMessage.content;
   
-  // ФИО: "1. **ФИО**: Иванов Иван Иванович" или "**ФИО**: Иванов Иван Иванович"
+  // Регион: "1. **Регион**: Татарстан"
+  const regionPattern = /(?:\d+\.\s*)?\*\*Регион\*\*[:\s]+([^\n]+?)(?:\n|$)/;
+  const regionMatch = text.match(regionPattern);
+  if (regionMatch) {
+    extracted.region = regionMatch[1].trim();
+    console.log('[profile-extraction] Extracted Region:', extracted.region);
+  }
+  
+  // ФИО: "3. **ФИО**: Иванов Иван Иванович" или "**ФИО**: Иванов Иван Иванович"
   // Поддержка тюркских суффиксов: оглы, кызы, улы, кызы (с маленькой буквы)
   const fioPattern = /(?:\d+\.\s*)?\*\*ФИО\*\*[:\s]+([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+(?:\s+(?:оглы|улы|кызы))?))?/;
   const fioMatch = text.match(fioPattern);
