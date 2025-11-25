@@ -11,7 +11,7 @@ dotenv.config({ path: join(__dirname, "..", ".env.local") });
 const prisma = new PrismaClient();
 
 async function checkUsersSessions() {
-  const userEmails = ["9061109990@mail.ru", "talik@mail.ru"];
+  const userEmails = ["9061109990@mail.ru", "talik.e@mail.ru"];
 
   try {
     for (const email of userEmails) {
