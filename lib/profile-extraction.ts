@@ -355,8 +355,8 @@ export async function extractProfileDataFromMessages(
           profileData.childrenBirthDates = JSON.stringify([childData]);
         }
         
-        profileData.childrenInfo = (profileData.childrenInfo ? profileData.childrenInfo + '; ' : '') + `${name} (${day}.${month}.${year})`;
-        console.log('[profile-extraction] ✅ Extracted child:', name, birthDate);
+        // childrenInfo больше не используется - все данные в JSON (childrenBirthDates)
+        console.log('[profile-extraction] ✅ Extracted child:', name, birthDate, `(${gender})`);
       }
     }
     
@@ -753,19 +753,17 @@ function validateExtractedProfile(data: Record<string, any>): Record<string, any
     validated.hasChildren = data.hasChildren;
   }
   
-  // Валидация childrenInfo
-  if (data.childrenInfo && typeof data.childrenInfo === 'string') {
-    const info = data.childrenInfo.trim();
-    if (info.length >= 2 && info.length <= 1000) {
-      validated.childrenInfo = info;
-    }
-  }
-  
-  // Валидация childrenBirthDates
+  // Валидация childrenBirthDates (JSON-массив с данными о детях)
   if (data.childrenBirthDates && typeof data.childrenBirthDates === 'string') {
     const dates = data.childrenBirthDates.trim();
-    if (dates.length >= 2 && dates.length <= 2000) {
-      validated.childrenBirthDates = dates;
+    // Проверяем что это валидный JSON
+    try {
+      const parsed = JSON.parse(dates);
+      if (Array.isArray(parsed)) {
+        validated.childrenBirthDates = dates;
+      }
+    } catch (e) {
+      console.warn('[profile-extraction] Invalid JSON in childrenBirthDates:', e);
     }
   }
   
