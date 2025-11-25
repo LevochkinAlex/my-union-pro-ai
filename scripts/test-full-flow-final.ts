@@ -70,12 +70,14 @@ async function runFinalTest() {
       {
         userId: user.id,
         type: 'MEMBERSHIP_APPLICATION',
+        title: 'Заявление о вступлении',
         filePath: '/fake/path/membership.pdf',
         fileName: 'membership.pdf',
       },
       {
         userId: user.id,
         type: 'CONTRIBUTION_APPLICATION',
+        title: 'Заявление о взносах',
         filePath: '/fake/path/contribution.pdf',
         fileName: 'contribution.pdf',
       }
