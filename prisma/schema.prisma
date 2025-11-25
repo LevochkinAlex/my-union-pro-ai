@@ -491,8 +491,8 @@ model ChatBot {
   // Температура для генерации (0-2)
   temperature Float @default(0.7)
 
-  // Максимальное количество токенов
-  maxTokens Int @default(1000)
+  // Максимальное количество токенов (увеличено для поддержки сложных диалогов)
+  maxTokens Int @default(8000)
 
   // Базы знаний, используемые этим ботом
   knowledgeBases  ChatBotKnowledgeBase[]
