@@ -18,7 +18,8 @@
     "seed:default-bot": "dotenv -e .env.local -- node scripts/create-default-bot.mjs",
     "worker": "dotenv -e .env.local -- tsx scripts/worker.ts",
     "worker:prod": "node dist/scripts/worker.js",
-    "load-documents": "dotenv -e .env.local -- node scripts/load-appeal-bot-documents.mjs"
+    "load-documents": "dotenv -e .env.local -- node scripts/load-appeal-bot-documents.mjs",
+    "reset-user": "dotenv -e .env.local -- tsx scripts/reset-user-data.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.65",

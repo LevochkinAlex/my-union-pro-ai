@@ -84,6 +84,7 @@ export default function DiscountsClient({
     ).filter(Boolean);
   });
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [searchInput, setSearchInput] = useState(filters.search); // Локальное состояние для поля ввода
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -320,6 +321,24 @@ export default function DiscountsClient({
     [filters, favorites, claimed]
   );
 
+  // Автоматически применяем фильтр по городу при загрузке, если cityId установлен
+  const hasAppliedCityFilterRef = useRef(false);
+  useEffect(() => {
+    // Применяем фильтр только один раз при загрузке
+    if (hasAppliedCityFilterRef.current) return;
+    
+    // Если cityId установлен в filters (из initialPreference), применяем фильтр
+    if (filters.cityId !== null && !filters.search) {
+      console.log(`[DiscountsClient] 🏙️ Auto-applying city filter: cityId=${filters.cityId}`);
+      hasAppliedCityFilterRef.current = true;
+      // Применяем фильтр (вызываем fetchDiscounts)
+      fetchDiscounts(filters, undefined, false);
+    } else {
+      hasAppliedCityFilterRef.current = true; // Помечаем что проверили, даже если фильтр не нужен
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Только при первой загрузке
+
   // Ref для отслеживания, идет ли уже загрузка (защита от повторных вызовов)
   const isLoadingMoreRef = useRef(false);
   const loadMoreTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -515,12 +534,23 @@ export default function DiscountsClient({
   const handleUseGeolocation = async () => {
     // Проверяем поддержку геолокации
     if (!navigator.geolocation) {
-      alert("Ваш браузер не поддерживает геолокацию.");
+      setError("Ваш браузер не поддерживает геолокацию.");
+      setTimeout(() => setError(null), 5000);
       return;
     }
 
+    setIsGettingLocation(true);
+    setError(null);
+
     try {
+      console.log("[DiscountsClient] 🗺️ Requesting geolocation...");
       const position = await getCurrentPosition();
+      console.log("[DiscountsClient] ✅ Geolocation received:", {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        accuracy: position.coords.accuracy
+      });
+      
       const nextFilters = {
         ...filters,
         nearMe: true,
@@ -531,32 +561,38 @@ export default function DiscountsClient({
         radiusKm: filters.radiusKm || 25,
       };
       setFilters(nextFilters);
-      fetchDiscounts(nextFilters);
+      await fetchDiscounts(nextFilters);
+      persistPreference(nextFilters);
     } catch (error: any) {
       // Обрабатываем разные типы ошибок геолокации
       let errorMessage = "Не удалось определить местоположение.";
       
-      if (error.code) {
+      if (error.code !== undefined) {
         switch (error.code) {
           case 1: // PERMISSION_DENIED
-            errorMessage = "Вы запретили доступ к геолокации. Разрешите доступ в настройках браузера.";
+            errorMessage = "Вы запретили доступ к геолокации. Разрешите доступ в настройках браузера и обновите страницу.";
             break;
           case 2: // POSITION_UNAVAILABLE
-            errorMessage = "Не удалось определить местоположение. Проверьте подключение к интернету.";
+            errorMessage = "Не удалось определить местоположение. Проверьте подключение к интернету и GPS.";
             break;
           case 3: // TIMEOUT
             errorMessage = "Время ожидания истекло. Попробуйте еще раз.";
             break;
         }
+      } else if (error.message) {
+        errorMessage = error.message;
       }
       
-      console.error("Geolocation error:", {
+      console.error("[DiscountsClient] ❌ Geolocation error:", {
         code: error.code,
         message: error.message,
         error: error
       });
       
-      alert(errorMessage);
+      setError(errorMessage);
+      setTimeout(() => setError(null), 8000);
+    } finally {
+      setIsGettingLocation(false);
     }
   };
 
@@ -775,13 +811,31 @@ export default function DiscountsClient({
           {geoSupport && (
             <button
               onClick={handleUseGeolocation}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              disabled={isGettingLocation || isLoading}
+              className={clsx(
+                "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition",
+                isGettingLocation || isLoading
+                  ? "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500"
+                  : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              )}
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              Найти рядом
+              {isGettingLocation ? (
+                <>
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Определение...
+                </>
+              ) : (
+                <>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Найти рядом
+                </>
+              )}
             </button>
           )}
 
@@ -951,13 +1005,32 @@ function DiscountGrid({
 function getCurrentPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {
-      reject(new Error("Геолокация недоступна"));
+      reject(new Error("Геолокация недоступна в вашем браузере"));
       return;
     }
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: false,
-      timeout: 10000,
-      maximumAge: 300000,
-    });
+    
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        console.log("[getCurrentPosition] ✅ Position received:", {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          timestamp: new Date(position.timestamp).toISOString()
+        });
+        resolve(position);
+      },
+      (error) => {
+        console.error("[getCurrentPosition] ❌ Error:", {
+          code: error.code,
+          message: error.message
+        });
+        reject(error);
+      },
+      {
+        enableHighAccuracy: true, // Используем высокую точность для лучших результатов
+        timeout: 15000, // Увеличиваем timeout до 15 секунд
+        maximumAge: 60000, // Кэшируем позицию максимум 1 минуту
+      }
+    );
   });
 }

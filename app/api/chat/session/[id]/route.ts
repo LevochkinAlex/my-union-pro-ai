@@ -46,11 +46,39 @@ export async function GET(
       },
     });
 
-    // Если сессия пустая, НЕ создаём приветствие здесь
-    // Приветствие создаётся ТОЛЬКО в /api/chat при создании новой сессии
-    // Это предотвращает дублирование приветственных сообщений при race condition
-    // Если messages.length === 0, просто возвращаем пустой массив
-    // Фронтенд перенаправит на /api/chat для создания новой сессии с приветствием
+    // Если сессия пустая, создаём приветственное сообщение
+    // (на случай если сессия была создана, но welcome message не был добавлен)
+    if (messages.length === 0) {
+      console.log("[GET /api/chat/session/[id]] Session is empty, creating welcome message");
+      
+      // Определяем содержание приветствия в зависимости от типа сессии
+      let welcomeMessageContent = "";
+
+      if (chatSession.type === "STATEMENT") {
+        welcomeMessageContent = `Здравствуйте! Я ваш помощник для вступления в Профсоюз работников здравоохранения РФ. Я помогу вам заполнить профиль и подготовить необходимые документы для этого.
+
+Вы можете заполнить профиль вместе со мной в чате, или самостоятельно через удобную форму.
+
+Давайте начнем. Укажите регион России, в которой вы находитесь.[SHOW_SELF_FILL_BUTTON]`;
+      } else if (chatSession.type === "APPEAL") {
+        welcomeMessageContent = "Здравствуйте! Я ваш помощник по оформлению обращений в профсоюз. Опишите вашу ситуацию, и я помогу вам составить обращение.";
+      } else {
+        welcomeMessageContent = "Здравствуйте! Чем могу помочь?";
+      }
+
+      const welcomeMessage = await prisma.chatMessage.create({
+        data: {
+          content: welcomeMessageContent,
+          role: "assistant",
+          userId: session.user.id,
+          sessionId: chatSession.id,
+          chatBotId: null,
+        },
+      });
+
+      messages = [welcomeMessage];
+      console.log("[GET /api/chat/session/[id]] Welcome message created");
+    }
 
     return NextResponse.json({
       session: {

@@ -60,16 +60,25 @@ export default async function DiscountsPage() {
     }
   }
 
+  // Если в профиле есть preferredDiscountCity, принудительно используем его
+  // (даже если в preference уже был сохранен другой город)
+  const finalCityId = autoCityId ?? (preference?.filters as any)?.cityId ?? null;
+  
   const preferencePayload: DiscountPreferenceResponse = {
     pushEnabled: preference?.pushEnabled ?? false,
     filters: {
       ...(preference?.filters as DiscountPreferenceResponse["filters"]),
-      // Устанавливаем город из профиля если не было сохранено ранее
-      cityId: (preference?.filters as any)?.cityId ?? autoCityId,
+      // Приоритет: город из профиля (preferredDiscountCity)
+      cityId: finalCityId,
     },
     geolocation: (preference?.geolocation as DiscountPreferenceResponse["geolocation"]) ?? null,
     updatedAt: preference?.updatedAt?.toISOString() ?? null,
   };
+  
+  // Логируем для отладки
+  if (autoCityId) {
+    console.log(`[discounts] ✅ Auto-selected city ID: ${autoCityId} from preferredDiscountCity: "${user?.preferredDiscountCity}"`);
+  }
 
   return (
     <div className="space-y-6">

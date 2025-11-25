@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSession } from "next-auth/react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { trackAppealQuestion, detectAppealType, extractKeywords } from "@/lib/analytics";
@@ -19,11 +19,20 @@ interface ChatMessage {
 function ChatContent() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const mode = searchParams?.get("mode"); // 'appeal' for Appeal Bot
   const sessionId = searchParams?.get("session"); // Specific chat session to load
   const [chatBotId, setChatBotId] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(sessionId || null);
   const [sessionType, setSessionType] = useState<"STATEMENT" | "APPEAL" | null>(null);
+  
+  // Обновляем currentSessionId при изменении sessionId из URL
+  useEffect(() => {
+    if (sessionId) {
+      console.log("[chat] 🔄 URL sessionId changed, updating currentSessionId:", sessionId);
+      setCurrentSessionId(sessionId);
+    }
+  }, [sessionId]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -92,11 +101,27 @@ function ChatContent() {
       }
       
       const data = await response.json();
+      console.log("[chat] ✅ Received data:", {
+        messagesCount: data.messages?.length || 0,
+        sessionId: data.session?.id,
+        sessionType: data.session?.type
+      });
+      
       setMessages(data.messages || []);
+      console.log("[chat] ✅ Messages set in state:", data.messages?.length || 0);
       
       // Обновляем sessionId и тип сессии если они были возвращены
       if (data.session?.id) {
+        console.log("[chat] 🔄 Updating currentSessionId to:", data.session.id);
         setCurrentSessionId(data.session.id);
+        
+        // Если sessionId нет в URL, обновляем URL чтобы сохранить сессию при переходах
+        if (!sessionId && data.session.id) {
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.set("session", data.session.id);
+          router.replace(newUrl.pathname + newUrl.search, { scroll: false });
+          console.log("[chat] 🔗 Updated URL with sessionId:", data.session.id);
+        }
       }
       if (data.session?.type) {
         setSessionType(data.session.type);
@@ -169,6 +194,12 @@ function ChatContent() {
   // Load message history ТОЛЬКО ОДИН РАЗ при монтировании или смене sessionId
   useEffect(() => {
     if (session?.user?.id && loadMessagesRef.current) {
+      // Если уже загружаются сообщения, не запускаем повторно
+      if (isLoadingMessagesRef.current) {
+        console.log("[Chat] Messages already loading, will skip duplicate load");
+        return;
+      }
+      
       // Сбрасываем isLoading при загрузке новой сессии
       setIsLoading(false);
       if (sessionId) {
@@ -428,6 +459,9 @@ function ChatContent() {
       }
       if (currentSessionId) {
         body.sessionId = currentSessionId;
+        console.log("[chat] 📤 Sending message with sessionId:", currentSessionId);
+      } else {
+        console.warn("[chat] ⚠️ No currentSessionId! Message will create a new session");
       }
 
       const response = await fetch("/api/chat", {
@@ -490,11 +524,12 @@ function ChatContent() {
       // Обновляем sessionId и тип сессии если они были возвращены
       if (data.sessionId) {
         setCurrentSessionId(data.sessionId);
-        // Обновляем URL с sessionId
-        if (typeof window !== "undefined") {
-          const url = new URL(window.location.href);
-          url.searchParams.set("session", data.sessionId);
-          window.history.replaceState({}, "", url.toString());
+        // Обновляем URL с sessionId если его нет в URL
+        if (!sessionId && data.sessionId) {
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.set("session", data.sessionId);
+          router.replace(newUrl.pathname + newUrl.search, { scroll: false });
+          console.log("[chat] 🔗 Updated URL with sessionId from POST:", data.sessionId);
         }
       }
       if (data.sessionType) {

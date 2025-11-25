@@ -1,5 +1,82 @@
 import { validateAddressWithDaData } from "./dadata";
 import { detectGenderByName } from "./utils/genderDetector";
+import { findProfession } from "./dictionaries";
+
+/**
+ * Список регионов России для валидации
+ */
+const RUSSIAN_REGIONS = [
+  'москва', 'санкт-петербург', 'ленинградская', 'московская',
+  'татарстан', 'башкортостан', 'чечня', 'дагестан', 'ингушетия',
+  'кабардино-балкария', 'карачаево-черкесия', 'осетия', 'адыгея',
+  'краснодарский', 'ставропольский', 'ростовская', 'волгоградская',
+  'астраханская', 'калмыкия', 'крым', 'севастополь',
+  'белгородская', 'брянская', 'владимирская', 'воронежская',
+  'ивановская', 'калужская', 'костромская', 'курская',
+  'липецкая', 'орловская', 'рязанская', 'смоленская',
+  'тамбовская', 'тверская', 'тульская', 'ярославская',
+  'архангельская', 'вологодская', 'карелия', 'коми',
+  'мурманская', 'ненецкий', 'новгородская', 'псковская',
+  'калининградская', 'санкт-петербург', 'ленинградская',
+  'кировская', 'нижегородская', 'оренбургская', 'пензенская',
+  'пермский', 'самарская', 'саратовская', 'удмуртия',
+  'ульяновская', 'чувашия', 'марий эл', 'мордовия',
+  'курганская', 'свердловская', 'тюменская', 'ханты-мансийский',
+  'ямало-ненецкий', 'челябинская', 'алтайский', 'алтай',
+  'бурятия', 'забайкальский', 'иркутская', 'кемеровская',
+  'красноярский', 'новосибирская', 'омская', 'томская',
+  'тыва', 'хакасия', 'амурская', 'еврейская',
+  'камчатский', 'магаданская', 'приморский', 'сахалинская',
+  'саха', 'хабаровский', 'чукотский'
+];
+
+/**
+ * Проверяет, является ли значение плейсхолдером или невалидным
+ */
+function isPlaceholder(value: string): boolean {
+  if (!value || typeof value !== 'string') return false;
+  
+  const normalized = value.toLowerCase().trim();
+  
+  // Служебные слова которые НЕ являются данными
+  const invalidValues = [
+    'самому', 'сам', 'самостоятельно', 'через форму',
+    'в чате', 'в диалоге', 'да', 'нет', 'ага', 'угу',
+    'верно', 'правильно', 'точно', 'ок', 'окей'
+  ];
+  
+  if (invalidValues.includes(normalized)) {
+    return true;
+  }
+  
+  const placeholderMarkers = [
+    '(←',           // (← вставьте...)
+    'вставь',       // вставьте реальный...
+    '_____',        // подчеркивания
+    '[пусто]',
+    '[значение]',
+    'не указан',
+    'не указана',
+    'не указано',
+    '(пусто)',
+  ];
+  
+  return placeholderMarkers.some(marker => normalized.includes(marker));
+}
+
+/**
+ * Проверяет, является ли значение валидным регионом России
+ */
+function isValidRegion(value: string): boolean {
+  if (!value || typeof value !== 'string') return false;
+  
+  const normalized = value.toLowerCase().trim();
+  
+  // Проверяем по списку регионов
+  return RUSSIAN_REGIONS.some(region => 
+    normalized.includes(region) || region.includes(normalized)
+  );
+}
 
 /**
  * Извлекает структурированные данные из сообщений бота
@@ -36,8 +113,13 @@ function extractStructuredDataFromBot(
   const regionPattern = /(?:\d+\.\s*)?\*\*Регион\*\*[:\s]+([^\n]+?)(?:\n|$)/;
   const regionMatch = text.match(regionPattern);
   if (regionMatch) {
-    extracted.region = regionMatch[1].trim();
-    console.log('[profile-extraction] Extracted Region:', extracted.region);
+    const value = regionMatch[1].trim();
+    if (!isPlaceholder(value) && isValidRegion(value)) {
+      extracted.region = value;
+      console.log('[profile-extraction] ✅ Extracted Region:', extracted.region);
+    } else {
+      console.log('[profile-extraction] ⚠️ Skipped Region (invalid/placeholder):', value);
+    }
   }
   
   // ФИО: "3. **ФИО**: Иванов Иван Иванович" или "**ФИО**: Иванов Иван Иванович"
@@ -66,8 +148,13 @@ function extractStructuredDataFromBot(
   const addressPattern = /(?:\d+\.\s*)?\*\*Адрес\*\*[:\s]+([^\n]+?)(?:\n|$)/;
   const addressMatch = text.match(addressPattern);
   if (addressMatch) {
-    extracted.address = addressMatch[1].trim();
+    const value = addressMatch[1].trim();
+    if (!isPlaceholder(value)) {
+      extracted.address = value;
     console.log('[profile-extraction] Extracted Address:', extracted.address);
+    } else {
+      console.log('[profile-extraction] ⚠️ Skipped Address (placeholder):', value);
+    }
   }
   
   // Телефон: "4. **Телефон**: +7 (963) 977-12-86"
@@ -106,8 +193,13 @@ function extractStructuredDataFromBot(
   const orgPattern = /(?:\d+\.\s*)?\*\*Организация\*\*[:\s]+([^\n]+?)(?:\n|$)/;
   const orgMatch = text.match(orgPattern);
   if (orgMatch) {
-    extracted.organizationName = orgMatch[1].trim();
-    console.log('[profile-extraction] Extracted Organization:', extracted.organizationName);
+    const value = orgMatch[1].trim();
+    if (!isPlaceholder(value)) {
+      extracted.organizationName = value;
+      console.log('[profile-extraction] ✅ Extracted Organization:', extracted.organizationName);
+    } else {
+      console.log('[profile-extraction] ⚠️ Skipped Organization (placeholder):', value);
+    }
   }
   
   console.log('[profile-extraction] Total extracted fields:', Object.keys(extracted).length);
@@ -216,9 +308,56 @@ export async function extractProfileDataFromMessages(
   if (Object.keys(structuredData).length > 0) {
     console.log('[profile-extraction] ✅ Found structured data from bot:', structuredData);
     Object.assign(profileData, structuredData);
+    
+    // ВАЛИДАЦИЯ: Проверяем что извлеченные данные не являются плейсхолдерами
+    // Если region невалидный - сбрасываем и будем искать через fallback
+    if (profileData.region && (isPlaceholder(profileData.region) || !isValidRegion(profileData.region))) {
+      console.log('[profile-extraction] ⚠️ Invalid region in structured data, will use fallback:', profileData.region);
+      delete profileData.region;
+    }
+    
+    // Если organizationName - плейсхолдер - сбрасываем и будем искать через fallback
+    if (profileData.organizationName && isPlaceholder(profileData.organizationName)) {
+      console.log('[profile-extraction] ⚠️ Invalid organizationName in structured data, will use fallback:', profileData.organizationName);
+      delete profileData.organizationName;
+    }
+    
     hasStructuredData = true;
   } else {
     console.log('[profile-extraction] ⚠️ No structured data found, will use fallback extraction');
+  }
+  
+  // FALLBACK: Если ФИО или дата рождения отсутствуют в итоговом сообщении,
+  // ищем их в подтверждениях бота по всей истории
+  if (!profileData.firstName || !profileData.lastName || !profileData.dateOfBirth) {
+    console.log('[profile-extraction] 🔍 Looking for missing FIO/DOB in bot confirmations...');
+    
+    for (const msg of botMessages) {
+      // Ищем подтверждение ФИО: "Ваше ФИО: Иванов Иван Иванович. Верно?"
+      if (!profileData.firstName || !profileData.lastName) {
+        const fioConfirmPattern = /(?:ваше\s+ФИО|фио)[\s:]+([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+(?:\s+(?:оглы|улы|кызы))?))?/i;
+        const fioMatch = msg.content.match(fioConfirmPattern);
+        if (fioMatch) {
+          profileData.lastName = fioMatch[1].trim();
+          profileData.firstName = fioMatch[2].trim();
+          if (fioMatch[3]) {
+            profileData.middleName = fioMatch[3].trim();
+          }
+          console.log('[profile-extraction] ✅ Found FIO from bot confirmation:', profileData.lastName, profileData.firstName, profileData.middleName);
+        }
+      }
+      
+      // Ищем подтверждение даты: "Ваша дата рождения: 16.01.1981. Верно?"
+      if (!profileData.dateOfBirth) {
+        const dobConfirmPattern = /(?:ваша\s+дата\s+рождения|дата\s+рождения)[\s:]+(\d{1,2}\.\d{1,2}\.\d{4})/i;
+        const dobMatch = msg.content.match(dobConfirmPattern);
+        if (dobMatch) {
+          const [day, month, year] = dobMatch[1].split('.').map(Number);
+          profileData.dateOfBirth = new Date(year, month - 1, day);
+          console.log('[profile-extraction] ✅ Found DOB from bot confirmation:', dobMatch[1], '→', profileData.dateOfBirth);
+        }
+      }
+    }
   }
 
   // Join all text for analysis (fallback если структурированные данные не найдены)
@@ -238,26 +377,9 @@ export async function extractProfileDataFromMessages(
     profileData.region = regionMatch[1].trim();
   }
 
-  // Extract preferred discount city (город для скидок)
-  // Ищем упоминания городов: "из Казани", "живу в Москве", "г. Санкт-Петербург", "г Набережные Челны" и т.д.
-  // Важно: берем ВСЕ слова города, включая составные названия (Нижний Новгород, Набережные Челны)
-  const cityPatterns = [
-    /(?:из|живу в|нахожусь в|город)\s+г?\.?\s*([А-ЯЁ][а-яёА-ЯЁ\-\s]+?)(?=\s*,|\s*$|\s+\d)/i,
-    /г\.?\s+([А-ЯЁ][а-яёА-ЯЁ\-\s]+?)(?=\s*,|\s*$|\s+\d)/i,
-    /город\s+([А-ЯЁ][а-яёА-ЯЁ\-\s]+?)(?=\s*,|\s*$|\s+\d)/i,
-  ];
-  
-  for (const pattern of cityPatterns) {
-    const cityMatch = userOnlyText.match(pattern);
-    if (cityMatch && cityMatch[1]) {
-      const city = cityMatch[1].trim();
-      // Фильтруем служебные слова
-      if (!['Россия', 'Федерация', 'Область', 'Край', 'Республика'].includes(city)) {
-        profileData.preferredDiscountCity = city;
-        break; // Берем первое найденное упоминание города
-      }
-    }
-  }
+  // ⚠️ preferredDiscountCity НЕ извлекается из текста пользователя!
+  // Город заполняется ТОЛЬКО из валидированного адреса DaData (см. ниже, строка ~787)
+  // Это предотвращает захват мусора типа "ага", "хирургия" и т.д.
 
   // ========== ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ ==========
   
@@ -275,7 +397,7 @@ export async function extractProfileDataFromMessages(
     const userAnswer = nextMsg.content.trim();
     
     // ЗАНЯТОСТЬ (employmentStatus)
-    if (botQuestion.includes('занятость') && (botQuestion.includes('работа') || botQuestion.includes('учеба') || botQuestion.includes('пенсия'))) {
+    if (!profileData.employmentStatus && botQuestion.includes('занятость') && (botQuestion.includes('работа') || botQuestion.includes('учеба') || botQuestion.includes('пенсия'))) {
       const answer = userAnswer.toLowerCase();
       if (answer.includes('работа') || answer.includes('работаю')) {
         profileData.employmentStatus = 'WORK';
@@ -290,7 +412,7 @@ export async function extractProfileDataFromMessages(
   }
 
     // СЕМЕЙНОЕ ПОЛОЖЕНИЕ (maritalStatus)
-    if (botQuestion.includes('семейное положение') || (botQuestion.includes('женат') && botQuestion.includes('замужем'))) {
+    if (!profileData.maritalStatus && (botQuestion.includes('семейное положение') || (botQuestion.includes('женат') && botQuestion.includes('замужем')))) {
       const answer = userAnswer.toLowerCase();
       if (answer.includes('замужем') || answer.includes('женат') || answer.includes('в браке')) {
         profileData.maritalStatus = 'MARRIED';
@@ -311,13 +433,13 @@ export async function extractProfileDataFromMessages(
     }
     
     // ИНФОРМАЦИЯ О СУПРУГЕ (spouseInfo)
-    if (botQuestion.includes('супруг') && userAnswer.length > 5 && !userAnswer.toLowerCase().includes('нет') && !userAnswer.toLowerCase().includes('одинок')) {
+    if (!profileData.spouseInfo && botQuestion.includes('супруг') && userAnswer.length > 5 && !userAnswer.toLowerCase().includes('нет') && !userAnswer.toLowerCase().includes('одинок')) {
       profileData.spouseInfo = userAnswer;
       console.log('[profile-extraction] ✅ Extracted spouseInfo:', userAnswer.substring(0, 50));
   }
 
     // ЕСТЬ ЛИ ДЕТИ (hasChildren)
-    if (botQuestion.includes('есть ли у вас дети') || botQuestion.includes('дети есть')) {
+    if (profileData.hasChildren === undefined && (botQuestion.includes('есть ли у вас дети') || botQuestion.includes('дети есть'))) {
       const answer = userAnswer.toLowerCase();
       if (answer.includes('да') || answer.includes('есть') || answer.match(/^\d+/)) {
         profileData.hasChildren = true;
@@ -366,7 +488,7 @@ export async function extractProfileDataFromMessages(
     }
     
     // ХОББИ И УВЛЕЧЕНИЯ (hobbies)
-    if (botQuestion.includes('хобби') || botQuestion.includes('увлечения')) {
+    if (!profileData.hobbies && (botQuestion.includes('хобби') || botQuestion.includes('увлечения'))) {
       if (userAnswer.length > 3 && !userAnswer.toLowerCase().includes('нет') && !userAnswer.toLowerCase().includes('пока нет')) {
         profileData.hobbies = userAnswer;
         console.log('[profile-extraction] ✅ Extracted hobbies:', userAnswer.substring(0, 50));
@@ -374,7 +496,7 @@ export async function extractProfileDataFromMessages(
     }
     
     // О СЕБЕ (aboutMe)
-    if ((botQuestion.includes('о себе') || botQuestion.includes('характер')) && botQuestion.includes('вдохновляет')) {
+    if (!profileData.aboutMe && (botQuestion.includes('о себе') || botQuestion.includes('характер')) && botQuestion.includes('вдохновляет')) {
       if (userAnswer.length > 5 && !userAnswer.toLowerCase().includes('нет') && !userAnswer.toLowerCase().includes('пока нет')) {
         profileData.aboutMe = userAnswer;
         console.log('[profile-extraction] ✅ Extracted aboutMe:', userAnswer.substring(0, 50));
@@ -382,7 +504,7 @@ export async function extractProfileDataFromMessages(
   }
 
     // ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ (additionalInfo)
-    if (botQuestion.includes('еще') && botQuestion.includes('рассказать')) {
+    if (!profileData.additionalInfo && botQuestion.includes('еще') && botQuestion.includes('рассказать')) {
       if (userAnswer.length > 5 && !userAnswer.toLowerCase().includes('нет') && !userAnswer.toLowerCase().includes('пока нет')) {
         profileData.additionalInfo = userAnswer;
         console.log('[profile-extraction] ✅ Extracted additionalInfo:', userAnswer.substring(0, 50));
@@ -451,12 +573,27 @@ export async function extractProfileDataFromMessages(
       }
     }
     
-    // АДРЕС из подтверждения: "Адрес: Москва, улица... Верно?"
-    if ((botQuestion.includes('адрес:') || botQuestion.includes('адрес проживания:')) && botQuestion.includes('верно')) {
+    // АДРЕС ВАЛИДИРОВАННЫЙ от DaData (ПРИОРИТЕТ!) - "Система проверила ваш адрес: **Респ Татарстан, г Набережные Челны...**"
+    if ((botQuestion.includes('система проверила') || botQuestion.includes('система нашла адрес')) && 
+        botQuestion.includes('адрес')) {
+      const dadataAddrMatch = currentMsg.content.match(/адрес[^:]*:\s*\*\*([^*]+)\*\*/i);
+      if (dadataAddrMatch && dadataAddrMatch[1]) {
+        const validatedAddr = dadataAddrMatch[1].trim();
+        if (validatedAddr.length >= 20) { // Полный адрес от DaData всегда длинный
+          profileData.address = validatedAddr;
+          console.log('[profile-extraction] ✅ Extracted VALIDATED address from DaData:', validatedAddr);
+        }
+      }
+    }
+    
+    // АДРЕС из подтверждения: "Адрес: Москва, улица... Верно?" (только если валидированного нет)
+    if ((botQuestion.includes('адрес:') || botQuestion.includes('адрес проживания:')) && 
+        botQuestion.includes('верно') && 
+        !profileData.address) {
       const addrMatch = currentMsg.content.match(/адрес[^:]*[:\s]+([^.?]+)/i);
       if (addrMatch && addrMatch[1]) {
         const addr = addrMatch[1].trim();
-        if (!profileData.address && addr.length >= 10) {
+        if (addr.length >= 10) {
           profileData.address = addr;
           console.log('[profile-extraction] ✅ Extracted address (from confirmation):', addr);
         }
@@ -482,13 +619,20 @@ export async function extractProfileDataFromMessages(
       if (botQuestion.includes('верно')) {
         const regionMatch = currentMsg.content.match(/регион[:\s]+([^.?]+)/i);
         if (regionMatch && regionMatch[1]) {
-          profileData.region = regionMatch[1].trim();
-          console.log('[profile-extraction] ✅ Extracted region (from confirmation):', profileData.region);
+          const region = regionMatch[1].trim();
+          if (!isPlaceholder(region) && isValidRegion(region)) {
+            profileData.region = region;
+            console.log('[profile-extraction] ✅ Extracted region (from confirmation):', profileData.region);
+          }
         }
       } else if (userAnswer.length >= 2 && !userAnswer.toLowerCase().match(/^(да|нет|верно)$/)) {
-        // Прямой ответ пользователя
-        profileData.region = userAnswer;
-        console.log('[profile-extraction] ✅ Extracted region (context):', userAnswer);
+        // Прямой ответ пользователя - валидируем что это регион
+        if (!isPlaceholder(userAnswer) && isValidRegion(userAnswer)) {
+          profileData.region = userAnswer;
+          console.log('[profile-extraction] ✅ Extracted region (context):', userAnswer);
+        } else {
+          console.log('[profile-extraction] ⚠️ Skipped region (invalid):', userAnswer);
+        }
       }
     }
   }
@@ -621,9 +765,16 @@ export async function extractProfileDataFromMessages(
         const validatedData = await validateAddressWithDaData(addressCandidate);
         if (validatedData) {
           profileData.address = validatedData.address;
-          // Автоматически подставляем город из DaData
-          if (validatedData.city) {
-            profileData.preferredDiscountCity = validatedData.city;
+          // Автоматически подставляем город из DaData (ТОЛЬКО если его еще нет и он валидный)
+          if (validatedData.city && !profileData.preferredDiscountCity) {
+            const city = validatedData.city.trim();
+            // Проверяем что это не плейсхолдер и валидный город
+            if (!isPlaceholder(city) && city.length >= 2 && city.length <= 100) {
+              profileData.preferredDiscountCity = city;
+              console.log(`[profile-extraction] ✅ Set preferredDiscountCity from DaData: ${city}`);
+            } else {
+              console.log(`[profile-extraction] ⚠️ Skipped city (invalid/placeholder): ${city}`);
+            }
           }
           console.log(`[profile-extraction] Address validated: ${validatedData.address}, city: ${validatedData.city}`);
         } else {
@@ -634,6 +785,45 @@ export async function extractProfileDataFromMessages(
         console.error("[profile-extraction] Error validating address with DaData:", error);
         profileData.address = addressCandidate;
       }
+    }
+  }
+
+  // ⚠️ ВАЖНО: Если адрес уже есть, но preferredDiscountCity не установлен - извлекаем город
+  if (profileData.address && !profileData.preferredDiscountCity) {
+    try {
+      console.log(`[profile-extraction] Extracting city from existing address: ${profileData.address}`);
+      // Пытаемся валидировать существующий адрес через DaData, чтобы получить город
+      const validatedData = await validateAddressWithDaData(profileData.address);
+      if (validatedData?.city) {
+        const city = validatedData.city.trim();
+        if (!isPlaceholder(city) && city.length >= 2 && city.length <= 100) {
+          profileData.preferredDiscountCity = city;
+          console.log(`[profile-extraction] ✅ Extracted preferredDiscountCity from existing address: ${city}`);
+        }
+      } else {
+        // Fallback: пытаемся извлечь город из адреса через regex
+        const cityPatterns = [
+          /г\.?\s*([А-ЯЁ][а-яё\-]+)/i,           // г. Набережные Челны
+          /город\s+([А-ЯЁ][а-яё\-]+)/i,          // город Набережные Челны
+          /,\s*г\.?\s*([А-ЯЁ][а-яё\-]+)/i,       // , г. Набережные Челны
+          /,\s*([А-ЯЁ][а-яё\-]+)\s*,/i,          // , Набережные Челны,
+        ];
+        
+        for (const pattern of cityPatterns) {
+          const match = profileData.address.match(pattern);
+          if (match && match[1]) {
+            const city = match[1].trim();
+            // Фильтруем служебные слова
+            if (!['область', 'республика', 'край', 'округ', 'район'].includes(city.toLowerCase()) && city.length >= 2) {
+              profileData.preferredDiscountCity = city;
+              console.log(`[profile-extraction] ✅ Extracted preferredDiscountCity via regex: ${city}`);
+              break;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[profile-extraction] Error extracting city from existing address:", error);
     }
   }
 
@@ -685,8 +875,8 @@ export async function extractProfileDataFromMessages(
     }
   }
 
-  // Extract organization name - только если не извлечено из структурированных данных
-  if (!profileData.organizationName && !hasStructuredData) {
+  // Extract organization name - если не извлечено или было невалидным в структурированных данных
+  if (!profileData.organizationName) {
     // СНАЧАЛА ищем в сообщениях БОТА - когда он показывает найденную организацию
     const botText = messages
       .filter((msg) => msg.role === "assistant")
@@ -694,10 +884,18 @@ export async function extractProfileDataFromMessages(
       .join("\n");
     
     // Паттерн для найденной организации через DaData/Минюст
+    // Учитываем markdown (**), переносы строк и пробелы
+    // Захватываем до закрывающих ** или до "Это правильная"
     const botOrgPatterns = [
-      /Я нашел вашу организацию[^:]*:\s*([А-ЯЁ][^\n]+?)(?:\.|Это правильная)/i,
-      /организацию в реестре:\s*([А-ЯЁ][^\n]+?)(?:\.|К сожалению)/i,
-      /НАЙДЕНА ОРГАНИЗАЦИЯ[^:]*:\s*([А-ЯЁ][^\]]+?)\]/i,
+      // "Я нашел вашу организацию в реестре: \n\n**Название имени Р.С. Акчурина.**" 
+      // Исправлено: учитываем переносы строк между : и **
+      /Я нашел[^:]*организацию[^:]*:\s*(?:\n\s*)*\*\*([А-ЯЁа-яё][^*]+?)\*\*/i,
+      // "организацию в реестре: **Название.**"
+      /организацию в реестре:\s*(?:\n\s*)*\*\*([А-ЯЁа-яё][^*]+?)\*\*/i,
+      // Системный маркер [✅ НАЙДЕНА ОРГАНИЗАЦИЯ: "Название"]
+      /НАЙДЕНА ОРГАНИЗАЦИЯ[^:]*:\s*"?([А-ЯЁа-яё][^"\]\n]+)"?\]/i,
+      // Универсальный паттерн: захватываем текст между ** ** (markdown bold)
+      /(?:найден[аоы]?\s+(?:в реестре\s+)?организаци[юя])[^*]*\*\*([А-ЯЁа-яё][^*]+?)\*\*/i,
     ];
     
     for (const pattern of botOrgPatterns) {
@@ -725,6 +923,33 @@ export async function extractProfileDataFromMessages(
           profileData.organizationName = orgMatch[1].trim();
         }
       }
+    }
+  }
+
+  // Валидация профессии через справочник
+  if (profileData.profession && typeof profileData.profession === 'string') {
+    const professionFromUser = profileData.profession.trim();
+    try {
+      const validatedProfession = await findProfession(professionFromUser);
+      if (validatedProfession) {
+        // Если нашли в справочнике - используем правильное название
+        if (validatedProfession !== professionFromUser) {
+          console.log(`[profile-extraction] ✅ Profession validated: "${professionFromUser}" → "${validatedProfession}"`);
+        }
+        profileData.profession = validatedProfession;
+      } else {
+        // Если не нашли в справочнике - НЕ сохраняем (это заставит бота переспросить)
+        if (isPlaceholder(professionFromUser)) {
+          console.log(`[profile-extraction] ⚠️ Skipped profession (placeholder): "${professionFromUser}"`);
+        } else {
+          console.log(`[profile-extraction] ⚠️ Profession not found in dictionary: "${professionFromUser}" (REJECTED - will ask again)`);
+        }
+        // Удаляем профессию если она не найдена в справочнике
+        delete profileData.profession;
+      }
+    } catch (error) {
+      console.error('[profile-extraction] Error validating profession:', error);
+      // В случае ошибки оставляем как есть
     }
   }
 
@@ -777,13 +1002,27 @@ function validateExtractedProfile(data: Record<string, any>): Record<string, any
   }
   
   // Валидация dateOfBirth
+  if (data.dateOfBirth) {
+    console.log('[profile-extraction] Validating dateOfBirth:', {
+      value: data.dateOfBirth,
+      type: typeof data.dateOfBirth,
+      isDate: data.dateOfBirth instanceof Date,
+      isValid: data.dateOfBirth instanceof Date && !isNaN(data.dateOfBirth.getTime())
+    });
+    
   if (data.dateOfBirth instanceof Date && !isNaN(data.dateOfBirth.getTime())) {
     const now = new Date();
     const age = now.getFullYear() - data.dateOfBirth.getFullYear();
+      console.log('[profile-extraction] Age check:', { age, min: 14, max: 100, passed: age >= 14 && age <= 100 });
+      
     if (age >= 14 && age <= 100) {
       validated.dateOfBirth = data.dateOfBirth;
+        console.log('[profile-extraction] ✅ dateOfBirth validated successfully');
     } else {
-      console.warn('[profile-extraction] Invalid dateOfBirth (age out of range):', data.dateOfBirth);
+        console.warn('[profile-extraction] ❌ dateOfBirth rejected: age out of range (14-100):', data.dateOfBirth, 'age:', age);
+      }
+    } else {
+      console.warn('[profile-extraction] ❌ dateOfBirth rejected: not a valid Date object');
     }
   }
   
@@ -816,10 +1055,14 @@ function validateExtractedProfile(data: Record<string, any>): Record<string, any
   }
   
   // Валидация preferredDiscountCity
+  // ⚠️ Город должен быть ТОЛЬКО из валидированного адреса DaData, не из текста пользователя!
   if (data.preferredDiscountCity && typeof data.preferredDiscountCity === 'string') {
     const city = data.preferredDiscountCity.trim();
-    if (city.length >= 2 && city.length <= 100) {
+    // Проверяем что это не плейсхолдер и валидный город
+    if (city.length >= 2 && city.length <= 100 && !isPlaceholder(city)) {
       validated.preferredDiscountCity = city;
+    } else {
+      console.warn('[profile-extraction] ⚠️ Invalid preferredDiscountCity (rejected):', city);
     }
   }
   
