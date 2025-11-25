@@ -22,8 +22,9 @@ async function updateBotTokens() {
     console.log(`  Модель: ${bot.model}`);
     console.log(`  Было: ${bot.maxTokens} tokens`);
     
-    // Обновляем до 8000 (оптимально для Claude 3.5 Sonnet и GPT-4)
-    const newMaxTokens = 8000;
+    // Обновляем до 16000 (оптимально для GPT-4o-mini с context window 128K)
+    // Это позволит боту давать развернутые ответы и не терять инструкции
+    const newMaxTokens = 16000;
     
     await prisma.chatBot.update({
       where: { id: bot.id },
@@ -37,9 +38,9 @@ async function updateBotTokens() {
   console.log('✨ Все боты обновлены!');
   console.log('');
   console.log('💡 Теперь бот сможет:');
-  console.log('   - Удерживать в памяти все инструкции');
-  console.log('   - Не забывать про сбор данных о каждом ребенке');
-  console.log('   - Лучше следовать сложным правилам');
+  console.log('   - Давать более развернутые и подробные ответы');
+  console.log('   - Не обрывать длинные объяснения на середине');
+  console.log('   - Лучше следовать сложным многоступенчатым инструкциям');
   
   await prisma.$disconnect();
 }

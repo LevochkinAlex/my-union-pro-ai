@@ -1170,12 +1170,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Формируем массив сообщений для OpenRouter
+    // ⚠️ ВАЖНО: Ограничиваем историю последними 15 сообщениями, чтобы системный промпт не "выталкивался" из контекста
+    const recentHistory = chatHistory.slice(-15);
+    
     const messages: ChatMessagePayload[] = [
       {
         role: "system",
         content: enhancedSystemPrompt,
       },
-      ...chatHistory.map((msg) => ({
+      ...recentHistory.map((msg) => ({
         role: msg.role as ChatMessagePayload["role"],
         content: msg.content,
       })),
@@ -1184,6 +1187,8 @@ export async function POST(request: NextRequest) {
         content: userMessage,
       },
     ];
+    
+    console.log(`[chat] Отправляем в API: системный промпт + ${recentHistory.length} сообщений из истории + новое сообщение пользователя`);
 
     // Сохраняем сообщение пользователя с привязкой к сессии
     await prisma.chatMessage.create({
