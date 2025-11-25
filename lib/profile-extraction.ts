@@ -216,19 +216,16 @@ export async function extractProfileDataFromMessages(
   // Join all text for analysis (fallback если структурированные данные не найдены)
   // ⚠️ ВАЖНО: Для fallback используем ТОЛЬКО сообщения пользователя,
   // чтобы избежать извлечения данных из списков вариантов, которые перечисляет бот
-  const allText = messages
-    .map((msg) => msg.content)
-    .join("\n");
-  
-  // Для fallback-извлечения используем только сообщения пользователя
   const userOnlyText = messages
     .filter((msg) => msg.role === "user")
     .map((msg) => msg.content)
     .join("\n");
+  
+  // allText убран - используем только userOnlyText чтобы не извлекать данные из сообщений бота
 
   // Extract region (регион России)
   const regionPattern = /(?:регион|область|край|республика)[\s:]+([А-ЯЁ][а-яё\s-]+(?:область|край|республика|автономный округ)?)/i;
-  const regionMatch = allText.match(regionPattern);
+  const regionMatch = userOnlyText.match(regionPattern);
   if (regionMatch) {
     profileData.region = regionMatch[1].trim();
   }
@@ -243,7 +240,7 @@ export async function extractProfileDataFromMessages(
   ];
   
   for (const pattern of cityPatterns) {
-    const cityMatch = allText.match(pattern);
+    const cityMatch = userOnlyText.match(pattern);
     if (cityMatch && cityMatch[1]) {
       const city = cityMatch[1].trim();
       // Фильтруем служебные слова
@@ -391,7 +388,7 @@ export async function extractProfileDataFromMessages(
     // Сначала ищем по явным меткам
     // Поддержка тюркских суффиксов: оглы, улы, кызы (с маленькой буквы)
     const fioLabelPattern = /(?:\*\*(?:ФИО|Фамилия|Имя)\*\*|ФИО|Фамилия\s+Имя\s+Отчество)[^:\n]*[:\-–]\s*([А-ЯЁ][а-яё]+)\s+([А-ЯЁ][а-яё]+)(?:\s+([А-ЯЁ][а-яё]+(?:\s+(?:оглы|улы|кызы))?))?/i;
-    const fioLabelMatch = allText.match(fioLabelPattern);
+    const fioLabelMatch = userOnlyText.match(fioLabelPattern);
     
     if (fioLabelMatch) {
       // Найдено по метке
@@ -428,7 +425,7 @@ export async function extractProfileDataFromMessages(
       ];
       
       let fioMatch;
-      while ((fioMatch = fioPattern.exec(allText)) !== null) {
+      while ((fioMatch = fioPattern.exec(userOnlyText)) !== null) {
         const word1 = fioMatch[1];
         const word2 = fioMatch[2];
         const word3 = fioMatch[3];
@@ -437,7 +434,7 @@ export async function extractProfileDataFromMessages(
         if (!excludeWords.includes(word1) && !excludeWords.includes(word2) && 
             (!word3 || !excludeWords.includes(word3))) {
           // Дополнительная проверка: исключаем если после идут слова "область", "край", "республика"
-          const contextAfter = allText.substring(fioMatch.index + fioMatch[0].length, fioMatch.index + fioMatch[0].length + 50);
+          const contextAfter = userOnlyText.substring(fioMatch.index + fioMatch[0].length, fioMatch.index + fioMatch[0].length + 50);
           if (!/(?:область|край|республика|округ|регион|город|г\.|улица|ул\.|проспект|пр\.)/i.test(contextAfter.substring(0, 20))) {
             if (word3) {
               profileData.lastName = word1.trim();
@@ -459,7 +456,7 @@ export async function extractProfileDataFromMessages(
     let dateOfBirth: Date | null = null;
 
     // Сначала пробуем гибкий парсер
-    const dateMatches = allText.match(
+    const dateMatches = userOnlyText.match(
       /(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4}|\d{1,2}\s+[а-яё]+\s+\d{4})/g
     );
     if (dateMatches) {
@@ -481,9 +478,9 @@ export async function extractProfileDataFromMessages(
   if (!profileData.phone && !hasStructuredData) {
     const phonePattern =
       /\+?7[\s-]?\(?(\d{3})\)?[\s-]?(\d{3})[\s-]?(\d{2})[\s-]?(\d{2})/;
-    const phoneMatch = allText.match(phonePattern);
+    const phoneMatch = userOnlyText.match(phonePattern);
     if (phoneMatch) {
-      profileData.phone = allText.match(/\+?7[\s\-\(\)0-9]+/)?.[0] || "";
+      profileData.phone = userOnlyText.match(/\+?7[\s\-\(\)0-9]+/)?.[0] || "";
     }
   }
 
@@ -491,7 +488,7 @@ export async function extractProfileDataFromMessages(
   if (!profileData.address && !hasStructuredData) {
     let addressCandidate: string | null = null;
     const addressLabelPattern = /(?:\*\*Адрес\*\*|Адрес)[^:\n]*[:\-–]\s*(.+)/i;
-    const addressLabelMatch = allText.match(addressLabelPattern);
+    const addressLabelMatch = userOnlyText.match(addressLabelPattern);
     if (addressLabelMatch) {
       addressCandidate = addressLabelMatch[1].split(/\n/)[0].trim();
     }
@@ -499,7 +496,7 @@ export async function extractProfileDataFromMessages(
     if (!addressCandidate) {
       const addressPattern =
         /(ул\.|улица|пр\.|проспект|пл\.|площадь|переулок|пер\.|бульвар|бул\.|набережная|наб\.|г\.\s*[А-ЯЁ][а-яё]+|город\s+[А-ЯЁ][а-яё]+)/gi;
-      const addressMatches = allText.match(addressPattern);
+      const addressMatches = userOnlyText.match(addressPattern);
       if (addressMatches && addressMatches.length > 0) {
         addressCandidate = normalizeAddress(addressMatches[0]);
       }
@@ -580,7 +577,7 @@ export async function extractProfileDataFromMessages(
   // Extract organization name - только если не извлечено из структурированных данных
   if (!profileData.organizationName && !hasStructuredData) {
     const orgLabelPattern = /(?:\*\*Организация\*\*|Организация|работаю|работает)[^:\n]*[:\-–]\s*(.+)/i;
-    const orgLabelMatch = allText.match(orgLabelPattern);
+    const orgLabelMatch = userOnlyText.match(orgLabelPattern);
     if (orgLabelMatch) {
       profileData.organizationName = orgLabelMatch[1].split(/\n/)[0].trim();
     }
@@ -588,7 +585,7 @@ export async function extractProfileDataFromMessages(
     // Также пытаемся найти название организации в контексте работы
     if (!profileData.organizationName) {
       const orgPattern = /(?:работаю|работает|организация|место работы)[\s:]+([А-ЯЁ][А-ЯЁа-яё\s"«»-]+(?:ООО|ЗАО|ОАО|ИП|ГБУЗ|ГБУ|МБУ|МУП|АО|ПАО|НКО|ОО|ППО|профсоюз)?)/i;
-      const orgMatch = allText.match(orgPattern);
+      const orgMatch = userOnlyText.match(orgPattern);
       if (orgMatch) {
         profileData.organizationName = orgMatch[1].trim();
       }
