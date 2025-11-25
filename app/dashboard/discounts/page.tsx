@@ -23,7 +23,7 @@ export default async function DiscountsPage() {
     getDiscountPreferenceSafe(userId),
     prisma.user.findUnique({
       where: { id: userId },
-      select: { address: true, region: true, preferredDiscountCity: true }
+      select: { address: true, preferredDiscountCity: true }
     }).catch((error) => {
       console.error("[discounts] Error fetching user:", error);
       return null;
