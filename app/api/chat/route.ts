@@ -11,7 +11,7 @@ import { extractProfileDataFromMessages, isProfileComplete } from "@/lib/profile
 import type { Prisma } from "@prisma/client";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
 import { findOrganization } from "@/lib/organization-search";
-import { validateAddressWithDaData } from "@/lib/dadata";
+import { validateAddressWithDaData, validateNameWithDaData } from "@/lib/dadata";
 import { detectGenderByName } from "@/lib/utils/genderDetector";
 import { detectBotQuestionContext, enhanceUserMessageWithContext, requiresValidation, logContext } from "@/lib/chat-context-helpers";
 import { findJobTitle, findProfession } from "@/lib/dictionaries";
@@ -943,6 +943,7 @@ export async function POST(request: NextRequest) {
     const validatedData: {
       address?: { address: string; city: string | null };
       organization?: { name: string; foundInDatabase: boolean; id?: string };
+      fio?: { lastName: string; firstName: string; middleName?: string; validated: boolean };
       jobTitle?: string;
       profession?: string;
     } = {};
@@ -954,6 +955,24 @@ export async function POST(request: NextRequest) {
           where: { id: session.user.id },
           select: { region: true },
         });
+
+        // ВАЛИДАЦИЯ ФИО
+        if (questionContext === "FIO" && message.length >= 5) {
+          console.log("[chat] 👤 Validating FIO via DaData:", message);
+          const nameResult = await validateNameWithDaData(message.trim());
+          
+          if (nameResult) {
+            console.log("[chat] ✅ FIO validated:", {
+              lastName: nameResult.lastName,
+              firstName: nameResult.firstName,
+              middleName: nameResult.middleName,
+              validated: nameResult.validated,
+            });
+            validatedData.fio = nameResult;
+          } else {
+            console.log("[chat] ⚠️ FIO validation failed");
+          }
+        }
 
         // ВАЛИДАЦИЯ АДРЕСА
         if (questionContext === "ADDRESS" && message.length > 10) {

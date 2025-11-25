@@ -169,7 +169,7 @@ export function enhanceUserMessageWithContext(
   validatedData?: {
     address?: { address: string; city: string | null };
     organization?: { name: string; foundInDatabase: boolean; id?: string };
-    fio?: { lastName: string; firstName: string; middleName?: string };
+    fio?: { lastName: string; firstName: string; middleName?: string; validated: boolean };
     dateOfBirth?: Date;
     phone?: string;
     jobTitle?: string;
@@ -196,7 +196,11 @@ export function enhanceUserMessageWithContext(
       break;
 
     case "FIO":
-      enhanced = `${userMessage}\n\n[КОНТЕКСТ: ФИО. Извлеки фамилию, имя, отчество. Тюркские суффиксы "улы"/"оглы"/"кызы" - часть отчества, пишутся с маленькой буквы!]`;
+      if (validatedData?.fio) {
+        enhanced = `${userMessage}\n\n[✅ СИСТЕМА ПРОВЕРИЛА ФИО ЧЕРЕЗ DADATA: ${validatedData.fio.lastName} ${validatedData.fio.firstName} ${validatedData.fio.middleName || ''}. Покажи пользователю это ФИО и спроси "Верно? (да/нет)"]`;
+      } else {
+        enhanced = `${userMessage}\n\n[КОНТЕКСТ: ФИО. Извлеки фамилию, имя, отчество. Тюркские суффиксы "улы"/"оглы"/"кызы" - часть отчества, пишутся с маленькой буквы!]`;
+      }
       break;
 
     case "DATE_OF_BIRTH":
@@ -245,7 +249,7 @@ export function enhanceUserMessageWithContext(
  * Проверяет, нужна ли валидация для данного контекста
  */
 export function requiresValidation(context: BotQuestionContext): boolean {
-  return context === "ORGANIZATION" || context === "ADDRESS" || context === "JOB_TITLE" || context === "PROFESSION";
+  return context === "ORGANIZATION" || context === "ADDRESS" || context === "JOB_TITLE" || context === "PROFESSION" || context === "FIO";
 }
 
 /**
