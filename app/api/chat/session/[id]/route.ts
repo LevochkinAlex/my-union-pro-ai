@@ -46,76 +46,11 @@ export async function GET(
       },
     });
 
-    // Если сессия пустая, создаем приветственное сообщение в зависимости от типа
-    if (messages.length === 0) {
-      // Выбираем бота в зависимости от типа сессии
-      let bot = null;
-      if (chatSession.type === "APPEAL") {
-        // Для обращений используем Appeal Bot
-        bot = await prisma.chatBot.findFirst({
-          where: {
-            isActive: true,
-            name: "Appeal Bot",
-          },
-        });
-        // Если Appeal Bot не найден, используем default bot как fallback
-        if (!bot) {
-          bot = await prisma.chatBot.findFirst({
-            where: {
-              isActive: true,
-              isDefault: true,
-            },
-          });
-        }
-      } else {
-        // Для заявлений используем default bot
-        bot = await prisma.chatBot.findFirst({
-          where: {
-            isActive: true,
-            isDefault: true,
-          },
-        });
-      }
-
-      let welcomeMessageContent: string;
-      if (chatSession.type === "APPEAL") {
-        // Приветствие для обращений
-        welcomeMessageContent = "Здравствуйте! Я ваш помощник по обращениям в профсоюз. Я могу помочь вам с вопросами и проблемами, связанными с профсоюзом, трудовыми отношениями и правами работников. При ответах я опираюсь на законы Российской Федерации, устав и положения профсоюза. Опишите, пожалуйста, ваше обращение или вопрос, и я постараюсь вам помочь.";
-      } else {
-        // Приветствие для заявлений - проверяем есть ли документы
-        const hasDocuments = await prisma.document.findFirst({
-          where: {
-            userId: session.user.id,
-            type: {
-              in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
-            },
-            status: {
-              not: "DRAFT",
-            },
-          },
-        });
-
-        if (hasDocuments) {
-          // Документы уже есть - приветствие для сбора дополнительной информации
-          welcomeMessageContent = "Здравствуйте! Ваше заявление уже сгенерировано и находится в обработке. Чтобы я мог лучше помогать вам, расскажите, пожалуйста, немного о себе. Чем вы занимаетесь?";
-        } else {
-          // Документов нет - обычное приветствие для сбора профиля
-          welcomeMessageContent = "Здравствуйте! Я ваш помощник для вступления в Профсоюз работников здравоохранения РФ. Я помогу вам заполнить профиль и подготовить необходимые документы для этого. Давайте начнем. Укажите регион России, в которой вы находитесь.";
-        }
-      }
-
-      const welcomeMessage = await prisma.chatMessage.create({
-        data: {
-          content: welcomeMessageContent,
-          role: "assistant",
-          userId: session.user.id,
-          sessionId: chatSession.id,
-          chatBotId: bot?.id || null,
-        },
-      });
-
-      messages = [welcomeMessage];
-    }
+    // Если сессия пустая, НЕ создаём приветствие здесь
+    // Приветствие создаётся ТОЛЬКО в /api/chat при создании новой сессии
+    // Это предотвращает дублирование приветственных сообщений при race condition
+    // Если messages.length === 0, просто возвращаем пустой массив
+    // Фронтенд перенаправит на /api/chat для создания новой сессии с приветствием
 
     return NextResponse.json({
       session: {

@@ -215,7 +215,7 @@ export function enhanceUserMessageWithContext(
 
     case "JOB_TITLE":
       if (validatedData?.jobTitle) {
-        enhanced = `${userMessage}\n\n[✅ СИСТЕМА НАШЛА В СПРАВОЧНИКЕ: "${validatedData.jobTitle}". Покажи пользователю это название и спроси "Ваша должность: ${validatedData.jobTitle}. Верно?"]`;
+        enhanced = `${userMessage}\n\n[✅ СИСТЕМА НАШЛА В СПРАВОЧНИКЕ: "${validatedData.jobTitle}". ⚠️ ОБЯЗАТЕЛЬНО скопируй ТОЧНОЕ значение "${validatedData.jobTitle}" в свой ответ! НЕ используй подчеркивания или плейсхолдеры! Скажи: "Ваша должность: ${validatedData.jobTitle}. Верно? (да/нет)"]`;
       } else {
         enhanced = `${userMessage}\n\n[⚠️ ДОЛЖНОСТЬ НЕ НАЙДЕНА В СПРАВОЧНИКЕ. Попроси уточнить или подтверди то, что написал пользователь.]`;
       }
@@ -223,7 +223,7 @@ export function enhanceUserMessageWithContext(
 
     case "PROFESSION":
       if (validatedData?.profession) {
-        enhanced = `${userMessage}\n\n[✅ СИСТЕМА НАШЛА В СПРАВОЧНИКЕ: "${validatedData.profession}". Покажи пользователю это название и спроси "Ваша профессия: ${validatedData.profession}. Верно?"]`;
+        enhanced = `${userMessage}\n\n[✅ СИСТЕМА НАШЛА В СПРАВОЧНИКЕ: "${validatedData.profession}". ⚠️ ОБЯЗАТЕЛЬНО скопируй ТОЧНОЕ значение "${validatedData.profession}" в свой ответ! НЕ используй подчеркивания или плейсхолдеры! Скажи: "Ваша профессия: ${validatedData.profession}. Верно? (да/нет)"]`;
       } else {
         enhanced = `${userMessage}\n\n[⚠️ ПРОФЕССИЯ НЕ НАЙДЕНА В СПРАВОЧНИКЕ. Попроси уточнить или подтверди то, что написал пользователь.]`;
       }

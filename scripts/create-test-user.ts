@@ -36,7 +36,6 @@ async function createTestUser() {
       email: TEST_EMAIL,
       password: hashedPassword,
       emailVerified: new Date(),
-      agreedToPrivacyPolicy: true,
     },
   });
   

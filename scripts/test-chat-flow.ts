@@ -1,160 +1,160 @@
 /**
- * Тест полного цикла регистрации и заполнения профиля через чат
+ * Автоматический тест полного цикла заполнения профиля через чат
  */
 
 import { prisma } from "../lib/prisma";
-import { hash } from "bcrypt";
 
-const TEST_EMAIL = `test.org.search.${Date.now()}@example.com`;
-const TEST_PASSWORD = "TestPass123!";
-const BASE_URL = "https://myunion.pro";
+const USER_EMAIL = "test.org.dadata@example.com";
+const USER_ID = "cmiepahzd00001ynhbyi536da";
 
-async function testChatFlow() {
-  console.log("\n🚀 Starting chat flow test...\n");
-  
-  // 1. Создаем тестового пользователя
-  console.log("1️⃣ Creating test user...");
-  const hashedPassword = await hash(TEST_PASSWORD, 10);
-  
-  const user = await prisma.user.create({
+// Симулируем диалог
+const DIALOG_STEPS = [
+  { step: 1, message: "Привет", expected: "регион" },
+  { step: 2, message: "Татарстан", expected: "организаци" },
+  { step: 3, message: "БСМП Набережные Челны", expected: "нашел|найдена|правильная" },
+  { step: 4, message: "да", expected: "фамилия|имя" },
+  { step: 5, message: "Иванов Иван Иванович", expected: "дата рождения|когда вы родились" },
+  { step: 6, message: "15.05.1990", expected: "адрес" },
+  { step: 7, message: "Татарстан, Набережные Челны, Чулман 11, квартира 141", expected: "телефон" },
+  { step: 8, message: "+79123456789", expected: "должность" },
+  { step: 9, message: "врач", expected: "найден|врач" },
+  { step: 10, message: "да", expected: "профессия|специальность" },
+  { step: 11, message: "массажист", expected: "найден|массажист" },
+  { step: 12, message: "да", expected: "образование" },
+  { step: 13, message: "высшее", expected: "проверим|давайте проверим" },
+  { step: 14, message: "да", expected: "документ|генерир" },
+];
+
+async function simulateChat() {
+  console.log("\n🤖 АВТОМАТИЧЕСКИЙ ТЕСТ ДИАЛОГА ЧАТА\n");
+  console.log("══════════════════════════════════════════════════════════════\n");
+
+  // Создаем новую сессию
+  const session = await prisma.chatSession.create({
     data: {
-      email: TEST_EMAIL,
-      password: hashedPassword,
-      emailVerified: new Date(),
-      agreedToPrivacyPolicy: true,
-    },
-  });
-  
-  console.log(`✅ User created: ${user.email} (ID: ${user.id})`);
-  
-  // 2. Создаем сессию чата
-  console.log("\n2️⃣ Creating chat session...");
-  const chatSession = await prisma.chatSession.create({
-    data: {
-      userId: user.id,
-      title: "Test Organization Search",
+      userId: USER_ID,
       type: "STATEMENT",
+      title: "Тестовая сессия - автоматический тест",
     },
   });
-  console.log(`✅ Chat session created: ${chatSession.id}`);
-  
-  // 3. Симулируем диалог с ботом
-  console.log("\n3️⃣ Simulating chat conversation...\n");
-  
-  const messages = [
-    { role: "user", content: "Привет", step: "Приветствие" },
-    { role: "user", content: "Татарстан", step: "Регион" },
-    { role: "user", content: "БСМП Набережные Челны", step: "Организация" },
-  ];
-  
-  for (const msg of messages) {
-    console.log(`📤 ${msg.step}: Sending "${msg.content}"`);
-    
+
+  console.log(`✅ Создана новая сессия: ${session.id}\n`);
+
+  for (const dialogStep of DIALOG_STEPS) {
+    console.log(`\n📝 ШАГ ${dialogStep.step}: "${dialogStep.message}"`);
+    console.log("─────────────────────────────────────────────────────────");
+
     // Сохраняем сообщение пользователя
     await prisma.chatMessage.create({
       data: {
-        userId: user.id,
-        sessionId: chatSession.id,
-        role: "user" as const,
-        content: msg.content,
+        userId: USER_ID,
+        sessionId: session.id,
+        role: "user",
+        content: dialogStep.message,
       },
     });
-    
-    // Симулируем запрос к API чата
+
+    // Вызываем API чата (симулируем)
     try {
-      const response = await fetch(`${BASE_URL}/api/chat`, {
+      const response = await fetch("http://localhost:3004/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          // Примечание: в реальности нужна аутентификация через NextAuth
         },
         body: JSON.stringify({
-          message: msg.content,
-          sessionId: chatSession.id,
+          message: dialogStep.message,
+          sessionId: session.id,
+          userId: USER_ID,
         }),
       });
-      
+
       if (!response.ok) {
-        console.log(`⚠️ API responded with status: ${response.status}`);
-        const errorText = await response.text();
-        console.log(`Error: ${errorText.substring(0, 200)}`);
-      } else {
-        const data = await response.json();
-        console.log(`📥 Bot response: ${data.message?.substring(0, 100)}...`);
+        console.log(`❌ API Error: ${response.status}`);
+        const text = await response.text();
+        console.log(`Response: ${text.substring(0, 200)}...`);
+        continue;
       }
+
+      // Читаем stream ответа
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let botResponse = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          botResponse += decoder.decode(value, { stream: true });
+        }
+      }
+
+      console.log(`\n🤖 Ответ бота:\n${botResponse}\n`);
+
+      // Проверяем ожидаемый паттерн
+      const expectedPattern = new RegExp(dialogStep.expected, "i");
+      if (expectedPattern.test(botResponse)) {
+        console.log(`✅ Паттерн найден: "${dialogStep.expected}"`);
+      } else {
+        console.log(`⚠️ Ожидаемый паттерн НЕ найден: "${dialogStep.expected}"`);
+      }
+
+      // Небольшая задержка между запросами
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     } catch (error) {
-      console.log(`❌ Error calling API: ${error}`);
+      console.error(`❌ Ошибка при вызове API:`, error);
     }
-    
-    // Небольшая задержка между сообщениями
-    await new Promise(resolve => setTimeout(resolve, 1000));
   }
-  
-  // 4. Проверяем сохраненные данные
-  console.log("\n4️⃣ Checking saved data...");
-  const updatedUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    include: {
-      organization: true,
-    },
+
+  console.log("\n══════════════════════════════════════════════════════════════");
+  console.log("🎯 ФИНАЛЬНАЯ ПРОВЕРКА ПРОФИЛЯ\n");
+
+  // Проверяем финальное состояние профиля
+  const user = await prisma.user.findUnique({
+    where: { id: USER_ID },
   });
-  
-  console.log("\n📊 User Profile:");
-  console.log(`- Region: ${updatedUser?.region || "❌ Not set"}`);
-  console.log(`- Organization ID: ${updatedUser?.organizationId || "Not in DB"}`);
-  console.log(`- Organization Name: ${updatedUser?.organizationName || "❌ Not set"}`);
-  console.log(`- Organization (DB): ${updatedUser?.organization?.name || "Not found"}`);
-  
-  // 5. Проверяем историю сообщений
-  console.log("\n5️⃣ Checking chat history...");
-  const chatMessages = await prisma.chatMessage.findMany({
-    where: { sessionId: chatSession.id },
-    orderBy: { createdAt: "asc" },
-  });
-  
-  console.log(`📝 Total messages: ${chatMessages.length}`);
-  
-  // Проверяем, есть ли маркер найденной организации в ответах бота
-  const botMessages = chatMessages.filter(m => m.role === "assistant");
-  const hasOrgSearch = botMessages.some(m => 
-    m.content.includes("[НАЙДЕНА ОРГАНИЗАЦИЯ") || 
-    m.content.includes("БСМП") ||
-    m.content.includes("Набережные Челны")
-  );
-  
-  if (hasOrgSearch) {
-    console.log("✅ Organization search via DaData WORKING!");
-  } else {
-    console.log("❌ Organization search NOT WORKING - bot didn't find organization");
+
+  if (!user) {
+    console.log("❌ Пользователь не найден!");
+    return;
   }
-  
-  // 6. Cleanup
-  console.log("\n6️⃣ Cleaning up test data...");
-  await prisma.chatMessage.deleteMany({
-    where: { sessionId: chatSession.id },
-  });
-  await prisma.chatSession.delete({
-    where: { id: chatSession.id },
-  });
-  await prisma.user.delete({
-    where: { id: user.id },
-  });
-  
-  console.log("✅ Test data cleaned up");
-  console.log("\n🎉 Test completed!\n");
-  console.log("📋 Summary:");
-  console.log(`- Test URL: ${BASE_URL}/dashboard?session=${chatSession.id}`);
-  console.log(`- Organization search: ${hasOrgSearch ? "✅ WORKING" : "❌ NOT WORKING"}`);
+
+  console.log("📊 ДАННЫЕ В БД:");
+  console.log("─────────────────────────────────────────────────────────");
+  console.log(`  region: ${user.region || "❌ ПУСТО"}`);
+  console.log(`  organizationName: ${user.organizationName || "❌ ПУСТО"}`);
+  console.log(`  firstName: ${user.firstName || "❌ ПУСТО"}`);
+  console.log(`  lastName: ${user.lastName || "❌ ПУСТО"}`);
+  console.log(`  middleName: ${user.middleName || "❌ ПУСТО"}`);
+  console.log(`  dateOfBirth: ${user.dateOfBirth ? user.dateOfBirth.toLocaleDateString() : "❌ ПУСТО"}`);
+  console.log(`  address: ${user.address || "❌ ПУСТО"}`);
+  console.log(`  phone: ${user.phone || "❌ ПУСТО"}`);
+  console.log(`  jobTitle: ${user.jobTitle || "❌ ПУСТО"}`);
+  console.log(`  profession: ${user.profession || "❌ ПУСТО"}`);
+  console.log(`  education: ${user.education || "❌ ПУСТО"}`);
+
+  // Проверяем полноту профиля
+  const isComplete =
+    !!user.region &&
+    (!!user.organizationName || !!user.organizationId) &&
+    !!user.firstName &&
+    !!user.lastName &&
+    !!user.dateOfBirth &&
+    !!user.address &&
+    !!user.phone &&
+    !!user.jobTitle &&
+    !!user.profession &&
+    !!user.education;
+
+  console.log("\n─────────────────────────────────────────────────────────");
+  console.log(`\n${isComplete ? "✅" : "❌"} Профиль ${isComplete ? "ПОЛНЫЙ" : "НЕПОЛНЫЙ"}`);
+  console.log("\n══════════════════════════════════════════════════════════════\n");
 }
 
-// Запускаем тест
-testChatFlow()
-  .then(() => {
-    console.log("\n✅ All tests completed successfully!");
-    process.exit(0);
-  })
+simulateChat()
   .catch((error) => {
-    console.error("\n❌ Test failed:", error);
+    console.error("\n❌ Критическая ошибка:", error);
     process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
   });
-

@@ -388,6 +388,109 @@ export async function extractProfileDataFromMessages(
         console.log('[profile-extraction] ✅ Extracted additionalInfo:', userAnswer.substring(0, 50));
       }
     }
+    
+    // ========== ОСНОВНЫЕ ПОЛЯ ПРОФИЛЯ (контекстный анализ) ==========
+    
+    // ДОЛЖНОСТЬ (jobTitle) - когда бот спрашивает про должность
+    if ((botQuestion.includes('должность') || botQuestion.includes('занимаемую должность')) && 
+        !botQuestion.includes('верно') && !botQuestion.includes('?')) {
+      // Это вопрос о должности, следующий ответ - должность
+      if (userAnswer.length >= 2 && userAnswer.length <= 100 && 
+          !userAnswer.toLowerCase().includes('да') && !userAnswer.toLowerCase().includes('нет')) {
+        if (!profileData.jobTitle) {
+          profileData.jobTitle = userAnswer;
+          console.log('[profile-extraction] ✅ Extracted jobTitle (context):', userAnswer);
+        }
+      }
+    }
+    
+    // ДОЛЖНОСТЬ из подтверждения: "Ваша должность: терапевт. Верно?"
+    if (botQuestion.includes('должность:') && botQuestion.includes('верно')) {
+      const jobMatch = currentMsg.content.match(/должность[:\s]+([^.?]+)/i);
+      if (jobMatch && jobMatch[1]) {
+        const job = jobMatch[1].trim();
+        if (!profileData.jobTitle && job.length >= 2) {
+          profileData.jobTitle = job;
+          console.log('[profile-extraction] ✅ Extracted jobTitle (from confirmation):', job);
+        }
+      }
+    }
+    
+    // ПРОФЕССИЯ (profession) - когда бот спрашивает про профессию
+    if ((botQuestion.includes('профессия') || botQuestion.includes('профессию') || botQuestion.includes('основную профессию')) && 
+        !botQuestion.includes('верно') && !botQuestion.includes('?')) {
+      if (userAnswer.length >= 2 && userAnswer.length <= 100 && 
+          !userAnswer.toLowerCase().includes('да') && !userAnswer.toLowerCase().includes('нет')) {
+        if (!profileData.profession) {
+          profileData.profession = userAnswer;
+          console.log('[profile-extraction] ✅ Extracted profession (context):', userAnswer);
+        }
+      }
+    }
+    
+    // ПРОФЕССИЯ из подтверждения: "Ваша профессия: врач. Верно?"
+    if (botQuestion.includes('профессия:') && botQuestion.includes('верно')) {
+      const profMatch = currentMsg.content.match(/профессия[:\s]+([^.?]+)/i);
+      if (profMatch && profMatch[1]) {
+        const prof = profMatch[1].trim();
+        if (!profileData.profession && prof.length >= 2) {
+          profileData.profession = prof;
+          console.log('[profile-extraction] ✅ Extracted profession (from confirmation):', prof);
+        }
+      }
+    }
+    
+    // АДРЕС (address) - когда бот спрашивает про адрес
+    if ((botQuestion.includes('адрес') || botQuestion.includes('проживания')) && 
+        !botQuestion.includes('верно') && !botQuestion.includes('правильный')) {
+      if (userAnswer.length >= 10 && !userAnswer.toLowerCase().match(/^(да|нет|верно|правильно)$/)) {
+        if (!profileData.address) {
+          profileData.address = userAnswer;
+          console.log('[profile-extraction] ✅ Extracted address (context):', userAnswer);
+        }
+      }
+    }
+    
+    // АДРЕС из подтверждения: "Адрес: Москва, улица... Верно?"
+    if ((botQuestion.includes('адрес:') || botQuestion.includes('адрес проживания:')) && botQuestion.includes('верно')) {
+      const addrMatch = currentMsg.content.match(/адрес[^:]*[:\s]+([^.?]+)/i);
+      if (addrMatch && addrMatch[1]) {
+        const addr = addrMatch[1].trim();
+        if (!profileData.address && addr.length >= 10) {
+          profileData.address = addr;
+          console.log('[profile-extraction] ✅ Extracted address (from confirmation):', addr);
+        }
+      }
+    }
+    
+    // ТЕЛЕФОН из подтверждения: "Телефон: +79161234567. Верно?"
+    if (botQuestion.includes('телефон:') && botQuestion.includes('верно')) {
+      const phoneMatch = currentMsg.content.match(/телефон[:\s]+([+\d\s()-]+)/i);
+      if (phoneMatch && phoneMatch[1]) {
+        const phone = phoneMatch[1].trim().replace(/\s+/g, '');
+        if (!profileData.phone && phone.length >= 10) {
+          profileData.phone = phone;
+          console.log('[profile-extraction] ✅ Extracted phone (from confirmation):', phone);
+        }
+      }
+    }
+    
+    // РЕГИОН из подтверждения или ответа: "регион: Москва"
+    if ((botQuestion.includes('регион') || botQuestion.includes('область') || botQuestion.includes('край')) &&
+        !profileData.region) {
+      // Проверяем подтверждение
+      if (botQuestion.includes('верно')) {
+        const regionMatch = currentMsg.content.match(/регион[:\s]+([^.?]+)/i);
+        if (regionMatch && regionMatch[1]) {
+          profileData.region = regionMatch[1].trim();
+          console.log('[profile-extraction] ✅ Extracted region (from confirmation):', profileData.region);
+        }
+      } else if (userAnswer.length >= 2 && !userAnswer.toLowerCase().match(/^(да|нет|верно)$/)) {
+        // Прямой ответ пользователя
+        profileData.region = userAnswer;
+        console.log('[profile-extraction] ✅ Extracted region (context):', userAnswer);
+      }
+    }
   }
 
   // Extract name patterns (ФИО) - только если не извлечено из структурированных данных
