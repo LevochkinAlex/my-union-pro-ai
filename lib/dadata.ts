@@ -214,13 +214,13 @@ export async function validateNameWithDaData(fullName: string): Promise<Validate
   if (!token || !secret) {
     console.warn("[dadata] DaData credentials not configured, skipping name validation");
     
-    // Fallback: простой парсинг ФИО
+    // Fallback: простой парсинг ФИО (сохраняет тюркские суффиксы "улы", "кызы", "оглы")
     const parts = fullName.trim().split(/\s+/);
     if (parts.length >= 2) {
       return {
         lastName: parts[0],
         firstName: parts[1],
-        middleName: parts[2] || undefined,
+        middleName: parts.slice(2).join(' ') || undefined,  // Берем ВСЕ части после firstName
         validated: false,
       };
     }
@@ -240,13 +240,13 @@ export async function validateNameWithDaData(fullName: string): Promise<Validate
 
     if (!response.ok) {
       console.error("[dadata] Name validation failed:", response.statusText);
-      // Fallback
+      // Fallback (сохраняет тюркские суффиксы)
       const parts = fullName.trim().split(/\s+/);
       if (parts.length >= 2) {
         return {
           lastName: parts[0],
           firstName: parts[1],
-          middleName: parts[2] || undefined,
+          middleName: parts.slice(2).join(' ') || undefined,  // Берем ВСЕ части после firstName
           validated: false,
         };
       }
@@ -273,14 +273,14 @@ export async function validateNameWithDaData(fullName: string): Promise<Validate
       };
     }
 
-    // Если DaData не смог распознать - используем fallback
+    // Если DaData не смог распознать - используем fallback (сохраняет тюркские суффиксы)
     console.warn("[dadata] ⚠️ Name not recognized by DaData, using fallback");
     const parts = fullName.trim().split(/\s+/);
     if (parts.length >= 2) {
       return {
         lastName: parts[0],
         firstName: parts[1],
-        middleName: parts[2] || undefined,
+        middleName: parts.slice(2).join(' ') || undefined,  // Берем ВСЕ части после firstName
         validated: false,
       };
     }
@@ -288,13 +288,13 @@ export async function validateNameWithDaData(fullName: string): Promise<Validate
     return null;
   } catch (error) {
     console.error("[dadata] Name validation error:", error);
-    // Fallback
+    // Fallback (сохраняет тюркские суффиксы)
     const parts = fullName.trim().split(/\s+/);
     if (parts.length >= 2) {
       return {
         lastName: parts[0],
         firstName: parts[1],
-        middleName: parts[2] || undefined,
+        middleName: parts.slice(2).join(' ') || undefined,  // Берем ВСЕ части после firstName
         validated: false,
       };
     }
