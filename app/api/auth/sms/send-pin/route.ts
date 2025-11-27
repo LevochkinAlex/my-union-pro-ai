@@ -116,34 +116,20 @@ export async function POST(request: NextRequest) {
     let deliveryError: string | undefined;
     const deliveryAttempts: string[] = [];
 
-    // Приоритет 1: SendPulse WhatsApp (если SendPulse добавлен как Partner, он может иметь приоритет)
-    deliveryAttempts.push("sendpulse_whatsapp");
-    console.log("[2FA Auth] Попытка отправки через SendPulse WhatsApp на номер:", normalizedPhone);
-    const sendpulseResult = await sendPINViaSendPulseWhatsApp(normalizedPhone, pinCode);
+    // Приоритет 1: WhatsApp Cloud API (Meta) - шаблоны аутентификации работают только через Meta API
+    // SendPulse не поддерживает шаблоны типа "Аутентификация" - их нужно подавать через Facebook Business Manager
+    deliveryAttempts.push("whatsapp");
+    console.log("[2FA Auth] Попытка отправки через WhatsApp Cloud API на номер:", normalizedPhone);
+    console.log("[2FA Auth] ⚠️ SendPulse не используется для аутентификации - шаблоны типа 'Аутентификация' работают только через Meta API");
+    const whatsappResult = await sendPINViaWhatsApp(normalizedPhone, pinCode);
     
-    if (sendpulseResult.success) {
+    if (whatsappResult.success) {
       deliveryMethod = "whatsapp";
       deliverySuccess = true;
-      console.log("[2FA Auth] ✅ PIN-код успешно отправлен через SendPulse WhatsApp");
+      console.log("[2FA Auth] ✅ PIN-код успешно отправлен через WhatsApp Cloud API");
     } else {
-      console.warn("[2FA Auth] ❌ SendPulse WhatsApp не сработал:", sendpulseResult.error);
-      deliveryError = sendpulseResult.error;
-      
-      // Приоритет 1.5: WhatsApp Cloud API (Meta) - fallback если SendPulse не сработал
-      if (!deliverySuccess) {
-        deliveryAttempts.push("whatsapp");
-        console.log("[2FA Auth] Попытка отправки через WhatsApp Cloud API на номер:", normalizedPhone);
-        const whatsappResult = await sendPINViaWhatsApp(normalizedPhone, pinCode);
-        
-        if (whatsappResult.success) {
-          deliveryMethod = "whatsapp";
-          deliverySuccess = true;
-          console.log("[2FA Auth] ✅ PIN-код успешно отправлен через WhatsApp Cloud API");
-        } else {
-          console.warn("[2FA Auth] ❌ WhatsApp Cloud API не сработал:", whatsappResult.error);
-          deliveryError = whatsappResult.error;
-        }
-      }
+      console.warn("[2FA Auth] ❌ WhatsApp Cloud API не сработал:", whatsappResult.error);
+      deliveryError = whatsappResult.error;
     }
 
     // Приоритет 2: Telegram (если WhatsApp не сработал и Telegram привязан)
