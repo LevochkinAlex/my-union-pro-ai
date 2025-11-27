@@ -57,7 +57,7 @@ export async function sendAuthenticationTemplate(
       template: {
         name: templateName,
         language: {
-          code: "en", // Язык template (из Facebook)
+          code: templateName === "authentication_template_" ? "ru" : "en", // Язык template (из Facebook)
         },
         components: [
           {
