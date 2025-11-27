@@ -145,19 +145,25 @@ function LoginForm() {
         // Убеждаемся, что errorMessage всегда строка
         let errorMessage = "Ошибка при отправке кода";
         
-        if (data.error) {
-          errorMessage = typeof data.error === "string" ? data.error : String(data.error);
+        console.error("[Login] Полный ответ сервера:", JSON.stringify(data, null, 2));
+        
+        if (data.error && data.error !== "undefined") {
+          errorMessage = typeof data.error === "string" ? data.error : JSON.stringify(data.error);
+        } else if (data.message) {
+          errorMessage = typeof data.message === "string" ? data.message : String(data.message);
         } else if (data.details?.error) {
           errorMessage = typeof data.details.error === "string" 
             ? data.details.error 
-            : String(data.details.error);
+            : JSON.stringify(data.details.error);
         } else if (data.details?.message) {
           errorMessage = typeof data.details.message === "string"
             ? data.details.message
-            : String(data.details.message);
+            : JSON.stringify(data.details.message);
+        } else if (data.details) {
+          errorMessage = `Ошибка: ${JSON.stringify(data.details)}`;
         }
         
-        console.error("[Login] Ошибка отправки кода:", errorMessage, data.details);
+        console.error("[Login] Итоговая ошибка:", errorMessage);
         setError(errorMessage);
         setLoading(false);
         return;
@@ -258,6 +264,8 @@ function LoginForm() {
                 ? "Введите номер телефона для получения кода"
                 : deliveryMethod === "telegram"
                 ? "Введите код из Telegram"
+                : deliveryMethod === "max"
+                ? "Введите код из MAX"
                 : deliveryMethod === "whatsapp"
                 ? "Введите код из WhatsApp"
                 : "Введите код подтверждения"}
@@ -352,7 +360,8 @@ function LoginForm() {
                   />
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                     {deliveryMethod === "telegram" && "Код отправлен в Telegram 📱"}
-                    {deliveryMethod === "whatsapp" && "Код отправлен в WhatsApp 💬"}
+                    {deliveryMethod === "max" && "Код отправлен в MAX 💬"}
+                    {deliveryMethod === "whatsapp" && "Код отправлен в WhatsApp 📲"}
                     {!deliveryMethod && `Код отправлен на ${formatPhoneForDisplay(phone) || "+7 (___) ___-__-__"}`}
                   </p>
                 </div>

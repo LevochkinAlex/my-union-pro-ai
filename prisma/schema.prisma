@@ -55,6 +55,10 @@ model User {
   telegramChatId String? @unique // Chat ID пользователя в Telegram для отправки PIN-кодов
   telegramUsername String? // Username пользователя в Telegram (для справки)
 
+  // MAX Messenger интеграция для 2FA
+  maxChatId String? @unique // Chat ID пользователя в MAX для отправки PIN-кодов
+  maxUsername String? // Username пользователя в MAX (для справки)
+
   // Предпочтения для скидок
   preferredDiscountCity String? // Предпочтительный город для фильтра скидок (название города)
 

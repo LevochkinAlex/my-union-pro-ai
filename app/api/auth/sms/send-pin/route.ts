@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendPINViaTelegram, validateChatId } from "@/lib/telegram-bot";
 import { sendPINViaWhatsApp } from "@/lib/whatsapp-cloud";
+import { sendPINViaMax, validateMaxChatId } from "@/lib/max-messenger";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 
@@ -82,6 +83,7 @@ export async function POST(request: NextRequest) {
       select: {
         id: true,
         telegramChatId: true,
+        maxChatId: true,
         phone: true,
       },
     });
@@ -129,7 +131,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Приоритет 2: WhatsApp через SendPulse (если Telegram не сработал)
+    // Приоритет 2: MAX Messenger (если Telegram не сработал и MAX привязан)
+    if (!deliverySuccess && existingUser?.maxChatId && validateMaxChatId(existingUser.maxChatId)) {
+      deliveryAttempts.push("max");
+      console.log("[2FA Auth] Попытка отправки через MAX на chat_id:", existingUser.maxChatId);
+      const maxResult = await sendPINViaMax(existingUser.maxChatId, pinCode);
+      
+      if (maxResult.success) {
+        deliveryMethod = "max";
+        deliverySuccess = true;
+        console.log("[2FA Auth] ✅ PIN-код успешно отправлен через MAX");
+      } else {
+        console.warn("[2FA Auth] ❌ MAX не сработал:", maxResult.error);
+        deliveryError = maxResult.error;
+      }
+    }
+
+    // Приоритет 3: WhatsApp (если Telegram и MAX не сработали)
     if (!deliverySuccess) {
       deliveryAttempts.push("whatsapp");
       console.log("[2FA Auth] Попытка отправки через WhatsApp на номер:", normalizedPhone);
@@ -153,14 +171,14 @@ export async function POST(request: NextRequest) {
         phone: normalizedPhone,
       });
 
-      // Если пользователь не зарегистрирован или Telegram не привязан
-      if (!existingUser || !existingUser.telegramChatId) {
+      // Если пользователь не зарегистрирован или мессенджеры не привязаны
+      if (!existingUser || (!existingUser.telegramChatId && !existingUser.maxChatId)) {
         return NextResponse.json(
           {
             error: "Не удалось отправить код",
-            requiresTelegram: true,
-            message: "Для получения кода необходимо привязать Telegram",
-            helpText: "Telegram — самый быстрый и надежный способ получения кодов",
+            requiresMessenger: true,
+            message: "Для получения кода необходимо привязать Telegram или MAX",
+            helpText: "Telegram или MAX — самые быстрые и надежные способы получения кодов",
             phone: normalizedPhone,
           },
           { status: 400 }
@@ -190,7 +208,8 @@ export async function POST(request: NextRequest) {
     // Формируем сообщение в зависимости от канала доставки
     const deliveryMessages = {
       telegram: "Код подтверждения отправлен в Telegram 📱",
-      whatsapp: "Код подтверждения отправлен в WhatsApp 💬",
+      max: "Код подтверждения отправлен в MAX 💬",
+      whatsapp: "Код подтверждения отправлен в WhatsApp 📲",
     };
 
     return NextResponse.json({
