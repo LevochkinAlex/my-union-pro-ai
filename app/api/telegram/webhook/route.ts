@@ -27,21 +27,39 @@ export async function POST(request: NextRequest) {
     // Команда /start с параметром для привязки номера телефона
     // Формат: /start AUTH_phone_79991234567
     if (text.startsWith("/start AUTH_phone_")) {
-      const phone = text.replace("/start AUTH_phone_", "");
+      const phoneParam = text.replace("/start AUTH_phone_", "");
+      // Нормализуем номер (добавляем + если его нет)
+      const phone = phoneParam.startsWith("+") ? phoneParam : `+${phoneParam}`;
       
       console.log("[Telegram Webhook] Попытка привязки Telegram к номеру:", phone);
 
-      // Ищем пользователя по номеру телефона
-      const user = await prisma.user.findUnique({
+      // Ищем пользователя по номеру телефона (пробуем разные варианты)
+      let user = await prisma.user.findUnique({
         where: { phone },
       });
 
-      if (!user) {
-        console.error("[Telegram Webhook] Пользователь не найден для номера:", phone);
-        return NextResponse.json({ 
-          ok: true,
-          error: "Пользователь не найден" 
+      // Если не нашли, пробуем без +
+      if (!user && !phone.startsWith("+")) {
+        user = await prisma.user.findUnique({
+          where: { phone: `+${phone}` },
         });
+      } else if (!user && phone.startsWith("+")) {
+        user = await prisma.user.findUnique({
+          where: { phone: phone.replace("+", "") },
+        });
+      }
+
+      // Если пользователь не найден, создаем нового
+      if (!user) {
+        console.log("[Telegram Webhook] Пользователь не найден, создаем нового для номера:", phone);
+        user = await prisma.user.create({
+          data: {
+            phone,
+            role: "PENDING_MEMBER",
+            membershipStatus: "PROFILE_INCOMPLETE",
+          },
+        });
+        console.log("[Telegram Webhook] ✅ Создан новый пользователь:", user.id);
       }
 
       // Привязываем Telegram chat_id к пользователю
