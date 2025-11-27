@@ -34,11 +34,11 @@ enum OrganizationType {
   FEDERAL // Федерация
 }
 
-// Пользователь
+  // Пользователь
 model User {
   id               String           @id @default(cuid())
-  email            String           @unique
-  password         String?
+  email            String?          @unique // Email теперь опционален (может быть заполнен позже)
+  password         String?          // Пароль опционален (SMS-авторизация)
   role             UserRole         @default(PENDING_MEMBER)
   membershipStatus MembershipStatus @default(PENDING_VERIFICATION)
 
@@ -47,9 +47,13 @@ model User {
   lastName    String?
   middleName  String?
   dateOfBirth DateTime?
-  phone       String?
+  phone       String?  @unique // Телефон теперь уникален и используется для авторизации
   address     String?
   avatarUrl   String? // URL фотографии профиля
+
+  // Telegram интеграция для 2FA
+  telegramChatId String? @unique // Chat ID пользователя в Telegram для отправки PIN-кодов
+  telegramUsername String? // Username пользователя в Telegram (для справки)
 
   // Предпочтения для скидок
   preferredDiscountCity String? // Предпочтительный город для фильтра скидок (название города)
@@ -143,12 +147,45 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // SMS PIN-коды для авторизации
+  smsPinCodes SMSPinCode[]
+
   @@index([email])
+  @@index([phone])
   @@index([organizationId])
   @@index([verificationToken])
   @@index([resetToken])
   @@index([unionCardNumber])
   @@index([unionMembershipStatus])
+}
+
+// SMS PIN-коды для авторизации
+model SMSPinCode {
+  id String @id @default(cuid())
+
+  // Номер телефона (может быть не привязан к пользователю, если это первая авторизация)
+  phone String
+
+  // PIN-код (захеширован)
+  hashedPin String
+
+  // Пользователь (если найден по телефону)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Время истечения (5 минут)
+  expiresAt DateTime
+
+  // Использован ли код
+  used Boolean @default(false)
+  usedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([used])
 }
 
 // Организация (ППО, региональные, федерация)

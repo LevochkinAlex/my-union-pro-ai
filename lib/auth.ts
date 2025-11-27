@@ -3,8 +3,103 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "./prisma";
 import bcrypt from "bcryptjs";
 
+/**
+ * Нормализация номера телефона к формату +7XXXXXXXXXX
+ */
+function normalizePhone(phone: string): string {
+  let cleaned = phone.replace(/[\s\-\(\)]/g, "");
+  if (cleaned.startsWith("8")) {
+    cleaned = "+7" + cleaned.slice(1);
+  }
+  if (cleaned.startsWith("7") && !cleaned.startsWith("+")) {
+    cleaned = "+" + cleaned;
+  }
+  return cleaned;
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
+    // SMS-авторизация (основной метод)
+    CredentialsProvider({
+      id: "sms",
+      name: "SMS",
+      credentials: {
+        phone: { label: "Phone", type: "text" },
+        pinCode: { label: "PIN Code", type: "text" },
+      },
+      async authorize(credentials): Promise<User | null> {
+        if (!credentials?.phone || !credentials?.pinCode) {
+          return null;
+        }
+
+        try {
+          const normalizedPhone = normalizePhone(credentials.phone);
+
+          // Ищем неиспользованный PIN-код
+          const pinRecord = await prisma.sMSPinCode.findFirst({
+            where: {
+              phone: normalizedPhone,
+              used: false,
+              expiresAt: {
+                gt: new Date(),
+              },
+            },
+            orderBy: {
+              createdAt: "desc",
+            },
+          });
+
+          if (!pinRecord) {
+            return null;
+          }
+
+          // Проверяем PIN-код
+          const isPinValid = await bcrypt.compare(credentials.pinCode, pinRecord.hashedPin);
+          if (!isPinValid) {
+            return null;
+          }
+
+          // Помечаем PIN-код как использованный
+          await prisma.sMSPinCode.update({
+            where: { id: pinRecord.id },
+            data: {
+              used: true,
+              usedAt: new Date(),
+            },
+          });
+
+          // Ищем или создаем пользователя
+          let user = await prisma.user.findUnique({
+            where: { phone: normalizedPhone },
+          });
+
+          if (!user) {
+            user = await prisma.user.create({
+              data: {
+                phone: normalizedPhone,
+                role: "PENDING_MEMBER",
+                membershipStatus: "PROFILE_INCOMPLETE",
+              },
+            });
+          }
+
+          return {
+            id: user.id,
+            email: user.email || undefined,
+            name: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || undefined,
+            role: user.role,
+            membershipStatus: user.membershipStatus,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            avatarUrl: user.avatarUrl,
+          };
+        } catch (error) {
+          console.error("[NextAuth] SMS Authorize error:", error);
+          return null;
+        }
+      },
+    }),
+    // Email/Password авторизация (для обратной совместимости)
     CredentialsProvider({
       id: "credentials",
       name: "Credentials",
@@ -37,8 +132,8 @@ export const authOptions: NextAuthOptions = {
 
           return {
             id: user.id,
-            email: user.email,
-            name: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim(),
+            email: user.email || undefined,
+            name: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || undefined,
             role: user.role,
             membershipStatus: user.membershipStatus,
             firstName: user.firstName,
@@ -46,7 +141,7 @@ export const authOptions: NextAuthOptions = {
             avatarUrl: user.avatarUrl,
           };
         } catch (error) {
-          console.error("[NextAuth] Authorize error:", error);
+          console.error("[NextAuth] Email Authorize error:", error);
           return null;
         }
       },
@@ -61,6 +156,8 @@ export const authOptions: NextAuthOptions = {
         token.firstName = user.firstName;
         token.lastName = user.lastName;
         token.avatarUrl = user.avatarUrl;
+        token.email = user.email;
+        token.name = user.name;
       }
       return token;
     },
