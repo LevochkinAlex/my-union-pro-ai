@@ -179,7 +179,7 @@ export async function sendPINViaWhatsApp(
       return {
         success: false,
         error: "Не удалось найти или создать контакт в SendPulse",
-        details: { searchData, createData: createResponse ? await createResponse.json() : null },
+        details: { searchData },
       };
     }
 
