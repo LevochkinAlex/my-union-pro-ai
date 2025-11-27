@@ -167,12 +167,14 @@ export async function POST(request: NextRequest) {
         const telegramLink = `https://t.me/${botUsername}?start=AUTH_phone_${normalizedPhone.replace(/^\+/, "")}`;
         
         // Возвращаем успех, но с предупреждением о необходимости привязать Telegram
+        // И сохраняем PIN-код, чтобы пользователь мог его использовать после привязки
         return NextResponse.json({
           success: true,
           deliveryMethod: "whatsapp",
           message: "Код отправлен в WhatsApp. Для надежной доставки рекомендуем привязать Telegram.",
           telegramLink,
           requiresTelegramLink: true,
+          warning: "WhatsApp может не доставить сообщение. Привяжите Telegram для надежной доставки кодов.",
         });
       }
     } else {
