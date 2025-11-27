@@ -127,6 +127,16 @@ export async function POST(request: NextRequest) {
       deliveryMethod = "whatsapp";
       deliverySuccess = true;
       console.log("[2FA Auth] ✅ PIN-код успешно отправлен через WhatsApp Cloud API");
+      
+      // Дополнительно отправляем через Telegram, если привязан (для надежности)
+      // WhatsApp может вернуть успех, но сообщение не дойти до пользователя
+      if (existingUser?.telegramChatId && validateChatId(existingUser.telegramChatId)) {
+        console.log("[2FA Auth] 📱 Дополнительная отправка через Telegram для надежности...");
+        const telegramBackup = await sendPINViaTelegram(existingUser.telegramChatId, pinCode);
+        if (telegramBackup.success) {
+          console.log("[2FA Auth] ✅ PIN-код также отправлен через Telegram (backup)");
+        }
+      }
     } else {
       console.warn("[2FA Auth] ❌ WhatsApp Cloud API не сработал:", whatsappResult.error);
       deliveryError = whatsappResult.error;
