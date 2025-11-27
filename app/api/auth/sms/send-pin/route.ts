@@ -78,8 +78,8 @@ export async function POST(request: NextRequest) {
     // Время истечения: 5 минут
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-    // Ищем пользователя по телефону (если есть)
-    const existingUser = await prisma.user.findUnique({
+    // Ищем пользователя по телефону (если есть) - пробуем разные варианты номера
+    let existingUser = await prisma.user.findUnique({
       where: { phone: normalizedPhone },
       select: {
         id: true,
@@ -88,6 +88,25 @@ export async function POST(request: NextRequest) {
         phone: true,
       },
     });
+
+    // Если не нашли, пробуем без +
+    if (!existingUser && normalizedPhone.startsWith("+")) {
+      existingUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { phone: normalizedPhone.replace("+", "") },
+            { phone: normalizedPhone.replace("+7", "7") },
+            { phone: normalizedPhone.replace("+7", "8") },
+          ],
+        },
+        select: {
+          id: true,
+          telegramChatId: true,
+          maxChatId: true,
+          phone: true,
+        },
+      });
+    }
 
     // Удаляем старые неиспользованные PIN-коды для этого номера
     await prisma.sMSPinCode.deleteMany({
@@ -140,8 +159,21 @@ export async function POST(request: NextRequest) {
         }
       } else if (existingUser && !existingUser.telegramChatId) {
         // Пользователь существует, но Telegram не привязан
-        // WhatsApp может не доставить, поэтому предупреждаем
+        // WhatsApp может не доставить, поэтому предупреждаем и предлагаем привязать Telegram
         console.log("[2FA Auth] ⚠️ Пользователь существует, но Telegram не привязан. WhatsApp может не доставить сообщение.");
+        
+        // Генерируем ссылку для привязки Telegram
+        const botUsername = process.env.TELEGRAM_BOT_USERNAME || "myunionpro_bot";
+        const telegramLink = `https://t.me/${botUsername}?start=AUTH_phone_${normalizedPhone.replace(/^\+/, "")}`;
+        
+        // Возвращаем успех, но с предупреждением о необходимости привязать Telegram
+        return NextResponse.json({
+          success: true,
+          deliveryMethod: "whatsapp",
+          message: "Код отправлен в WhatsApp. Для надежной доставки рекомендуем привязать Telegram.",
+          telegramLink,
+          requiresTelegramLink: true,
+        });
       }
     } else {
       console.warn("[2FA Auth] ❌ WhatsApp Cloud API не сработал:", whatsappResult.error);

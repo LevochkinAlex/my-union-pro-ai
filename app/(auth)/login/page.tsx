@@ -178,6 +178,16 @@ function LoginForm() {
 
       // Сохраняем метод доставки
       setDeliveryMethod(data.deliveryMethod || null);
+      
+      // Если есть ссылка на Telegram, показываем предложение привязать
+      if (data.telegramLink || data.requiresTelegramLink) {
+        setTelegramLink(data.telegramLink || `https://t.me/myunionpro_bot?start=AUTH_phone_${normalizedPhone.replace(/^\+/, "")}`);
+        if (data.message) {
+          // Показываем информационное сообщение, но не ошибку
+          console.log("[Login] Информация:", data.message);
+        }
+      }
+      
       setStep("pin");
       setCountdown(60); // 60 секунд до возможности повторной отправки
       setLoading(false);
@@ -318,10 +328,12 @@ function LoginForm() {
                   </p>
                 </div>
 
-                {requiresTelegram && telegramLink && (
+                {(requiresTelegram || telegramLink) && telegramLink && (
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-900/20 dark:border-blue-800">
                     <p className="text-sm text-blue-700 dark:text-blue-400 mb-3">
-                      📱 Необходимо привязать Telegram для получения кодов
+                      {requiresTelegram 
+                        ? "📱 Необходимо привязать Telegram для получения кодов"
+                        : "💡 Для надежной доставки кодов рекомендуем привязать Telegram"}
                     </p>
                     <a
                       href={telegramLink}
@@ -329,10 +341,10 @@ function LoginForm() {
                       rel="noopener noreferrer"
                       className="block w-full px-4 py-2 bg-blue-600 text-white text-center font-medium rounded-lg hover:bg-blue-700 transition-colors"
                     >
-                      Открыть Telegram
+                      {requiresTelegram ? "Открыть Telegram" : "Привязать Telegram"}
                     </a>
                     <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 text-center">
-                      После привязки вернитесь сюда и повторите попытку
+                      После привязки коды будут приходить в Telegram автоматически
                     </p>
                   </div>
                 )}
