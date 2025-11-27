@@ -115,8 +115,22 @@ export async function POST(request: NextRequest) {
     let deliveryError: string | undefined;
     const deliveryAttempts: string[] = [];
 
-    // Приоритет 1: Telegram (если привязан)
-    if (existingUser?.telegramChatId && validateChatId(existingUser.telegramChatId)) {
+    // Приоритет 1: WhatsApp (работает для всех, даже для новых пользователей)
+    deliveryAttempts.push("whatsapp");
+    console.log("[2FA Auth] Попытка отправки через WhatsApp на номер:", normalizedPhone);
+    const whatsappResult = await sendPINViaWhatsApp(normalizedPhone, pinCode);
+    
+    if (whatsappResult.success) {
+      deliveryMethod = "whatsapp";
+      deliverySuccess = true;
+      console.log("[2FA Auth] ✅ PIN-код успешно отправлен через WhatsApp");
+    } else {
+      console.warn("[2FA Auth] ❌ WhatsApp не сработал:", whatsappResult.error);
+      deliveryError = whatsappResult.error;
+    }
+
+    // Приоритет 2: Telegram (если WhatsApp не сработал и Telegram привязан)
+    if (!deliverySuccess && existingUser?.telegramChatId && validateChatId(existingUser.telegramChatId)) {
       deliveryAttempts.push("telegram");
       console.log("[2FA Auth] Попытка отправки через Telegram на chat_id:", existingUser.telegramChatId);
       const telegramResult = await sendPINViaTelegram(existingUser.telegramChatId, pinCode);
@@ -131,7 +145,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Приоритет 2: MAX Messenger (если Telegram не сработал и MAX привязан)
+    // Приоритет 3: MAX Messenger (если WhatsApp и Telegram не сработали и MAX привязан)
     if (!deliverySuccess && existingUser?.maxChatId && validateMaxChatId(existingUser.maxChatId)) {
       deliveryAttempts.push("max");
       console.log("[2FA Auth] Попытка отправки через MAX на chat_id:", existingUser.maxChatId);
@@ -147,22 +161,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Приоритет 3: WhatsApp (если Telegram и MAX не сработали)
-    if (!deliverySuccess) {
-      deliveryAttempts.push("whatsapp");
-      console.log("[2FA Auth] Попытка отправки через WhatsApp на номер:", normalizedPhone);
-      const whatsappResult = await sendPINViaWhatsApp(normalizedPhone, pinCode);
-      
-      if (whatsappResult.success) {
-        deliveryMethod = "whatsapp";
-        deliverySuccess = true;
-        console.log("[2FA Auth] ✅ PIN-код успешно отправлен через WhatsApp");
-      } else {
-        console.warn("[2FA Auth] ❌ WhatsApp не сработал:", whatsappResult.error);
-        deliveryError = whatsappResult.error;
-      }
-    }
-
     // Если ни один метод не сработал
     if (!deliverySuccess) {
       console.error("[2FA Auth] ❌ Все методы доставки провалились:", {
@@ -174,15 +172,14 @@ export async function POST(request: NextRequest) {
         hasMax: !!existingUser?.maxChatId,
       });
 
-      // Если пользователь не зарегистрирован или мессенджеры не привязаны, 
-      // но WhatsApp тоже не сработал - показываем сообщение о необходимости привязки
+      // Если WhatsApp не сработал и у пользователя нет привязанных мессенджеров
       if (!existingUser || (!existingUser.telegramChatId && !existingUser.maxChatId)) {
         return NextResponse.json(
           {
             error: "Не удалось отправить код",
             requiresMessenger: true,
-            message: "Для получения кода необходимо привязать Telegram или MAX",
-            helpText: "Telegram или MAX — самые быстрые и надежные способы получения кодов. WhatsApp также доступен, но может быть недоступен в данный момент.",
+            message: "Не удалось отправить код через WhatsApp. Привяжите Telegram или MAX для надежной доставки",
+            helpText: "WhatsApp может быть временно недоступен. Telegram или MAX — более надежные способы получения кодов.",
             phone: normalizedPhone,
           },
           { status: 400 }
@@ -211,9 +208,9 @@ export async function POST(request: NextRequest) {
 
     // Формируем сообщение в зависимости от канала доставки
     const deliveryMessages = {
+      whatsapp: "Код подтверждения отправлен в WhatsApp 📲",
       telegram: "Код подтверждения отправлен в Telegram 📱",
       max: "Код подтверждения отправлен в MAX 💬",
-      whatsapp: "Код подтверждения отправлен в WhatsApp 📲",
     };
 
     return NextResponse.json({
