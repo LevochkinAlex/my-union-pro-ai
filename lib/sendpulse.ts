@@ -203,7 +203,7 @@ export async function sendPINViaWhatsApp(
             },
             components: [
               {
-                type: "BODY",
+                type: "body",
                 parameters: [
                   {
                     type: "text",
