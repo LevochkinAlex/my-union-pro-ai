@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendWelcomeMessage } from "@/lib/telegram-bot";
+import { sendWelcomeMessage, sendTelegramMessage } from "@/lib/telegram-bot";
 
 /**
  * POST /api/telegram/webhook
@@ -73,14 +73,74 @@ export async function POST(request: NextRequest) {
         await sendWelcomeMessage(chatId);
       } else {
         console.log("[Telegram Webhook] Chat ID не привязан к аккаунту");
-        // TODO: Отправить инструкцию, как привязать аккаунт
+        // Отправляем инструкцию, как привязать аккаунт
+        await sendTelegramMessage(
+          chatId,
+          `👋 <b>Добро пожаловать в МойСоюз!</b>
+
+Для привязки Telegram к вашему аккаунту:
+1. Перейдите на страницу входа: <a href="https://myunion.pro/login">myunion.pro/login</a>
+2. Введите ваш номер телефона
+3. Нажмите "Привязать Telegram" (если появится такая кнопка)
+4. Или используйте ссылку из сообщения об ошибке
+
+После привязки вы будете получать коды для входа прямо здесь! 🚀`
+        );
       }
 
       return NextResponse.json({ ok: true });
     }
 
-    // Игнорируем остальные сообщения
-    console.log("[Telegram Webhook] Неизвестная команда:", text);
+    // Команды техподдержки
+    if (text === "/help" || text === "/support" || text.toLowerCase() === "помощь" || text.toLowerCase() === "поддержка") {
+      const { sendSupportMessage } = await import("@/lib/telegram-bot");
+      await sendSupportMessage(chatId, from);
+      return NextResponse.json({ ok: true });
+    }
+
+    // Обработка вопросов пользователей (техподдержка)
+    // Если пользователь привязан, сохраняем вопрос для техподдержки
+    const user = await prisma.user.findUnique({
+      where: { telegramChatId: chatId },
+    });
+
+    if (user) {
+      // Пользователь привязан - сохраняем вопрос и отправляем подтверждение
+      console.log("[Telegram Webhook] Вопрос от пользователя:", {
+        userId: user.id,
+        phone: user.phone,
+        question: text,
+      });
+
+      // Сохраняем вопрос в БД (можно создать таблицу SupportTickets)
+      // Пока просто логируем и отправляем подтверждение
+      await sendTelegramMessage(
+        chatId,
+        `✅ <b>Ваш вопрос получен!</b>
+
+Мы получили ваше сообщение и ответим в ближайшее время.
+
+<b>Ваш вопрос:</b>
+"${text}"
+
+<b>Часы работы техподдержки:</b> Пн-Пт, 9:00-18:00 МСК
+
+<i>Для срочных вопросов: support@myunion.pro</i>`
+      );
+    } else {
+      // Пользователь не привязан - отправляем инструкцию
+      await sendTelegramMessage(
+        chatId,
+        `❓ <b>Вопрос получен!</b>
+
+Для получения помощи:
+1. Сначала привяжите Telegram к вашему аккаунту (команда /start)
+2. После привязки вы сможете задавать вопросы техподдержке
+
+Или напишите нам на email: support@myunion.pro`
+      );
+    }
+
     return NextResponse.json({ ok: true });
 
   } catch (error) {

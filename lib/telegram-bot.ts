@@ -16,7 +16,7 @@ export interface SendMessageResult {
 /**
  * Отправляет сообщение через Telegram Bot API
  */
-async function sendTelegramMessage(
+export async function sendTelegramMessage(
   chatId: string,
   text: string
 ): Promise<SendMessageResult> {
@@ -148,6 +148,36 @@ export async function sendWelcomeMessage(chatId: string): Promise<SendMessageRes
 Теперь вы будете получать коды для входа прямо сюда 🚀
 
 <i>Это сообщение отправлено автоматически</i>
+  `.trim();
+
+  return sendTelegramMessage(chatId, message);
+}
+
+/**
+ * Отправляет сообщение техподдержки
+ */
+export async function sendSupportMessage(
+  chatId: string,
+  from?: { id?: number; username?: string; first_name?: string }
+): Promise<SendMessageResult> {
+  const userName = from?.first_name || from?.username || "Пользователь";
+  
+  const message = `
+🆘 <b>Техподдержка МойСоюз</b>
+
+Привет, ${userName}! 👋
+
+Мы готовы помочь вам с любыми вопросами:
+• Проблемы с входом и регистрацией
+• Вопросы по использованию платформы
+• Технические проблемы
+• Другое
+
+Просто напишите ваш вопрос, и мы ответим в ближайшее время.
+
+<b>Часы работы:</b> Пн-Пт, 9:00-18:00 МСК
+
+<i>Вы также можете написать на email: support@myunion.pro</i>
   `.trim();
 
   return sendTelegramMessage(chatId, message);

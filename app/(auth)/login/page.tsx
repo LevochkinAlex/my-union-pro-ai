@@ -121,8 +121,8 @@ function LoginForm() {
       console.log("[Login] Ответ сервера:", { status: response.status, data });
 
       if (!response.ok || !data.success) {
-        // Если требуется привязка Telegram
-        if (data.requiresTelegram) {
+        // Если требуется привязка мессенджера (Telegram или MAX)
+        if (data.requiresMessenger || data.requiresTelegram) {
           setRequiresTelegram(true);
           
           // Получаем ссылку для привязки Telegram
@@ -134,10 +134,12 @@ function LoginForm() {
           
           if (linkResponse.ok) {
             const linkData = await linkResponse.json();
-            setTelegramLink(linkData.deepLink);
+            setTelegramLink(linkData.deepLink || data.telegramLink);
+          } else if (data.telegramLink) {
+            setTelegramLink(data.telegramLink);
           }
           
-          setError(data.message || "Необходимо привязать Telegram");
+          setError(data.message || "Необходимо привязать Telegram или MAX");
           setLoading(false);
           return;
         }
@@ -403,13 +405,23 @@ function LoginForm() {
               </form>
             )}
 
-            <div className="mt-5 text-center">
+            <div className="mt-5 text-center space-y-2">
               <p className="text-sm text-gray-700 dark:text-gray-400">
                 Нет аккаунта?{" "}
                 <span className="text-gray-500 dark:text-gray-500">
                   Регистрация происходит автоматически при первом входе
                 </span>
               </p>
+              <div>
+                <a
+                  href="https://t.me/myunionpro_bot"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                >
+                  Проблема с регистрацией?
+                </a>
+              </div>
             </div>
           </div>
         </div>

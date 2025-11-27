@@ -135,7 +135,13 @@ export async function POST(request: NextRequest) {
         const telegramBackup = await sendPINViaTelegram(existingUser.telegramChatId, pinCode);
         if (telegramBackup.success) {
           console.log("[2FA Auth] ✅ PIN-код также отправлен через Telegram (backup)");
+          // Если Telegram успешно отправлен, используем его как основной метод
+          deliveryMethod = "telegram";
         }
+      } else if (existingUser && !existingUser.telegramChatId) {
+        // Пользователь существует, но Telegram не привязан
+        // WhatsApp может не доставить, поэтому предупреждаем
+        console.log("[2FA Auth] ⚠️ Пользователь существует, но Telegram не привязан. WhatsApp может не доставить сообщение.");
       }
     } else {
       console.warn("[2FA Auth] ❌ WhatsApp Cloud API не сработал:", whatsappResult.error);
@@ -187,6 +193,10 @@ export async function POST(request: NextRequest) {
 
       // Если WhatsApp не сработал и у пользователя нет привязанных мессенджеров
       if (!existingUser || (!existingUser.telegramChatId && !existingUser.maxChatId)) {
+        // Генерируем ссылку для привязки Telegram
+        const botUsername = process.env.TELEGRAM_BOT_USERNAME || "myunionpro_bot";
+        const telegramLink = `https://t.me/${botUsername}?start=AUTH_phone_${normalizedPhone.replace(/^\+/, "")}`;
+        
         return NextResponse.json(
           {
             error: "Не удалось отправить код",
@@ -194,6 +204,7 @@ export async function POST(request: NextRequest) {
             message: "Не удалось отправить код через WhatsApp. Привяжите Telegram или MAX для надежной доставки",
             helpText: "WhatsApp может быть временно недоступен. Telegram или MAX — более надежные способы получения кодов.",
             phone: normalizedPhone,
+            telegramLink,
           },
           { status: 400 }
         );
