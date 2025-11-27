@@ -116,32 +116,32 @@ export async function POST(request: NextRequest) {
     let deliveryError: string | undefined;
     const deliveryAttempts: string[] = [];
 
-    // Приоритет 1: WhatsApp Cloud API (Meta) - работает для всех, даже для новых пользователей
-    deliveryAttempts.push("whatsapp");
-    console.log("[2FA Auth] Попытка отправки через WhatsApp Cloud API на номер:", normalizedPhone);
-    const whatsappResult = await sendPINViaWhatsApp(normalizedPhone, pinCode);
+    // Приоритет 1: SendPulse WhatsApp (если SendPulse добавлен как Partner, он может иметь приоритет)
+    deliveryAttempts.push("sendpulse_whatsapp");
+    console.log("[2FA Auth] Попытка отправки через SendPulse WhatsApp на номер:", normalizedPhone);
+    const sendpulseResult = await sendPINViaSendPulseWhatsApp(normalizedPhone, pinCode);
     
-    if (whatsappResult.success) {
+    if (sendpulseResult.success) {
       deliveryMethod = "whatsapp";
       deliverySuccess = true;
-      console.log("[2FA Auth] ✅ PIN-код успешно отправлен через WhatsApp Cloud API");
+      console.log("[2FA Auth] ✅ PIN-код успешно отправлен через SendPulse WhatsApp");
     } else {
-      console.warn("[2FA Auth] ❌ WhatsApp Cloud API не сработал:", whatsappResult.error);
-      deliveryError = whatsappResult.error;
+      console.warn("[2FA Auth] ❌ SendPulse WhatsApp не сработал:", sendpulseResult.error);
+      deliveryError = sendpulseResult.error;
       
-      // Приоритет 1.5: SendPulse WhatsApp (fallback если Cloud API не сработал)
+      // Приоритет 1.5: WhatsApp Cloud API (Meta) - fallback если SendPulse не сработал
       if (!deliverySuccess) {
-        deliveryAttempts.push("sendpulse_whatsapp");
-        console.log("[2FA Auth] Попытка отправки через SendPulse WhatsApp на номер:", normalizedPhone);
-        const sendpulseResult = await sendPINViaSendPulseWhatsApp(normalizedPhone, pinCode);
+        deliveryAttempts.push("whatsapp");
+        console.log("[2FA Auth] Попытка отправки через WhatsApp Cloud API на номер:", normalizedPhone);
+        const whatsappResult = await sendPINViaWhatsApp(normalizedPhone, pinCode);
         
-        if (sendpulseResult.success) {
-          deliveryMethod = "whatsapp"; // Используем тот же метод для UI
+        if (whatsappResult.success) {
+          deliveryMethod = "whatsapp";
           deliverySuccess = true;
-          console.log("[2FA Auth] ✅ PIN-код успешно отправлен через SendPulse WhatsApp");
+          console.log("[2FA Auth] ✅ PIN-код успешно отправлен через WhatsApp Cloud API");
         } else {
-          console.warn("[2FA Auth] ❌ SendPulse WhatsApp не сработал:", sendpulseResult.error);
-          deliveryError = sendpulseResult.error;
+          console.warn("[2FA Auth] ❌ WhatsApp Cloud API не сработал:", whatsappResult.error);
+          deliveryError = whatsappResult.error;
         }
       }
     }
