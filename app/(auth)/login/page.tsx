@@ -328,12 +328,10 @@ function LoginForm() {
                   </p>
                 </div>
 
-                {(requiresTelegram || telegramLink) && telegramLink && (
+                {requiresTelegram && telegramLink && (
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-900/20 dark:border-blue-800">
                     <p className="text-sm text-blue-700 dark:text-blue-400 mb-3">
-                      {requiresTelegram 
-                        ? "📱 Необходимо привязать Telegram для получения кодов"
-                        : "💡 Для надежной доставки кодов рекомендуем привязать Telegram"}
+                      📱 Необходимо привязать Telegram для получения кодов
                     </p>
                     <a
                       href={telegramLink}
@@ -341,10 +339,10 @@ function LoginForm() {
                       rel="noopener noreferrer"
                       className="block w-full px-4 py-2 bg-blue-600 text-white text-center font-medium rounded-lg hover:bg-blue-700 transition-colors"
                     >
-                      {requiresTelegram ? "Открыть Telegram" : "Привязать Telegram"}
+                      Открыть Telegram
                     </a>
                     <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 text-center">
-                      После привязки коды будут приходить в Telegram автоматически
+                      После привязки вернитесь сюда и повторите попытку
                     </p>
                   </div>
                 )}
@@ -379,27 +377,6 @@ function LoginForm() {
                     {!deliveryMethod && `Код отправлен на ${formatPhoneForDisplay(phone) || "+7 (___) ___-__-__"}`}
                   </p>
                   
-                  {telegramLink && deliveryMethod === "whatsapp" && (
-                    <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:border-yellow-800">
-                      <p className="text-xs text-yellow-800 dark:text-yellow-300 mb-2 font-medium">
-                        ⚠️ WhatsApp может не доставить код
-                      </p>
-                      <p className="text-xs text-yellow-700 dark:text-yellow-400 mb-2">
-                        Привяжите Telegram для надежной доставки кодов в будущем
-                      </p>
-                      <a
-                        href={telegramLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block w-full px-3 py-2 bg-blue-600 text-white text-center text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                      >
-                        Привязать Telegram
-                      </a>
-                      <p className="mt-2 text-xs text-yellow-600 dark:text-yellow-400 text-center">
-                        Откроется Telegram → нажмите "Start" → коды будут приходить автоматически
-                      </p>
-                    </div>
-                  )}
                 </div>
 
                 <button
