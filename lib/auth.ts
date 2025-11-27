@@ -74,12 +74,23 @@ export const authOptions: NextAuthOptions = {
           });
 
           if (!user) {
+            // Создаем нового пользователя при первом успешном входе
             user = await prisma.user.create({
               data: {
                 phone: normalizedPhone,
                 role: "PENDING_MEMBER",
                 membershipStatus: "PROFILE_INCOMPLETE",
               },
+            });
+            console.log("[NextAuth] ✅ Создан новый пользователь при первом входе:", {
+              id: user.id,
+              phone: user.phone,
+            });
+          } else {
+            console.log("[NextAuth] ✅ Найден существующий пользователь:", {
+              id: user.id,
+              phone: user.phone,
+              role: user.role,
             });
           }
 
