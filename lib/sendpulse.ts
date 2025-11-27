@@ -150,10 +150,26 @@ export async function sendPINViaWhatsApp(
       }
     );
 
-    const data = await response.json();
+    const responseText = await response.text();
+    console.log("[SendPulse WhatsApp] Статус ответа:", response.status, response.statusText);
+    console.log("[SendPulse WhatsApp] Полный ответ (raw):", responseText);
+    
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error("[SendPulse WhatsApp] Ошибка парсинга JSON:", e);
+      return {
+        success: false,
+        error: `Ошибка ответа от SendPulse: ${response.status} ${response.statusText}`,
+        details: { rawResponse: responseText },
+      };
+    }
+
+    console.log("[SendPulse WhatsApp] Распарсенный ответ:", JSON.stringify(data, null, 2));
 
     if (!response.ok || !data.success) {
-      console.error("[SendPulse WhatsApp] Ошибка отправки template:", data);
+      console.error("[SendPulse WhatsApp] ❌ Ошибка отправки template:", JSON.stringify(data, null, 2));
       
       // Более информативное сообщение об ошибке
       let errorMessage = "Ошибка отправки WhatsApp";
@@ -161,9 +177,13 @@ export async function sendPINViaWhatsApp(
         const firstError = Object.values(data.errors)[0];
         if (Array.isArray(firstError) && firstError.length > 0) {
           errorMessage = firstError[0];
+        } else if (typeof firstError === 'string') {
+          errorMessage = firstError;
         }
       } else if (data.message) {
         errorMessage = data.message;
+      } else if (data.error) {
+        errorMessage = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
       }
       
       return {
