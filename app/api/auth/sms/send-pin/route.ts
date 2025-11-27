@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sendPINViaTelegram, validateChatId } from "@/lib/telegram-bot";
 import { sendPINViaWhatsApp } from "@/lib/whatsapp-cloud";
 import { sendPINViaMax, validateMaxChatId } from "@/lib/max-messenger";
+import { sendPINViaWhatsApp as sendPINViaSendPulseWhatsApp } from "@/lib/sendpulse";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 
@@ -115,18 +116,34 @@ export async function POST(request: NextRequest) {
     let deliveryError: string | undefined;
     const deliveryAttempts: string[] = [];
 
-    // Приоритет 1: WhatsApp (работает для всех, даже для новых пользователей)
+    // Приоритет 1: WhatsApp Cloud API (Meta) - работает для всех, даже для новых пользователей
     deliveryAttempts.push("whatsapp");
-    console.log("[2FA Auth] Попытка отправки через WhatsApp на номер:", normalizedPhone);
+    console.log("[2FA Auth] Попытка отправки через WhatsApp Cloud API на номер:", normalizedPhone);
     const whatsappResult = await sendPINViaWhatsApp(normalizedPhone, pinCode);
     
     if (whatsappResult.success) {
       deliveryMethod = "whatsapp";
       deliverySuccess = true;
-      console.log("[2FA Auth] ✅ PIN-код успешно отправлен через WhatsApp");
+      console.log("[2FA Auth] ✅ PIN-код успешно отправлен через WhatsApp Cloud API");
     } else {
-      console.warn("[2FA Auth] ❌ WhatsApp не сработал:", whatsappResult.error);
+      console.warn("[2FA Auth] ❌ WhatsApp Cloud API не сработал:", whatsappResult.error);
       deliveryError = whatsappResult.error;
+      
+      // Приоритет 1.5: SendPulse WhatsApp (fallback если Cloud API не сработал)
+      if (!deliverySuccess) {
+        deliveryAttempts.push("sendpulse_whatsapp");
+        console.log("[2FA Auth] Попытка отправки через SendPulse WhatsApp на номер:", normalizedPhone);
+        const sendpulseResult = await sendPINViaSendPulseWhatsApp(normalizedPhone, pinCode);
+        
+        if (sendpulseResult.success) {
+          deliveryMethod = "whatsapp"; // Используем тот же метод для UI
+          deliverySuccess = true;
+          console.log("[2FA Auth] ✅ PIN-код успешно отправлен через SendPulse WhatsApp");
+        } else {
+          console.warn("[2FA Auth] ❌ SendPulse WhatsApp не сработал:", sendpulseResult.error);
+          deliveryError = sendpulseResult.error;
+        }
+      }
     }
 
     // Приоритет 2: Telegram (если WhatsApp не сработал и Telegram привязан)

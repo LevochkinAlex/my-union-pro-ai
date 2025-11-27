@@ -96,7 +96,9 @@ export async function sendPINViaWhatsApp(
     // Используем утвержденный authentication template для отправки OTP
     // Документация: https://sendpulse.com/integrations/api/chatbot/whatsapp
     
-    // Формат для SendPulse: отправка template по номеру телефона
+    // SendPulse WhatsApp API: отправка template сообщения
+    // Документация: https://sendpulse.com/integrations/api/chatbot/whatsapp
+    // Endpoint для отправки template: /whatsapp/contacts/sendTemplateByPhones
     const response = await fetch(
       `${SENDPULSE_API_BASE}/whatsapp/contacts/sendTemplateByPhones`,
       {
@@ -107,11 +109,11 @@ export async function sendPINViaWhatsApp(
         },
         body: JSON.stringify({
           bot_id: SENDPULSE_WHATSAPP_BOT_ID,
-          phones: [normalizedPhone], // Массив номеров
+          phones: [normalizedPhone], // Массив номеров (без +)
           template: {
             name: "authentication_template_", // Одобренный Facebook template
             language: {
-              code: "en",
+              code: "en", // или "ru" если template на русском
             },
             components: [
               {

@@ -43,6 +43,9 @@ grep -q "WHATSAPP_ACCESS_TOKEN" .env.local 2>/dev/null || echo "WHATSAPP_ACCESS_
 grep -q "WHATSAPP_PHONE_NUMBER_ID" .env.local 2>/dev/null || echo "WHATSAPP_PHONE_NUMBER_ID=867058486493985" >> .env.local
 grep -q "WHATSAPP_BUSINESS_ACCOUNT_ID" .env.local 2>/dev/null || echo "WHATSAPP_BUSINESS_ACCOUNT_ID=138596839968735" >> .env.local
 
+# Add MAX Bot Token if not present (optional - user needs to add it manually)
+# grep -q "MAX_BOT_TOKEN" .env.local 2>/dev/null || echo "# MAX_BOT_TOKEN=your_token_here" >> .env.local
+
 echo "🔄 Restarting PM2 process..."
 pm2 restart my-union-pro || pm2 start npm --name my-union-pro -- start
 
