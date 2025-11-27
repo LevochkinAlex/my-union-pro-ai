@@ -112,14 +112,81 @@ export async function sendPINViaWhatsApp(
     console.log("[SendPulse WhatsApp] Номер:", normalizedPhone);
     console.log("[SendPulse WhatsApp] PIN-код:", pinCode);
 
-    // Используем утвержденный authentication template для отправки OTP
-    // Документация: https://sendpulse.com/integrations/api/chatbot/whatsapp
-    
-    // SendPulse WhatsApp API: отправка template сообщения
-    // Документация: https://sendpulse.com/integrations/api/chatbot/whatsapp
-    // Endpoint для отправки template: /whatsapp/contacts/sendTemplateByPhones
+    // Шаг 1: Найти или создать контакт
+    console.log("[SendPulse WhatsApp] 🔍 Поиск контакта...");
+    const searchResponse = await fetch(
+      `${SENDPULSE_API_BASE}/whatsapp/contacts?bot_id=${SENDPULSE_WHATSAPP_BOT_ID}&phone=${normalizedPhone}`,
+      {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const searchData = await searchResponse.json();
+    let contactId: string | null = null;
+
+    if (searchResponse.ok && searchData.success && searchData.data && searchData.data.length > 0) {
+      contactId = searchData.data[0].id;
+      console.log("[SendPulse WhatsApp] ✅ Контакт найден, ID:", contactId);
+    } else {
+      // Попробуем создать контакт
+      console.log("[SendPulse WhatsApp] 📝 Создание нового контакта...");
+      const createResponse = await fetch(
+        `${SENDPULSE_API_BASE}/whatsapp/contacts`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            bot_id: SENDPULSE_WHATSAPP_BOT_ID,
+            phone: normalizedPhone,
+          }),
+        }
+      );
+
+      const createData = await createResponse.json();
+      if (createResponse.ok && createData.success && createData.data?.id) {
+        contactId = createData.data.id;
+        console.log("[SendPulse WhatsApp] ✅ Контакт создан, ID:", contactId);
+      } else if (createData.errors?.phone?.includes("Contact already exists")) {
+        // Контакт уже существует, попробуем найти еще раз
+        console.log("[SendPulse WhatsApp] ⚠️ Контакт уже существует, повторный поиск...");
+        const retrySearch = await fetch(
+          `${SENDPULSE_API_BASE}/whatsapp/contacts?bot_id=${SENDPULSE_WHATSAPP_BOT_ID}&phone=${normalizedPhone}`,
+          {
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        const retryData = await retrySearch.json();
+        if (retrySearch.ok && retryData.success && retryData.data && retryData.data.length > 0) {
+          contactId = retryData.data[0].id;
+          console.log("[SendPulse WhatsApp] ✅ Контакт найден после повторного поиска, ID:", contactId);
+        }
+      }
+    }
+
+    if (!contactId) {
+      console.error("[SendPulse WhatsApp] ❌ Не удалось найти или создать контакт");
+      return {
+        success: false,
+        error: "Не удалось найти или создать контакт в SendPulse",
+        details: { searchData, createData: createResponse ? await createResponse.json() : null },
+      };
+    }
+
+    // Шаг 2: Отправить шаблон используя contact_id
+    console.log("[SendPulse WhatsApp] 📤 Отправка шаблона контакту:", contactId);
     const response = await fetch(
-      `${SENDPULSE_API_BASE}/whatsapp/contacts/sendTemplateByPhones`,
+      `${SENDPULSE_API_BASE}/whatsapp/contacts/sendTemplate`,
       {
         method: "POST",
         headers: {
@@ -128,7 +195,7 @@ export async function sendPINViaWhatsApp(
         },
         body: JSON.stringify({
           bot_id: SENDPULSE_WHATSAPP_BOT_ID,
-          phones: [normalizedPhone], // Массив номеров (без +)
+          contact_id: contactId,
           template: {
             name: "authentication_template_", // Одобренный Facebook template
             language: {
