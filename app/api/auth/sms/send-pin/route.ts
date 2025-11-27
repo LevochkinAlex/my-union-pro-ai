@@ -75,8 +75,8 @@ export async function POST(request: NextRequest) {
     // Хешируем PIN-код для хранения в БД
     const hashedPin = await bcrypt.hash(pinCode, 10);
 
-    // Время истечения: 5 минут
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    // Время истечения: 10 минут (соответствует шаблону WhatsApp)
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     // Ищем пользователя по телефону (если есть) - пробуем разные варианты номера
     let existingUser = await prisma.user.findUnique({
