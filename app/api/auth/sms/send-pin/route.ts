@@ -169,16 +169,20 @@ export async function POST(request: NextRequest) {
         attempts: deliveryAttempts,
         lastError: deliveryError,
         phone: normalizedPhone,
+        hasUser: !!existingUser,
+        hasTelegram: !!existingUser?.telegramChatId,
+        hasMax: !!existingUser?.maxChatId,
       });
 
-      // Если пользователь не зарегистрирован или мессенджеры не привязаны
+      // Если пользователь не зарегистрирован или мессенджеры не привязаны, 
+      // но WhatsApp тоже не сработал - показываем сообщение о необходимости привязки
       if (!existingUser || (!existingUser.telegramChatId && !existingUser.maxChatId)) {
         return NextResponse.json(
           {
             error: "Не удалось отправить код",
             requiresMessenger: true,
             message: "Для получения кода необходимо привязать Telegram или MAX",
-            helpText: "Telegram или MAX — самые быстрые и надежные способы получения кодов",
+            helpText: "Telegram или MAX — самые быстрые и надежные способы получения кодов. WhatsApp также доступен, но может быть недоступен в данный момент.",
             phone: normalizedPhone,
           },
           { status: 400 }
