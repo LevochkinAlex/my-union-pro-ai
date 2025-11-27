@@ -197,13 +197,13 @@ export async function sendPINViaWhatsApp(
           bot_id: SENDPULSE_WHATSAPP_BOT_ID,
           contact_id: contactId,
           template: {
-            name: "authentication_template_", // Одобренный Facebook template
+            name: "sample_template", // Используем существующий шаблон из SendPulse
             language: {
-              code: "en", // или "ru" если template на русском
+              code: "en_US", // Язык шаблона
             },
             components: [
               {
-                type: "body",
+                type: "BODY",
                 parameters: [
                   {
                     type: "text",
