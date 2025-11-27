@@ -67,17 +67,36 @@ export async function sendPINViaWhatsApp(
   phone: string,
   pinCode: string
 ): Promise<SendPulseResult> {
+  console.log("[SendPulse WhatsApp] 🚀 Начало отправки через SendPulse");
+  console.log("[SendPulse WhatsApp] Проверка credentials:", {
+    hasUserId: !!SENDPULSE_USER_ID,
+    hasSecret: !!SENDPULSE_SECRET,
+    hasBotId: !!SENDPULSE_WHATSAPP_BOT_ID,
+    botId: SENDPULSE_WHATSAPP_BOT_ID,
+  });
+
+  if (!SENDPULSE_USER_ID || !SENDPULSE_SECRET) {
+    console.error("[SendPulse WhatsApp] ❌ Credentials не настроены");
+    return {
+      success: false,
+      error: "SendPulse credentials не настроены",
+    };
+  }
+
   const token = await getAccessToken();
   
   if (!token) {
+    console.error("[SendPulse WhatsApp] ❌ Не удалось получить токен");
     return {
       success: false,
       error: "Не удалось получить токен SendPulse",
     };
   }
 
+  console.log("[SendPulse WhatsApp] ✅ Токен получен");
+
   if (!SENDPULSE_WHATSAPP_BOT_ID) {
-    console.error("[SendPulse WhatsApp] SENDPULSE_WHATSAPP_BOT_ID не настроен");
+    console.error("[SendPulse WhatsApp] ❌ SENDPULSE_WHATSAPP_BOT_ID не настроен");
     return {
       success: false,
       error: "WhatsApp Bot ID не настроен",
