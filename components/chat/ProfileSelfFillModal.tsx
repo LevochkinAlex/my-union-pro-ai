@@ -895,11 +895,12 @@ function Step2DocumentsUpload({
         if (response.ok) {
           const data = await response.json();
           // Фильтруем только сгенерированные документы
-          const generated = data.filter((doc: any) => 
+          const generated = (data.documents || []).filter((doc: any) => 
             doc.status === "GENERATED" && 
             (doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION")
           );
           setGeneratedDocs(generated);
+          console.log("[ProfileSelfFillModal] Loaded generated documents:", generated);
         }
       } catch (error) {
         console.error("Failed to load documents:", error);
@@ -930,6 +931,24 @@ function Step2DocumentsUpload({
           <li>Загрузите обратно в форму ниже</li>
         </ol>
       </div>
+
+      {/* Индикатор загрузки */}
+      {loading && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <p className="text-sm text-blue-800 dark:text-blue-200">
+            ⏳ Загрузка документов...
+          </p>
+        </div>
+      )}
+
+      {/* Если документы не найдены */}
+      {!loading && !membershipDoc && !contributionDoc && (
+        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+          <p className="text-sm text-orange-800 dark:text-orange-200">
+            ⚠️ Документы еще не сгенерированы. Пожалуйста, вернитесь на предыдущий шаг и подтвердите данные.
+          </p>
+        </div>
+      )}
 
       {/* Скачивание сгенерированных документов */}
       {!loading && (membershipDoc || contributionDoc) && (
