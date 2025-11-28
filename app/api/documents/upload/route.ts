@@ -304,20 +304,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    console.log(`[upload] Document uploaded successfully:`, {
-      id: document.id,
-      type: documentType,
-      status: document.status,
-      fileName: file.name
-    });
-    
-    uploadedDocuments.push({
-      documentId: document.id,
-      documentType,
-      fileName: file.name,
-      filePath: relativePath,
-    });
-  }
+      console.log(`[upload] Document uploaded successfully:`, {
+        id: document.id,
+        type: documentType,
+        status: document.status,
+        fileName: file.name
+      });
+      
+      uploadedDocuments.push({
+        documentId: document.id,
+        documentType,
+        fileName: file.name,
+        filePath: relativePath,
+      });
+    } // end for loop
 
     return NextResponse.json({
       success: true,
