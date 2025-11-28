@@ -1199,13 +1199,20 @@ export async function POST(request: NextRequest) {
     
     console.log(`[chat] Отправляем в API: системный промпт + ${recentHistory.length} сообщений из истории + новое сообщение пользователя`);
 
+    // Очищаем технические маркеры из сообщения перед сохранением
+    const cleanMessage = message
+      .replace(/\[SELF_FILL_COMPLETED\]/g, '')
+      .replace(/\[DOCUMENTS_UPLOADED\]/g, '')
+      .replace(/\[PROFILE_COMPLETE\]/g, '')
+      .trim();
+
     // Сохраняем сообщение пользователя с привязкой к сессии
     await prisma.chatMessage.create({
       data: {
         userId: session.user.id,
         sessionId: chatSession.id,
         role: "user",
-        content: message,
+        content: cleanMessage,
         chatBotId: bot.id,
       },
     });
