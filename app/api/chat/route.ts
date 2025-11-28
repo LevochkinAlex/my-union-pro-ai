@@ -468,7 +468,7 @@ ${profileComplete ? `### ⚠️ ВАЖНО: ПРОФИЛЬ ПОЛЬЗОВАТЕ�
 ### ✅ ЧТО ДЕЛАТЬ:
 - Вежливо направляй пользователя к кнопке "Заполнить анкету"
 - Не отвлекайся на другие темы до заполнения анкеты
-- Если пользователь спрашивает про профсоюз или скидки, коротко ответь, но напомни про анкету`;
+- Если пользователь спрашивает про профсоюз или скидки, коротко ответь, но напомни про анкету`}`;
     
     // Если заявление уже сгенерировано, проверяем дополнительную информацию
     if (hasGeneratedDocuments && !additionalInfoComplete) {
@@ -755,6 +755,35 @@ export async function POST(request: NextRequest) {
         },
       });
         console.log(`[chat] 🆕 Created first STATEMENT session: ${chatSession.id}`);
+      }
+    }
+
+    // ПРОВЕРКА: Блокируем создание APPEAL сессий, пока не загружены документы
+    if (chatSession.type === "APPEAL") {
+      // Проверяем, загружены ли подписанные документы (статус SIGNED или выше)
+      const uploadedDocuments = await prisma.document.findMany({
+        where: {
+          userId: session.user.id,
+          type: {
+            in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
+          },
+          status: {
+            in: ["SIGNED", "PENDING", "APPROVED"],
+          },
+          filePath: {
+            not: null, // Убеждаемся что файл реально загружен
+          },
+        },
+      });
+      
+      if (uploadedDocuments.length < 2) {
+        return NextResponse.json(
+          { 
+            error: "Для создания обращений необходимо сначала заполнить и загрузить подписанные заявления. Перейдите в раздел 'Мой бот' для подачи заявления.",
+            requiresDocuments: true,
+          },
+          { status: 403 }
+        );
       }
     }
 

@@ -32,6 +32,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [renameSessionId, setRenameSessionId] = useState<string | null>(null);
   const [newSessionName, setNewSessionName] = useState("");
+  const [documentsUploaded, setDocumentsUploaded] = useState(false); // Загружены ли документы
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -52,9 +53,10 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
     
     try {
       setIsLoading(true);
-      const [sessionsRes, appealsRes] = await Promise.all([
+      const [sessionsRes, appealsRes, docsRes] = await Promise.all([
         fetch("/api/chat/sessions"),
         fetch("/api/appeals"),
+        fetch("/api/documents"), // Проверяем статус документов
       ]);
 
       if (sessionsRes.ok) {
@@ -65,6 +67,18 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
       if (appealsRes.ok) {
         const data = await appealsRes.json();
         setAppeals(data.appeals || []);
+      }
+      
+      // Проверяем, загружены ли оба документа
+      if (docsRes.ok) {
+        const data = await docsRes.json();
+        const uploadedDocs = data.documents?.filter(
+          (doc: any) => 
+            (doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION") &&
+            (doc.status === "SIGNED" || doc.status === "PENDING" || doc.status === "APPROVED") &&
+            doc.filePath
+        ) || [];
+        setDocumentsUploaded(uploadedDocs.length >= 2);
       }
       
       hasLoadedRef.current = true;
@@ -107,6 +121,13 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   }, [isExpanded]);
 
   const handleNewAppeal = async () => {
+    // Проверяем, загружены ли документы
+    if (!documentsUploaded) {
+      alert("Для создания обращений необходимо сначала заполнить и загрузить подписанные заявления.\n\nПерейдите в раздел 'Мой бот' для подачи заявления.");
+      router.push("/dashboard"); // Переходим в "Мой бот"
+      return;
+    }
+    
     try {
       const response = await fetch("/api/chat/sessions", {
         method: "POST",
@@ -120,7 +141,12 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
         router.push(`/dashboard?session=${data.session.id}`);
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(errorData.error || "Ошибка при создании нового обращения");
+        if (errorData.requiresDocuments) {
+          alert(errorData.error || "Необходимо загрузить документы");
+          router.push("/dashboard"); // Переходим в "Мой бот"
+        } else {
+          alert(errorData.error || "Ошибка при создании нового обращения");
+        }
       }
     } catch (error) {
       console.error("Error creating new appeal:", error);
@@ -304,12 +330,24 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
           {/* New Chat Button */}
           <button
             onClick={handleNewAppeal}
-            className="flex w-full items-center gap-2 rounded-md border border-dashed border-gray-300 px-2 py-1.5 text-sm text-gray-600 hover:border-gray-400 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:bg-gray-800 transition-colors"
+            disabled={!documentsUploaded}
+            title={!documentsUploaded ? "Сначала загрузите подписанные заявления в разделе 'Мой бот'" : "Создать новое обращение"}
+            className={clsx(
+              "flex w-full items-center gap-2 rounded-md border border-dashed px-2 py-1.5 text-sm transition-colors",
+              documentsUploaded 
+                ? "border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:bg-gray-800 cursor-pointer"
+                : "border-gray-200 text-gray-400 dark:border-gray-700 dark:text-gray-600 cursor-not-allowed opacity-50"
+            )}
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             <span className="text-left">Новый чат</span>
+            {!documentsUploaded && (
+              <svg className="h-3 w-3 ml-auto" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+              </svg>
+            )}
           </button>
 
           {/* Appeals */}
