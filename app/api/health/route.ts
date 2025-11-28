@@ -19,6 +19,8 @@ export async function GET() {
         SMTP_USER: process.env.SMTP_USER ? "✓ set" : "✗ not set",
         SMTP_PASSWORD: process.env.SMTP_PASSWORD ? "✓ set" : "✗ not set",
         SMTP_FROM: process.env.SMTP_FROM ? "✓ set" : "✗ not set",
+        EXOLVE_API_KEY: process.env.EXOLVE_API_KEY ? "✓ set" : "✗ not set",
+        TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN ? "✓ set" : "✗ not set",
       },
     });
   } catch (error) {
