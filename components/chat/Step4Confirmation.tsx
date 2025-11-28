@@ -2,7 +2,7 @@
 
 interface Step4ConfirmationProps {
   profileData: any;
-  uploadedDocs: { membership: File | null; contribution: File | null };
+  uploadedDocs: { membership?: File | null; contribution?: File | null };
   additionalData: any;
   organizations: Array<{
     id: string;
@@ -95,11 +95,11 @@ export default function Step4Confirmation({
         </h4>
         <div className="space-y-2 text-sm">
           <div className="flex items-center gap-2">
-            {uploadedDocs.membership ? (
+            {uploadedDocs?.membership ? (
               <>
                 <span className="text-green-600">✓</span>
                 <span className="text-gray-900 dark:text-white">Заявление о вступлении</span>
-                <span className="text-gray-500 dark:text-gray-400">({uploadedDocs.membership.name})</span>
+                <span className="text-gray-500 dark:text-gray-400">({uploadedDocs.membership?.name})</span>
               </>
             ) : (
               <>
@@ -109,11 +109,11 @@ export default function Step4Confirmation({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {uploadedDocs.contribution ? (
+            {uploadedDocs?.contribution ? (
               <>
                 <span className="text-green-600">✓</span>
                 <span className="text-gray-900 dark:text-white">Заявление о взносах</span>
-                <span className="text-gray-500 dark:text-gray-400">({uploadedDocs.contribution.name})</span>
+                <span className="text-gray-500 dark:text-gray-400">({uploadedDocs.contribution?.name})</span>
               </>
             ) : (
               <>
