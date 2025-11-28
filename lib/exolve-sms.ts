@@ -4,6 +4,7 @@
  */
 
 const EXOLVE_API_KEY = process.env.EXOLVE_API_KEY;
+const EXOLVE_SENDER_NUMBER = "79587173423"; // Номер отправителя в Exolve
 // Правильный endpoint для Exolve SMS API
 const EXOLVE_API_URL = "https://api.exolve.ru/sms/v1/SendSMS";
 
@@ -38,8 +39,8 @@ export async function sendSMSViaExolve(
     // Согласно документации Exolve SMS API
     // https://docs.exolve.ru/docs/ru/api-reference/sms-api/
     const requestBody = {
-      number: normalizedPhone,
-      destination: normalizedPhone,
+      number: EXOLVE_SENDER_NUMBER, // Номер отправителя (купленный в Exolve)
+      destination: normalizedPhone,  // Номер получателя
       text: text,
     };
 
