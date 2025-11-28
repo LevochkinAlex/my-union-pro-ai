@@ -19,6 +19,7 @@ export async function GET() {
       select: {
         id: true,
         email: true,
+        emailVerified: true,
         phone: true,
         firstName: true,
         lastName: true,
@@ -28,6 +29,7 @@ export async function GET() {
         jobTitle: true,
         profession: true,
         education: true,
+        organizationId: true,
         organizationName: true,
         employmentStatus: true,
         maritalStatus: true,
