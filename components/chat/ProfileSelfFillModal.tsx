@@ -5,6 +5,7 @@ import PhoneInput from "@/components/form/PhoneInput";
 import AddressInput from "@/components/form/AddressInput";
 import Autocomplete from "@/components/form/Autocomplete";
 import EmailValidationField from "@/components/form/EmailValidationField";
+import Step4Confirmation from "@/components/chat/Step4Confirmation";
 
 interface ProfileSelfFillModalProps {
   isOpen: boolean;
@@ -600,7 +601,11 @@ export function ProfileSelfFillModal({
               profileData={profileData}
               uploadedDocs={uploadedDocs}
               additionalData={additionalData}
-              organizations={organizations}
+              organizations={organizations.map((org) => ({
+                id: org.id,
+                name: org.name,
+                fullPath: org.fullPath,
+              }))}
               onBackToEdit={handleBackToEdit}
             />
           )}
