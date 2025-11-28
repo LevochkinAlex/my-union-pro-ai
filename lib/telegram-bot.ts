@@ -182,11 +182,12 @@ export async function sendWelcomeMessage(chatId: string): Promise<SendMessageRes
 export async function sendNewUserWelcome(
   chatId: string,
   loginToken: string,
-  firstName?: string
+  firstName?: string,
+  baseUrl?: string
 ): Promise<SendMessageResult> {
   const name = firstName ? `, ${firstName}` : "";
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
-  const loginUrl = `${baseUrl}/api/auth/telegram/auto-login?token=${loginToken}`;
+  const appUrl = baseUrl || process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
+  const loginUrl = `${appUrl}/api/auth/telegram/auto-login?token=${loginToken}`;
 
   const message = `
 👋 <b>Добро пожаловать в МойСоюз${name}!</b>
@@ -211,11 +212,12 @@ export async function sendNewUserWelcome(
 export async function sendReturningUserWelcome(
   chatId: string,
   loginToken: string,
-  firstName?: string
+  firstName?: string,
+  baseUrl?: string
 ): Promise<SendMessageResult> {
   const name = firstName ? `, ${firstName}` : "";
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
-  const loginUrl = `${baseUrl}/api/auth/telegram/auto-login?token=${loginToken}`;
+  const appUrl = baseUrl || process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
+  const loginUrl = `${appUrl}/api/auth/telegram/auto-login?token=${loginToken}`;
 
   const message = `
 🎉 <b>Рад видеть вас снова${name}!</b>

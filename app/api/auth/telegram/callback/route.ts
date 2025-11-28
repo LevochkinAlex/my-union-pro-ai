@@ -134,18 +134,7 @@ export async function GET(request: NextRequest) {
 
     console.log("[Telegram Login] Токен создан");
 
-    // Отправляем приветственное сообщение в Telegram
-    const { sendNewUserWelcome, sendReturningUserWelcome } = await import("@/lib/telegram-bot");
-    
-    if (isNewUser) {
-      console.log("[Telegram Login] Отправляем приветствие новому пользователю");
-      await sendNewUserWelcome(id, loginToken, first_name || undefined);
-    } else {
-      console.log("[Telegram Login] Отправляем приветствие существующему пользователю");
-      await sendReturningUserWelcome(id, loginToken, first_name || undefined);
-    }
-
-    // Определяем правильный базовый URL
+    // Определяем правильный базовый URL СНАЧАЛА
     // Для localhost всегда используем http, для продакшена - из env или из заголовков
     const host = request.headers.get("host") || "localhost:3000";
     const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
@@ -163,6 +152,17 @@ export async function GET(request: NextRequest) {
       const proto = request.headers.get("x-forwarded-proto") || 
                     (request.url.startsWith("https") ? "https" : "http");
       baseUrl = `${proto}://${host}`;
+    }
+
+    // Отправляем приветственное сообщение в Telegram с правильным baseUrl
+    const { sendNewUserWelcome, sendReturningUserWelcome } = await import("@/lib/telegram-bot");
+    
+    if (isNewUser) {
+      console.log("[Telegram Login] Отправляем приветствие новому пользователю");
+      await sendNewUserWelcome(id, loginToken, first_name || undefined, baseUrl);
+    } else {
+      console.log("[Telegram Login] Отправляем приветствие существующему пользователю");
+      await sendReturningUserWelcome(id, loginToken, first_name || undefined, baseUrl);
     }
     
     // Редиректим на страницу с токеном для автоматической авторизации

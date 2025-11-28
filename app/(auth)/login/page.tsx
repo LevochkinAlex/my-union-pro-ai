@@ -651,22 +651,28 @@ export default function LoginPage() {
     <>
       <style jsx global>{`
         /* Стили для Telegram Login Widget */
+        #telegram-login-container {
+          display: block !important;
+          width: 100% !important;
+        }
+        
         #telegram-login-container iframe {
           width: 100% !important;
           max-width: 100% !important;
           height: 48px !important;
           border-radius: 8px !important;
-        }
-        
-        #telegram-login-container {
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
+          display: block !important;
         }
         
         /* Скрываем стандартные отступы виджета */
         #telegram-login-container > * {
           margin: 0 !important;
+          width: 100% !important;
+        }
+        
+        /* Скрываем аватар пользователя, который может появиться */
+        #telegram-login-container img:not([src*="telegram"]) {
+          display: none !important;
         }
       `}</style>
       <Script

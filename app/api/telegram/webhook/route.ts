@@ -149,9 +149,16 @@ export async function POST(request: NextRequest) {
 
       console.log("[Telegram Webhook] Создан токен для быстрого входа");
 
+      // Определяем правильный baseUrl
+      const host = request.headers.get("host") || "localhost:3000";
+      const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+      const baseUrl = isLocalhost 
+        ? `http://${host}` 
+        : (process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro");
+
       // Отправляем сообщение с кнопкой для входа
       const { sendReturningUserWelcome } = await import("@/lib/telegram-bot");
-      await sendReturningUserWelcome(chatId, loginToken, user.firstName || undefined);
+      await sendReturningUserWelcome(chatId, loginToken, user.firstName || undefined, baseUrl);
       
       return NextResponse.json({ ok: true });
     }
