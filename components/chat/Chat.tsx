@@ -1235,33 +1235,11 @@ function ChatContent() {
       {showSelfFillModal && currentSessionId && (
         <ProfileSelfFillModal
           isOpen={showSelfFillModal}
-          onClose={async () => {
-            // Проверяем заполненность заявления перед закрытием
-            if (sessionType === "STATEMENT") {
-              try {
-                const response = await fetch("/api/chat/check-application");
-                if (response.ok) {
-                  const data = await response.json();
-                  setIsApplicationFilled(data.applicationFilled);
-                  
-                  // Закрываем модальное окно только если заявление заполнено
-                  if (data.applicationFilled) {
-                    setShowSelfFillModal(false);
-                    // Перезагружаем чат после закрытия модалки
-                    loadMessages();
-                  } else {
-                    // Если заявление не заполнено - не закрываем модальное окно
-                    console.log("[chat] Application not filled, keeping modal open");
-                  }
-                }
-              } catch (error) {
-                console.error("[chat] Error checking application on close:", error);
-              }
-            } else {
-              // Для APPEAL сессий просто закрываем
-              setShowSelfFillModal(false);
-              loadMessages();
-            }
+          onClose={() => {
+            // Закрываем модалку всегда
+            setShowSelfFillModal(false);
+            // Перезагружаем чат после закрытия
+            loadMessages();
           }}
           sessionId={currentSessionId}
         />
