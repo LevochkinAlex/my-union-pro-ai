@@ -87,9 +87,13 @@ export async function POST() {
           fileName: pathModule.basename(membershipPath),
           fileSize: membershipStats.size,
           status: "GENERATED",
+          // Сбрасываем старые подписанные документы и Google Drive
+          signedFilePath: null,
+          driveFileId: null,
+          driveUrl: null,
         },
       });
-      console.log("[regenerate-documents] ✅ Membership application updated");
+      console.log("[regenerate-documents] ✅ Membership application updated (old signed version cleared)");
     } else {
       await prisma.document.create({
         data: {
@@ -116,9 +120,13 @@ export async function POST() {
           fileName: pathModule.basename(contributionsPath),
           fileSize: contributionsStats.size,
           status: "GENERATED",
+          // Сбрасываем старые подписанные документы и Google Drive
+          signedFilePath: null,
+          driveFileId: null,
+          driveUrl: null,
         },
       });
-      console.log("[regenerate-documents] ✅ Contributions application updated");
+      console.log("[regenerate-documents] ✅ Contributions application updated (old signed version cleared)");
     } else {
       await prisma.document.create({
         data: {
