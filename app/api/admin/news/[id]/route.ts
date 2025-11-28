@@ -82,6 +82,8 @@ export async function PUT(
       return NextResponse.json({ error: "News not found" }, { status: 404 });
     }
 
+    console.log("[admin/news PUT] Updating news with coverImage length:", coverImage?.length || 0);
+
     // Обновляем новость
     const updateData: any = {};
     if (title !== undefined) updateData.title = title;

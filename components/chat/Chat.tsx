@@ -41,7 +41,7 @@ function ChatContent() {
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [showSelfFillModal, setShowSelfFillModal] = useState(false);
-  const [isApplicationFilled, setIsApplicationFilled] = useState<boolean | null>(null);
+  const [isApplicationFilled, setIsApplicationFilled] = useState<boolean | null>(false); // По умолчанию false - чат заблокирован
   const [isCheckingApplication, setIsCheckingApplication] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -147,7 +147,7 @@ function ChatContent() {
     }
   }, [sessionId]);
 
-  // Проверка заполненности заявления при загрузке STATEMENT сессии
+  // Проверка заполненности заявления при загрузке STATEMENT сессии (БЕЗ автооткрытия)
   useEffect(() => {
     const checkApplication = async () => {
       if (sessionType === "STATEMENT" && currentSessionId) {
@@ -158,11 +158,8 @@ function ChatContent() {
             const data = await response.json();
             setIsApplicationFilled(data.applicationFilled);
             
-            // Если заявление не заполнено - принудительно открываем модальное окно
-            if (!data.applicationFilled) {
-              console.log("[chat] Application not filled, opening modal");
-              setShowSelfFillModal(true);
-            }
+            // НЕ открываем модалку автоматически, только проверяем статус
+            console.log("[chat] Application filled:", data.applicationFilled);
           }
         } catch (error) {
           console.error("[chat] Error checking application:", error);
@@ -1118,6 +1115,13 @@ function ChatContent() {
                 onChange={(e) => {
                   console.log("[Chat] Input changed:", e.target.value);
                   setInput(e.target.value);
+                }}
+                onClick={() => {
+                  // Если чат заблокирован - открываем модалку
+                  if (sessionType === "STATEMENT" && isApplicationFilled === false) {
+                    console.log("[Chat] Blocked textarea clicked, opening modal");
+                    setShowSelfFillModal(true);
+                  }
                 }}
                 onKeyDown={handleKeyDown}
                 placeholder={

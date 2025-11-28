@@ -140,10 +140,11 @@ export default function ProfilePage() {
     membershipJoinedAt: string | null;
     membershipStatus: string;
     currentOrganization: {
-      id: string;
+      id: string | null;
       name: string;
       inn: string | null;
       chairmanName: string | null;
+      type?: "linked" | "text"; // linked = из справочника, text = старое текстовое поле
     } | null;
     history: Array<{
       id: string;
@@ -1545,11 +1546,16 @@ export default function ProfilePage() {
             {membershipData.currentOrganization && (
               <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
                 <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                  Текущая организация
+                  Организация
                 </label>
                 <p className="text-base font-medium text-gray-900 dark:text-white">
                   {membershipData.currentOrganization.name}
                 </p>
+                {membershipData.currentOrganization.type === "text" && (
+                  <p className="mt-2 text-xs text-orange-600 dark:text-orange-400">
+                    ⚠️ Организация не привязана к справочнику. Пожалуйста, обновите профиль и выберите организацию из списка.
+                  </p>
+                )}
                 {membershipData.currentOrganization.inn && (
                   <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                     ИНН: {membershipData.currentOrganization.inn}
@@ -1560,6 +1566,15 @@ export default function ProfilePage() {
                     Председатель: {membershipData.currentOrganization.chairmanName}
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Если нет организации вообще */}
+            {!membershipData.currentOrganization && (
+              <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-900/20">
+                <p className="text-sm text-orange-800 dark:text-orange-200">
+                  ⚠️ Организация не указана. Пожалуйста, заполните анкету и выберите организацию из списка.
+                </p>
               </div>
             )}
 

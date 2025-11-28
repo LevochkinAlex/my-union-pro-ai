@@ -22,10 +22,17 @@ export default function Autocomplete({
   const [isOpen, setIsOpen] = useState(false);
   const [filteredOptions, setFilteredOptions] = useState<string[]>([]);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [justSelected, setJustSelected] = useState(false); // Флаг что значение только что выбрано
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Если значение только что выбрано из списка - не открываем dropdown
+    if (justSelected) {
+      setJustSelected(false);
+      return;
+    }
+
     if (value.trim().length >= 2) {
       const query = value.toLowerCase();
       
@@ -56,7 +63,7 @@ export default function Autocomplete({
       setIsOpen(false);
     }
     setHighlightedIndex(-1);
-  }, [value, options]);
+  }, [value, options, justSelected]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -80,8 +87,9 @@ export default function Autocomplete({
 
   const handleOptionClick = (option: string) => {
     onChange(option);
+    setJustSelected(true); // Устанавливаем флаг что значение выбрано
     setIsOpen(false);
-    inputRef.current?.focus();
+    inputRef.current?.blur(); // Убираем фокус чтобы закрыть dropdown
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

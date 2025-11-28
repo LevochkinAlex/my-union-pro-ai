@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import PhoneInput from "@/components/form/PhoneInput";
 import AddressInput from "@/components/form/AddressInput";
 import Autocomplete from "@/components/form/Autocomplete";
@@ -9,6 +9,117 @@ interface ProfileSelfFillModalProps {
   isOpen: boolean;
   onClose: () => void;
   sessionId: string;
+}
+
+interface Organization {
+  id: string;
+  name: string;
+  type: string;
+  level: number;
+  fullPath: string;
+  indentedName: string;
+}
+
+// Компонент выбора организации с поиском
+function OrganizationSelect({
+  organizations,
+  selectedId,
+  onSelect,
+}: {
+  organizations: Organization[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const selectedOrg = organizations.find((o) => o.id === selectedId);
+
+  // Фильтрация организаций по поиску
+  const filtered = search
+    ? organizations.filter(
+        (org) =>
+          org.name.toLowerCase().includes(search.toLowerCase()) ||
+          org.fullPath.toLowerCase().includes(search.toLowerCase())
+      )
+    : organizations;
+
+  // Закрытие при клике вне компонента
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <label className="block text-sm font-medium mb-1">Организация *</label>
+      
+      {/* Поле ввода для поиска */}
+      <input
+        type="text"
+        value={isOpen ? search : (selectedOrg?.name || "")}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        placeholder="Начните вводить название организации..."
+        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+      />
+      
+      {/* Выпадающий список */}
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-gray-500 dark:text-gray-400">
+              {organizations.length === 0 ? "Загрузка..." : "Ничего не найдено"}
+            </div>
+          ) : (
+            filtered.slice(0, 50).map((org) => (
+              <button
+                key={org.id}
+                type="button"
+                onClick={() => {
+                  onSelect(org.id);
+                  setSearch("");
+                  setIsOpen(false);
+                }}
+                className={`w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-gray-700 ${
+                  org.id === selectedId ? "bg-blue-100 dark:bg-gray-600" : ""
+                }`}
+              >
+                <div className="font-medium text-sm">{org.name}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {org.fullPath}
+                </div>
+              </button>
+            ))
+          )}
+          {filtered.length > 50 && (
+            <div className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 border-t">
+              Показано 50 из {filtered.length}. Уточните поиск.
+            </div>
+          )}
+        </div>
+      )}
+      
+      <p className="mt-1 text-xs text-blue-600 dark:text-blue-400">
+        💡 Введите название организации для поиска
+      </p>
+      
+      {selectedOrg && (
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          ✓ Выбрано: {selectedOrg.fullPath}
+        </p>
+      )}
+    </div>
+  );
 }
 
 type Step = 1 | 2 | 3;
@@ -28,14 +139,6 @@ export function ProfileSelfFillModal({
   const [professions, setProfessions] = useState<string[]>([]);
 
   // Справочник организаций
-  interface Organization {
-    id: string;
-    name: string;
-    type: string;
-    level: number;
-    fullPath: string;
-    indentedName: string;
-  }
   const [organizations, setOrganizations] = useState<Organization[]>([]);
 
   // Данные формы
@@ -73,7 +176,17 @@ export function ProfileSelfFillModal({
         const orgsResponse = await fetch("/api/organizations");
         if (orgsResponse.ok) {
           const orgsData = await orgsResponse.json();
-          setOrganizations(orgsData.flatList || []);
+          console.log("[ProfileModal] Loaded organizations:", orgsData);
+          
+          // Фильтруем только первичные организации (ППО) для заявлений
+          const primaryOrgs = (orgsData.flatList || []).filter(
+            (org: any) => org.type === "PRIMARY"
+          );
+          
+          console.log("[ProfileModal] Filtered PRIMARY organizations:", primaryOrgs.length);
+          setOrganizations(primaryOrgs);
+        } else {
+          console.error("[ProfileModal] Failed to load organizations:", await orgsResponse.text());
         }
 
         // Загружаем существующие данные пользователя
@@ -223,8 +336,19 @@ export function ProfileSelfFillModal({
     }
     
     // Проверяем, что организация выбрана из списка
-    if (!organizations.find(org => org.id === profileData.organizationId)) {
+    const selectedOrg = organizations.find(org => org.id === profileData.organizationId);
+    if (!selectedOrg) {
       alert("Выберите организацию из списка");
+      return false;
+    }
+    
+    // Проверяем, что выбрана первичная организация (ППО)
+    if (selectedOrg.type !== "PRIMARY") {
+      alert(
+        "⚠️ Заявление можно подать только в первичную профсоюзную организацию (ППО).\n\n" +
+        `Вы выбрали: ${selectedOrg.fullPath}\n\n` +
+        "Пожалуйста, выберите ППО из списка."
+      );
       return false;
     }
     
@@ -698,30 +822,11 @@ function Step1ProfileForm({
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Организация *
-          </label>
-          <select
-            name="organizationId"
-            value={data.organizationId}
-            onChange={handleChange}
-            required
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 cursor-pointer"
-          >
-            <option value="">Выберите организацию...</option>
-            {organizations.map((org) => (
-              <option key={org.id} value={org.id}>
-                {org.indentedName}
-              </option>
-            ))}
-          </select>
-          {data.organizationId && (
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {organizations.find((o) => o.id === data.organizationId)?.fullPath}
-            </p>
-          )}
-        </div>
+        <OrganizationSelect
+          organizations={organizations}
+          selectedId={data.organizationId}
+          onSelect={(orgId) => onChange({ ...data, organizationId: orgId })}
+        />
 
         <div>
           <label className="block text-sm font-medium mb-1">Должность *</label>

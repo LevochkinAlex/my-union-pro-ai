@@ -107,6 +107,7 @@ export default function ImageUploadWithCrop({
       }
 
       const data = await response.json();
+      console.log("[ImageUploadWithCrop] Uploaded image, URL length:", data.url?.length || 0);
       onChange(data.url);
       setShowCropper(false);
       setImageSrc(null);

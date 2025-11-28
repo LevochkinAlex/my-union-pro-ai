@@ -231,6 +231,15 @@ model Organization {
   parentId String?
   parent   Organization?  @relation("OrganizationHierarchy", fields: [parentId], references: [id])
   children Organization[] @relation("OrganizationHierarchy")
+  
+  // Уровень в иерархии (0 = корень, 1 = дочерняя организация первого уровня и т.д.)
+  level Int @default(0)
+  
+  // Порядок сортировки (для отображения в списке)
+  sortOrder Int @default(0)
+  
+  // Полный путь в иерархии (для быстрого поиска, например: "Федерация / Региональная / ППО")
+  fullPath String?
 
   // Контакты
   inn     String? @unique
@@ -257,6 +266,8 @@ model Organization {
   @@index([type])
   @@index([parentId])
   @@index([inn])
+  @@index([level])
+  @@index([sortOrder])
 }
 
 // Типы документов

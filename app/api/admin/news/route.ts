@@ -83,6 +83,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log("[admin/news POST] Creating news with coverImage length:", coverImage?.length || 0);
+
     // Создаем новость
     const newsPost = await prisma.newsPost.create({
       data: {

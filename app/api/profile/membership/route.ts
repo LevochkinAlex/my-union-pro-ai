@@ -94,18 +94,33 @@ export async function GET() {
       notes: entry.notes,
     }));
 
+    // Определяем текущую организацию (из справочника или текстовое поле для обратной совместимости)
+    let currentOrganization = null;
+    if (user.organization) {
+      // Из справочника организаций
+      currentOrganization = {
+        id: user.organization.id,
+        name: user.organization.name,
+        inn: user.organization.inn,
+        chairmanName: user.organization.chairmanName,
+        type: "linked", // Связана через ID
+      };
+    } else if (user.organizationName) {
+      // Текстовое поле (старая система, для обратной совместимости)
+      currentOrganization = {
+        id: null,
+        name: user.organizationName,
+        inn: null,
+        chairmanName: null,
+        type: "text", // Просто текст, не из справочника
+      };
+    }
+
     return NextResponse.json({
       unionCardNumber,
       membershipJoinedAt: user.membershipJoinedAt,
       membershipStatus: user.unionMembershipStatus || "NOT_ACCEPTED",
-      currentOrganization: user.organization
-        ? {
-            id: user.organization.id,
-            name: user.organization.name,
-            inn: user.organization.inn,
-            chairmanName: user.organization.chairmanName,
-          }
-        : null,
+      currentOrganization,
       history,
     });
   } catch (error) {

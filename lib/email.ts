@@ -8,6 +8,42 @@ export interface SendEmailResult {
   messageId?: string;
 }
 
+export interface SendEmailOptions {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+}
+
+/**
+ * Универсальная функция для отправки email
+ */
+export async function sendEmail(options: SendEmailOptions): Promise<void> {
+  try {
+    console.log("[Email] Готово к отправке:");
+    console.log("  To:", options.to);
+    console.log("  Subject:", options.subject);
+
+    // TODO: Интеграция с email сервисом (SendGrid, Mailgun, или SMTP)
+    // Пример для SendGrid:
+    // const sgMail = require('@sendgrid/mail');
+    // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    // await sgMail.send({
+    //   to: options.to,
+    //   from: 'noreply@myunion.pro',
+    //   subject: options.subject,
+    //   html: options.html,
+    //   text: options.text,
+    // });
+
+    console.log("[Email] ⚠️ ВНИМАНИЕ: Email НЕ отправлен (нужна настройка SMTP/SendGrid)");
+    console.log("[Email] HTML preview:", options.html.slice(0, 200));
+  } catch (error) {
+    console.error("[Email] Ошибка отправки:", error);
+    throw error;
+  }
+}
+
 /**
  * Отправляет Magic Link на email для авторизации
  */
