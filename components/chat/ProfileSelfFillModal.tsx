@@ -370,9 +370,38 @@ export function ProfileSelfFillModal({
         return;
       }
       
-      console.log("[ProfileModal] Uploading documents to server...");
-      await uploadDocuments();
-      console.log("[ProfileModal] Documents uploaded successfully");
+      // Загружаем только если есть новые документы
+      const hasNewDocuments = (needsMembership && uploadedDocs.membership) || (needsContribution && uploadedDocs.contribution);
+      
+      if (hasNewDocuments) {
+        console.log("[ProfileModal] Uploading new documents to server...");
+        
+        const formData = new FormData();
+        if (needsMembership && uploadedDocs.membership) {
+          formData.append("membership", uploadedDocs.membership);
+          console.log("[ProfileModal] Including membership document");
+        }
+        if (needsContribution && uploadedDocs.contribution) {
+          formData.append("contribution", uploadedDocs.contribution);
+          console.log("[ProfileModal] Including contribution document");
+        }
+        
+        try {
+          const response = await fetch("/api/documents/upload", {
+            method: "POST",
+            body: formData,
+          });
+          if (!response.ok) throw new Error("Failed to upload documents");
+          console.log("[ProfileModal] Documents uploaded successfully");
+        } catch (error) {
+          console.error("Error uploading documents:", error);
+          alert("Ошибка при загрузке документов");
+          return;
+        }
+      } else {
+        console.log("[ProfileModal] All documents already uploaded, skipping upload");
+      }
+      
       await sendDocumentsUploadedMessage(); // Отправляем сообщение о загрузке документов
       setCurrentStep(4); // → К дополнительной информации
     } else if (currentStep === 4) {
