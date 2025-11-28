@@ -4,6 +4,7 @@
  */
 
 const EXOLVE_API_KEY = process.env.EXOLVE_API_KEY;
+// Правильный endpoint для Exolve согласно документации
 const EXOLVE_API_URL = "https://api.exolve.ru/messaging/v1/SendSMS";
 
 export interface ExolveSMSResult {
@@ -34,17 +35,26 @@ export async function sendSMSViaExolve(
     // Нормализуем номер для Exolve (убираем +)
     const normalizedPhone = phone.replace(/^\+/, "");
 
+    // Согласно документации Exolve API
+    const requestBody = {
+      number: normalizedPhone,
+      destination: normalizedPhone,
+      text: text,
+    };
+
+    console.log("[Exolve SMS] Запрос:", {
+      url: EXOLVE_API_URL,
+      body: requestBody,
+      hasKey: !!EXOLVE_API_KEY,
+    });
+
     const response = await fetch(EXOLVE_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${EXOLVE_API_KEY}`,
       },
-      body: JSON.stringify({
-        number: normalizedPhone,
-        destination: normalizedPhone,
-        text: text,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     const data = await response.json();
