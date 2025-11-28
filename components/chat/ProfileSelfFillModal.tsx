@@ -498,42 +498,7 @@ export function ProfileSelfFillModal({
     return true;
   };
 
-  const validateStep2 = (): boolean => {
-    // Проверяем только те документы, которых нет в базе (не загружены ранее)
-    const membershipAlreadyUploaded = !!existingDocs.membership?.signedFilePath;
-    const contributionAlreadyUploaded = !!existingDocs.contribution?.signedFilePath;
-    
-    console.log("[ProfileModal] validateStep2:", {
-      existingDocs,
-      membershipAlreadyUploaded,
-      contributionAlreadyUploaded,
-      uploadedDocs: {
-        membership: !!uploadedDocs.membership,
-        contribution: !!uploadedDocs.contribution,
-      },
-    });
-    
-    const needsMembership = !membershipAlreadyUploaded;
-    const needsContribution = !contributionAlreadyUploaded;
-    
-    if (needsMembership && !uploadedDocs.membership) {
-      alert("Загрузите заявление о вступлении в профсоюз");
-      return false;
-    }
-    
-    if (needsContribution && !uploadedDocs.contribution) {
-      alert("Загрузите заявление о перечислении членских взносов");
-      return false;
-    }
-    
-    // Если оба документа уже загружены, можно пропустить
-    if (!needsMembership && !needsContribution) {
-      console.log("[ProfileModal] Both documents already uploaded, skipping validation");
-      return true;
-    }
-    
-    return true;
-  };
+  // validateStep2 удалена - валидация теперь inline в handleNextStep
 
   const saveProfileData = async () => {
     try {
@@ -586,48 +551,7 @@ export function ProfileSelfFillModal({
     }
   };
 
-  const uploadDocuments = async () => {
-    try {
-      const formData = new FormData();
-      
-      // Отправляем только те документы, которых нет в базе (не загружены ранее)
-      const needsMembership = !existingDocs.membership?.signedFilePath;
-      const needsContribution = !existingDocs.contribution?.signedFilePath;
-      
-      if (needsMembership && uploadedDocs.membership) {
-        formData.append("membership", uploadedDocs.membership);
-        console.log("[ProfileModal] Uploading membership document");
-      }
-      
-      if (needsContribution && uploadedDocs.contribution) {
-        formData.append("contribution", uploadedDocs.contribution);
-        console.log("[ProfileModal] Uploading contribution document");
-      }
-      
-      // Если оба документа уже загружены, ничего не отправляем
-      if (!needsMembership && !needsContribution) {
-        console.log("[ProfileModal] Both documents already uploaded, skipping upload");
-        return;
-      }
-      
-      // Если нет файлов для загрузки, выходим
-      if (!formData.has("membership") && !formData.has("contribution")) {
-        console.log("[ProfileModal] No new documents to upload");
-        return;
-      }
-
-      const response = await fetch("/api/documents/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) throw new Error("Failed to upload documents");
-    } catch (error) {
-      console.error("Error uploading documents:", error);
-      alert("Ошибка при загрузке документов");
-      throw error;
-    }
-  };
+  // uploadDocuments удалена - загрузка теперь inline в handleNextStep
 
   const saveAdditionalData = async () => {
     try {
@@ -1202,7 +1126,7 @@ function Step2DocumentsUpload({
   };
 
   return (
-    <div className="space-y-4">
+      <div className="space-y-4">
       <h3 className="text-lg font-semibold mb-4">Документы для вступления</h3>
       
       {/* Индикатор загрузки */}
@@ -1252,11 +1176,11 @@ function Step2DocumentsUpload({
                 {membershipDoc.status === 'GENERATED' ? (
                   <div>
                     <label className="block">
-                      <input
-                        type="file"
+          <input
+            type="file"
                         accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
+            onChange={(e) => {
+              const file = e.target.files?.[0];
                           if (file) handleFileUpload(file, 'membership');
                         }}
                         className="hidden"
@@ -1314,8 +1238,8 @@ function Step2DocumentsUpload({
                       </span>
                     </div>
                   </div>
-                )}
-              </div>
+          )}
+        </div>
             </div>
           )}
 
@@ -1345,11 +1269,11 @@ function Step2DocumentsUpload({
                 {contributionDoc.status === 'GENERATED' ? (
                   <div>
                     <label className="block">
-                      <input
-                        type="file"
+          <input
+            type="file"
                         accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
+            onChange={(e) => {
+              const file = e.target.files?.[0];
                           if (file) handleFileUpload(file, 'contribution');
                         }}
                         className="hidden"
@@ -1407,9 +1331,9 @@ function Step2DocumentsUpload({
                       </span>
                     </div>
                   </div>
-                )}
-              </div>
-            </div>
+          )}
+        </div>
+      </div>
           )}
 
           {/* Документ 3: Устав (только для ознакомления) */}
@@ -1434,8 +1358,8 @@ function Step2DocumentsUpload({
               </a>
               <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
                 📘 Документ для ознакомления. Подписание не требуется.
-              </p>
-            </div>
+        </p>
+      </div>
           </div>
         </>
       )}

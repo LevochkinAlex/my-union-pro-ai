@@ -540,8 +540,8 @@ export default function ProfilePage() {
         return capitalizeName(part);
       }).join(" ");
       
-      setProfileData((prev) => ({
-        ...prev,
+    setProfileData((prev) => ({
+      ...prev,
         [name]: formatted,
       }));
     } else {
@@ -980,19 +980,19 @@ export default function ProfilePage() {
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Образование</label>
               <div className="relative">
-                <select
-                  name="education"
-                  value={profileData.education}
-                  onChange={handleProfileChange}
+              <select
+                name="education"
+                value={profileData.education}
+                onChange={handleProfileChange}
                   className="block w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2.5 pr-12 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                >
-                  <option value="">Выберите уровень образования</option>
-                  {EDUCATION_LEVELS.map((level) => (
-                    <option key={level} value={level}>
-                      {level}
-                    </option>
-                  ))}
-                </select>
+              >
+                <option value="">Выберите уровень образования</option>
+                {EDUCATION_LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {level}
+                  </option>
+                ))}
+              </select>
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 dark:text-gray-400">
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -1048,7 +1048,7 @@ export default function ProfilePage() {
                 <select
                   name="employmentStatus"
                   value={additionalInfo.employmentStatus}
-                  onChange={handleAdditionalInfoChange}
+                onChange={handleAdditionalInfoChange}
                   className="block w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2.5 pr-12 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                 >
                   <option value="">Выберите</option>
@@ -1067,19 +1067,19 @@ export default function ProfilePage() {
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Семейное положение</label>
               <div className="relative">
-                <select
-                  name="maritalStatus"
-                  value={additionalInfo.maritalStatus}
-                  onChange={handleAdditionalInfoChange}
+              <select
+                name="maritalStatus"
+                value={additionalInfo.maritalStatus}
+                onChange={handleAdditionalInfoChange}
                   className="block w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2.5 pr-12 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                >
-                  <option value="">Выберите</option>
-                  <option value="Не женат/Не замужем">Не женат/Не замужем</option>
-                  <option value="Женат/Замужем">Женат/Замужем</option>
-                  <option value="В разводе">В разводе</option>
-                  <option value="Вдовец/Вдова">Вдовец/Вдова</option>
-                  <option value="В гражданском браке">В гражданском браке</option>
-                </select>
+              >
+                <option value="">Выберите</option>
+                <option value="Не женат/Не замужем">Не женат/Не замужем</option>
+                <option value="Женат/Замужем">Женат/Замужем</option>
+                <option value="В разводе">В разводе</option>
+                <option value="Вдовец/Вдова">Вдовец/Вдова</option>
+                <option value="В гражданском браке">В гражданском браке</option>
+              </select>
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 dark:text-gray-400">
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -1121,7 +1121,7 @@ export default function ProfilePage() {
             </div>
 
             {additionalInfo.hasChildren && (
-              <div className="md:col-span-2">
+                <div className="md:col-span-2">
                 <div className="mb-4 flex items-center justify-between">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                     Информация о детях
@@ -1254,11 +1254,11 @@ export default function ProfilePage() {
             )}
 
             {/* Награды */}
-            <div className="md:col-span-2">
+                <div className="md:col-span-2">
               <div className="mb-4 flex items-center justify-between">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                   Награды (ведомственные, государственные, профсоюзные)
-                </label>
+                  </label>
                 <button
                   type="button"
                   onClick={addAward}

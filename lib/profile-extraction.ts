@@ -455,7 +455,7 @@ export async function extractProfileDataFromMessages(
         (botQuestion.includes('укажите') && botQuestion.includes('ребенка'))) {
       // Формат: "Рома 01 07 2000" или "Рома, 01.07.2000" или "Рома 01.07.2000"
       const match = userAnswer.match(/([А-ЯЁ][а-яё]+)\s*,?\s*(\d{1,2})\s*[.\s\/-]?\s*(\d{1,2})\s*[.\s\/-]?\s*(\d{4})/);
-      if (match) {
+    if (match) {
         const name = match[1];
         const day = match[2].padStart(2, '0');
         const month = match[3].padStart(2, '0');
@@ -708,60 +708,60 @@ export async function extractProfileDataFromMessages(
 
   // Extract date of birth - только если не извлечено из структурированных данных
   if (!profileData.dateOfBirth && !hasStructuredData) {
-    let dateOfBirth: Date | null = null;
+  let dateOfBirth: Date | null = null;
 
-    // Сначала пробуем гибкий парсер
+  // Сначала пробуем гибкий парсер
     const dateMatches = userOnlyText.match(
-      /(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4}|\d{1,2}\s+[а-яё]+\s+\d{4})/g
-    );
-    if (dateMatches) {
-      for (const dateStr of dateMatches) {
-        const parsed = parseDateFlexible(dateStr);
-        if (parsed) {
-          dateOfBirth = parsed;
-          break; // Берем первый найденный
-        }
+    /(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4}|\d{1,2}\s+[а-яё]+\s+\d{4})/g
+  );
+  if (dateMatches) {
+    for (const dateStr of dateMatches) {
+      const parsed = parseDateFlexible(dateStr);
+      if (parsed) {
+        dateOfBirth = parsed;
+        break; // Берем первый найденный
       }
     }
+  }
 
-    if (dateOfBirth) {
-      profileData.dateOfBirth = dateOfBirth;
+  if (dateOfBirth) {
+    profileData.dateOfBirth = dateOfBirth;
     }
   }
 
   // Extract phone - только если не извлечено из структурированных данных
   if (!profileData.phone && !hasStructuredData) {
-    const phonePattern =
-      /\+?7[\s-]?\(?(\d{3})\)?[\s-]?(\d{3})[\s-]?(\d{2})[\s-]?(\d{2})/;
+  const phonePattern =
+    /\+?7[\s-]?\(?(\d{3})\)?[\s-]?(\d{3})[\s-]?(\d{2})[\s-]?(\d{2})/;
     const phoneMatch = userOnlyText.match(phonePattern);
-    if (phoneMatch) {
+  if (phoneMatch) {
       profileData.phone = userOnlyText.match(/\+?7[\s\-\(\)0-9]+/)?.[0] || "";
     }
   }
 
   // Extract address - только если не извлечено из структурированных данных
   if (!profileData.address && !hasStructuredData) {
-    let addressCandidate: string | null = null;
-    const addressLabelPattern = /(?:\*\*Адрес\*\*|Адрес)[^:\n]*[:\-–]\s*(.+)/i;
+  let addressCandidate: string | null = null;
+  const addressLabelPattern = /(?:\*\*Адрес\*\*|Адрес)[^:\n]*[:\-–]\s*(.+)/i;
     const addressLabelMatch = userOnlyText.match(addressLabelPattern);
-    if (addressLabelMatch) {
-      addressCandidate = addressLabelMatch[1].split(/\n/)[0].trim();
-    }
+  if (addressLabelMatch) {
+    addressCandidate = addressLabelMatch[1].split(/\n/)[0].trim();
+  }
 
-    if (!addressCandidate) {
-      const addressPattern =
-        /(ул\.|улица|пр\.|проспект|пл\.|площадь|переулок|пер\.|бульвар|бул\.|набережная|наб\.|г\.\s*[А-ЯЁ][а-яё]+|город\s+[А-ЯЁ][а-яё]+)/gi;
+  if (!addressCandidate) {
+    const addressPattern =
+      /(ул\.|улица|пр\.|проспект|пл\.|площадь|переулок|пер\.|бульвар|бул\.|набережная|наб\.|г\.\s*[А-ЯЁ][а-яё]+|город\s+[А-ЯЁ][а-яё]+)/gi;
       const addressMatches = userOnlyText.match(addressPattern);
-      if (addressMatches && addressMatches.length > 0) {
-        addressCandidate = normalizeAddress(addressMatches[0]);
-      }
+    if (addressMatches && addressMatches.length > 0) {
+      addressCandidate = normalizeAddress(addressMatches[0]);
     }
+  }
 
-    if (addressCandidate) {
-      addressCandidate = normalizeAddress(addressCandidate);
+  if (addressCandidate) {
+    addressCandidate = normalizeAddress(addressCandidate);
 
-      try {
-        console.log(`[profile-extraction] Validating address via DaData: ${addressCandidate}`);
+    try {
+      console.log(`[profile-extraction] Validating address via DaData: ${addressCandidate}`);
         const validatedData = await validateAddressWithDaData(addressCandidate);
         if (validatedData) {
           profileData.address = validatedData.address;
@@ -777,13 +777,13 @@ export async function extractProfileDataFromMessages(
             }
           }
           console.log(`[profile-extraction] Address validated: ${validatedData.address}, city: ${validatedData.city}`);
-        } else {
-          profileData.address = addressCandidate;
-          console.log(`[profile-extraction] Address not validated by DaData, using as-is: ${addressCandidate}`);
-        }
-      } catch (error) {
-        console.error("[profile-extraction] Error validating address with DaData:", error);
+      } else {
         profileData.address = addressCandidate;
+        console.log(`[profile-extraction] Address not validated by DaData, using as-is: ${addressCandidate}`);
+      }
+    } catch (error) {
+      console.error("[profile-extraction] Error validating address with DaData:", error);
+      profileData.address = addressCandidate;
       }
     }
   }
@@ -830,27 +830,27 @@ export async function extractProfileDataFromMessages(
   // Extract job title and profession - только если не извлечено из структурированных данных
   if ((!profileData.jobTitle || !profileData.profession) && !hasStructuredData) {
     // Используем userOnlyText чтобы не извлекать из текста бота
-    const jobLabelPattern = /(?:\*\*Должность\*\*|Должность)[^:\n]*[:\-–]\s*(.+)/i;
-    const professionLabelPattern = /(?:\*\*Профессия\*\*|Профессия)[^:\n]*[:\-–]\s*(.+)/i;
+  const jobLabelPattern = /(?:\*\*Должность\*\*|Должность)[^:\n]*[:\-–]\s*(.+)/i;
+  const professionLabelPattern = /(?:\*\*Профессия\*\*|Профессия)[^:\n]*[:\-–]\s*(.+)/i;
 
     const jobLabelMatch = userOnlyText.match(jobLabelPattern);
     if (jobLabelMatch && !profileData.jobTitle) {
-      profileData.jobTitle = jobLabelMatch[1].split(/\n/)[0].trim();
-    }
+    profileData.jobTitle = jobLabelMatch[1].split(/\n/)[0].trim();
+  }
 
     const professionLabelMatch = userOnlyText.match(professionLabelPattern);
     if (professionLabelMatch && !profileData.profession) {
-      profileData.profession = professionLabelMatch[1].split(/\n/)[0].trim();
-    }
+    profileData.profession = professionLabelMatch[1].split(/\n/)[0].trim();
+  }
 
-    if (!profileData.jobTitle || !profileData.profession) {
-      const jobPattern =
+  if (!profileData.jobTitle || !profileData.profession) {
+    const jobPattern =
         /(должност[а-яё]*|специалист[а-яё]*|инженер[а-яё]*|программист[а-яё]*|бухгалтер[а-яё]*|бухгалтер[а-яё]*|юрист[а-яё]*|менеджер[а-яё]*|директор[а-яё]*|учитель|врач|продавец|водитель).+?(?=\.|\n|,|$)/i;
       const jobMatch = userOnlyText.match(jobPattern);
-      if (jobMatch) {
-        const jobValue = jobMatch[0].trim();
-        if (!profileData.jobTitle) profileData.jobTitle = jobValue;
-        if (!profileData.profession) profileData.profession = jobValue;
+    if (jobMatch) {
+      const jobValue = jobMatch[0].trim();
+      if (!profileData.jobTitle) profileData.jobTitle = jobValue;
+      if (!profileData.profession) profileData.profession = jobValue;
       }
     }
   }
@@ -858,19 +858,19 @@ export async function extractProfileDataFromMessages(
   // Extract education - только если не извлечено из структурированных данных
   if (!profileData.education && !hasStructuredData) {
     // Используем userOnlyText чтобы не извлекать из списков вариантов бота
-    const educationLabelPattern = /(?:\*\*Образование\*\*|Образование)[^:\n]*[:\-–]\s*(.+)/i;
+  const educationLabelPattern = /(?:\*\*Образование\*\*|Образование)[^:\n]*[:\-–]\s*(.+)/i;
     const educationLabelMatch = userOnlyText.match(educationLabelPattern);
 
-    if (educationLabelMatch) {
-      profileData.education = educationLabelMatch[1].split(/\n/)[0].trim();
-    }
+  if (educationLabelMatch) {
+    profileData.education = educationLabelMatch[1].split(/\n/)[0].trim();
+  }
 
-    if (!profileData.education) {
-      const educationPattern =
-        /(высшее|среднее|начальное|бакалавриат|магистратура|специалитет|аспирантура|среднее профессиональное|начальное профессиональное).+?(?=\.|\n|$)/i;
+  if (!profileData.education) {
+    const educationPattern =
+      /(высшее|среднее|начальное|бакалавриат|магистратура|специалитет|аспирантура|среднее профессиональное|начальное профессиональное).+?(?=\.|\n|$)/i;
       const educationMatch = userOnlyText.match(educationPattern);
-      if (educationMatch) {
-        profileData.education = educationMatch[0].trim();
+    if (educationMatch) {
+      profileData.education = educationMatch[0].trim();
       }
     }
   }
@@ -909,18 +909,18 @@ export async function extractProfileDataFromMessages(
     
     // Если не нашли в сообщениях бота, ищем в сообщениях пользователя
     if (!profileData.organizationName) {
-      const orgLabelPattern = /(?:\*\*Организация\*\*|Организация|работаю|работает)[^:\n]*[:\-–]\s*(.+)/i;
+  const orgLabelPattern = /(?:\*\*Организация\*\*|Организация|работаю|работает)[^:\n]*[:\-–]\s*(.+)/i;
       const orgLabelMatch = userOnlyText.match(orgLabelPattern);
-      if (orgLabelMatch) {
-        profileData.organizationName = orgLabelMatch[1].split(/\n/)[0].trim();
-      }
+  if (orgLabelMatch) {
+    profileData.organizationName = orgLabelMatch[1].split(/\n/)[0].trim();
+  }
 
-      // Также пытаемся найти название организации в контексте работы
-      if (!profileData.organizationName) {
-        const orgPattern = /(?:работаю|работает|организация|место работы)[\s:]+([А-ЯЁ][А-ЯЁа-яё\s"«»-]+(?:ООО|ЗАО|ОАО|ИП|ГБУЗ|ГБУ|МБУ|МУП|АО|ПАО|НКО|ОО|ППО|профсоюз)?)/i;
+  // Также пытаемся найти название организации в контексте работы
+  if (!profileData.organizationName) {
+    const orgPattern = /(?:работаю|работает|организация|место работы)[\s:]+([А-ЯЁ][А-ЯЁа-яё\s"«»-]+(?:ООО|ЗАО|ОАО|ИП|ГБУЗ|ГБУ|МБУ|МУП|АО|ПАО|НКО|ОО|ППО|профсоюз)?)/i;
         const orgMatch = userOnlyText.match(orgPattern);
-        if (orgMatch) {
-          profileData.organizationName = orgMatch[1].trim();
+    if (orgMatch) {
+      profileData.organizationName = orgMatch[1].trim();
         }
       }
     }

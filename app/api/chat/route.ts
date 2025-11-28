@@ -750,7 +750,7 @@ export async function POST(request: NextRequest) {
       chatSession = await prisma.chatSession.create({
         data: {
           userId: session.user.id,
-            title: "Заявление",
+          title: "Заявление",
           type: "STATEMENT",
         },
       });
@@ -822,8 +822,8 @@ export async function POST(request: NextRequest) {
 
     // Получаем данные пользователя для персонализации (всегда)
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-    });
+        where: { id: session.user.id },
+      });
     
     // Проверяем документы (только для STATEMENT сессий)
     let hasGeneratedDocuments = false;
@@ -1407,8 +1407,8 @@ export async function POST(request: NextRequest) {
             
             // Проверяем существующие документы
             const existingDocs = await prisma.document.findMany({
-              where: {
-                userId: session.user.id,
+          where: { 
+            userId: session.user.id,
                 type: {
                   in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
                 },
@@ -1512,7 +1512,7 @@ export async function POST(request: NextRequest) {
 [SHOW_DOCUMENT_ACTIONS]
 
 После отправки документов на проверку, я расскажу вам о всех возможностях платформы! 😊`;
-          } else {
+                } else {
             console.log("[chat] ⚠️ Self-fill completed but profile incomplete");
             aiResponse = `⚠️ Для генерации заявлений необходимо заполнить все обязательные поля профиля. Пожалуйста, проверьте и дополните данные.`;
           }

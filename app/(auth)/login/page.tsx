@@ -313,7 +313,7 @@ function LoginForm() {
         } else {
           // Перенаправляем на callbackUrl
           router.push(callbackUrl);
-          router.refresh();
+        router.refresh();
         }
       }
     } catch (err) {
