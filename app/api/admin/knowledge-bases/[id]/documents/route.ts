@@ -11,6 +11,7 @@ const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "knowledge");
 // Убеждаемся, что директория существует
 async function ensureUploadDir() {
   try {
+    const { id } = await params;
     await fs.mkdir(UPLOAD_DIR, { recursive: true });
   } catch (error) {
     console.error("[knowledge] Ошибка создания директории:", error);
@@ -23,6 +24,7 @@ export async function POST(
   { params }: { params: { id: string } | Promise<{ id:string }> }
 ) {
   try {
+    const { id } = await params;
     const { session, error } = await ensureSuperAdmin();
     if (error) {
       return error;
@@ -173,6 +175,7 @@ export async function GET(
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { session, error } = await ensureSuperAdmin();
     if (error) {
       return error;

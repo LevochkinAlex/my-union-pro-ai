@@ -22,7 +22,7 @@ interface Poll {
 export default function EditNewsPage() {
   const router = useRouter();
   const params = useParams();
-  const id = params.id as string;
+  const id = id as string;
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");

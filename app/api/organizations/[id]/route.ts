@@ -9,9 +9,10 @@ import { prisma } from "@/lib/prisma";
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
@@ -22,7 +23,7 @@ export async function GET(
     }
 
     const organization = await prisma.organization.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         parent: {
           select: {
@@ -70,9 +71,10 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
@@ -100,7 +102,7 @@ export async function PUT(
 
     // Проверяем существование организации
     const existingOrg = await prisma.organization.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!existingOrg) {
@@ -147,7 +149,7 @@ export async function PUT(
 
     // Обновляем организацию
     const organization = await prisma.organization.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         name: name !== undefined ? name : undefined,
         type: type !== undefined ? type : undefined,
@@ -166,7 +168,7 @@ export async function PUT(
 
     // Если изменился уровень или fullPath, обновляем всех детей рекурсивно
     if (level !== existingOrg.level || fullPath !== existingOrg.fullPath) {
-      await updateChildrenPaths(params.id, level, fullPath);
+      await updateChildrenPaths(id, level, fullPath);
     }
 
     console.log("[organizations/id] Updated:", organization.id, organization.name);
@@ -190,9 +192,10 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
@@ -217,7 +220,7 @@ export async function DELETE(
 
     // Проверяем, есть ли члены в этой организации
     const membersCount = await prisma.user.count({
-      where: { organizationId: params.id },
+      where: { organizationId: id },
     });
 
     if (membersCount > 0) {
@@ -229,7 +232,7 @@ export async function DELETE(
 
     // Мягкое удаление
     const organization = await prisma.organization.update({
-      where: { id: params.id },
+      where: { id },
       data: { isActive: false },
     });
 

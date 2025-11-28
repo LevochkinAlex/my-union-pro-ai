@@ -64,7 +64,7 @@ type KnowledgeBaseWithRelations = KnowledgeBaseData & {
 export default function KnowledgeBaseDetailsPage() {
   const router = useRouter();
   const params = useParams();
-  const id = params.id as string;
+  const id = id as string;
 
   const [kb, setKb] = useState<KnowledgeBaseWithRelations | null>(null);
   const [name, setName] = useState("");
@@ -88,6 +88,7 @@ export default function KnowledgeBaseDetailsPage() {
     if (!id) return;
     setLoading(true);
     try {
+    const { id } = await params;
       const response = await fetch(`/api/admin/knowledge-bases/${id}`);
       if (!response.ok) {
         throw new Error("Не удалось загрузить базу знаний");
@@ -111,6 +112,7 @@ export default function KnowledgeBaseDetailsPage() {
     setError("");
 
     try {
+    const { id } = await params;
       const response = await fetch(`/api/admin/knowledge-bases/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -138,6 +140,7 @@ export default function KnowledgeBaseDetailsPage() {
     setError("");
 
     try {
+    const { id } = await params;
       const formData = new FormData();
       formData.append("file", file);
 
@@ -164,6 +167,7 @@ export default function KnowledgeBaseDetailsPage() {
     setSaving(true);
     setError("");
     try {
+    const { id } = await params;
       const response = await fetch(`/api/admin/knowledge-documents/${documentId}/retry`, {
         method: "POST",
       });
@@ -192,6 +196,7 @@ export default function KnowledgeBaseDetailsPage() {
     setError("");
     
     try {
+    const { id } = await params;
       const response = await fetch(`/api/admin/knowledge-bases/${id}/text`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -225,6 +230,7 @@ export default function KnowledgeBaseDetailsPage() {
     setError("");
     
     try {
+    const { id } = await params;
       const response = await fetch(`/api/admin/knowledge-bases/${id}/url`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -274,6 +280,7 @@ export default function KnowledgeBaseDetailsPage() {
     if (!confirm("Вы уверены, что хотите удалить эту базу знаний?")) return;
 
     try {
+    const { id } = await params;
       const response = await fetch(`/api/admin/knowledge-bases/${id}`, {
         method: "DELETE",
       });

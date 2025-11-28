@@ -9,6 +9,7 @@ export async function POST(
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { session, error } = await ensureSuperAdmin();
     if (error) {
       return error;
@@ -47,6 +48,7 @@ export async function POST(
 
     // Валидация URL
     try {
+    const { id } = await params;
       new URL(url);
     } catch {
       return NextResponse.json(

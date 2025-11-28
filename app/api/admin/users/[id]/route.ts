@@ -32,6 +32,7 @@ export async function GET(
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { error } = await ensureSuperAdmin();
     if (error) return error;
     
@@ -89,6 +90,7 @@ export async function PUT(
 
   let payload: UpdatePayload;
   try {
+    const { id } = await params;
     payload = (await request.json()) as UpdatePayload;
   } catch (error) {
     console.error("[admin/users] Неверный JSON", error);
@@ -142,6 +144,7 @@ export async function PUT(
   }
 
   try {
+    const { id } = await params;
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: updateData,
@@ -221,6 +224,7 @@ export async function DELETE(
   }
 
   try {
+    const { id } = await params;
     await prisma.user.delete({
       where: { id: userId },
     });
