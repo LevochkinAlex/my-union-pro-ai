@@ -5,7 +5,7 @@ import PhoneInput from "@/components/form/PhoneInput";
 import AddressInput from "@/components/form/AddressInput";
 import Autocomplete from "@/components/form/Autocomplete";
 import EmailValidationField from "@/components/form/EmailValidationField";
-import Step4Confirmation from "@/components/chat/Step4Confirmation";
+import Step2ConfirmBasicData from "@/components/chat/Step2ConfirmBasicData";
 
 interface ProfileSelfFillModalProps {
   isOpen: boolean;
@@ -269,34 +269,45 @@ export function ProfileSelfFillModal({
 
   const handleNextStep = async () => {
     if (currentStep === 1) {
-      // Валидация и сохранение основных данных
+      // Шаг 1: Валидация и сохранение основных данных
       const isValid = validateStep1();
       if (!isValid) return;
       
       await saveProfileData();
-      setCurrentStep(2);
+      setCurrentStep(2); // → К подтверждению данных
     } else if (currentStep === 2) {
-      // Проверка загрузки документов
+      // Шаг 2: Подтверждение данных и генерация PDF документов
+      setSaving(true);
+      try {
+        // Отправляем команду на генерацию документов
+        await sendCompletionMessage();
+        alert("✅ Документы успешно сгенерированы! Скачайте их в разделе 'Документы', распечатайте, подпишите и загрузите на следующем шаге.");
+        setCurrentStep(3); // → К загрузке документов
+      } catch (error) {
+        console.error("Error generating documents:", error);
+        alert("Ошибка при генерации документов. Попробуйте еще раз.");
+      } finally {
+        setSaving(false);
+      }
+    } else if (currentStep === 3) {
+      // Шаг 3: Проверка загрузки подписанных документов
       const isValid = validateStep2();
       if (!isValid) return;
       
       await uploadDocuments();
-      setCurrentStep(3);
-    } else if (currentStep === 3) {
-      // Сохранение дополнительной информации (опциональный шаг)
-      await saveAdditionalData();
-      setCurrentStep(4); // Переходим к итоговой странице
+      setCurrentStep(4); // → К дополнительной информации
     } else if (currentStep === 4) {
-      // Подтверждение данных и генерация документов
+      // Шаг 4: Сохранение дополнительной информации и завершение
+      await saveAdditionalData();
       setHasUnsavedChanges(false);
-      await sendCompletionMessage();
       onClose();
     }
   };
 
   const handleSkipAdditionalInfo = async () => {
-    // Пропускаем заполнение дополнительной информации, но переходим к подтверждению
-    setCurrentStep(4);
+    // Пропускаем заполнение дополнительной информации и завершаем
+    setHasUnsavedChanges(false);
+    onClose();
   };
 
   const handleBackToEdit = () => {
@@ -537,9 +548,9 @@ export function ProfileSelfFillModal({
                 <div className="ml-2 flex-1">
                   <p className="text-xs font-medium text-gray-900 dark:text-white">
                     {step === 1 && "Основные"}
-                    {step === 2 && "Документы"}
-                    {step === 3 && "Доп. инфо"}
-                    {step === 4 && "Проверка"}
+                    {step === 2 && "Проверка"}
+                    {step === 3 && "Документы"}
+                    {step === 4 && "Доп. инфо"}
                   </p>
                 </div>
                 {step < 4 && (
@@ -577,6 +588,18 @@ export function ProfileSelfFillModal({
           )}
 
           {currentStep === 2 && (
+            <Step2ConfirmBasicData
+              profileData={profileData}
+              organizations={organizations.map((org) => ({
+                id: org.id,
+                name: org.name,
+                fullPath: org.fullPath,
+              }))}
+              onBackToEdit={handleBackToEdit}
+            />
+          )}
+
+          {currentStep === 3 && (
             <Step2DocumentsUpload
               docs={uploadedDocs}
               onChange={(docs) => {
@@ -586,7 +609,7 @@ export function ProfileSelfFillModal({
             />
           )}
 
-          {currentStep === 3 && (
+          {currentStep === 4 && (
             <Step3AdditionalInfo
               data={additionalData}
               onChange={(data) => {
@@ -595,25 +618,29 @@ export function ProfileSelfFillModal({
               }}
             />
           )}
-
-          {currentStep === 4 && (
-            <Step4Confirmation
-              profileData={profileData}
-              uploadedDocs={uploadedDocs}
-              additionalData={additionalData}
-              organizations={organizations.map((org) => ({
-                id: org.id,
-                name: org.name,
-                fullPath: org.fullPath,
-              }))}
-              onBackToEdit={handleBackToEdit}
-            />
-          )}
         </div>
 
         {/* Footer */}
         <div className="sticky bottom-0 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
-          {currentStep === 3 ? (
+          {currentStep === 2 ? (
+            // Шаг 2: Подтверждение данных перед генерацией
+            <>
+              <button
+                onClick={handleBackToEdit}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+              >
+                ← Исправить
+              </button>
+              <button
+                onClick={handleNextStep}
+                disabled={saving}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center gap-2 disabled:bg-gray-400"
+              >
+                {saving ? "Генерация..." : "✓ Подтвердить и сгенерировать документы"}
+              </button>
+            </>
+          ) : currentStep === 4 ? (
+            // Шаг 4: Дополнительная информация (опционально)
             <>
               <button
                 onClick={handleSkipAdditionalInfo}
@@ -625,25 +652,11 @@ export function ProfileSelfFillModal({
                 onClick={handleNextStep}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
               >
-                Далее
-              </button>
-            </>
-          ) : currentStep === 4 ? (
-            <>
-              <button
-                onClick={handleBackToEdit}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-              >
-                ← Исправить
-              </button>
-              <button
-                onClick={handleNextStep}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center gap-2"
-              >
-                ✓ Подтвердить и сгенерировать документы
+                Завершить
               </button>
             </>
           ) : (
+            // Шаги 1 и 3: Обычная навигация
             <>
               <button
                 onClick={() => currentStep > 1 && setCurrentStep((s) => (s - 1) as Step)}

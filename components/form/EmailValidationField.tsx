@@ -129,35 +129,33 @@ export default function EmailValidationField({
 
       {mode === "initial" || mode === "verified" ? (
         // Режим ввода email
-        <div className="flex gap-2">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => onEmailChange(e.target.value)}
-            placeholder="example@mail.com"
-            disabled={mode === "verified"}
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          />
-          {mode === "initial" && email && (
-            <button
-              type="button"
-              onClick={handleSendPin}
-              disabled={loading}
-              className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors whitespace-nowrap"
-            >
-              {loading ? "Отправка..." : "Валидировать"}
-            </button>
-          )}
+        <>
+          <div className="flex gap-2">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => onEmailChange(e.target.value)}
+              placeholder="example@mail.com"
+              disabled={mode === "verified"}
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+            {mode === "initial" && email && (
+              <button
+                type="button"
+                onClick={handleSendPin}
+                disabled={loading}
+                className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors whitespace-nowrap"
+              >
+                {loading ? "Отправка..." : "Валидировать"}
+              </button>
+            )}
+          </div>
           {mode === "verified" && (
-            <button
-              type="button"
-              onClick={handleChangeEmail}
-              className="px-4 py-2 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors whitespace-nowrap"
-            >
-              Изменить
-            </button>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              💡 Email подтвержден и используется для доступа к скидкам BestBenefits. Изменение невозможно.
+            </p>
           )}
-        </div>
+        </>
       ) : (
         // Режим ввода PIN
         <div className="space-y-2">
