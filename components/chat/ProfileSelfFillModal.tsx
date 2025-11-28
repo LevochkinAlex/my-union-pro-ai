@@ -356,17 +356,35 @@ export function ProfileSelfFillModal({
         console.error("[ProfileModal] Failed to reload documents:", error);
       }
       
-      // Валидация с учетом загруженных документов
+      // Валидация: проверяем только документы, которых нет в базе
       const needsMembership = !membershipAlreadyUploaded;
       const needsContribution = !contributionAlreadyUploaded;
       
+      console.log("[ProfileModal] Validation check:", {
+        needsMembership,
+        needsContribution,
+        hasMembershipFile: !!uploadedDocs.membership,
+        hasContributionFile: !!uploadedDocs.contribution,
+      });
+      
+      // ТОЛЬКО если документа нет в базе И не загружен сейчас - показываем ошибку
       if (needsMembership && !uploadedDocs.membership) {
+        console.error("[ProfileModal] Missing membership document");
         alert("Загрузите заявление о вступлении в профсоюз");
         return;
       }
       
       if (needsContribution && !uploadedDocs.contribution) {
+        console.error("[ProfileModal] Missing contribution document");
         alert("Загрузите заявление о перечислении членских взносов");
+        return;
+      }
+      
+      // Если оба документа уже в базе - просто пропускаем загрузку
+      if (!needsMembership && !needsContribution) {
+        console.log("[ProfileModal] ✅ Both documents already in database, skipping upload entirely");
+        await sendDocumentsUploadedMessage();
+        setCurrentStep(4);
         return;
       }
       
