@@ -2,8 +2,10 @@
 
 import { signIn } from "next-auth/react";
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useEffect, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Script from "next/script";
 
 /**
  * Нормализация номера телефона к формату +7XXXXXXXXXX
@@ -33,9 +35,10 @@ function formatPhoneForDisplay(phone: string): string {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [phone, setPhone] = useState("");
+  const [input, setInput] = useState(""); // Универсальное поле: телефон или email
+  const [inputType, setInputType] = useState<"phone" | "email" | null>(null);
   const [pinCode, setPinCode] = useState("");
-  const [step, setStep] = useState<"phone" | "pin">("phone");
+  const [step, setStep] = useState<"input" | "pin" | "email-sent">("input");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
@@ -59,6 +62,24 @@ function LoginForm() {
       return () => clearTimeout(timer);
     }
   }, [countdown]);
+
+  // Определяем тип ввода: телефон или email
+  const detectInputType = useCallback((value: string): "phone" | "email" | null => {
+    if (!value) return null;
+    
+    // Если есть @, значит email
+    if (value.includes("@")) {
+      return "email";
+    }
+    
+    // Если есть цифры или +, значит телефон
+    if (/[\d+]/.test(value)) {
+      return "phone";
+    }
+    
+    // По умолчанию null (ждём больше символов)
+    return null;
+  }, []);
 
   // Функция для форматирования номера телефона с маской
   const formatPhoneInput = useCallback((value: string): string => {
@@ -87,26 +108,79 @@ function LoginForm() {
     }
   }, []);
 
-  // Обработчик изменения номера телефона
-  const handlePhoneChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhoneInput(e.target.value);
-    setPhone(formatted);
-  }, [formatPhoneInput]);
+  // Обработчик изменения универсального поля
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const type = detectInputType(value);
+    
+    setInputType(type);
+    
+    // Если это телефон, форматируем
+    if (type === "phone") {
+      const formatted = formatPhoneInput(value);
+      setInput(formatted);
+    } else {
+      // Для email просто сохраняем как есть
+      setInput(value);
+    }
+  }, [detectInputType, formatPhoneInput]);
 
-  const handlePhoneSubmit = async (e: React.FormEvent) => {
+  const handleInputSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     try {
-      // Проверяем, что номер заполнен
-      if (!phone || phone.replace(/\D/g, "").length < 10) {
+      // Определяем тип ввода
+      const type = inputType || detectInputType(input);
+      
+      if (!type) {
+        setError("Введите номер телефона или email");
+        setLoading(false);
+        return;
+      }
+
+      // Если это EMAIL
+      if (type === "email") {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(input)) {
+          setError("Неверный формат email");
+          setLoading(false);
+          return;
+        }
+
+        console.log("[Login] Отправка magic link на email:", input);
+        
+        const response = await fetch("/api/auth/email/send-magic-link", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email: input }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          setError(data.error || "Ошибка при отправке письма");
+          setLoading(false);
+          return;
+        }
+
+        // Показываем экран "Проверьте email"
+        setStep("email-sent");
+        setLoading(false);
+        return;
+      }
+
+      // Если это ТЕЛЕФОН
+      if (!input || input.replace(/\D/g, "").length < 10) {
         setError("Введите полный номер телефона");
         setLoading(false);
         return;
       }
 
-      const normalizedPhone = normalizePhone(phone);
+      const normalizedPhone = normalizePhone(input);
       console.log("[Login] Отправка запроса на отправку PIN-кода. Номер:", normalizedPhone);
       
       const response = await fetch("/api/auth/sms/send-pin", {
@@ -204,7 +278,7 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const normalizedPhone = normalizePhone(phone);
+      const normalizedPhone = normalizePhone(input);
 
       const result = await signIn("sms", {
         phone: normalizedPhone,
@@ -233,7 +307,7 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const normalizedPhone = normalizePhone(phone);
+      const normalizedPhone = normalizePhone(input);
       
       const response = await fetch("/api/auth/sms/send-pin", {
         method: "POST",
@@ -272,14 +346,12 @@ function LoginForm() {
               Вход в систему
             </h1>
             <p className="text-base text-gray-600 dark:text-gray-400">
-              {step === "phone"
-                ? "Введите номер телефона для получения кода"
-                : deliveryMethod === "telegram"
-                ? "Введите код из Telegram"
-                : deliveryMethod === "max"
-                ? "Введите код из MAX"
-                : deliveryMethod === "whatsapp"
-                ? "Введите код из WhatsApp"
+              {step === "input"
+                ? "Введите номер телефона или email"
+                : step === "email-sent"
+                ? "Проверьте вашу почту"
+                : deliveryMethod === "sms"
+                ? "Введите код из SMS"
                 : "Введите код подтверждения"}
             </p>
           </div>
@@ -290,91 +362,56 @@ function LoginForm() {
               </div>
             )}
 
-            {step === "phone" ? (
-              <form onSubmit={handlePhoneSubmit} className="space-y-5">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Номер телефона
-                  </label>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={handlePhoneChange}
-                    onKeyDown={(e) => {
-                      // Разрешаем удаление, навигацию и специальные клавиши
-                      if (
-                        e.key === "Backspace" ||
-                        e.key === "Delete" ||
-                        e.key === "ArrowLeft" ||
-                        e.key === "ArrowRight" ||
-                        e.key === "Tab" ||
-                        e.key === "Home" ||
-                        e.key === "End" ||
-                        (e.ctrlKey && (e.key === "a" || e.key === "c" || e.key === "v" || e.key === "x"))
-                      ) {
-                        return;
-                      }
-                      // Разрешаем только цифры
-                      if (!/^\d$/.test(e.key)) {
-                        e.preventDefault();
-                      }
-                    }}
-                    placeholder="+7 (999) 123-45-67"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                    Код будет отправлен в Telegram, MAX или WhatsApp
+            {step === "email-sent" && (
+              <div className="text-center py-8">
+                <div className="mb-6">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 mb-4">
+                    <svg className="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                    Проверьте вашу почту ✉️
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
+                    Мы отправили ссылку для входа на<br/>
+                    <strong>{input}</strong>
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-500">
+                    Ссылка действительна 15 минут
                   </p>
                 </div>
-
-                {requiresTelegram && telegramLink && (
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-900/20 dark:border-blue-800">
-                    <p className="text-sm text-blue-700 dark:text-blue-400 mb-3">
-                      📱 Необходимо привязать Telegram для получения кодов
-                    </p>
-                    <a
-                      href={telegramLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block w-full px-4 py-2 bg-blue-600 text-white text-center font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      Открыть Telegram
-                    </a>
-                    <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 text-center">
-                      После привязки вернитесь сюда и повторите попытку
-                    </p>
-                  </div>
-                )}
-
                 <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  type="button"
+                  onClick={() => {
+                    setStep("input");
+                    setInput("");
+                    setError("");
+                  }}
+                  className="text-sm text-gray-600 hover:text-gray-700 dark:text-gray-400"
                 >
-                  {loading ? "Отправка..." : "Получить код"}
+                  Изменить email
                 </button>
-              </form>
-            ) : (
+              </div>
+            )}
+
+            {step === "pin" && (
               <form onSubmit={handlePinSubmit} className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Код подтверждения
-                  </label>
+                </label>
                   <input
                     type="text"
                     value={pinCode}
                     onChange={(e) => setPinCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
                     placeholder="0000"
-                    required
+                      required
                     maxLength={4}
                     className="w-full px-4 py-3 text-center text-2xl tracking-widest border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                    {deliveryMethod === "telegram" && "Код отправлен в Telegram 📱"}
-                    {deliveryMethod === "max" && "Код отправлен в MAX 💬"}
-                    {deliveryMethod === "whatsapp" && "Код отправлен в WhatsApp 📲"}
-                    {!deliveryMethod && `Код отправлен на ${formatPhoneForDisplay(phone) || "+7 (___) ___-__-__"}`}
+                    {deliveryMethod === "sms" ? "Код отправлен в SMS 📱" : `Код отправлен на ${formatPhoneForDisplay(input) || "+7 (___) ___-__-__"}`}
                   </p>
                   
                 </div>
@@ -404,16 +441,141 @@ function LoginForm() {
                   <button
                     type="button"
                     onClick={() => {
-                      setStep("phone");
+                      setStep("input");
                       setPinCode("");
                       setError("");
                     }}
                     className="text-sm text-gray-600 hover:text-gray-700 dark:text-gray-400"
                   >
-                    Изменить номер телефона
+                    Изменить {inputType === "email" ? "email" : "номер телефона"}
                   </button>
                 </div>
               </form>
+            )}
+
+            {step === "input" && (
+              <>
+                <form onSubmit={handleInputSubmit} className="space-y-5">
+                  <div>
+                    <label
+                      htmlFor="input"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                    >
+                      Телефон или Email
+                    </label>
+                    <input
+                      id="input"
+                      type="text"
+                      value={input}
+                      onChange={handleInputChange}
+                      placeholder="+7 (999) 123-45-67 или email@example.com"
+                      required
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                      {inputType === "email" ? "Отправим ссылку для входа на email ✉️" : inputType === "phone" ? "Отправим код в SMS 📱" : "Введите номер телефона или email"}
+                    </p>
+                </div>
+
+              <button
+                    type="submit"
+                    disabled={loading}
+                className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {loading ? "Отправка..." : "Продолжить"}
+              </button>
+            </form>
+
+                <div className="mt-8">
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="px-4 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-medium">
+                        или войти через
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Социальные сети */}
+                  <div className="mt-6 grid grid-cols-2 gap-3">
+                    {/* Telegram */}
+                    <div 
+                      id="telegram-login-container" 
+                      className="relative flex items-center justify-center min-h-[48px] rounded-lg border border-gray-300 dark:border-gray-700 overflow-hidden"
+                    >
+                      {/* Fallback кнопка - показывается если виджет не загрузился */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Пытаемся кликнуть на виджет, если он загрузился
+                          const iframe = document.querySelector('#telegram-login-container iframe');
+                          if (iframe) {
+                            (iframe as HTMLIFrameElement).click();
+                          } else {
+                            // Если виджет не загрузился, открываем бота напрямую
+                            window.open('https://t.me/myunionpro_bot?start=login', '_blank');
+                          }
+                        }}
+                        className="absolute inset-0 flex items-center justify-center gap-3 px-4 py-3 bg-[#0088cc] hover:bg-[#0077b3] text-white font-medium rounded-lg transition-colors z-10"
+                        style={{ display: 'none' }} // Скрываем по умолчанию, показываем только если виджет не загрузился
+                        id="telegram-fallback-button"
+                      >
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161l-1.702 8.008c-.128.568-.473.706-.957.44l-2.644-1.947-1.275 1.227c-.141.141-.259.259-.533.259l.19-2.706 4.906-4.432c.213-.19-.046-.295-.33-.105l-6.062 3.817-2.612-.816c-.568-.178-.58-.568.119-.841l10.213-3.937c.473-.178.887.105.733.841z"/>
+                        </svg>
+                        <span>Telegram</span>
+                      </button>
+                      {/* Виджет Telegram Login будет вставлен сюда */}
+                    </div>
+
+                    {/* MAX */}
+                    <button
+                      type="button"
+                      disabled
+                      className="flex items-center justify-center gap-3 px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 font-medium rounded-lg cursor-not-allowed border border-gray-300 dark:border-gray-700"
+                    >
+                      <Image
+                        src="/max-messenger-sign-logo.svg"
+                        alt="MAX"
+                        width={24}
+                        height={24}
+                        className="w-6 h-6"
+                      />
+                      <span>MAX</span>
+                    </button>
+
+                    {/* VK */}
+                    <button
+                      type="button"
+                      disabled
+                      className="flex items-center justify-center gap-3 px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 font-medium rounded-lg cursor-not-allowed border border-gray-300 dark:border-gray-700"
+                    >
+                      <svg className="w-6 h-6" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M0 23.04C0 12.1788 0 6.74826 3.37413 3.37413C6.74826 0 12.1788 0 23.04 0H24.96C35.8212 0 41.2517 0 44.6259 3.37413C48 6.74826 48 12.1788 48 23.04V24.96C48 35.8212 48 41.2517 44.6259 44.6259C41.2517 48 35.8212 48 24.96 48H23.04C12.1788 48 6.74826 48 3.37413 44.6259C0 41.2517 0 35.8212 0 24.96V23.04Z" fill="#0077FF"/>
+                        <path d="M25.54 34.5801C14.6 34.5801 8.3601 27.0801 8.1001 14.6001H13.5801C13.7601 23.7601 17.8 27.6401 21 28.4401V14.6001H26.1602V22.5001C29.3202 22.1601 32.6398 18.5601 33.7598 14.6001H38.9199C38.0599 19.4801 34.4599 23.0801 31.8999 24.5601C34.4599 25.7601 38.5601 28.9001 40.1201 34.5801H34.4399C33.2199 30.7801 30.1802 27.8401 26.1602 27.4401V34.5801H25.54Z" fill="white"/>
+                      </svg>
+                      <span>VK</span>
+                    </button>
+
+                    {/* Google */}
+                    <button
+                      type="button"
+                      disabled
+                      className="flex items-center justify-center gap-3 px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 font-medium rounded-lg cursor-not-allowed border border-gray-300 dark:border-gray-700"
+                    >
+                      <svg className="w-5 h-5" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                      </svg>
+                      <span>Google</span>
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
 
             <div className="mt-5 text-center space-y-2">
@@ -441,17 +603,119 @@ function LoginForm() {
   );
 }
 
+function TelegramLoginWrapper() {
+  useEffect(() => {
+    // Инициализация Telegram Login Widget
+    const initTelegramWidget = () => {
+      const container = document.getElementById("telegram-login-container");
+      const fallbackButton = document.getElementById("telegram-fallback-button");
+      if (!container) return;
+      
+      // Проверяем, что домен настроен (иначе виджет покажет ошибку)
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+      const isProduction = baseUrl.includes("myunion.pro");
+      
+      if (!isProduction) {
+        // В разработке показываем fallback кнопку сразу
+        if (fallbackButton) {
+          (fallbackButton as HTMLButtonElement).style.display = "flex";
+        }
+        // В разработке не загружаем виджет
+        return;
+      }
+      
+      // В продакшене сначала показываем fallback, потом скроем если виджет загрузится
+      if (fallbackButton) {
+        (fallbackButton as HTMLButtonElement).style.display = "flex";
+      }
+      
+      // Очищаем предыдущий виджет (но оставляем fallback кнопку)
+      const existingScript = container.querySelector('script[data-telegram-login]');
+      if (existingScript) {
+        existingScript.remove();
+      }
+      
+      // Создаем script элемент для виджета
+      const script = document.createElement("script");
+      script.src = "https://telegram.org/js/telegram-widget.js?22";
+      script.async = true;
+      script.setAttribute("data-telegram-login", "myunionpro_bot");
+      script.setAttribute("data-size", "large");
+      script.setAttribute("data-radius", "8");
+      script.setAttribute("data-auth-url", `${baseUrl}/api/auth/telegram/callback`);
+      script.setAttribute("data-request-access", "write");
+      
+      // Обработка ошибок виджета
+      script.onerror = () => {
+        console.warn("[Telegram Login] Виджет не загрузился, показываем fallback кнопку");
+        if (fallbackButton) {
+          (fallbackButton as HTMLButtonElement).style.display = "flex";
+        }
+      };
+      
+      // Проверяем, загрузился ли виджет через 2 секунды
+      setTimeout(() => {
+        const iframe = container.querySelector('iframe');
+        if (!iframe && fallbackButton) {
+          // Виджет не загрузился, показываем fallback
+          (fallbackButton as HTMLButtonElement).style.display = "flex";
+        } else if (iframe && fallbackButton) {
+          // Виджет загрузился, скрываем fallback
+          (fallbackButton as HTMLButtonElement).style.display = "none";
+        }
+      }, 2000);
+      
+      container.appendChild(script);
+      
+      console.log("[Telegram Login] Виджет инициализирован");
+    };
+
+    // Даём время для загрузки DOM
+    const timer = setTimeout(initTelegramWidget, 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return null;
+}
+
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="flex flex-col flex-1 w-full items-center justify-center">
-        <div className="text-center">
-          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
-          <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
+    <>
+      <style jsx global>{`
+        /* Стили для Telegram Login Widget */
+        #telegram-login-container iframe {
+          width: 100% !important;
+          max-width: 100% !important;
+          height: 48px !important;
+          border-radius: 8px !important;
+        }
+        
+        #telegram-login-container {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+        
+        /* Скрываем стандартные отступы виджета */
+        #telegram-login-container > * {
+          margin: 0 !important;
+        }
+      `}</style>
+      <Script
+        src="https://telegram.org/js/telegram-widget.js?22"
+        strategy="lazyOnload"
+      />
+      <Suspense fallback={
+        <div className="flex flex-col flex-1 w-full items-center justify-center">
+          <div className="text-center">
+            <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+            <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
+          </div>
         </div>
-      </div>
-    }>
-      <LoginForm />
-    </Suspense>
+      }>
+        <TelegramLoginWrapper />
+        <LoginForm />
+      </Suspense>
+    </>
   );
 }

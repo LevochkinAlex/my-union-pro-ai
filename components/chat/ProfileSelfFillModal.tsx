@@ -114,6 +114,13 @@ export function ProfileSelfFillModal({
     }
   };
 
+  const handleSkipAdditionalInfo = async () => {
+    // Пропускаем заполнение дополнительной информации
+    setHasUnsavedChanges(false);
+    await sendCompletionMessage();
+    onClose();
+  };
+
   const validateStep1 = (): boolean => {
     // Проверка обязательных полей шага 1
     if (
@@ -129,6 +136,19 @@ export function ProfileSelfFillModal({
       alert("Заполните все обязательные поля");
       return false;
     }
+    
+    // Проверяем, что должность есть в справочнике
+    if (!jobTitles.includes(profileData.jobTitle)) {
+      alert(`Должность "${profileData.jobTitle}" не найдена в справочнике. Выберите должность из списка.`);
+      return false;
+    }
+    
+    // Проверяем, что профессия есть в справочнике
+    if (!professions.includes(profileData.profession)) {
+      alert(`Профессия "${profileData.profession}" не найдена в справочнике медицинских профессий. Выберите профессию из списка.`);
+      return false;
+    }
+    
     return true;
   };
 
@@ -221,17 +241,31 @@ export function ProfileSelfFillModal({
       <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-4xl max-h-[90vh] overflow-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl">
         {/* Header */}
         <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Самостоятельное заполнение профиля
-            </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Самостоятельное заполнение профиля
+              </h2>
+              <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                {Math.round(((currentStep - 1) / 3) * 100 + 33)}% заполнено
+              </span>
+            </div>
+            
+            {/* Progress bar */}
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${Math.round(((currentStep - 1) / 3) * 100 + 33)}%` }}
+              />
+            </div>
+            
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               Шаг {currentStep} из 3
             </p>
           </div>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="ml-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
           >
             <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -314,20 +348,38 @@ export function ProfileSelfFillModal({
 
         {/* Footer */}
         <div className="sticky bottom-0 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
-          <button
-            onClick={() => currentStep > 1 && setCurrentStep((s) => (s - 1) as Step)}
-            disabled={currentStep === 1}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Назад
-          </button>
-
-          <button
-            onClick={handleNextStep}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-          >
-            {currentStep === 3 ? "Завершить" : "Далее"}
-          </button>
+          {currentStep === 3 ? (
+            <>
+              <button
+                onClick={handleSkipAdditionalInfo}
+                className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+              >
+                Заполнить позже
+              </button>
+              <button
+                onClick={handleNextStep}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              >
+                Завершить
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => currentStep > 1 && setCurrentStep((s) => (s - 1) as Step)}
+                disabled={currentStep === 1}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Назад
+              </button>
+              <button
+                onClick={handleNextStep}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              >
+                Далее
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -578,7 +630,13 @@ function Step3AdditionalInfo({
 }) {
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold mb-4">Дополнительная информация</h3>
+      <h3 className="text-lg font-semibold mb-2">Дополнительная информация</h3>
+      
+      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
+        <p className="text-sm text-green-800 dark:text-green-200">
+          ✅ Документы успешно загружены! Теперь вы можете заполнить дополнительную информацию о себе, чтобы AI-бот мог лучше вас консультировать и давать персонализированные рекомендации. Эта информация необязательна и может быть заполнена позже.
+        </p>
+      </div>
       
       <div className="grid grid-cols-2 gap-4">
         <div>

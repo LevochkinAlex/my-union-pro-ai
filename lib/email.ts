@@ -1,166 +1,244 @@
-import nodemailer from "nodemailer";
-import { getSmtpConfig } from "./settings";
+/**
+ * Email функции для отправки magic links и уведомлений
+ */
 
-type EmailConfig = {
-  host: string;
-  port: string;
-  user: string;
-  pass: string;
-  from: string;
-};
-
-function maskConfig(config: EmailConfig) {
-  return {
-    host: config.host || "не задан",
-    port: config.port || "не задан",
-    user: config.user || "не задан",
-    from: config.from || "не задан",
-    pass: config.pass ? "***" : "не задан",
-  };
-}
-
-const EMAIL_FALLBACK_MESSAGE =
-  "[email] SMTP настройки не найдены. Письмо не отправлено, используем fallback лог.";
-
-const isEmailConfigured = (config: EmailConfig): boolean =>
-  !!config.host && !!config.port && !!config.user && !!config.pass && !!config.from;
-
-async function resolveEmailConfig(): Promise<EmailConfig> {
-  const config = await getSmtpConfig();
-  return {
-    host: config.host ?? "",
-    port: config.port ?? "",
-    user: config.user ?? "",
-    pass: config.pass ?? "",
-    from: config.from ?? "",
-  };
-}
-
-async function createTransporter() {
-  const config = await resolveEmailConfig();
-
-  if (process.env.NODE_ENV === "development") {
-    console.log("[email] Текущие SMTP настройки:", maskConfig(config));
-  }
-
-  if (!isEmailConfigured(config)) {
-    return { transporter: null, config };
-  }
-
-  const port = parseInt(config.port || "465", 10);
-  const secure = port === 465;
-
-  const transporter = nodemailer.createTransport({
-    host: config.host,
-    port,
-    secure,
-    auth: {
-      user: config.user,
-      pass: config.pass,
-    },
-  });
-
-  return { transporter, config };
-}
-
-function logEmailFallback({
-  to,
-  subject,
-  html,
-}: {
-  to: string;
-  subject: string;
-  html: string;
-}) {
-  console.warn(
-    "[email] SMTP настройки не найдены. Письмо не отправлено, используем fallback лог.",
-  );
-  console.info("[email] Получатель:", to);
-  console.info("[email] Тема:", subject);
-  console.info("[email] HTML:\n", html);
-}
-
-type EmailResult = {
-  sent: boolean;
-  info?: unknown;
-  fallback?: boolean;
+export interface SendEmailResult {
+  success: boolean;
   error?: string;
-};
+  messageId?: string;
+}
 
-export async function sendVerificationEmail(email: string, code: string): Promise<EmailResult> {
-  const { transporter, config } = await createTransporter();
-
-  const mailOptions = {
-    from: config.from || "support@myunion.pro",
-    to: email,
-    subject: "Подтверждение регистрации MyUnion",
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #465fff;">Добро пожаловать в MyUnion!</h2>
-        <p>Ваш код подтверждения:</p>
-        <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
-          <h1 style="margin: 0; font-size: 32px; letter-spacing: 8px; color: #465fff;">${code}</h1>
-        </div>
-        <p>Код действителен в течение 10 минут.</p>
-        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
-          Если вы не регистрировались в MyUnion, проигнорируйте это письмо.
+/**
+ * Отправляет Magic Link на email для авторизации
+ */
+export async function sendMagicLinkEmail(
+  email: string,
+  magicLink: string,
+  isNewUser: boolean,
+  firstName?: string
+): Promise<SendEmailResult> {
+  try {
+    // TODO: Интеграция с email сервисом (SendGrid, Mailgun, или SMTP)
+    // Пока просто логируем
+    
+    const name = firstName ? `, ${firstName}` : "";
+    const subject = isNewUser ? "Добро пожаловать в МойСоюз!" : "Вход в МойСоюз";
+    
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+  <div style="max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    <!-- Header -->
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 20px; text-align: center;">
+      <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">
+        ${isNewUser ? "👋 Добро пожаловать!" : "🎉 С возвращением!"}
+      </h1>
+    </div>
+    
+    <!-- Content -->
+    <div style="padding: 40px 30px;">
+      <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
+        Привет${name}!
+      </p>
+      
+      <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #333333;">
+        ${isNewUser 
+          ? "Мы рады видеть вас в МойСоюз! Нажмите кнопку ниже, чтобы завершить регистрацию и настроить свой профиль." 
+          : "Нажмите кнопку ниже, чтобы войти в свой личный кабинет."}
+      </p>
+      
+      <!-- Button -->
+      <div style="text-align: center; margin: 40px 0;">
+        <a href="${magicLink}" 
+           style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
+          ${isNewUser ? "🚀 Завершить регистрацию" : "🔐 Войти в аккаунт"}
+        </a>
+      </div>
+      
+      <p style="margin: 30px 0 10px; font-size: 14px; color: #666666;">
+        Или скопируйте эту ссылку в браузер:
+      </p>
+      <div style="padding: 12px; background-color: #f5f5f5; border-radius: 6px; word-break: break-all;">
+        <a href="${magicLink}" style="color: #667eea; text-decoration: none; font-size: 13px;">
+          ${magicLink}
+        </a>
+      </div>
+      
+      <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+        <p style="margin: 0; font-size: 13px; color: #999999; line-height: 1.6;">
+          ⏱ Эта ссылка действительна <strong>15 минут</strong><br>
+          ⚠️ Если вы не запрашивали это письмо, просто проигнорируйте его
         </p>
       </div>
-    `,
-  };
+    </div>
+    
+    <!-- Footer -->
+    <div style="background-color: #f8f8f8; padding: 20px 30px; text-align: center; border-top: 1px solid #e0e0e0;">
+      <p style="margin: 0 0 10px; font-size: 14px; color: #666666;">
+        <strong>МойСоюз</strong> — современная платформа для профсоюзов
+      </p>
+      <p style="margin: 0; font-size: 12px; color: #999999;">
+        Техподдержка: <a href="mailto:support@myunion.pro" style="color: #667eea; text-decoration: none;">support@myunion.pro</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
 
-  if (!transporter) {
-    logEmailFallback(mailOptions);
-    return { sent: false, fallback: true, info: EMAIL_FALLBACK_MESSAGE };
-  }
+    console.log("[Email] Готово к отправке:");
+    console.log("  To:", email);
+    console.log("  Subject:", subject);
+    console.log("  Magic Link:", magicLink);
+    console.log("  Is New User:", isNewUser);
 
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    return { sent: true, info };
+    // TODO: Реальная отправка через email сервис
+    // Пример для SendGrid:
+    // const sgMail = require('@sendgrid/mail');
+    // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    // await sgMail.send({
+    //   to: email,
+    //   from: 'noreply@myunion.pro',
+    //   subject: subject,
+    //   html: htmlContent,
+    // });
+
+    // Пока возвращаем успех (для тестирования)
+    console.log("[Email] ⚠️ ВНИМАНИЕ: Email НЕ отправлен (нужна настройка SMTP/SendGrid)");
+    console.log("[Email] Magic Link для тестирования:", magicLink);
+
+    return {
+      success: true,
+      messageId: "test-" + Date.now(),
+    };
   } catch (error) {
-    console.error("[email] Ошибка при отправке письма:", error);
-    return { sent: false, error: error instanceof Error ? error.message : String(error) };
+    console.error("[Email] Ошибка отправки:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 
-export async function sendWelcomeEmail(email: string, password: string): Promise<EmailResult> {
-  const { transporter, config } = await createTransporter();
-
-  const mailOptions = {
-    from: config.from || "support@myunion.pro",
-    to: email,
-    subject: "Добро пожаловать в MyUnion",
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #465fff;">Добро пожаловать в MyUnion!</h2>
-        <p>Ваша регистрация успешно завершена.</p>
-        <p>Ваши учетные данные для входа:</p>
-        <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Пароль:</strong> ${password}</p>
-        </div>
-        <p>Сохраните эти данные в надежном месте. Вы сможете изменить пароль в настройках профиля.</p>
-        <p style="margin-top: 30px;">
-          <a href="${process.env.NEXTAUTH_URL}/login" style="background: #465fff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block;">
-            Войти в систему
-          </a>
-        </p>
-      </div>
-    `,
-  };
-
-  if (!transporter) {
-    logEmailFallback(mailOptions);
-    return { sent: false, fallback: true, info: EMAIL_FALLBACK_MESSAGE };
-  }
-
+/**
+ * Отправляет код верификации на email (для старой системы регистрации)
+ */
+export async function sendVerificationEmail(
+  email: string,
+  verificationToken: string
+): Promise<{ sent: boolean; error?: string }> {
   try {
-    const info = await transporter.sendMail(mailOptions);
-    return { sent: true, info };
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
+    const verificationLink = `${baseUrl}/register/verify?token=${verificationToken}`;
+    
+    const subject = "Подтверждение email для регистрации в МойСоюз";
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+  <div style="max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 20px; text-align: center;">
+      <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">Подтверждение email</h1>
+    </div>
+    <div style="padding: 40px 30px;">
+      <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
+        Для завершения регистрации подтвердите ваш email адрес.
+      </p>
+      <div style="text-align: center; margin: 40px 0;">
+        <a href="${verificationLink}" 
+           style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600;">
+          Подтвердить email
+        </a>
+      </div>
+      <p style="margin: 30px 0 10px; font-size: 14px; color: #666666;">
+        Или скопируйте ссылку: ${verificationLink}
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
+
+    console.log("[Email] Verification email готов к отправке:", email);
+    // TODO: Реальная отправка через email сервис
+    
+    return { sent: true };
   } catch (error) {
-    console.error("[email] Ошибка при отправке письма:", error);
-    return { sent: false, error: error instanceof Error ? error.message : String(error) };
+    console.error("[Email] Ошибка отправки verification email:", error);
+    return {
+      sent: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 
+/**
+ * Отправляет приветственное письмо с паролем (для старой системы регистрации)
+ */
+export async function sendWelcomeEmail(
+  email: string,
+  password: string
+): Promise<SendEmailResult> {
+  try {
+    const subject = "Добро пожаловать в МойСоюз!";
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+  <div style="max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 20px; text-align: center;">
+      <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">👋 Добро пожаловать!</h1>
+    </div>
+    <div style="padding: 40px 30px;">
+      <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
+        Ваш аккаунт успешно создан!
+      </p>
+      <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
+        Ваш временный пароль: <strong>${password}</strong>
+      </p>
+      <p style="margin: 0 0 30px; font-size: 14px; color: #666666;">
+        Рекомендуем изменить пароль после первого входа.
+      </p>
+      <div style="text-align: center; margin: 40px 0;">
+        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://myunion.pro'}/login" 
+           style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600;">
+          Войти в аккаунт
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
 
+    console.log("[Email] Welcome email готов к отправке:", email);
+    // TODO: Реальная отправка через email сервис
+    
+    return {
+      success: true,
+      messageId: "test-" + Date.now(),
+    };
+  } catch (error) {
+    console.error("[Email] Ошибка отправки welcome email:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}

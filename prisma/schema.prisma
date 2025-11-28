@@ -154,6 +154,9 @@ model User {
   // SMS PIN-коды для авторизации
   smsPinCodes SMSPinCode[]
 
+  // Временные токены для авторизации через соцсети
+  loginTokens LoginToken[]
+
   @@index([email])
   @@index([phone])
   @@index([organizationId])
@@ -187,6 +190,32 @@ model SMSPinCode {
   createdAt DateTime @default(now())
 
   @@index([phone])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([used])
+}
+
+// Временные токены для авторизации через соцсети (Telegram, VK, Google и т.д.)
+model LoginToken {
+  id String @id @default(cuid())
+
+  // Токен (уникальный, случайный)
+  token String @unique
+
+  // Пользователь
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Время истечения (5 минут)
+  expiresAt DateTime
+
+  // Использован ли токен
+  used   Boolean   @default(false)
+  usedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([token])
   @@index([userId])
   @@index([expiresAt])
   @@index([used])

@@ -41,6 +41,8 @@ function ChatContent() {
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [showSelfFillModal, setShowSelfFillModal] = useState(false);
+  const [isApplicationFilled, setIsApplicationFilled] = useState<boolean | null>(null);
+  const [isCheckingApplication, setIsCheckingApplication] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -144,6 +146,38 @@ function ChatContent() {
       isLoadingMessagesRef.current = false;
     }
   }, [sessionId]);
+
+  // Проверка заполненности заявления при загрузке STATEMENT сессии
+  useEffect(() => {
+    const checkApplication = async () => {
+      if (sessionType === "STATEMENT" && currentSessionId) {
+        setIsCheckingApplication(true);
+        try {
+          const response = await fetch("/api/chat/check-application");
+          if (response.ok) {
+            const data = await response.json();
+            setIsApplicationFilled(data.applicationFilled);
+            
+            // Если заявление не заполнено - принудительно открываем модальное окно
+            if (!data.applicationFilled) {
+              console.log("[chat] Application not filled, opening modal");
+              setShowSelfFillModal(true);
+            }
+          }
+        } catch (error) {
+          console.error("[chat] Error checking application:", error);
+        } finally {
+          setIsCheckingApplication(false);
+        }
+      } else if (sessionType !== "STATEMENT") {
+        // Для APPEAL сессий не проверяем
+        setIsApplicationFilled(true);
+        setIsCheckingApplication(false);
+      }
+    };
+
+    checkApplication();
+  }, [sessionType, currentSessionId]);
 
   // Load Appeal Bot ID if in appeal mode
   useEffect(() => {
@@ -940,7 +974,7 @@ function ChatContent() {
                           }
                         </ReactMarkdown>
 
-                        {/* Кнопка "Я заполню сам" - показываем в первом сообщении бота для STATEMENT */}
+                        {/* Кнопка "Заполнить анкету" - показываем в первом сообщении бота для STATEMENT */}
                         {message.role === "assistant" && 
                          message.content.includes("[SHOW_SELF_FILL_BUTTON]") && 
                          sessionType === "STATEMENT" && (
@@ -952,7 +986,7 @@ function ChatContent() {
                               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                               </svg>
-                              Я заполню сам
+                              Заполнить анкету
                             </button>
                           </div>
                         )}
@@ -1087,13 +1121,15 @@ function ChatContent() {
                 }}
                 onKeyDown={handleKeyDown}
                 placeholder={
-                  sessionType === "APPEAL" 
+                  sessionType === "STATEMENT" && isApplicationFilled === false
+                    ? "Сначала заполните анкету для подачи заявления..."
+                    : sessionType === "APPEAL" 
                     ? "Опишите ваше обращение или задайте вопрос..." 
                     : "Введите ваше сообщение..."
                 }
                 rows={1}
-                disabled={isLoading || uploadingFile}
-                className="flex-1 resize-none border-0 bg-transparent px-4 py-3 text-[15px] text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-0 dark:text-gray-100 dark:placeholder-gray-400"
+                disabled={isLoading || uploadingFile || (sessionType === "STATEMENT" && isApplicationFilled === false)}
+                className="flex-1 resize-none border-0 bg-transparent px-4 py-3 text-[15px] text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-0 dark:text-gray-100 dark:placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   minHeight: "52px",
                   maxHeight: "200px",
@@ -1102,7 +1138,7 @@ function ChatContent() {
               />
               <button
                 type="submit"
-                disabled={(!input.trim() && !uploadingFile) || isLoading || uploadingFile}
+                disabled={(!input.trim() && !uploadingFile) || isLoading || uploadingFile || (sessionType === "STATEMENT" && isApplicationFilled === false)}
                 className="m-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-blue-500 dark:hover:bg-blue-600"
                 aria-label="Отправить сообщение"
               >
@@ -1168,10 +1204,33 @@ function ChatContent() {
       {showSelfFillModal && currentSessionId && (
         <ProfileSelfFillModal
           isOpen={showSelfFillModal}
-          onClose={() => {
-            setShowSelfFillModal(false);
-            // Перезагружаем чат после закрытия модалки
-            loadMessages();
+          onClose={async () => {
+            // Проверяем заполненность заявления перед закрытием
+            if (sessionType === "STATEMENT") {
+              try {
+                const response = await fetch("/api/chat/check-application");
+                if (response.ok) {
+                  const data = await response.json();
+                  setIsApplicationFilled(data.applicationFilled);
+                  
+                  // Закрываем модальное окно только если заявление заполнено
+                  if (data.applicationFilled) {
+                    setShowSelfFillModal(false);
+                    // Перезагружаем чат после закрытия модалки
+                    loadMessages();
+                  } else {
+                    // Если заявление не заполнено - не закрываем модальное окно
+                    console.log("[chat] Application not filled, keeping modal open");
+                  }
+                }
+              } catch (error) {
+                console.error("[chat] Error checking application on close:", error);
+              }
+            } else {
+              // Для APPEAL сессий просто закрываем
+              setShowSelfFillModal(false);
+              loadMessages();
+            }
           }}
           sessionId={currentSessionId}
         />

@@ -19,6 +19,56 @@ function normalizePhone(phone: string): string {
 
 export const authOptions: NextAuthOptions = {
   providers: [
+    // Авторизация по временному токену (для соцсетей: Telegram, VK, Google)
+    CredentialsProvider({
+      id: "credentials",
+      name: "Credentials",
+      credentials: {
+        loginToken: { label: "Login Token", type: "text" },
+      },
+      async authorize(credentials): Promise<User | null> {
+        if (!credentials?.loginToken) {
+          return null;
+        }
+
+        try {
+          // Ищем неиспользованный токен
+          const tokenRecord = await prisma.loginToken.findUnique({
+            where: { token: credentials.loginToken },
+            include: { user: true },
+          });
+
+          if (!tokenRecord || tokenRecord.used || tokenRecord.expiresAt < new Date()) {
+            return null;
+          }
+
+          // Помечаем токен как использованный
+          await prisma.loginToken.update({
+            where: { id: tokenRecord.id },
+            data: {
+              used: true,
+              usedAt: new Date(),
+            },
+          });
+
+          // Возвращаем пользователя
+          const fullName = [tokenRecord.user.firstName, tokenRecord.user.lastName]
+            .filter(Boolean)
+            .join(" ") || undefined;
+            
+          return {
+            id: tokenRecord.user.id,
+            email: tokenRecord.user.email || undefined,
+            name: fullName,
+            role: tokenRecord.user.role,
+            membershipStatus: tokenRecord.user.membershipStatus,
+          };
+        } catch (error) {
+          console.error("[Auth] Ошибка при авторизации по токену:", error);
+          return null;
+        }
+      },
+    }),
     // SMS-авторизация (основной метод)
     CredentialsProvider({
       id: "sms",

@@ -14,11 +14,20 @@ export interface SendMessageResult {
 }
 
 /**
+ * Inline кнопка для Telegram
+ */
+export interface InlineButton {
+  text: string;
+  url: string;
+}
+
+/**
  * Отправляет сообщение через Telegram Bot API
  */
 export async function sendTelegramMessage(
   chatId: string,
-  text: string
+  text: string,
+  inlineButtons?: InlineButton[][]
 ): Promise<SendMessageResult> {
   if (!TELEGRAM_BOT_TOKEN) {
     console.error("[Telegram Bot] TELEGRAM_BOT_TOKEN не установлен в .env.local");
@@ -33,16 +42,30 @@ export async function sendTelegramMessage(
   try {
     console.log("[Telegram Bot] Отправка сообщения на chat_id:", chatId);
 
+    const payload: {
+      chat_id: string;
+      text: string;
+      parse_mode: string;
+      reply_markup?: { inline_keyboard: InlineButton[][] };
+    } = {
+      chat_id: chatId,
+      text: text,
+      parse_mode: "HTML",
+    };
+
+    // Добавляем Inline кнопки, если они есть
+    if (inlineButtons && inlineButtons.length > 0) {
+      payload.reply_markup = {
+        inline_keyboard: inlineButtons,
+      };
+    }
+
     const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: text,
-        parse_mode: "HTML",
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = await response.json();
@@ -151,6 +174,62 @@ export async function sendWelcomeMessage(chatId: string): Promise<SendMessageRes
   `.trim();
 
   return sendTelegramMessage(chatId, message);
+}
+
+/**
+ * Отправляет приветствие новому пользователю с кнопкой для завершения регистрации
+ */
+export async function sendNewUserWelcome(
+  chatId: string,
+  loginToken: string,
+  firstName?: string
+): Promise<SendMessageResult> {
+  const name = firstName ? `, ${firstName}` : "";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
+  const loginUrl = `${baseUrl}/api/auth/telegram/auto-login?token=${loginToken}`;
+
+  const message = `
+👋 <b>Добро пожаловать в МойСоюз${name}!</b>
+
+Мы создали для вас аккаунт.
+
+Нажмите кнопку ниже для завершения регистрации и заполнения профиля:
+
+⏱ <i>Ссылка действительна 10 минут</i>
+  `.trim();
+
+  const buttons: InlineButton[][] = [
+    [{ text: "🚀 Завершить регистрацию", url: loginUrl }],
+  ];
+
+  return sendTelegramMessage(chatId, message, buttons);
+}
+
+/**
+ * Отправляет приветствие существующему пользователю с кнопкой для входа
+ */
+export async function sendReturningUserWelcome(
+  chatId: string,
+  loginToken: string,
+  firstName?: string
+): Promise<SendMessageResult> {
+  const name = firstName ? `, ${firstName}` : "";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
+  const loginUrl = `${baseUrl}/api/auth/telegram/auto-login?token=${loginToken}`;
+
+  const message = `
+🎉 <b>Рад видеть вас снова${name}!</b>
+
+Нажмите кнопку ниже для входа в личный кабинет:
+
+⏱ <i>Ссылка действительна 10 минут</i>
+  `.trim();
+
+  const buttons: InlineButton[][] = [
+    [{ text: "🔐 Войти в аккаунт", url: loginUrl }],
+  ];
+
+  return sendTelegramMessage(chatId, message, buttons);
 }
 
 /**

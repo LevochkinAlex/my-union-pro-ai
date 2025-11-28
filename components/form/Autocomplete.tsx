@@ -27,9 +27,28 @@ export default function Autocomplete({
 
   useEffect(() => {
     if (value.trim().length >= 2) {
-      const filtered = options.filter((option) =>
-        option.toLowerCase().includes(value.toLowerCase())
-      );
+      const query = value.toLowerCase();
+      
+      // Улучшенный поиск: точное совпадение в начале, затем вхождение в середине
+      const exact: string[] = [];
+      const startsWith: string[] = [];
+      const contains: string[] = [];
+      
+      options.forEach((option) => {
+        const optionLower = option.toLowerCase();
+        
+        if (optionLower === query) {
+          exact.push(option);
+        } else if (optionLower.startsWith(query)) {
+          startsWith.push(option);
+        } else if (optionLower.includes(query)) {
+          contains.push(option);
+        }
+      });
+      
+      // Объединяем результаты: сначала точные, потом начинающиеся с запроса, потом содержащие
+      const filtered = [...exact, ...startsWith, ...contains].slice(0, 10); // Топ-10 результатов
+      
       setFilteredOptions(filtered);
       setIsOpen(filtered.length > 0);
     } else {

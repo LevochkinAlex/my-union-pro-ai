@@ -6,7 +6,7 @@ import { getOpenRouterConfig } from "@/lib/settings";
 import { generateEmbedding } from "@/lib/knowledge/embeddings";
 import { Logger } from "@/lib/logger";
 import { generateMembershipApplication, generateContributionsApplication } from "@/lib/documents";
-import { extractProfileDataFromMessages, isProfileComplete } from "@/lib/profile-extraction";
+import { isProfileComplete } from "@/lib/profile-extraction";
 // @ts-ignore - Prisma types are available at runtime
 import type { Prisma } from "@prisma/client";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
@@ -156,6 +156,27 @@ async function buildSystemPrompt(
   // Добавляем контекст, если есть
   if (bot.context) {
     prompt += `\n\nКонтекст:\n${bot.context}`;
+  }
+
+  // Добавляем информацию о пользователе для персонализации
+  if (user && sessionType) {
+    const userName = [user.lastName, user.firstName, user.middleName].filter(Boolean).join(' ');
+    const userInfo = [];
+    
+    if (userName) userInfo.push(`Имя: ${userName}`);
+    if (user.organizationName) userInfo.push(`Организация: ${user.organizationName}`);
+    if (user.jobTitle) userInfo.push(`Должность: ${user.jobTitle}`);
+    if (user.profession) userInfo.push(`Профессия: ${user.profession}`);
+    if (user.region) userInfo.push(`Регион: ${user.region}`);
+    
+    if (userInfo.length > 0) {
+      prompt += `\n\n## ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ:
+
+Ты общаешься с пользователем, информация о котором:
+${userInfo.join('\n')}
+
+⚠️ ВАЖНО: Используй эту информацию для персонализации ответов, обращайся к пользователю по имени, учитывай его должность и профессию при консультациях.`;
+    }
   }
 
   // Добавляем специфичные инструкции в зависимости от типа сессии
@@ -999,13 +1020,13 @@ export async function POST(request: NextRequest) {
         console.log(`[chat] ✅ Reusing existing STATEMENT session: ${chatSession.id}`);
       } else {
         // Создаем новую сессию ТОЛЬКО если у пользователя вообще нет сессий STATEMENT
-        chatSession = await prisma.chatSession.create({
-          data: {
-            userId: session.user.id,
+      chatSession = await prisma.chatSession.create({
+        data: {
+          userId: session.user.id,
             title: "Заявление",
-            type: "STATEMENT",
-          },
-        });
+          type: "STATEMENT",
+        },
+      });
         console.log(`[chat] 🆕 Created first STATEMENT session: ${chatSession.id}`);
       }
     }
@@ -1398,26 +1419,7 @@ export async function POST(request: NextRequest) {
                                   lastBotMsg.content.includes("профессия") ||
                                   lastBotMsg.content.includes("должность"));
       
-      if (isCollectingProfile) {
-        // Извлекаем данные из истории
-        const extractedData = await extractProfileDataFromMessages(chatHistory);
-        
-        if (Object.keys(extractedData).length > 0) {
-          console.log("[chat] 📋 Adding extracted profile data to system prompt for summary generation");
-          enhancedSystemPrompt += `\n\n[EXTRACTED_PROFILE_DATA]
-Данные из истории диалога (используй ИХ для итога):
-- Организация: ${extractedData.organizationName || "не указана"}
-- ФИО: ${extractedData.lastName || ""} ${extractedData.firstName || ""} ${extractedData.middleName || ""}
-- Дата рождения: ${extractedData.dateOfBirth ? new Date(extractedData.dateOfBirth).toLocaleDateString('ru-RU') : "не указана"}
-- Адрес: ${extractedData.address || "не указан"}
-- Телефон: ${extractedData.phone || "не указан"}
-- Должность: ${extractedData.jobTitle || "не указана"}
-- Профессия: ${extractedData.profession || "не указана"}
-- Образование: ${extractedData.education || "не указано"}
-
-⚠️ ИСПОЛЬЗУЙ ЭТИ ДАННЫЕ для формирования итогового сообщения!`;
-        }
-      }
+      // Экстракт из переписки удален - данные заполняются только через модальное окно анкеты
     }
 
     // Формируем массив сообщений для OpenRouter
@@ -1649,203 +1651,7 @@ export async function POST(request: NextRequest) {
           msg => msg.role === "assistant" && msg.content.includes("[PROFILE_AWAITING_CONFIRMATION]")
         );
 
-        // Всегда пытаемся извлечь и обновить данные из чата (даже если маркер есть, чтобы обновить данные)
-        console.log("[chat] Extracting profile data from messages...");
-        
-        try {
-          // Пытаемся извлечь данные из сообщений чата (включая новое сообщение)
-          const messagesForExtraction = [
-            ...allMessages.map((msg) => ({
-              role: msg.role,
-              content: msg.content,
-            })),
-            {
-              role: "user" as const,
-              content: message,
-            },
-            {
-              role: "assistant" as const,
-              content: aiResponse,
-            },
-          ];
-          
-          // Функция извлечения
-          const extractedData = await extractProfileDataFromMessages(messagesForExtraction);
-          
-          console.log("[chat] Extracted data:", extractedData);
-          
-          // Валидация адреса уже произошла ДО отправки к AI (см. строку ~720)
-          // Этот блок больше не нужен, валидация перенесена выше
-          
-          // Используем организацию из валидации, если она была найдена до отправки к AI
-          if (validatedData.organization) {
-            if (validatedData.organization.foundInDatabase && validatedData.organization.id) {
-              // Организация найдена в базе - привязываем к пользователю
-              extractedData.organizationId = validatedData.organization.id;
-              console.log("[chat] Using organization found before AI (in database):", validatedData.organization.name);
-            } else if (validatedData.organization.name) {
-              // Организация найдена в Минюсте, но не в базе - сохраняем название
-              extractedData.organizationName = validatedData.organization.name;
-              console.log("[chat] Using organization found before AI (in Minjust):", validatedData.organization.name);
-            }
-          } else if (extractedData.organizationName || message.includes("организац") || message.includes("работаю")) {
-            // Если организация не была найдена до AI, пытаемся найти её сейчас
-            const orgName = extractedData.organizationName || message;
-            const userRegion = extractedData.region;
-            
-            try {
-              const foundOrg = await findOrganization(orgName, userRegion);
-              if (foundOrg?.foundInDatabase && foundOrg.id) {
-                // Организация найдена в базе - привязываем к пользователю
-                extractedData.organizationId = foundOrg.id;
-                console.log("[chat] Organization found in database:", foundOrg.name);
-              } else if (foundOrg?.name) {
-                // Организация найдена в Минюсте, но не в базе - сохраняем название
-                extractedData.organizationName = foundOrg.name;
-                console.log("[chat] Organization found in Minjust:", foundOrg.name);
-              }
-            } catch (orgError) {
-              console.warn("[chat] Error searching organization:", orgError);
-            }
-          }
-          
-          // Обновляем профиль с извлеченными данными
-          if (Object.keys(extractedData).length > 0) {
-            // Получаем текущие данные пользователя для проверки
-            const currentUser = await prisma.user.findUnique({
-              where: { id: session.user.id },
-            });
-            
-            // Убираем только пустые значения
-            const cleanData = Object.fromEntries(
-              Object.entries(extractedData).filter(
-                ([key, value]) =>
-                  value !== undefined &&
-                  value !== null &&
-                  value !== "" &&
-                  !(typeof value === "number" && Number.isNaN(value))
-              )
-            );
-            
-            // ЗАЩИТА: Не перезаписываем ФИО географическими названиями
-            const geoWords = [
-              'Республика', 'Область', 'Край', 'Округ', 'Регион', 'Город',
-              'Татарстан', 'Башкортостан', 'Москва', 'Казань', 'Санкт', 'Петербург'
-            ];
-            
-            // Проверяем firstName - только если новое значение похоже на географическое название
-            if (cleanData.firstName) {
-              const isGeoName = geoWords.some(word => 
-                cleanData.firstName.toLowerCase().includes(word.toLowerCase()) || 
-                word.toLowerCase().includes(cleanData.firstName.toLowerCase())
-              );
-              if (isGeoName) {
-                console.log("[chat] ⚠️ Skipping firstName update - looks like a geographic name:", cleanData.firstName);
-                delete cleanData.firstName;
-              } else {
-                console.log("[chat] ✅ firstName will be updated:", cleanData.firstName, "→", currentUser?.firstName || "null");
-              }
-            }
-            
-            // Проверяем lastName - только если новое значение похоже на географическое название
-            if (cleanData.lastName) {
-              const isGeoName = geoWords.some(word => 
-                cleanData.lastName.toLowerCase().includes(word.toLowerCase()) || 
-                word.toLowerCase().includes(cleanData.lastName.toLowerCase())
-              );
-              if (isGeoName) {
-                console.log("[chat] ⚠️ Skipping lastName update - looks like a geographic name:", cleanData.lastName);
-                delete cleanData.lastName;
-              } else {
-                console.log("[chat] ✅ lastName will be updated:", cleanData.lastName, "→", currentUser?.lastName || "null");
-              }
-            }
-            
-            // Проверяем middleName - только если новое значение похоже на географическое название
-            if (cleanData.middleName) {
-              const isGeoName = geoWords.some(word => 
-                cleanData.middleName.toLowerCase().includes(word.toLowerCase()) || 
-                word.toLowerCase().includes(cleanData.middleName.toLowerCase())
-              );
-              if (isGeoName) {
-                console.log("[chat] ⚠️ Skipping middleName update - looks like a geographic name:", cleanData.middleName);
-                delete cleanData.middleName;
-              } else {
-                console.log("[chat] ✅ middleName will be updated:", cleanData.middleName, "→", currentUser?.middleName || "null");
-              }
-            }
-            
-            if (Object.keys(cleanData).length > 0) {
-              console.log("[chat] 📝 Updating profile with extracted data:", cleanData);
-              await prisma.user.update({
-                where: { id: session.user.id },
-                data: cleanData,
-              });
-              console.log("[chat] ✅ Profile updated successfully");
-            } else {
-              console.log("[chat] ⚠️ No data to update (cleanData is empty)");
-              console.log("[chat] Extracted data keys:", Object.keys(extractedData));
-              console.log("[chat] Extracted data values:", Object.values(extractedData).map(v => typeof v === 'object' ? JSON.stringify(v).substring(0, 50) : String(v).substring(0, 50)));
-            }
-            
-            // ⚠️ ВАЖНО: Если адрес обновлен, но preferredDiscountCity не установлен - извлекаем город
-            const updatedUser = await prisma.user.findUnique({
-              where: { id: session.user.id },
-              select: { address: true, preferredDiscountCity: true }
-            });
-            
-            if (updatedUser?.address && !updatedUser.preferredDiscountCity) {
-              try {
-                console.log("[chat] 🔍 Extracting preferredDiscountCity from address:", updatedUser.address);
-                const validatedAddress = await validateAddressWithDaData(updatedUser.address);
-                if (validatedAddress?.city) {
-                  const city = validatedAddress.city.trim();
-                  // Проверяем что это не плейсхолдер
-                  const isPlaceholder = (value: string) => {
-                    if (!value || typeof value !== 'string') return false;
-                    const markers = ['(←', 'вставь', '_____', '[пусто]', '[значение]', 'не указан', '(пусто)', 'не указано', 'самому'];
-                    return markers.some(marker => value.toLowerCase().includes(marker));
-                  };
-                  
-                  if (!isPlaceholder(city) && city.length >= 2 && city.length <= 100) {
-                    await prisma.user.update({
-                      where: { id: session.user.id },
-                      data: { preferredDiscountCity: city }
-                    });
-                    console.log("[chat] ✅ Updated preferredDiscountCity from address:", city);
-                  }
-                } else {
-                  // Fallback: извлекаем через regex
-                  const cityPatterns = [
-                    /г\.?\s*([А-ЯЁ][а-яё\-]+)/i,
-                    /город\s+([А-ЯЁ][а-яё\-]+)/i,
-                    /,\s*г\.?\s*([А-ЯЁ][а-яё\-]+)/i,
-                    /,\s*([А-ЯЁ][а-яё\-]+)\s*,/i,
-                  ];
-                  
-                  for (const pattern of cityPatterns) {
-                    const match = updatedUser.address.match(pattern);
-                    if (match && match[1]) {
-                      const city = match[1].trim();
-                      if (!['область', 'республика', 'край', 'округ', 'район'].includes(city.toLowerCase()) && city.length >= 2) {
-                        await prisma.user.update({
-                          where: { id: session.user.id },
-                          data: { preferredDiscountCity: city }
-                        });
-                        console.log("[chat] ✅ Updated preferredDiscountCity via regex:", city);
-                        break;
-                      }
-                    }
-                  }
-                }
-              } catch (cityError) {
-                console.warn("[chat] Error extracting city from address:", cityError);
-              }
-            }
-          }
-        } catch (extractError) {
-          console.warn("[chat] Error extracting data:", extractError);
-        }
+        // Экстракт из переписки удален - данные заполняются только через модальное окно анкеты
 
         // Проверяем полноту профиля ТОЛЬКО если документы еще не сгенерированы
         if (!hasGeneratedDocuments) {
@@ -2343,7 +2149,7 @@ export async function GET() {
       // Приветствие зависит от типа сессии
       const welcomeMessageContent = chatSession.type === "APPEAL"
         ? "Здравствуйте! Я ваш помощник по обращениям в профсоюз. Я могу помочь вам с вопросами и проблемами, связанными с профсоюзом, трудовыми отношениями и правами работников. При ответах я опираюсь на законы Российской Федерации, устав и положения профсоюза. Опишите, пожалуйста, ваше обращение или вопрос, и я постараюсь вам помочь."
-        : "Здравствуйте! Я ваш помощник для вступления в Профсоюз работников здравоохранения РФ. Я помогу вам заполнить профиль и подготовить необходимые документы для этого.\n\nВы можете заполнить профиль вместе со мной в чате, или самостоятельно через удобную форму.\n\nДавайте начнем. Укажите наименование организации, в которой вы работаете.[SHOW_SELF_FILL_BUTTON]";
+        : "Здравствуйте! Я уникальный AI-бот профсоюза, готовый консультировать вас по всем сложным вопросам, связанным с профсоюзной деятельностью, вашими правами, льготами и преимуществами членства.\n\nДля начала работы необходимо заполнить анкету для подачи заявления о вступлении в профсоюз. Это займет всего несколько минут.\n\n[SHOW_SELF_FILL_BUTTON]";
       
       console.log("GET /api/chat: Создание приветственного сообщения в БД...");
       
