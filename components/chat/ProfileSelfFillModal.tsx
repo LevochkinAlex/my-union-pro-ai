@@ -295,6 +295,7 @@ export function ProfileSelfFillModal({
       if (!isValid) return;
       
       await uploadDocuments();
+      await sendDocumentsUploadedMessage(); // Отправляем сообщение о загрузке документов
       setCurrentStep(4); // → К дополнительной информации
     } else if (currentStep === 4) {
       // Шаг 4: Сохранение дополнительной информации и завершение
@@ -472,16 +473,34 @@ export function ProfileSelfFillModal({
 
   const sendCompletionMessage = async () => {
     try {
+      // Формируем нормальное сообщение от пользователя
+      const userName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || 'Пользователь';
       await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: "[SELF_FILL_COMPLETED]",
+          message: `Я, ${userName}, заполнил анкету. [SELF_FILL_COMPLETED]`,
           sessionId,
         }),
       });
     } catch (error) {
       console.error("Error sending completion message:", error);
+    }
+  };
+
+  const sendDocumentsUploadedMessage = async () => {
+    try {
+      const userName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || 'Пользователь';
+      await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Я, ${userName}, отправил документы на проверку. [DOCUMENTS_UPLOADED]`,
+          sessionId,
+        }),
+      });
+    } catch (error) {
+      console.error("Error sending documents uploaded message:", error);
     }
   };
 
@@ -886,6 +905,8 @@ function Step2DocumentsUpload({
 }) {
   const [generatedDocs, setGeneratedDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploadProgress, setUploadProgress] = useState<{ membership?: number; contribution?: number }>({});
+  const [validating, setValidating] = useState<{ membership?: boolean; contribution?: boolean }>({});
 
   // Загружаем сгенерированные документы
   useEffect(() => {
@@ -894,13 +915,12 @@ function Step2DocumentsUpload({
         const response = await fetch("/api/documents");
         if (response.ok) {
           const data = await response.json();
-          // Фильтруем только сгенерированные документы
-          const generated = (data.documents || []).filter((doc: any) => 
-            doc.status === "GENERATED" && 
+          // Фильтруем документы заявлений (любой статус: GENERATED, SIGNED, PENDING, etc.)
+          const applicationDocs = (data.documents || []).filter((doc: any) => 
             (doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION")
           );
-          setGeneratedDocs(generated);
-          console.log("[ProfileSelfFillModal] Loaded generated documents:", generated);
+          setGeneratedDocs(applicationDocs);
+          console.log("[ProfileSelfFillModal] Loaded application documents:", applicationDocs);
         }
       } catch (error) {
         console.error("Failed to load documents:", error);
@@ -914,24 +934,79 @@ function Step2DocumentsUpload({
   const membershipDoc = generatedDocs.find(d => d.type === "MEMBERSHIP_APPLICATION");
   const contributionDoc = generatedDocs.find(d => d.type === "CONTRIBUTION_APPLICATION");
 
-  return (
-    <div className="space-y-6">
-      <h3 className="text-lg font-semibold mb-4">Загрузка подписанных документов</h3>
-      
-      {/* Инструкция */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
-          📄 Инструкция:
-        </h4>
-        <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
-          <li>Скачайте сгенерированные документы ниже</li>
-          <li>Распечатайте их</li>
-          <li>Подпишите и поставьте дату</li>
-          <li>Отсканируйте или сфотографируйте подписанные документы</li>
-          <li>Загрузите обратно в форму ниже</li>
-        </ol>
-      </div>
+  const handleFileUpload = async (file: File, type: 'membership' | 'contribution') => {
+    // Проверка размера (50 МБ)
+    const MAX_SIZE = 50 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      alert("Файл слишком большой. Максимальный размер: 50 МБ");
+      return;
+    }
 
+    // Проверка формата
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowedTypes.includes(file.type)) {
+      alert("Неподдерживаемый формат. Разрешены: PDF, JPG, JPEG, PNG");
+      return;
+    }
+
+    // Симуляция загрузки с прогресс-баром
+    setUploadProgress(prev => ({ ...prev, [type]: 0 }));
+    
+    // Постепенное увеличение прогресса
+    const interval = setInterval(() => {
+      setUploadProgress(prev => {
+        const current = prev[type] || 0;
+        if (current >= 90) {
+          clearInterval(interval);
+          return prev;
+        }
+        return { ...prev, [type]: current + 10 };
+      });
+    }, 100);
+
+    // AI-валидация документа
+    setValidating(prev => ({ ...prev, [type]: true }));
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('documentType', type === 'membership' ? 'MEMBERSHIP_APPLICATION' : 'CONTRIBUTION_APPLICATION');
+
+      const response = await fetch('/api/documents/validate', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.valid) {
+        clearInterval(interval);
+        setUploadProgress(prev => ({ ...prev, [type]: undefined }));
+        setValidating(prev => ({ ...prev, [type]: false }));
+        alert(result.error || "Загруженный файл не соответствует требуемому документу. Пожалуйста, проверьте файл и попробуйте снова.");
+        return;
+      }
+
+      // Успешная валидация
+      setUploadProgress(prev => ({ ...prev, [type]: 100 }));
+      onChange({ ...docs, [type]: file });
+      
+      setTimeout(() => {
+        setUploadProgress(prev => ({ ...prev, [type]: undefined }));
+      }, 1000);
+    } catch (error) {
+      console.error("Validation error:", error);
+      alert("Ошибка при проверке документа. Попробуйте еще раз.");
+      setUploadProgress(prev => ({ ...prev, [type]: undefined }));
+    } finally {
+      clearInterval(interval);
+      setValidating(prev => ({ ...prev, [type]: false }));
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold mb-4">Документы для вступления</h3>
+      
       {/* Индикатор загрузки */}
       {loading && (
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
@@ -945,92 +1020,227 @@ function Step2DocumentsUpload({
       {!loading && !membershipDoc && !contributionDoc && (
         <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
           <p className="text-sm text-orange-800 dark:text-orange-200">
-            ⚠️ Документы еще не сгенерированы. Пожалуйста, вернитесь на предыдущий шаг и подтвердите данные.
+            ⚠️ Документы еще не сгенерированы. Вернитесь на предыдущий шаг.
           </p>
         </div>
       )}
 
-      {/* Скачивание сгенерированных документов */}
+      {/* Компактные карточки документов */}
       {!loading && (membershipDoc || contributionDoc) && (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-          <h4 className="font-semibold text-green-900 dark:text-green-100 mb-3">
-            ✅ Сгенерированные документы для скачивания:
-          </h4>
-          <div className="space-y-2">
-            {membershipDoc && (
+        <>
+          {/* Документ 1: Заявление о вступлении */}
+          {membershipDoc && (
+            <div className="border-2 border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+              <div className="bg-gray-100 dark:bg-gray-700 px-4 py-3 border-b border-gray-300 dark:border-gray-600">
+                <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <span className="text-blue-600 dark:text-blue-400">1.</span>
+                  📄 Заявление о вступлении в профсоюз
+                </h4>
+              </div>
+              <div className="p-4 space-y-3">
+                {/* Скачать */}
+                <a
+                  href={`/api/documents/${membershipDoc.id}/download`}
+                  download
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Скачать бланк
+                </a>
+                
+                {/* Загрузить или показать статус */}
+                {membershipDoc.status === 'GENERATED' ? (
+                  <div>
+                    <label className="block">
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleFileUpload(file, 'membership');
+                        }}
+                        className="hidden"
+                        id="membership-upload"
+                      />
+                      <div className="flex items-center justify-center gap-2 px-4 py-2 border-2 border-dashed border-blue-400 dark:border-blue-500 hover:border-blue-600 dark:hover:border-blue-400 rounded-lg transition-colors text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        {docs.membership ? 'Заменить подписанный' : 'Загрузить подписанный'}
+                      </div>
+                    </label>
+                    
+                    {/* Прогресс-бар */}
+                    {uploadProgress.membership !== undefined && (
+                      <div className="mt-2">
+                        <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 mb-1">
+                          <span>Загрузка и проверка...</span>
+                          <span>{uploadProgress.membership}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          <div 
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${uploadProgress.membership}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Успешная загрузка */}
+                    {docs.membership && uploadProgress.membership === undefined && (
+                      <div className="mt-2 flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        <span className="truncate">{docs.membership.name}</span>
+                      </div>
+                    )}
+                    
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      💡 Распечатайте, подпишите и загрузите обратно (PDF, JPG, PNG до 50 МБ)
+                    </p>
+                  </div>
+                ) : (
+                  <div className="px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-300">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <span className="font-medium">
+                        {membershipDoc.status === 'SIGNED' && '✅ Документ подписан и загружен'}
+                        {membershipDoc.status === 'PENDING' && '⏳ Документ на проверке'}
+                        {membershipDoc.status === 'APPROVED' && '✅ Документ одобрен'}
+                        {membershipDoc.status === 'REJECTED' && '❌ Документ отклонен'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Документ 2: Заявление о взносах */}
+          {contributionDoc && (
+            <div className="border-2 border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+              <div className="bg-gray-100 dark:bg-gray-700 px-4 py-3 border-b border-gray-300 dark:border-gray-600">
+                <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <span className="text-blue-600 dark:text-blue-400">2.</span>
+                  📄 Заявление о перечислении членских взносов
+                </h4>
+              </div>
+              <div className="p-4 space-y-3">
+                {/* Скачать */}
+                <a
+                  href={`/api/documents/${contributionDoc.id}/download`}
+                  download
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Скачать бланк
+                </a>
+                
+                {/* Загрузить или показать статус */}
+                {contributionDoc.status === 'GENERATED' ? (
+                  <div>
+                    <label className="block">
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleFileUpload(file, 'contribution');
+                        }}
+                        className="hidden"
+                        id="contribution-upload"
+                      />
+                      <div className="flex items-center justify-center gap-2 px-4 py-2 border-2 border-dashed border-blue-400 dark:border-blue-500 hover:border-blue-600 dark:hover:border-blue-400 rounded-lg transition-colors text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        {docs.contribution ? 'Заменить подписанный' : 'Загрузить подписанный'}
+                      </div>
+                    </label>
+                    
+                    {/* Прогресс-бар */}
+                    {uploadProgress.contribution !== undefined && (
+                      <div className="mt-2">
+                        <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 mb-1">
+                          <span>Загрузка и проверка...</span>
+                          <span>{uploadProgress.contribution}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          <div 
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${uploadProgress.contribution}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Успешная загрузка */}
+                    {docs.contribution && uploadProgress.contribution === undefined && (
+                      <div className="mt-2 flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        <span className="truncate">{docs.contribution.name}</span>
+                      </div>
+                    )}
+                    
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      💡 Распечатайте, подпишите и загрузите обратно (PDF, JPG, PNG до 50 МБ)
+                    </p>
+                  </div>
+                ) : (
+                  <div className="px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-300">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <span className="font-medium">
+                        {contributionDoc.status === 'SIGNED' && '✅ Документ подписан и загружен'}
+                        {contributionDoc.status === 'PENDING' && '⏳ Документ на проверке'}
+                        {contributionDoc.status === 'APPROVED' && '✅ Документ одобрен'}
+                        {contributionDoc.status === 'REJECTED' && '❌ Документ отклонен'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Документ 3: Устав (только для ознакомления) */}
+          <div className="border-2 border-blue-300 dark:border-blue-600 rounded-lg overflow-hidden bg-blue-50 dark:bg-blue-900/20">
+            <div className="bg-blue-100 dark:bg-blue-800/40 px-4 py-3 border-b border-blue-300 dark:border-blue-600">
+              <h4 className="font-semibold text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                <span className="text-blue-600 dark:text-blue-400">3.</span>
+                📖 Устав Профсоюза работников здравоохранения РФ
+                <span className="ml-auto text-xs bg-blue-600 text-white px-2 py-1 rounded">Ознакомление</span>
+              </h4>
+            </div>
+            <div className="p-4">
               <a
-                href={`/api/documents/${membershipDoc.id}/download`}
-                download
-                className="flex items-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
+                href="/documents/union-charter.docx"
+                download="Устав_Профсоюза_РФ.docx"
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                <span>📄 Скачать заявление о вступлении в профсоюз</span>
+                Скачать Устав (апрель 2021)
               </a>
-            )}
-            {contributionDoc && (
-              <a
-                href={`/api/documents/${contributionDoc.id}/download`}
-                download
-                className="flex items-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <span>📄 Скачать заявление о перечислении членских взносов</span>
-              </a>
-            )}
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                📘 Документ для ознакомления. Подписание не требуется.
+              </p>
+            </div>
           </div>
-        </div>
+        </>
       )}
-
-      {/* Загрузка подписанных документов */}
-      <div className="space-y-4">
-        <h4 className="font-semibold text-gray-900 dark:text-white mb-3">
-          Загрузите подписанные документы:
-        </h4>
-        
-        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6">
-          <label className="block text-sm font-medium mb-2">
-            Заявление о вступлении (подписанное) *
-          </label>
-          <input
-            type="file"
-            accept=".pdf,image/*"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) onChange({ ...docs, membership: file });
-            }}
-            className="w-full"
-          />
-          {docs.membership && (
-            <p className="text-sm text-green-600 mt-2">
-              ✓ {docs.membership.name}
-            </p>
-          )}
-        </div>
-
-        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6">
-          <label className="block text-sm font-medium mb-2">
-            Заявление о взносах (подписанное) *
-          </label>
-          <input
-            type="file"
-            accept=".pdf,image/*"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) onChange({ ...docs, contribution: file });
-            }}
-            className="w-full"
-          />
-          {docs.contribution && (
-            <p className="text-sm text-green-600 mt-2">
-              ✓ {docs.contribution.name}
-            </p>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
