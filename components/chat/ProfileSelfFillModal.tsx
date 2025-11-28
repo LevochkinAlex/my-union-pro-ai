@@ -479,13 +479,11 @@ export function ProfileSelfFillModal({
 
   const sendCompletionMessage = async () => {
     try {
-      // Формируем нормальное сообщение от пользователя
-      const userName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || 'Пользователь';
       await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: `Я, ${userName}, заполнил анкету. [SELF_FILL_COMPLETED]`,
+          message: `Я успешно заполнил анкету [SELF_FILL_COMPLETED]`,
           sessionId,
         }),
       });
@@ -496,12 +494,11 @@ export function ProfileSelfFillModal({
 
   const sendDocumentsUploadedMessage = async () => {
     try {
-      const userName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || 'Пользователь';
       await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: `Я, ${userName}, отправил документы на проверку. [DOCUMENTS_UPLOADED]`,
+          message: `Я отправил документы на проверку [DOCUMENTS_UPLOADED]`,
           sessionId,
         }),
       });
