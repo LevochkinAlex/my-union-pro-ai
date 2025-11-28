@@ -322,6 +322,34 @@ export function ProfileSelfFillModal({
     } else if (currentStep === 3) {
       // Шаг 3: Проверка загрузки подписанных документов
       console.log("[ProfileModal] Step 3: Uploading documents", uploadedDocs);
+      
+      // Перезагружаем данные о документах перед валидацией
+      try {
+        const docsResponse = await fetch("/api/documents");
+        if (docsResponse.ok) {
+          const docsData = await docsResponse.json();
+          const generatedDocs = (docsData.documents || []).filter((doc: any) =>
+            (doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION") &&
+            doc.status !== "DELETED"
+          );
+          
+          const membershipDoc = generatedDocs.find((d: any) => d.type === "MEMBERSHIP_APPLICATION");
+          const contributionDoc = generatedDocs.find((d: any) => d.type === "CONTRIBUTION_APPLICATION");
+          
+          setExistingDocs({
+            membership: membershipDoc ? { id: membershipDoc.id, signedFilePath: membershipDoc.signedFilePath } : undefined,
+            contribution: contributionDoc ? { id: contributionDoc.id, signedFilePath: contributionDoc.signedFilePath } : undefined,
+          });
+          
+          console.log("[ProfileModal] Reloaded existing docs:", {
+            membership: !!membershipDoc?.signedFilePath,
+            contribution: !!contributionDoc?.signedFilePath,
+          });
+        }
+      } catch (error) {
+        console.error("[ProfileModal] Failed to reload documents:", error);
+      }
+      
       const isValid = validateStep2();
       if (!isValid) {
         console.log("[ProfileModal] Validation failed");
@@ -411,8 +439,21 @@ export function ProfileSelfFillModal({
 
   const validateStep2 = (): boolean => {
     // Проверяем только те документы, которых нет в базе (не загружены ранее)
-    const needsMembership = !existingDocs.membership?.signedFilePath;
-    const needsContribution = !existingDocs.contribution?.signedFilePath;
+    const membershipAlreadyUploaded = !!existingDocs.membership?.signedFilePath;
+    const contributionAlreadyUploaded = !!existingDocs.contribution?.signedFilePath;
+    
+    console.log("[ProfileModal] validateStep2:", {
+      existingDocs,
+      membershipAlreadyUploaded,
+      contributionAlreadyUploaded,
+      uploadedDocs: {
+        membership: !!uploadedDocs.membership,
+        contribution: !!uploadedDocs.contribution,
+      },
+    });
+    
+    const needsMembership = !membershipAlreadyUploaded;
+    const needsContribution = !contributionAlreadyUploaded;
     
     if (needsMembership && !uploadedDocs.membership) {
       alert("Загрузите заявление о вступлении в профсоюз");
