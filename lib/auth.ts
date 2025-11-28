@@ -119,9 +119,40 @@ export const authOptions: NextAuthOptions = {
           });
 
           // Ищем или создаем пользователя
+          // Извлекаем только цифры для поиска (7XXXXXXXXXX)
+          const phoneDigits = normalizedPhone.replace(/\D/g, "");
+          
+          // Пробуем найти по точному совпадению
           let user = await prisma.user.findUnique({
             where: { phone: normalizedPhone },
           });
+
+          // Если не нашли, ищем по номеру в других форматах
+          if (!user) {
+            user = await prisma.user.findFirst({
+              where: {
+                OR: [
+                  { phone: { contains: phoneDigits.slice(-10) } }, // Последние 10 цифр
+                  { phone: `+7 (${phoneDigits.slice(1, 4)}) ${phoneDigits.slice(4, 7)}-${phoneDigits.slice(7, 9)}-${phoneDigits.slice(9)}` },
+                  { phone: `+${phoneDigits}` },
+                  { phone: phoneDigits },
+                  { phone: `8${phoneDigits.slice(1)}` },
+                ],
+              },
+            });
+            
+            if (user) {
+              // Обновляем телефон на нормализованный формат
+              console.log("[NextAuth] 📞 Найден пользователь с другим форматом телефона, обновляем:", {
+                oldPhone: user.phone,
+                newPhone: normalizedPhone,
+              });
+              user = await prisma.user.update({
+                where: { id: user.id },
+                data: { phone: normalizedPhone },
+              });
+            }
+          }
 
           if (!user) {
             // Создаем нового пользователя при первом успешном входе
