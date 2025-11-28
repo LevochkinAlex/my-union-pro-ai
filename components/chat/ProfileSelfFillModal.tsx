@@ -527,7 +527,7 @@ export function ProfileSelfFillModal({
                 Самостоятельное заполнение профиля
               </h2>
               <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                {Math.round(((currentStep - 1) / 3) * 100 + 33)}% заполнено
+                {Math.round((currentStep / 4) * 100)}% заполнено
               </span>
             </div>
             
@@ -970,43 +970,18 @@ function Step2DocumentsUpload({
       });
     }, 100);
 
-    // AI-валидация документа
-    setValidating(prev => ({ ...prev, [type]: true }));
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('documentType', type === 'membership' ? 'MEMBERSHIP_APPLICATION' : 'CONTRIBUTION_APPLICATION');
-
-      const response = await fetch('/api/documents/validate', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = await response.json();
-
-      if (!response.ok || !result.valid) {
-        clearInterval(interval);
-        setUploadProgress(prev => ({ ...prev, [type]: undefined }));
-        setValidating(prev => ({ ...prev, [type]: false }));
-        alert(result.error || "Загруженный файл не соответствует требуемому документу. Пожалуйста, проверьте файл и попробуйте снова.");
-        return;
-      }
-
-      // Успешная валидация
-      setUploadProgress(prev => ({ ...prev, [type]: 100 }));
-      onChange({ ...docs, [type]: file });
-      
-      setTimeout(() => {
-        setUploadProgress(prev => ({ ...prev, [type]: undefined }));
-      }, 1000);
-    } catch (error) {
-      console.error("Validation error:", error);
-      alert("Ошибка при проверке документа. Попробуйте еще раз.");
+    // Базовая валидация пройдена, принимаем файл
+    // TODO: Включить AI-валидацию когда настроим OpenRouter
+    console.log("[ProfileModal] File validation passed:", file.name);
+    
+    // Завершаем прогресс
+    clearInterval(interval);
+    setUploadProgress(prev => ({ ...prev, [type]: 100 }));
+    onChange({ ...docs, [type]: file });
+    
+    setTimeout(() => {
       setUploadProgress(prev => ({ ...prev, [type]: undefined }));
-    } finally {
-      clearInterval(interval);
-      setValidating(prev => ({ ...prev, [type]: false }));
-    }
+    }, 1000);
   };
 
   return (
