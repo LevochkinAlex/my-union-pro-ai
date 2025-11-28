@@ -13,10 +13,30 @@ export async function GET(request: NextRequest) {
 
     console.log("[Telegram Auto-Login] Попытка входа с токеном:", token ? "****" : "отсутствует");
 
+    // Определяем правильный baseUrl для редиректов
+    const host = request.headers.get("host") || "localhost:3000";
+    const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+    
+    let baseUrl: string;
+    if (process.env.NEXTAUTH_URL) {
+      baseUrl = process.env.NEXTAUTH_URL;
+    } else if (process.env.NEXT_PUBLIC_APP_URL) {
+      baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+    } else if (isLocalhost) {
+      // Для localhost всегда http
+      baseUrl = `http://${host}`;
+    } else {
+      // Для продакшена определяем по заголовкам
+      const proto = request.headers.get("x-forwarded-proto") || "https";
+      baseUrl = `${proto}://${host}`;
+    }
+
+    console.log("[Telegram Auto-Login] BaseUrl:", baseUrl);
+
     if (!token) {
       console.error("[Telegram Auto-Login] Токен не предоставлен");
       return NextResponse.redirect(
-        new URL("/login?error=missing_token", request.url)
+        new URL("/login?error=missing_token", baseUrl)
       );
     }
 
@@ -29,7 +49,7 @@ export async function GET(request: NextRequest) {
     if (!loginToken) {
       console.error("[Telegram Auto-Login] Токен не найден в БД");
       return NextResponse.redirect(
-        new URL("/login?error=invalid_token", request.url)
+        new URL("/login?error=invalid_token", baseUrl)
       );
     }
 
@@ -41,7 +61,7 @@ export async function GET(request: NextRequest) {
       });
 
       return NextResponse.redirect(
-        new URL("/login?error=token_expired", request.url)
+        new URL("/login?error=token_expired", baseUrl)
       );
     }
 
@@ -49,7 +69,7 @@ export async function GET(request: NextRequest) {
     if (loginToken.used) {
       console.error("[Telegram Auto-Login] Токен уже был использован");
       return NextResponse.redirect(
-        new URL("/login?error=token_used", request.url)
+        new URL("/login?error=token_used", baseUrl)
       );
     }
 
@@ -58,12 +78,12 @@ export async function GET(request: NextRequest) {
     // Редиректим на страницу успешной авторизации с токеном для NextAuth
     // NextAuth сам пометит токен как использованный
     return NextResponse.redirect(
-      new URL(`/auth/telegram/success?token=${token}`, request.url)
+      new URL(`/auth/telegram/success?token=${token}`, baseUrl)
     );
   } catch (error) {
     console.error("[Telegram Auto-Login] Ошибка:", error);
     return NextResponse.redirect(
-      new URL("/login?error=server_error", request.url)
+      new URL("/login?error=server_error", baseUrl)
     );
   }
 }

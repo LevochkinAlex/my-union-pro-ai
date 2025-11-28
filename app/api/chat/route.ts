@@ -167,15 +167,41 @@ async function buildSystemPrompt(
     if (user.organizationName) userInfo.push(`Организация: ${user.organizationName}`);
     if (user.jobTitle) userInfo.push(`Должность: ${user.jobTitle}`);
     if (user.profession) userInfo.push(`Профессия: ${user.profession}`);
-    if (user.region) userInfo.push(`Регион: ${user.region}`);
+    if (user.preferredDiscountCity) userInfo.push(`Город: ${user.preferredDiscountCity}`);
+    
+    // Дополнительная информация (если заполнена)
+    if (user.employmentStatus) userInfo.push(`Занятость: ${user.employmentStatus}`);
+    if (user.maritalStatus) userInfo.push(`Семейное положение: ${user.maritalStatus}`);
+    if (user.spouseInfo) userInfo.push(`Информация о супруге: ${user.spouseInfo}`);
+    if (user.childrenBirthDates) {
+      try {
+        const children = JSON.parse(user.childrenBirthDates);
+        if (Array.isArray(children) && children.length > 0) {
+          const childrenInfo = children.map((child: any) => 
+            `${child.name} (${child.birthDate ? new Date(child.birthDate).toLocaleDateString('ru-RU') : 'дата не указана'})`
+          ).join(', ');
+          userInfo.push(`Дети: ${childrenInfo}`);
+        }
+      } catch (e) {
+        console.error('[buildSystemPrompt] Failed to parse childrenBirthDates:', e);
+      }
+    }
+    if (user.hobbies) userInfo.push(`Хобби: ${user.hobbies}`);
+    if (user.aboutMe) userInfo.push(`О себе: ${user.aboutMe}`);
     
     if (userInfo.length > 0) {
-      prompt += `\n\n## ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ:
+      prompt += `\n\n## ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ (используй для персонализации):
 
 Ты общаешься с пользователем, информация о котором:
 ${userInfo.join('\n')}
 
-⚠️ ВАЖНО: Используй эту информацию для персонализации ответов, обращайся к пользователю по имени, учитывай его должность и профессию при консультациях.`;
+⚠️ КРИТИЧЕСКИ ВАЖНО:
+- ОБЯЗАТЕЛЬНО обращайся к пользователю по имени (не говори "пользователь")
+- Используй информацию о его организации, должности, профессии в ответах
+- Если знаешь про детей/семью/хобби - упоминай это естественно в беседе
+- Веди себя как помощник, который УЖЕ ЗНАЕТ пользователя
+- НЕ спрашивай заново то, что уже знаешь о пользователе
+- Будь дружелюбным и персональным, а не формальным ботом`;
     }
   }
 
@@ -765,14 +791,14 @@ export async function POST(request: NextRequest) {
 
     const relevantChunks = await retrieveRelevantChunks(bot, message);
 
-    // Получаем данные пользователя для проверки полноты профиля (только для STATEMENT сессий)
-    let user = null;
+    // Получаем данные пользователя для персонализации (всегда)
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+    });
+    
+    // Проверяем документы (только для STATEMENT сессий)
     let hasGeneratedDocuments = false;
     if (chatSession.type === "STATEMENT") {
-      user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-      });
-      
       // Проверяем, есть ли у пользователя сгенерированные документы
       // Учитываем все статусы кроме DRAFT (черновик)
       const documents = await prisma.document.findMany({
@@ -934,8 +960,8 @@ export async function POST(request: NextRequest) {
         // Импортируем функции поиска организации
         const { searchOrganizationInDatabase, searchOrganizationInMinjust } = await import("@/lib/organization-search");
         
-        // Извлекаем регион из профиля пользователя
-        const userRegion = user?.region || user?.city;
+        // Извлекаем регион из профиля пользователя (если есть)
+        const userRegion = user?.preferredDiscountCity;
         
         // Сначала ищем в собственной базе данных
         console.log(`[chat] 🔍 Searching organization in database: ${message}, region: ${userRegion}`);
