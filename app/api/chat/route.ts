@@ -1374,17 +1374,145 @@ export async function POST(request: NextRequest) {
     }
 
     // ОБРАБОТКА САМОСТОЯТЕЛЬНОГО ЗАПОЛНЕНИЯ ПРОФИЛЯ
-    // Если пользователь отправил [SELF_FILL_COMPLETED], возвращаем благодарственное сообщение
+    // Если пользователь отправил [SELF_FILL_COMPLETED], генерируем документы сразу
     if (message && message.includes("[SELF_FILL_COMPLETED]")) {
       aiResponse = `Благодарю вас за самостоятельное заполнение профиля! 🎉
 
-Все данные успешно сохранены. Теперь вы можете:
+Все данные успешно сохранены.`;
 
-- **Скачать документы** - перейдите в раздел "Документы"
+      // Проверяем, что это STATEMENT сессия и документы еще не созданы
+      if (chatSession.type === "STATEMENT" && !hasGeneratedDocuments) {
+        try {
+          const user = await prisma.user.findUnique({
+            where: { id: session.user.id },
+            include: { organization: true },
+          });
+
+          // Проверяем полноту профиля
+          const profileIsComplete = isProfileComplete(user);
+
+          if (profileIsComplete && user) {
+            console.log("[chat] 🎯 Self-fill completed with full profile - generating documents...");
+            
+            // Генерируем PDF файлы
+            const [membershipPath, contributionsPath] = await Promise.all([
+              generateMembershipApplication(user),
+              generateContributionsApplication(user, user.organization?.name, undefined),
+            ]);
+            
+            console.log("[chat] PDF files generated:", { membershipPath, contributionsPath });
+            
+            // Проверяем существующие документы
+            const existingDocs = await prisma.document.findMany({
+              where: {
+                userId: session.user.id,
+                type: {
+                  in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
+                },
+              },
+            });
+
+            // Получаем размеры файлов
+            const fs = await import("fs/promises");
+            const pathModule = await import("path");
+            
+            const membershipStats = await fs.stat(pathModule.join(process.cwd(), "public", membershipPath));
+            const contributionsStats = await fs.stat(pathModule.join(process.cwd(), "public", contributionsPath));
+
+            // Создаем или обновляем документы в базе данных
+            // Заявление о вступлении
+            const existingMembership = existingDocs.find(d => d.type === "MEMBERSHIP_APPLICATION");
+            if (existingMembership) {
+              await prisma.document.update({
+                where: { id: existingMembership.id },
+                data: {
+                  filePath: membershipPath,
+                  fileName: pathModule.basename(membershipPath),
+                  fileSize: membershipStats.size,
+                  status: "GENERATED",
+                },
+              });
+              console.log("[chat] ✅ Membership application updated in DB");
+            } else {
+              await prisma.document.create({
+                data: {
+                  userId: session.user.id,
+                  type: "MEMBERSHIP_APPLICATION",
+                  status: "GENERATED",
+                  title: "Заявление о вступлении в профсоюз",
+                  filePath: membershipPath,
+                  fileName: pathModule.basename(membershipPath),
+                  fileSize: membershipStats.size,
+                  mimeType: "application/pdf",
+                  organizationId: user.organizationId || null,
+                },
+              });
+              console.log("[chat] ✅ Membership application created in DB");
+            }
+
+            // Заявление о взносах
+            const existingContributions = existingDocs.find(d => d.type === "CONTRIBUTION_APPLICATION");
+            if (existingContributions) {
+              await prisma.document.update({
+                where: { id: existingContributions.id },
+                data: {
+                  filePath: contributionsPath,
+                  fileName: pathModule.basename(contributionsPath),
+                  fileSize: contributionsStats.size,
+                  status: "GENERATED",
+                },
+              });
+              console.log("[chat] ✅ Contributions application updated in DB");
+            } else {
+              await prisma.document.create({
+                data: {
+                  userId: session.user.id,
+                  type: "CONTRIBUTION_APPLICATION",
+                  status: "GENERATED",
+                  title: "Заявление о взносах",
+                  filePath: contributionsPath,
+                  fileName: pathModule.basename(contributionsPath),
+                  fileSize: contributionsStats.size,
+                  mimeType: "application/pdf",
+                  organizationId: user.organizationId || null,
+                },
+              });
+              console.log("[chat] ✅ Contributions application created in DB");
+            }
+            
+            console.log("[chat] ✅ Documents generated and saved to database successfully");
+            
+            // Добавляем маркер завершения и информацию о документах
+            aiResponse += `\n\n📄 **Заявления успешно сгенерированы!**
+
+Вы можете скачать их в разделе [Документы](/dashboard/documents):
+- ✅ Заявление о вступлении в профсоюз
+- ✅ Заявление о перечислении членских взносов
+
+**Что дальше?**
+- Скачайте документы, подпишите их и отправьте в ваше профсоюзное отделение
+- Спросите меня о профсоюзе, ваших правах или льготах
+- Сообщите о проблемах - я помогу вам с обращениями
+
+Чем я могу вам помочь?
+
+[PROFILE_COMPLETE]`;
+          } else {
+            console.log("[chat] ⚠️ Self-fill completed but profile incomplete");
+            aiResponse += `\n\nОднако для генерации заявлений необходимо заполнить все обязательные поля профиля. Пожалуйста, проверьте и дополните данные.`;
+          }
+        } catch (docError) {
+          console.error("[chat] ⚠️ Error generating documents after self-fill:", docError);
+          aiResponse += `\n\n⚠️ Произошла ошибка при генерации документов. Пожалуйста, обратитесь в поддержку или попробуйте позже.`;
+        }
+      } else {
+        aiResponse += `\n\nВы можете:
+- **Скачать документы** - перейдите в раздел [Документы](/dashboard/documents)
 - **Задать вопросы** - спросите меня о профсоюзе, ваших правах или льготах
 - **Сообщить о проблемах** - я помогу вам с обращениями и жалобами
 
 Чем я могу вам помочь?`;
+      }
     }
 
     // Проверяем полноту профиля и добавляем маркер завершения если нужно
