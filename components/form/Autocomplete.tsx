@@ -23,6 +23,7 @@ export default function Autocomplete({
   const [filteredOptions, setFilteredOptions] = useState<string[]>([]);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [justSelected, setJustSelected] = useState(false); // Флаг что значение только что выбрано
+  const [userTyping, setUserTyping] = useState(false); // Флаг что пользователь вводит текст
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -33,6 +34,7 @@ export default function Autocomplete({
       return;
     }
 
+    // Фильтруем опции только если пользователь начал вводить текст
     if (value.trim().length >= 2) {
       const query = value.toLowerCase();
       
@@ -57,13 +59,16 @@ export default function Autocomplete({
       const filtered = [...exact, ...startsWith, ...contains].slice(0, 10); // Топ-10 результатов
       
       setFilteredOptions(filtered);
-      setIsOpen(filtered.length > 0);
+      // Открываем dropdown ТОЛЬКО если пользователь вводит текст
+      if (userTyping) {
+        setIsOpen(filtered.length > 0);
+      }
     } else {
       setFilteredOptions([]);
       setIsOpen(false);
     }
     setHighlightedIndex(-1);
-  }, [value, options, justSelected]);
+  }, [value, options, justSelected, userTyping]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -82,12 +87,14 @@ export default function Autocomplete({
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUserTyping(true); // Пользователь начал вводить текст
     onChange(e.target.value);
   };
 
   const handleOptionClick = (option: string) => {
     onChange(option);
     setJustSelected(true); // Устанавливаем флаг что значение выбрано
+    setUserTyping(false); // Сбрасываем флаг ввода
     setIsOpen(false);
     inputRef.current?.blur(); // Убираем фокус чтобы закрыть dropdown
   };
@@ -129,7 +136,12 @@ export default function Autocomplete({
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
         onFocus={() => {
-          if (filteredOptions.length > 0) setIsOpen(true);
+          // НЕ открываем dropdown автоматически при фокусе
+          // Он откроется только когда пользователь начнет вводить текст
+        }}
+        onBlur={() => {
+          // Сбрасываем флаг ввода при потере фокуса
+          setTimeout(() => setUserTyping(false), 200); // Небольшая задержка для обработки клика по опции
         }}
         placeholder={placeholder}
         className={className}
