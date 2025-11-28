@@ -884,18 +884,101 @@ function Step2DocumentsUpload({
   docs: any;
   onChange: (docs: any) => void;
 }) {
+  const [generatedDocs, setGeneratedDocs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Загружаем сгенерированные документы
+  useEffect(() => {
+    async function loadDocuments() {
+      try {
+        const response = await fetch("/api/documents");
+        if (response.ok) {
+          const data = await response.json();
+          // Фильтруем только сгенерированные документы
+          const generated = data.filter((doc: any) => 
+            doc.status === "GENERATED" && 
+            (doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION")
+          );
+          setGeneratedDocs(generated);
+        }
+      } catch (error) {
+        console.error("Failed to load documents:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadDocuments();
+  }, []);
+
+  const membershipDoc = generatedDocs.find(d => d.type === "MEMBERSHIP_APPLICATION");
+  const contributionDoc = generatedDocs.find(d => d.type === "CONTRIBUTION_APPLICATION");
+
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold mb-4">Загрузка документов</h3>
+      <h3 className="text-lg font-semibold mb-4">Загрузка подписанных документов</h3>
       
+      {/* Инструкция */}
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+          📄 Инструкция:
+        </h4>
+        <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
+          <li>Скачайте сгенерированные документы ниже</li>
+          <li>Распечатайте их</li>
+          <li>Подпишите и поставьте дату</li>
+          <li>Отсканируйте или сфотографируйте подписанные документы</li>
+          <li>Загрузите обратно в форму ниже</li>
+        </ol>
+      </div>
+
+      {/* Скачивание сгенерированных документов */}
+      {!loading && (membershipDoc || contributionDoc) && (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+          <h4 className="font-semibold text-green-900 dark:text-green-100 mb-3">
+            ✅ Сгенерированные документы для скачивания:
+          </h4>
+          <div className="space-y-2">
+            {membershipDoc && (
+              <a
+                href={`/api/documents/${membershipDoc.id}/download`}
+                download
+                className="flex items-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>📄 Скачать заявление о вступлении в профсоюз</span>
+              </a>
+            )}
+            {contributionDoc && (
+              <a
+                href={`/api/documents/${contributionDoc.id}/download`}
+                download
+                className="flex items-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>📄 Скачать заявление о перечислении членских взносов</span>
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Загрузка подписанных документов */}
       <div className="space-y-4">
+        <h4 className="font-semibold text-gray-900 dark:text-white mb-3">
+          Загрузите подписанные документы:
+        </h4>
+        
         <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6">
           <label className="block text-sm font-medium mb-2">
-            Заявление о вступлении *
+            Заявление о вступлении (подписанное) *
           </label>
           <input
             type="file"
-            accept=".pdf"
+            accept=".pdf,image/*"
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) onChange({ ...docs, membership: file });
@@ -911,11 +994,11 @@ function Step2DocumentsUpload({
 
         <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6">
           <label className="block text-sm font-medium mb-2">
-            Заявление о взносах *
+            Заявление о взносах (подписанное) *
           </label>
           <input
             type="file"
-            accept=".pdf"
+            accept=".pdf,image/*"
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) onChange({ ...docs, contribution: file });
@@ -928,12 +1011,6 @@ function Step2DocumentsUpload({
             </p>
           )}
         </div>
-      </div>
-
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <p className="text-sm text-blue-800 dark:text-blue-200">
-          💡 Скачайте пустые бланки, заполните их, подпишите и загрузите обратно
-        </p>
       </div>
     </div>
   );
