@@ -281,7 +281,7 @@ export function ProfileSelfFillModal({
       try {
         // Отправляем команду на генерацию документов
         await sendCompletionMessage();
-        alert("✅ Документы успешно сгенерированы! Скачайте их в разделе 'Документы', распечатайте, подпишите и загрузите на следующем шаге.");
+        // Переходим к следующему шагу (там уже будут кнопки скачивания)
         setCurrentStep(3); // → К загрузке документов
       } catch (error) {
         console.error("Error generating documents:", error);
