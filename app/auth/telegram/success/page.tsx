@@ -18,37 +18,40 @@ function TelegramSuccessContent() {
     const token = searchParams.get("token");
     const checkTelegram = searchParams.get("check");
 
-    // Если нужно проверить Telegram, показываем инструкции
-    if (checkTelegram === "true") {
+    // Если нужно проверить Telegram (старая логика), показываем инструкции
+    if (checkTelegram === "true" && !token) {
       setShowInstructions(true);
       return;
     }
 
     if (!token) {
-      setError("Токен авторизации не найден");
-      setTimeout(() => router.push("/login"), 3000);
+      setError("Токен авторизации не найден. Проверьте Telegram бот для получения ссылки.");
+      setShowInstructions(true);
       return;
     }
 
-    // Авторизуем пользователя по токену
+    // Авторизуем пользователя по токену автоматически
     const authenticate = async () => {
       try {
+        console.log("[Telegram Success] Попытка авторизации по токену");
         const result = await signIn("credentials", {
           loginToken: token,
           redirect: false,
         });
 
         if (result?.error) {
-          setError("Ошибка авторизации. Попробуйте снова.");
-          setTimeout(() => router.push("/login"), 3000);
+          console.error("[Telegram Success] Ошибка авторизации:", result.error);
+          setError("Ошибка авторизации. Попробуйте использовать кнопку в Telegram боте.");
+          setShowInstructions(true);
         } else if (result?.ok) {
+          console.log("[Telegram Success] Авторизация успешна, редирект в dashboard");
           // Успешная авторизация - редирект в dashboard
           router.push("/dashboard");
         }
       } catch (err) {
         console.error("[Telegram Success] Ошибка:", err);
-        setError("Произошла ошибка. Попробуйте снова.");
-        setTimeout(() => router.push("/login"), 3000);
+        setError("Произошла ошибка. Попробуйте использовать кнопку в Telegram боте.");
+        setShowInstructions(true);
       }
     };
 
@@ -71,14 +74,23 @@ function TelegramSuccessContent() {
             Проверьте Telegram! 📱
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            Мы отправили вам сообщение с кнопкой для входа в личный кабинет.
+            {error 
+              ? "Автоматическая авторизация не удалась. Используйте кнопку в Telegram боте."
+              : "Мы отправили вам сообщение с кнопкой для входа в личный кабинет. Вы также будете авторизованы автоматически через несколько секунд."}
           </p>
+          {error && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
+              <p className="text-sm text-red-700 dark:text-red-400">
+                {error}
+              </p>
+            </div>
+          )}
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
             <p className="text-sm text-blue-700 dark:text-blue-400">
               <b>💡 Что делать дальше:</b><br/>
               1. Откройте Telegram<br/>
-              2. Найдите сообщение от нашего бота<br/>
-              3. Нажмите на кнопку для входа
+              2. Найдите сообщение от бота @myunionpro_bot<br/>
+              3. Нажмите на кнопку "Войти в личный кабинет"
             </p>
           </div>
           <a

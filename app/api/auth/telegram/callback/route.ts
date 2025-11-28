@@ -145,10 +145,33 @@ export async function GET(request: NextRequest) {
       await sendReturningUserWelcome(id, loginToken, first_name || undefined);
     }
 
-    // Редиректим на страницу с инструкцией проверить Telegram
-    return NextResponse.redirect(
-      new URL(`/auth/telegram/success?check=true`, request.url)
-    );
+    // Определяем правильный базовый URL
+    // Для localhost всегда используем http, для продакшена - из env или из заголовков
+    const host = request.headers.get("host") || "localhost:3000";
+    const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+    
+    let baseUrl: string;
+    if (process.env.NEXTAUTH_URL) {
+      baseUrl = process.env.NEXTAUTH_URL;
+    } else if (process.env.NEXT_PUBLIC_APP_URL) {
+      baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+    } else if (isLocalhost) {
+      // Для localhost всегда http
+      baseUrl = `http://${host}`;
+    } else {
+      // Для продакшена определяем по заголовкам
+      const proto = request.headers.get("x-forwarded-proto") || 
+                    (request.url.startsWith("https") ? "https" : "http");
+      baseUrl = `${proto}://${host}`;
+    }
+    
+    // Редиректим на страницу с токеном для автоматической авторизации
+    const redirectUrl = new URL(`/auth/telegram/success?token=${loginToken}`, baseUrl);
+    
+    console.log("[Telegram Login] Редирект на:", redirectUrl.toString());
+    console.log("[Telegram Login] Host:", host, "isLocalhost:", isLocalhost);
+    
+    return NextResponse.redirect(redirectUrl);
   } catch (error) {
     console.error("[Telegram Login] Ошибка:", error);
     return NextResponse.redirect(

@@ -109,6 +109,53 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // Команда /start login - авторизация через кнопку в боте
+    if (text === "/start login" || text === "/login") {
+      console.log("[Telegram Webhook] Команда login от пользователя:", chatId);
+      
+      // Проверяем, есть ли пользователь с этим chat_id
+      const user = await prisma.user.findUnique({
+        where: { telegramChatId: chatId },
+      });
+
+      if (!user) {
+        // Пользователь не привязан - отправляем инструкцию
+        await sendTelegramMessage(
+          chatId,
+          `❌ <b>Telegram не привязан к аккаунту</b>
+
+Для авторизации через Telegram:
+1. Перейдите на страницу входа: <a href="https://myunion.pro/login">myunion.pro/login</a>
+2. Нажмите кнопку "Войти с Telegram"
+3. После авторизации Telegram будет привязан к вашему аккаунту
+
+После привязки вы сможете использовать быстрый вход через бот! 🚀`
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      // Пользователь привязан - создаем токен и отправляем кнопку для входа
+      const crypto = await import("crypto");
+      const loginToken = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
+
+      await prisma.loginToken.create({
+        data: {
+          token: loginToken,
+          userId: user.id,
+          expiresAt,
+        },
+      });
+
+      console.log("[Telegram Webhook] Создан токен для быстрого входа");
+
+      // Отправляем сообщение с кнопкой для входа
+      const { sendReturningUserWelcome } = await import("@/lib/telegram-bot");
+      await sendReturningUserWelcome(chatId, loginToken, user.firstName || undefined);
+      
+      return NextResponse.json({ ok: true });
+    }
+
     // Команды техподдержки
     if (text === "/help" || text === "/support" || text.toLowerCase() === "помощь" || text.toLowerCase() === "поддержка") {
       const { sendSupportMessage } = await import("@/lib/telegram-bot");

@@ -162,6 +162,8 @@ function LoginForm() {
         const data = await response.json();
 
         if (!response.ok || !data.success) {
+          // Убеждаемся, что остаемся на шаге ввода и email сохраняется
+          setStep("input");
           setError(data.error || "Ошибка при отправке письма");
           setLoading(false);
           return;
@@ -213,6 +215,8 @@ function LoginForm() {
             setTelegramLink(data.telegramLink);
           }
           
+          // Убеждаемся, что остаемся на шаге ввода и номер сохраняется
+          setStep("input");
           setError(data.message || "Необходимо привязать Telegram или MAX");
           setLoading(false);
           return;
@@ -240,6 +244,8 @@ function LoginForm() {
         }
         
         console.error("[Login] Итоговая ошибка:", errorMessage);
+        // Убеждаемся, что остаемся на шаге ввода и номер сохраняется
+        setStep("input");
         setError(errorMessage);
         setLoading(false);
         return;
@@ -499,34 +505,12 @@ function LoginForm() {
                   </div>
 
                   {/* Социальные сети */}
-                  <div className="mt-6 grid grid-cols-2 gap-3">
+                  <div className="mt-6 flex flex-col gap-3">
                     {/* Telegram */}
                     <div 
                       id="telegram-login-container" 
-                      className="relative flex items-center justify-center min-h-[48px] rounded-lg border border-gray-300 dark:border-gray-700 overflow-hidden"
+                      className="flex items-center justify-center min-h-[48px] rounded-lg border border-gray-300 dark:border-gray-700 overflow-hidden"
                     >
-                      {/* Fallback кнопка - показывается если виджет не загрузился */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          // Пытаемся кликнуть на виджет, если он загрузился
-                          const iframe = document.querySelector('#telegram-login-container iframe');
-                          if (iframe) {
-                            (iframe as HTMLIFrameElement).click();
-                          } else {
-                            // Если виджет не загрузился, открываем бота напрямую
-                            window.open('https://t.me/myunionpro_bot?start=login', '_blank');
-                          }
-                        }}
-                        className="absolute inset-0 flex items-center justify-center gap-3 px-4 py-3 bg-[#0088cc] hover:bg-[#0077b3] text-white font-medium rounded-lg transition-colors z-10"
-                        style={{ display: 'none' }} // Скрываем по умолчанию, показываем только если виджет не загрузился
-                        id="telegram-fallback-button"
-                      >
-                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161l-1.702 8.008c-.128.568-.473.706-.957.44l-2.644-1.947-1.275 1.227c-.141.141-.259.259-.533.259l.19-2.706 4.906-4.432c.213-.19-.046-.295-.33-.105l-6.062 3.817-2.612-.816c-.568-.178-.58-.568.119-.841l10.213-3.937c.473-.178.887.105.733.841z"/>
-                        </svg>
-                        <span>Telegram</span>
-                      </button>
                       {/* Виджет Telegram Login будет вставлен сюда */}
                     </div>
 
@@ -534,7 +518,7 @@ function LoginForm() {
                     <button
                       type="button"
                       disabled
-                      className="flex items-center justify-center gap-3 px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 font-medium rounded-lg cursor-not-allowed border border-gray-300 dark:border-gray-700"
+                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 font-medium rounded-lg cursor-not-allowed border border-gray-300 dark:border-gray-700"
                     >
                       <Image
                         src="/max-messenger-sign-logo.svg"
@@ -543,27 +527,27 @@ function LoginForm() {
                         height={24}
                         className="w-6 h-6"
                       />
-                      <span>MAX</span>
+                      <span>Войти с MAX</span>
                     </button>
 
                     {/* VK */}
                     <button
                       type="button"
                       disabled
-                      className="flex items-center justify-center gap-3 px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 font-medium rounded-lg cursor-not-allowed border border-gray-300 dark:border-gray-700"
+                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 font-medium rounded-lg cursor-not-allowed border border-gray-300 dark:border-gray-700"
                     >
                       <svg className="w-6 h-6" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M0 23.04C0 12.1788 0 6.74826 3.37413 3.37413C6.74826 0 12.1788 0 23.04 0H24.96C35.8212 0 41.2517 0 44.6259 3.37413C48 6.74826 48 12.1788 48 23.04V24.96C48 35.8212 48 41.2517 44.6259 44.6259C41.2517 48 35.8212 48 24.96 48H23.04C12.1788 48 6.74826 48 3.37413 44.6259C0 41.2517 0 35.8212 0 24.96V23.04Z" fill="#0077FF"/>
                         <path d="M25.54 34.5801C14.6 34.5801 8.3601 27.0801 8.1001 14.6001H13.5801C13.7601 23.7601 17.8 27.6401 21 28.4401V14.6001H26.1602V22.5001C29.3202 22.1601 32.6398 18.5601 33.7598 14.6001H38.9199C38.0599 19.4801 34.4599 23.0801 31.8999 24.5601C34.4599 25.7601 38.5601 28.9001 40.1201 34.5801H34.4399C33.2199 30.7801 30.1802 27.8401 26.1602 27.4401V34.5801H25.54Z" fill="white"/>
                       </svg>
-                      <span>VK</span>
+                      <span>Войти с VK</span>
                     </button>
 
                     {/* Google */}
                     <button
                       type="button"
                       disabled
-                      className="flex items-center justify-center gap-3 px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 font-medium rounded-lg cursor-not-allowed border border-gray-300 dark:border-gray-700"
+                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 font-medium rounded-lg cursor-not-allowed border border-gray-300 dark:border-gray-700"
                     >
                       <svg className="w-5 h-5" viewBox="0 0 24 24">
                         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -571,7 +555,7 @@ function LoginForm() {
                         <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                       </svg>
-                      <span>Google</span>
+                      <span>Войти с Google</span>
                     </button>
                   </div>
                 </div>
@@ -608,34 +592,38 @@ function TelegramLoginWrapper() {
     // Инициализация Telegram Login Widget
     const initTelegramWidget = () => {
       const container = document.getElementById("telegram-login-container");
-      const fallbackButton = document.getElementById("telegram-fallback-button");
       if (!container) return;
       
+      // Очищаем предыдущий виджет
+      container.innerHTML = "";
+      
       // Проверяем, что домен настроен (иначе виджет покажет ошибку)
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+      // Используем текущий origin с правильным протоколом
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                      (window.location.protocol === "https:" 
+                        ? window.location.origin 
+                        : window.location.origin.replace("https://", "http://"));
       const isProduction = baseUrl.includes("myunion.pro");
       
       if (!isProduction) {
-        // В разработке показываем fallback кнопку сразу
-        if (fallbackButton) {
-          (fallbackButton as HTMLButtonElement).style.display = "flex";
-        }
-        // В разработке не загружаем виджет
+        // В разработке показываем обычную кнопку, которая открывает бота
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "w-full flex items-center justify-center gap-3 px-4 py-3 bg-[#0088cc] hover:bg-[#0077b3] text-white font-medium rounded-lg transition-colors";
+        button.innerHTML = `
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161l-1.702 8.008c-.128.568-.473.706-.957.44l-2.644-1.947-1.275 1.227c-.141.141-.259.259-.533.259l.19-2.706 4.906-4.432c.213-.19-.046-.295-.33-.105l-6.062 3.817-2.612-.816c-.568-.178-.58-.568.119-.841l10.213-3.937c.473-.178.887.105.733.841z"/>
+          </svg>
+          <span>Войти с Telegram</span>
+        `;
+        button.onclick = () => {
+          window.open('https://t.me/myunionpro_bot?start=login', '_blank');
+        };
+        container.appendChild(button);
         return;
       }
       
-      // В продакшене сначала показываем fallback, потом скроем если виджет загрузится
-      if (fallbackButton) {
-        (fallbackButton as HTMLButtonElement).style.display = "flex";
-      }
-      
-      // Очищаем предыдущий виджет (но оставляем fallback кнопку)
-      const existingScript = container.querySelector('script[data-telegram-login]');
-      if (existingScript) {
-        existingScript.remove();
-      }
-      
-      // Создаем script элемент для виджета
+      // В продакшене загружаем официальный виджет
       const script = document.createElement("script");
       script.src = "https://telegram.org/js/telegram-widget.js?22";
       script.async = true;
@@ -644,26 +632,6 @@ function TelegramLoginWrapper() {
       script.setAttribute("data-radius", "8");
       script.setAttribute("data-auth-url", `${baseUrl}/api/auth/telegram/callback`);
       script.setAttribute("data-request-access", "write");
-      
-      // Обработка ошибок виджета
-      script.onerror = () => {
-        console.warn("[Telegram Login] Виджет не загрузился, показываем fallback кнопку");
-        if (fallbackButton) {
-          (fallbackButton as HTMLButtonElement).style.display = "flex";
-        }
-      };
-      
-      // Проверяем, загрузился ли виджет через 2 секунды
-      setTimeout(() => {
-        const iframe = container.querySelector('iframe');
-        if (!iframe && fallbackButton) {
-          // Виджет не загрузился, показываем fallback
-          (fallbackButton as HTMLButtonElement).style.display = "flex";
-        } else if (iframe && fallbackButton) {
-          // Виджет загрузился, скрываем fallback
-          (fallbackButton as HTMLButtonElement).style.display = "none";
-        }
-      }, 2000);
       
       container.appendChild(script);
       
