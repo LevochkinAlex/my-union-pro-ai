@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
     const first_name = searchParams.get("first_name");
     const last_name = searchParams.get("last_name");
     const username = searchParams.get("username");
+    const phone = searchParams.get("phone"); // Опционально, если пользователь разрешил
     const photo_url = searchParams.get("photo_url");
     const auth_date = searchParams.get("auth_date");
     const hash = searchParams.get("hash");
@@ -82,14 +83,61 @@ export async function GET(request: NextRequest) {
 
     console.log("[Telegram Login] Подпись проверена успешно");
 
+    // Нормализуем номер телефона, если он был передан
+    const normalizePhone = (phone: string): string => {
+      let cleaned = phone.replace(/[\s\-\(\)]/g, "");
+      if (cleaned.startsWith("8")) {
+        cleaned = "+7" + cleaned.slice(1);
+      }
+      if (cleaned.startsWith("7") && !cleaned.startsWith("+")) {
+        cleaned = "+" + cleaned;
+      }
+      return cleaned;
+    };
+
+    const normalizedPhone = phone ? normalizePhone(phone) : null;
+
+    console.log("[Telegram Login] Данные от Telegram:", {
+      telegramId: id,
+      phone: normalizedPhone ? "****" + normalizedPhone.slice(-4) : "не передан",
+      username,
+      firstName: first_name,
+    });
+
     // Ищем существующего пользователя
+    // 1. Сначала по telegramChatId
     let user = await prisma.user.findUnique({
       where: { telegramChatId: id },
     });
 
+    // 2. Если не найден и есть phone - ищем по номеру телефона
+    if (!user && normalizedPhone) {
+      user = await prisma.user.findUnique({
+        where: { phone: normalizedPhone },
+      });
+
+      if (user) {
+        console.log("[Telegram Login] 🔗 Найден существующий аккаунт по номеру телефона. Синхронизируем с Telegram:", user.id);
+        
+        // Обновляем существующего пользователя (зарегистрированного через SMS)
+        // Добавляем к нему Telegram данные
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            telegramChatId: id,
+            telegramUsername: username || user.telegramUsername,
+            firstName: first_name || user.firstName,
+            lastName: last_name || user.lastName,
+          },
+        });
+        
+        console.log("[Telegram Login] ✅ Аккаунт синхронизирован: SMS ↔ Telegram");
+      }
+    }
+
     const isNewUser = !user;
 
-    if (user) {
+    if (user && !isNewUser) {
       // Обновляем данные существующего пользователя
       console.log("[Telegram Login] Пользователь найден:", user.id);
       
@@ -99,10 +147,11 @@ export async function GET(request: NextRequest) {
           telegramUsername: username || user.telegramUsername,
           firstName: first_name || user.firstName,
           lastName: last_name || user.lastName,
-          // Не перезаписываем статус если пользователь уже активен
+          // Если у пользователя не было phone, но Telegram передал - сохраняем
+          phone: normalizedPhone || user.phone,
         },
       });
-    } else {
+    } else if (isNewUser) {
       // Создаем нового пользователя
       console.log("[Telegram Login] Создаем нового пользователя");
       
@@ -112,6 +161,7 @@ export async function GET(request: NextRequest) {
           telegramUsername: username || null,
           firstName: first_name || null,
           lastName: last_name || null,
+          phone: normalizedPhone,
           role: "PENDING_MEMBER",
           membershipStatus: "PROFILE_INCOMPLETE",
         },
