@@ -136,6 +136,10 @@ export function ProfileSelfFillModal({
   const [showCloseWarning, setShowCloseWarning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hasExistingDocuments, setHasExistingDocuments] = useState(false);
+  const [existingDocs, setExistingDocs] = useState<{
+    membership?: { id: string; signedFilePath: string | null };
+    contribution?: { id: string; signedFilePath: string | null };
+  }>({});
 
   // Справочники профессий и должностей
   const [jobTitles, setJobTitles] = useState<string[]>([]);
@@ -243,7 +247,20 @@ export function ProfileSelfFillModal({
             doc.status !== "DELETED"
           );
           setHasExistingDocuments(generatedDocs.length > 0);
-          console.log("[ProfileModal] Has existing documents:", generatedDocs.length > 0);
+          
+          // Сохраняем информацию о существующих документах
+          const membershipDoc = generatedDocs.find((d: any) => d.type === "MEMBERSHIP_APPLICATION");
+          const contributionDoc = generatedDocs.find((d: any) => d.type === "CONTRIBUTION_APPLICATION");
+          
+          setExistingDocs({
+            membership: membershipDoc ? { id: membershipDoc.id, signedFilePath: membershipDoc.signedFilePath } : undefined,
+            contribution: contributionDoc ? { id: contributionDoc.id, signedFilePath: contributionDoc.signedFilePath } : undefined,
+          });
+          
+          console.log("[ProfileModal] Has existing documents:", {
+            membership: !!membershipDoc?.signedFilePath,
+            contribution: !!contributionDoc?.signedFilePath,
+          });
         }
       } catch (error) {
         console.error("[ProfileModal] Failed to load data:", error);
@@ -393,10 +410,26 @@ export function ProfileSelfFillModal({
   };
 
   const validateStep2 = (): boolean => {
-    if (!uploadedDocs.membership || !uploadedDocs.contribution) {
-      alert("Загрузите оба документа");
+    // Проверяем только те документы, которых нет в базе (не загружены ранее)
+    const needsMembership = !existingDocs.membership?.signedFilePath;
+    const needsContribution = !existingDocs.contribution?.signedFilePath;
+    
+    if (needsMembership && !uploadedDocs.membership) {
+      alert("Загрузите заявление о вступлении в профсоюз");
       return false;
     }
+    
+    if (needsContribution && !uploadedDocs.contribution) {
+      alert("Загрузите заявление о перечислении членских взносов");
+      return false;
+    }
+    
+    // Если оба документа уже загружены, можно пропустить
+    if (!needsMembership && !needsContribution) {
+      console.log("[ProfileModal] Both documents already uploaded, skipping validation");
+      return true;
+    }
+    
     return true;
   };
 
@@ -454,11 +487,31 @@ export function ProfileSelfFillModal({
   const uploadDocuments = async () => {
     try {
       const formData = new FormData();
-      if (uploadedDocs.membership) {
+      
+      // Отправляем только те документы, которых нет в базе (не загружены ранее)
+      const needsMembership = !existingDocs.membership?.signedFilePath;
+      const needsContribution = !existingDocs.contribution?.signedFilePath;
+      
+      if (needsMembership && uploadedDocs.membership) {
         formData.append("membership", uploadedDocs.membership);
+        console.log("[ProfileModal] Uploading membership document");
       }
-      if (uploadedDocs.contribution) {
+      
+      if (needsContribution && uploadedDocs.contribution) {
         formData.append("contribution", uploadedDocs.contribution);
+        console.log("[ProfileModal] Uploading contribution document");
+      }
+      
+      // Если оба документа уже загружены, ничего не отправляем
+      if (!needsMembership && !needsContribution) {
+        console.log("[ProfileModal] Both documents already uploaded, skipping upload");
+        return;
+      }
+      
+      // Если нет файлов для загрузки, выходим
+      if (!formData.has("membership") && !formData.has("contribution")) {
+        console.log("[ProfileModal] No new documents to upload");
+        return;
       }
 
       const response = await fetch("/api/documents/upload", {
