@@ -36,17 +36,22 @@ export async function sendSMSViaExolve(
     // Нормализуем номер для Exolve (убираем +, оставляем только цифры)
     const normalizedPhone = phone.replace(/[^\d]/g, "");
 
-    // Согласно документации Exolve SMS API
+    // Exolve использует JSON-RPC протокол
     // https://docs.exolve.ru/docs/ru/api-reference/sms-api/
     const requestBody = {
-      number: EXOLVE_SENDER_NUMBER, // Номер отправителя (купленный в Exolve)
-      destination: normalizedPhone,  // Номер получателя
-      text: text,
+      jsonrpc: "2.0",
+      id: Date.now(),
+      method: "sms.send",
+      params: {
+        number: EXOLVE_SENDER_NUMBER, // Номер отправителя (купленный в Exolve)
+        destination: normalizedPhone,  // Номер получателя
+        text: text,
+      },
     };
 
     console.log("[Exolve SMS] Запрос:", {
       url: EXOLVE_API_URL,
-      number: normalizedPhone,
+      destination: normalizedPhone,
       hasKey: !!EXOLVE_API_KEY,
     });
 
@@ -67,14 +72,24 @@ export async function sendSMSViaExolve(
       data,
     });
 
+    // Проверяем JSON-RPC ответ
+    if (data.error) {
+      console.error("[Exolve SMS] Ошибка API (JSON-RPC):", data.error);
+      return {
+        success: false,
+        error: data.error.message || `Ошибка Exolve API: ${data.error.code}`,
+        details: data.error,
+      };
+    }
+
     if (!response.ok) {
-      console.error("[Exolve SMS] Ошибка API:", {
+      console.error("[Exolve SMS] Ошибка HTTP:", {
         status: response.status,
         data,
       });
       return {
         success: false,
-        error: data.message || data.error || `Ошибка Exolve API: ${response.status}`,
+        error: `Ошибка Exolve API: ${response.status}`,
         details: data,
       };
     }
@@ -83,7 +98,7 @@ export async function sendSMSViaExolve(
 
     return {
       success: true,
-      messageId: data.txn_id || data.message_id || data.id,
+      messageId: data.result?.txn_id || data.id,
     };
   } catch (error) {
     console.error("[Exolve SMS] Ошибка при отправке SMS:", error);
