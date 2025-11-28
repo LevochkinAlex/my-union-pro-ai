@@ -334,7 +334,7 @@ export async function POST(request: NextRequest) {
       document = await prisma.document.create({
         data: {
           userId: session.user.id,
-          type: documentType,
+          type: documentType as any,
           status: "GENERATED",
           title: file.name,
           fileName: file.name,
