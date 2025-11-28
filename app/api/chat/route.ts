@@ -207,13 +207,12 @@ ${userInfo.join('\n')}
 
   // Добавляем специфичные инструкции в зависимости от типа сессии
   if (sessionType === "STATEMENT") {
-    // Проверяем полноту профиля пользователя
-    const profileComplete = user ? isProfileComplete(user) : false;
+    // AI-режим включается ТОЛЬКО после отправки документов на проверку
+    // До этого - только системные сообщения
     
-    // Новый универсальный промпт - бот отвечает на вопросы и ведёт беседы
     prompt += `\n\n## ИНСТРУКЦИИ ДЛЯ AI-ПОМОЩНИКА ПРОФСОЮЗА МООП РЗ:
 
-Ты - умный AI-помощник профсоюза МООП РЗ. Твоя главная задача - отвечать на вопросы пользователей и вести с ними беседы.
+Ты - умный AI-помощник профсоюза МООП РЗ. Твоя главная задача - отвечать на вопросы пользователей и вести с ними дружелюбные беседы.
 
 ### ТВОИ ОСНОВНЫЕ ФУНКЦИИ:
 
@@ -244,20 +243,13 @@ ${userInfo.join('\n')}
 **3. ОБЩЕНИЕ И ПОДДЕРЖКА:**
 - Веди дружелюбные беседы на любые темы
 - Помогай с вопросами и проблемами
-- Записывай важную информацию о проблемах пользователя
-
-### ⚠️ ВАЖНО - ЗАЯВЛЕНИЯ:
-${profileComplete ? `Профиль пользователя заполнен. Если нужно изменить данные - направляй в раздел "Профиль".` : `Если пользователь ещё не заполнил анкету - предложи нажать кнопку "Заполнить анкету" для подачи заявления о вступлении в профсоюз.`}
-
-### 📝 ЗАПОМИНАНИЕ ИНФОРМАЦИИ:
-- Если пользователь рассказывает о проблеме или важной ситуации - запомни это
-- Если пользователь делится личной информацией - используй её для персонализации
-- Веди себя как внимательный собеседник, который помнит контекст разговора
+- Будь внимательным собеседником
 
 ### СТИЛЬ ОБЩЕНИЯ:
-- Будь дружелюбным и профессиональным
+- Будь дружелюбным, тёплым и приветливым
 - Обращайся к пользователю по имени, если знаешь его
 - Давай полезные и конкретные ответы
+- Используй эмодзи для создания дружелюбной атмосферы 😊
 - Не бойся признать, если чего-то не знаешь`;
   } else if (sessionType === "APPEAL") {
     // Инструкции для чата обращений
@@ -451,6 +443,8 @@ export async function POST(request: NextRequest) {
     
     // Проверяем документы (только для STATEMENT сессий)
     let hasGeneratedDocuments = false;
+    let hasSignedDocuments = false; // Оба документа подписаны и отправлены на проверку
+    
     if (chatSession.type === "STATEMENT") {
       // Проверяем, есть ли у пользователя сгенерированные документы
       // Учитываем все статусы кроме DRAFT (черновик)
@@ -464,14 +458,27 @@ export async function POST(request: NextRequest) {
             not: "DRAFT",
           },
         },
-        take: 1,
       });
       hasGeneratedDocuments = documents.length > 0;
       
+      // Проверяем, есть ли ОБА подписанных документа
+      const signedDocs = await prisma.document.findMany({
+        where: {
+          userId: session.user.id,
+          type: {
+            in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
+          },
+          status: {
+            in: ["SIGNED", "PENDING", "APPROVED"],
+          },
+        },
+      });
+      const hasMembership = signedDocs.some(d => d.type === "MEMBERSHIP_APPLICATION");
+      const hasContribution = signedDocs.some(d => d.type === "CONTRIBUTION_APPLICATION");
+      hasSignedDocuments = hasMembership && hasContribution;
+      
       // Логируем для отладки
-      if (hasGeneratedDocuments) {
-        console.log(`[chat] User ${session.user.id} has ${documents.length} generated documents`);
-      }
+      console.log(`[chat] User ${session.user.id}: generated=${hasGeneratedDocuments}, signed=${hasSignedDocuments}`);
     }
 
     // Формируем системный промпт с учетом настроек бота и типа сессии
@@ -488,6 +495,61 @@ export async function POST(request: NextRequest) {
       },
       take: 50, // Последние 50 сообщений
     });
+
+    // ========== ПРОВЕРКА: AI ВКЛЮЧАЕТСЯ ТОЛЬКО ПОСЛЕ ОТПРАВКИ ДОКУМЕНТОВ ==========
+    // До отправки документов на проверку - только системные сообщения без AI
+    if (chatSession.type === "STATEMENT" && !hasSignedDocuments) {
+      // Сохраняем сообщение пользователя
+      const cleanMessage = message
+        .replace(/\[SELF_FILL_COMPLETED\]/g, '')
+        .replace(/\[DOCUMENTS_UPLOADED\]/g, '')
+        .replace(/\[PROFILE_COMPLETE\]/g, '')
+        .trim();
+      
+      await prisma.chatMessage.create({
+        data: {
+          userId: session.user.id,
+          sessionId: chatSession.id,
+          role: "user",
+          content: cleanMessage,
+          chatBotId: bot.id,
+        },
+      });
+      
+      // Определяем системный ответ
+      let systemResponse = "";
+      
+      if (!hasGeneratedDocuments) {
+        // Документы ещё не сгенерированы - предлагаем заполнить анкету
+        systemResponse = `Для продолжения работы, пожалуйста, заполните анкету. Нажмите кнопку "Заполнить анкету" выше. 📝
+
+[SHOW_SELF_FILL_BUTTON]`;
+      } else {
+        // Документы сгенерированы, но не подписаны - предлагаем подписать
+        systemResponse = `Ваши документы сгенерированы! 📄
+
+Пожалуйста, скачайте их, подпишите и загрузите обратно в систему. После этого AI-помощник будет готов ответить на все ваши вопросы.
+
+[SHOW_DOCUMENTS_BUTTONS]`;
+      }
+      
+      // Сохраняем системный ответ
+      const assistantMessage = await prisma.chatMessage.create({
+        data: {
+          userId: session.user.id,
+          sessionId: chatSession.id,
+          role: "assistant",
+          content: systemResponse,
+          chatBotId: bot.id,
+        },
+      });
+      
+      return NextResponse.json({
+        message: systemResponse,
+        sessionId: chatSession.id,
+        messageId: assistantMessage.id,
+      });
+    }
 
     // ========== УНИВЕРСАЛЬНАЯ КОНТЕКСТНАЯ ОБРАБОТКА ==========
     // Определяем контекст: о чем спрашивал бот в последнем сообщении?

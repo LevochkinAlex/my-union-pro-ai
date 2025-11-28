@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     const profileComplete = isProfileComplete(user);
 
     // Проверяем наличие сгенерированных документов
-    const documents = await prisma.document.findMany({
+    const generatedDocuments = await prisma.document.findMany({
       where: {
         userId: session.user.id,
         type: {
@@ -42,19 +42,39 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const hasMembershipApp = documents.some(d => d.type === "MEMBERSHIP_APPLICATION");
-    const hasContributionApp = documents.some(d => d.type === "CONTRIBUTION_APPLICATION");
-    const hasGeneratedDocuments = hasMembershipApp && hasContributionApp;
+    const hasMembershipGenerated = generatedDocuments.some(d => d.type === "MEMBERSHIP_APPLICATION");
+    const hasContributionGenerated = generatedDocuments.some(d => d.type === "CONTRIBUTION_APPLICATION");
+    const hasGeneratedDocuments = hasMembershipGenerated || hasContributionGenerated;
 
-    // Заявление считается заполненным, если профиль заполнен И документы сгенерированы
-    const applicationFilled = profileComplete && hasGeneratedDocuments;
+    // Проверяем наличие ПОДПИСАННЫХ документов (для активации AI-чата)
+    const signedDocuments = await prisma.document.findMany({
+      where: {
+        userId: session.user.id,
+        type: {
+          in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
+        },
+        status: {
+          in: ["SIGNED", "PENDING", "APPROVED"],
+        },
+      },
+    });
+
+    const hasMembershipSigned = signedDocuments.some(d => d.type === "MEMBERSHIP_APPLICATION");
+    const hasContributionSigned = signedDocuments.some(d => d.type === "CONTRIBUTION_APPLICATION");
+    const hasSignedDocuments = hasMembershipSigned && hasContributionSigned;
+
+    // Чат активируется когда ОБА документа подписаны и отправлены на проверку
+    const applicationFilled = hasSignedDocuments;
 
     return NextResponse.json({
       applicationFilled,
       profileComplete,
       hasGeneratedDocuments,
-      hasMembershipApp,
-      hasContributionApp,
+      hasSignedDocuments,
+      hasMembershipGenerated,
+      hasContributionGenerated,
+      hasMembershipSigned,
+      hasContributionSigned,
     });
   } catch (error) {
     console.error("[check-application] Error:", error);
