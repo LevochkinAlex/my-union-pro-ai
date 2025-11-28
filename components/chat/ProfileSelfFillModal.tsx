@@ -21,10 +21,22 @@ export function ProfileSelfFillModal({
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showCloseWarning, setShowCloseWarning] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Справочники профессий и должностей
   const [jobTitles, setJobTitles] = useState<string[]>([]);
   const [professions, setProfessions] = useState<string[]>([]);
+
+  // Справочник организаций
+  interface Organization {
+    id: string;
+    name: string;
+    type: string;
+    level: number;
+    fullPath: string;
+    indentedName: string;
+  }
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
 
   // Данные формы
   const [profileData, setProfileData] = useState({
@@ -33,30 +45,85 @@ export function ProfileSelfFillModal({
     middleName: "",
     dateOfBirth: "",
     phone: "",
+    email: "",
     address: "",
     jobTitle: "",
     profession: "",
     education: "",
-    organizationName: "",
+    organizationId: "", // Теперь ID вместо имени
   });
 
-  // Загрузка справочников
+  // Статус верификации email
+  const [emailVerified, setEmailVerified] = useState<Date | null>(null);
+  const [originalEmail, setOriginalEmail] = useState<string>("");
+
+  // Загрузка данных пользователя и справочников
   useEffect(() => {
-    const loadDictionaries = async () => {
+    const loadData = async () => {
       try {
-        const response = await fetch("/api/dictionaries");
-        if (response.ok) {
-          const data = await response.json();
+        // Загружаем справочники
+        const dictResponse = await fetch("/api/dictionaries");
+        if (dictResponse.ok) {
+          const data = await dictResponse.json();
           setJobTitles(data.jobTitles || []);
           setProfessions(data.professions || []);
         }
+
+        // Загружаем организации
+        const orgsResponse = await fetch("/api/organizations");
+        if (orgsResponse.ok) {
+          const orgsData = await orgsResponse.json();
+          setOrganizations(orgsData.flatList || []);
+        }
+
+        // Загружаем существующие данные пользователя
+        const userResponse = await fetch("/api/user/profile");
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          console.log("[ProfileModal] Loaded user data:", userData);
+          
+          // API возвращает user напрямую, без обёртки
+          const user = userData.user || userData;
+          
+          // Заполняем форму существующими данными
+          setProfileData({
+            firstName: user.firstName || "",
+            lastName: user.lastName || "",
+            middleName: user.middleName || "",
+            dateOfBirth: user.dateOfBirth 
+              ? new Date(user.dateOfBirth).toISOString().split('T')[0] 
+              : "",
+            phone: user.phone || "",
+            email: user.email || "",
+            address: user.address || "",
+            jobTitle: user.jobTitle || "",
+            profession: user.profession || "",
+            education: user.education || "",
+            organizationId: user.organizationId || "",
+          });
+
+          // Сохраняем статус верификации email
+          setEmailVerified(user.emailVerified ? new Date(user.emailVerified) : null);
+          setOriginalEmail(user.email || "");
+
+          // Заполняем дополнительные данные если есть
+          setAdditionalData({
+            employmentStatus: user.employmentStatus || "",
+            maritalStatus: user.maritalStatus || "",
+            spouseInfo: user.spouseInfo || "",
+            hasChildren: user.hasChildren || false,
+            hobbies: user.hobbies || "",
+            aboutMe: user.aboutMe || "",
+            additionalInfo: user.additionalInfo || "",
+          });
+        }
       } catch (error) {
-        console.error("Failed to load dictionaries:", error);
+        console.error("[ProfileModal] Failed to load data:", error);
       }
     };
 
     if (isOpen) {
-      loadDictionaries();
+      loadData();
     }
   }, [isOpen]);
 
@@ -76,12 +143,9 @@ export function ProfileSelfFillModal({
   }>({});
 
   const handleClose = useCallback(() => {
-    if (hasUnsavedChanges && currentStep < 3) {
-      setShowCloseWarning(true);
-    } else {
-      onClose();
-    }
-  }, [hasUnsavedChanges, currentStep, onClose]);
+    // Разрешаем закрывать модалку в любой момент без предупреждений
+    onClose();
+  }, [onClose]);
 
   const handleConfirmClose = () => {
     setShowCloseWarning(false);
@@ -128,12 +192,21 @@ export function ProfileSelfFillModal({
       !profileData.lastName ||
       !profileData.dateOfBirth ||
       !profileData.phone ||
+      !profileData.email ||
       !profileData.address ||
       !profileData.jobTitle ||
       !profileData.profession ||
-      !profileData.education
+      !profileData.education ||
+      !profileData.organizationId
     ) {
       alert("Заполните все обязательные поля");
+      return false;
+    }
+    
+    // Проверка формата email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(profileData.email)) {
+      alert("Введите корректный email адрес");
       return false;
     }
     
@@ -146,6 +219,12 @@ export function ProfileSelfFillModal({
     // Проверяем, что профессия есть в справочнике
     if (!professions.includes(profileData.profession)) {
       alert(`Профессия "${profileData.profession}" не найдена в справочнике медицинских профессий. Выберите профессию из списка.`);
+      return false;
+    }
+    
+    // Проверяем, что организация выбрана из списка
+    if (!organizations.find(org => org.id === profileData.organizationId)) {
+      alert("Выберите организацию из списка");
       return false;
     }
     
@@ -163,12 +242,47 @@ export function ProfileSelfFillModal({
   const saveProfileData = async () => {
     try {
       const response = await fetch("/api/profile", {
-        method: "PATCH",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profileData),
       });
 
       if (!response.ok) throw new Error("Failed to save profile");
+
+      // Если email изменился или это новый email - отправляем письмо с подтверждением
+      if (profileData.email && profileData.email !== originalEmail) {
+        console.log("[ProfileModal] Email changed, sending verification email");
+        
+        try {
+          const verifyResponse = await fetch("/api/user/send-verification-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: profileData.email }),
+          });
+
+          if (verifyResponse.ok) {
+            const verifyData = await verifyResponse.json();
+            console.log("[ProfileModal] Verification email sent:", verifyData.message);
+            
+            // Обновляем originalEmail и сбрасываем emailVerified
+            setOriginalEmail(profileData.email);
+            setEmailVerified(null);
+            
+            // Показываем уведомление
+            alert(
+              "Профиль сохранен!\n\n" +
+              "На указанный email отправлено письмо с подтверждением. " +
+              "Пожалуйста, проверьте почту и перейдите по ссылке для активации доступа к скидкам."
+            );
+          } else {
+            const error = await verifyResponse.json();
+            console.error("[ProfileModal] Failed to send verification email:", error);
+          }
+        } catch (emailError) {
+          console.error("[ProfileModal] Error sending verification email:", emailError);
+          // Не блокируем сохранение профиля из-за ошибки отправки письма
+        }
+      }
     } catch (error) {
       console.error("Error saving profile:", error);
       alert("Ошибка при сохранении профиля");
@@ -322,6 +436,11 @@ export function ProfileSelfFillModal({
               }}
               jobTitles={jobTitles}
               professions={professions}
+              organizations={organizations}
+              emailVerified={emailVerified}
+              originalEmail={originalEmail}
+              saving={saving}
+              setSaving={setSaving}
             />
           )}
 
@@ -420,11 +539,28 @@ function Step1ProfileForm({
   onChange,
   jobTitles,
   professions,
+  organizations,
+  emailVerified,
+  originalEmail,
+  saving,
+  setSaving,
 }: {
   data: any;
   onChange: (data: any) => void;
   jobTitles: string[];
   professions: string[];
+  organizations: Array<{
+    id: string;
+    name: string;
+    type: string;
+    level: number;
+    fullPath: string;
+    indentedName: string;
+  }>;
+  emailVerified: Date | null;
+  originalEmail: string;
+  saving: boolean;
+  setSaving: (value: boolean) => void;
 }) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     onChange({ ...data, [e.target.name]: e.target.value });
@@ -490,6 +626,67 @@ function Step1ProfileForm({
           />
         </div>
 
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Email *
+            {emailVerified ? (
+              <span className="ml-2 text-xs text-green-600 dark:text-green-400">
+                ✓ Подтвержден
+              </span>
+            ) : data.email && originalEmail === data.email ? (
+              <span className="ml-2 text-xs text-orange-600 dark:text-orange-400">
+                ⚠ Ожидает подтверждения
+              </span>
+            ) : null}
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="email"
+              name="email"
+              value={data.email}
+              onChange={handleChange}
+              placeholder="example@mail.com"
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+            />
+            {data.email && !emailVerified && data.email === originalEmail && (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    setSaving(true);
+                    const response = await fetch("/api/user/send-verification-email", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ email: data.email }),
+                    });
+                    
+                    if (response.ok) {
+                      alert("Письмо с подтверждением отправлено на " + data.email);
+                    } else {
+                      const error = await response.json();
+                      alert(error.error || "Ошибка при отправке письма");
+                    }
+                  } catch (error) {
+                    console.error("Failed to send verification email:", error);
+                    alert("Ошибка при отправке письма");
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                disabled={saving}
+                className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors whitespace-nowrap"
+              >
+                Отправить повторно
+              </button>
+            )}
+          </div>
+          {data.email && !emailVerified && data.email === originalEmail && (
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Для доступа к скидкам BestBenefits подтвердите email. Проверьте почту.
+            </p>
+          )}
+        </div>
+
         <div className="col-span-2">
           <label className="block text-sm font-medium mb-1">Адрес *</label>
           <AddressInput
@@ -502,14 +699,28 @@ function Step1ProfileForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">Организация</label>
-          <input
-            type="text"
-            name="organizationName"
-            value={data.organizationName}
+          <label className="block text-sm font-medium mb-1">
+            Организация *
+          </label>
+          <select
+            name="organizationId"
+            value={data.organizationId}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
-          />
+            required
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 cursor-pointer"
+          >
+            <option value="">Выберите организацию...</option>
+            {organizations.map((org) => (
+              <option key={org.id} value={org.id}>
+                {org.indentedName}
+              </option>
+            ))}
+          </select>
+          {data.organizationId && (
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {organizations.find((o) => o.id === data.organizationId)?.fullPath}
+            </p>
+          )}
         </div>
 
         <div>
