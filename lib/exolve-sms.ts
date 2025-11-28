@@ -36,11 +36,11 @@ export async function sendSMSViaExolve(
     // Нормализуем номер для Exolve (убираем +, оставляем только цифры)
     const normalizedPhone = phone.replace(/[^\d]/g, "");
 
-    // Exolve Messaging API использует простой REST формат
+    // Exolve Messaging API использует REST формат с полями в lowercase
     // https://docs.exolve.ru/docs/ru/api-reference/sms-api/
     const requestBody = {
       number: EXOLVE_SENDER_NUMBER, // Номер отправителя (купленный в Exolve)
-      destination: normalizedPhone,  // Номер получателя
+      destination: normalizedPhone,  // Номер получателя (без +)
       text: text,
     };
 
