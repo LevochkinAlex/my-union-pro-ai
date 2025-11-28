@@ -1501,10 +1501,9 @@ export async function POST(request: NextRequest) {
       }
       
       // НЕ отвечаем автоматически - пользователь увидит только свое сообщение
-      // и продолжит работу в модальном окне
+      // Возвращаем успех без создания ответа ассистента
       return NextResponse.json({ 
-        success: true,
-        noResponse: true // Специальный флаг - не показывать ответ в UI
+        success: true
       });
     }
 

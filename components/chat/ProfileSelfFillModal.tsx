@@ -291,10 +291,16 @@ export function ProfileSelfFillModal({
       }
     } else if (currentStep === 3) {
       // Шаг 3: Проверка загрузки подписанных документов
+      console.log("[ProfileModal] Step 3: Uploading documents", uploadedDocs);
       const isValid = validateStep2();
-      if (!isValid) return;
+      if (!isValid) {
+        console.log("[ProfileModal] Validation failed");
+        return;
+      }
       
+      console.log("[ProfileModal] Uploading documents to server...");
       await uploadDocuments();
+      console.log("[ProfileModal] Documents uploaded successfully");
       await sendDocumentsUploadedMessage(); // Отправляем сообщение о загрузке документов
       setCurrentStep(4); // → К дополнительной информации
     } else if (currentStep === 4) {
