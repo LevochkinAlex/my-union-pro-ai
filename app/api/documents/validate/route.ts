@@ -155,11 +155,16 @@ ${expectedContent.requiredFields.map((f, i) => `${i + 1}. ${f}`).join("\n")}
     }
 
     const openaiInstance = getOpenAI();
+    
+    // Если OpenAI недоступен, пропускаем AI-валидацию и принимаем документ
     if (!openaiInstance) {
-      return NextResponse.json(
-        { valid: false, error: "AI validation not available" },
-        { status: 500 }
-      );
+      console.log("[validate-document] ⚠️ OpenAI not available, skipping AI validation");
+      return NextResponse.json({
+        valid: true,
+        message: "Документ принят (AI-валидация недоступна)",
+        confidence: 50,
+        skippedValidation: true,
+      });
     }
 
     const completion = await openaiInstance.chat.completions.create({
