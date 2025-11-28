@@ -6,7 +6,7 @@
 const EXOLVE_API_KEY = process.env.EXOLVE_API_KEY;
 const EXOLVE_SENDER_NUMBER = "79587173423"; // Номер отправителя в Exolve
 // Правильный endpoint для Exolve SMS API
-const EXOLVE_API_URL = "https://api.exolve.ru/sms/v1/SendSMS";
+const EXOLVE_API_URL = "https://api.exolve.ru/messaging/v1/SendSMS";
 
 export interface ExolveSMSResult {
   success: boolean;
@@ -36,17 +36,12 @@ export async function sendSMSViaExolve(
     // Нормализуем номер для Exolve (убираем +, оставляем только цифры)
     const normalizedPhone = phone.replace(/[^\d]/g, "");
 
-    // Exolve использует JSON-RPC протокол
+    // Exolve Messaging API использует простой REST формат
     // https://docs.exolve.ru/docs/ru/api-reference/sms-api/
     const requestBody = {
-      jsonrpc: "2.0",
-      id: Date.now(),
-      method: "sms.send",
-      params: {
-        number: EXOLVE_SENDER_NUMBER, // Номер отправителя (купленный в Exolve)
-        destination: normalizedPhone,  // Номер получателя
-        text: text,
-      },
+      number: EXOLVE_SENDER_NUMBER, // Номер отправителя (купленный в Exolve)
+      destination: normalizedPhone,  // Номер получателя
+      text: text,
     };
 
     console.log("[Exolve SMS] Запрос:", {
@@ -72,33 +67,24 @@ export async function sendSMSViaExolve(
       data,
     });
 
-    // Проверяем JSON-RPC ответ
-    if (data.error) {
-      console.error("[Exolve SMS] Ошибка API (JSON-RPC):", data.error);
-      return {
-        success: false,
-        error: data.error.message || `Ошибка Exolve API: ${data.error.code}`,
-        details: data.error,
-      };
-    }
-
-    if (!response.ok) {
-      console.error("[Exolve SMS] Ошибка HTTP:", {
+    // Проверяем ответ
+    if (!response.ok || data.error) {
+      console.error("[Exolve SMS] Ошибка API:", {
         status: response.status,
         data,
       });
       return {
         success: false,
-        error: `Ошибка Exolve API: ${response.status}`,
+        error: data.error?.message || data.message || `Ошибка Exolve API: ${response.status}`,
         details: data,
       };
     }
 
-    console.log("[Exolve SMS] ✅ SMS успешно отправлено");
+    console.log("[Exolve SMS] ✅ SMS успешно отправлено, message_id:", data.message_id);
 
     return {
       success: true,
-      messageId: data.result?.txn_id || data.id,
+      messageId: data.message_id || data.txn_id,
     };
   } catch (error) {
     console.error("[Exolve SMS] Ошибка при отправке SMS:", error);
