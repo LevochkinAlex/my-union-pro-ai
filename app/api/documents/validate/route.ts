@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { createWorker } from "tesseract.js";
-import sharp from "sharp";
 
 /**
  * POST /api/documents/validate
@@ -40,19 +39,13 @@ export async function POST(request: NextRequest) {
 
     // Обработка изображений (JPG, PNG)
     if (file.type.startsWith("image/")) {
-      // Оптимизируем изображение для OCR
-      const optimizedBuffer = await sharp(buffer)
-        .resize(2000, 2000, { fit: "inside", withoutEnlargement: true })
-        .grayscale()
-        .normalize()
-        .toBuffer();
-
-      imageBase64 = `data:${file.type};base64,${optimizedBuffer.toString("base64")}`;
+      // Используем оригинальный буфер (без sharp для оптимизации)
+      imageBase64 = `data:${file.type};base64,${buffer.toString("base64")}`;
 
       // OCR для извлечения текста из изображения
       console.log("[validate-document] Performing OCR...");
       const worker = await createWorker("rus");
-      const { data } = await worker.recognize(optimizedBuffer);
+      const { data } = await worker.recognize(buffer);
       textContent = data.text;
       await worker.terminate();
       console.log("[validate-document] OCR completed, extracted text length:", textContent.length);
