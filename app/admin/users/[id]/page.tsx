@@ -9,7 +9,7 @@ import { User } from "@prisma/client";
 
 export default function AdminUserDetailsPage() {
   const params = useParams();
-  const userId = id as string;
+  const userId = params.id as string;
   const { data: session } = useSession();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);

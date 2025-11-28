@@ -120,7 +120,7 @@ async function enrichParamsWithPreference(params: DiscountSearchParams, userId: 
     return;
   }
 
-  if (ids && ids.length > 0) {
+  if (params.ids && params.ids.length > 0) {
     return;
   }
 
@@ -135,9 +135,9 @@ async function enrichParamsWithPreference(params: DiscountSearchParams, userId: 
     const list: number[] | undefined =
       params.view === "favorites" ? filters?.favorites : filters?.claimed;
     if (list?.length) {
-      ids = list.join(",");
+      params.ids = list.join(",");
     }
-    // Если список пустой, не устанавливаем ids - вернется пустой результат
+    // Если список пустой, не устанавливаем params.ids - вернется пустой результат
   } catch (error) {
     console.warn("[api/discounts] Failed to load preference filters:", error);
   }

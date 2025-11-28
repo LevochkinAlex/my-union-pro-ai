@@ -8,7 +8,6 @@ function serializeProvider(provider: ApiProvider) {
   let parsedModels: unknown = [];
   if (typeof availableModels === "string" && availableModels.trim().length > 0) {
     try {
-    const { id } = await params;
       parsedModels = JSON.parse(availableModels);
     } catch (error) {
       console.warn(`[api-providers] Не удалось распарсить availableModels для ${provider.name}:`, error);
@@ -19,7 +18,6 @@ function serializeProvider(provider: ApiProvider) {
   let parsedCapabilities: unknown = null;
   if (typeof capabilities === "string" && capabilities.trim().length > 0) {
     try {
-    const { id } = await params;
       parsedCapabilities = JSON.parse(capabilities);
     } catch (error) {
       console.warn(`[api-providers] Не удалось распарсить capabilities для ${provider.name}:`, error);
@@ -42,7 +40,6 @@ export async function GET(
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
     const { error } = await ensureSuperAdmin();
     if (error) {
       return error;
@@ -78,7 +75,6 @@ export async function PUT(
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
     const { error } = await ensureSuperAdmin();
     if (error) {
       return error;
@@ -159,7 +155,6 @@ export async function DELETE(
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
     const { error } = await ensureSuperAdmin();
     if (error) {
       return error;

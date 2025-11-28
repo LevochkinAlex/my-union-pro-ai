@@ -41,7 +41,7 @@ type ChatBot = Omit<PrismaChatBot, 'temperature' | 'maxTokens' | 'createdAt' | '
 export default function BotDetailsPage() {
   const router = useRouter();
   const params = useParams();
-  const id = id as string;
+  const id = params.id as string;
 
   const [bot, setBot] = useState<ChatBot | null>(null);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);

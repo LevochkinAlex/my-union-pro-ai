@@ -8,7 +8,6 @@ export async function GET(
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
     const { error } = await ensureSuperAdmin();
     if (error) {
       return error;
@@ -95,7 +94,6 @@ export async function PUT(
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
     const { error } = await ensureSuperAdmin();
     if (error) {
       return error;
@@ -153,7 +151,6 @@ export async function DELETE(
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
     const { error } = await ensureSuperAdmin();
     if (error) {
       return error;

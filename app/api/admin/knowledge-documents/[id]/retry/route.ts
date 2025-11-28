@@ -8,7 +8,6 @@ export async function POST(
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
     const { error } = await ensureSuperAdmin();
     if (error) {
       return error;
