@@ -165,11 +165,14 @@ export async function GET(request: NextRequest) {
       await sendReturningUserWelcome(id, loginToken, first_name || undefined, baseUrl);
     }
     
-    // Редиректим на страницу с токеном для автоматической авторизации
-    const redirectUrl = new URL(`/auth/telegram/success?token=${loginToken}`, baseUrl);
+    // Редиректим на страницу с инструкцией проверить Telegram
+    // НЕ передаем токен в URL, чтобы избежать двойного использования
+    // Пользователь должен кликнуть на кнопку в боте для входа
+    const redirectUrl = new URL(`/auth/telegram/success?check=true`, baseUrl);
     
     console.log("[Telegram Login] Редирект на:", redirectUrl.toString());
     console.log("[Telegram Login] Host:", host, "isLocalhost:", isLocalhost);
+    console.log("[Telegram Login] Токен отправлен в Telegram");
     
     return NextResponse.redirect(redirectUrl);
   } catch (error) {
