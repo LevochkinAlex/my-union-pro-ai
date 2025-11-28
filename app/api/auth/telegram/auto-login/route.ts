@@ -7,30 +7,29 @@ import { prisma } from "@/lib/prisma";
  * Автоматический вход пользователя по одноразовому токену из Telegram
  */
 export async function GET(request: NextRequest) {
+  // Определяем правильный baseUrl для редиректов В НАЧАЛЕ
+  const host = request.headers.get("host") || "localhost:3000";
+  const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+  
+  let baseUrl: string;
+  if (process.env.NEXTAUTH_URL) {
+    baseUrl = process.env.NEXTAUTH_URL;
+  } else if (process.env.NEXT_PUBLIC_APP_URL) {
+    baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+  } else if (isLocalhost) {
+    // Для localhost всегда http
+    baseUrl = `http://${host}`;
+  } else {
+    // Для продакшена определяем по заголовкам
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    baseUrl = `${proto}://${host}`;
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const token = searchParams.get("token");
 
     console.log("[Telegram Auto-Login] Попытка входа с токеном:", token ? "****" : "отсутствует");
-
-    // Определяем правильный baseUrl для редиректов
-    const host = request.headers.get("host") || "localhost:3000";
-    const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
-    
-    let baseUrl: string;
-    if (process.env.NEXTAUTH_URL) {
-      baseUrl = process.env.NEXTAUTH_URL;
-    } else if (process.env.NEXT_PUBLIC_APP_URL) {
-      baseUrl = process.env.NEXT_PUBLIC_APP_URL;
-    } else if (isLocalhost) {
-      // Для localhost всегда http
-      baseUrl = `http://${host}`;
-    } else {
-      // Для продакшена определяем по заголовкам
-      const proto = request.headers.get("x-forwarded-proto") || "https";
-      baseUrl = `${proto}://${host}`;
-    }
-
     console.log("[Telegram Auto-Login] BaseUrl:", baseUrl);
 
     if (!token) {
