@@ -131,15 +131,35 @@ export async function POST(request: NextRequest) {
     }
 
     const formData = await request.formData();
-    const file = formData.get("file") as File;
     const sessionId = formData.get("sessionId") as string;
+    
+    // Поддержка как одиночного файла, так и множественных (membership, contribution)
+    const membershipFile = formData.get("membership") as File | null;
+    const contributionFile = formData.get("contribution") as File | null;
+    const singleFile = formData.get("file") as File | null;
+    
+    const filesToUpload: Array<{file: File, type?: string}> = [];
+    
+    if (membershipFile) {
+      filesToUpload.push({ file: membershipFile, type: "MEMBERSHIP_APPLICATION" });
+    }
+    if (contributionFile) {
+      filesToUpload.push({ file: contributionFile, type: "CONTRIBUTION_APPLICATION" });
+    }
+    if (singleFile) {
+      filesToUpload.push({ file: singleFile });
+    }
 
-    if (!file) {
+    if (filesToUpload.length === 0) {
       return NextResponse.json(
         { error: "Файл не предоставлен" },
         { status: 400 }
       );
     }
+    
+    const uploadedDocuments = [];
+    
+    for (const {file, type: forcedType} of filesToUpload) {
 
     // Ограничиваем размер файла до 10MB
     if (file.size > 10 * 1024 * 1024) {
@@ -165,8 +185,8 @@ export async function POST(request: NextRequest) {
     const pdfText = extractTextFromPDF(buffer);
     console.log('[upload] Extracted PDF text length:', pdfText.length);
     
-    // Определяем тип документа по содержимому
-    let documentType = detectDocumentType(file.name, pdfText);
+    // Определяем тип документа по содержимому или используем forcedType
+    let documentType = forcedType || detectDocumentType(file.name, pdfText);
     
     // Дополнительная проверка по типу сессии
     if (sessionId) {
@@ -290,14 +310,19 @@ export async function POST(request: NextRequest) {
       status: document.status,
       fileName: file.name
     });
-
-    return NextResponse.json({
-      success: true,
+    
+    uploadedDocuments.push({
       documentId: document.id,
       documentType,
       fileName: file.name,
       filePath: relativePath,
-      message: "Файл успешно загружен и проверен",
+    });
+  }
+
+    return NextResponse.json({
+      success: true,
+      documents: uploadedDocuments,
+      message: `Загружено файлов: ${uploadedDocuments.length}`,
     });
   } catch (error) {
     console.error("Error uploading file:", error);
