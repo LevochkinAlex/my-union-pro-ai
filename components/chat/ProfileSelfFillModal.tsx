@@ -135,6 +135,7 @@ export function ProfileSelfFillModal({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showCloseWarning, setShowCloseWarning] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [hasExistingDocuments, setHasExistingDocuments] = useState(false);
 
   // Справочники профессий и должностей
   const [jobTitles, setJobTitles] = useState<string[]>([]);
@@ -231,6 +232,18 @@ export function ProfileSelfFillModal({
             aboutMe: user.aboutMe || "",
             additionalInfo: user.additionalInfo || "",
           });
+        }
+
+        // Проверяем наличие сгенерированных документов
+        const docsResponse = await fetch("/api/documents");
+        if (docsResponse.ok) {
+          const docsData = await docsResponse.json();
+          const generatedDocs = (docsData.documents || []).filter((doc: any) =>
+            (doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION") &&
+            doc.status !== "DELETED"
+          );
+          setHasExistingDocuments(generatedDocs.length > 0);
+          console.log("[ProfileModal] Has existing documents:", generatedDocs.length > 0);
         }
       } catch (error) {
         console.error("[ProfileModal] Failed to load data:", error);
@@ -653,13 +666,25 @@ export function ProfileSelfFillModal({
               >
                 ← Исправить
               </button>
-              <button
-                onClick={handleNextStep}
-                disabled={saving}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center gap-2 disabled:bg-gray-400"
-              >
-                {saving ? "Генерация..." : "✓ Подтвердить и сгенерировать документы"}
-              </button>
+              <div className="flex gap-3">
+                {hasExistingDocuments && (
+                  <button
+                    onClick={() => {
+                      setCurrentStep(3);
+                    }}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  >
+                    Далее (без генерации)
+                  </button>
+                )}
+                <button
+                  onClick={handleNextStep}
+                  disabled={saving}
+                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center gap-2 disabled:bg-gray-400"
+                >
+                  {saving ? "Генерация..." : hasExistingDocuments ? "🔄 Перегенерировать документы" : "✓ Подтвердить и сгенерировать документы"}
+                </button>
+              </div>
             </>
           ) : currentStep === 4 ? (
             // Шаг 4: Дополнительная информация (опционально)
@@ -909,7 +934,6 @@ function Step2DocumentsUpload({
   const [generatedDocs, setGeneratedDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadProgress, setUploadProgress] = useState<{ membership?: number; contribution?: number }>({});
-  const [validating, setValidating] = useState<{ membership?: boolean; contribution?: boolean }>({});
 
   // Загружаем сгенерированные документы
   useEffect(() => {
@@ -967,18 +991,59 @@ function Step2DocumentsUpload({
       });
     }, 100);
 
-    // Базовая валидация пройдена, принимаем файл
-    // TODO: Включить AI-валидацию когда настроим OpenRouter
-    console.log("[ProfileModal] File validation passed:", file.name);
-    
-    // Завершаем прогресс
-    clearInterval(interval);
-    setUploadProgress(prev => ({ ...prev, [type]: 100 }));
-    onChange({ ...docs, [type]: file });
-    
-    setTimeout(() => {
+    // AI-валидация документа (с graceful fallback)
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('documentType', type === 'membership' ? 'MEMBERSHIP_APPLICATION' : 'CONTRIBUTION_APPLICATION');
+
+      const response = await fetch('/api/documents/validate', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      // Если API вернул ошибку или документ не валиден
+      if (!response.ok || (result.valid === false && !result.skippedValidation)) {
+        clearInterval(interval);
+        setUploadProgress(prev => ({ ...prev, [type]: undefined }));
+        console.warn("[ProfileModal] Validation failed:", result.error);
+        
+        // Предупреждаем пользователя, но даём возможность продолжить
+        const continueAnyway = confirm(
+          `⚠️ ${result.error || "Загруженный файл может не соответствовать требуемому документу."}\n\nВы уверены что хотите загрузить этот файл?`
+        );
+        
+        if (!continueAnyway) {
+          return;
+        }
+      }
+
+      // Успешная валидация или пользователь подтвердил
+      clearInterval(interval);
+      setUploadProgress(prev => ({ ...prev, [type]: 100 }));
+      onChange({ ...docs, [type]: file });
+      
+      console.log("[ProfileModal] File accepted:", file.name, result.skippedValidation ? "(validation skipped)" : "(validated)");
+      
+      setTimeout(() => {
+        setUploadProgress(prev => ({ ...prev, [type]: undefined }));
+      }, 1000);
+    } catch (error) {
+      clearInterval(interval);
+      console.error("[ProfileModal] Validation error:", error);
       setUploadProgress(prev => ({ ...prev, [type]: undefined }));
-    }, 1000);
+      
+      // При ошибке запроса предлагаем загрузить без валидации
+      const continueAnyway = confirm(
+        "Не удалось проверить документ. Загрузить без проверки?"
+      );
+      
+      if (continueAnyway) {
+        onChange({ ...docs, [type]: file });
+      }
+    }
   };
 
   return (
