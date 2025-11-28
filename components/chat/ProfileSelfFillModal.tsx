@@ -324,6 +324,9 @@ export function ProfileSelfFillModal({
       console.log("[ProfileModal] Step 3: Uploading documents", uploadedDocs);
       
       // Перезагружаем данные о документах перед валидацией
+      let membershipAlreadyUploaded = false;
+      let contributionAlreadyUploaded = false;
+      
       try {
         const docsResponse = await fetch("/api/documents");
         if (docsResponse.ok) {
@@ -336,23 +339,34 @@ export function ProfileSelfFillModal({
           const membershipDoc = generatedDocs.find((d: any) => d.type === "MEMBERSHIP_APPLICATION");
           const contributionDoc = generatedDocs.find((d: any) => d.type === "CONTRIBUTION_APPLICATION");
           
+          membershipAlreadyUploaded = !!membershipDoc?.signedFilePath;
+          contributionAlreadyUploaded = !!contributionDoc?.signedFilePath;
+          
           setExistingDocs({
             membership: membershipDoc ? { id: membershipDoc.id, signedFilePath: membershipDoc.signedFilePath } : undefined,
             contribution: contributionDoc ? { id: contributionDoc.id, signedFilePath: contributionDoc.signedFilePath } : undefined,
           });
           
           console.log("[ProfileModal] Reloaded existing docs:", {
-            membership: !!membershipDoc?.signedFilePath,
-            contribution: !!contributionDoc?.signedFilePath,
+            membership: membershipAlreadyUploaded,
+            contribution: contributionAlreadyUploaded,
           });
         }
       } catch (error) {
         console.error("[ProfileModal] Failed to reload documents:", error);
       }
       
-      const isValid = validateStep2();
-      if (!isValid) {
-        console.log("[ProfileModal] Validation failed");
+      // Валидация с учетом загруженных документов
+      const needsMembership = !membershipAlreadyUploaded;
+      const needsContribution = !contributionAlreadyUploaded;
+      
+      if (needsMembership && !uploadedDocs.membership) {
+        alert("Загрузите заявление о вступлении в профсоюз");
+        return;
+      }
+      
+      if (needsContribution && !uploadedDocs.contribution) {
+        alert("Загрузите заявление о перечислении членских взносов");
         return;
       }
       
