@@ -1509,6 +1509,8 @@ export async function POST(request: NextRequest) {
 
 4. 📤 **Загрузите** обратно подписанные документы через форму
 
+[SHOW_DOCUMENT_ACTIONS]
+
 После отправки документов на проверку, я расскажу вам о всех возможностях платформы! 😊`;
           } else {
             console.log("[chat] ⚠️ Self-fill completed but profile incomplete");

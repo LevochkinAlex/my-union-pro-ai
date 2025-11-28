@@ -968,6 +968,7 @@ function ChatContent() {
                             .replace(/\[PROFILE_COMPLETE\]/g, "")
                             .replace(/\[PROFILE_AWAITING_CONFIRMATION\]/g, "")
                             .replace(/\[SHOW_SELF_FILL_BUTTON\]/g, "")
+                            .replace(/\[SHOW_DOCUMENT_ACTIONS\]/g, "")
                           }
                         </ReactMarkdown>
 
@@ -984,6 +985,32 @@ function ChatContent() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                               </svg>
                               Заполнить анкету
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Кнопки действий с документами - после генерации */}
+                        {message.role === "assistant" && 
+                         message.content.includes("[SHOW_DOCUMENT_ACTIONS]") && 
+                         sessionType === "STATEMENT" && (
+                          <div className="mt-4 flex flex-col sm:flex-row gap-3">
+                            <button
+                              onClick={() => setShowSelfFillModal(true)}
+                              className="inline-flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                              </svg>
+                              Подписать в анкете
+                            </button>
+                            <button
+                              onClick={() => window.open("/dashboard/documents", "_blank")}
+                              className="inline-flex items-center justify-center gap-2 rounded-lg border-2 border-purple-600 bg-transparent px-4 py-2.5 text-sm font-medium text-purple-600 dark:text-purple-400 transition-colors hover:bg-purple-50 dark:hover:bg-purple-900/20 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              Открыть раздел "Документы"
                             </button>
                           </div>
                         )}

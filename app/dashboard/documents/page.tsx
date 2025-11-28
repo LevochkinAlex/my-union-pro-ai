@@ -27,6 +27,7 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [profileChanged, setProfileChanged] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
 
   useEffect(() => {
     loadDocuments();
@@ -133,6 +134,59 @@ export default function DocumentsPage() {
     } catch (err) {
       console.error("Ошибка скачивания:", err);
       alert("Не удалось скачать документ");
+    }
+  };
+
+  const handleUploadSigned = async (docId: string, file: File) => {
+    try {
+      setUploadProgress({ [docId]: 0 });
+
+      // Симуляция прогресса
+      const interval = setInterval(() => {
+        setUploadProgress(prev => {
+          const current = prev[docId] || 0;
+          if (current < 90) {
+            return { [docId]: current + 10 };
+          }
+          return prev;
+        });
+      }, 100);
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('documentId', docId);
+
+      const response = await fetch('/api/documents/upload-signed', {
+        method: 'POST',
+        body: formData,
+      });
+
+      clearInterval(interval);
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Ошибка загрузки");
+      }
+
+      setUploadProgress({ [docId]: 100 });
+      
+      setTimeout(() => {
+        setUploadProgress(prev => {
+          const newState = { ...prev };
+          delete newState[docId];
+          return newState;
+        });
+        loadDocuments(); // Перезагружаем список
+      }, 1000);
+
+    } catch (err) {
+      console.error("Ошибка загрузки:", err);
+      alert(err instanceof Error ? err.message : "Не удалось загрузить документ");
+      setUploadProgress(prev => {
+        const newState = { ...prev };
+        delete newState[docId];
+        return newState;
+      });
     }
   };
 
@@ -353,6 +407,43 @@ export default function DocumentsPage() {
                       </svg>
                       Скачать
                     </button>
+                  )}
+                  {/* Кнопка загрузки подписанного для GENERATED документов */}
+                  {(doc.status === 'GENERATED' || doc.status === 'SIGNED') && 
+                   (doc.type === 'MEMBERSHIP_APPLICATION' || doc.type === 'CONTRIBUTION_APPLICATION') && (
+                    <div className="relative">
+                      {uploadProgress[doc.id] !== undefined ? (
+                        <div className="flex items-center gap-2 rounded-lg border-2 border-purple-600 bg-purple-50 dark:bg-purple-900/20 px-4 py-2">
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
+                          <span className="text-sm text-purple-700 dark:text-purple-300">
+                            {uploadProgress[doc.id]}%
+                          </span>
+                        </div>
+                      ) : (
+                        <label className="inline-flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 cursor-pointer">
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <span className="hidden md:inline">Загрузить подписанный</span>
+                          <span className="md:hidden">Загрузить</span>
+                          <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                if (file.size > 50 * 1024 * 1024) {
+                                  alert("Файл слишком большой. Максимальный размер: 50 МБ");
+                                  return;
+                                }
+                                handleUploadSigned(doc.id, file);
+                              }
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
                   )}
                   {doc.signedFilePath && (
                     <button
