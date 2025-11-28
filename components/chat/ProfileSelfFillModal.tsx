@@ -123,7 +123,7 @@ function OrganizationSelect({
   );
 }
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4;
 
 export function ProfileSelfFillModal({
   isOpen,
@@ -282,21 +282,25 @@ export function ProfileSelfFillModal({
       await uploadDocuments();
       setCurrentStep(3);
     } else if (currentStep === 3) {
-      // Сохранение дополнительной информации
+      // Сохранение дополнительной информации (опциональный шаг)
       await saveAdditionalData();
+      setCurrentStep(4); // Переходим к итоговой странице
+    } else if (currentStep === 4) {
+      // Подтверждение данных и генерация документов
       setHasUnsavedChanges(false);
-      
-      // Закрываем модалку и отправляем сообщение в чат
       await sendCompletionMessage();
       onClose();
     }
   };
 
   const handleSkipAdditionalInfo = async () => {
-    // Пропускаем заполнение дополнительной информации
-    setHasUnsavedChanges(false);
-    await sendCompletionMessage();
-    onClose();
+    // Пропускаем заполнение дополнительной информации, но переходим к подтверждению
+    setCurrentStep(4);
+  };
+
+  const handleBackToEdit = () => {
+    // Возврат к первому шагу для редактирования
+    setCurrentStep(1);
   };
 
   const validateStep1 = (): boolean => {
@@ -494,12 +498,12 @@ export function ProfileSelfFillModal({
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
               <div
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${Math.round(((currentStep - 1) / 3) * 100 + 33)}%` }}
+                style={{ width: `${Math.round(((currentStep - 1) / 4) * 100 + 25)}%` }}
               />
             </div>
             
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Шаг {currentStep} из 3
+              Шаг {currentStep} из 4
             </p>
           </div>
           <button
@@ -515,11 +519,11 @@ export function ProfileSelfFillModal({
         {/* Stepper */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
-            {[1, 2, 3].map((step) => (
+            {[1, 2, 3, 4].map((step) => (
               <div key={step} className="flex items-center flex-1">
                 <div
                   className={`
-                    w-10 h-10 rounded-full flex items-center justify-center font-semibold
+                    w-10 h-10 rounded-full flex items-center justify-center font-semibold text-xs
                     ${
                       currentStep >= step
                         ? "bg-blue-600 text-white"
@@ -529,16 +533,17 @@ export function ProfileSelfFillModal({
                 >
                   {step}
                 </div>
-                <div className="ml-3 flex-1">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {step === 1 && "Основные данные"}
+                <div className="ml-2 flex-1">
+                  <p className="text-xs font-medium text-gray-900 dark:text-white">
+                    {step === 1 && "Основные"}
                     {step === 2 && "Документы"}
-                    {step === 3 && "Дополнительно"}
+                    {step === 3 && "Доп. инфо"}
+                    {step === 4 && "Проверка"}
                   </p>
                 </div>
-                {step < 3 && (
+                {step < 4 && (
                   <div
-                    className={`h-1 flex-1 mx-4 ${
+                    className={`h-1 flex-1 mx-2 ${
                       currentStep > step
                         ? "bg-blue-600"
                         : "bg-gray-200 dark:bg-gray-700"
@@ -563,6 +568,7 @@ export function ProfileSelfFillModal({
               professions={professions}
               organizations={organizations}
               emailVerified={emailVerified}
+              setEmailVerified={setEmailVerified}
               originalEmail={originalEmail}
               saving={saving}
               setSaving={setSaving}
@@ -588,6 +594,16 @@ export function ProfileSelfFillModal({
               }}
             />
           )}
+
+          {currentStep === 4 && (
+            <Step4Confirmation
+              profileData={profileData}
+              uploadedDocs={uploadedDocs}
+              additionalData={additionalData}
+              organizations={organizations}
+              onBackToEdit={handleBackToEdit}
+            />
+          )}
         </div>
 
         {/* Footer */}
@@ -604,7 +620,22 @@ export function ProfileSelfFillModal({
                 onClick={handleNextStep}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
               >
-                Завершить
+                Далее
+              </button>
+            </>
+          ) : currentStep === 4 ? (
+            <>
+              <button
+                onClick={handleBackToEdit}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+              >
+                ← Исправить
+              </button>
+              <button
+                onClick={handleNextStep}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center gap-2"
+              >
+                ✓ Подтвердить и сгенерировать документы
               </button>
             </>
           ) : (
@@ -666,6 +697,7 @@ function Step1ProfileForm({
   professions,
   organizations,
   emailVerified,
+  setEmailVerified,
   originalEmail,
   saving,
   setSaving,
@@ -683,6 +715,7 @@ function Step1ProfileForm({
     indentedName: string;
   }>;
   emailVerified: Date | null;
+  setEmailVerified: (date: Date | null) => void;
   originalEmail: string;
   saving: boolean;
   setSaving: (value: boolean) => void;
@@ -758,7 +791,7 @@ function Step1ProfileForm({
           onVerified={() => {
             // Обновляем статус верификации после успешной проверки PIN
             const now = new Date();
-            onChange({ ...data, emailVerified: now });
+            setEmailVerified(now);
           }}
         />
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface EmailValidationFieldProps {
   email: string;
@@ -21,6 +21,13 @@ export default function EmailValidationField({
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Синхронизация состояния с prop emailVerified
+  useEffect(() => {
+    if (emailVerified) {
+      setMode("verified");
+    }
+  }, [emailVerified]);
 
   // Отправка PIN на email
   const handleSendPin = async () => {
