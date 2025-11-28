@@ -1,20 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { OpenAI } from "openai";
 import { createWorker } from "tesseract.js";
 import sharp from "sharp";
-
-// Ленивая инициализация OpenAI
-let openai: OpenAI | null = null;
-function getOpenAI() {
-  if (!openai && process.env.OPENAI_API_KEY) {
-    openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-  }
-  return openai;
-}
 
 /**
  * POST /api/documents/validate
@@ -154,11 +142,11 @@ ${expectedContent.requiredFields.map((f, i) => `${i + 1}. ${f}`).join("\n")}
       });
     }
 
-    const openaiInstance = getOpenAI();
+    // Используем OpenRouter API
+    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     
-    // Если OpenAI недоступен, пропускаем AI-валидацию и принимаем документ
-    if (!openaiInstance) {
-      console.log("[validate-document] ⚠️ OpenAI not available, skipping AI validation");
+    if (!OPENROUTER_API_KEY) {
+      console.log("[validate-document] ⚠️ OpenRouter not configured, skipping AI validation");
       return NextResponse.json({
         valid: true,
         message: "Документ принят (AI-валидация недоступна)",
@@ -167,14 +155,35 @@ ${expectedContent.requiredFields.map((f, i) => `${i + 1}. ${f}`).join("\n")}
       });
     }
 
-    const completion = await openaiInstance.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages,
-      temperature: 0.3,
-      response_format: { type: "json_object" },
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro",
+        "X-Title": "MyUnion Pro Document Validation",
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini",
+        messages,
+        temperature: 0.3,
+        response_format: { type: "json_object" },
+      }),
     });
 
-    const aiResponse = completion.choices[0]?.message?.content;
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("[validate-document] OpenRouter API error:", error);
+      return NextResponse.json({
+        valid: true,
+        message: "Документ принят (ошибка AI-валидации)",
+        confidence: 50,
+        skippedValidation: true,
+      });
+    }
+
+    const data = await response.json();
+    const aiResponse = data.choices?.[0]?.message?.content;
     if (!aiResponse) {
       return NextResponse.json(
         { valid: false, error: "Не удалось проверить документ" },
