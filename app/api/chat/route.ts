@@ -1381,11 +1381,8 @@ export async function POST(request: NextRequest) {
     }
 
     // ОБРАБОТКА САМОСТОЯТЕЛЬНОГО ЗАПОЛНЕНИЯ ПРОФИЛЯ
-    // Если пользователь отправил [SELF_FILL_COMPLETED], генерируем документы сразу
+    // Если пользователь отправил [SELF_FILL_COMPLETED], генерируем документы БЕЗ автоматического ответа
     if (message && message.includes("[SELF_FILL_COMPLETED]")) {
-      // Убираем маркер из сообщения для отображения в чате
-      const userMessage = message.replace("[SELF_FILL_COMPLETED]", "").trim();
-      
       // Проверяем, что это STATEMENT сессия и документы еще не созданы
       if (chatSession.type === "STATEMENT" && !hasGeneratedDocuments) {
         try {
@@ -1495,24 +1492,20 @@ export async function POST(request: NextRequest) {
             }
             
             console.log("[chat] ✅ Documents generated and saved to database successfully");
-            
-            // Короткое подтверждение генерации документов
-            aiResponse = `Отлично! Документы для вступления в профсоюз успешно сгенерированы. 
-
-На следующем шаге вы сможете скачать заявления, распечатать, подписать и загрузить обратно.
-
-[PROFILE_COMPLETE]`;
           } else {
             console.log("[chat] ⚠️ Self-fill completed but profile incomplete");
-            aiResponse = `⚠️ Для генерации заявлений необходимо заполнить все обязательные поля профиля. Пожалуйста, проверьте и дополните данные.`;
           }
         } catch (docError) {
           console.error("[chat] ⚠️ Error generating documents after self-fill:", docError);
-          aiResponse = `⚠️ Произошла ошибка при генерации документов. Пожалуйста, обратитесь в поддержку или попробуйте позже.`;
         }
-      } else {
-        aiResponse = `Документы уже были сгенерированы ранее. Вы можете продолжить заполнение анкеты.`;
       }
+      
+      // НЕ отвечаем автоматически - пользователь увидит только свое сообщение
+      // и продолжит работу в модальном окне
+      return NextResponse.json({ 
+        success: true,
+        noResponse: true // Специальный флаг - не показывать ответ в UI
+      });
     }
 
     // ОБРАБОТКА ЗАГРУЗКИ ДОКУМЕНТОВ
