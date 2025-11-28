@@ -5,9 +5,16 @@ import { OpenAI } from "openai";
 import { createWorker } from "tesseract.js";
 import sharp from "sharp";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Ленивая инициализация OpenAI
+let openai: OpenAI | null = null;
+function getOpenAI() {
+  if (!openai && process.env.OPENAI_API_KEY) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+  return openai;
+}
 
 /**
  * POST /api/documents/validate
@@ -147,7 +154,15 @@ ${expectedContent.requiredFields.map((f, i) => `${i + 1}. ${f}`).join("\n")}
       });
     }
 
-    const completion = await openai.chat.completions.create({
+    const openaiInstance = getOpenAI();
+    if (!openaiInstance) {
+      return NextResponse.json(
+        { valid: false, error: "AI validation not available" },
+        { status: 500 }
+      );
+    }
+
+    const completion = await openaiInstance.chat.completions.create({
       model: "gpt-4o-mini",
       messages,
       temperature: 0.3,
