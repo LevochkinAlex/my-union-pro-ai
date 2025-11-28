@@ -80,6 +80,9 @@ model User {
   training           String?  @db.Text // Обучение в формате JSON: [{"name": "название", "year": "YYYY", "description": "описание"}]
   additionalInfo     String?  @db.Text // Дополнительная информация (свободный текст)
 
+  // База знаний о пользователе (для супер-админа)
+  knowledgeBase      String?  @db.Text // История обращений, проблем и заметок о пользователе в формате JSON
+
   // Подпись (путь к файлу на сервере)
   signaturePath String?
 
