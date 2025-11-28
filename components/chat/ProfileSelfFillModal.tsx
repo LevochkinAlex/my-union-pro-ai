@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import PhoneInput from "@/components/form/PhoneInput";
 import AddressInput from "@/components/form/AddressInput";
 import Autocomplete from "@/components/form/Autocomplete";
+import EmailValidationField from "@/components/form/EmailValidationField";
 
 interface ProfileSelfFillModalProps {
   isOpen: boolean;
@@ -750,66 +751,16 @@ function Step1ProfileForm({
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Email *
-            {emailVerified ? (
-              <span className="ml-2 text-xs text-green-600 dark:text-green-400">
-                ✓ Подтвержден
-              </span>
-            ) : data.email && originalEmail === data.email ? (
-              <span className="ml-2 text-xs text-orange-600 dark:text-orange-400">
-                ⚠ Ожидает подтверждения
-              </span>
-            ) : null}
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="email"
-              name="email"
-              value={data.email}
-              onChange={handleChange}
-              placeholder="example@mail.com"
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
-            />
-            {data.email && !emailVerified && data.email === originalEmail && (
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    setSaving(true);
-                    const response = await fetch("/api/user/send-verification-email", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ email: data.email }),
-                    });
-                    
-                    if (response.ok) {
-                      alert("Письмо с подтверждением отправлено на " + data.email);
-                    } else {
-                      const error = await response.json();
-                      alert(error.error || "Ошибка при отправке письма");
-                    }
-                  } catch (error) {
-                    console.error("Failed to send verification email:", error);
-                    alert("Ошибка при отправке письма");
-                  } finally {
-                    setSaving(false);
-                  }
-                }}
-                disabled={saving}
-                className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors whitespace-nowrap"
-              >
-                Отправить повторно
-              </button>
-            )}
-          </div>
-          {data.email && !emailVerified && data.email === originalEmail && (
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Для доступа к скидкам BestBenefits подтвердите email. Проверьте почту.
-            </p>
-          )}
-        </div>
+        <EmailValidationField
+          email={data.email}
+          emailVerified={emailVerified}
+          onEmailChange={(email) => onChange({ ...data, email })}
+          onVerified={() => {
+            // Обновляем статус верификации после успешной проверки PIN
+            const now = new Date();
+            onChange({ ...data, emailVerified: now });
+          }}
+        />
 
         <div className="col-span-2">
           <label className="block text-sm font-medium mb-1">Адрес *</label>

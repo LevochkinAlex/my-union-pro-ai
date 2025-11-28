@@ -157,6 +157,9 @@ model User {
   // Временные токены для авторизации через соцсети
   loginTokens LoginToken[]
 
+  // Email PIN-коды для валидации email
+  emailPinCodes EmailPinCode[] @relation("EmailPinCodes")
+
   @@index([email])
   @@index([phone])
   @@index([organizationId])
@@ -216,6 +219,35 @@ model LoginToken {
   createdAt DateTime @default(now())
 
   @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([used])
+}
+
+// Email PIN-коды для валидации email
+model EmailPinCode {
+  id String @id @default(cuid())
+
+  // Email адрес
+  email String
+
+  // PIN-код (захеширован)
+  hashedPin String
+
+  // Пользователь (если найден по email)
+  userId String?
+  user   User?   @relation("EmailPinCodes", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Время истечения (10 минут)
+  expiresAt DateTime
+
+  // Использован ли код
+  used Boolean @default(false)
+  usedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([email])
   @@index([userId])
   @@index([expiresAt])
   @@index([used])
