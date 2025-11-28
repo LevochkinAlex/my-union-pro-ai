@@ -46,6 +46,9 @@ function LoginForm() {
   const [requiresTelegram, setRequiresTelegram] = useState(false);
   const [telegramLink, setTelegramLink] = useState<string | null>(null);
   const [deliveryMethod, setDeliveryMethod] = useState<string | null>(null);
+  const [showTelegramRecommendation, setShowTelegramRecommendation] = useState(false);
+  const [isNewUser, setIsNewUser] = useState(false);
+  const [hasTelegram, setHasTelegram] = useState(false);
 
   // Получаем callbackUrl из query параметров при монтировании
   useEffect(() => {
@@ -256,12 +259,19 @@ function LoginForm() {
         console.log("🔑 PIN-код (только для разработки):", data.pinCode);
       }
 
-      // Сохраняем метод доставки
+      // Сохраняем метод доставки и информацию о пользователе
       setDeliveryMethod(data.deliveryMethod || null);
+      setIsNewUser(!data.isExistingUser);
+      setHasTelegram(data.hasTelegram || false);
+      
+      // Если код отправлен по SMS и нет Telegram - подготовим ссылку для рекомендации
+      if (data.deliveryMethod === "sms" && !data.hasTelegram) {
+        setTelegramLink(`https://t.me/myunionpro_bot?start=link_phone_${normalizedPhone.replace(/^\+/, "")}`);
+      }
       
       // Если есть ссылка на Telegram, показываем предложение привязать
       if (data.telegramLink || data.requiresTelegramLink) {
-        setTelegramLink(data.telegramLink || `https://t.me/myunionpro_bot?start=AUTH_phone_${normalizedPhone.replace(/^\+/, "")}`);
+        setTelegramLink(data.telegramLink || `https://t.me/myunionpro_bot?start=link_phone_${normalizedPhone.replace(/^\+/, "")}`);
         if (data.message) {
           // Показываем информационное сообщение, но не ошибку
           console.log("[Login] Информация:", data.message);
@@ -296,9 +306,15 @@ function LoginForm() {
         setError("Неверный PIN-код");
         setLoading(false);
       } else {
-        // Перенаправляем на callbackUrl, сохраняя query параметры
-        router.push(callbackUrl);
-        router.refresh();
+        // Если код был отправлен по SMS и у пользователя нет Telegram - показываем рекомендацию
+        if (deliveryMethod === "sms" && !hasTelegram) {
+          setShowTelegramRecommendation(true);
+          setLoading(false);
+        } else {
+          // Перенаправляем на callbackUrl
+          router.push(callbackUrl);
+          router.refresh();
+        }
       }
     } catch (err) {
       setError("Ошибка при входе");
@@ -343,8 +359,58 @@ function LoginForm() {
     }
   };
 
+  // Функция для закрытия модалки и перехода в dashboard
+  const handleCloseTelegramModal = () => {
+    setShowTelegramRecommendation(false);
+    router.push(callbackUrl);
+    router.refresh();
+  };
+
   return (
     <div className="flex flex-col flex-1 w-full">
+      {/* Модалка с рекомендацией привязать Telegram */}
+      {showTelegramRecommendation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-md mx-4 shadow-2xl">
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 mb-4">
+                <svg className="w-8 h-8 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161c-.18 1.897-.962 6.502-1.359 8.627-.168.9-.5 1.201-.82 1.23-.697.064-1.226-.461-1.901-.903-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.139-5.062 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.831-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635.099-.002.321.023.465.141.121.1.154.234.17.331.015.098.034.321.019.496z"/>
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
+                💡 Экономьте на SMS!
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300 mb-6">
+                Привяжите <strong>Telegram</strong> чтобы получать коды для входа бесплатно вместо платных SMS.
+              </p>
+              <div className="space-y-3">
+                <a
+                  href={telegramLink || "https://t.me/myunionpro_bot"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#0088cc] hover:bg-[#0077b5] text-white font-medium rounded-xl transition-colors"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161c-.18 1.897-.962 6.502-1.359 8.627-.168.9-.5 1.201-.82 1.23-.697.064-1.226-.461-1.901-.903-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.139-5.062 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.831-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635.099-.002.321.023.465.141.121.1.154.234.17.331.015.098.034.321.019.496z"/>
+                  </svg>
+                  Привязать Telegram
+                </a>
+                <button
+                  onClick={handleCloseTelegramModal}
+                  className="w-full py-3 px-4 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-medium transition-colors"
+                >
+                  Пропустить
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">
+                Вы сможете привязать Telegram позже в настройках профиля
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col justify-center flex-1 w-full max-w-md px-8 mx-auto">
         <div>
           <div className="mb-10">

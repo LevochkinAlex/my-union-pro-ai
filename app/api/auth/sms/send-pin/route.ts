@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendPINViaSMS } from "@/lib/exolve-sms";
+import { sendTelegramMessage } from "@/lib/telegram-bot";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 
@@ -126,29 +127,69 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Отправляем PIN-код через SMS (Exolve)
-    console.log("[2FA Auth] Отправка PIN-кода через SMS на номер:", normalizedPhone);
-    const smsResult = await sendPINViaSMS(normalizedPhone, pinCode);
-    
-    if (!smsResult.success) {
-      console.error("[2FA Auth] ❌ SMS не сработал:", smsResult.error);
+    // Определяем способ доставки: Telegram (бесплатно) или SMS (платно)
+    let deliveryMethod: "telegram" | "sms" = "sms";
+    let deliverySuccess = false;
+    let isExistingUser = !!existingUser;
+
+    // Если у пользователя привязан Telegram - отправляем туда (экономия на SMS)
+    if (existingUser?.telegramChatId) {
+      console.log("[2FA Auth] 📱 Пользователь имеет привязанный Telegram, отправляем туда:", existingUser.telegramChatId);
       
-      return NextResponse.json(
-        {
-          error: "Не удалось отправить код",
-          message: "Проверьте правильность номера телефона и попробуйте позже",
-          details: process.env.NODE_ENV === "development" ? smsResult.error : undefined,
-        },
-        { status: 500 }
-      );
+      const telegramMessage = `
+🔐 <b>Код для входа в МойСоюз</b>
+
+Ваш код: <code>${pinCode}</code>
+
+⏱ Код действителен 10 минут.
+⚠️ Не сообщайте этот код никому!
+      `.trim();
+
+      const telegramResult = await sendTelegramMessage(existingUser.telegramChatId, telegramMessage);
+      
+      if (telegramResult.success) {
+        console.log("[2FA Auth] ✅ PIN-код отправлен в Telegram");
+        deliveryMethod = "telegram";
+        deliverySuccess = true;
+      } else {
+        console.log("[2FA Auth] ⚠️ Telegram не сработал, пробуем SMS:", telegramResult.error);
+      }
     }
 
-    console.log("[2FA Auth] ✅ PIN-код успешно отправлен через SMS");
+    // Если Telegram не сработал или не привязан - отправляем SMS
+    if (!deliverySuccess) {
+      console.log("[2FA Auth] 📨 Отправка PIN-кода через SMS на номер:", normalizedPhone);
+      const smsResult = await sendPINViaSMS(normalizedPhone, pinCode);
+      
+      if (smsResult.success) {
+        console.log("[2FA Auth] ✅ PIN-код успешно отправлен через SMS");
+        deliveryMethod = "sms";
+        deliverySuccess = true;
+      } else {
+        console.error("[2FA Auth] ❌ SMS не сработал:", smsResult.error);
+        
+        return NextResponse.json(
+          {
+            error: "Не удалось отправить код",
+            message: "Проверьте правильность номера телефона и попробуйте позже",
+            details: process.env.NODE_ENV === "development" ? smsResult.error : undefined,
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    const messages = {
+      telegram: "Код отправлен в Telegram 💬",
+      sms: "Код отправлен в SMS 📱",
+    };
 
     return NextResponse.json({
       success: true,
-      deliveryMethod: "sms",
-      message: "Код отправлен в SMS 📱",
+      deliveryMethod,
+      message: messages[deliveryMethod],
+      isExistingUser,
+      hasTelegram: !!existingUser?.telegramChatId,
       // В продакшене не возвращаем PIN-код, только для разработки
       ...(process.env.NODE_ENV === "development" && { pinCode }),
     });
