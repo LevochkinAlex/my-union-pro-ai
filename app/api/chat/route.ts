@@ -158,50 +158,107 @@ async function buildSystemPrompt(
     prompt += `\n\nКонтекст:\n${bot.context}`;
   }
 
-  // Добавляем информацию о пользователе для персонализации
+  // Добавляем ПОЛНУЮ информацию о пользователе для персонализации
   if (user && sessionType) {
-    const userName = [user.lastName, user.firstName, user.middleName].filter(Boolean).join(' ');
-    const userInfo = [];
+    const fullName = [user.lastName, user.firstName, user.middleName].filter(Boolean).join(' ');
+    const firstName = user.firstName || '';
     
-    if (userName) userInfo.push(`Имя: ${userName}`);
-    if (user.organizationName) userInfo.push(`Организация: ${user.organizationName}`);
-    if (user.jobTitle) userInfo.push(`Должность: ${user.jobTitle}`);
-    if (user.profession) userInfo.push(`Профессия: ${user.profession}`);
-    if (user.preferredDiscountCity) userInfo.push(`Город: ${user.preferredDiscountCity}`);
+    // Собираем ВСЮ информацию из профиля
+    const profileData: string[] = [];
     
-    // Дополнительная информация (если заполнена)
-    if (user.employmentStatus) userInfo.push(`Занятость: ${user.employmentStatus}`);
-    if (user.maritalStatus) userInfo.push(`Семейное положение: ${user.maritalStatus}`);
-    if (user.spouseInfo) userInfo.push(`Информация о супруге: ${user.spouseInfo}`);
+    // Основные данные
+    if (fullName) profileData.push(`👤 ФИО: ${fullName}`);
+    if (user.email) profileData.push(`📧 Email: ${user.email}`);
+    if (user.phone) profileData.push(`📱 Телефон: ${user.phone}`);
+    if (user.dateOfBirth) {
+      const dob = new Date(user.dateOfBirth);
+      const age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+      profileData.push(`🎂 Дата рождения: ${dob.toLocaleDateString('ru-RU')} (${age} лет)`);
+    }
+    if (user.address) profileData.push(`🏠 Адрес: ${user.address}`);
+    if (user.preferredDiscountCity) profileData.push(`📍 Город для скидок: ${user.preferredDiscountCity}`);
+    
+    // Профессиональная информация
+    if (user.organizationName) profileData.push(`🏢 Организация: ${user.organizationName}`);
+    if (user.jobTitle) profileData.push(`💼 Должность: ${user.jobTitle}`);
+    if (user.profession) profileData.push(`🔧 Профессия: ${user.profession}`);
+    if (user.education) profileData.push(`🎓 Образование: ${user.education}`);
+    if (user.employmentStatus) {
+      const statusMap: Record<string, string> = {
+        'WORK': 'Работает',
+        'STUDY': 'Учится', 
+        'RETIREMENT': 'На пенсии'
+      };
+      profileData.push(`📊 Занятость: ${statusMap[user.employmentStatus] || user.employmentStatus}`);
+    }
+    
+    // Семейное положение
+    if (user.maritalStatus) {
+      const maritalMap: Record<string, string> = {
+        'single': 'Не женат/Не замужем',
+        'married': 'Женат/Замужем',
+        'divorced': 'В разводе',
+        'widowed': 'Вдовец/Вдова',
+        'civil_marriage': 'Гражданский брак'
+      };
+      profileData.push(`💑 Семейное положение: ${maritalMap[user.maritalStatus] || user.maritalStatus}`);
+    }
+    if (user.spouseInfo) profileData.push(`👫 Супруг(а): ${user.spouseInfo}`);
+    
+    // Дети
     if (user.childrenBirthDates) {
       try {
         const children = JSON.parse(user.childrenBirthDates);
         if (Array.isArray(children) && children.length > 0) {
-          const childrenInfo = children.map((child: any) => 
-            `${child.name} (${child.birthDate ? new Date(child.birthDate).toLocaleDateString('ru-RU') : 'дата не указана'})`
-          ).join(', ');
-          userInfo.push(`Дети: ${childrenInfo}`);
+          profileData.push(`👶 Количество детей: ${children.length}`);
+          children.forEach((child: any, idx: number) => {
+            const childAge = child.birthDate 
+              ? Math.floor((Date.now() - new Date(child.birthDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+              : null;
+            const ageStr = childAge !== null ? ` (${childAge} лет)` : '';
+            profileData.push(`   • ${child.name}${ageStr}`);
+          });
         }
       } catch (e) {
         console.error('[buildSystemPrompt] Failed to parse childrenBirthDates:', e);
       }
+    } else if (user.hasChildren === false) {
+      profileData.push(`👶 Дети: Нет`);
     }
-    if (user.hobbies) userInfo.push(`Хобби: ${user.hobbies}`);
-    if (user.aboutMe) userInfo.push(`О себе: ${user.aboutMe}`);
     
-    if (userInfo.length > 0) {
-      prompt += `\n\n## ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ (используй для персонализации):
+    // Личная информация
+    if (user.hobbies) profileData.push(`🎯 Хобби и увлечения: ${user.hobbies}`);
+    if (user.aboutMe) profileData.push(`📝 О себе: ${user.aboutMe}`);
+    if (user.additionalInfo) profileData.push(`ℹ️ Дополнительно: ${user.additionalInfo}`);
+    
+    // Статус в профсоюзе
+    if (user.membershipStatus) {
+      const statusMap: Record<string, string> = {
+        'PENDING_VERIFICATION': '⏳ Ожидает проверки',
+        'PROFILE_INCOMPLETE': '📝 Профиль не заполнен',
+        'DOCUMENTS_PENDING': '📄 Документы на проверке',
+        'APPROVED': '✅ Одобрен',
+        'REJECTED': '❌ Отклонён',
+        'SUSPENDED': '⚠️ Приостановлен'
+      };
+      profileData.push(`🏛️ Статус членства: ${statusMap[user.membershipStatus] || user.membershipStatus}`);
+    }
+    
+    // Telegram
+    if (user.telegramUsername) profileData.push(`📲 Telegram: @${user.telegramUsername}`);
+    
+    if (profileData.length > 0) {
+      prompt += `\n\n## 📋 ПОЛНЫЙ ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ (ЗАПОМНИ ЭТО!):
 
-Ты общаешься с пользователем, информация о котором:
-${userInfo.join('\n')}
+${profileData.join('\n')}
 
-⚠️ КРИТИЧЕСКИ ВАЖНО:
-- ОБЯЗАТЕЛЬНО обращайся к пользователю по имени (не говори "пользователь")
-- Используй информацию о его организации, должности, профессии в ответах
-- Если знаешь про детей/семью/хобби - упоминай это естественно в беседе
-- Веди себя как помощник, который УЖЕ ЗНАЕТ пользователя
-- НЕ спрашивай заново то, что уже знаешь о пользователе
-- Будь дружелюбным и персональным, а не формальным ботом`;
+### 🧠 КАК ИСПОЛЬЗОВАТЬ ЭТУ ИНФОРМАЦИЮ:
+- **ОБРАЩАЙСЯ ПО ИМЕНИ**: "${firstName || 'друг'}" - не говори "пользователь" или "вы"
+- **ПОМНИ ВСЁ**: Ты уже знаешь этого человека - не спрашивай то, что указано выше
+- **ПЕРСОНАЛИЗИРУЙ**: Упоминай работу, семью, хобби когда это уместно
+- **ПОЗДРАВЛЯЙ**: Если скоро день рождения - поздравь! Если есть дети - спроси как они
+- **РЕКОМЕНДУЙ**: Зная город и интересы, предлагай релевантные скидки
+- **БУДЬ ДРУГОМ**: Веди себя как знакомый, который рад помочь`;
     }
   }
 
@@ -210,47 +267,67 @@ ${userInfo.join('\n')}
     // AI-режим включается ТОЛЬКО после отправки документов на проверку
     // До этого - только системные сообщения
     
+    const userName = user ? [user.firstName, user.middleName].filter(Boolean).join(' ') : '';
+    
     prompt += `\n\n## ИНСТРУКЦИИ ДЛЯ AI-ПОМОЩНИКА ПРОФСОЮЗА МООП РЗ:
 
-Ты - умный AI-помощник профсоюза МООП РЗ. Твоя главная задача - отвечать на вопросы пользователей и вести с ними дружелюбные беседы.
+Ты - умный, дружелюбный AI-помощник профсоюза МООП РЗ. ${userName ? `Ты общаешься с ${userName}.` : ''}
 
-### ТВОИ ОСНОВНЫЕ ФУНКЦИИ:
+### 🧠 САМООБУЧЕНИЕ И ПАМЯТЬ:
+- **ЗАПОМИНАЙ** всё, что говорит пользователь - его проблемы, вопросы, предпочтения
+- **АНАЛИЗИРУЙ** свои ответы - если пользователь недоволен или переспрашивает, значит ты ошибся
+- **НЕ ПОВТОРЯЙ** ошибки - если что-то не сработало, попробуй другой подход
+- **УЧИСЬ** из контекста разговора - адаптируйся под стиль общения пользователя
+- Если не знаешь ответ - честно скажи и предложи связаться с техподдержкой
 
-**1. КОНСУЛЬТАЦИИ ПО ПРОФСОЮЗУ:**
-- Отвечай на вопросы о профсоюзе, используя базу знаний
-- Объясняй права и обязанности членов профсоюза
-- Рассказывай про структуру, устав и деятельность МООП РЗ
-- Помогай разобраться в документах и формах
+### 📱 ФУНКЦИИ СИСТЕМЫ MyUnion (рассказывай о них!):
 
-**2. СКИДКИ BESTBENEFITS:**
-Когда спрашивают про скидки, объясни:
+**1. 🤖 AI Чат (где мы сейчас)**
+- Отвечаю на любые вопросы о профсоюзе
+- Помогаю разобраться с документами
+- Консультирую по правам членов профсоюза
 
-📍 **Где найти:** Раздел "Скидки" в меню слева → фильтр автоматически установлен на ваш город
+**2. 📄 Документы**
+- Заявление о вступлении в профсоюз
+- Заявление о членских взносах  
+- Скачивание и загрузка подписанных документов
+- Отслеживание статуса проверки
 
-🎯 **Как использовать:**
-1. Выберите скидку из списка
-2. Нажмите "Активировать"
-3. Получите промокод
-4. Используйте в магазине/онлайн
+**3. 💳 Скидки BestBenefits**
+- Скидки 10-50% в ресторанах, магазинах, онлайн-сервисах
+- Фильтр по городу (автоматически из профиля)
+- Категории: Еда, Товары, Услуги, Красота, Развлечения
+- Активация промокодов одним кликом
+- Добавление в избранное ⭐
 
-⭐ **Полезное:**
-- Добавляйте в избранное (звездочка)
-- Включите уведомления о новых скидках
-- Используйте "Рядом со мной" для поиска nearby
+**4. 📰 Новости**
+- Новости профсоюза и отрасли
+- Важные объявления
+- Опросы и голосования
 
-🏷️ **Категории:** Рестораны, Магазины, Онлайн-сервисы, Красота, Развлечения
+**5. 👤 Профиль**
+- Личные данные
+- Информация об организации
+- Настройки уведомлений
 
-**3. ОБЩЕНИЕ И ПОДДЕРЖКА:**
-- Веди дружелюбные беседы на любые темы
-- Помогай с вопросами и проблемами
-- Будь внимательным собеседником
+**6. 📝 Обращения** 
+- Создание обращений в профсоюз
+- Решение трудовых вопросов
+- Юридические консультации
 
-### СТИЛЬ ОБЩЕНИЯ:
-- Будь дружелюбным, тёплым и приветливым
-- Обращайся к пользователю по имени, если знаешь его
-- Давай полезные и конкретные ответы
-- Используй эмодзи для создания дружелюбной атмосферы 😊
-- Не бойся признать, если чего-то не знаешь`;
+### 💬 СТИЛЬ ОБЩЕНИЯ:
+- Будь дружелюбным и тёплым 😊
+- Обращайся по имени: "${userName || 'друг'}"
+- Используй эмодзи умеренно
+- Давай конкретные и полезные ответы
+- Предлагай функции системы, когда это уместно
+- Если пользователь расстроен - прояви эмпатию
+
+### ⚠️ ВАЖНО:
+- НЕ говори "Извините, я специализируюсь только на..." - ты универсальный помощник!
+- НЕ проси заполнять анкету - документы уже поданы
+- НЕ будь формальным роботом - будь другом
+- ПОМНИ контекст всего разговора`;
   } else if (sessionType === "APPEAL") {
     // Инструкции для чата обращений
     prompt += `\n\n## ИНСТРУКЦИИ ДЛЯ РАБОТЫ С ОБРАЩЕНИЯМИ:
