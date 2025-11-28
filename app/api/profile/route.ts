@@ -141,6 +141,50 @@ export async function PUT(request: NextRequest) {
       },
     });
 
+    // === ПРОВЕРКА УНИКАЛЬНОСТИ ТЕЛЕФОНА ===
+    if (phone && phone !== userBeforeUpdate?.phone) {
+      // Нормализуем номер для поиска
+      const phoneDigits = phone.replace(/\D/g, "");
+      
+      const existingUserWithPhone = await prisma.user.findFirst({
+        where: {
+          id: { not: session.user.id },
+          OR: [
+            { phone },
+            { phone: { contains: phoneDigits.slice(-10) } },
+          ],
+        },
+        select: { id: true, phone: true },
+      });
+      
+      if (existingUserWithPhone) {
+        console.warn("[profile] Phone already used by another user:", phone);
+        return NextResponse.json(
+          { error: "Этот номер телефона уже используется другим пользователем" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // === ПРОВЕРКА УНИКАЛЬНОСТИ EMAIL ===
+    if (email && email !== userBeforeUpdate?.email) {
+      const existingUserWithEmail = await prisma.user.findFirst({
+        where: {
+          id: { not: session.user.id },
+          email: email.toLowerCase(),
+        },
+        select: { id: true, email: true },
+      });
+      
+      if (existingUserWithEmail) {
+        console.warn("[profile] Email already used by another user:", email);
+        return NextResponse.json(
+          { error: "Этот email уже используется другим пользователем" },
+          { status: 400 }
+        );
+      }
+    }
+
     // Проверяем, изменились ли ключевые поля профиля, которые влияют на документы
     const documentsAffectingFields = [
       { old: userBeforeUpdate?.firstName, new: firstName ? capitalizeName(firstName) : null },
