@@ -1,11 +1,9 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Script from "next/script";
 
 /**
  * Нормализация номера телефона к формату +7XXXXXXXXXX
@@ -572,13 +570,8 @@ function LoginForm() {
 
                   {/* Социальные сети */}
                   <div className="mt-6 flex flex-col gap-3">
-                    {/* Telegram */}
-                    <div 
-                      id="telegram-login-container" 
-                      className="flex items-center justify-center min-h-[48px] rounded-lg border border-gray-300 dark:border-gray-700 overflow-hidden"
-                    >
-                      {/* Виджет Telegram Login будет вставлен сюда */}
-                    </div>
+                    {/* Telegram - кастомная кнопка */}
+                    <TelegramLoginButton />
 
                     {/* MAX */}
                     <button
@@ -653,109 +646,58 @@ function LoginForm() {
   );
 }
 
-function TelegramLoginWrapper() {
+function TelegramLoginButton() {
+  const [isMobile, setIsMobile] = useState(false);
+  
   useEffect(() => {
-    // Инициализация Telegram Login Widget
-    const initTelegramWidget = () => {
-      const container = document.getElementById("telegram-login-container");
-      if (!container) return;
-      
-      // Очищаем предыдущий виджет
-      container.innerHTML = "";
-      
-      // Проверяем, что домен настроен (иначе виджет покажет ошибку)
-      // Используем текущий origin с правильным протоколом
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                      (window.location.protocol === "https:" 
-                        ? window.location.origin 
-                        : window.location.origin.replace("https://", "http://"));
-      const isProduction = baseUrl.includes("myunion.pro");
-      
-      if (!isProduction) {
-        // В разработке показываем обычную кнопку, которая открывает бота
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "w-full flex items-center justify-center gap-3 px-4 py-3 bg-[#0088cc] hover:bg-[#0077b3] text-white font-medium rounded-lg transition-colors";
-        button.innerHTML = `
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161l-1.702 8.008c-.128.568-.473.706-.957.44l-2.644-1.947-1.275 1.227c-.141.141-.259.259-.533.259l.19-2.706 4.906-4.432c.213-.19-.046-.295-.33-.105l-6.062 3.817-2.612-.816c-.568-.178-.58-.568.119-.841l10.213-3.937c.473-.178.887.105.733.841z"/>
-          </svg>
-          <span>Войти с Telegram</span>
-        `;
-        button.onclick = () => {
-          window.open('https://t.me/myunionpro_bot?start=login', '_blank');
-        };
-        container.appendChild(button);
-        return;
-      }
-      
-      // В продакшене загружаем официальный виджет
-      const script = document.createElement("script");
-      script.src = "https://telegram.org/js/telegram-widget.js?22";
-      script.async = true;
-      script.setAttribute("data-telegram-login", "myunionpro_bot");
-      script.setAttribute("data-size", "large");
-      script.setAttribute("data-radius", "8");
-      script.setAttribute("data-auth-url", `${baseUrl}/api/auth/telegram/callback`);
-      script.setAttribute("data-request-access", "write");
-      
-      container.appendChild(script);
-      
-      console.log("[Telegram Login] Виджет инициализирован");
+    // Определяем мобильное устройство
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor;
+      return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
     };
-
-    // Даём время для загрузки DOM
-    const timer = setTimeout(initTelegramWidget, 500);
-    return () => clearTimeout(timer);
+    setIsMobile(checkMobile());
   }, []);
 
-  return null;
+  const handleTelegramLogin = () => {
+    // Deeplink для входа через бота
+    // Для мобильных - открываем напрямую в Telegram
+    // Для десктопа - тоже deeplink, Telegram сам откроется
+    const loginDeeplink = "https://t.me/myunionpro_bot?start=login";
+    
+    if (isMobile) {
+      // На мобильных просто открываем ссылку - Telegram перехватит её
+      window.location.href = loginDeeplink;
+    } else {
+      // На десктопе открываем в новом окне
+      window.open(loginDeeplink, "_blank");
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleTelegramLogin}
+      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[#0088cc] hover:bg-[#0077b3] text-white font-medium rounded-lg transition-colors border border-[#0088cc]"
+    >
+      <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161c-.18 1.897-.962 6.502-1.359 8.627-.168.9-.5 1.201-.82 1.23-.697.064-1.226-.461-1.901-.903-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.139-5.062 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.831-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635.099-.002.321.023.465.141.121.1.154.234.17.331.015.098.034.321.019.496z"/>
+      </svg>
+      <span>Войти с Telegram</span>
+    </button>
+  );
 }
 
 export default function LoginPage() {
   return (
-    <>
-      <style jsx global>{`
-        /* Стили для Telegram Login Widget */
-        #telegram-login-container {
-          display: block !important;
-          width: 100% !important;
-        }
-        
-        #telegram-login-container iframe {
-          width: 100% !important;
-          max-width: 100% !important;
-          height: 48px !important;
-          border-radius: 8px !important;
-          display: block !important;
-        }
-        
-        /* Скрываем стандартные отступы виджета */
-        #telegram-login-container > * {
-          margin: 0 !important;
-          width: 100% !important;
-        }
-        
-        /* Скрываем аватар пользователя, который может появиться */
-        #telegram-login-container img:not([src*="telegram"]) {
-          display: none !important;
-        }
-      `}</style>
-      <Script
-        src="https://telegram.org/js/telegram-widget.js?22"
-        strategy="lazyOnload"
-      />
-      <Suspense fallback={
-        <div className="flex flex-col flex-1 w-full items-center justify-center">
-          <div className="text-center">
-            <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
-            <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
-          </div>
+    <Suspense fallback={
+      <div className="flex flex-col flex-1 w-full items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+          <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
         </div>
-      }>
-        <TelegramLoginWrapper />
-        <LoginForm />
-      </Suspense>
-    </>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
