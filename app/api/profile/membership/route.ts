@@ -96,6 +96,18 @@ export async function GET() {
 
     // Определяем текущую организацию (из справочника или текстовое поле для обратной совместимости)
     let currentOrganization = null;
+    
+    // Логируем для отладки
+    console.log("[profile/membership] User organization data:", {
+      userId: user.id,
+      organizationId: user.organizationId,
+      organizationName: user.organizationName,
+      organization: user.organization ? {
+        id: user.organization.id,
+        name: user.organization.name,
+      } : null,
+    });
+    
     if (user.organization) {
       // Из справочника организаций
       currentOrganization = {
@@ -114,6 +126,34 @@ export async function GET() {
         chairmanName: null,
         type: "text", // Просто текст, не из справочника
       };
+    } else if (user.organizationId) {
+      // Если есть organizationId, но связь не загрузилась - пытаемся загрузить организацию отдельно
+      console.log("[profile/membership] OrganizationId exists but relation not loaded, loading separately:", user.organizationId);
+      try {
+        const org = await prisma.organization.findUnique({
+          where: { id: user.organizationId },
+          select: {
+            id: true,
+            name: true,
+            inn: true,
+            chairmanName: true,
+          },
+        });
+        if (org) {
+          currentOrganization = {
+            id: org.id,
+            name: org.name,
+            inn: org.inn,
+            chairmanName: org.chairmanName,
+            type: "linked",
+          };
+          console.log("[profile/membership] Successfully loaded organization:", org.name);
+        } else {
+          console.warn("[profile/membership] Organization not found for ID:", user.organizationId);
+        }
+      } catch (error) {
+        console.error("[profile/membership] Error loading organization:", error);
+      }
     }
 
     return NextResponse.json({

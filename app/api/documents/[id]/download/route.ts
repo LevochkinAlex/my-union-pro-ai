@@ -40,7 +40,7 @@ export async function GET(
     }
 
     // Определяем, какой файл скачивать: подписанный или обычный
-    const filePathToDownload = downloadSigned && document.signedFilePath 
+    let filePathToDownload = downloadSigned && document.signedFilePath 
       ? document.signedFilePath 
       : document.filePath;
 
@@ -53,7 +53,7 @@ export async function GET(
     } else if (filePathToDownload) {
       // Документ хранится как файл на диске
       try {
-        const absolutePath = resolveFilePath(filePathToDownload);
+        let absolutePath = resolveFilePath(filePathToDownload);
         console.log("[documents/download] Пытаемся прочитать файл:", absolutePath);
         console.log("[documents/download] Исходный путь из БД:", filePathToDownload);
         console.log("[documents/download] Скачиваем подписанный файл:", downloadSigned);
@@ -64,18 +64,28 @@ export async function GET(
           console.log("[documents/download] Файл существует");
         } catch (accessError) {
           console.error("[documents/download] Файл не существует:", absolutePath);
+          
+          // Если запрашивается подписанный файл, но он не найден - возвращаем ошибку
+          if (downloadSigned) {
+            return NextResponse.json(
+              { error: `Подписанный документ не найден. Пожалуйста, загрузите подписанный документ.` },
+              { status: 404 }
+            );
+          }
+          
           return NextResponse.json(
-            { error: `Файл не найден: ${document.filePath}` },
+            { error: `Файл не найден: ${filePathToDownload}` },
             { status: 404 }
           );
         }
         
+        // Читаем файл
         fileBuffer = await fs.readFile(absolutePath);
         console.log("[documents/download] Файл успешно прочитан, размер:", fileBuffer.length);
       } catch (error) {
         console.error("[documents/download] Ошибка при чтении файла:", error);
-        console.error("[documents/download] Путь:", document.filePath);
-        console.error("[documents/download] Абсолютный путь:", resolveFilePath(document.filePath));
+        console.error("[documents/download] Путь:", filePathToDownload);
+        console.error("[documents/download] Абсолютный путь:", resolveFilePath(filePathToDownload));
         return NextResponse.json(
           { error: `Не удалось прочитать файл: ${error instanceof Error ? error.message : String(error)}` },
           { status: 500 }

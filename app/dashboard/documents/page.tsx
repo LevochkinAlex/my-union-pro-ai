@@ -447,7 +447,7 @@ export default function DocumentsPage() {
                       )}
                     </div>
                   )}
-                  {doc.signedFilePath && (
+                  {doc.signedFilePath && (doc.status === 'SIGNED' || doc.status === 'PENDING' || doc.status === 'APPROVED') && (
                     <button
                       onClick={async () => {
                         // Скачиваем подписанный файл

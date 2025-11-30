@@ -116,6 +116,25 @@ export async function PUT(request: NextRequest) {
     const education = normalizeEducation(body.education);
     const organizationId = normalizeString(body.organizationId);
 
+    // Валидация организации, если указана
+    if (organizationId) {
+      const org = await prisma.organization.findUnique({
+        where: { id: organizationId },
+      });
+      if (!org) {
+        console.warn("[profile] Organization not found:", organizationId);
+        return NextResponse.json(
+          { error: `Организация с ID ${organizationId} не найдена. Пожалуйста, выберите организацию из списка.` },
+          { status: 400 }
+        );
+      }
+      console.log("[profile] Validating organization:", {
+        id: org.id,
+        name: org.name,
+        type: org.type,
+      });
+    }
+
     let dateOfBirth: Date | null = null;
     if (body.dateOfBirth) {
       const date = new Date(body.dateOfBirth);
