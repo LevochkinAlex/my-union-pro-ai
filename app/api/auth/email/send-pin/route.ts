@@ -54,12 +54,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Проверяем настройки SMTP перед отправкой
+    if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
+      console.error("[Send Email PIN] ❌ SMTP настройки не установлены");
+      return NextResponse.json(
+        { error: "Сервис отправки email временно недоступен. Обратитесь в поддержку." },
+        { status: 503 }
+      );
+    }
+
     // Отправляем PIN-код
+    console.log("[Send Email PIN] Отправка PIN-кода на email:", email);
     const result = await sendEmailPin(email, session?.user?.id);
 
     if (!result.success) {
+      console.error("[Send Email PIN] ❌ Ошибка отправки:", result.error);
       return NextResponse.json(
-        { error: result.error || "Не удалось отправить код" },
+        { 
+          error: result.error || "Не удалось отправить код",
+          details: process.env.NODE_ENV === "development" ? result.error : undefined,
+        },
         { status: 500 }
       );
     }

@@ -166,16 +166,54 @@ export async function sendEmailPin(
       `.trim(),
     };
 
-    await transporter.sendMail(mailOptions);
+    // Проверяем подключение перед отправкой
+    try {
+      await transporter.verify();
+      console.log("[Email PIN] ✅ SMTP сервер готов к отправке");
+    } catch (verifyError) {
+      console.error("[Email PIN] ❌ Ошибка проверки SMTP подключения:", verifyError);
+      return {
+        success: false,
+        error: `Ошибка подключения к SMTP серверу: ${verifyError instanceof Error ? verifyError.message : String(verifyError)}`,
+      };
+    }
 
-    console.log("[Email PIN] ✅ Email отправлен");
+    const result = await transporter.sendMail(mailOptions);
+
+    console.log("[Email PIN] ✅ Email отправлен:", {
+      messageId: result.messageId,
+      accepted: result.accepted,
+      rejected: result.rejected,
+    });
+
+    if (result.rejected && result.rejected.length > 0) {
+      console.error("[Email PIN] ❌ Email отклонен:", result.rejected);
+      return {
+        success: false,
+        error: `Email отклонен: ${result.rejected.join(", ")}`,
+      };
+    }
 
     return { success: true };
   } catch (error) {
-    console.error("[Email PIN] ❌ Ошибка:", error);
+    console.error("[Email PIN] ❌ Ошибка отправки email:", error);
+    
+    let errorMessage = "Неизвестная ошибка";
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      // Дополнительная информация для распространенных ошибок
+      if (error.message.includes("Invalid login")) {
+        errorMessage = "Неверные учетные данные SMTP";
+      } else if (error.message.includes("ECONNREFUSED")) {
+        errorMessage = "Не удалось подключиться к SMTP серверу";
+      } else if (error.message.includes("ETIMEDOUT")) {
+        errorMessage = "Таймаут подключения к SMTP серверу";
+      }
+    }
+    
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage,
     };
   }
 }

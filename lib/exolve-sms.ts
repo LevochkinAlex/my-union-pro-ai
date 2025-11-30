@@ -59,7 +59,19 @@ export async function sendSMSViaExolve(
       body: JSON.stringify(requestBody),
     });
 
-    const data = await response.json();
+    let data;
+    const responseText = await response.text();
+    
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error("[Exolve SMS] ❌ Не удалось распарсить ответ как JSON:", responseText);
+      return {
+        success: false,
+        error: `Неверный формат ответа от Exolve API: ${response.status} ${response.statusText}`,
+        details: { responseText, status: response.status },
+      };
+    }
 
     console.log("[Exolve SMS] Ответ API:", {
       status: response.status,
@@ -68,19 +80,30 @@ export async function sendSMSViaExolve(
     });
 
     // Проверяем ответ
-    if (!response.ok || data.error) {
-      console.error("[Exolve SMS] Ошибка API:", {
+    if (!response.ok) {
+      console.error("[Exolve SMS] ❌ Ошибка API:", {
         status: response.status,
+        statusText: response.statusText,
         data,
       });
       return {
         success: false,
-        error: data.error?.message || data.message || `Ошибка Exolve API: ${response.status}`,
+        error: data.error?.message || data.message || data.error || `Ошибка Exolve API: ${response.status} ${response.statusText}`,
         details: data,
       };
     }
 
-    console.log("[Exolve SMS] ✅ SMS успешно отправлено, message_id:", data.message_id);
+    // Проверяем наличие ошибки в теле ответа
+    if (data.error) {
+      console.error("[Exolve SMS] ❌ Ошибка в ответе:", data);
+      return {
+        success: false,
+        error: data.error?.message || data.error || data.message || "Неизвестная ошибка Exolve API",
+        details: data,
+      };
+    }
+
+    console.log("[Exolve SMS] ✅ SMS успешно отправлено, message_id:", data.message_id || data.txn_id);
 
     return {
       success: true,

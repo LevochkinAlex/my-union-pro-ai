@@ -159,6 +159,8 @@ export async function POST(request: NextRequest) {
     // Если Telegram не сработал или не привязан - отправляем SMS
     if (!deliverySuccess) {
       console.log("[2FA Auth] 📨 Отправка PIN-кода через SMS на номер:", normalizedPhone);
+      console.log("[2FA Auth] EXOLVE_API_KEY установлен:", !!process.env.EXOLVE_API_KEY);
+      
       const smsResult = await sendPINViaSMS(normalizedPhone, pinCode);
       
       if (smsResult.success) {
@@ -166,13 +168,27 @@ export async function POST(request: NextRequest) {
         deliveryMethod = "sms";
         deliverySuccess = true;
       } else {
-        console.error("[2FA Auth] ❌ SMS не сработал:", smsResult.error);
+        console.error("[2FA Auth] ❌ SMS не сработал:", {
+          error: smsResult.error,
+          details: smsResult.details,
+        });
+        
+        // Более информативное сообщение об ошибке
+        let errorMessage = "Не удалось отправить код";
+        if (smsResult.error?.includes("не настроен") || smsResult.error?.includes("не установлен")) {
+          errorMessage = "Сервис отправки SMS временно недоступен. Обратитесь в поддержку.";
+        } else if (smsResult.error) {
+          errorMessage = `Ошибка отправки SMS: ${smsResult.error}`;
+        }
         
         return NextResponse.json(
           {
-            error: "Не удалось отправить код",
+            error: errorMessage,
             message: "Проверьте правильность номера телефона и попробуйте позже",
-            details: process.env.NODE_ENV === "development" ? smsResult.error : undefined,
+            details: process.env.NODE_ENV === "development" ? {
+              error: smsResult.error,
+              details: smsResult.details,
+            } : undefined,
           },
           { status: 500 }
         );
