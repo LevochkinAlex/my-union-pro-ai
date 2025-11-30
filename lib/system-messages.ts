@@ -150,6 +150,20 @@ export const SystemMessages = {
    * Документы сгенерированы
    */
   async documentsGenerated(userId: string, documents: Array<{ type: string; title: string; filePath: string }>) {
+    // Проверяем, не отправляли ли уже это сообщение
+    const existingMessage = await prisma.chatMessage.findFirst({
+      where: {
+        userId,
+        content: { contains: "Готово, ваши документы сгенерированы" },
+        isSystemMessage: true,
+      },
+    });
+
+    if (existingMessage) {
+      console.log("[system-messages] Documents generated message already exists, skipping");
+      return existingMessage;
+    }
+
     const docsList = documents
       .map((doc) => `• ${doc.title}`)
       .join("\n");
@@ -172,6 +186,20 @@ export const SystemMessages = {
    * Инструкция по загрузке документов
    */
   async uploadDocumentsInstruction(userId: string) {
+    // Проверяем, не отправляли ли уже это сообщение
+    const existingMessage = await prisma.chatMessage.findFirst({
+      where: {
+        userId,
+        content: { contains: "Вы можете прикрепить подписанные документы" },
+        isSystemMessage: true,
+      },
+    });
+
+    if (existingMessage) {
+      console.log("[system-messages] Upload instruction message already exists, skipping");
+      return existingMessage;
+    }
+
     return sendSystemMessage(
       userId,
       `📎 Вы можете прикрепить подписанные документы прямо в чат (используйте кнопку прикрепления файла) или воспользоваться разделом "Документы" в меню.`,
@@ -188,6 +216,20 @@ export const SystemMessages = {
    * Документы загружены и отправлены на проверку
    */
   async documentsSubmitted(userId: string) {
+    // Проверяем, не отправляли ли уже это сообщение
+    const existingMessage = await prisma.chatMessage.findFirst({
+      where: {
+        userId,
+        content: { contains: "Спасибо за ваши документы" },
+        isSystemMessage: true,
+      },
+    });
+
+    if (existingMessage) {
+      console.log("[system-messages] Documents submitted message already exists, skipping");
+      return existingMessage;
+    }
+
     return sendSystemMessage(
       userId,
       `✅ Спасибо за ваши документы!\n\nОни направлены руководителю на проверку. Ожидайте, пожалуйста, валидацию.\n\nКак только вы будете приняты в члены профсоюза, для вас откроются все привилегии:\n\n✨ **Доступ к скидкам BestBenefits** - эксклюзивные предложения от партнеров профсоюза\n📚 **Юридическая поддержка** - консультации по трудовому праву\n🎁 **Социальные программы** - помощь в сложных жизненных ситуациях\n📢 **Участие в жизни профсоюза** - голосование, собрания, инициативы\n🏥 **Медицинская поддержка** - программы оздоровления и профилактики\n🎓 **Образовательные программы** - курсы повышения квалификации\n\nПосле одобрения вы сможете общаться с AI-помощником и задавать любые вопросы!`,

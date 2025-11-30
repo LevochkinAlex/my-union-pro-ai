@@ -100,12 +100,58 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
+      // Нормализуем номер телефона
+      const normalizePhone = (phone: string): string => {
+        let cleaned = phone.replace(/[\s\-\(\)\+]/g, "");
+        if (cleaned.startsWith("8")) {
+          cleaned = "7" + cleaned.slice(1);
+        }
+        if (!cleaned.startsWith("7")) {
+          cleaned = "7" + cleaned;
+        }
+        return "+" + cleaned;
+      };
+
+      const normalizedPhone = normalizePhone(contact.phone_number);
+      console.log("[Telegram Webhook] Нормализованный телефон:", normalizedPhone);
+
+      // Сначала проверяем, есть ли пользователь с этим номером
+      let existingUserByPhone = await prisma.user.findUnique({
+        where: { phone: normalizedPhone },
+      });
+
       // Ищем пользователя по telegramChatId
       let user = await prisma.user.findUnique({
         where: { telegramChatId: chatId },
       });
 
-      if (!user) {
+      // Если есть пользователь с этим номером, но другой telegramChatId - привязываем
+      if (existingUserByPhone && (!user || user.id !== existingUserByPhone.id)) {
+        console.log("[Telegram Webhook] Найден пользователь по номеру, привязываем Telegram:", {
+          userId: existingUserByPhone.id,
+          phone: normalizedPhone,
+          existingTelegramChatId: existingUserByPhone.telegramChatId,
+          newTelegramChatId: chatId,
+        });
+
+        // Если у существующего пользователя уже есть другой telegramChatId, обновляем
+        if (existingUserByPhone.telegramChatId && existingUserByPhone.telegramChatId !== chatId) {
+          console.log("[Telegram Webhook] У пользователя уже есть другой telegramChatId, обновляем");
+        }
+
+        // Привязываем Telegram к существующему пользователю
+        user = await prisma.user.update({
+          where: { id: existingUserByPhone.id },
+          data: {
+            telegramChatId: chatId,
+            telegramUsername: from?.username || null,
+            firstName: from?.first_name || user?.firstName || existingUserByPhone.firstName,
+            lastName: from?.last_name || user?.lastName || existingUserByPhone.lastName,
+            phone: normalizedPhone, // Обновляем номер на нормализованный
+          },
+        });
+        console.log("[Telegram Webhook] ✅ Telegram привязан к существующему пользователю:", user.id);
+      } else if (!user) {
         // Создаем нового пользователя с Telegram
         console.log("[Telegram Webhook] Создаем нового пользователя для Telegram:", chatId);
         user = await prisma.user.create({
@@ -114,11 +160,21 @@ export async function POST(request: NextRequest) {
             telegramUsername: from?.username || null,
             firstName: from?.first_name || null,
             lastName: from?.last_name || null,
+            phone: normalizedPhone,
             role: "PENDING_MEMBER",
             membershipStatus: "PROFILE_INCOMPLETE",
           },
         });
         console.log("[Telegram Webhook] ✅ Создан новый пользователь:", user.id);
+      } else {
+        // Пользователь найден по telegramChatId, обновляем номер если нужно
+        if (user.phone !== normalizedPhone) {
+          console.log("[Telegram Webhook] Обновляем номер телефона для пользователя:", user.id);
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: { phone: normalizedPhone },
+          });
+        }
       }
 
       // Нормализуем номер телефона
@@ -515,12 +571,23 @@ ${loginUrl}
       return NextResponse.json({ ok: true });
     }
 
+    // Команда /restart - то же самое, что /start
+    if (text === "/restart") {
+      text = "/start";
+    }
+
     // Обычная команда /start (без параметра)
     if (text === "/start") {
       // Проверяем, есть ли уже пользователь с этим chat_id
-      const user = await prisma.user.findUnique({
+      let user = await prisma.user.findUnique({
         where: { telegramChatId: chatId },
       });
+
+      // Если не нашли по chat_id, но пользователь мог предоставить номер ранее
+      // Проверяем, может быть нужно привязать существующего пользователя
+      if (!user) {
+        console.log("[Telegram Webhook] Chat ID не найден, запрашиваем номер для привязки");
+      }
 
       if (user) {
         console.log("[Telegram Webhook] Пользователь уже привязан:", user.id);

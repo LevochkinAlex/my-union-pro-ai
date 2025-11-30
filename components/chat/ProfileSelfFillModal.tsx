@@ -301,7 +301,7 @@ export function ProfileSelfFillModal({
 
   const handleClose = useCallback(() => {
     // Разрешаем закрывать модалку в любой момент без предупреждений
-    onClose();
+      onClose();
   }, [onClose]);
 
   // Автосохранение одного поля
@@ -516,33 +516,33 @@ export function ProfileSelfFillModal({
     // Проверка формата email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(profileData.email)) {
-      alert("Введите корректный email адрес");
+      alertWarning("Введите корректный email адрес");
       return false;
     }
     
     // Проверяем, что должность есть в справочнике
     if (!jobTitles.includes(profileData.jobTitle)) {
-      alert(`Должность "${profileData.jobTitle}" не найдена в справочнике. Выберите должность из списка.`);
+      alertWarning(`Должность "${profileData.jobTitle}" не найдена в справочнике. Выберите должность из списка.`);
       return false;
     }
     
     // Проверяем, что профессия есть в справочнике
     if (!professions.includes(profileData.profession)) {
-      alert(`Профессия "${profileData.profession}" не найдена в справочнике медицинских профессий. Выберите профессию из списка.`);
+      alertWarning(`Профессия "${profileData.profession}" не найдена в справочнике медицинских профессий. Выберите профессию из списка.`);
       return false;
     }
     
     // Проверяем, что организация выбрана из списка
     const selectedOrg = organizations.find(org => org.id === profileData.organizationId);
     if (!selectedOrg) {
-      alert("Выберите организацию из списка");
+      alertWarning("Выберите организацию из списка");
       return false;
     }
     
     // Проверяем, что выбрана первичная организация (ППО)
     if (selectedOrg.type !== "PRIMARY") {
-      alert(
-        "⚠️ Заявление можно подать только в первичную профсоюзную организацию (ППО).\n\n" +
+      alertWarning(
+        "Заявление можно подать только в первичную профсоюзную организацию (ППО).\n\n" +
         `Вы выбрали: ${selectedOrg.fullPath}\n\n` +
         "Пожалуйста, выберите ППО из списка."
       );
@@ -574,7 +574,7 @@ export function ProfileSelfFillModal({
         
         try {
           const verifyResponse = await fetch("/api/user/send-verification-email", {
-            method: "POST",
+        method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: profileData.email }),
           });
@@ -588,10 +588,11 @@ export function ProfileSelfFillModal({
             setEmailVerified(null);
             
             // Показываем уведомление
-            alert(
+            alertSuccess(
               "Профиль сохранен!\n\n" +
               "На указанный email отправлено письмо с подтверждением. " +
-              "Пожалуйста, проверьте почту и перейдите по ссылке для активации доступа к скидкам."
+              "Пожалуйста, проверьте почту и перейдите по ссылке для активации доступа к скидкам.",
+              "Профиль сохранен!"
             );
           } else {
             const error = await verifyResponse.json();
@@ -605,7 +606,7 @@ export function ProfileSelfFillModal({
     } catch (error) {
       console.error("Error saving profile:", error);
       const message = error instanceof Error ? error.message : "Ошибка при сохранении профиля";
-      alert(message);
+      alertError(message);
       throw error;
     }
   };
@@ -623,7 +624,7 @@ export function ProfileSelfFillModal({
       if (!response.ok) throw new Error("Failed to save additional info");
     } catch (error) {
       console.error("Error saving additional info:", error);
-      alert("Ошибка при сохранении дополнительной информации");
+      alertError("Ошибка при сохранении дополнительной информации");
       throw error;
     }
   };
@@ -671,9 +672,9 @@ export function ProfileSelfFillModal({
         <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
           <div className="flex-1">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Самостоятельное заполнение профиля
-              </h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Самостоятельное заполнение профиля
+            </h2>
               <div className="flex items-center gap-3">
                 {/* Индикатор автосохранения */}
                 {autoSaveStatus === "saving" && (
@@ -856,12 +857,12 @@ export function ProfileSelfFillModal({
           {currentStep === 2 ? (
             // Шаг 2: Подтверждение данных перед генерацией
             <>
-              <button
+          <button
                 onClick={handleBackToEdit}
                 className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-              >
+          >
                 ← Исправить
-              </button>
+          </button>
               <div className="flex gap-3">
                 {hasExistingDocuments && (
                   <button
@@ -891,28 +892,33 @@ export function ProfileSelfFillModal({
               >
                 Заполнить позже
               </button>
-              <button
-                onClick={handleNextStep}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-              >
+          <button
+            onClick={handleNextStep}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+          >
                 Завершить
-              </button>
+          </button>
             </>
           ) : (
             // Шаги 1 и 3: Обычная навигация
             <>
               <button
-                onClick={() => currentStep > 1 && setCurrentStep((s) => (s - 1) as Step)}
+                onClick={() => {
+                  if (currentStep > 1) {
+                    setCurrentStep((s) => (s - 1) as Step);
+                  }
+                }}
                 disabled={currentStep === 1}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                Назад
+                ← Назад
               </button>
               <button
                 onClick={handleNextStep}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                disabled={saving}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                Далее
+                {saving ? "Сохранение..." : "Далее"}
               </button>
             </>
           )}
@@ -1074,7 +1080,7 @@ function Step1ProfileForm({
           <PhoneInput
             name="phone"
             value={data.phone}
-            onChange={handleChange} 
+            onChange={handleChange}
             onBlur={(e: any) => {
               // При потере фокуса проверяем телефон
               if (onFieldBlur && data.phone !== originalPhone) {
@@ -1220,14 +1226,14 @@ function Step2DocumentsUpload({
     // Проверка размера (50 МБ)
     const MAX_SIZE = 50 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
-      alert("Файл слишком большой. Максимальный размер: 50 МБ");
+      alertError("Файл слишком большой. Максимальный размер: 50 МБ");
       return;
     }
 
     // Проверка формата
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
     if (!allowedTypes.includes(file.type)) {
-      alert("Неподдерживаемый формат. Разрешены: PDF, JPG, JPEG, PNG");
+      alertError("Неподдерживаемый формат. Разрешены: PDF, JPG, JPEG, PNG");
       return;
     }
 

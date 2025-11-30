@@ -1020,7 +1020,7 @@ function ChatContent() {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json" },
                                     body: JSON.stringify({
-                                      message: "[SELF_FILL_COMPLETED]",
+                                      message: "[GENERATE_DOCUMENTS_BUTTON]",
                                       sessionId: currentSessionId,
                                     }),
                                   });

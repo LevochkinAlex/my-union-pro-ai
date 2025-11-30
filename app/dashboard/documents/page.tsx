@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { alertError, alertSuccess, alertWarning, confirm } from "@/lib/alert";
 
 interface Document {
   id: string;
@@ -85,7 +86,8 @@ export default function DocumentsPage() {
   };
 
   const handleRegenerateDocuments = async () => {
-    if (!confirm("Вы уверены, что хотите перегенерировать документы? Старые документы будут заменены.")) {
+    const confirmed = await confirm("Вы уверены, что хотите перегенерировать документы? Старые документы будут заменены.", "Подтвердите перегенерацию");
+    if (!confirmed) {
       return;
     }
 
@@ -106,7 +108,7 @@ export default function DocumentsPage() {
       await loadDocuments();
       await loadProfileStatus();
 
-      alert("Документы успешно перегенерированы! Проверьте их и скачайте обновленные версии.");
+      alertSuccess("Документы успешно перегенерированы! Проверьте их и скачайте обновленные версии.");
     } catch (err) {
       console.error("Ошибка перегенерации:", err);
       setError(err instanceof Error ? err.message : "Не удалось перегенерировать документы");
@@ -133,7 +135,7 @@ export default function DocumentsPage() {
       document.body.removeChild(a);
     } catch (err) {
       console.error("Ошибка скачивания:", err);
-      alert("Не удалось скачать документ");
+      alertError("Не удалось скачать документ");
     }
   };
 
@@ -181,7 +183,7 @@ export default function DocumentsPage() {
 
     } catch (err) {
       console.error("Ошибка загрузки:", err);
-      alert(err instanceof Error ? err.message : "Не удалось загрузить документ");
+      alertError(err instanceof Error ? err.message : "Не удалось загрузить документ");
       setUploadProgress(prev => {
         const newState = { ...prev };
         delete newState[docId];
@@ -467,7 +469,7 @@ export default function DocumentsPage() {
                           document.body.removeChild(a);
                         } catch (err) {
                           console.error("Ошибка скачивания:", err);
-                          alert("Не удалось скачать подписанное заявление");
+                          alertError("Не удалось скачать подписанное заявление");
                         }
                       }}
                       className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"

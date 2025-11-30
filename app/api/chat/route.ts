@@ -580,6 +580,7 @@ export async function POST(request: NextRequest) {
       // Сохраняем сообщение пользователя
       const cleanMessage = message
         .replace(/\[SELF_FILL_COMPLETED\]/g, '')
+        .replace(/\[GENERATE_DOCUMENTS_BUTTON\]/g, '')
         .replace(/\[DOCUMENTS_UPLOADED\]/g, '')
         .replace(/\[PROFILE_COMPLETE\]/g, '')
         .trim();
@@ -1145,8 +1146,8 @@ export async function POST(request: NextRequest) {
     }
 
     // ОБРАБОТКА САМОСТОЯТЕЛЬНОГО ЗАПОЛНЕНИЯ ПРОФИЛЯ
-    // Если пользователь отправил [SELF_FILL_COMPLETED], генерируем документы БЕЗ автоматического ответа
-    if (message && message.includes("[SELF_FILL_COMPLETED]")) {
+    // Если пользователь отправил [GENERATE_DOCUMENTS_BUTTON] или [SELF_FILL_COMPLETED], генерируем документы БЕЗ автоматического ответа
+    if (message && (message.includes("[GENERATE_DOCUMENTS_BUTTON]") || message.includes("[SELF_FILL_COMPLETED]"))) {
       // Проверяем, что это STATEMENT сессия и документы еще не созданы
       if (chatSession.type === "STATEMENT" && !hasGeneratedDocuments) {
         try {

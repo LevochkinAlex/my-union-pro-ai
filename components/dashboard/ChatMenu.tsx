@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import clsx from "clsx";
+import { alertError, alertWarning, confirm } from "@/lib/alert";
 
 interface ChatSession {
   id: string;
@@ -125,7 +126,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   const handleNewAppeal = async () => {
     // Проверяем, загружены ли документы
     if (!documentsUploaded) {
-      alert("Для создания обращений необходимо сначала заполнить и загрузить подписанные заявления.\n\nПерейдите в раздел 'Мой бот' для подачи заявления.");
+      alertWarning("Для создания обращений необходимо сначала заполнить и загрузить подписанные заявления.\n\nПерейдите в раздел 'Мой бот' для подачи заявления.");
       router.push("/dashboard"); // Переходим в "Мой бот"
       return;
     }
@@ -144,15 +145,15 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
       } else {
         const errorData = await response.json().catch(() => ({}));
         if (errorData.requiresDocuments) {
-          alert(errorData.error || "Необходимо загрузить документы");
+          alertWarning(errorData.error || "Необходимо загрузить документы");
           router.push("/dashboard"); // Переходим в "Мой бот"
         } else {
-          alert(errorData.error || "Ошибка при создании нового обращения");
+          alertError(errorData.error || "Ошибка при создании нового обращения");
         }
       }
     } catch (error) {
       console.error("Error creating new appeal:", error);
-      alert("Ошибка при создании нового обращения");
+      alertError("Ошибка при создании нового обращения");
     }
   };
 
@@ -166,7 +167,8 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
 
   const handleDeleteAppeal = async (e: React.MouseEvent | React.KeyboardEvent, appealId: string) => {
     e.stopPropagation();
-    if (!confirm("Вы уверены, что хотите удалить это обращение?")) return;
+    const confirmed = await confirm("Вы уверены, что хотите удалить это обращение?", "Подтвердите удаление");
+    if (!confirmed) return;
 
     try {
       const response = await fetch(`/api/appeals/${appealId}`, {
@@ -178,7 +180,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
           router.push("/dashboard");
         }
       } else {
-        alert("Ошибка при удалении обращения");
+        alertError("Ошибка при удалении обращения");
       }
     } catch (error) {
       console.error("Error deleting appeal:", error);
@@ -200,7 +202,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
         setRenameSessionId(null);
         setNewSessionName("");
       } else {
-        alert("Ошибка при переименовании чата");
+        alertError("Ошибка при переименовании чата");
       }
     } catch (error) {
       console.error("Error renaming session:", error);
@@ -295,9 +297,10 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                   <span className="flex-1 truncate text-left">{session.title || "Обращение"}</span>
                   {isHovered && (
                     <div
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        if (confirm("Вы уверены, что хотите удалить это обращение?")) {
+                        const confirmed = await confirm("Вы уверены, что хотите удалить это обращение?", "Подтвердите удаление");
+                        if (confirmed) {
                           fetch(`/api/chat/sessions/${session.id}`, { method: "DELETE" })
                             .then(() => loadSessions())
                             .catch(console.error);
@@ -307,11 +310,12 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                       title="Удалить"
                       role="button"
                       tabIndex={0}
-                      onKeyDown={(e) => {
+                      onKeyDown={async (e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
                           e.stopPropagation();
-                          if (confirm("Вы уверены, что хотите удалить это обращение?")) {
+                          const confirmed = await confirm("Вы уверены, что хотите удалить это обращение?", "Подтвердите удаление");
+                          if (confirmed) {
                             fetch(`/api/chat/sessions/${session.id}`, { method: "DELETE" })
                               .then(() => loadSessions())
                               .catch(console.error);

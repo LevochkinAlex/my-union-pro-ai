@@ -300,11 +300,11 @@ export async function PUT(request: NextRequest) {
     // Если профиль заполнен и документов еще нет - отправляем системное сообщение
     if (isProfileComplete && !hasGeneratedDocs) {
       try {
-        // Проверяем не отправляли ли уже это сообщение
+        // Проверяем не отправляли ли уже это сообщение по уникальному маркеру
         const existingMessage = await prisma.chatMessage.findFirst({
           where: {
             userId: session.user.id,
-            content: { contains: "Вы успешно заполнили свою анкету" },
+            content: { contains: "[GENERATE_DOCUMENTS_BUTTON]" },
             isSystemMessage: true,
           },
         });
@@ -312,6 +312,8 @@ export async function PUT(request: NextRequest) {
         if (!existingMessage) {
           await SystemMessages.profileCompleted(session.user.id);
           console.log("[profile] System message sent: profile completed");
+        } else {
+          console.log("[profile] System message already exists, skipping");
         }
       } catch (error) {
         console.error("[profile] Error sending system message:", error);
