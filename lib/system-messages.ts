@@ -79,11 +79,9 @@ export async function sendSystemMessage(
     // Отправляем email
     if (options?.sendEmail && user?.email && user?.emailBotNotifications) {
       try {
-        await sendEmail(
-          user.email,
-          options?.emailSubject || "Уведомление от МойСоюз",
-          `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2>${options?.emailSubject || "Уведомление от МойСоюз"}</h2>
+        const emailSubject = options?.emailSubject || "Уведомление от МойСоюз";
+        const emailHtml = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>${emailSubject}</h2>
             <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
               ${content.replace(/\n/g, "<br>")}
             </div>
@@ -93,9 +91,15 @@ export async function sendSystemMessage(
                 Открыть в МойСоюз →
               </a>
             </p>
-          </div>`,
-          content.replace(/<[^>]*>/g, "")
-        );
+          </div>`;
+        const emailText = content.replace(/<[^>]*>/g, "");
+        
+        await sendEmail({
+          to: user.email,
+          subject: emailSubject,
+          html: emailHtml,
+          text: emailText,
+        });
       } catch (error) {
         console.error("[system-messages] Email error:", error);
       }
