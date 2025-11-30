@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Получаем оба аккаунта
+    // Получаем оба аккаунта со всеми данными для переноса
     const [primaryAccount, secondaryAccount] = await Promise.all([
       prisma.user.findUnique({
         where: { id: primaryAccountId },
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
           appeals: true,
         },
       }),
-    ]);
+    ]) as any; // Типизация для доступа к telegramChatId и другим полям
 
     if (!primaryAccount || !secondaryAccount) {
       return NextResponse.json(
@@ -122,7 +122,19 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // 6. Обновляем главный аккаунт с новым телефоном
+      // 6. Переносим SMS коды на главный аккаунт
+      await tx.sMSPinCode.updateMany({
+        where: { userId: secondaryAccountId },
+        data: { userId: primaryAccountId },
+      });
+
+      // 7. Переносим сообщения чата
+      await tx.chatMessage.updateMany({
+        where: { userId: secondaryAccountId },
+        data: { userId: primaryAccountId },
+      });
+
+      // 8. Обновляем главный аккаунт с новым телефоном и данными авторизации
       // Email НЕ меняется (остаётся от primary аккаунта)
       const updatedPrimary = await tx.user.update({
         where: { id: primaryAccountId },
@@ -130,6 +142,12 @@ export async function POST(request: NextRequest) {
           phone: normalizedPhone,
           // Сохраняем authPhone если его не было
           authPhone: primaryAccount.authPhone || secondaryAccount.authPhone || normalizedPhone,
+          // ВАЖНО: Переносим Telegram данные если у primary их нет
+          telegramChatId: primaryAccount.telegramChatId || secondaryAccount.telegramChatId,
+          telegramUsername: primaryAccount.telegramUsername || secondaryAccount.telegramUsername,
+          // Переносим MAX данные если у primary их нет
+          maxChatId: primaryAccount.maxChatId || secondaryAccount.maxChatId,
+          maxUsername: primaryAccount.maxUsername || secondaryAccount.maxUsername,
           // Если у primary нет unionCardNumber, берём от secondary
           unionCardNumber: primaryAccount.unionCardNumber || secondaryAccount.unionCardNumber,
           // Объединяем дополнительную информацию
