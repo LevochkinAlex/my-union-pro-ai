@@ -557,12 +557,10 @@ ${loginUrl}
     }
 
     // Команда /restart - то же самое, что /start
-    if (text === "/restart") {
-      text = "/start";
-    }
+    const commandText = (text === "/restart" || text === "/start") ? "/start" : text;
 
     // Обычная команда /start (без параметра)
-    if (text === "/start") {
+    if (commandText === "/start") {
       // Проверяем, есть ли уже пользователь с этим chat_id
       let user = await prisma.user.findUnique({
         where: { telegramChatId: chatId },
