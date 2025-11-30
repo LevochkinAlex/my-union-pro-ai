@@ -550,7 +550,96 @@ export async function POST(request: NextRequest) {
     // Получаем данные пользователя для персонализации (всегда)
     const user = await prisma.user.findUnique({
         where: { id: session.user.id },
+        include: { organization: true },
       });
+    
+    // ПРОВЕРЯЕМ: нужно ли сгенерировать документы ПЕРЕД проверкой их статуса
+    // Если пришел маркер [SELF_FILL_COMPLETED], генерируем документы сразу
+    if (chatSession.type === "STATEMENT" && message && (message.includes("[SELF_FILL_COMPLETED]") || message.includes("[GENERATE_DOCUMENTS_BUTTON]"))) {
+      try {
+        const userForDocs = await prisma.user.findUnique({
+          where: { id: session.user.id },
+          include: { organization: true },
+        });
+
+        const profileIsComplete = isProfileComplete(userForDocs);
+        if (profileIsComplete && userForDocs) {
+          console.log("[chat] 🎯 Generating documents from [SELF_FILL_COMPLETED] marker...");
+          
+          // Проверяем, не сгенерированы ли уже документы
+          const existingDocsCheck = await prisma.document.findMany({
+            where: {
+              userId: session.user.id,
+              type: {
+                in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
+              },
+              status: {
+                not: "DRAFT",
+              },
+            },
+          });
+          
+          // Генерируем только если документов нет
+          if (existingDocsCheck.length === 0) {
+            // Импортируем функции генерации
+            const { generateMembershipApplication, generateContributionsApplication } = await import("@/lib/documents");
+            
+            // Генерируем PDF файлы
+            const [membershipPath, contributionsPath] = await Promise.all([
+              generateMembershipApplication(userForDocs),
+              generateContributionsApplication(userForDocs, userForDocs.organization?.name, undefined),
+            ]);
+            
+            console.log("[chat] PDF files generated:", { membershipPath, contributionsPath });
+            
+            // Получаем размеры файлов
+            const fs = await import("fs/promises");
+            const pathModule = await import("path");
+            
+            const membershipStats = await fs.stat(pathModule.join(process.cwd(), "public", membershipPath));
+            const contributionsStats = await fs.stat(pathModule.join(process.cwd(), "public", contributionsPath));
+
+            // Создаем документы в базе данных
+            await prisma.document.create({
+              data: {
+                userId: session.user.id,
+                type: "MEMBERSHIP_APPLICATION",
+                status: "GENERATED",
+                title: "Заявление о вступлении в профсоюз",
+                filePath: membershipPath,
+                fileName: pathModule.basename(membershipPath),
+                fileSize: membershipStats.size,
+                mimeType: "application/pdf",
+                organizationId: userForDocs.organizationId || null,
+              },
+            });
+
+            await prisma.document.create({
+              data: {
+                userId: session.user.id,
+                type: "CONTRIBUTION_APPLICATION",
+                status: "GENERATED",
+                title: "Заявление о взносах",
+                filePath: contributionsPath,
+                fileName: pathModule.basename(contributionsPath),
+                fileSize: contributionsStats.size,
+                mimeType: "application/pdf",
+                organizationId: userForDocs.organizationId || null,
+              },
+            });
+            
+            console.log("[chat] ✅ Documents generated and saved to database successfully");
+          } else {
+            console.log("[chat] ⚠️ Documents already exist, skipping generation");
+          }
+        } else {
+          console.log("[chat] ⚠️ Cannot generate documents: profile is incomplete");
+        }
+      } catch (docError) {
+        console.error("[chat] ⚠️ Error generating documents:", docError);
+        // Не прерываем выполнение, просто логируем ошибку
+      }
+    }
     
     // Проверяем документы (только для STATEMENT сессий)
     let hasGeneratedDocuments = false;
@@ -610,7 +699,7 @@ export async function POST(request: NextRequest) {
     // ========== ПРОВЕРКА: AI ВКЛЮЧАЕТСЯ ТОЛЬКО ПОСЛЕ ОТПРАВКИ ДОКУМЕНТОВ ==========
     // До отправки документов на проверку - только системные сообщения без AI
     if (chatSession.type === "STATEMENT" && !hasSignedDocuments) {
-      // Сохраняем сообщение пользователя
+      // Сохраняем сообщение пользователя (без маркеров)
       const cleanMessage = message
         .replace(/\[SELF_FILL_COMPLETED\]/g, '')
         .replace(/\[GENERATE_DOCUMENTS_BUTTON\]/g, '')
@@ -618,71 +707,63 @@ export async function POST(request: NextRequest) {
         .replace(/\[PROFILE_COMPLETE\]/g, '')
         .trim();
       
-      await prisma.chatMessage.create({
-        data: {
-          userId: session.user.id,
-          sessionId: chatSession.id,
-          role: "user",
-          content: cleanMessage,
-          chatBotId: bot.id,
-        },
-      });
-      
-      // Если пользователь пишет о заполнении анкеты, проверяем документы заново
-      // (на случай, если они только что были сгенерированы)
-      if (message && (
-        message.toLowerCase().includes("заполнил анкету") || 
-        message.toLowerCase().includes("заполнил анкет") ||
-        message.toLowerCase().includes("успешно заполнил")
-      )) {
-        const recentDocuments = await prisma.document.findMany({
-          where: {
+      if (cleanMessage) {
+        await prisma.chatMessage.create({
+          data: {
             userId: session.user.id,
-            type: {
-              in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
-            },
-            status: {
-              not: "DRAFT",
-            },
+            sessionId: chatSession.id,
+            role: "user",
+            content: cleanMessage,
+            chatBotId: bot.id,
           },
         });
-        hasGeneratedDocuments = recentDocuments.length > 0;
-        console.log(`[chat] Re-checked documents after "filled questionnaire" message: generated=${hasGeneratedDocuments}`);
       }
       
-      // Определяем системный ответ
-      let systemResponse = "";
-      
+      // Если документов нет, предлагаем заполнить анкету
       if (!hasGeneratedDocuments) {
-        // Документы ещё не сгенерированы - предлагаем заполнить анкету
-        systemResponse = `Для продолжения работы, пожалуйста, заполните анкету. Нажмите кнопку "Заполнить анкету" выше.
+        const systemResponse = `Для продолжения работы, пожалуйста, заполните анкету. Нажмите кнопку "Заполнить анкету" выше.
 
 [SHOW_SELF_FILL_BUTTON]`;
+        
+        const assistantMessage = await prisma.chatMessage.create({
+          data: {
+            userId: session.user.id,
+            sessionId: chatSession.id,
+            role: "assistant",
+            content: systemResponse,
+            chatBotId: bot.id,
+          },
+        });
+        
+        return NextResponse.json({
+          message: systemResponse,
+          sessionId: chatSession.id,
+          messageId: assistantMessage.id,
+        });
       } else {
         // Документы сгенерированы, но не подписаны - предлагаем подписать
-        systemResponse = `Ваши документы сгенерированы!
+        const systemResponse = `Отлично! Ваши документы сгенерированы.
 
 Пожалуйста, скачайте их, подпишите и загрузите обратно в систему. После этого AI-помощник будет готов ответить на все ваши вопросы.
 
 [SHOW_DOCUMENTS_BUTTONS]`;
-      }
-      
-      // Сохраняем системный ответ
-      const assistantMessage = await prisma.chatMessage.create({
-        data: {
-          userId: session.user.id,
+        
+        const assistantMessage = await prisma.chatMessage.create({
+          data: {
+            userId: session.user.id,
+            sessionId: chatSession.id,
+            role: "assistant",
+            content: systemResponse,
+            chatBotId: bot.id,
+          },
+        });
+        
+        return NextResponse.json({
+          message: systemResponse,
           sessionId: chatSession.id,
-          role: "assistant",
-          content: systemResponse,
-          chatBotId: bot.id,
-        },
-      });
-      
-      return NextResponse.json({
-        message: systemResponse,
-        sessionId: chatSession.id,
-        messageId: assistantMessage.id,
-      });
+          messageId: assistantMessage.id,
+        });
+      }
     }
 
     // ========== УНИВЕРСАЛЬНАЯ КОНТЕКСТНАЯ ОБРАБОТКА ==========
@@ -1203,8 +1284,11 @@ export async function POST(request: NextRequest) {
     // ОБРАБОТКА САМОСТОЯТЕЛЬНОГО ЗАПОЛНЕНИЯ ПРОФИЛЯ
     // Если пользователь отправил [GENERATE_DOCUMENTS_BUTTON] или [SELF_FILL_COMPLETED], генерируем документы БЕЗ автоматического ответа
     if (message && (message.includes("[GENERATE_DOCUMENTS_BUTTON]") || message.includes("[SELF_FILL_COMPLETED]"))) {
-      // Проверяем, что это STATEMENT сессия и документы еще не созданы
-      if (chatSession.type === "STATEMENT" && !hasGeneratedDocuments) {
+      // Если документы уже подписаны - игнорируем маркер
+      if (hasSignedDocuments) {
+        // Документы уже отправлены на проверку - просто возвращаем пустой ответ
+        aiResponse = "";
+      } else if (chatSession.type === "STATEMENT" && !hasGeneratedDocuments) {
         try {
           const user = await prisma.user.findUnique({
             where: { id: session.user.id },
@@ -1360,34 +1444,134 @@ export async function POST(request: NextRequest) {
           aiResponse = `⚠️ Произошла ошибка при генерации документов. Пожалуйста, обратитесь в поддержку или попробуйте позже.`;
         }
       } else {
-        // Документы уже были сгенерированы - отправляем системное сообщение с кнопками скачивания и полем загрузки
+        // Документы уже были сгенерированы - проверяем актуальное состояние
         try {
-          const generatedDocs = await prisma.document.findMany({
+          // Проверяем актуальное состояние документов в БД
+          const currentDocs = await prisma.document.findMany({
             where: {
               userId: session.user.id,
               type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
-              status: "GENERATED",
             },
             orderBy: { createdAt: "desc" },
           });
 
-          if (generatedDocs.length > 0) {
-            // Отправляем системное сообщение с кнопками скачивания и полем загрузки
-            const docsList = generatedDocs
-              .map((doc) => `• ${doc.title || (doc.type === "MEMBERSHIP_APPLICATION" ? "Заявление о вступлении в профсоюз" : "Заявление о взносах")}`)
-              .join("\n");
+          const generatedDocs = currentDocs.filter(doc => doc.status === "GENERATED" || (doc.filePath && !doc.signedFilePath));
+          const signedDocs = currentDocs.filter(doc => doc.status === "SIGNED" || doc.status === "PENDING" || doc.status === "APPROVED");
 
+          if (signedDocs.length >= 2) {
+            // Документы уже подписаны - ничего не делаем
+            aiResponse = "";
+          } else if (generatedDocs.length > 0) {
+            // Документы сгенерированы, но не подписаны - отправляем системное сообщение с кнопками
             await SystemMessages.documentsAlreadyGenerated(session.user.id, generatedDocs);
             console.log("[chat] ✅ System message sent: documents already generated with download/upload options");
-            
-            // Не отправляем обычный ответ бота, так как системное сообщение уже отправлено
             aiResponse = ""; // Пустой ответ, чтобы не дублировать сообщение
           } else {
-            aiResponse = `⚠️ Документы не найдены. Пожалуйста, попробуйте сгенерировать их снова.`;
+            // Документы не найдены - пытаемся сгенерировать заново
+            const user = await prisma.user.findUnique({
+              where: { id: session.user.id },
+              include: { organization: true },
+            });
+
+            const profileIsComplete = isProfileComplete(user);
+            if (profileIsComplete && user) {
+              // Генерируем документы
+              const [membershipPath, contributionsPath] = await Promise.all([
+                generateMembershipApplication(user),
+                generateContributionsApplication(user, user.organization?.name, undefined),
+              ]);
+              
+              // Сохраняем в БД (код аналогичен выше)
+              const fs = await import("fs/promises");
+              const pathModule = await import("path");
+              
+              const membershipStats = await fs.stat(pathModule.join(process.cwd(), "public", membershipPath));
+              const contributionsStats = await fs.stat(pathModule.join(process.cwd(), "public", contributionsPath));
+
+              // Проверяем существующие документы
+              const existingDocs = await prisma.document.findMany({
+                where: {
+                  userId: session.user.id,
+                  type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
+                },
+              });
+              
+              const existingMembership = existingDocs.find(d => d.type === "MEMBERSHIP_APPLICATION");
+              const existingContribution = existingDocs.find(d => d.type === "CONTRIBUTION_APPLICATION");
+              
+              await Promise.all([
+                existingMembership
+                  ? prisma.document.update({
+                      where: { id: existingMembership.id },
+                      data: {
+                        filePath: membershipPath,
+                        fileName: pathModule.basename(membershipPath),
+                        fileSize: membershipStats.size,
+                        status: "GENERATED",
+                        signedFilePath: null,
+                        driveFileId: null,
+                        driveUrl: null,
+                      },
+                    })
+                  : prisma.document.create({
+                      data: {
+                        userId: session.user.id,
+                        type: "MEMBERSHIP_APPLICATION",
+                        status: "GENERATED",
+                        title: "Заявление о вступлении в профсоюз",
+                        filePath: membershipPath,
+                        fileName: pathModule.basename(membershipPath),
+                        fileSize: membershipStats.size,
+                        mimeType: "application/pdf",
+                        organizationId: user.organizationId || null,
+                      },
+                    }),
+                existingContribution
+                  ? prisma.document.update({
+                      where: { id: existingContribution.id },
+                      data: {
+                        filePath: contributionsPath,
+                        fileName: pathModule.basename(contributionsPath),
+                        fileSize: contributionsStats.size,
+                        status: "GENERATED",
+                        signedFilePath: null,
+                        driveFileId: null,
+                        driveUrl: null,
+                      },
+                    })
+                  : prisma.document.create({
+                      data: {
+                        userId: session.user.id,
+                        type: "CONTRIBUTION_APPLICATION",
+                        status: "GENERATED",
+                        title: "Заявление о взносах",
+                        filePath: contributionsPath,
+                        fileName: pathModule.basename(contributionsPath),
+                        fileSize: contributionsStats.size,
+                        mimeType: "application/pdf",
+                        organizationId: user.organizationId || null,
+                      },
+                    }),
+              ]);
+
+              const newGeneratedDocs = await prisma.document.findMany({
+                where: {
+                  userId: session.user.id,
+                  type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
+                  status: "GENERATED",
+                },
+              });
+
+              await SystemMessages.documentsGenerated(session.user.id, newGeneratedDocs);
+              await SystemMessages.uploadDocumentsInstruction(session.user.id);
+              aiResponse = "";
+            } else {
+              aiResponse = `⚠️ Для генерации заявлений необходимо заполнить все обязательные поля профиля. Пожалуйста, проверьте и дополните данные.`;
+            }
           }
         } catch (sysMsgError) {
-          console.error("[chat] Error sending system message for already generated documents:", sysMsgError);
-          aiResponse = `Документы уже были сгенерированы. Пожалуйста, скачайте их из раздела "Документы", подпишите и загрузите обратно.`;
+          console.error("[chat] Error handling document generation:", sysMsgError);
+          aiResponse = `⚠️ Произошла ошибка. Пожалуйста, попробуйте позже или обратитесь в поддержку.`;
         }
       }
     }

@@ -48,12 +48,12 @@ export async function GET(
 
     // Проверяем, нужно ли создать или обновить приветственное сообщение
     if (chatSession.type === "STATEMENT") {
-      // Проверяем это первый вход - проверяем отсутствие несистемных сообщений в этой сессии
+      // Проверяем это первый вход - проверяем отсутствие сообщений от пользователя (role: "user") в этой сессии
       const userMessagesCount = await prisma.chatMessage.count({
         where: {
           sessionId: chatSession.id,
           userId: session.user.id,
-          isSystemMessage: false,
+          role: "user", // Только сообщения от пользователя, не от бота
         },
       });
       

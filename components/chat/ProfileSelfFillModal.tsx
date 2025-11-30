@@ -366,32 +366,51 @@ export function ProfileSelfFillModal({
         // Отправляем команду на генерацию документов
         const response = await sendCompletionMessage();
         if (!response || !response.ok) {
+          const errorText = await response.text();
+          console.error("[ProfileModal] Failed to generate documents:", errorText);
           throw new Error("Не удалось сгенерировать документы");
         }
         
-        // Ждем немного чтобы документы успели сгенерироваться
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Ждем с повторными проверками, чтобы документы успели сгенерироваться
+        let attempts = 0;
+        const maxAttempts = 10; // 10 попыток по 1 секунде = 10 секунд максимум
+        let documentsGenerated = false;
         
-        // Перезагружаем документы чтобы они отобразились на шаге 3
-        try {
-          const docsResponse = await fetch("/api/documents");
-          if (docsResponse.ok) {
-            const docsData = await docsResponse.json();
-            const generatedDocs = (docsData.documents || []).filter((doc: any) =>
-              (doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION") &&
-              doc.status !== "DELETED"
-            );
-            
-            const membershipDoc = generatedDocs.find((d: any) => d.type === "MEMBERSHIP_APPLICATION");
-            const contributionDoc = generatedDocs.find((d: any) => d.type === "CONTRIBUTION_APPLICATION");
-            
-            setExistingDocs({
-              membership: membershipDoc ? { id: membershipDoc.id, signedFilePath: membershipDoc.signedFilePath } : undefined,
-              contribution: contributionDoc ? { id: contributionDoc.id, signedFilePath: contributionDoc.signedFilePath } : undefined,
-            });
+        while (attempts < maxAttempts && !documentsGenerated) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          try {
+            const docsResponse = await fetch("/api/documents");
+            if (docsResponse.ok) {
+              const docsData = await docsResponse.json();
+              const generatedDocs = (docsData.documents || []).filter((doc: any) =>
+                (doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION") &&
+                doc.status !== "DELETED" &&
+                doc.status !== "DRAFT"
+              );
+              
+              if (generatedDocs.length >= 2) {
+                documentsGenerated = true;
+                const membershipDoc = generatedDocs.find((d: any) => d.type === "MEMBERSHIP_APPLICATION");
+                const contributionDoc = generatedDocs.find((d: any) => d.type === "CONTRIBUTION_APPLICATION");
+                
+                setExistingDocs({
+                  membership: membershipDoc ? { id: membershipDoc.id, signedFilePath: membershipDoc.signedFilePath } : undefined,
+                  contribution: contributionDoc ? { id: contributionDoc.id, signedFilePath: contributionDoc.signedFilePath } : undefined,
+                });
+                setHasExistingDocuments(true);
+              }
+            }
+          } catch (error) {
+            console.error("[ProfileModal] Failed to reload documents:", error);
           }
-        } catch (error) {
-          console.error("[ProfileModal] Failed to reload documents:", error);
+          
+          attempts++;
+        }
+        
+        if (!documentsGenerated) {
+          console.warn("[ProfileModal] Documents were not generated after", maxAttempts, "attempts");
+          alertError("Документы не были сгенерированы. Попробуйте еще раз или используйте кнопку генерации на следующем шаге.");
         }
         
         // Переходим к следующему шагу (там уже будут кнопки скачивания)
@@ -875,6 +894,67 @@ export function ProfileSelfFillModal({
                 setUploadedDocs(docs);
                 setHasUnsavedChanges(true);
               }}
+              onGenerateDocuments={async () => {
+                setSaving(true);
+                try {
+                  const response = await sendCompletionMessage();
+                  if (!response || !response.ok) {
+                    const errorText = await response.text();
+                    console.error("[ProfileModal] Failed to generate documents:", errorText);
+                    throw new Error("Не удалось сгенерировать документы");
+                  }
+                  
+                  // Ждем с повторными проверками
+                  let attempts = 0;
+                  const maxAttempts = 10;
+                  let documentsGenerated = false;
+                  
+                  while (attempts < maxAttempts && !documentsGenerated) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    try {
+                      const docsResponse = await fetch("/api/documents");
+                      if (docsResponse.ok) {
+                        const docsData = await docsResponse.json();
+                        const generatedDocs = (docsData.documents || []).filter((doc: any) =>
+                          (doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION") &&
+                          doc.status !== "DELETED" &&
+                          doc.status !== "DRAFT"
+                        );
+                        
+                        if (generatedDocs.length >= 2) {
+                          documentsGenerated = true;
+                          const membershipDoc = generatedDocs.find((d: any) => d.type === "MEMBERSHIP_APPLICATION");
+                          const contributionDoc = generatedDocs.find((d: any) => d.type === "CONTRIBUTION_APPLICATION");
+                          
+                          setExistingDocs({
+                            membership: membershipDoc ? { id: membershipDoc.id, signedFilePath: membershipDoc.signedFilePath } : undefined,
+                            contribution: contributionDoc ? { id: contributionDoc.id, signedFilePath: contributionDoc.signedFilePath } : undefined,
+                          });
+                          setHasExistingDocuments(true);
+                          
+                          // Обновляем компонент документов
+                          window.location.reload();
+                        }
+                      }
+                    } catch (error) {
+                      console.error("[ProfileModal] Failed to reload documents:", error);
+                    }
+                    
+                    attempts++;
+                  }
+                  
+                  if (!documentsGenerated) {
+                    alertError("Документы не были сгенерированы. Попробуйте еще раз.");
+                  }
+                } catch (error) {
+                  console.error("Error generating documents:", error);
+                  alertError("Ошибка при генерации документов. Попробуйте еще раз.");
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              generating={saving}
             />
           )}
 
@@ -1225,9 +1305,13 @@ function Step1ProfileForm({
 function Step2DocumentsUpload({
   docs,
   onChange,
+  onGenerateDocuments,
+  generating = false,
 }: {
   docs: any;
   onChange: (docs: any) => void;
+  onGenerateDocuments?: () => Promise<void>;
+  generating?: boolean;
 }) {
   const [generatedDocs, setGeneratedDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1359,10 +1443,34 @@ function Step2DocumentsUpload({
 
       {/* Если документы не найдены */}
       {!loading && !membershipDoc && !contributionDoc && (
-        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4 space-y-3">
           <p className="text-sm text-orange-800 dark:text-orange-200">
-            ⚠️ Документы еще не сгенерированы. Вернитесь на предыдущий шаг.
+            ⚠️ Документы еще не сгенерированы.
           </p>
+          {onGenerateDocuments && (
+            <button
+              onClick={onGenerateDocuments}
+              disabled={generating}
+              className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {generating ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Генерация документов...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Сгенерировать документы
+                </>
+              )}
+            </button>
+          )}
         </div>
       )}
 
