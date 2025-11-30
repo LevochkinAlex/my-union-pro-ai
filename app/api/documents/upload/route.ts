@@ -403,6 +403,8 @@ export async function POST(request: NextRequest) {
             data: { status: "PENDING" },
           });
 
+          // Отправляем финальное системное сообщение
+          // Сообщение от пользователя будет отправлено из модалки через /api/chat с маркером [DOCUMENTS_UPLOADED]
           await SystemMessages.documentsSubmitted(session.user.id);
           console.log("[upload] ✅ System message sent: documents submitted");
         }

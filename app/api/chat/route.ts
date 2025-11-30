@@ -1409,32 +1409,14 @@ export async function POST(request: NextRequest) {
               });
 
               await SystemMessages.documentsGenerated(session.user.id, generatedDocs);
-              await SystemMessages.uploadDocumentsInstruction(session.user.id);
-              console.log("[chat] ✅ System messages sent: documents generated");
+              console.log("[chat] ✅ System message sent: documents generated");
             } catch (sysMsgError) {
               console.error("[chat] Error sending system messages:", sysMsgError);
               // Не блокируем генерацию документов из-за ошибки отправки сообщений
             }
             
-            // Отвечаем с инструкцией по скачиванию и загрузке документов
-            aiResponse = `Отлично! 🎉 Ваша анкета успешно заполнена, и документы для вступления в профсоюз сгенерированы.
-
-**Следующие шаги:**
-
-1. 📥 **Скачайте документы** из модального окна (Шаг 3)
-   - Заявление о вступлении в профсоюз
-   - Заявление о перечислении членских взносов
-   - Устав Профсоюза (для ознакомления)
-
-2. 🖨️ **Распечатайте** заявления
-
-3. ✍️ **Подпишите** документы и поставьте дату
-
-4. 📤 **Загрузите** обратно подписанные документы через форму
-
-[SHOW_DOCUMENT_ACTIONS]
-
-После отправки документов на проверку, я расскажу вам о всех возможностях платформы! 😊`;
+            // Не отправляем обычный ответ бота, так как системное сообщение уже отправлено
+            aiResponse = "";
                 } else {
             console.log("[chat] ⚠️ Self-fill completed but profile incomplete");
             aiResponse = `⚠️ Для генерации заявлений необходимо заполнить все обязательные поля профиля. Пожалуйста, проверьте и дополните данные.`;
@@ -1563,7 +1545,6 @@ export async function POST(request: NextRequest) {
               });
 
               await SystemMessages.documentsGenerated(session.user.id, newGeneratedDocs);
-              await SystemMessages.uploadDocumentsInstruction(session.user.id);
               aiResponse = "";
             } else {
               aiResponse = `⚠️ Для генерации заявлений необходимо заполнить все обязательные поля профиля. Пожалуйста, проверьте и дополните данные.`;
@@ -1579,6 +1560,21 @@ export async function POST(request: NextRequest) {
     // ОБРАБОТКА ЗАГРУЗКИ ДОКУМЕНТОВ
     // Если пользователь отправил [DOCUMENTS_UPLOADED], отправляем системное сообщение
     if (message && message.includes("[DOCUMENTS_UPLOADED]")) {
+      // Сохраняем сообщение от пользователя (без маркера)
+      const cleanMessage = message.replace(/\[DOCUMENTS_UPLOADED\]/g, "").trim();
+      
+      if (cleanMessage) {
+        await prisma.chatMessage.create({
+          data: {
+            userId: session.user.id,
+            sessionId: chatSession.id,
+            role: "user",
+            content: cleanMessage,
+            chatBotId: bot.id,
+          },
+        });
+      }
+      
       // Проверяем что документы действительно загружены
       const uploadedDocs = await prisma.document.findMany({
         where: {
@@ -1590,7 +1586,7 @@ export async function POST(request: NextRequest) {
       });
 
       if (uploadedDocs.length >= 2) {
-        // Отправляем системное сообщение
+        // Отправляем системное сообщение (финальное)
         try {
           await SystemMessages.documentsSubmitted(session.user.id);
           console.log("[chat] ✅ System message sent: documents submitted");
@@ -1599,44 +1595,8 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      aiResponse = `Превосходно! 🎉 Ваши документы получены и отправлены на проверку.
-
-**Что происходит дальше?**
-
-⏳ Проверка ваших заявлений обычно занимает **1-2 рабочих дня**. Мы уведомим вас, когда документы будут одобрены.
-
-А пока что давайте расскажу, какие **возможности** открываются для вас как члена профсоюза! 😊
-
----
-
-## 🎁 Эксклюзивные скидки BestBenefits
-
-Вы получаете **бесплатный доступ** к платформе скидок:
-
-✨ **Что доступно:**
-- 🏪 **Более 1000 партнеров** по всей России
-- 💰 **Скидки до 70%** на товары и услуги  
-- 🛒 Магазины, рестораны, развлечения, здоровье, путешествия
-- 📱 **Apple Wallet интеграция** - добавьте карту на смартфон
-- 🎫 **Генерация промокодов** прямо из приложения
-
-🔗 Перейдите в раздел [Скидки](/dashboard/discounts) чтобы начать экономить!
-
----
-
-## 🤝 Поддержка и консультации
-
-**Я всегда готов помочь вам:**
-- 📚 Расскажу о ваших **правах и льготах** как члена профсоюза
-- ⚖️ Помогу разобраться с **трудовыми спорами**
-- 📝 Окажу поддержку в **обращениях и жалобах**
-- 💡 Отвечу на любые вопросы о профсоюзе
-
----
-
-**Есть вопросы? Спрашивайте!** 💬 
-
-Я могу рассказать подробнее про скидки, помочь с документами или ответить на любые другие вопросы.`;
+      // Не отправляем обычный ответ бота, так как системное сообщение уже отправлено
+      aiResponse = "";
     }
 
     // Проверяем полноту профиля и добавляем маркер завершения если нужно

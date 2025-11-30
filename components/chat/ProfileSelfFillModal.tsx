@@ -706,7 +706,7 @@ export function ProfileSelfFillModal({
 
   const sendDocumentsUploadedMessage = async () => {
     try {
-      await fetch("/api/chat", {
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -714,6 +714,13 @@ export function ProfileSelfFillModal({
           sessionId,
         }),
       });
+      
+      if (response.ok) {
+        // Закрываем модалку после успешной отправки
+        setTimeout(() => {
+          onClose();
+        }, 500);
+      }
     } catch (error) {
       console.error("Error sending documents uploaded message:", error);
     }
@@ -898,6 +905,7 @@ export function ProfileSelfFillModal({
                 setUploadedDocs(docs);
                 setHasUnsavedChanges(true);
               }}
+              onDocumentsSubmitted={sendDocumentsUploadedMessage}
               onGenerateDocuments={async () => {
                 setSaving(true);
                 try {
@@ -1311,11 +1319,13 @@ function Step2DocumentsUpload({
   onChange,
   onGenerateDocuments,
   generating = false,
+  onDocumentsSubmitted,
 }: {
   docs: any;
   onChange: (docs: any) => void;
   onGenerateDocuments?: () => Promise<void>;
   generating?: boolean;
+  onDocumentsSubmitted?: () => Promise<void>;
 }) {
   const [generatedDocs, setGeneratedDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1692,6 +1702,49 @@ function Step2DocumentsUpload({
         </p>
       </div>
           </div>
+
+          {/* Кнопка "Отправить на проверку" - показывается только когда оба документа загружены */}
+          {docs.membership && docs.contribution && (
+            <div className="mt-6 pt-6 border-t border-gray-300 dark:border-gray-600">
+              <button
+                onClick={async () => {
+                  // Загружаем документы на сервер
+                  const formData = new FormData();
+                  formData.append("membership", docs.membership);
+                  formData.append("contribution", docs.contribution);
+                  
+                  try {
+                    const response = await fetch("/api/documents/upload", {
+                      method: "POST",
+                      body: formData,
+                    });
+                    
+                    if (!response.ok) {
+                      throw new Error("Failed to upload documents");
+                    }
+                    
+                    // Отправляем сообщение от пользователя
+                    if (onDocumentsSubmitted) {
+                      await onDocumentsSubmitted();
+                    }
+                    
+                    // Закрываем модалку
+                    onChange({ membership: null, contribution: null });
+                    // Модалка закроется автоматически после отправки сообщения
+                  } catch (error) {
+                    console.error("Error uploading documents:", error);
+                    alertError("Ошибка при загрузке документов");
+                  }
+                }}
+                className="w-full px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-base font-medium flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Отправить на проверку
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
