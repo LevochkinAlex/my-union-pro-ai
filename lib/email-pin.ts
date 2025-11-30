@@ -57,9 +57,16 @@ export async function sendEmailPin(
     const transporter = createEmailTransport();
 
     const mailOptions = {
-      from: `"МойСоюз" <${process.env.SMTP_USER}>`,
+      from: process.env.SMTP_FROM || `"МойСоюз" <${process.env.SMTP_USER}>`,
       to: email,
       subject: "Код подтверждения email — МойСоюз",
+      // Добавляем заголовки для снижения вероятности попадания в спам
+      headers: {
+        'X-Priority': '1',
+        'X-MSMail-Priority': 'High',
+        'Importance': 'high',
+        'List-Unsubscribe': '<mailto:support@myunion.pro>',
+      },
       html: `
         <!DOCTYPE html>
         <html>
@@ -178,12 +185,21 @@ export async function sendEmailPin(
       };
     }
 
+    console.log("[Email PIN] Отправка письма на:", email);
+    console.log("[Email PIN] SMTP настройки:", {
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      user: process.env.SMTP_USER,
+      from: mailOptions.from,
+    });
+
     const result = await transporter.sendMail(mailOptions);
 
     console.log("[Email PIN] ✅ Email отправлен:", {
       messageId: result.messageId,
       accepted: result.accepted,
       rejected: result.rejected,
+      response: result.response,
     });
 
     if (result.rejected && result.rejected.length > 0) {

@@ -2,6 +2,8 @@
  * Email функции для отправки magic links и уведомлений
  */
 
+import nodemailer from "nodemailer";
+
 export interface SendEmailResult {
   success: boolean;
   error?: string;
@@ -16,6 +18,21 @@ export interface SendEmailOptions {
 }
 
 /**
+ * Создание транспорта для отправки email
+ */
+function createEmailTransport() {
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "smtp.mail.ru",
+    port: parseInt(process.env.SMTP_PORT || "465"),
+    secure: true,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASSWORD,
+    },
+  });
+}
+
+/**
  * Универсальная функция для отправки email
  */
 export async function sendEmail(options: SendEmailOptions): Promise<void> {
@@ -24,20 +41,38 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
     console.log("  To:", options.to);
     console.log("  Subject:", options.subject);
 
-    // TODO: Интеграция с email сервисом (SendGrid, Mailgun, или SMTP)
-    // Пример для SendGrid:
-    // const sgMail = require('@sendgrid/mail');
-    // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    // await sgMail.send({
-    //   to: options.to,
-    //   from: 'noreply@myunion.pro',
-    //   subject: options.subject,
-    //   html: options.html,
-    //   text: options.text,
-    // });
+    if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
+      throw new Error("SMTP настройки не установлены");
+    }
 
-    console.log("[Email] ⚠️ ВНИМАНИЕ: Email НЕ отправлен (нужна настройка SMTP/SendGrid)");
-    console.log("[Email] HTML preview:", options.html.slice(0, 200));
+    const transporter = createEmailTransport();
+    
+    // Проверяем подключение
+    await transporter.verify();
+    console.log("[Email] ✅ SMTP сервер готов");
+
+    const result = await transporter.sendMail({
+      from: process.env.SMTP_FROM || `"МойСоюз" <${process.env.SMTP_USER}>`,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+      headers: {
+        'X-Priority': '1',
+        'X-MSMail-Priority': 'High',
+        'Importance': 'high',
+      },
+    });
+
+    console.log("[Email] ✅ Email отправлен:", {
+      messageId: result.messageId,
+      accepted: result.accepted,
+      rejected: result.rejected,
+    });
+
+    if (result.rejected && result.rejected.length > 0) {
+      throw new Error(`Email отклонен: ${result.rejected.join(", ")}`);
+    }
   } catch (error) {
     console.error("[Email] Ошибка отправки:", error);
     throw error;
@@ -134,24 +169,17 @@ export async function sendMagicLinkEmail(
     console.log("  Magic Link:", magicLink);
     console.log("  Is New User:", isNewUser);
 
-    // TODO: Реальная отправка через email сервис
-    // Пример для SendGrid:
-    // const sgMail = require('@sendgrid/mail');
-    // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    // await sgMail.send({
-    //   to: email,
-    //   from: 'noreply@myunion.pro',
-    //   subject: subject,
-    //   html: htmlContent,
-    // });
-
-    // Пока возвращаем успех (для тестирования)
-    console.log("[Email] ⚠️ ВНИМАНИЕ: Email НЕ отправлен (нужна настройка SMTP/SendGrid)");
-    console.log("[Email] Magic Link для тестирования:", magicLink);
+    // Отправляем через SMTP
+    await sendEmail({
+      to: email,
+      subject,
+      html: htmlContent,
+      text: `Привет${name}!\n\n${isNewUser ? "Мы рады видеть вас в МойСоюз! Перейдите по ссылке ниже, чтобы завершить регистрацию." : "Перейдите по ссылке ниже, чтобы войти в свой личный кабинет."}\n\n${magicLink}\n\nЭта ссылка действительна 15 минут.`,
+    });
 
     return {
       success: true,
-      messageId: "test-" + Date.now(),
+      messageId: "sent-" + Date.now(),
     };
   } catch (error) {
     console.error("[Email] Ошибка отправки:", error);
@@ -207,9 +235,24 @@ export async function sendVerificationEmail(
     `.trim();
 
     console.log("[Email] Verification email готов к отправке:", email);
-    // TODO: Реальная отправка через email сервис
     
-    return { sent: true };
+    // Отправляем через SMTP
+    try {
+      await sendEmail({
+        to: email,
+        subject,
+        html: htmlContent,
+        text: `Для завершения регистрации подтвердите ваш email адрес.\n\nПерейдите по ссылке: ${verificationLink}`,
+      });
+      
+      return { sent: true };
+    } catch (error) {
+      console.error("[Email] Ошибка отправки verification email:", error);
+      return {
+        sent: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   } catch (error) {
     console.error("[Email] Ошибка отправки verification email:", error);
     return {
@@ -264,12 +307,27 @@ export async function sendWelcomeEmail(
     `.trim();
 
     console.log("[Email] Welcome email готов к отправке:", email);
-    // TODO: Реальная отправка через email сервис
     
-    return {
-      success: true,
-      messageId: "test-" + Date.now(),
-    };
+    // Отправляем через SMTP
+    try {
+      await sendEmail({
+        to: email,
+        subject,
+        html: htmlContent,
+        text: `Ваш аккаунт успешно создан!\n\nВаш временный пароль: ${password}\n\nРекомендуем изменить пароль после первого входа.\n\nВойти в аккаунт: ${process.env.NEXT_PUBLIC_APP_URL || 'https://myunion.pro'}/login`,
+      });
+      
+      return {
+        success: true,
+        messageId: "sent-" + Date.now(),
+      };
+    } catch (error) {
+      console.error("[Email] Ошибка отправки welcome email:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   } catch (error) {
     console.error("[Email] Ошибка отправки welcome email:", error);
     return {

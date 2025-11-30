@@ -200,6 +200,45 @@ export async function GET(request: NextRequest) {
         if (user) {
           console.log("[Telegram Login] 🔗 Найден существующий аккаунт по номеру телефона. Синхронизируем с Telegram:", user.id);
           
+          // Проверяем, не привязан ли этот Telegram уже к другому аккаунту
+          const existingTgUser = await prisma.user.findUnique({
+            where: { telegramChatId: id },
+          });
+          
+          if (existingTgUser && existingTgUser.id !== user.id) {
+            console.log("[Telegram Login] ⚠️ Этот Telegram уже привязан к другому аккаунту. Объединяем аккаунты:", existingTgUser.id);
+            
+            // Объединяем аккаунты: переносим данные из Telegram-аккаунта в аккаунт с телефоном
+            await prisma.document.updateMany({
+              where: { userId: existingTgUser.id },
+              data: { userId: user.id },
+            });
+            await prisma.chatSession.updateMany({
+              where: { userId: existingTgUser.id },
+              data: { userId: user.id },
+            });
+            await prisma.chatMessage.updateMany({
+              where: { userId: existingTgUser.id },
+              data: { userId: user.id },
+            });
+            await prisma.userAppeal.updateMany({
+              where: { userId: existingTgUser.id },
+              data: { userId: user.id },
+            });
+            await prisma.membershipHistory.updateMany({
+              where: { userId: existingTgUser.id },
+              data: { userId: user.id },
+            });
+            await prisma.sMSPinCode.deleteMany({ where: { userId: existingTgUser.id } });
+            await prisma.loginToken.deleteMany({ where: { userId: existingTgUser.id } });
+            await prisma.emailPinCode.deleteMany({ where: { userId: existingTgUser.id } });
+            await prisma.pushSubscription.deleteMany({ where: { userId: existingTgUser.id } });
+            await prisma.phoneHistory.deleteMany({ where: { userId: existingTgUser.id } });
+            await prisma.user.delete({ where: { id: existingTgUser.id } });
+            
+            console.log("[Telegram Login] ✅ Аккаунты объединены, дубликат удалён");
+          }
+          
           user = await prisma.user.update({
             where: { id: user.id },
             data: {
@@ -234,19 +273,62 @@ export async function GET(request: NextRequest) {
         // Создаем нового пользователя
         console.log("[Telegram Login] Создаем нового пользователя");
         
-        user = await prisma.user.create({
-          data: {
-            telegramChatId: id,
-            telegramUsername: username || null,
-            firstName: first_name || null,
-            lastName: last_name || null,
-            phone: normalizedPhone,
-            role: "PENDING_MEMBER",
-            membershipStatus: "PROFILE_INCOMPLETE",
-          },
+        // Проверяем, не существует ли уже пользователь с этим telegramChatId (на случай, если остался после удаления)
+        const existingTgUser = await prisma.user.findUnique({
+          where: { telegramChatId: id },
         });
         
-        console.log("[Telegram Login] Новый пользователь создан:", user.id);
+        if (existingTgUser) {
+          console.log("[Telegram Login] ⚠️ Найден пользователь с этим Telegram ID, используем его:", existingTgUser.id);
+          // Обновляем существующего пользователя вместо создания нового
+          user = await prisma.user.update({
+            where: { id: existingTgUser.id },
+            data: {
+              telegramUsername: username || existingTgUser.telegramUsername,
+              firstName: first_name || existingTgUser.firstName,
+              lastName: last_name || existingTgUser.lastName,
+              phone: normalizedPhone || existingTgUser.phone,
+            },
+          });
+          isNewUser = false;
+        } else {
+          // Создаем нового пользователя
+          try {
+            user = await prisma.user.create({
+              data: {
+                telegramChatId: id,
+                telegramUsername: username || null,
+                firstName: first_name || null,
+                lastName: last_name || null,
+                phone: normalizedPhone,
+                role: "PENDING_MEMBER",
+                membershipStatus: "PROFILE_INCOMPLETE",
+              },
+            });
+            
+            console.log("[Telegram Login] Новый пользователь создан:", user.id);
+          } catch (createError: any) {
+            // Если ошибка из-за уникального constraint (telegramChatId или phone), пробуем найти существующего
+            if (createError?.code === 'P2002') {
+              console.log("[Telegram Login] ⚠️ Ошибка уникальности при создании, ищем существующего пользователя");
+              
+              // Пробуем найти по telegramChatId
+              const foundUser = await prisma.user.findUnique({
+                where: { telegramChatId: id },
+              });
+              
+              if (foundUser) {
+                user = foundUser;
+                isNewUser = false;
+                console.log("[Telegram Login] ✅ Найден существующий пользователь:", user.id);
+              } else {
+                throw createError; // Если не нашли, пробрасываем ошибку дальше
+              }
+            } else {
+              throw createError;
+            }
+          }
+        }
       }
     }
 
