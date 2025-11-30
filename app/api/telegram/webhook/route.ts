@@ -164,18 +164,69 @@ export async function POST(request: NextRequest) {
           where: { id: user.id },
         });
 
+        // Создаем токен для автоматической авторизации
+        const crypto = await import("crypto");
+        const loginToken = crypto.randomBytes(32).toString("hex");
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
+
+        await prisma.loginToken.create({
+          data: {
+            token: loginToken,
+            userId: existingUser.id,
+            expiresAt,
+          },
+        });
+
+        // Определяем правильный baseUrl
+        const host = request.headers.get("host") || "localhost:3000";
+        const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+        const baseUrl = isLocalhost 
+          ? `http://${host}` 
+          : (process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro");
+        
+        const loginUrl = `${baseUrl}/api/auth/telegram/auto-login?token=${loginToken}`;
+
+        const name = existingUser.firstName ? `, ${existingUser.firstName}` : "";
         await sendTelegramMessage(
           chatId,
-          `✅ <b>Аккаунты успешно синхронизированы!</b>
+          `✅ <b>Аккаунты успешно синхронизированы${name}!</b>
 
 Ваш аккаунт Telegram теперь привязан к номеру телефона <code>${normalizedPhone}</code>.
 
-Теперь вы можете входить:
-• Через Telegram (быстрый вход через бот)
-• Через SMS код на номер ${normalizedPhone}
+Нажмите кнопку ниже для входа в личный кабинет:
 
-Оба способа ведут в один аккаунт! 🎉`
+⏱ <i>Ссылка действительна 10 минут</i>`
         );
+
+        // Отправляем кнопку для входа
+        const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+        if (TELEGRAM_BOT_TOKEN) {
+          const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+          
+          try {
+            await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: "Войти в аккаунт:",
+                parse_mode: "HTML",
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: "🔐 Войти в аккаунт",
+                        url: loginUrl,
+                      },
+                    ],
+                  ],
+                },
+              }),
+            });
+          } catch (error) {
+            console.error("[Telegram Webhook] Ошибка при отправке кнопки после объединения:", error);
+          }
+        }
 
         return NextResponse.json({ ok: true });
       }
@@ -295,26 +346,109 @@ ${loginUrl}
           );
         }
       } else {
-        // Существующий пользователь - просто привязываем номер (если изменился)
-        console.log("[Telegram Webhook] Пользователь уже имел номер, обновляем");
+        // Существующий пользователь - обновляем номер и авторизуем на сайте
+        console.log("[Telegram Webhook] Пользователь уже имел номер, обновляем и авторизуем");
         
+        // Обновляем номер (если изменился)
         await prisma.user.update({
           where: { id: user.id },
           data: { phone: normalizedPhone },
         });
 
+        // Создаем токен для автоматической авторизации
+        const crypto = await import("crypto");
+        const loginToken = crypto.randomBytes(32).toString("hex");
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
+
+        await prisma.loginToken.create({
+          data: {
+            token: loginToken,
+            userId: user.id,
+            expiresAt,
+          },
+        });
+
+        console.log("[Telegram Webhook] Создан токен для автоматической авторизации (возвращающийся пользователь)");
+
+        // Определяем правильный baseUrl
+        const host = request.headers.get("host") || "localhost:3000";
+        const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+        const baseUrl = isLocalhost 
+          ? `http://${host}` 
+          : (process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro");
+        
+        const loginUrl = `${baseUrl}/api/auth/telegram/auto-login?token=${loginToken}`;
+        
+        // Отправляем приветствие для возвращающегося пользователя
+        const name = user.firstName ? `, ${user.firstName}` : "";
         await sendTelegramMessage(
           chatId,
-          `✅ <b>Номер телефона успешно привязан!</b>
+          `🎉 <b>Рад видеть вас снова${name}!</b>
 
-Ваш номер <code>${normalizedPhone}</code> теперь привязан к аккаунту.
+Ваш номер <code>${normalizedPhone}</code> обновлен.
 
-Теперь вы можете входить:
-• Через Telegram (быстрый вход через бот)
-• Через SMS код на этот номер
+Нажмите кнопку ниже для входа в личный кабинет:
 
-Оба способа ведут в ваш аккаунт! 🎉`
+⏱ <i>Ссылка действительна 10 минут</i>`
         );
+        
+        // Отправляем кнопку для входа
+        const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+        if (!TELEGRAM_BOT_TOKEN) {
+          console.error("[Telegram Webhook] TELEGRAM_BOT_TOKEN не установлен!");
+          return NextResponse.json({ ok: false, error: "Bot token not configured" }, { status: 500 });
+        }
+        
+        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: "Войти в аккаунт:",
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: "🔐 Войти в аккаунт",
+                      url: loginUrl,
+                    },
+                  ],
+                ],
+              },
+            }),
+          });
+          
+          const result = await response.json();
+          console.log("[Telegram Webhook] Результат отправки сообщения с кнопкой (возвращающийся):", result);
+          
+          if (!result.ok) {
+            console.error("[Telegram Webhook] Ошибка отправки сообщения:", result);
+            // Пробуем отправить простое сообщение со ссылкой
+            await sendTelegramMessage(
+              chatId,
+              `🔐 <b>Перейдите на сайт для входа:</b>
+
+${loginUrl}
+
+⏱ <i>Ссылка действительна 10 минут</i>`
+            );
+          }
+        } catch (error) {
+          console.error("[Telegram Webhook] Ошибка при отправке сообщения:", error);
+          // Пробуем отправить простое сообщение со ссылкой
+          await sendTelegramMessage(
+            chatId,
+            `🔐 <b>Перейдите на сайт для входа:</b>
+
+${loginUrl}
+
+⏱ <i>Ссылка действительна 10 минут</i>`
+          );
+        }
       }
 
       return NextResponse.json({ ok: true });
