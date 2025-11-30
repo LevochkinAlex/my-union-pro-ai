@@ -177,21 +177,6 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Нормализуем номер телефона
-      const normalizePhone = (phone: string): string => {
-        let cleaned = phone.replace(/[\s\-\(\)\+]/g, "");
-        if (cleaned.startsWith("8")) {
-          cleaned = "7" + cleaned.slice(1);
-        }
-        if (!cleaned.startsWith("7")) {
-          cleaned = "7" + cleaned;
-        }
-        return "+" + cleaned;
-      };
-
-      const normalizedPhone = normalizePhone(contact.phone_number);
-      console.log("[Telegram Webhook] Нормализованный телефон:", normalizedPhone);
-
       // Проверяем, нет ли уже другого пользователя с этим номером
       const existingUser = await prisma.user.findUnique({
         where: { phone: normalizedPhone },
