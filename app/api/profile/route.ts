@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
+import { normalizePhone, getPhoneDigits, isSamePhone } from "@/lib/utils/phone";
 
 function normalizeString(value: unknown): string | null {
   if (value === null || value === undefined) {
@@ -141,28 +142,55 @@ export async function PUT(request: NextRequest) {
       },
     });
 
+    // === НОРМАЛИЗАЦИЯ ТЕЛЕФОНА ===
+    const normalizedPhone = normalizePhone(phone);
+    const phoneDigits = getPhoneDigits(normalizedPhone);
+    
     // === ПРОВЕРКА УНИКАЛЬНОСТИ ТЕЛЕФОНА ===
-    if (phone && phone !== userBeforeUpdate?.phone) {
-      // Нормализуем номер для поиска
-      const phoneDigits = phone.replace(/\D/g, "");
-      
+    if (normalizedPhone && !isSamePhone(normalizedPhone, userBeforeUpdate?.phone)) {
+      // Проверяем не занят ли номер другим пользователем
       const existingUserWithPhone = await prisma.user.findFirst({
         where: {
           id: { not: session.user.id },
           OR: [
-            { phone },
-            { phone: { contains: phoneDigits.slice(-10) } },
+            { phone: normalizedPhone },
+            { authPhone: normalizedPhone },
           ],
         },
-        select: { id: true, phone: true },
+        select: { id: true, phone: true, firstName: true, lastName: true },
       });
       
       if (existingUserWithPhone) {
-        console.warn("[profile] Phone already used by another user:", phone);
+        console.warn("[profile] Phone already used by another user:", normalizedPhone, existingUserWithPhone.id);
         return NextResponse.json(
-          { error: "Этот номер телефона уже используется другим пользователем" },
-          { status: 400 }
+          { 
+            error: "Этот номер телефона уже используется другим пользователем",
+            existingUser: {
+              id: existingUserWithPhone.id,
+              name: [existingUserWithPhone.firstName, existingUserWithPhone.lastName].filter(Boolean).join(" ") || "Пользователь"
+            },
+            canMerge: true // Можно предложить объединить аккаунты
+          },
+          { status: 409 } // Conflict
         );
+      }
+      
+      // Записываем историю смены телефона
+      try {
+        await prisma.phoneHistory.create({
+          data: {
+            userId: session.user.id,
+            phone: normalizedPhone,
+            phoneNormalized: phoneDigits,
+            changeType: "PROFILE_UPDATE",
+            previousPhone: userBeforeUpdate?.phone || null,
+            source: "profile",
+          },
+        });
+        console.log("[profile] Phone change recorded in history:", userBeforeUpdate?.phone, "->", normalizedPhone);
+      } catch (historyError) {
+        // Не блокируем сохранение профиля из-за ошибки записи истории
+        console.error("[profile] Failed to record phone history:", historyError);
       }
     }
 
@@ -191,7 +219,7 @@ export async function PUT(request: NextRequest) {
       { old: userBeforeUpdate?.lastName, new: lastName ? capitalizeName(lastName) : null },
       { old: userBeforeUpdate?.middleName, new: middleName ? capitalizeName(middleName) : null },
       { old: userBeforeUpdate?.dateOfBirth?.toISOString(), new: dateOfBirth?.toISOString() },
-      { old: userBeforeUpdate?.phone, new: phone },
+      { old: normalizePhone(userBeforeUpdate?.phone), new: normalizedPhone },
       { old: userBeforeUpdate?.address, new: address },
       { old: userBeforeUpdate?.jobTitle, new: jobTitle },
       { old: userBeforeUpdate?.profession, new: profession },
@@ -225,7 +253,7 @@ export async function PUT(request: NextRequest) {
         lastName: lastName ? capitalizeName(lastName) : null,
         middleName: middleName ? capitalizeName(middleName) : null,
         email: emailToSave, // Email не меняется если уже установлен
-        phone,
+        phone: normalizedPhone, // Телефон всегда сохраняется в нормализованном формате
         address,
         preferredDiscountCity: preferredDiscountCity ? capitalizeName(preferredDiscountCity) : null,
         jobTitle,

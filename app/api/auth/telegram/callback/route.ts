@@ -123,8 +123,43 @@ export async function GET(request: NextRequest) {
       
       if (existingTgUser && existingTgUser.id !== session.user.id) {
         console.log("[Telegram Login] ⚠️ Этот Telegram уже привязан к другому аккаунту:", existingTgUser.id);
-        // Можно либо показать ошибку, либо объединить аккаунты
-        // Пока просто обновим текущего пользователя
+        // Объединяем аккаунты: переносим данные из Telegram-аккаунта в текущий
+        
+        // Переносим документы
+        await prisma.document.updateMany({
+          where: { userId: existingTgUser.id },
+          data: { userId: session.user.id },
+        });
+        
+        // Переносим чат-сессии
+        await prisma.chatSession.updateMany({
+          where: { userId: existingTgUser.id },
+          data: { userId: session.user.id },
+        });
+        
+        // Переносим историю членства
+        await prisma.membershipHistory.updateMany({
+          where: { userId: existingTgUser.id },
+          data: { userId: session.user.id },
+        });
+        
+        // Переносим обращения
+        await prisma.userAppeal.updateMany({
+          where: { userId: existingTgUser.id },
+          data: { userId: session.user.id },
+        });
+        
+        // Удаляем связанные записи
+        await prisma.sMSPinCode.deleteMany({ where: { userId: existingTgUser.id } });
+        await prisma.loginToken.deleteMany({ where: { userId: existingTgUser.id } });
+        await prisma.emailPinCode.deleteMany({ where: { userId: existingTgUser.id } });
+        await prisma.pushSubscription.deleteMany({ where: { userId: existingTgUser.id } });
+        await prisma.phoneHistory.deleteMany({ where: { userId: existingTgUser.id } });
+        
+        // Удаляем дубликат
+        await prisma.user.delete({ where: { id: existingTgUser.id } });
+        
+        console.log("[Telegram Login] ✅ Аккаунты объединены, дубликат удалён");
       }
       
       user = await prisma.user.update({

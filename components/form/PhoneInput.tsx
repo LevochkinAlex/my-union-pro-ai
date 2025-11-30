@@ -6,6 +6,7 @@ interface PhoneInputProps {
   name: string;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -15,6 +16,7 @@ export default function PhoneInput({
   name,
   value,
   onChange,
+  onBlur,
   placeholder = "+7 (___) ___-__-__",
   className = "",
   disabled = false,
@@ -80,6 +82,7 @@ export default function PhoneInput({
       name={name}
       value={value}
       onChange={handleChange}
+      onBlur={onBlur}
       placeholder={placeholder}
       disabled={disabled}
       className={className}

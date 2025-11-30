@@ -47,8 +47,12 @@ model User {
   lastName    String?
   middleName  String?
   dateOfBirth DateTime?
-  phone       String?  @unique // Телефон теперь уникален и используется для авторизации
+  phone       String?  @unique // Текущий телефон профиля (может быть изменён)
+  authPhone   String?  @unique // Телефон, через который была первая авторизация (НЕ меняется)
   address     String?
+  
+  // История телефонов
+  phoneHistory PhoneHistory[]
   avatarUrl   String? // URL фотографии профиля
 
   // Telegram интеграция для 2FA
@@ -199,6 +203,41 @@ model SMSPinCode {
   @@index([userId])
   @@index([expiresAt])
   @@index([used])
+}
+
+// История телефонов пользователя
+model PhoneHistory {
+  id String @id @default(cuid())
+
+  // Пользователь
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Телефон (нормализован: +7XXXXXXXXXX)
+  phone         String
+  phoneNormalized String // Только цифры без +
+
+  // Тип изменения
+  changeType    String // AUTH (авторизация), PROFILE_UPDATE (обновление профиля), MERGE (слияние аккаунтов)
+  
+  // Предыдущий телефон (если это смена)
+  previousPhone String?
+  
+  // Источник изменения
+  source        String? // "telegram", "sms", "profile", "admin"
+  
+  // IP адрес при изменении (для безопасности)
+  ipAddress     String?
+  
+  // Заметки (например, причина изменения)
+  notes         String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([phone])
+  @@index([phoneNormalized])
+  @@index([createdAt])
 }
 
 // Временные токены для авторизации через соцсети (Telegram, VK, Google и т.д.)

@@ -6,6 +6,7 @@ import AddressInput from "@/components/form/AddressInput";
 import Autocomplete from "@/components/form/Autocomplete";
 import EmailValidationField from "@/components/form/EmailValidationField";
 import Step2ConfirmBasicData from "@/components/chat/Step2ConfirmBasicData";
+import ChangePhoneModal from "@/components/profile/ChangePhoneModal";
 
 interface ProfileSelfFillModalProps {
   isOpen: boolean;
@@ -166,6 +167,15 @@ export function ProfileSelfFillModal({
   // Статус верификации email
   const [emailVerified, setEmailVerified] = useState<Date | null>(null);
   const [originalEmail, setOriginalEmail] = useState<string>("");
+  
+  // Автосохранение
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [phoneConflict, setPhoneConflict] = useState<{ existingUser?: { name: string }; canMerge?: boolean } | null>(null);
+  const [originalPhone, setOriginalPhone] = useState<string>("");
+  
+  // Модалка смены телефона
+  const [showChangePhoneModal, setShowChangePhoneModal] = useState(false);
 
   // Загрузка данных пользователя и справочников
   useEffect(() => {
@@ -222,9 +232,10 @@ export function ProfileSelfFillModal({
             organizationId: user.organizationId || "",
           });
 
-          // Сохраняем статус верификации email
+          // Сохраняем статус верификации email и телефона
           setEmailVerified(user.emailVerified ? new Date(user.emailVerified) : null);
           setOriginalEmail(user.email || "");
+          setOriginalPhone(user.phone || "");
 
           // Заполняем дополнительные данные если есть
           setAdditionalData({
@@ -291,6 +302,48 @@ export function ProfileSelfFillModal({
     // Разрешаем закрывать модалку в любой момент без предупреждений
     onClose();
   }, [onClose]);
+
+  // Автосохранение одного поля
+  const autoSaveField = useCallback(async (fieldName: string, value: string) => {
+    // Пропускаем если это первый рендер или значение пустое
+    if (!value || autoSaving) return;
+    
+    setAutoSaving(true);
+    setAutoSaveStatus("saving");
+    setPhoneConflict(null);
+    
+    try {
+      const response = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [fieldName]: value }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        
+        // Обработка конфликта телефонов
+        if (response.status === 409 && errorData.canMerge) {
+          setPhoneConflict({
+            existingUser: errorData.existingUser,
+            canMerge: errorData.canMerge,
+          });
+          setAutoSaveStatus("error");
+          return;
+        }
+        
+        throw new Error(errorData.error || "Ошибка сохранения");
+      }
+      
+      setAutoSaveStatus("saved");
+      setTimeout(() => setAutoSaveStatus("idle"), 2000);
+    } catch (error) {
+      console.error("[AutoSave] Error:", error);
+      setAutoSaveStatus("error");
+    } finally {
+      setAutoSaving(false);
+    }
+  }, [autoSaving]);
 
   const handleConfirmClose = () => {
     setShowCloseWarning(false);
@@ -508,7 +561,11 @@ export function ProfileSelfFillModal({
         body: JSON.stringify(profileData),
       });
 
-      if (!response.ok) throw new Error("Failed to save profile");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || "Ошибка при сохранении профиля";
+        throw new Error(errorMessage);
+      }
 
       // Если email изменился или это новый email - отправляем письмо с подтверждением
       if (profileData.email && profileData.email !== originalEmail) {
@@ -546,7 +603,8 @@ export function ProfileSelfFillModal({
       }
     } catch (error) {
       console.error("Error saving profile:", error);
-      alert("Ошибка при сохранении профиля");
+      const message = error instanceof Error ? error.message : "Ошибка при сохранении профиля";
+      alert(message);
       throw error;
     }
   };
@@ -615,9 +673,29 @@ export function ProfileSelfFillModal({
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                 Самостоятельное заполнение профиля
               </h2>
-              <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                {Math.round((currentStep / 4) * 100)}% заполнено
-              </span>
+              <div className="flex items-center gap-3">
+                {/* Индикатор автосохранения */}
+                {autoSaveStatus === "saving" && (
+                  <span className="text-xs text-blue-500 animate-pulse flex items-center gap-1">
+                    <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Сохранение...
+                  </span>
+                )}
+                {autoSaveStatus === "saved" && (
+                  <span className="text-xs text-green-500 flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    Сохранено
+                  </span>
+                )}
+                <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                  {Math.round((currentStep / 4) * 100)}% заполнено
+                </span>
+              </div>
             </div>
             
             {/* Progress bar */}
@@ -683,6 +761,36 @@ export function ProfileSelfFillModal({
 
         {/* Content */}
         <div className="px-6 py-6">
+          {/* Предупреждение о конфликте телефонов */}
+          {phoneConflict && (
+            <div className="mb-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-orange-500 text-xl">⚠️</span>
+                <div className="flex-1">
+                  <p className="font-medium text-orange-800 dark:text-orange-200">
+                    Этот номер телефона уже используется
+                  </p>
+                  <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
+                    Номер привязан к аккаунту: {phoneConflict.existingUser?.name || "другой пользователь"}.
+                    {phoneConflict.canMerge && (
+                      <> Возможно, это ваш второй аккаунт. Обратитесь в поддержку для объединения.</>
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileData(prev => ({ ...prev, phone: originalPhone }));
+                      setPhoneConflict(null);
+                    }}
+                    className="mt-2 text-sm text-orange-600 hover:text-orange-800 underline"
+                  >
+                    Вернуть исходный номер
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {currentStep === 1 && (
             <Step1ProfileForm
               data={profileData}
@@ -690,12 +798,20 @@ export function ProfileSelfFillModal({
                 setProfileData(data);
                 setHasUnsavedChanges(true);
               }}
+              onFieldBlur={(fieldName, value) => {
+                // Автосохранение при потере фокуса (только для некоторых полей)
+                if (["firstName", "lastName", "middleName", "phone", "address"].includes(fieldName)) {
+                  autoSaveField(fieldName, value);
+                }
+              }}
+              onChangePhoneClick={() => setShowChangePhoneModal(true)}
               jobTitles={jobTitles}
               professions={professions}
               organizations={organizations}
               emailVerified={emailVerified}
               setEmailVerified={setEmailVerified}
               originalEmail={originalEmail}
+              originalPhone={originalPhone}
               saving={saving}
               setSaving={setSaving}
             />
@@ -829,6 +945,18 @@ export function ProfileSelfFillModal({
           </div>
         </div>
       )}
+      
+      {/* Change Phone Modal */}
+      <ChangePhoneModal
+        isOpen={showChangePhoneModal}
+        onClose={() => setShowChangePhoneModal(false)}
+        currentPhone={originalPhone || profileData.phone}
+        onPhoneChanged={(newPhone) => {
+          setProfileData(prev => ({ ...prev, phone: newPhone }));
+          setOriginalPhone(newPhone);
+          setShowChangePhoneModal(false);
+        }}
+      />
     </>
   );
 }
@@ -837,17 +965,22 @@ export function ProfileSelfFillModal({
 function Step1ProfileForm({
   data,
   onChange,
+  onFieldBlur,
+  onChangePhoneClick,
   jobTitles,
   professions,
   organizations,
   emailVerified,
   setEmailVerified,
   originalEmail,
+  originalPhone,
   saving,
   setSaving,
 }: {
   data: any;
   onChange: (data: any) => void;
+  onFieldBlur?: (fieldName: string, value: string) => void;
+  onChangePhoneClick?: () => void;
   jobTitles: string[];
   professions: string[];
   organizations: Array<{
@@ -861,11 +994,18 @@ function Step1ProfileForm({
   emailVerified: Date | null;
   setEmailVerified: (date: Date | null) => void;
   originalEmail: string;
+  originalPhone?: string;
   saving: boolean;
   setSaving: (value: boolean) => void;
 }) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     onChange({ ...data, [e.target.name]: e.target.value });
+  };
+  
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (onFieldBlur) {
+      onFieldBlur(e.target.name, e.target.value);
+    }
   };
 
   return (
@@ -880,6 +1020,7 @@ function Step1ProfileForm({
             name="lastName"
             value={data.lastName}
             onChange={handleChange}
+            onBlur={handleBlur}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
           />
         </div>
@@ -891,6 +1032,7 @@ function Step1ProfileForm({
             name="firstName"
             value={data.firstName}
             onChange={handleChange}
+            onBlur={handleBlur}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
           />
         </div>
@@ -902,6 +1044,7 @@ function Step1ProfileForm({
             name="middleName"
             value={data.middleName}
             onChange={handleChange}
+            onBlur={handleBlur}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
           />
         </div>
@@ -913,19 +1056,51 @@ function Step1ProfileForm({
             name="dateOfBirth"
             value={data.dateOfBirth}
             onChange={handleChange}
+            onBlur={handleBlur}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">Телефон *</label>
+          <label className="block text-sm font-medium mb-1">
+            Телефон *
+            {originalPhone && data.phone !== originalPhone && (
+              <span className="ml-2 text-xs text-orange-500">
+                ⚠️ Изменён
+              </span>
+            )}
+          </label>
           <PhoneInput
             name="phone"
             value={data.phone}
-            onChange={handleChange}
+            onChange={handleChange} 
+            onBlur={(e: any) => {
+              // При потере фокуса проверяем телефон
+              if (onFieldBlur && data.phone !== originalPhone) {
+                onFieldBlur("phone", data.phone);
+              }
+            }}
             placeholder="+7 (___) ___-__-__"
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
           />
+          <div className="mt-1 flex items-center justify-between">
+            {originalPhone && data.phone !== originalPhone ? (
+              <p className="text-xs text-orange-600 dark:text-orange-400">
+                Исходный номер: {originalPhone}
+              </p>
+            ) : (
+              <span />
+            )}
+            {onChangePhoneClick && originalPhone && (
+              <button
+                type="button"
+                onClick={onChangePhoneClick}
+                className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+              >
+                🔄 Изменить номер (с подтверждением)
+              </button>
+            )}
+          </div>
         </div>
 
         <EmailValidationField
