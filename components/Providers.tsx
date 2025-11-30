@@ -4,6 +4,7 @@ import { SessionProvider } from "next-auth/react";
 import { ThemeProvider } from "next-themes";
 import FirebasePushInit from "./firebase-push-init";
 import { LanguageProvider } from "@/lib/language-context";
+import { AlertProvider } from "./providers/AlertProvider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -16,8 +17,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
         disableTransitionOnChange={false}
       >
         <LanguageProvider>
-          <FirebasePushInit />
-          {children}
+          <AlertProvider>
+            <FirebasePushInit />
+            {children}
+          </AlertProvider>
         </LanguageProvider>
       </ThemeProvider>
     </SessionProvider>

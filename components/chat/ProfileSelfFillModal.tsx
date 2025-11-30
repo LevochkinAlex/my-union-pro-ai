@@ -7,6 +7,7 @@ import Autocomplete from "@/components/form/Autocomplete";
 import EmailValidationField from "@/components/form/EmailValidationField";
 import Step2ConfirmBasicData from "@/components/chat/Step2ConfirmBasicData";
 import ChangePhoneModal from "@/components/profile/ChangePhoneModal";
+import { alertError, alertWarning, alertSuccess } from "@/lib/alert";
 
 interface ProfileSelfFillModalProps {
   isOpen: boolean;
@@ -368,7 +369,7 @@ export function ProfileSelfFillModal({
         setCurrentStep(3); // → К загрузке документов
       } catch (error) {
         console.error("Error generating documents:", error);
-        alert("Ошибка при генерации документов. Попробуйте еще раз.");
+        alertError("Ошибка при генерации документов. Попробуйте еще раз.");
       } finally {
         setSaving(false);
       }
@@ -423,13 +424,13 @@ export function ProfileSelfFillModal({
       // ТОЛЬКО если документа нет в базе И не загружен сейчас - показываем ошибку
       if (needsMembership && !uploadedDocs.membership) {
         console.error("[ProfileModal] Missing membership document");
-        alert("Загрузите заявление о вступлении в профсоюз");
+        alertWarning("Загрузите заявление о вступлении в профсоюз");
         return;
       }
       
       if (needsContribution && !uploadedDocs.contribution) {
         console.error("[ProfileModal] Missing contribution document");
-        alert("Загрузите заявление о перечислении членских взносов");
+        alertWarning("Загрузите заявление о перечислении членских взносов");
         return;
       }
       
@@ -466,7 +467,7 @@ export function ProfileSelfFillModal({
           console.log("[ProfileModal] Documents uploaded successfully");
         } catch (error) {
           console.error("Error uploading documents:", error);
-          alert("Ошибка при загрузке документов");
+          alertError("Ошибка при загрузке документов");
           return;
         }
       } else {
@@ -508,7 +509,7 @@ export function ProfileSelfFillModal({
       !profileData.education ||
       !profileData.organizationId
     ) {
-      alert("Заполните все обязательные поля");
+      alertWarning("Заполните все обязательные поля");
       return false;
     }
     

@@ -562,7 +562,71 @@ ${loginUrl}
             }),
           });
         } else {
-          await sendWelcomeMessage(chatId);
+          // У пользователя уже есть номер - создаем токен и отправляем кнопку для входа
+          console.log("[Telegram Webhook] Пользователь с номером, создаем токен для входа");
+          
+          // Создаем токен для автоматической авторизации
+          const crypto = await import("crypto");
+          const loginToken = crypto.randomBytes(32).toString("hex");
+          const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
+
+          await prisma.loginToken.create({
+            data: {
+              token: loginToken,
+              userId: user.id,
+              expiresAt,
+            },
+          });
+
+          // Определяем правильный baseUrl
+          const host = request.headers.get("host") || "localhost:3000";
+          const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+          const baseUrl = isLocalhost 
+            ? `http://${host}` 
+            : (process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro");
+          
+          const loginUrl = `${baseUrl}/api/auth/telegram/auto-login?token=${loginToken}`;
+          
+          // Отправляем приветствие для возвращающегося пользователя
+          const name = user.firstName ? `, ${user.firstName}` : "";
+          await sendTelegramMessage(
+            chatId,
+            `🎉 <b>Рад видеть вас снова${name}!</b>
+
+Нажмите кнопку ниже для входа в личный кабинет:
+
+⏱ <i>Ссылка действительна 10 минут</i>`
+          );
+          
+          // Отправляем кнопку для входа
+          const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+          if (TELEGRAM_BOT_TOKEN) {
+            const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+            
+            try {
+              await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: chatId,
+                  text: "Войти в аккаунт:",
+                  parse_mode: "HTML",
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        {
+                          text: "🔐 Войти в аккаунт",
+                          url: loginUrl,
+                        },
+                      ],
+                    ],
+                  },
+                }),
+              });
+            } catch (error) {
+              console.error("[Telegram Webhook] Ошибка при отправке кнопки:", error);
+            }
+          }
         }
       } else {
         console.log("[Telegram Webhook] Chat ID не привязан к аккаунту");
