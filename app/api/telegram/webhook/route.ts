@@ -180,57 +180,102 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // Проверяем, новый ли это пользователь (нет номера телефона и email)
-      const isNewUser = !user.phone && !user.email;
+      // Проверяем, новый ли это пользователь (нет номера телефона)
+      // Если у пользователя раньше не было номера, предлагаем выбор регистрации
+      const hadNoPhone = !user.phone;
       
-      if (isNewUser) {
-        // Новый пользователь - предлагаем выбор регистрации
-        await sendTelegramMessage(
-          chatId,
-          `👋 <b>Алоха!</b>
-
-Отлично, ваш номер <code>${normalizedPhone}</code> получен! 
-
-Где будем регистрироваться?`,
-        );
+      console.log("[Telegram Webhook] Обработка контакта:", {
+        userId: user.id,
+        hadNoPhone,
+        currentPhone: user.phone,
+        newPhone: normalizedPhone,
+      });
+      
+      if (hadNoPhone) {
+        // Новый пользователь или пользователь без номера - предлагаем выбор регистрации
+        console.log("[Telegram Webhook] Пользователь без номера, предлагаем выбор регистрации");
         
-        // Отправляем кнопки выбора
-        const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-        
-        await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: "Выберите способ регистрации:",
-            parse_mode: "HTML",
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: "📱 В Telegram",
-                    callback_data: `register_telegram_${normalizedPhone}`,
-                  },
-                ],
-                [
-                  {
-                    text: "🌐 На сайте myunion.pro",
-                    url: `https://myunion.pro/login?phone=${encodeURIComponent(normalizedPhone)}`,
-                  },
-                ],
-              ],
-            },
-          }),
-        });
-        
-        // Сохраняем номер временно (будет использован при выборе)
+        // Сначала сохраняем номер
         await prisma.user.update({
           where: { id: user.id },
           data: { phone: normalizedPhone },
         });
+        
+        // Отправляем приветствие с кнопками выбора
+        const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+        if (!TELEGRAM_BOT_TOKEN) {
+          console.error("[Telegram Webhook] TELEGRAM_BOT_TOKEN не установлен!");
+          return NextResponse.json({ ok: false, error: "Bot token not configured" }, { status: 500 });
+        }
+        
+        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: `👋 <b>Алоха!</b>
+
+Отлично, ваш номер <code>${normalizedPhone}</code> получен! 
+
+Где будем регистрироваться?`,
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: "📱 В Telegram",
+                      callback_data: `register_telegram_${normalizedPhone}`,
+                    },
+                  ],
+                  [
+                    {
+                      text: "🌐 На сайте myunion.pro",
+                      url: `https://myunion.pro/login?phone=${encodeURIComponent(normalizedPhone)}`,
+                    },
+                  ],
+                ],
+              },
+            }),
+          });
+          
+          const result = await response.json();
+          console.log("[Telegram Webhook] Результат отправки сообщения с кнопками:", result);
+          
+          if (!result.ok) {
+            console.error("[Telegram Webhook] Ошибка отправки сообщения:", result);
+            // Пробуем отправить простое сообщение без кнопок
+            await sendTelegramMessage(
+              chatId,
+              `👋 <b>Алоха!</b>
+
+Отлично, ваш номер <code>${normalizedPhone}</code> получен! 
+
+Выберите способ регистрации:
+• В Telegram - используйте команду /register
+• На сайте: https://myunion.pro/login?phone=${encodeURIComponent(normalizedPhone)}`
+            );
+          }
+        } catch (error) {
+          console.error("[Telegram Webhook] Ошибка при отправке сообщения:", error);
+          // Пробуем отправить простое сообщение
+          await sendTelegramMessage(
+            chatId,
+            `👋 <b>Алоха!</b>
+
+Отлично, ваш номер <code>${normalizedPhone}</code> получен! 
+
+Выберите способ регистрации:
+• В Telegram - используйте команду /register
+• На сайте: https://myunion.pro/login?phone=${encodeURIComponent(normalizedPhone)}`
+          );
+        }
       } else {
-        // Существующий пользователь - просто привязываем номер
+        // Существующий пользователь - просто привязываем номер (если изменился)
+        console.log("[Telegram Webhook] Пользователь уже имел номер, обновляем");
+        
         await prisma.user.update({
           where: { id: user.id },
           data: { phone: normalizedPhone },
