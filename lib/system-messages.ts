@@ -183,6 +183,43 @@ export const SystemMessages = {
   },
 
   /**
+   * Документы уже были сгенерированы - показываем кнопки скачивания и поле загрузки
+   */
+  async documentsAlreadyGenerated(userId: string, documents: Array<{ id: string; type: string; title: string | null; filePath: string | null }>) {
+    // Проверяем, не отправляли ли уже это сообщение
+    const existingMessage = await prisma.chatMessage.findFirst({
+      where: {
+        userId,
+        content: { contains: "[SHOW_DOCUMENT_DOWNLOADS]" },
+        isSystemMessage: true,
+      },
+    });
+
+    if (existingMessage) {
+      console.log("[system-messages] Documents already generated message already exists, skipping");
+      return existingMessage;
+    }
+
+    const docsList = documents
+      .map((doc) => {
+        const title = doc.title || (doc.type === "MEMBERSHIP_APPLICATION" ? "Заявление о вступлении в профсоюз" : "Заявление о взносах");
+        return `• ${title}`;
+      })
+      .join("\n");
+
+    return sendSystemMessage(
+      userId,
+      `📄 Документы уже были сгенерированы:\n\n${docsList}\n\nПожалуйста, скачайте их (кнопки ниже), подпишите и загрузите обратно (поле для загрузки ниже).\n\n[SHOW_DOCUMENT_DOWNLOADS]\n[SHOW_DOCUMENT_UPLOAD]`,
+      undefined,
+      {
+        sendPush: false, // Не спамить при повторном нажатии
+        sendEmail: false,
+        sendTelegram: false,
+      }
+    );
+  },
+
+  /**
    * Инструкция по загрузке документов
    */
   async uploadDocumentsInstruction(userId: string) {

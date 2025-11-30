@@ -364,7 +364,36 @@ export function ProfileSelfFillModal({
       setSaving(true);
       try {
         // Отправляем команду на генерацию документов
-        await sendCompletionMessage();
+        const response = await sendCompletionMessage();
+        if (!response || !response.ok) {
+          throw new Error("Не удалось сгенерировать документы");
+        }
+        
+        // Ждем немного чтобы документы успели сгенерироваться
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Перезагружаем документы чтобы они отобразились на шаге 3
+        try {
+          const docsResponse = await fetch("/api/documents");
+          if (docsResponse.ok) {
+            const docsData = await docsResponse.json();
+            const generatedDocs = (docsData.documents || []).filter((doc: any) =>
+              (doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION") &&
+              doc.status !== "DELETED"
+            );
+            
+            const membershipDoc = generatedDocs.find((d: any) => d.type === "MEMBERSHIP_APPLICATION");
+            const contributionDoc = generatedDocs.find((d: any) => d.type === "CONTRIBUTION_APPLICATION");
+            
+            setExistingDocs({
+              membership: membershipDoc ? { id: membershipDoc.id, signedFilePath: membershipDoc.signedFilePath } : undefined,
+              contribution: contributionDoc ? { id: contributionDoc.id, signedFilePath: contributionDoc.signedFilePath } : undefined,
+            });
+          }
+        } catch (error) {
+          console.error("[ProfileModal] Failed to reload documents:", error);
+        }
+        
         // Переходим к следующему шагу (там уже будут кнопки скачивания)
         setCurrentStep(3); // → К загрузке документов
       } catch (error) {
@@ -520,6 +549,12 @@ export function ProfileSelfFillModal({
       return false;
     }
     
+    // Проверка валидации email
+    if (!emailVerified) {
+      alertWarning("Для продолжения необходимо подтвердить email адрес. Пожалуйста, проверьте почту и введите код подтверждения.");
+      return false;
+    }
+    
     // Проверяем, что должность есть в справочнике
     if (!jobTitles.includes(profileData.jobTitle)) {
       alertWarning(`Должность "${profileData.jobTitle}" не найдена в справочнике. Выберите должность из списка.`);
@@ -631,7 +666,7 @@ export function ProfileSelfFillModal({
 
   const sendCompletionMessage = async () => {
     try {
-      await fetch("/api/chat", {
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -639,8 +674,10 @@ export function ProfileSelfFillModal({
           sessionId,
         }),
       });
+      return response;
     } catch (error) {
       console.error("Error sending completion message:", error);
+      throw error;
     }
   };
 

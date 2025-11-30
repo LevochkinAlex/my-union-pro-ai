@@ -1305,8 +1305,35 @@ export async function POST(request: NextRequest) {
           aiResponse = `⚠️ Произошла ошибка при генерации документов. Пожалуйста, обратитесь в поддержку или попробуйте позже.`;
         }
       } else {
-        // Документы уже были сгенерированы
-        aiResponse = `Документы уже были сгенерированы. Пожалуйста, скачайте их из модального окна, подпишите и загрузите обратно.`;
+        // Документы уже были сгенерированы - отправляем системное сообщение с кнопками скачивания и полем загрузки
+        try {
+          const generatedDocs = await prisma.document.findMany({
+            where: {
+              userId: session.user.id,
+              type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
+              status: "GENERATED",
+            },
+            orderBy: { createdAt: "desc" },
+          });
+
+          if (generatedDocs.length > 0) {
+            // Отправляем системное сообщение с кнопками скачивания и полем загрузки
+            const docsList = generatedDocs
+              .map((doc) => `• ${doc.title || (doc.type === "MEMBERSHIP_APPLICATION" ? "Заявление о вступлении в профсоюз" : "Заявление о взносах")}`)
+              .join("\n");
+
+            await SystemMessages.documentsAlreadyGenerated(session.user.id, generatedDocs);
+            console.log("[chat] ✅ System message sent: documents already generated with download/upload options");
+            
+            // Не отправляем обычный ответ бота, так как системное сообщение уже отправлено
+            aiResponse = ""; // Пустой ответ, чтобы не дублировать сообщение
+          } else {
+            aiResponse = `⚠️ Документы не найдены. Пожалуйста, попробуйте сгенерировать их снова.`;
+          }
+        } catch (sysMsgError) {
+          console.error("[chat] Error sending system message for already generated documents:", sysMsgError);
+          aiResponse = `Документы уже были сгенерированы. Пожалуйста, скачайте их из раздела "Документы", подпишите и загрузите обратно.`;
+        }
       }
     }
 

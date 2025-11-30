@@ -133,13 +133,13 @@ export default function EmailValidationField({
           <div className="flex gap-2">
             <input
               type="email"
-              value={email}
+              value={email || ""}
               onChange={(e) => onEmailChange(e.target.value)}
               placeholder="example@mail.com"
               disabled={mode === "verified"}
               className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
             />
-            {mode === "initial" && email && (
+            {mode === "initial" && email && email.trim() && (
               <button
                 type="button"
                 onClick={handleSendPin}

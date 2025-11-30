@@ -6,6 +6,7 @@ import AddressInput from "@/components/form/AddressInput";
 import DateInput from "@/components/form/DateInput";
 import AvatarUpload from "@/components/profile/AvatarUpload";
 import Autocomplete from "@/components/form/Autocomplete";
+import EmailValidationField from "@/components/form/EmailValidationField";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
 
@@ -88,6 +89,7 @@ export default function ProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [emailVerified, setEmailVerified] = useState<Date | null>(null);
   
   // Справочники профессий и должностей
   const [jobTitles, setJobTitles] = useState<string[]>([]);
@@ -293,6 +295,7 @@ export default function ProfilePage() {
           avatarUrl: user.avatarUrl ?? null,
           organization: user.organization,
         });
+        setEmailVerified(user.emailVerified ? new Date(user.emailVerified) : null);
       } catch (error) {
         console.error(error);
         setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка загрузки профиля" });
@@ -544,12 +547,14 @@ export default function ProfilePage() {
     e.preventDefault();
     setSavingProfile(true);
     try {
+      // Не отправляем email, так как он обновляется через EmailValidationField
+      const { email, ...profileDataWithoutEmail } = profileData;
       const response = await fetch("/api/profile", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(profileData),
+        body: JSON.stringify(profileDataWithoutEmail),
       });
 
       if (!response.ok) {
@@ -934,8 +939,30 @@ export default function ProfilePage() {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Информация об аккаунте</h3>
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Email</p>
-                <p className="text-base font-medium text-gray-900 dark:text-white">{profileData.email}</p>
+                <EmailValidationField
+                  email={profileData.email || ""}
+                  emailVerified={emailVerified}
+                  onEmailChange={(email) => {
+                    setProfileData({ ...profileData, email });
+                    // После изменения email нужно перезагрузить профиль чтобы получить обновленный emailVerified
+                    if (emailVerified) {
+                      setEmailVerified(null);
+                    }
+                  }}
+                  onVerified={async () => {
+                    // Перезагружаем профиль чтобы получить обновленный emailVerified
+                    try {
+                      const response = await fetch("/api/profile");
+                      if (response.ok) {
+                        const data = await response.json();
+                        setEmailVerified(data.user.emailVerified ? new Date(data.user.emailVerified) : null);
+                        setProfileData({ ...profileData, email: data.user.email || "" });
+                      }
+                    } catch (error) {
+                      console.error("Failed to reload profile:", error);
+                    }
+                  }}
+                />
               </div>
               {profileData.organization && (
                 <div>

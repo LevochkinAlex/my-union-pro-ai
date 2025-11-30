@@ -44,6 +44,7 @@ function ChatContent() {
   const [showSelfFillModal, setShowSelfFillModal] = useState(false);
   const [isApplicationFilled, setIsApplicationFilled] = useState<boolean | null>(false); // По умолчанию false - чат заблокирован
   const [isCheckingApplication, setIsCheckingApplication] = useState(true);
+  const [userDocuments, setUserDocuments] = useState<Array<{ id: string; type: string; title: string | null; filePath: string | null }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -191,6 +192,34 @@ function ChatContent() {
 
     checkApplication();
   }, [sessionType, currentSessionId, messages, showSelfFillModal]);
+
+  // Загрузка документов для отображения кнопок скачивания
+  useEffect(() => {
+    const loadDocuments = async () => {
+      const hasDownloadMarker = messages.some(
+        (msg) => msg.content?.includes("[SHOW_DOCUMENT_DOWNLOADS]")
+      );
+      
+      if (hasDownloadMarker && userDocuments.length === 0) {
+        try {
+          const response = await fetch("/api/documents");
+          if (response.ok) {
+            const docs = await response.json();
+            const generatedDocs = docs.filter(
+              (d: any) => 
+                d.status === "GENERATED" && 
+                (d.type === "MEMBERSHIP_APPLICATION" || d.type === "CONTRIBUTION_APPLICATION")
+            );
+            setUserDocuments(generatedDocs);
+          }
+        } catch (error) {
+          console.error("[chat] Error loading documents:", error);
+        }
+      }
+    };
+
+    loadDocuments();
+  }, [messages, userDocuments.length]);
 
   // Load Appeal Bot ID if in appeal mode
   useEffect(() => {
@@ -661,72 +690,73 @@ function ChatContent() {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    // Ограничиваем размер файла до 10MB
-    if (file.size > 10 * 1024 * 1024) {
-      setError("Файл слишком большой. Максимальный размер: 10MB");
-      setTimeout(() => setError(null), 5000);
-      return;
+    // Проверяем размер всех файлов
+    for (let i = 0; i < files.length; i++) {
+      if (files[i].size > 10 * 1024 * 1024) {
+        setError(`Файл "${files[i].name}" слишком большой. Максимальный размер: 10MB`);
+        setTimeout(() => setError(null), 5000);
+        return;
+      }
     }
 
     setUploadingFile(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("sessionId", currentSessionId || "");
+      const uploadedFiles: Array<{ fileName: string; documentId: string; type: string }> = [];
+      
+      // Загружаем все файлы последовательно
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("sessionId", currentSessionId || "");
 
-      const response = await fetch("/api/documents/upload", {
-        method: "POST",
-        body: formData,
-      });
+        const response = await fetch("/api/documents/upload", {
+          method: "POST",
+          body: formData,
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Ошибка загрузки файла");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Ошибка загрузки файла "${file.name}"`);
+        }
+
+        const data = await response.json();
+        uploadedFiles.push({
+          fileName: data.fileName,
+          documentId: data.documentId,
+          type: data.documentType,
+        });
+        
+        // Добавляем сообщение о загруженном файле
+        const fileMessage: ChatMessage = {
+          id: `file-${Date.now()}-${i}`,
+          role: "user",
+          content: `📎 Загружен файл: ${file.name}`,
+          createdAt: new Date(),
+        };
+
+        setMessages((prev) => [...prev, fileMessage]);
       }
 
-      const data = await response.json();
-      
-      // Добавляем сообщение о загруженном файле
-      const fileMessage: ChatMessage = {
-        id: `file-${Date.now()}`,
-        role: "user",
-        content: `📎 Загружен файл: ${file.name}`,
-        createdAt: new Date(),
-      };
-
-      setMessages((prev) => [...prev, fileMessage]);
-
-      // Отправляем сообщение боту о загруженном файле с информацией о документе
-      if (currentSessionId) {
-        const chatResponse = await fetch("/api/chat", {
+      // После загрузки всех файлов отправляем системное сообщение
+      if (currentSessionId && uploadedFiles.length > 0) {
+        // Проверяем, что все документы загружены
+        const checkResponse = await fetch("/api/chat", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            message: `Я загрузил файл: ${file.name}. Это мое подписанное заявление. Пожалуйста, проверь его правильность заполнения.`,
+            message: "[DOCUMENTS_UPLOADED]",
             sessionId: currentSessionId,
-            uploadedDocument: {
-              fileName: data.fileName,
-              documentId: data.documentId,
-              type: data.documentType,
-            },
           }),
         });
 
-        if (chatResponse.ok) {
-          const chatData = await chatResponse.json();
-          const aiMessage: ChatMessage = {
-            id: `ai-${Date.now()}`,
-            role: "assistant",
-            content: chatData.message,
-            createdAt: new Date(),
-          };
-          
-          setMessages((prev) => [...prev, aiMessage]);
+        if (checkResponse.ok) {
+          await loadMessages();
           shouldAutoScrollRef.current = true;
         }
       }
@@ -847,9 +877,17 @@ function ChatContent() {
                 >
                   {message.role === "assistant" && (
                     <div className="flex-shrink-0">
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-white font-semibold text-xs shadow-sm">
-                        AI
-                      </div>
+                      {message.isSystemMessage ? (
+                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-semibold text-xs shadow-sm">
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                      ) : (
+                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-white font-semibold text-xs shadow-sm">
+                          AI
+                        </div>
+                      )}
                     </div>
                   )}
                   
@@ -862,9 +900,19 @@ function ChatContent() {
                       className={`rounded-2xl px-4 py-3 shadow-sm ${
                         message.role === "user"
                           ? "bg-blue-600 text-white rounded-br-md"
+                          : message.isSystemMessage
+                          ? "bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 text-gray-900 dark:text-gray-100 rounded-bl-md"
                           : "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 rounded-bl-md"
                       }`}
                     >
+                      {message.isSystemMessage && (
+                        <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-green-700 dark:text-green-400">
+                          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Системное сообщение
+                        </div>
+                      )}
                       <div className="text-[15px] leading-relaxed">
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
@@ -1067,6 +1115,70 @@ function ChatContent() {
                               </svg>
                               Открыть раздел "Документы"
                             </button>
+                          </div>
+                        )}
+
+                        {/* Кнопки скачивания документов - после генерации */}
+                        {message.role === "assistant" && 
+                         message.content.includes("[SHOW_DOCUMENT_DOWNLOADS]") && 
+                         sessionType === "STATEMENT" && (
+                          <div className="mt-4 space-y-2">
+                            {userDocuments.length > 0 ? (
+                              userDocuments
+                                .filter((doc) => doc.filePath && (doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION"))
+                                .map((doc) => {
+                                  const docTitle = doc.title || (doc.type === "MEMBERSHIP_APPLICATION" ? "Заявление о вступлении в профсоюз" : "Заявление о взносах");
+                                  return (
+                                    <a
+                                      key={doc.id}
+                                      href={`/api/documents/${doc.id}/download`}
+                                      download
+                                      className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                    >
+                                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                      </svg>
+                                      Скачать {docTitle}
+                                    </a>
+                                  );
+                                })
+                            ) : (
+                              <div className="text-sm text-gray-500 dark:text-gray-400">
+                                Загрузка документов...
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Поле для загрузки документов */}
+                        {message.role === "assistant" && 
+                         message.content.includes("[SHOW_DOCUMENT_UPLOAD]") && 
+                         sessionType === "STATEMENT" && (
+                          <div className="mt-4">
+                            <label
+                              htmlFor="file-upload-multiple"
+                              className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 px-6 py-4 transition-colors hover:border-blue-500 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-blue-400 dark:hover:bg-gray-700"
+                            >
+                              <svg className="mb-2 h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                              </svg>
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                {uploadingFile ? "Загрузка..." : "Нажмите для загрузки подписанных документов"}
+                              </span>
+                              <span className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Можно выбрать несколько файлов (PDF)
+                              </span>
+                              <input
+                                type="file"
+                                id="file-upload-multiple"
+                                ref={fileInputRef}
+                                multiple
+                                accept=".pdf,application/pdf"
+                                onChange={handleFileUpload}
+                                disabled={isLoading || uploadingFile}
+                                className="hidden"
+                              />
+                            </label>
                           </div>
                         )}
                       </div>

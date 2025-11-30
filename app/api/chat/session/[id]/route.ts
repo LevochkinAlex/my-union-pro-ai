@@ -46,38 +46,91 @@ export async function GET(
       },
     });
 
-    // Если сессия пустая, создаём приветственное сообщение
-    // (на случай если сессия была создана, но welcome message не был добавлен)
-    if (messages.length === 0) {
-      console.log("[GET /api/chat/session/[id]] Session is empty, creating welcome message");
+    // Проверяем, нужно ли создать или обновить приветственное сообщение
+    if (chatSession.type === "STATEMENT") {
+      // Проверяем это первый вход - проверяем флаг isFirstLogin или отсутствие несистемных сообщений в этой сессии
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { isFirstLogin: true },
+      });
       
-      // Определяем содержание приветствия в зависимости от типа сессии
-      let welcomeMessageContent = "";
-
-      if (chatSession.type === "STATEMENT") {
-        // Проверяем это первый вход (нет других сообщений кроме системных)
-        const allMessages = await prisma.chatMessage.findMany({
-          where: { userId: session.user.id },
-          orderBy: { createdAt: "asc" },
-        });
-        
-        const isFirstEntry = allMessages.length === 0 || 
-          (allMessages.length === 1 && allMessages[0].isSystemMessage);
-        
-        if (isFirstEntry) {
-          welcomeMessageContent = `Здравствуйте! 👋 Я AI-помощник профсоюза МООП РЗ.
+      // Проверяем, есть ли несистемные сообщения от пользователя в этой STATEMENT сессии
+      const userMessages = await prisma.chatMessage.findMany({
+        where: {
+          userId: session.user.id,
+          sessionId: chatSession.id,
+          role: "user", // Только сообщения от пользователя
+        },
+        take: 1,
+      });
+      
+      const isFirstEntry = (user?.isFirstLogin ?? true) && userMessages.length === 0;
+      
+      // Ищем приветственное сообщение
+      const welcomeMsg = messages.find(
+        (msg) => msg.role === "assistant" && 
+        msg.content.includes("Здравствуйте! 👋") && 
+        !msg.isSystemMessage
+      );
+      
+      if (isFirstEntry) {
+        const welcomeMessageContent = `Здравствуйте! 👋 Я AI-помощник профсоюза МООП РЗ.
 
 Я готов ответить на ваши вопросы о профсоюзе, скидках BestBenefits, правах членов профсоюза и многом другом.
 
 Если вы ещё не член профсоюза - заполните анкету для подачи заявления о вступлении.
 
 [SHOW_SELF_FILL_BUTTON]`;
-        } else {
-          welcomeMessageContent = `Здравствуйте! 👋 Я AI-помощник профсоюза МООП РЗ.
+        
+        if (!welcomeMsg) {
+          // Создаем приветственное сообщение с кнопкой
+          const newWelcomeMessage = await prisma.chatMessage.create({
+            data: {
+              content: welcomeMessageContent,
+              role: "assistant",
+              userId: session.user.id,
+              sessionId: chatSession.id,
+              chatBotId: null,
+            },
+          });
+          messages = [newWelcomeMessage, ...messages];
+          console.log("[GET /api/chat/session/[id]] Welcome message with button created");
+        } else if (!welcomeMsg.content.includes("[SHOW_SELF_FILL_BUTTON]")) {
+          // Обновляем существующее сообщение, добавляя кнопку
+          await prisma.chatMessage.update({
+            where: { id: welcomeMsg.id },
+            data: { content: welcomeMessageContent },
+          });
+          // Обновляем в массиве messages
+          const index = messages.findIndex((m) => m.id === welcomeMsg.id);
+          if (index !== -1) {
+            messages[index] = { ...welcomeMsg, content: welcomeMessageContent };
+          }
+          console.log("[GET /api/chat/session/[id]] Welcome message updated with button");
+        }
+      } else if (messages.length === 0) {
+        // Если не первый вход, но сессия пустая - создаем простое приветствие
+        const welcomeMessageContent = `Здравствуйте! 👋 Я AI-помощник профсоюза МООП РЗ.
 
 Я готов ответить на ваши вопросы о профсоюзе, скидках BestBenefits, правах членов профсоюза и многом другом.`;
-        }
-      } else if (chatSession.type === "APPEAL") {
+
+        const newWelcomeMessage = await prisma.chatMessage.create({
+          data: {
+            content: welcomeMessageContent,
+            role: "assistant",
+            userId: session.user.id,
+            sessionId: chatSession.id,
+            chatBotId: null,
+          },
+        });
+        messages = [newWelcomeMessage];
+        console.log("[GET /api/chat/session/[id]] Welcome message created");
+      }
+    } else if (messages.length === 0) {
+      // Для других типов сессий создаем приветствие, если сессия пустая
+      let welcomeMessageContent = "";
+      
+      if (chatSession.type === "APPEAL") {
         welcomeMessageContent = "Здравствуйте! Я ваш помощник по обращениям в профсоюз. Опишите вашу ситуацию или задайте вопрос, и я постараюсь помочь.";
       } else {
         welcomeMessageContent = "Здравствуйте! Чем могу помочь?";
