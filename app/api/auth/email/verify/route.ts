@@ -58,13 +58,6 @@ export async function GET(request: NextRequest) {
 
     console.log("[Email Verify] Токен валиден, редиректим для входа");
 
-    // Определяем правильный baseUrl
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                    process.env.NEXTAUTH_URL || 
-                    (request.headers.get("host")?.includes("localhost") 
-                      ? `http://${request.headers.get("host")}` 
-                      : `https://${request.headers.get("host") || "myunion.pro"}`);
-
     // Редиректим на страницу успешной авторизации
     // NextAuth обработает токен и авторизует пользователя
     return NextResponse.redirect(
