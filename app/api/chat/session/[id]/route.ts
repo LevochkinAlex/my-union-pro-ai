@@ -55,13 +55,28 @@ export async function GET(
       let welcomeMessageContent = "";
 
       if (chatSession.type === "STATEMENT") {
-        welcomeMessageContent = `Здравствуйте! 👋 Я AI-помощник профсоюза МООП РЗ.
+        // Проверяем это первый вход (нет других сообщений кроме системных)
+        const allMessages = await prisma.chatMessage.findMany({
+          where: { userId: session.user.id },
+          orderBy: { createdAt: "asc" },
+        });
+        
+        const isFirstEntry = allMessages.length === 0 || 
+          (allMessages.length === 1 && allMessages[0].isSystemMessage);
+        
+        if (isFirstEntry) {
+          welcomeMessageContent = `Здравствуйте! 👋 Я AI-помощник профсоюза МООП РЗ.
 
 Я готов ответить на ваши вопросы о профсоюзе, скидках BestBenefits, правах членов профсоюза и многом другом.
 
 Если вы ещё не член профсоюза - заполните анкету для подачи заявления о вступлении.
 
 [SHOW_SELF_FILL_BUTTON]`;
+        } else {
+          welcomeMessageContent = `Здравствуйте! 👋 Я AI-помощник профсоюза МООП РЗ.
+
+Я готов ответить на ваши вопросы о профсоюзе, скидках BestBenefits, правах членов профсоюза и многом другом.`;
+        }
       } else if (chatSession.type === "APPEAL") {
         welcomeMessageContent = "Здравствуйте! Я ваш помощник по обращениям в профсоюз. Опишите вашу ситуацию или задайте вопрос, и я постараюсь помочь.";
       } else {
@@ -94,6 +109,7 @@ export async function GET(
         role: msg.role,
         content: msg.content,
         createdAt: msg.createdAt,
+        isSystemMessage: msg.isSystemMessage || false,
       })),
     });
   } catch (error) {

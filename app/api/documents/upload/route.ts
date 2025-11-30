@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { SystemMessages } from "@/lib/system-messages";
 
 /**
  * Проверяет что файл является PDF документом
@@ -359,6 +360,57 @@ export async function POST(request: NextRequest) {
         filePath: relativePath,
       });
     } // end for loop
+
+    // Проверяем загружены ли оба обязательных документа (membership и contribution)
+    const membershipDoc = await prisma.document.findFirst({
+      where: {
+        userId: session.user.id,
+        type: "MEMBERSHIP_APPLICATION",
+        status: { in: ["SIGNED", "PENDING", "APPROVED"] },
+        signedFilePath: { not: null },
+      },
+    });
+
+    const contributionDoc = await prisma.document.findFirst({
+      where: {
+        userId: session.user.id,
+        type: "CONTRIBUTION_APPLICATION",
+        status: { in: ["SIGNED", "PENDING", "APPROVED"] },
+        signedFilePath: { not: null },
+      },
+    });
+
+    // Если оба документа загружены - отправляем системное сообщение
+    if (membershipDoc && contributionDoc) {
+      try {
+        // Проверяем не отправляли ли уже это сообщение
+        const existingMessage = await prisma.chatMessage.findFirst({
+          where: {
+            userId: session.user.id,
+            content: { contains: "Спасибо за ваши документы" },
+            isSystemMessage: true,
+          },
+        });
+
+        if (!existingMessage) {
+          // Обновляем статус документов на PENDING (отправлены на проверку)
+          await prisma.document.updateMany({
+            where: {
+              userId: session.user.id,
+              type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
+              status: "SIGNED",
+            },
+            data: { status: "PENDING" },
+          });
+
+          await SystemMessages.documentsSubmitted(session.user.id);
+          console.log("[upload] ✅ System message sent: documents submitted");
+        }
+      } catch (sysMsgError) {
+        console.error("[upload] Error sending system message:", sysMsgError);
+        // Не блокируем загрузку документов из-за ошибки отправки сообщений
+      }
+    }
 
     return NextResponse.json({
       success: true,

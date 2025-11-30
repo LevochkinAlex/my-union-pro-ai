@@ -14,6 +14,7 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   createdAt: Date;
+  isSystemMessage?: boolean;
 }
 
 function ChatContent() {
@@ -147,7 +148,7 @@ function ChatContent() {
     }
   }, [sessionId]);
 
-  // Проверка заполненности заявления при загрузке STATEMENT сессии (БЕЗ автооткрытия)
+  // Проверка заполненности заявления при загрузке STATEMENT сессии
   useEffect(() => {
     const checkApplication = async () => {
       if (sessionType === "STATEMENT" && currentSessionId) {
@@ -158,7 +159,22 @@ function ChatContent() {
             const data = await response.json();
             setIsApplicationFilled(data.applicationFilled);
             
-            // НЕ открываем модалку автоматически, только проверяем статус
+            // Проверяем это первый вход (только приветственное сообщение от AI)
+            const isFirstEntry = messages.length === 1 && 
+              messages[0].role === "assistant" && 
+              messages[0].content.includes("Здравствуйте! 👋");
+            
+            // Если первый вход и заявление не заполнено - открываем модалку через 10 секунд
+            if (isFirstEntry && !data.applicationFilled && !showSelfFillModal) {
+              console.log("[chat] First entry detected, will open modal in 10 seconds");
+              const timer = setTimeout(() => {
+                setShowSelfFillModal(true);
+                console.log("[chat] Auto-opening self-fill modal after 10 seconds");
+              }, 10000);
+              
+              return () => clearTimeout(timer);
+            }
+            
             console.log("[chat] Application filled:", data.applicationFilled);
           }
         } catch (error) {
@@ -174,7 +190,7 @@ function ChatContent() {
     };
 
     checkApplication();
-  }, [sessionType, currentSessionId]);
+  }, [sessionType, currentSessionId, messages, showSelfFillModal]);
 
   // Load Appeal Bot ID if in appeal mode
   useEffect(() => {
@@ -969,6 +985,7 @@ function ChatContent() {
                             .replace(/\[PROFILE_AWAITING_CONFIRMATION\]/g, "")
                             .replace(/\[SHOW_SELF_FILL_BUTTON\]/g, "")
                             .replace(/\[SHOW_DOCUMENT_ACTIONS\]/g, "")
+                            .replace(/\[GENERATE_DOCUMENTS_BUTTON\]/g, "")
                           }
                         </ReactMarkdown>
 
@@ -985,6 +1002,44 @@ function ChatContent() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                               </svg>
                               Заполнить анкету
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Кнопка "Сгенерировать документы" - показываем в системном сообщении */}
+                        {message.role === "assistant" && 
+                         (message.isSystemMessage || message.content.includes("[GENERATE_DOCUMENTS_BUTTON]")) && 
+                         message.content.includes("[GENERATE_DOCUMENTS_BUTTON]") && 
+                         sessionType === "STATEMENT" && (
+                          <div className="mt-4">
+                            <button
+                              onClick={async () => {
+                                setIsLoading(true);
+                                try {
+                                  const response = await fetch("/api/chat", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      message: "[SELF_FILL_COMPLETED]",
+                                      sessionId: currentSessionId,
+                                    }),
+                                  });
+                                  if (response.ok) {
+                                    await loadMessages();
+                                  }
+                                } catch (error) {
+                                  console.error("Error generating documents:", error);
+                                } finally {
+                                  setIsLoading(false);
+                                }
+                              }}
+                              disabled={isLoading}
+                              className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              {isLoading ? "Генерация..." : "Сгенерировать документы"}
                             </button>
                           </div>
                         )}

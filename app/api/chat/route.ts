@@ -15,6 +15,7 @@ import { validateAddressWithDaData, validateNameWithDaData } from "@/lib/dadata"
 import { detectGenderByName } from "@/lib/utils/genderDetector";
 import { detectBotQuestionContext, enhanceUserMessageWithContext, requiresValidation, logContext } from "@/lib/chat-context-helpers";
 import { findJobTitle, findProfession } from "@/lib/dictionaries";
+import { SystemMessages } from "@/lib/system-messages";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -1256,6 +1257,25 @@ export async function POST(request: NextRequest) {
             
             console.log("[chat] ✅ Documents generated and saved to database successfully");
             
+            // Отправляем системное сообщение о генерации документов
+            try {
+              const generatedDocs = await prisma.document.findMany({
+                where: {
+                  userId: session.user.id,
+                  type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
+                  status: "GENERATED",
+                },
+                select: { type: true, title: true, filePath: true },
+              });
+
+              await SystemMessages.documentsGenerated(session.user.id, generatedDocs);
+              await SystemMessages.uploadDocumentsInstruction(session.user.id);
+              console.log("[chat] ✅ System messages sent: documents generated");
+            } catch (sysMsgError) {
+              console.error("[chat] Error sending system messages:", sysMsgError);
+              // Не блокируем генерацию документов из-за ошибки отправки сообщений
+            }
+            
             // Отвечаем с инструкцией по скачиванию и загрузке документов
             aiResponse = `Отлично! 🎉 Ваша анкета успешно заполнена, и документы для вступления в профсоюз сгенерированы.
 
@@ -1290,8 +1310,28 @@ export async function POST(request: NextRequest) {
     }
 
     // ОБРАБОТКА ЗАГРУЗКИ ДОКУМЕНТОВ
-    // Если пользователь отправил [DOCUMENTS_UPLOADED], показываем приветственное сообщение
+    // Если пользователь отправил [DOCUMENTS_UPLOADED], отправляем системное сообщение
     if (message && message.includes("[DOCUMENTS_UPLOADED]")) {
+      // Проверяем что документы действительно загружены
+      const uploadedDocs = await prisma.document.findMany({
+        where: {
+          userId: session.user.id,
+          type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
+          status: { in: ["SIGNED", "PENDING", "APPROVED"] },
+          signedFilePath: { not: null },
+        },
+      });
+
+      if (uploadedDocs.length >= 2) {
+        // Отправляем системное сообщение
+        try {
+          await SystemMessages.documentsSubmitted(session.user.id);
+          console.log("[chat] ✅ System message sent: documents submitted");
+        } catch (sysMsgError) {
+          console.error("[chat] Error sending system message:", sysMsgError);
+        }
+      }
+
       aiResponse = `Превосходно! 🎉 Ваши документы получены и отправлены на проверку.
 
 **Что происходит дальше?**
@@ -1850,7 +1890,13 @@ export async function GET() {
       // Приветствие зависит от типа сессии
       const welcomeMessageContent = chatSession.type === "APPEAL"
         ? "Здравствуйте! Я ваш помощник по обращениям в профсоюз. Я могу помочь вам с вопросами и проблемами, связанными с профсоюзом, трудовыми отношениями и правами работников. При ответах я опираюсь на законы Российской Федерации, устав и положения профсоюза. Опишите, пожалуйста, ваше обращение или вопрос, и я постараюсь вам помочь."
-        : "Здравствуйте! Я уникальный AI-бот профсоюза, готовый консультировать вас по всем сложным вопросам, связанным с профсоюзной деятельностью, вашими правами, льготами и преимуществами членства.\n\nДля начала работы необходимо заполнить анкету для подачи заявления о вступлении в профсоюз. Это займет всего несколько минут.\n\n[SHOW_SELF_FILL_BUTTON]";
+        : `Здравствуйте! 👋 Я AI-помощник профсоюза МООП РЗ.
+
+Я готов ответить на ваши вопросы о профсоюзе, скидках BestBenefits, правах членов профсоюза и многом другом.
+
+Если вы ещё не член профсоюза - заполните анкету для подачи заявления о вступлении.
+
+[SHOW_SELF_FILL_BUTTON]`;
       
       console.log("GET /api/chat: Создание приветственного сообщения в БД...");
       
@@ -1867,7 +1913,13 @@ export async function GET() {
             title: chatSession.title,
             type: chatSession.type,
           },
-          messages: [doubleCheck] 
+          messages: [{
+            id: doubleCheck.id,
+            role: doubleCheck.role,
+            content: doubleCheck.content,
+            createdAt: doubleCheck.createdAt,
+            isSystemMessage: doubleCheck.isSystemMessage || false,
+          }]
         });
       }
       
@@ -1878,6 +1930,7 @@ export async function GET() {
           userId: session.user.id,
           sessionId: chatSession.id,
           chatBotId: bot.id,
+          isSystemMessage: false,
         },
       });
       console.log("GET /api/chat: Приветственное сообщение создано. ID:", welcomeMessage.id);
@@ -1887,7 +1940,13 @@ export async function GET() {
           title: chatSession.title,
           type: chatSession.type,
         },
-        messages: [welcomeMessage] 
+        messages: [{
+          id: welcomeMessage.id,
+          role: welcomeMessage.role,
+          content: welcomeMessage.content,
+          createdAt: welcomeMessage.createdAt,
+          isSystemMessage: welcomeMessage.isSystemMessage || false,
+        }]
       });
     }
 
@@ -1898,7 +1957,13 @@ export async function GET() {
         title: chatSession.title,
         type: chatSession.type,
       },
-      messages 
+      messages: messages.map((msg) => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        createdAt: msg.createdAt,
+        isSystemMessage: msg.isSystemMessage || false,
+      }))
     });
     
   } catch (error) {

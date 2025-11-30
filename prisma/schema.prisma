@@ -453,6 +453,7 @@ model ChatMessage {
 
   role    String // "user" или "assistant"
   content String @db.Text
+  isSystemMessage Boolean @default(false) // Системное сообщение (не от AI)
 
   createdAt DateTime @default(now())
 

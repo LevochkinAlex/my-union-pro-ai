@@ -40,7 +40,9 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   // Get active session ID from URL
-  const activeSessionId = searchParams.get("session") || searchParams.get("appeal") || null;
+  // Если есть appeal - это обращение, если session - это STATEMENT сессия
+  const activeAppealId = searchParams.get("appeal");
+  const activeSessionId = activeAppealId ? null : (searchParams.get("session") || null);
 
   const isLoadingRef = useRef(false);
   const hasLoadedRef = useRef(false);
@@ -252,7 +254,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
               onMouseLeave={() => setHoveredId(null)}
               className={clsx(
                 "group relative flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-                activeSessionId === statementSession.id
+                activeSessionId === statementSession.id && !activeAppealId
                   ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
                   : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
               )}
@@ -260,7 +262,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
               <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <span className="flex-1 truncate text-left">Мой бот</span>
+              <span className="flex-1 truncate text-left">Мой чат</span>
               {hoveredId === statementSession.id && (
                 <span className="text-xs text-gray-500 dark:text-gray-400">Постоянный</span>
               )}
@@ -269,7 +271,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
 
           {/* Appeal Sessions from ChatSessions */}
           {sessions.filter(s => s.type === "APPEAL").map((session) => {
-            const isActive = activeSessionId === session.id;
+            const isActive = activeAppealId === session.id || activeSessionId === session.id;
             const isHovered = hoveredId === session.id;
             return (
               <div
@@ -357,7 +359,7 @@ export default function ChatMenu({ isCollapsed }: ChatMenuProps) {
                 Обр.
               </div>
               {appeals.map((appeal) => {
-                const isActive = activeSessionId === appeal.id;
+                const isActive = activeAppealId === appeal.id || activeSessionId === appeal.id;
                 const isHovered = hoveredId === appeal.id;
                 return (
                   <div

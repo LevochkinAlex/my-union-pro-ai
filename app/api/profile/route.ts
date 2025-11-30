@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { normalizePhone, getPhoneDigits, isSamePhone } from "@/lib/utils/phone";
+import { SystemMessages } from "@/lib/system-messages";
 
 function normalizeString(value: unknown): string | null {
   if (value === null || value === undefined) {
@@ -271,6 +272,52 @@ export async function PUT(request: NextRequest) {
     // Синхронизация с BestBenefits перенесена в /api/user/verify-email
     // Аккаунт создается только ПОСЛЕ подтверждения email пользователем
     console.log("[profile] Profile saved. BestBenefits sync will happen after email verification.");
+
+    // Проверяем готовность профиля для генерации документов
+    const requiredFields = [
+      updatedUser.firstName,
+      updatedUser.lastName,
+      updatedUser.dateOfBirth,
+      updatedUser.phone,
+      updatedUser.address,
+      updatedUser.jobTitle,
+      updatedUser.profession,
+      updatedUser.education,
+      updatedUser.organizationId,
+    ];
+
+    const isProfileComplete = requiredFields.every((field) => field !== null && field !== undefined && field !== "");
+
+    // Проверяем есть ли уже сгенерированные документы
+    const hasGeneratedDocs = await prisma.document.count({
+      where: {
+        userId: session.user.id,
+        type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
+        status: { in: ["GENERATED", "SIGNED", "PENDING", "APPROVED"] },
+      },
+    }) > 0;
+
+    // Если профиль заполнен и документов еще нет - отправляем системное сообщение
+    if (isProfileComplete && !hasGeneratedDocs) {
+      try {
+        // Проверяем не отправляли ли уже это сообщение
+        const existingMessage = await prisma.chatMessage.findFirst({
+          where: {
+            userId: session.user.id,
+            content: { contains: "Вы успешно заполнили свою анкету" },
+            isSystemMessage: true,
+          },
+        });
+
+        if (!existingMessage) {
+          await SystemMessages.profileCompleted(session.user.id);
+          console.log("[profile] System message sent: profile completed");
+        }
+      } catch (error) {
+        console.error("[profile] Error sending system message:", error);
+        // Не блокируем сохранение профиля из-за ошибки отправки сообщения
+      }
+    }
 
     return NextResponse.json({
       success: true,

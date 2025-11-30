@@ -81,8 +81,14 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        // Добавляем приветственное сообщение бота согласно новому промпту
-        const welcomeMessage = "Здравствуйте! Я ваш помощник для вступления в Профсоюз работников здравоохранения РФ. Я помогу вам заполнить профиль и подготовить необходимые документы для этого. Давайте начнем. Укажите регион России, в которой вы находитесь.";
+        // Добавляем приветственное сообщение для первого входа
+        const welcomeMessage = `Здравствуйте! 👋 Я AI-помощник профсоюза МООП РЗ.
+
+Я готов ответить на ваши вопросы о профсоюзе, скидках BestBenefits, правах членов профсоюза и многом другом.
+
+Если вы ещё не член профсоюза - заполните анкету для подачи заявления о вступлении.
+
+[SHOW_SELF_FILL_BUTTON]`;
 
         await prisma.chatMessage.create({
           data: {
@@ -91,6 +97,7 @@ export async function POST(request: NextRequest) {
             userId: updatedUser.id,
             chatBotId: defaultBot.id,
             sessionId: chatSession.id,
+            isSystemMessage: false, // Это сообщение от AI, не системное
           },
         });
       }

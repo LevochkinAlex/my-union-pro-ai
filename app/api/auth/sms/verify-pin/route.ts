@@ -106,22 +106,60 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Ищем или создаем пользователя
+    // Ищем или создаем пользователя (пробуем разные форматы номера)
     let user = await prisma.user.findUnique({
       where: { phone: normalizedPhone },
     });
 
-    if (!user) {
-      // Создаем нового пользователя
-      user = await prisma.user.create({
-        data: {
-          phone: normalizedPhone,
-          // Email будет заполнен позже через чат или профиль
-          role: "PENDING_MEMBER",
-          membershipStatus: "PROFILE_INCOMPLETE",
+    // Если не нашли, пробуем без +
+    if (!user && normalizedPhone.startsWith("+")) {
+      user = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { phone: normalizedPhone.replace("+", "") },
+            { phone: normalizedPhone.replace("+7", "7") },
+            { phone: normalizedPhone.replace("+7", "8") },
+            { authPhone: normalizedPhone },
+            { authPhone: normalizedPhone.replace("+", "") },
+          ],
         },
       });
-      console.log("[2FA Auth] Создан новый пользователь:", user.id);
+    }
+
+    if (!user) {
+      // Создаем нового пользователя
+      try {
+        user = await prisma.user.create({
+          data: {
+            phone: normalizedPhone,
+            authPhone: normalizedPhone, // Устанавливаем authPhone при первой регистрации
+            // Email будет заполнен позже через чат или профиль
+            role: "PENDING_MEMBER",
+            membershipStatus: "PROFILE_INCOMPLETE",
+          },
+        });
+        console.log("[2FA Auth] Создан новый пользователь:", user.id);
+      } catch (createError: any) {
+        // Если ошибка уникальности - возможно номер уже есть в другом формате
+        if (createError.code === "P2002") {
+          console.log("[2FA Auth] Конфликт уникальности, пробуем найти пользователя снова...");
+          user = await prisma.user.findFirst({
+            where: {
+              OR: [
+                { phone: { contains: normalizedPhone.replace(/\D/g, "").slice(-10) } },
+                { authPhone: { contains: normalizedPhone.replace(/\D/g, "").slice(-10) } },
+              ],
+            },
+          });
+          if (user) {
+            console.log("[2FA Auth] Найден пользователь после конфликта:", user.id);
+          } else {
+            throw createError;
+          }
+        } else {
+          throw createError;
+        }
+      }
     } else {
       console.log("[2FA Auth] Найден существующий пользователь:", user.id);
     }
