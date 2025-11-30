@@ -48,23 +48,16 @@ export async function GET(
 
     // Проверяем, нужно ли создать или обновить приветственное сообщение
     if (chatSession.type === "STATEMENT") {
-      // Проверяем это первый вход - проверяем флаг isFirstLogin или отсутствие несистемных сообщений в этой сессии
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { isFirstLogin: true },
-      });
-      
-      // Проверяем, есть ли несистемные сообщения от пользователя в этой STATEMENT сессии
-      const userMessages = await prisma.chatMessage.findMany({
+      // Проверяем это первый вход - проверяем отсутствие несистемных сообщений в этой сессии
+      const userMessagesCount = await prisma.chatMessage.count({
         where: {
-          userId: session.user.id,
           sessionId: chatSession.id,
-          role: "user", // Только сообщения от пользователя
+          userId: session.user.id,
+          isSystemMessage: false,
         },
-        take: 1,
       });
       
-      const isFirstEntry = (user?.isFirstLogin ?? true) && userMessages.length === 0;
+      const isFirstEntry = userMessagesCount === 0;
       
       // Ищем приветственное сообщение
       const welcomeMsg = messages.find(
@@ -76,9 +69,7 @@ export async function GET(
       if (isFirstEntry) {
         const welcomeMessageContent = `Здравствуйте! 👋 Я AI-помощник профсоюза МООП РЗ.
 
-Я готов ответить на ваши вопросы о профсоюзе, скидках BestBenefits, правах членов профсоюза и многом другом.
-
-Если вы ещё не член профсоюза - заполните анкету для подачи заявления о вступлении.
+Подайте заявление о вступлении в профсоюз, заполнив анкету.
 
 [SHOW_SELF_FILL_BUTTON]`;
         
