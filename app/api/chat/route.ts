@@ -168,9 +168,9 @@ async function buildSystemPrompt(
     const profileData: string[] = [];
     
     // Основные данные
-    if (fullName) profileData.push(`👤 ФИО: ${fullName}`);
-    if (user.email) profileData.push(`📧 Email: ${user.email}`);
-    if (user.phone) profileData.push(`📱 Телефон: ${user.phone}`);
+    if (fullName) profileData.push(`ФИО: ${fullName}`);
+    if (user.email) profileData.push(`Email: ${user.email}`);
+    if (user.phone) profileData.push(`Телефон: ${user.phone}`);
     if (user.dateOfBirth) {
       const dob = new Date(user.dateOfBirth);
       const age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
@@ -228,28 +228,28 @@ async function buildSystemPrompt(
     }
     
     // Личная информация
-    if (user.hobbies) profileData.push(`🎯 Хобби и увлечения: ${user.hobbies}`);
-    if (user.aboutMe) profileData.push(`📝 О себе: ${user.aboutMe}`);
-    if (user.additionalInfo) profileData.push(`ℹ️ Дополнительно: ${user.additionalInfo}`);
+    if (user.hobbies) profileData.push(`Хобби и увлечения: ${user.hobbies}`);
+    if (user.aboutMe) profileData.push(`О себе: ${user.aboutMe}`);
+    if (user.additionalInfo) profileData.push(`Дополнительно: ${user.additionalInfo}`);
     
     // Статус в профсоюзе
     if (user.membershipStatus) {
       const statusMap: Record<string, string> = {
         'PENDING_VERIFICATION': '⏳ Ожидает проверки',
-        'PROFILE_INCOMPLETE': '📝 Профиль не заполнен',
-        'DOCUMENTS_PENDING': '📄 Документы на проверке',
-        'APPROVED': '✅ Одобрен',
-        'REJECTED': '❌ Отклонён',
-        'SUSPENDED': '⚠️ Приостановлен'
+        'PROFILE_INCOMPLETE': 'Профиль не заполнен',
+        'DOCUMENTS_PENDING': 'Документы на проверке',
+        'APPROVED': 'Одобрен',
+        'REJECTED': 'Отклонён',
+        'SUSPENDED': 'Приостановлен'
       };
-      profileData.push(`🏛️ Статус членства: ${statusMap[user.membershipStatus] || user.membershipStatus}`);
+      profileData.push(`Статус членства: ${statusMap[user.membershipStatus] || user.membershipStatus}`);
     }
     
     // Telegram
     if (user.telegramUsername) profileData.push(`📲 Telegram: @${user.telegramUsername}`);
     
     if (profileData.length > 0) {
-      prompt += `\n\n## 📋 ПОЛНЫЙ ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ (ЗАПОМНИ ЭТО!):
+      prompt += `\n\n## ПОЛНЫЙ ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ (ЗАПОМНИ ЭТО!):
 
 ${profileData.join('\n')}
 
@@ -281,50 +281,50 @@ ${profileData.join('\n')}
 - **УЧИСЬ** из контекста разговора - адаптируйся под стиль общения пользователя
 - Если не знаешь ответ - честно скажи и предложи связаться с техподдержкой
 
-### 📱 ФУНКЦИИ СИСТЕМЫ MyUnion (рассказывай о них!):
+### ФУНКЦИИ СИСТЕМЫ MyUnion (рассказывай о них!):
 
-**1. 🤖 AI Чат (где мы сейчас)**
+**1. AI Чат (где мы сейчас)**
 - Отвечаю на любые вопросы о профсоюзе
 - Помогаю разобраться с документами
 - Консультирую по правам членов профсоюза
 
-**2. 📄 Документы**
+**2. Документы**
 - Заявление о вступлении в профсоюз
 - Заявление о членских взносах  
 - Скачивание и загрузка подписанных документов
 - Отслеживание статуса проверки
 
-**3. 💳 Скидки BestBenefits**
+**3. Скидки BestBenefits**
 - Скидки 10-50% в ресторанах, магазинах, онлайн-сервисах
 - Фильтр по городу (автоматически из профиля)
 - Категории: Еда, Товары, Услуги, Красота, Развлечения
 - Активация промокодов одним кликом
-- Добавление в избранное ⭐
+- Добавление в избранное
 
-**4. 📰 Новости**
+**4. Новости**
 - Новости профсоюза и отрасли
 - Важные объявления
 - Опросы и голосования
 
-**5. 👤 Профиль**
+**5. Профиль**
 - Личные данные
 - Информация об организации
 - Настройки уведомлений
 
-**6. 📝 Обращения** 
+**6. Обращения** 
 - Создание обращений в профсоюз
 - Решение трудовых вопросов
 - Юридические консультации
 
-### 💬 СТИЛЬ ОБЩЕНИЯ:
-- Будь дружелюбным и тёплым 😊
+### СТИЛЬ ОБЩЕНИЯ:
+- Будь дружелюбным и тёплым
 - Обращайся по имени: "${userName || 'друг'}"
-- Используй эмодзи умеренно
+- Не используй эмодзи в ответах
 - Давай конкретные и полезные ответы
 - Предлагай функции системы, когда это уместно
 - Если пользователь расстроен - прояви эмпатию
 
-### ⚠️ ВАЖНО:
+### ВАЖНО:
 - НЕ говори "Извините, я специализируюсь только на..." - ты универсальный помощник!
 - НЕ проси заполнять анкету - документы уже поданы
 - НЕ будь формальным роботом - будь другом
@@ -441,14 +441,47 @@ export async function POST(request: NextRequest) {
         console.log(`[chat] ✅ Reusing existing STATEMENT session: ${chatSession.id}`);
       } else {
         // Создаем новую сессию ТОЛЬКО если у пользователя вообще нет сессий STATEMENT
-      chatSession = await prisma.chatSession.create({
-        data: {
-          userId: session.user.id,
-          title: "Заявление",
-          type: "STATEMENT",
-        },
-      });
+        chatSession = await prisma.chatSession.create({
+          data: {
+            userId: session.user.id,
+            title: "Заявление",
+            type: "STATEMENT",
+          },
+        });
         console.log(`[chat] 🆕 Created first STATEMENT session: ${chatSession.id}`);
+        
+        // Создаем приветственное сообщение для новой сессии
+        const defaultBot = await prisma.chatBot.findFirst({
+          where: { isDefault: true },
+        });
+        
+        // Проверяем, есть ли сообщения от пользователя (первый вход)
+        const userMessagesCount = await prisma.chatMessage.count({
+          where: {
+            userId: session.user.id,
+            role: "user",
+          },
+        });
+        
+        if (userMessagesCount === 0) {
+          // Первый вход - создаем приветственное сообщение с кнопкой
+          const welcomeMessage = `Здравствуйте! Я AI-помощник профсоюза МООП РЗ.
+
+Подайте заявление о вступлении в профсоюз, заполнив анкету.
+
+[SHOW_SELF_FILL_BUTTON]`;
+          
+          await prisma.chatMessage.create({
+            data: {
+              content: welcomeMessage,
+              role: "assistant",
+              userId: session.user.id,
+              sessionId: chatSession.id,
+              chatBotId: defaultBot?.id || null,
+            },
+          });
+          console.log(`[chat] ✅ Welcome message with button created for new session`);
+        }
       }
     }
 
@@ -595,17 +628,39 @@ export async function POST(request: NextRequest) {
         },
       });
       
+      // Если пользователь пишет о заполнении анкеты, проверяем документы заново
+      // (на случай, если они только что были сгенерированы)
+      if (message && (
+        message.toLowerCase().includes("заполнил анкету") || 
+        message.toLowerCase().includes("заполнил анкет") ||
+        message.toLowerCase().includes("успешно заполнил")
+      )) {
+        const recentDocuments = await prisma.document.findMany({
+          where: {
+            userId: session.user.id,
+            type: {
+              in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
+            },
+            status: {
+              not: "DRAFT",
+            },
+          },
+        });
+        hasGeneratedDocuments = recentDocuments.length > 0;
+        console.log(`[chat] Re-checked documents after "filled questionnaire" message: generated=${hasGeneratedDocuments}`);
+      }
+      
       // Определяем системный ответ
       let systemResponse = "";
       
       if (!hasGeneratedDocuments) {
         // Документы ещё не сгенерированы - предлагаем заполнить анкету
-        systemResponse = `Для продолжения работы, пожалуйста, заполните анкету. Нажмите кнопку "Заполнить анкету" выше. 📝
+        systemResponse = `Для продолжения работы, пожалуйста, заполните анкету. Нажмите кнопку "Заполнить анкету" выше.
 
 [SHOW_SELF_FILL_BUTTON]`;
       } else {
         // Документы сгенерированы, но не подписаны - предлагаем подписать
-        systemResponse = `Ваши документы сгенерированы! 📄
+        systemResponse = `Ваши документы сгенерированы!
 
 Пожалуйста, скачайте их, подпишите и загрузите обратно в систему. После этого AI-помощник будет готов ответить на все ваши вопросы.
 
