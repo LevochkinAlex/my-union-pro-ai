@@ -68,14 +68,23 @@ function LoginForm() {
   const detectInputType = useCallback((value: string): "phone" | "email" | null => {
     if (!value) return null;
     
-    // Если есть @, значит email
+    // Если есть @, значит email (приоритет)
     if (value.includes("@")) {
       return "email";
     }
     
-    // Если есть цифры или +, значит телефон
-    if (/[\d+]/.test(value)) {
-      return "phone";
+    // Если начинается с + или 8, или содержит только цифры и форматирование телефона - это телефон
+    const trimmed = value.trim();
+    if (trimmed.startsWith("+") || trimmed.startsWith("8") || /^[\d\s\-\(\)]+$/.test(trimmed)) {
+      // Но только если нет букв (кроме форматирования)
+      if (!/[a-zA-Zа-яА-Я]/.test(trimmed)) {
+        return "phone";
+      }
+    }
+    
+    // Если есть буквы и нет @ - возможно email (ждём @)
+    if (/[a-zA-Zа-яА-Я]/.test(value)) {
+      return null; // Ждём @ для подтверждения
     }
     
     // По умолчанию null (ждём больше символов)
@@ -112,16 +121,30 @@ function LoginForm() {
   // Обработчик изменения универсального поля
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    const type = detectInputType(value);
     
+    // Если пользователь вводит @, сразу переключаемся на email режим
+    if (value.includes("@")) {
+      setInputType("email");
+      setInput(value);
+      return;
+    }
+    
+    const type = detectInputType(value);
     setInputType(type);
     
-    // Если это телефон, форматируем
+    // Если это явно телефон (начинается с + или 8, или уже отформатирован), форматируем
     if (type === "phone") {
-      const formatted = formatPhoneInput(value);
-      setInput(formatted);
+      // Форматируем только если это явно телефон (начинается с +, 8, или уже много цифр)
+      const trimmed = value.trim();
+      if (trimmed.startsWith("+") || trimmed.startsWith("8") || /^[\d\s\-\(\)]+$/.test(trimmed)) {
+        const formatted = formatPhoneInput(value);
+        setInput(formatted);
+      } else {
+        // Если не явный телефон, просто сохраняем как есть (может быть email начинающийся с цифры)
+        setInput(value);
+      }
     } else {
-      // Для email просто сохраняем как есть
+      // Для email или неопределенного типа просто сохраняем как есть
       setInput(value);
     }
   }, [detectInputType, formatPhoneInput]);

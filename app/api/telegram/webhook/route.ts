@@ -13,6 +13,62 @@ export async function POST(request: NextRequest) {
 
     console.log("[Telegram Webhook] Получено обновление:", JSON.stringify(update, null, 2));
 
+    // Обработка callback_query (нажатие на inline кнопки)
+    if (update.callback_query) {
+      const callback = update.callback_query;
+      const callbackChatId = callback.message?.chat?.id?.toString();
+      const callbackData = callback.data;
+
+      console.log("[Telegram Webhook] Получен callback_query:", { chatId: callbackChatId, data: callbackData });
+
+      if (callbackData?.startsWith("register_telegram_")) {
+        const phone = callbackData.replace("register_telegram_", "");
+        
+        // Ищем пользователя
+        const user = await prisma.user.findUnique({
+          where: { telegramChatId: callbackChatId },
+        });
+
+        if (user) {
+          // Обновляем пользователя - регистрация в Telegram
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              phone: phone,
+              role: "PENDING_MEMBER",
+              membershipStatus: "PROFILE_INCOMPLETE",
+            },
+          });
+
+          // Отвечаем на callback
+          const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+          await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              callback_query_id: callback.id,
+              text: "Регистрация в Telegram начата!",
+            }),
+          });
+
+          await sendTelegramMessage(
+            callbackChatId!,
+            `✅ <b>Регистрация в Telegram начата!</b>
+
+Отлично! Теперь вы можете заполнить профиль прямо здесь в боте.
+
+Используйте команды:
+• /profile - заполнить профиль
+• /help - помощь
+
+Или перейдите на сайт для полной регистрации: <a href="https://myunion.pro/dashboard">myunion.pro</a>`
+          );
+        }
+      }
+
+      return NextResponse.json({ ok: true });
+    }
+
     // Проверяем, что это сообщение (может быть текст или контакт)
     if (!update.message) {
       console.log("[Telegram Webhook] Обновление не содержит сообщения");
@@ -45,18 +101,24 @@ export async function POST(request: NextRequest) {
       }
 
       // Ищем пользователя по telegramChatId
-      const user = await prisma.user.findUnique({
+      let user = await prisma.user.findUnique({
         where: { telegramChatId: chatId },
       });
 
       if (!user) {
-        await sendTelegramMessage(
-          chatId,
-          `❌ <b>Сначала войдите через Telegram</b>
-
-Перейдите на <a href="https://myunion.pro/login">страницу входа</a> и нажмите "Войти с Telegram"`
-        );
-        return NextResponse.json({ ok: true });
+        // Создаем нового пользователя с Telegram
+        console.log("[Telegram Webhook] Создаем нового пользователя для Telegram:", chatId);
+        user = await prisma.user.create({
+          data: {
+            telegramChatId: chatId,
+            telegramUsername: from?.username || null,
+            firstName: from?.first_name || null,
+            lastName: from?.last_name || null,
+            role: "PENDING_MEMBER",
+            membershipStatus: "PROFILE_INCOMPLETE",
+          },
+        });
+        console.log("[Telegram Webhook] ✅ Создан новый пользователь:", user.id);
       }
 
       // Нормализуем номер телефона
@@ -118,15 +180,65 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // Сохраняем номер телефона в профиль пользователя
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { phone: normalizedPhone },
-      });
+      // Проверяем, новый ли это пользователь (нет номера телефона и email)
+      const isNewUser = !user.phone && !user.email;
+      
+      if (isNewUser) {
+        // Новый пользователь - предлагаем выбор регистрации
+        await sendTelegramMessage(
+          chatId,
+          `👋 <b>Алоха!</b>
 
-      await sendTelegramMessage(
-        chatId,
-        `✅ <b>Номер телефона успешно привязан!</b>
+Отлично, ваш номер <code>${normalizedPhone}</code> получен! 
+
+Где будем регистрироваться?`,
+        );
+        
+        // Отправляем кнопки выбора
+        const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        
+        await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: "Выберите способ регистрации:",
+            parse_mode: "HTML",
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "📱 В Telegram",
+                    callback_data: `register_telegram_${normalizedPhone}`,
+                  },
+                ],
+                [
+                  {
+                    text: "🌐 На сайте myunion.pro",
+                    url: `https://myunion.pro/login?phone=${encodeURIComponent(normalizedPhone)}`,
+                  },
+                ],
+              ],
+            },
+          }),
+        });
+        
+        // Сохраняем номер временно (будет использован при выборе)
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { phone: normalizedPhone },
+        });
+      } else {
+        // Существующий пользователь - просто привязываем номер
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { phone: normalizedPhone },
+        });
+
+        await sendTelegramMessage(
+          chatId,
+          `✅ <b>Номер телефона успешно привязан!</b>
 
 Ваш номер <code>${normalizedPhone}</code> теперь привязан к аккаунту.
 
@@ -135,7 +247,8 @@ export async function POST(request: NextRequest) {
 • Через SMS код на этот номер
 
 Оба способа ведут в ваш аккаунт! 🎉`
-      );
+        );
+      }
 
       return NextResponse.json({ ok: true });
     }
@@ -210,22 +323,83 @@ export async function POST(request: NextRequest) {
 
       if (user) {
         console.log("[Telegram Webhook] Пользователь уже привязан:", user.id);
-        await sendWelcomeMessage(chatId);
+        
+        // Если у пользователя нет номера - запрашиваем
+        if (!user.phone) {
+          await sendTelegramMessage(
+            chatId,
+            `👋 <b>Добро пожаловать в МойСоюз!</b>
+
+Для завершения регистрации нам нужен ваш номер телефона.
+
+Поделитесь номером телефона, нажав кнопку ниже:`,
+          );
+          
+          // Отправляем кнопку для шаринга телефона
+          const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+          const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+          
+          await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: "Нажмите кнопку, чтобы поделиться номером:",
+              parse_mode: "HTML",
+              reply_markup: {
+                keyboard: [
+                  [
+                    {
+                      text: "📱 Поделиться номером телефона",
+                      request_contact: true,
+                    }
+                  ]
+                ],
+                one_time_keyboard: true,
+                resize_keyboard: true,
+              },
+            }),
+          });
+        } else {
+          await sendWelcomeMessage(chatId);
+        }
       } else {
         console.log("[Telegram Webhook] Chat ID не привязан к аккаунту");
-        // Отправляем инструкцию, как привязать аккаунт
+        // Новый пользователь - запрашиваем номер телефона
         await sendTelegramMessage(
           chatId,
           `👋 <b>Добро пожаловать в МойСоюз!</b>
 
-Для привязки Telegram к вашему аккаунту:
-1. Перейдите на страницу входа: <a href="https://myunion.pro/login">myunion.pro/login</a>
-2. Введите ваш номер телефона
-3. Нажмите "Привязать Telegram" (если появится такая кнопка)
-4. Или используйте ссылку из сообщения об ошибке
+Для регистрации нам нужен ваш номер телефона.
 
-После привязки вы будете получать коды для входа прямо здесь! 🚀`
+Поделитесь номером телефона, нажав кнопку ниже:`,
         );
+        
+        // Отправляем кнопку для шаринга телефона
+        const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        
+        await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: "Нажмите кнопку, чтобы поделиться номером:",
+            parse_mode: "HTML",
+            reply_markup: {
+              keyboard: [
+                [
+                  {
+                    text: "📱 Поделиться номером телефона",
+                    request_contact: true,
+                  }
+                ]
+              ],
+              one_time_keyboard: true,
+              resize_keyboard: true,
+            },
+          }),
+        });
       }
 
       return NextResponse.json({ ok: true });
@@ -241,18 +415,80 @@ export async function POST(request: NextRequest) {
       });
 
       if (!user) {
-        // Пользователь не привязан - отправляем инструкцию
+        // Пользователь не привязан - запрашиваем номер телефона
         await sendTelegramMessage(
           chatId,
-          `❌ <b>Telegram не привязан к аккаунту</b>
+          `👋 <b>Добро пожаловать в МойСоюз!</b>
 
-Для авторизации через Telegram:
-1. Перейдите на страницу входа: <a href="https://myunion.pro/login">myunion.pro/login</a>
-2. Нажмите кнопку "Войти с Telegram"
-3. После авторизации Telegram будет привязан к вашему аккаунту
+Для регистрации или входа нам нужен ваш номер телефона.
 
-После привязки вы сможете использовать быстрый вход через бот! 🚀`
+Поделитесь номером телефона, нажав кнопку ниже:`,
         );
+        
+        // Отправляем кнопку для шаринга телефона
+        const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        
+        await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: "Нажмите кнопку, чтобы поделиться номером:",
+            parse_mode: "HTML",
+            reply_markup: {
+              keyboard: [
+                [
+                  {
+                    text: "📱 Поделиться номером телефона",
+                    request_contact: true,
+                  }
+                ]
+              ],
+              one_time_keyboard: true,
+              resize_keyboard: true,
+            },
+          }),
+        });
+        
+        return NextResponse.json({ ok: true });
+      }
+      
+      // Если у пользователя нет номера телефона - запрашиваем
+      if (!user.phone) {
+        await sendTelegramMessage(
+          chatId,
+          `📱 <b>Нужен номер телефона</b>
+
+Для завершения регистрации поделитесь вашим номером телефона:`,
+        );
+        
+        // Отправляем кнопку для шаринга телефона
+        const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        
+        await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: "Нажмите кнопку, чтобы поделиться номером:",
+            parse_mode: "HTML",
+            reply_markup: {
+              keyboard: [
+                [
+                  {
+                    text: "📱 Поделиться номером телефона",
+                    request_contact: true,
+                  }
+                ]
+              ],
+              one_time_keyboard: true,
+              resize_keyboard: true,
+            },
+          }),
+        });
+        
         return NextResponse.json({ ok: true });
       }
 

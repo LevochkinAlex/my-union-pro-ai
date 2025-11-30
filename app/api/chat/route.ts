@@ -1616,7 +1616,8 @@ export async function POST(request: NextRequest) {
         role: "assistant",
         content: aiResponse,
         chatBotId: bot.id,
-      },
+        isSystemMessage: false, // Сообщения от AI не системные
+      } as any,
     });
 
     // Send push notification to user with action buttons (only if user is not actively chatting)
@@ -1918,7 +1919,7 @@ export async function GET() {
             role: doubleCheck.role,
             content: doubleCheck.content,
             createdAt: doubleCheck.createdAt,
-            isSystemMessage: doubleCheck.isSystemMessage || false,
+            isSystemMessage: (doubleCheck as any).isSystemMessage || false,
           }]
         });
       }
@@ -1931,7 +1932,7 @@ export async function GET() {
           sessionId: chatSession.id,
           chatBotId: bot.id,
           isSystemMessage: false,
-        },
+        } as any, // Временное решение до обновления Prisma типов
       });
       console.log("GET /api/chat: Приветственное сообщение создано. ID:", welcomeMessage.id);
       return NextResponse.json({ 
@@ -1945,7 +1946,7 @@ export async function GET() {
           role: welcomeMessage.role,
           content: welcomeMessage.content,
           createdAt: welcomeMessage.createdAt,
-          isSystemMessage: welcomeMessage.isSystemMessage || false,
+          isSystemMessage: (welcomeMessage as any).isSystemMessage || false,
         }]
       });
     }
@@ -1962,7 +1963,7 @@ export async function GET() {
         role: msg.role,
         content: msg.content,
         createdAt: msg.createdAt,
-        isSystemMessage: msg.isSystemMessage || false,
+        isSystemMessage: (msg as any).isSystemMessage || false,
       }))
     });
     
