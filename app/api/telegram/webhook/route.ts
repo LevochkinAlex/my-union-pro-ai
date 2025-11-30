@@ -192,16 +192,52 @@ export async function POST(request: NextRequest) {
       });
       
       if (hadNoPhone) {
-        // Новый пользователь или пользователь без номера - предлагаем выбор регистрации
-        console.log("[Telegram Webhook] Пользователь без номера, предлагаем выбор регистрации");
+        // Новый пользователь или пользователь без номера - сохраняем номер и авторизуем на сайте
+        console.log("[Telegram Webhook] Пользователь без номера, сохраняем номер и авторизуем на сайте");
         
-        // Сначала сохраняем номер
+        // Сохраняем номер
         await prisma.user.update({
           where: { id: user.id },
           data: { phone: normalizedPhone },
         });
         
-        // Отправляем приветствие с кнопками выбора
+        // Создаем токен для автоматической авторизации
+        const crypto = await import("crypto");
+        const loginToken = crypto.randomBytes(32).toString("hex");
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
+
+        await prisma.loginToken.create({
+          data: {
+            token: loginToken,
+            userId: user.id,
+            expiresAt,
+          },
+        });
+
+        console.log("[Telegram Webhook] Создан токен для автоматической авторизации");
+
+        // Определяем правильный baseUrl
+        const host = request.headers.get("host") || "localhost:3000";
+        const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+        const baseUrl = isLocalhost 
+          ? `http://${host}` 
+          : (process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro");
+        
+        const loginUrl = `${baseUrl}/api/auth/telegram/auto-login?token=${loginToken}`;
+        
+        // Отправляем приветствие с кнопкой для входа на сайт
+        await sendTelegramMessage(
+          chatId,
+          `👋 <b>Алоха!</b>
+
+Отлично, ваш номер <code>${normalizedPhone}</code> получен! 
+
+Нажмите кнопку ниже, чтобы перейти на сайт и завершить регистрацию:
+
+⏱ <i>Ссылка действительна 10 минут</i>`
+        );
+        
+        // Отправляем кнопку для входа
         const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
         if (!TELEGRAM_BOT_TOKEN) {
           console.error("[Telegram Webhook] TELEGRAM_BOT_TOKEN не установлен!");
@@ -216,24 +252,14 @@ export async function POST(request: NextRequest) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               chat_id: chatId,
-              text: `👋 <b>Алоха!</b>
-
-Отлично, ваш номер <code>${normalizedPhone}</code> получен! 
-
-Где будем регистрироваться?`,
+              text: "Перейти на сайт для регистрации:",
               parse_mode: "HTML",
               reply_markup: {
                 inline_keyboard: [
                   [
                     {
-                      text: "📱 В Telegram",
-                      callback_data: `register_telegram_${normalizedPhone}`,
-                    },
-                  ],
-                  [
-                    {
-                      text: "🌐 На сайте myunion.pro",
-                      url: `https://myunion.pro/login?phone=${encodeURIComponent(normalizedPhone)}`,
+                      text: "🔐 Перейти на сайт",
+                      url: loginUrl,
                     },
                   ],
                 ],
@@ -242,34 +268,30 @@ export async function POST(request: NextRequest) {
           });
           
           const result = await response.json();
-          console.log("[Telegram Webhook] Результат отправки сообщения с кнопками:", result);
+          console.log("[Telegram Webhook] Результат отправки сообщения с кнопкой:", result);
           
           if (!result.ok) {
             console.error("[Telegram Webhook] Ошибка отправки сообщения:", result);
-            // Пробуем отправить простое сообщение без кнопок
+            // Пробуем отправить простое сообщение со ссылкой
             await sendTelegramMessage(
               chatId,
-              `👋 <b>Алоха!</b>
+              `🔐 <b>Перейдите на сайт для регистрации:</b>
 
-Отлично, ваш номер <code>${normalizedPhone}</code> получен! 
+${loginUrl}
 
-Выберите способ регистрации:
-• В Telegram - используйте команду /register
-• На сайте: https://myunion.pro/login?phone=${encodeURIComponent(normalizedPhone)}`
+⏱ <i>Ссылка действительна 10 минут</i>`
             );
           }
         } catch (error) {
           console.error("[Telegram Webhook] Ошибка при отправке сообщения:", error);
-          // Пробуем отправить простое сообщение
+          // Пробуем отправить простое сообщение со ссылкой
           await sendTelegramMessage(
             chatId,
-            `👋 <b>Алоха!</b>
+            `🔐 <b>Перейдите на сайт для регистрации:</b>
 
-Отлично, ваш номер <code>${normalizedPhone}</code> получен! 
+${loginUrl}
 
-Выберите способ регистрации:
-• В Telegram - используйте команду /register
-• На сайте: https://myunion.pro/login?phone=${encodeURIComponent(normalizedPhone)}`
+⏱ <i>Ссылка действительна 10 минут</i>`
           );
         }
       } else {
