@@ -670,12 +670,16 @@ export function ProfileSelfFillModal({
   const saveAdditionalData = async () => {
     try {
       const response = await fetch("/api/profile/additional-info", {
-        method: "POST",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(additionalData),
       });
 
-      if (!response.ok) throw new Error("Failed to save additional info");
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[ProfileModal] Failed to save additional info:", errorText);
+        throw new Error("Failed to save additional info");
+      }
     } catch (error) {
       console.error("Error saving additional info:", error);
       alertError("Ошибка при сохранении дополнительной информации");
