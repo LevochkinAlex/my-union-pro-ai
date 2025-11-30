@@ -527,22 +527,10 @@ export default function ProfilePage() {
     
     // Для отчества применяем особую логику
     if (name === "middleName") {
-      // Разбиваем отчество на части
-      const parts = value.trim().toLowerCase().split(/\s+/);
-      
-      // Форматируем каждую часть
-      const formatted = parts.map(part => {
-        // Тюркские суффиксы остаются с маленькой буквы
-        if (["оглы", "кызы", "улы", "гызы", "огли", "кизи"].includes(part)) {
-          return part;
-        }
-        // Остальные части с заглавной буквы
-        return capitalizeName(part);
-      }).join(" ");
-      
-    setProfileData((prev) => ({
-      ...prev,
-        [name]: formatted,
+      // Форматируем отчество с заглавной буквы
+      setProfileData((prev) => ({
+        ...prev,
+        [name]: capitalizeName(value),
       }));
     } else {
       setProfileData((prev) => ({
@@ -550,28 +538,6 @@ export default function ProfilePage() {
         [name]: capitalizeName(value),
       }));
     }
-  };
-  
-  // Проверяем, есть ли тюркский суффикс в отчестве
-  const hasTurkicSuffix = (middleName: string): boolean => {
-    const lower = middleName.toLowerCase();
-    return /\s(оглы|кызы|улы|гызы|огли|кизи)$/.test(lower) || 
-           ["оглы", "кызы", "улы", "гызы", "огли", "кизи"].some(suffix => lower === suffix);
-  };
-  
-  // Добавить тюркский суффикс к отчеству
-  const addTurkicSuffix = (suffix: string) => {
-    const currentMiddleName = profileData.middleName.trim();
-    if (!currentMiddleName) return;
-    
-    // Удаляем существующий суффикс, если есть
-    const withoutSuffix = currentMiddleName.replace(/\s+(оглы|кызы|улы|гызы|огли|кизи)$/i, '');
-    
-    // Добавляем новый суффикс
-    setProfileData((prev) => ({
-      ...prev,
-      middleName: `${withoutSuffix} ${suffix}`,
-    }));
   };
 
   const handleProfileSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -873,46 +839,8 @@ export default function ProfilePage() {
                 value={profileData.middleName}
                 onChange={handleNameChange("middleName")}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                placeholder="Например: Петрович или Ахмедович оглы"
+                placeholder="Например: Петрович"
               />
-              {/* Подсказка для тюркских суффиксов */}
-              {profileData.middleName && !hasTurkicSuffix(profileData.middleName) && (
-                <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
-                  <p className="mb-2 text-xs text-blue-800 dark:text-blue-300">
-                    Если ваше отчество тюркского происхождения, добавьте суффикс:
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => addTurkicSuffix("оглы")}
-                      className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 transition"
-                    >
-                      + оглы (сын)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => addTurkicSuffix("кызы")}
-                      className="rounded-md bg-pink-600 px-3 py-1 text-xs font-medium text-white hover:bg-pink-700 transition"
-                    >
-                      + кызы (дочь)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => addTurkicSuffix("улы")}
-                      className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 transition"
-                    >
-                      + улы (сын, каз.)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => addTurkicSuffix("гызы")}
-                      className="rounded-md bg-purple-600 px-3 py-1 text-xs font-medium text-white hover:bg-purple-700 transition"
-                    >
-                      + гызы (дочь, азерб.)
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Дата рождения</label>
