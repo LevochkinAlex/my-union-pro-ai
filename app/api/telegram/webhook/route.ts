@@ -553,35 +553,34 @@ ${loginUrl}
       const normalizedPhone = normalizePhone(phone);
       
       // Ищем пользователя по номеру телефона (пробуем разные варианты)
-      // Проверяем и phone, и authPhone
+      // Проверяем и phone, и authPhone - ВАЖНО: ищем существующих пользователей, не создаем новых
+      const phoneVariants = normalizedPhone.startsWith("+") 
+        ? [
+            normalizedPhone,
+            normalizedPhone.replace("+", ""),
+            normalizedPhone.replace("+7", "7"),
+            normalizedPhone.replace("+7", "8"),
+          ]
+        : [normalizedPhone];
+      
       let user = await prisma.user.findFirst({
         where: {
           OR: [
-            { phone: normalizedPhone },
-            { authPhone: normalizedPhone },
+            ...phoneVariants.map(phone => ({ phone })),
+            ...phoneVariants.map(phone => ({ authPhone: phone })),
           ],
         },
       });
-
-      // Если не нашли, пробуем другие форматы
-      if (!user && normalizedPhone.startsWith("+")) {
-        const phoneWithoutPlus = normalizedPhone.replace("+", "");
-        const phoneWith7 = normalizedPhone.replace("+7", "7");
-        const phoneWith8 = normalizedPhone.replace("+7", "8");
-        
-        user = await prisma.user.findFirst({
-          where: {
-            OR: [
-              { phone: phoneWithoutPlus },
-              { phone: phoneWith7 },
-              { phone: phoneWith8 },
-              { authPhone: phoneWithoutPlus },
-              { authPhone: phoneWith7 },
-              { authPhone: phoneWith8 },
-            ],
-          },
-        });
-      }
+      
+      console.log("[Telegram Webhook] Поиск пользователя для привязки:", {
+        normalizedPhone,
+        phoneVariants,
+        найден: !!user,
+        userId: user?.id,
+        phone: user?.phone,
+        authPhone: user?.authPhone,
+        telegramChatId: user?.telegramChatId,
+      });
 
       // Если пользователь не найден, создаем нового
       if (!user) {
