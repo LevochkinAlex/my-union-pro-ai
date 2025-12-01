@@ -38,7 +38,35 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        emailVerified: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        phone: true,
+        dateOfBirth: true,
+        address: true,
+        preferredDiscountCity: true,
+        avatarUrl: true,
+        jobTitle: true,
+        profession: true,
+        education: true,
+        employmentStatus: true,
+        hobbies: true,
+        aboutMe: true,
+        hasChildren: true,
+        childrenInfo: true,
+        maritalStatus: true,
+        spouseInfo: true,
+        additionalInfo: true,
+        membershipStatus: true,
+        organizationId: true,
+        profileChangedAfterDocuments: true,
+        profileLastModified: true,
+        createdAt: true,
+        updatedAt: true,
         organization: {
           select: {
             id: true,
@@ -78,6 +106,7 @@ export async function GET() {
         spouseInfo: user.spouseInfo,
         additionalInfo: user.additionalInfo,
         membershipStatus: user.membershipStatus, // Статус верификации (PENDING_VERIFICATION, APPROVED и т.д.)
+        organizationId: user.organizationId, // Добавляем organizationId для удобства
         organization: user.organization,
         profileChangedAfterDocuments: user.profileChangedAfterDocuments,
         profileLastModified: user.profileLastModified,

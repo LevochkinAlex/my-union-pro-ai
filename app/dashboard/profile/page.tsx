@@ -6,6 +6,7 @@ import AddressInput from "@/components/form/AddressInput";
 import DateInput from "@/components/form/DateInput";
 import AvatarUpload from "@/components/profile/AvatarUpload";
 import Autocomplete from "@/components/form/Autocomplete";
+import OrganizationAutocomplete from "@/components/form/OrganizationAutocomplete";
 import EmailValidationField from "@/components/form/EmailValidationField";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
@@ -37,6 +38,7 @@ interface ProfileData {
   email: string;
   preferredDiscountCity: string; // Предпочтительный город для скидок
   avatarUrl: string | null;
+  organizationId: string | null;
   organization?: {
     id: string;
     name: string;
@@ -87,13 +89,16 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
   const [isLoading, setIsLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [emailVerified, setEmailVerified] = useState<Date | null>(null);
+  const [lastSavedField, setLastSavedField] = useState<string | null>(null);
   
   // Справочники профессий и должностей
   const [jobTitles, setJobTitles] = useState<string[]>([]);
   const [professions, setProfessions] = useState<string[]>([]);
+  const [organizations, setOrganizations] = useState<Array<{ id: string; name: string; fullPath?: string; indentedName?: string; type?: string; level?: number }>>([]);
 
   const [profileData, setProfileData] = useState<ProfileData>({
     firstName: "",
@@ -108,6 +113,7 @@ export default function ProfilePage() {
     email: "",
     preferredDiscountCity: "",
     avatarUrl: null,
+    organizationId: null,
     organization: null,
   });
 
@@ -270,40 +276,41 @@ export default function ProfilePage() {
 
   const [savingAdditionalInfo, setSavingAdditionalInfo] = useState(false);
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch("/api/profile");
-        if (!response.ok) {
-          throw new Error("Не удалось загрузить профиль");
-        }
-        const data = await response.json();
-        const user = data.user;
-        setProfileData({
-          firstName: user.firstName ?? "",
-          lastName: user.lastName ?? "",
-          middleName: user.middleName ?? "",
-          phone: user.phone ?? "",
-          dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split("T")[0] : "",
-          address: user.address ?? "",
-          jobTitle: user.jobTitle ?? "",
-          profession: user.profession ?? "",
-          education: user.education ?? "",
-          email: user.email,
-          preferredDiscountCity: user.preferredDiscountCity ?? "",
-          avatarUrl: user.avatarUrl ?? null,
-          organization: user.organization,
-        });
-        setEmailVerified(user.emailVerified ? new Date(user.emailVerified) : null);
-      } catch (error) {
-        console.error(error);
-        setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка загрузки профиля" });
-      } finally {
-        setIsLoading(false);
+  const loadProfile = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch("/api/profile");
+      if (!response.ok) {
+        throw new Error("Не удалось загрузить профиль");
       }
-    };
+      const data = await response.json();
+      const user = data.user;
+      setProfileData({
+        firstName: user.firstName ?? "",
+        lastName: user.lastName ?? "",
+        middleName: user.middleName ?? "",
+        phone: user.phone ?? "",
+        dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split("T")[0] : "",
+        address: user.address ?? "",
+        jobTitle: user.jobTitle ?? "",
+        profession: user.profession ?? "",
+        education: user.education ?? "",
+        email: user.email,
+        preferredDiscountCity: user.preferredDiscountCity ?? "",
+        avatarUrl: user.avatarUrl ?? null,
+        organizationId: user.organization?.id || null,
+        organization: user.organization,
+      });
+      setEmailVerified(user.emailVerified ? new Date(user.emailVerified) : null);
+    } catch (error) {
+      console.error(error);
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка загрузки профиля" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     loadProfile();
   }, []);
 
@@ -311,11 +318,20 @@ export default function ProfilePage() {
   useEffect(() => {
     const loadDictionaries = async () => {
       try {
-        const response = await fetch("/api/dictionaries");
-        if (response.ok) {
-          const data = await response.json();
+        const [dictionariesRes, orgsRes] = await Promise.all([
+          fetch("/api/dictionaries"),
+          fetch("/api/organizations"),
+        ]);
+
+        if (dictionariesRes.ok) {
+          const data = await dictionariesRes.json();
           setJobTitles(data.jobTitles || []);
           setProfessions(data.professions || []);
+        }
+
+        if (orgsRes.ok) {
+          const data = await orgsRes.json();
+          setOrganizations(data.flatList || data.organizations || []);
         }
       } catch (error) {
         console.error("Failed to load dictionaries:", error);
@@ -543,18 +559,78 @@ export default function ProfilePage() {
     }
   };
 
-  const handleProfileSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setSavingProfile(true);
+  // Функция автосохранения отдельного поля
+  const autoSaveField = async (fieldName: string, value: any) => {
+    if (autoSaving) return; // Предотвращаем множественные одновременные запросы
+    
+    setAutoSaving(true);
+    setLastSavedField(fieldName);
+    
     try {
-      // Не отправляем email, так как он обновляется через EmailValidationField
-      const { email, ...profileDataWithoutEmail } = profileData;
+      const payload: any = {};
+      
+      // Подготавливаем данные для отправки
+      if (fieldName === 'organizationId') {
+        payload.organizationId = value || null;
+      } else {
+        payload[fieldName] = value;
+      }
+
       const response = await fetch("/api/profile", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(profileDataWithoutEmail),
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Не удалось сохранить");
+      }
+
+      // Обновляем organization объект, если изменилась организация
+      if (fieldName === 'organizationId' && value) {
+        const selectedOrg = organizations.find(org => org.id === value);
+        if (selectedOrg) {
+          setProfileData(prev => ({
+            ...prev,
+            organization: {
+              id: selectedOrg.id,
+              name: selectedOrg.name || selectedOrg.fullPath || '',
+              inn: null, // ИНН можно получить из API если нужно
+            }
+          }));
+        }
+      }
+    } catch (error) {
+      console.error(`[autoSave] Error saving field ${fieldName}:`, error);
+      // Не показываем ошибку пользователю при автосохранении, только в консоль
+    } finally {
+      setAutoSaving(false);
+      // Убираем индикатор через 2 секунды
+      setTimeout(() => setLastSavedField(null), 2000);
+    }
+  };
+
+  const handleFieldBlur = (fieldName: string, value: any) => {
+    // Автосохранение при потере фокуса
+    autoSaveField(fieldName, value);
+  };
+
+  const handleProfileSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    try {
+      // Не отправляем email и organization, так как email обновляется через EmailValidationField,
+      // а organization - это только для отображения, отправляем organizationId
+      const { email, organization, ...profileDataToSend } = profileData;
+      const response = await fetch("/api/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(profileDataToSend),
       });
 
       if (!response.ok) {
@@ -721,6 +797,8 @@ export default function ProfilePage() {
       const data = await response.json();
       setProfileData(prev => ({ ...prev, avatarUrl: data.avatarUrl }));
       setMessage({ type: "success", text: "Фото профиля успешно обновлено" });
+      // Перезагружаем профиль, чтобы убедиться, что все данные синхронизированы
+      await loadProfile();
     } catch (error) {
       console.error(error);
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка загрузки фото" });
@@ -811,7 +889,11 @@ export default function ProfilePage() {
         
         {/* Avatar Upload */}
         <div className="mt-4 mb-6 border-b border-gray-200 pb-4 dark:border-gray-700 md:mt-6 md:mb-8 md:pb-6">
-          <AvatarUpload currentAvatarUrl={profileData.avatarUrl} onSave={handleAvatarSave} />
+          <AvatarUpload 
+            currentAvatarUrl={profileData.avatarUrl} 
+            onSave={handleAvatarSave}
+            userName={[profileData.lastName, profileData.firstName, profileData.middleName].filter(Boolean).join(" ") || undefined}
+          />
         </div>
         
         <form onSubmit={handleProfileSubmit} className="mt-4 space-y-6">
@@ -823,6 +905,7 @@ export default function ProfilePage() {
                 name="lastName"
                 value={profileData.lastName}
                 onChange={handleNameChange("lastName")}
+                onBlur={() => handleFieldBlur("lastName", profileData.lastName)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>
@@ -833,6 +916,7 @@ export default function ProfilePage() {
                 name="firstName"
                 value={profileData.firstName}
                 onChange={handleNameChange("firstName")}
+                onBlur={() => handleFieldBlur("firstName", profileData.firstName)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>
@@ -843,6 +927,7 @@ export default function ProfilePage() {
                 name="middleName"
                 value={profileData.middleName}
                 onChange={handleNameChange("middleName")}
+                onBlur={() => handleFieldBlur("middleName", profileData.middleName)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                 placeholder="Например: Петрович"
               />
@@ -853,6 +938,7 @@ export default function ProfilePage() {
                 name="dateOfBirth"
                 value={profileData.dateOfBirth}
                 onChange={handleProfileChange}
+                onBlur={() => handleFieldBlur("dateOfBirth", profileData.dateOfBirth)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>
@@ -862,6 +948,7 @@ export default function ProfilePage() {
                 name="phone"
                 value={profileData.phone}
                 onChange={handleProfileChange}
+                onBlur={() => handleFieldBlur("phone", profileData.phone)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>
@@ -871,6 +958,7 @@ export default function ProfilePage() {
                 name="address"
                 value={profileData.address}
                 onChange={handleProfileChange}
+                onBlur={() => handleFieldBlur("address", profileData.address)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>
@@ -884,6 +972,7 @@ export default function ProfilePage() {
                 name="preferredDiscountCity"
                 value={profileData.preferredDiscountCity}
                 onChange={handleProfileChange}
+                onBlur={() => handleFieldBlur("preferredDiscountCity", profileData.preferredDiscountCity)}
                 placeholder="Например: Москва, Санкт-Петербург, Казань..."
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
@@ -893,7 +982,13 @@ export default function ProfilePage() {
               <Autocomplete
                 name="jobTitle"
                 value={profileData.jobTitle}
-                onChange={(value) => setProfileData({ ...profileData, jobTitle: value })}
+                onChange={(value) => {
+                  setProfileData({ ...profileData, jobTitle: value });
+                  // Автосохранение при выборе из списка
+                  if (jobTitles.includes(value)) {
+                    handleFieldBlur("jobTitle", value);
+                  }
+                }}
                 options={jobTitles}
                 placeholder="Начните вводить должность..."
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
@@ -904,7 +999,13 @@ export default function ProfilePage() {
               <Autocomplete
                 name="profession"
                 value={profileData.profession}
-                onChange={(value) => setProfileData({ ...profileData, profession: value })}
+                onChange={(value) => {
+                  setProfileData({ ...profileData, profession: value });
+                  // Автосохранение при выборе из списка
+                  if (professions.includes(value)) {
+                    handleFieldBlur("profession", value);
+                  }
+                }}
                 options={professions}
                 placeholder="Начните вводить профессию..."
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
@@ -917,6 +1018,7 @@ export default function ProfilePage() {
                 name="education"
                 value={profileData.education}
                 onChange={handleProfileChange}
+                onBlur={() => handleFieldBlur("education", profileData.education)}
                   className="block w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2.5 pr-12 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               >
                 <option value="">Выберите уровень образования</option>
@@ -964,15 +1066,23 @@ export default function ProfilePage() {
                   }}
                 />
               </div>
-              {profileData.organization && (
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Организация</p>
-                  <p className="text-base font-medium text-gray-900 dark:text-white">
-                    {profileData.organization.name}
-                    {profileData.organization.inn ? ` (ИНН ${profileData.organization.inn})` : ""}
-                  </p>
-                </div>
-              )}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                  Организация
+                </label>
+                <OrganizationAutocomplete
+                  value={profileData.organizationId || ""}
+                  onChange={(organizationId) => {
+                    setProfileData({ ...profileData, organizationId: organizationId || null });
+                    // Автосохранение при выборе организации
+                    if (organizationId) {
+                      handleFieldBlur("organizationId", organizationId);
+                    }
+                  }}
+                  options={organizations}
+                  placeholder="Начните вводить название организации..."
+                />
+              </div>
             </div>
           </div>
 

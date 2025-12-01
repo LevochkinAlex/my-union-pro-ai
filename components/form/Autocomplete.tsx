@@ -59,9 +59,15 @@ export default function Autocomplete({
       const filtered = [...exact, ...startsWith, ...contains].slice(0, 10); // Топ-10 результатов
       
       setFilteredOptions(filtered);
-      // Открываем dropdown если есть результаты и пользователь вводит текст или поле в фокусе
-      if (filtered.length > 0 && (userTyping || document.activeElement === inputRef.current)) {
-        setIsOpen(true);
+      // Открываем dropdown если есть результаты и (пользователь вводит текст или поле в фокусе или есть совпадения)
+      if (filtered.length > 0) {
+        // Всегда показываем dropdown если есть результаты и поле в фокусе или пользователь вводит
+        if (userTyping || document.activeElement === inputRef.current) {
+          setIsOpen(true);
+        } else if (value.trim().length > 0) {
+          // Если есть текст, но фокус потерян - не показываем
+          setIsOpen(false);
+        }
       } else {
         setIsOpen(false);
       }
@@ -138,7 +144,8 @@ export default function Autocomplete({
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
         onFocus={() => {
-          // Открываем dropdown при фокусе, если есть значение
+          // Открываем dropdown при фокусе, если есть значение или начинаем вводить
+          setUserTyping(true); // Устанавливаем флаг при фокусе
           if (value.trim().length >= 1) {
             const query = value.toLowerCase();
             const exact: string[] = [];
@@ -159,6 +166,13 @@ export default function Autocomplete({
             const filtered = [...exact, ...startsWith, ...contains].slice(0, 10);
             if (filtered.length > 0) {
               setFilteredOptions(filtered);
+              setIsOpen(true);
+            }
+          } else {
+            // Если поле пустое, показываем все опции при фокусе
+            const allOptions = options.slice(0, 10);
+            if (allOptions.length > 0) {
+              setFilteredOptions(allOptions);
               setIsOpen(true);
             }
           }

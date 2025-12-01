@@ -77,24 +77,38 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     // Ищем пользователя по телефону (если есть) - пробуем разные варианты номера
-    let existingUser = await prisma.user.findUnique({
-      where: { phone: normalizedPhone },
+    // Проверяем и phone, и authPhone (телефон первой авторизации)
+    let existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { phone: normalizedPhone },
+          { authPhone: normalizedPhone },
+        ],
+      },
       select: {
         id: true,
         telegramChatId: true,
         maxChatId: true,
         phone: true,
+        authPhone: true,
       },
     });
 
     // Если не нашли, пробуем без +
     if (!existingUser && normalizedPhone.startsWith("+")) {
+      const phoneWithoutPlus = normalizedPhone.replace("+", "");
+      const phoneWith7 = normalizedPhone.replace("+7", "7");
+      const phoneWith8 = normalizedPhone.replace("+7", "8");
+      
       existingUser = await prisma.user.findFirst({
         where: {
           OR: [
-            { phone: normalizedPhone.replace("+", "") },
-            { phone: normalizedPhone.replace("+7", "7") },
-            { phone: normalizedPhone.replace("+7", "8") },
+            { phone: phoneWithoutPlus },
+            { phone: phoneWith7 },
+            { phone: phoneWith8 },
+            { authPhone: phoneWithoutPlus },
+            { authPhone: phoneWith7 },
+            { authPhone: phoneWith8 },
           ],
         },
         select: {
@@ -102,6 +116,7 @@ export async function POST(request: NextRequest) {
           telegramChatId: true,
           maxChatId: true,
           phone: true,
+          authPhone: true,
         },
       });
     }
@@ -145,13 +160,15 @@ export async function POST(request: NextRequest) {
     });
 
     // Определяем способ доставки: Telegram (бесплатно) или SMS (платно)
+    // Приоритет: если пользователь привязал Telegram (даже после первой SMS авторизации) - отправляем в Telegram
     let deliveryMethod: "telegram" | "sms" = "sms";
     let deliverySuccess = false;
     let isExistingUser = !!existingUser;
 
     // Если у пользователя привязан Telegram - отправляем туда (экономия на SMS)
+    // Это работает даже если пользователь сначала авторизовался по SMS, а потом привязал Telegram через бота
     if (existingUser?.telegramChatId) {
-      console.log("[2FA Auth] 📱 Пользователь имеет привязанный Telegram, отправляем туда:", existingUser.telegramChatId);
+      console.log("[2FA Auth] 📱 Пользователь имеет привязанный Telegram, отправляем туда (приоритет над SMS):", existingUser.telegramChatId);
       
       const telegramMessage = `
 🔐 <b>Код для входа в МойСоюз</b>

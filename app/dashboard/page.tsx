@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import NewsList from "@/components/dashboard/news/NewsList";
 import DiscountCard from "@/components/dashboard/discounts/DiscountCard";
 import MembershipBanner from "@/components/dashboard/MembershipBanner";
+import UserCard from "@/components/dashboard/users/UserCard";
 import { calculateProfileProgress } from "@/lib/profile-progress";
 
 export default async function DashboardPage() {
@@ -99,7 +100,10 @@ export default async function DashboardPage() {
       id: true,
       firstName: true,
       lastName: true,
+      middleName: true,
       avatarUrl: true,
+      jobTitle: true,
+      profession: true,
       organization: {
         select: {
           name: true,
@@ -178,59 +182,10 @@ export default async function DashboardPage() {
           </span>
         </div>
         {newUsers.length > 0 ? (
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-            <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
-              {newUsers.map((user) => {
-                const fullName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Пользователь";
-                const initials = user.firstName && user.lastName
-                  ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
-                  : user.firstName?.[0] || user.lastName?.[0] || "U";
-                
-                return (
-                  <div
-                    key={user.id}
-                    className="group flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
-                  >
-                    {/* Avatar */}
-                    {user.avatarUrl ? (
-                      <div className="relative h-12 w-12 flex-shrink-0 rounded-full overflow-hidden ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all">
-                        <img
-                          src={user.avatarUrl}
-                          alt={fullName}
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-                    ) : (
-                      <div className="h-12 w-12 flex-shrink-0 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold text-sm ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all shadow-sm">
-                        {initials}
-                      </div>
-                    )}
-                    
-                    {/* User Info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">
-                        {fullName}
-                      </p>
-                      {user.organization?.name && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-                          {user.organization.name}
-                        </p>
-                      )}
-                    </div>
-                    
-                    {/* Date Badge */}
-                    <div className="flex-shrink-0">
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                        {new Date(user.createdAt).toLocaleDateString("ru-RU", {
-                          day: "numeric",
-                          month: "short",
-                        })}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {newUsers.map((user) => (
+              <UserCard key={user.id} user={user} />
+            ))}
           </div>
         ) : (
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-12 text-center">

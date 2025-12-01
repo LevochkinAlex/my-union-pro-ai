@@ -222,12 +222,22 @@ export default function NewsCard({
         {post.coverImage && (
           <div className="mb-4 -mx-4 sm:-mx-6 bg-gray-100 dark:bg-gray-700">
             <img
-              src={post.coverImage}
+              src={
+                post.coverImage.startsWith("data:") || post.coverImage.startsWith("http")
+                  ? post.coverImage
+                  : `/api/news/image?path=${encodeURIComponent(post.coverImage)}`
+              }
               alt={post.title}
               className="w-full h-auto max-h-96 object-cover"
+              loading="lazy"
+              decoding="async"
               onError={(e) => {
+                console.error("[NewsCard] Failed to load cover image:", post.coverImage?.substring(0, 100));
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';
+              }}
+              onLoad={() => {
+                console.log("[NewsCard] Cover image loaded successfully");
               }}
             />
           </div>

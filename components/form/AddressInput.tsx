@@ -19,6 +19,7 @@ interface AddressInputProps {
   name?: string;
   value: string;
   onChange: ((value: string) => void) | ((e: React.ChangeEvent<HTMLInputElement>) => void);
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -28,6 +29,7 @@ export default function AddressInput({
   name,
   value,
   onChange,
+  onBlur,
   placeholder = "Начните вводить адрес...",
   className = "",
   disabled = false,
@@ -132,6 +134,7 @@ export default function AddressInput({
         name={name}
         value={value}
         onChange={handleInputChange}
+        onBlur={onBlur}
         placeholder={placeholder}
         disabled={disabled}
         autoComplete="off"

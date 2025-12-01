@@ -54,6 +54,8 @@ export default function QuestionnaireModal({
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [lastSavedField, setLastSavedField] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
     firstName: "",
     lastName: "",
@@ -96,7 +98,15 @@ export default function QuestionnaireModal({
 
       if (profileRes.ok) {
         const profileData = await profileRes.json();
-        setFormData({
+        console.log("[QuestionnaireModal] Loading profile data:", {
+          firstName: profileData.user?.firstName,
+          lastName: profileData.user?.lastName,
+          jobTitle: profileData.user?.jobTitle,
+          profession: profileData.user?.profession,
+          organizationId: profileData.user?.organization?.id,
+          organization: profileData.user?.organization,
+        });
+        const loadedData = {
           firstName: profileData.user?.firstName || "",
           lastName: profileData.user?.lastName || "",
           middleName: profileData.user?.middleName || "",
@@ -109,9 +119,11 @@ export default function QuestionnaireModal({
           jobTitle: profileData.user?.jobTitle || "",
           profession: profileData.user?.profession || "",
           education: profileData.user?.education || "",
-          organizationId: profileData.user?.organization?.id || "",
+          organizationId: profileData.user?.organizationId || profileData.user?.organization?.id || "",
           avatarUrl: profileData.user?.avatarUrl || null,
-        });
+        };
+        console.log("[QuestionnaireModal] Setting form data:", loadedData);
+        setFormData(loadedData);
         setEmailVerified(profileData.user?.emailVerified ? new Date(profileData.user.emailVerified) : null);
       }
 
@@ -142,6 +154,46 @@ export default function QuestionnaireModal({
     }
   };
 
+  // Функция автосохранения полей
+  const autoSaveField = async (fieldName: string, value: any) => {
+    if (autoSaving) return;
+
+    setAutoSaving(true);
+    setLastSavedField(fieldName);
+
+    try {
+      const payload: any = {};
+      if (fieldName === 'organizationId') {
+        payload.organizationId = value || null;
+      } else {
+        payload[fieldName] = value;
+      }
+
+      const response = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Не удалось сохранить");
+      }
+
+      console.log(`[QuestionnaireModal] Auto-saved field ${fieldName}:`, value);
+    } catch (error) {
+      console.error(`[QuestionnaireModal] Error auto-saving field ${fieldName}:`, error);
+      // Не показываем ошибку пользователю при автосохранении, чтобы не мешать
+    } finally {
+      setAutoSaving(false);
+      setTimeout(() => setLastSavedField(null), 2000);
+    }
+  };
+
+  const handleFieldBlur = (fieldName: string, value: any) => {
+    autoSaveField(fieldName, value);
+  };
+
   const handleAvatarSave = async (croppedImageBlob: Blob) => {
     try {
       const formDataToSend = new FormData();
@@ -159,6 +211,8 @@ export default function QuestionnaireModal({
       const data = await response.json();
       setFormData({ ...formData, avatarUrl: data.avatarUrl });
       showAlert({ message: "Фото успешно загружено", type: "success" });
+      // Перезагружаем данные после загрузки аватара
+      await loadData();
     } catch (error) {
       showAlert({
         message: error instanceof Error ? error.message : "Ошибка при загрузке фото",
@@ -193,6 +247,8 @@ export default function QuestionnaireModal({
         throw new Error("Ошибка при сохранении");
       }
 
+      // Перезагружаем данные после сохранения, чтобы убедиться, что все синхронизировано
+      await loadData();
       setCurrentStep(2);
     } catch (error) {
       showAlert({
@@ -330,9 +386,21 @@ export default function QuestionnaireModal({
     <>
       <Modal isOpen={isOpen} onClose={onClose} className="max-w-4xl">
         <div className="max-h-[85vh] overflow-y-auto p-6">
-          <h2 className="mb-6 text-2xl font-bold text-gray-900 dark:text-white">
-            Заполнение анкеты для вступления в профсоюз
-          </h2>
+          <div className="mb-6 flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Заполнение анкеты для вступления в профсоюз
+            </h2>
+            {autoSaving && (
+              <span className="text-sm text-blue-600 dark:text-blue-400">
+                Сохранение...
+              </span>
+            )}
+            {lastSavedField && !autoSaving && (
+              <span className="text-sm text-green-600 dark:text-green-400">
+                ✓ Сохранено
+              </span>
+            )}
+          </div>
 
           {/* Прогресс */}
           <div className="mb-6">
@@ -367,6 +435,7 @@ export default function QuestionnaireModal({
                 <AvatarUpload
                   currentAvatarUrl={formData.avatarUrl}
                   onSave={handleAvatarSave}
+                  userName={[formData.lastName, formData.firstName, formData.middleName].filter(Boolean).join(" ") || undefined}
                 />
               </div>
 
@@ -391,6 +460,7 @@ export default function QuestionnaireModal({
                     type="text"
                     value={formData.firstName}
                     onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    onBlur={() => handleFieldBlur("firstName", formData.firstName)}
                     className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
                     required
                   />
@@ -403,6 +473,7 @@ export default function QuestionnaireModal({
                     type="text"
                     value={formData.middleName}
                     onChange={(e) => setFormData({ ...formData, middleName: e.target.value })}
+                    onBlur={() => handleFieldBlur("middleName", formData.middleName)}
                     className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
                   />
                 </div>
@@ -413,6 +484,7 @@ export default function QuestionnaireModal({
                   <DateInput
                     value={formData.dateOfBirth}
                     onChange={(value) => setFormData({ ...formData, dateOfBirth: value })}
+                    onBlur={() => handleFieldBlur("dateOfBirth", formData.dateOfBirth)}
                   />
                 </div>
                 <div>
@@ -422,6 +494,7 @@ export default function QuestionnaireModal({
                   <PhoneInput
                     value={formData.phone}
                     onChange={(value) => setFormData({ ...formData, phone: value })}
+                    onBlur={() => handleFieldBlur("phone", formData.phone)}
                   />
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     <button
@@ -450,6 +523,7 @@ export default function QuestionnaireModal({
                   <AddressInput
                     value={formData.address}
                     onChange={(value) => setFormData({ ...formData, address: value })}
+                    onBlur={() => handleFieldBlur("address", formData.address)}
                   />
                 </div>
                 <div>
@@ -459,6 +533,7 @@ export default function QuestionnaireModal({
                   <Autocomplete
                     value={formData.jobTitle}
                     onChange={(value) => setFormData({ ...formData, jobTitle: value })}
+                    onBlur={() => handleFieldBlur("jobTitle", formData.jobTitle)}
                     options={jobTitles}
                     placeholder="Начните вводить должность..."
                     className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
@@ -470,7 +545,10 @@ export default function QuestionnaireModal({
                   </label>
                   <OrganizationAutocomplete
                     value={formData.organizationId}
-                    onChange={(organizationId) => setFormData({ ...formData, organizationId })}
+                    onChange={(organizationId) => {
+                      setFormData({ ...formData, organizationId });
+                      handleFieldBlur("organizationId", organizationId || null);
+                    }}
                     options={organizations}
                     placeholder="Начните вводить название организации..."
                   />
@@ -482,6 +560,7 @@ export default function QuestionnaireModal({
                   <Autocomplete
                     value={formData.profession}
                     onChange={(value) => setFormData({ ...formData, profession: value })}
+                    onBlur={() => handleFieldBlur("profession", formData.profession)}
                     options={professions}
                     placeholder="Начните вводить профессию..."
                     className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
@@ -494,6 +573,7 @@ export default function QuestionnaireModal({
                   <Select
                     value={formData.education}
                     onChange={(e) => setFormData({ ...formData, education: e.target.value })}
+                    onBlur={() => handleFieldBlur("education", formData.education)}
                   >
                     <option value="">Выберите образование</option>
                     {EDUCATION_LEVELS.map((level) => (

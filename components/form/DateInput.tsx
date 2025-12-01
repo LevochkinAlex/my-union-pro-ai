@@ -6,6 +6,7 @@ interface DateInputProps {
   name?: string;
   value: string;
   onChange: ((value: string) => void) | ((e: React.ChangeEvent<HTMLInputElement>) => void);
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -15,6 +16,7 @@ export default function DateInput({
   name,
   value,
   onChange,
+  onBlur,
   placeholder = "ДД.ММ.ГГГГ",
   className = "",
   disabled = false,
@@ -110,6 +112,7 @@ export default function DateInput({
         name={name}
         value={displayValue}
         onChange={handleChange}
+        onBlur={onBlur}
         placeholder={placeholder}
         disabled={disabled}
         className={className || defaultClassName}

@@ -38,13 +38,25 @@ export async function POST(request: NextRequest) {
     const base64 = buffer.toString("base64");
     const avatarUrl = `data:${file.type};base64,${base64}`;
 
+    // Проверяем длину base64 строки (для диагностики)
+    console.log(`[avatar] Base64 length: ${avatarUrl.length} characters`);
+    console.log(`[avatar] File size: ${file.size} bytes, type: ${file.type}`);
+
     // Update user avatar URL in database (stored as base64 data URL)
-    await prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
       data: { avatarUrl },
+      select: { avatarUrl: true },
     });
 
-    console.log(`[avatar] ✅ Avatar uploaded for user ${session.user.id}: ${avatarUrl}`);
+    // Проверяем, что avatarUrl сохранился полностью
+    const savedLength = updatedUser.avatarUrl?.length || 0;
+    console.log(`[avatar] ✅ Avatar uploaded for user ${session.user.id}`);
+    console.log(`[avatar] Saved avatarUrl length: ${savedLength} characters`);
+    
+    if (savedLength !== avatarUrl.length) {
+      console.error(`[avatar] ⚠️ WARNING: Avatar URL was truncated! Original: ${avatarUrl.length}, Saved: ${savedLength}`);
+    }
 
     return NextResponse.json({
       success: true,

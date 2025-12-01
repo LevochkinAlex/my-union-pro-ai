@@ -33,6 +33,7 @@ function formatPhoneForDisplay(phone: string): string {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [loginMethod, setLoginMethod] = useState<"sms" | "email">("sms"); // Вкладка: SMS или Email
   const [input, setInput] = useState(""); // Универсальное поле: телефон или email
   const [inputType, setInputType] = useState<"phone" | "email" | null>(null);
   const [pinCode, setPinCode] = useState("");
@@ -96,15 +97,24 @@ function LoginForm() {
     // Убираем все нецифровые символы
     const cleaned = value.replace(/\D/g, "");
     
+    // Если пользователь ввел +7, сохраняем его
+    let hasPlus = value.includes("+");
+    
     // Ограничиваем до 11 цифр (7 + 10 цифр номера)
     const limited = cleaned.slice(0, 11);
     
     // Если номер начинается с 8, заменяем на 7
-    const normalized = limited.startsWith("8") ? "7" + limited.slice(1) : limited;
+    let normalized = limited.startsWith("8") ? "7" + limited.slice(1) : limited;
+    
+    // Если номер не начинается с 7, добавляем 7
+    if (normalized.length > 0 && !normalized.startsWith("7")) {
+      normalized = "7" + normalized;
+      normalized = normalized.slice(0, 11); // Ограничиваем до 11 цифр
+    }
     
     // Форматируем в маску +7 (999) 999-99-99
     if (normalized.length === 0) {
-      return "";
+      return hasPlus ? "+7" : "";
     } else if (normalized.length <= 1) {
       return `+${normalized}`;
     } else if (normalized.length <= 4) {
@@ -122,32 +132,54 @@ function LoginForm() {
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     
-    // Если пользователь вводит @, сразу переключаемся на email режим
-    if (value.includes("@")) {
+    // Если выбран метод входа по Email
+    if (loginMethod === "email") {
       setInputType("email");
       setInput(value);
       return;
     }
     
+    // Если выбран метод входа по SMS - всегда телефон
+    if (loginMethod === "sms") {
+      setInputType("phone");
+      // Автопрефикс +7: если поле пустое или начинается с цифры (не с +7), добавляем +7
+      if (value === "" || (!value.startsWith("+") && /^\d/.test(value))) {
+        const formatted = formatPhoneInput(value);
+        setInput(formatted);
+      } else if (value.startsWith("+7")) {
+        // Если уже есть +7, просто форматируем
+        const formatted = formatPhoneInput(value);
+        setInput(formatted);
+      } else if (value.startsWith("+") && !value.startsWith("+7")) {
+        // Если начинается с другого +, заменяем на +7
+        const cleaned = value.replace(/\D/g, "");
+        const formatted = formatPhoneInput("7" + cleaned);
+        setInput(formatted);
+      } else {
+        const formatted = formatPhoneInput(value);
+        setInput(formatted);
+      }
+      return;
+    }
+    
+    // Старая логика для универсального поля (если понадобится)
     const type = detectInputType(value);
     setInputType(type);
     
-    // Если это явно телефон (начинается с + или 8, или уже отформатирован), форматируем
     if (type === "phone") {
-      // Форматируем только если это явно телефон (начинается с +, 8, или уже много цифр)
-      const trimmed = value.trim();
-      if (trimmed.startsWith("+") || trimmed.startsWith("8") || /^[\d\s\-\(\)]+$/.test(trimmed)) {
-        const formatted = formatPhoneInput(value);
-        setInput(formatted);
-      } else {
-        // Если не явный телефон, просто сохраняем как есть (может быть email начинающийся с цифры)
-        setInput(value);
-      }
+      const formatted = formatPhoneInput(value);
+      setInput(formatted);
     } else {
-      // Для email или неопределенного типа просто сохраняем как есть
       setInput(value);
     }
-  }, [detectInputType, formatPhoneInput]);
+  }, [loginMethod, detectInputType, formatPhoneInput]);
+  
+  // Обработчик фокуса на поле телефона - добавляем +7 если пусто
+  const handlePhoneFocus = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
+    if (loginMethod === "sms" && !input) {
+      setInput("+7");
+    }
+  }, [loginMethod, input]);
 
   const handleInputSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,15 +187,9 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      // Определяем тип ввода
-      const type = inputType || detectInputType(input);
+      // Определяем тип ввода на основе выбранного метода
+      const type = loginMethod === "email" ? "email" : "phone";
       
-      if (!type) {
-        setError("Введите номер телефона или email");
-        setLoading(false);
-        return;
-      }
-
       // Если это EMAIL
       if (type === "email") {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -440,11 +466,13 @@ function LoginForm() {
             </h1>
             <p className="text-base text-gray-600 dark:text-gray-400">
               {step === "input"
-                ? "Введите номер телефона или email"
+                ? loginMethod === "email" ? "Введите email для входа" : "Введите номер телефона"
                 : step === "email-sent"
                 ? "Проверьте вашу почту"
                 : deliveryMethod === "sms"
                 ? "Введите код из SMS"
+                : deliveryMethod === "telegram"
+                ? "Введите код из Telegram"
                 : "Введите код подтверждения"}
             </p>
           </div>
@@ -452,6 +480,46 @@ function LoginForm() {
             {error && (
               <div className="p-4 mb-6 text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">
                 {error}
+              </div>
+            )}
+
+            {step === "input" && (
+              <div className="mb-6">
+                {/* Вкладки для выбора метода входа */}
+                <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginMethod("sms");
+                      setInput("");
+                      setInputType("phone");
+                      setError("");
+                    }}
+                    className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                      loginMethod === "sms"
+                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                        : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    }`}
+                  >
+                    По SMS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginMethod("email");
+                      setInput("");
+                      setInputType("email");
+                      setError("");
+                    }}
+                    className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                      loginMethod === "email"
+                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                        : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    }`}
+                  >
+                    По Email
+                  </button>
+                </div>
               </div>
             )}
 
@@ -554,19 +622,22 @@ function LoginForm() {
                       htmlFor="input"
                       className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
                     >
-                      Телефон или Email
+                      {loginMethod === "email" ? "Email" : "Номер телефона"}
                     </label>
                     <input
                       id="input"
-                      type="text"
+                      type={loginMethod === "email" ? "email" : "tel"}
                       value={input}
                       onChange={handleInputChange}
-                      placeholder="+7 (999) 123-45-67 или email@example.com"
+                      onFocus={loginMethod === "sms" ? handlePhoneFocus : undefined}
+                      placeholder={loginMethod === "email" ? "email@example.com" : "+7 (999) 123-45-67"}
                       required
                       className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                     <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                      {inputType === "email" ? "Отправим ссылку для входа на email ✉️" : inputType === "phone" ? "Отправим код в SMS 📱" : "Введите номер телефона или email"}
+                      {loginMethod === "email" 
+                        ? "Отправим ссылку для входа на email ✉️" 
+                        : "Отправим код в SMS 📱 (или в Telegram, если привязан)"}
                     </p>
                 </div>
 
@@ -580,19 +651,8 @@ function LoginForm() {
             </form>
 
                 <div className="mt-8">
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
-                    </div>
-                    <div className="relative flex justify-center text-sm">
-                      <span className="px-4 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-medium">
-                        или войти через
-                      </span>
-                    </div>
-                  </div>
-
                   {/* Социальные сети */}
-                  <div className="mt-6 flex flex-col gap-3">
+                  <div className="flex flex-col gap-3">
                     {/* Telegram - кастомная кнопка */}
                     <TelegramLoginButton />
 

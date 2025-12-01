@@ -53,7 +53,7 @@ model User {
 
   // История телефонов
   phoneHistory PhoneHistory[]
-  avatarUrl    String? // URL фотографии профиля
+  avatarUrl    String? @db.Text // URL фотографии профиля (base64 data URL может быть очень длинным)
 
   // Telegram интеграция для 2FA
   telegramChatId   String? @unique // Chat ID пользователя в Telegram для отправки PIN-кодов

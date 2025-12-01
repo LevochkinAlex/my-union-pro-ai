@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import Cropper from "react-easy-crop";
 import { Area } from "react-easy-crop";
 import { Camera, X, Check, Upload, Pencil } from "lucide-react";
@@ -8,9 +8,10 @@ import { Camera, X, Check, Upload, Pencil } from "lucide-react";
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null;
   onSave: (croppedImageBlob: Blob) => Promise<void>;
+  userName?: string; // Имя пользователя для плейсхолдера с инициалами
 }
 
-export default function AvatarUpload({ currentAvatarUrl, onSave }: AvatarUploadProps) {
+export default function AvatarUpload({ currentAvatarUrl, onSave, userName }: AvatarUploadProps) {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -18,7 +19,14 @@ export default function AvatarUpload({ currentAvatarUrl, onSave }: AvatarUploadP
   const [isUploading, setIsUploading] = useState(false);
   const [showCropper, setShowCropper] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [imageLoadError, setImageLoadError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Сбрасываем ошибку загрузки при изменении currentAvatarUrl
+  useEffect(() => {
+    // Всегда сбрасываем ошибку при изменении URL, чтобы новое изображение могло загрузиться
+    setImageLoadError(false);
+  }, [currentAvatarUrl]);
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -111,6 +119,7 @@ export default function AvatarUpload({ currentAvatarUrl, onSave }: AvatarUploadP
       setShowCropper(false);
       setImageSrc(null);
       setError(null);
+      setImageLoadError(false); // Сбрасываем ошибку загрузки после успешной загрузки
     } catch (error) {
       console.error("Error uploading avatar:", error);
       const errorMessage = error instanceof Error ? error.message : "Ошибка при загрузке фото";
@@ -132,21 +141,69 @@ export default function AvatarUpload({ currentAvatarUrl, onSave }: AvatarUploadP
     }
   };
 
+  // Генерация инициалов из имени
+  const getInitials = (name?: string): string => {
+    if (!name) return "";
+    const parts = name.trim().split(" ").filter(Boolean);
+    if (parts.length === 0) return "";
+    if (parts.length === 1) return parts[0][0].toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase().slice(0, 2);
+  };
+
+  // Генерация цвета для плейсхолдера
+  const getPlaceholderColor = (name?: string): string => {
+    if (!name) return "bg-gray-200 dark:bg-gray-700";
+    const colors = [
+      "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300",
+      "bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-300",
+      "bg-pink-100 text-pink-600 dark:bg-pink-900 dark:text-pink-300",
+      "bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-300",
+      "bg-yellow-100 text-yellow-600 dark:bg-yellow-900 dark:text-yellow-300",
+      "bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300",
+      "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300",
+      "bg-cyan-100 text-cyan-600 dark:bg-cyan-900 dark:text-cyan-300",
+    ];
+    const index = name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colors[index % colors.length];
+  };
+
+  const shouldShowPlaceholder = !currentAvatarUrl || imageLoadError;
+  const initials = getInitials(userName);
+
   return (
     <div className="space-y-4">
       {/* Avatar Preview */}
       <div className="flex flex-col items-center gap-4 md:flex-row md:items-center">
         {/* Avatar with mobile edit button */}
         <div className="relative">
-          {currentAvatarUrl ? (
+          {!shouldShowPlaceholder && currentAvatarUrl ? (
             <img
+              key={currentAvatarUrl} // Ключ для принудительной перезагрузки при изменении URL
               src={currentAvatarUrl}
               alt="Avatar"
               className="h-24 w-24 rounded-full object-cover ring-2 ring-gray-200 dark:ring-gray-700"
+              crossOrigin="anonymous"
+              onError={() => {
+                console.error("[AvatarUpload] Failed to load avatar image");
+                console.error("[AvatarUpload] Avatar URL length:", currentAvatarUrl?.length);
+                console.error("[AvatarUpload] Avatar URL is base64:", currentAvatarUrl?.startsWith('data:'));
+                console.error("[AvatarUpload] Avatar URL preview:", currentAvatarUrl?.substring(0, 100));
+                setImageLoadError(true);
+              }}
+              onLoad={() => {
+                console.log("[AvatarUpload] Avatar image loaded successfully");
+                console.log("[AvatarUpload] Avatar URL type:", currentAvatarUrl?.startsWith('data:') ? 'base64' : 'url');
+                setImageLoadError(false);
+              }}
             />
-          ) : (
-            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gray-200 ring-2 ring-gray-200 dark:bg-gray-700 dark:ring-gray-700">
-              <Camera className="h-10 w-10 text-gray-400 dark:text-gray-500" />
+          ) : null}
+          {shouldShowPlaceholder && (
+            <div className={`flex h-24 w-24 items-center justify-center rounded-full ring-2 ring-gray-200 dark:ring-gray-700 ${getPlaceholderColor(userName)}`}>
+              {initials ? (
+                <span className="text-2xl font-semibold">{initials}</span>
+              ) : (
+                <Camera className="h-10 w-10 text-gray-400 dark:text-gray-500" />
+              )}
             </div>
           )}
           
