@@ -34,8 +34,8 @@ export default function Autocomplete({
       return;
     }
 
-    // Фильтруем опции только если пользователь начал вводить текст
-    if (value.trim().length >= 2) {
+    // Фильтруем опции
+    if (value.trim().length >= 1) {
       const query = value.toLowerCase();
       
       // Улучшенный поиск: точное совпадение в начале, затем вхождение в середине
@@ -59,9 +59,11 @@ export default function Autocomplete({
       const filtered = [...exact, ...startsWith, ...contains].slice(0, 10); // Топ-10 результатов
       
       setFilteredOptions(filtered);
-      // Открываем dropdown ТОЛЬКО если пользователь вводит текст
-      if (userTyping) {
-        setIsOpen(filtered.length > 0);
+      // Открываем dropdown если есть результаты и пользователь вводит текст или поле в фокусе
+      if (filtered.length > 0 && (userTyping || document.activeElement === inputRef.current)) {
+        setIsOpen(true);
+      } else {
+        setIsOpen(false);
       }
     } else {
       setFilteredOptions([]);
@@ -136,15 +138,37 @@ export default function Autocomplete({
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
         onFocus={() => {
-          // НЕ открываем dropdown автоматически при фокусе
-          // Он откроется только когда пользователь начнет вводить текст
+          // Открываем dropdown при фокусе, если есть значение
+          if (value.trim().length >= 1) {
+            const query = value.toLowerCase();
+            const exact: string[] = [];
+            const startsWith: string[] = [];
+            const contains: string[] = [];
+            
+            options.forEach((option) => {
+              const optionLower = option.toLowerCase();
+              if (optionLower === query) {
+                exact.push(option);
+              } else if (optionLower.startsWith(query)) {
+                startsWith.push(option);
+              } else if (optionLower.includes(query)) {
+                contains.push(option);
+              }
+            });
+            
+            const filtered = [...exact, ...startsWith, ...contains].slice(0, 10);
+            if (filtered.length > 0) {
+              setFilteredOptions(filtered);
+              setIsOpen(true);
+            }
+          }
         }}
         onBlur={() => {
           // Сбрасываем флаг ввода при потере фокуса
           setTimeout(() => setUserTyping(false), 200); // Небольшая задержка для обработки клика по опции
         }}
         placeholder={placeholder}
-        className={className}
+        className={className || "w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"}
         autoComplete="off"
       />
 

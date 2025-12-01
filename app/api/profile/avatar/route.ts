@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
-import { existsSync } from "fs";
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,24 +32,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create uploads directory if it doesn't exist
-    const uploadsDir = path.join(process.cwd(), "public", "uploads", "avatars");
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true });
-    }
-
-    // Generate unique filename
-    const extension = file.name.split(".").pop();
-    const filename = `${session.user.id}_${Date.now()}.${extension}`;
-    const filepath = path.join(uploadsDir, filename);
-
-    // Convert file to buffer and save
+    // Convert file to base64
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    await writeFile(filepath, buffer);
+    const base64 = buffer.toString("base64");
+    const avatarUrl = `data:${file.type};base64,${base64}`;
 
-    // Update user avatar URL in database (using API route for serving)
-    const avatarUrl = `/api/uploads/avatars/${filename}`;
+    // Update user avatar URL in database (stored as base64 data URL)
     await prisma.user.update({
       where: { id: session.user.id },
       data: { avatarUrl },

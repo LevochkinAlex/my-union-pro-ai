@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 
 interface DateInputProps {
-  name: string;
+  name?: string;
   value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onChange: ((value: string) => void) | ((e: React.ChangeEvent<HTMLInputElement>) => void);
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -82,18 +82,26 @@ export default function DateInput({
 
     // Конвертируем в ISO формат для сохранения
     const isoDate = convertToISODate(formatted);
-
-    const syntheticEvent = {
-      ...e,
-      target: {
-        ...e.target,
-        name: name,
-        value: isoDate || formatted, // Если не удалось сконвертировать, отправляем как есть
-      },
-    } as React.ChangeEvent<HTMLInputElement>;
-
-    onChange(syntheticEvent);
+    const finalValue = isoDate || formatted;
+    
+    if (onChange.length === 1) {
+      // Новый интерфейс: onChange(value: string)
+      (onChange as (value: string) => void)(finalValue);
+    } else {
+      // Старый интерфейс: onChange(e: React.ChangeEvent<HTMLInputElement>)
+      const syntheticEvent = {
+        ...e,
+        target: {
+          ...e.target,
+          name: name || "",
+          value: finalValue,
+        },
+      } as React.ChangeEvent<HTMLInputElement>;
+      (onChange as (e: React.ChangeEvent<HTMLInputElement>) => void)(syntheticEvent);
+    }
   };
+
+  const defaultClassName = "w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400";
 
   return (
     <div className="relative">
@@ -104,7 +112,7 @@ export default function DateInput({
         onChange={handleChange}
         placeholder={placeholder}
         disabled={disabled}
-        className={className}
+        className={className || defaultClassName}
         maxLength={10}
       />
     </div>

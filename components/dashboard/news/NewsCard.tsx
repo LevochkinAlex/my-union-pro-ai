@@ -53,10 +53,64 @@ export default function NewsCard({
   const [showComments, setShowComments] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [localViewCount, setLocalViewCount] = useState(post.viewCount);
+  const [displayContent, setDisplayContent] = useState(post.content);
+  const [mounted, setMounted] = useState(false);
   const cardRef = useRef<HTMLElement>(null);
   const hasIncrementedView = useRef(false);
 
   // Отслеживание видимости карточки для инкремента просмотров
+  // Устанавливаем mounted состояние
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Функция для извлечения текста из HTML (работаем на сервере и клиенте)
+  const getTextFromHTML = (html: string) => {
+    // Проверяем, что мы на клиенте
+    if (typeof document !== "undefined") {
+      const div = document.createElement("div");
+      div.innerHTML = html;
+      return div.textContent || div.innerText || "";
+    }
+    // На сервере используем регулярные выражения
+    return html
+      .replace(/<[^>]*>/g, " ") // Удаляем HTML теги
+      .replace(/\s+/g, " ") // Заменяем множественные пробелы на один
+      .trim();
+  };
+
+  // Функция для сокращения HTML контента
+  const getTruncatedHTML = (html: string, maxLength: number) => {
+    const text = getTextFromHTML(html);
+    if (text.length <= maxLength) return html;
+    
+    // Обрезаем текст
+    const truncatedText = text.substring(0, maxLength);
+    // Ищем последний пробел чтобы не обрезать слово
+    const lastSpace = truncatedText.lastIndexOf(' ');
+    const finalText = lastSpace > 0 ? truncatedText.substring(0, lastSpace) : truncatedText;
+    
+    return `<p>${finalText}...</p>`;
+  };
+
+  // Вычисляем needsTruncation
+  const textContent = getTextFromHTML(post.content);
+  const needsTruncation = textContent.length > 300;
+
+  // Вычисляем displayContent после монтирования на клиенте
+  useEffect(() => {
+    if (mounted) {
+      const content = needsTruncation && !isExpanded
+        ? getTruncatedHTML(post.content, 300)
+        : post.content;
+      
+      setDisplayContent(content);
+    } else {
+      // На сервере показываем полный контент или сокращенный без интерактивности
+      setDisplayContent(needsTruncation ? getTruncatedHTML(post.content, 300) : post.content);
+    }
+  }, [mounted, post.content, isExpanded, needsTruncation]);
+
   useEffect(() => {
     if (!cardRef.current || hasIncrementedView.current) return;
 
@@ -94,35 +148,6 @@ export default function NewsCard({
       observer.disconnect();
     };
   }, [post.id]);
-
-  // Функция для извлечения текста из HTML
-  const getTextFromHTML = (html: string) => {
-    const div = document.createElement("div");
-    div.innerHTML = html;
-    return div.textContent || div.innerText || "";
-  };
-
-  // Проверяем, нужно ли сокращение (больше 300 символов)
-  const textContent = getTextFromHTML(post.content);
-  const needsTruncation = textContent.length > 300;
-
-  // Функция для сокращения HTML контента
-  const getTruncatedHTML = (html: string, maxLength: number) => {
-    const text = getTextFromHTML(html);
-    if (text.length <= maxLength) return html;
-    
-    // Обрезаем текст
-    const truncatedText = text.substring(0, maxLength);
-    // Ищем последний пробел чтобы не обрезать слово
-    const lastSpace = truncatedText.lastIndexOf(' ');
-    const finalText = lastSpace > 0 ? truncatedText.substring(0, lastSpace) : truncatedText;
-    
-    return `<p>${finalText}...</p>`;
-  };
-
-  const displayContent = needsTruncation && !isExpanded
-    ? getTruncatedHTML(post.content, 300)
-    : post.content;
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "недавно";

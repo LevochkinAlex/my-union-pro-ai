@@ -4,11 +4,18 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import NewsList from "@/components/dashboard/news/NewsList";
 import DiscountCard from "@/components/dashboard/discounts/DiscountCard";
+import MembershipBanner from "@/components/dashboard/MembershipBanner";
+import { calculateProfileProgress } from "@/lib/profile-progress";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
 
-  if (!session) {
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+
+  const userId = session.user.id;
+  if (!userId || typeof userId !== "string") {
     redirect("/login");
   }
 
@@ -37,6 +44,39 @@ export default async function DashboardPage() {
       },
     },
   });
+
+  // Получаем данные текущего пользователя для баннера
+  let currentUser = null;
+  let profileProgress = 0;
+  let hasDocuments = false;
+  let membershipStatus: "PENDING" | "APPROVED" | "REJECTED" | "PENDING_VERIFICATION" = "PENDING";
+
+  try {
+    currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        organization: true,
+        documents: {
+          where: {
+            type: {
+              in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTIONS_APPLICATION"],
+            },
+          },
+        },
+      },
+    });
+
+    // Вычисляем прогресс заполнения профиля
+    if (currentUser) {
+      membershipStatus = currentUser.membershipStatus;
+      const progressResult = calculateProfileProgress(currentUser);
+      profileProgress = progressResult.total;
+      hasDocuments = (currentUser.documents.length || 0) > 0;
+    }
+  } catch (error) {
+    console.error("[Dashboard] Error fetching current user:", error);
+    // Продолжаем работу без данных пользователя
+  }
 
   // Получаем новых пользователей (последние 10, зарегистрированных за последние 7 дней)
   const sevenDaysAgo = new Date();
@@ -96,6 +136,15 @@ export default async function DashboardPage() {
         </p>
       </div>
 
+      {/* Баннер для новых пользователей или тех, кто не заполнил профиль */}
+      {membershipStatus !== "APPROVED" && (
+        <MembershipBanner
+          profileProgress={profileProgress}
+          hasDocuments={hasDocuments}
+          membershipStatus={membershipStatus}
+        />
+      )}
+
       {/* Свежие новости */}
       <section>
         <div className="flex items-center justify-between mb-4">
@@ -129,49 +178,82 @@ export default async function DashboardPage() {
           </span>
         </div>
         {newUsers.length > 0 ? (
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              {newUsers.map((user) => (
-                <div
-                  key={user.id}
-                  className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                >
-                  {user.avatarUrl ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt={`${user.firstName} ${user.lastName}`}
-                      className="h-12 w-12 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="h-12 w-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
-                      {user.firstName?.charAt(0) || user.lastName?.charAt(0) || "U"}
-                    </div>
-                  )}
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      {user.firstName} {user.lastName}
-                    </p>
-                    {user.organization?.name && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {user.organization.name}
-                      </p>
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
+              {newUsers.map((user) => {
+                const fullName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Пользователь";
+                const initials = user.firstName && user.lastName
+                  ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
+                  : user.firstName?.[0] || user.lastName?.[0] || "U";
+                
+                return (
+                  <div
+                    key={user.id}
+                    className="group flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+                  >
+                    {/* Avatar */}
+                    {user.avatarUrl ? (
+                      <div className="relative h-12 w-12 flex-shrink-0 rounded-full overflow-hidden ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all">
+                        <img
+                          src={user.avatarUrl}
+                          alt={fullName}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="h-12 w-12 flex-shrink-0 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold text-sm ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all shadow-sm">
+                        {initials}
+                      </div>
                     )}
+                    
+                    {/* User Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">
+                        {fullName}
+                      </p>
+                      {user.organization?.name && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+                          {user.organization.name}
+                        </p>
+                      )}
+                    </div>
+                    
+                    {/* Date Badge */}
+                    <div className="flex-shrink-0">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                        {new Date(user.createdAt).toLocaleDateString("ru-RU", {
+                          day: "numeric",
+                          month: "short",
+                        })}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(user.createdAt).toLocaleDateString("ru-RU", {
-                      day: "numeric",
-                      month: "short",
-                    })}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ) : (
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
-            <p className="text-gray-500 dark:text-gray-400">
-              За последние 7 дней новых участников не было
-            </p>
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-12 text-center">
+            <div className="flex flex-col items-center">
+              <div className="h-16 w-16 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
+                <svg
+                  className="h-8 w-8 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4.354a4 4 0 110 5.292M15 19H9a6 6 0 016-6h0a6 6 0 016 6v1H9v-1a4 4 0 018 0z"
+                  />
+                </svg>
+              </div>
+              <p className="text-gray-500 dark:text-gray-400 font-medium">
+                За последние 7 дней новых участников не было
+              </p>
+            </div>
           </div>
         )}
       </section>

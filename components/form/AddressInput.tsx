@@ -16,9 +16,9 @@ interface AddressSuggestion {
 }
 
 interface AddressInputProps {
-  name: string;
+  name?: string;
   value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onChange: ((value: string) => void) | ((e: React.ChangeEvent<HTMLInputElement>) => void);
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -85,7 +85,15 @@ export default function AddressInput({
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange(e);
+    const value = e.target.value;
+    
+    if (onChange.length === 1) {
+      // Новый интерфейс: onChange(value: string)
+      (onChange as (value: string) => void)(value);
+    } else {
+      // Старый интерфейс: onChange(e: React.ChangeEvent<HTMLInputElement>)
+      (onChange as (e: React.ChangeEvent<HTMLInputElement>) => void)(e);
+    }
 
     // Дебаунс для запросов к API
     if (timeoutRef.current) {
@@ -93,22 +101,29 @@ export default function AddressInput({
     }
 
     timeoutRef.current = setTimeout(() => {
-      fetchSuggestions(e.target.value);
+      fetchSuggestions(value);
     }, 300);
   };
 
   const handleSelectSuggestion = (suggestion: AddressSuggestion) => {
-    const syntheticEvent = {
-      target: {
-        name: name,
-        value: suggestion.value,
-      },
-    } as React.ChangeEvent<HTMLInputElement>;
-
-    onChange(syntheticEvent);
+    if (onChange.length === 1) {
+      // Новый интерфейс: onChange(value: string)
+      (onChange as (value: string) => void)(suggestion.value);
+    } else {
+      // Старый интерфейс: onChange(e: React.ChangeEvent<HTMLInputElement>)
+      const syntheticEvent = {
+        target: {
+          name: name || "",
+          value: suggestion.value,
+        },
+      } as React.ChangeEvent<HTMLInputElement>;
+      (onChange as (e: React.ChangeEvent<HTMLInputElement>) => void)(syntheticEvent);
+    }
     setIsOpen(false);
     setSuggestions([]);
   };
+
+  const defaultClassName = "w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400";
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -120,7 +135,7 @@ export default function AddressInput({
         placeholder={placeholder}
         disabled={disabled}
         autoComplete="off"
-        className={className}
+        className={className || defaultClassName}
       />
 
       {isOpen && suggestions.length > 0 && (

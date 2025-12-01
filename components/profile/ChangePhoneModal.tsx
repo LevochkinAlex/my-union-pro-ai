@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Modal } from "@/components/ui/modal";
 import PhoneInput from "@/components/form/PhoneInput";
 import MergeAccountsModal from "./MergeAccountsModal";
 
@@ -71,8 +72,12 @@ export default function ChangePhoneModal({
     }
   }, [countdown]);
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setNewPhone(e.target.value);
+  const handlePhoneChange = (value: string | React.ChangeEvent<HTMLInputElement>) => {
+    if (typeof value === 'string') {
+      setNewPhone(value);
+    } else {
+      setNewPhone(value.target.value);
+    }
     setError("");
   };
 
@@ -218,30 +223,17 @@ export default function ChangePhoneModal({
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
     <>
-      {/* Overlay */}
-      <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
-
-      {/* Modal */}
-      <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md bg-white dark:bg-gray-800 rounded-xl shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            {step === "phone" && "Изменить номер телефона"}
-            {step === "sms" && "Подтверждение"}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+      <Modal isOpen={isOpen} onClose={onClose} className="max-w-md">
+        <div className="p-6">
+          {/* Header */}
+          <div className="mb-6">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              {step === "phone" && "Изменить номер телефона"}
+              {step === "sms" && "Подтверждение"}
+            </h2>
+          </div>
 
         {/* Content */}
         <div className="px-6 py-6">
@@ -258,11 +250,10 @@ export default function ChangePhoneModal({
                   Новый номер телефона
                 </label>
                 <PhoneInput
-                  name="newPhone"
                   value={newPhone}
                   onChange={handlePhoneChange}
                   placeholder="+7 (___) ___-__-__"
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-lg"
+                  className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                 />
               </div>
 
@@ -336,56 +327,57 @@ export default function ChangePhoneModal({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-          >
-            Отмена
-          </button>
-          
-          {step === "phone" && (
+          {/* Footer */}
+          <div className="mt-6 flex justify-end gap-3">
             <button
-              onClick={handleCheckPhone}
-              disabled={loading || !newPhone}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
             >
-              {loading ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Отправка...
-                </>
-              ) : (
-                "Получить код"
-              )}
+              Отмена
             </button>
-          )}
+            
+            {step === "phone" && (
+              <button
+                onClick={handleCheckPhone}
+                disabled={loading || !newPhone}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Отправка...
+                  </>
+                ) : (
+                  "Получить код"
+                )}
+              </button>
+            )}
 
-          {step === "sms" && (
-            <button
-              onClick={handleVerifySms}
-              disabled={loading || smsCode.length !== 4}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Проверка...
-                </>
-              ) : (
-                "Подтвердить"
-              )}
-            </button>
-          )}
+            {step === "sms" && (
+              <button
+                onClick={handleVerifySms}
+                disabled={loading || smsCode.length !== 4}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Проверка...
+                  </>
+                ) : (
+                  "Подтвердить"
+                )}
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      </Modal>
 
       {/* Merge Modal */}
       {showMergeModal && currentAccount && existingAccount && (
