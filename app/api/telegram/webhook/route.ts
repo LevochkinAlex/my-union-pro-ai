@@ -140,15 +140,23 @@ export async function POST(request: NextRequest) {
         }
 
         // Привязываем Telegram к существующему пользователю
+        const updateData: any = {
+          telegramChatId: chatId,
+          telegramUsername: from?.username || null,
+          firstName: from?.first_name || user?.firstName || existingUserByPhone.firstName,
+          lastName: from?.last_name || user?.lastName || existingUserByPhone.lastName,
+          phone: normalizedPhone, // Обновляем номер на нормализованный
+        };
+        
+        // Если authPhone еще не установлен, устанавливаем его
+        if (!existingUserByPhone.authPhone && normalizedPhone) {
+          updateData.authPhone = normalizedPhone;
+          console.log("[Telegram Webhook] Устанавливаем authPhone при привязке Telegram:", normalizedPhone);
+        }
+        
         user = await prisma.user.update({
           where: { id: existingUserByPhone.id },
-          data: {
-            telegramChatId: chatId,
-            telegramUsername: from?.username || null,
-            firstName: from?.first_name || user?.firstName || existingUserByPhone.firstName,
-            lastName: from?.last_name || user?.lastName || existingUserByPhone.lastName,
-            phone: normalizedPhone, // Обновляем номер на нормализованный
-          },
+          data: updateData,
         });
         console.log("[Telegram Webhook] ✅ Telegram привязан к существующему пользователю:", user.id);
       } else if (!user) {
@@ -161,6 +169,7 @@ export async function POST(request: NextRequest) {
             firstName: from?.first_name || null,
             lastName: from?.last_name || null,
             phone: normalizedPhone,
+            authPhone: normalizedPhone, // Устанавливаем authPhone при первой авторизации через Telegram
             role: "PENDING_MEMBER",
             membershipStatus: "PROFILE_INCOMPLETE",
           },
@@ -168,11 +177,22 @@ export async function POST(request: NextRequest) {
         console.log("[Telegram Webhook] ✅ Создан новый пользователь:", user.id);
       } else {
         // Пользователь найден по telegramChatId, обновляем номер если нужно
+        const updateData: any = {};
         if (user.phone !== normalizedPhone) {
+          updateData.phone = normalizedPhone;
           console.log("[Telegram Webhook] Обновляем номер телефона для пользователя:", user.id);
+        }
+        
+        // Если authPhone еще не установлен, устанавливаем его
+        if (!user.authPhone && normalizedPhone) {
+          updateData.authPhone = normalizedPhone;
+          console.log("[Telegram Webhook] Устанавливаем authPhone при обновлении номера:", normalizedPhone);
+        }
+        
+        if (Object.keys(updateData).length > 0) {
           user = await prisma.user.update({
             where: { id: user.id },
-            data: { phone: normalizedPhone },
+            data: updateData,
           });
         }
       }
@@ -502,56 +522,142 @@ ${loginUrl}
     }
 
     // Команда /start с параметром для привязки номера телефона
-    // Формат: /start AUTH_phone_79991234567
-    if (text.startsWith("/start AUTH_phone_")) {
-      const phoneParam = text.replace("/start AUTH_phone_", "");
+    // Форматы: /start AUTH_phone_79991234567 или /start link_phone_79991234567
+    if (text.startsWith("/start AUTH_phone_") || text.startsWith("/start link_phone_")) {
+      const phoneParam = text.replace("/start AUTH_phone_", "").replace("/start link_phone_", "");
       // Нормализуем номер (добавляем + если его нет)
-      const phone = phoneParam.startsWith("+") ? phoneParam : `+${phoneParam}`;
+      let phone = phoneParam.startsWith("+") ? phoneParam : `+${phoneParam}`;
+      
+      // Если номер начинается с 7 без +, добавляем +
+      if (phone.startsWith("7") && !phone.startsWith("+")) {
+        phone = "+" + phone;
+      }
       
       console.log("[Telegram Webhook] Попытка привязки Telegram к номеру:", phone);
 
+      // Нормализуем номер для поиска
+      const normalizePhone = (phone: string): string => {
+        let cleaned = phone.replace(/[\s\-\(\)]/g, "");
+        if (cleaned.startsWith("8")) {
+          cleaned = "+7" + cleaned.slice(1);
+        }
+        if (cleaned.startsWith("7") && !cleaned.startsWith("+")) {
+          cleaned = "+" + cleaned;
+        }
+        return cleaned;
+      };
+      
+      const normalizedPhone = normalizePhone(phone);
+      
       // Ищем пользователя по номеру телефона (пробуем разные варианты)
-      let user = await prisma.user.findUnique({
-        where: { phone },
+      // Проверяем и phone, и authPhone
+      let user = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { phone: normalizedPhone },
+            { authPhone: normalizedPhone },
+          ],
+        },
       });
 
-      // Если не нашли, пробуем без +
-      if (!user && !phone.startsWith("+")) {
-        user = await prisma.user.findUnique({
-          where: { phone: `+${phone}` },
-        });
-      } else if (!user && phone.startsWith("+")) {
-        user = await prisma.user.findUnique({
-          where: { phone: phone.replace("+", "") },
+      // Если не нашли, пробуем другие форматы
+      if (!user && normalizedPhone.startsWith("+")) {
+        const phoneWithoutPlus = normalizedPhone.replace("+", "");
+        const phoneWith7 = normalizedPhone.replace("+7", "7");
+        const phoneWith8 = normalizedPhone.replace("+7", "8");
+        
+        user = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { phone: phoneWithoutPlus },
+              { phone: phoneWith7 },
+              { phone: phoneWith8 },
+              { authPhone: phoneWithoutPlus },
+              { authPhone: phoneWith7 },
+              { authPhone: phoneWith8 },
+            ],
+          },
         });
       }
 
       // Если пользователь не найден, создаем нового
       if (!user) {
-        console.log("[Telegram Webhook] Пользователь не найден, создаем нового для номера:", phone);
-        user = await prisma.user.create({
-          data: {
-            phone,
-            role: "PENDING_MEMBER",
-            membershipStatus: "PROFILE_INCOMPLETE",
-          },
-        });
-        console.log("[Telegram Webhook] ✅ Создан новый пользователь:", user.id);
+        console.log("[Telegram Webhook] Пользователь не найден, создаем нового для номера:", normalizedPhone);
+        try {
+          user = await prisma.user.create({
+            data: {
+              phone: normalizedPhone,
+              authPhone: normalizedPhone, // Устанавливаем authPhone при первой авторизации
+              telegramChatId: chatId,
+              telegramUsername: from?.username || null,
+              firstName: from?.first_name || null,
+              lastName: from?.last_name || null,
+              role: "PENDING_MEMBER",
+              membershipStatus: "PROFILE_INCOMPLETE",
+            },
+          });
+          console.log("[Telegram Webhook] ✅ Создан новый пользователь:", user.id);
+        } catch (createError: any) {
+          // Если ошибка уникальности - возможно номер уже есть в другом формате
+          if (createError.code === "P2002") {
+            console.log("[Telegram Webhook] Конфликт уникальности, пробуем найти пользователя снова...");
+            user = await prisma.user.findFirst({
+              where: {
+                OR: [
+                  { phone: { contains: normalizedPhone.replace(/\D/g, "").slice(-10) } },
+                  { authPhone: { contains: normalizedPhone.replace(/\D/g, "").slice(-10) } },
+                ],
+              },
+            });
+            if (user) {
+              console.log("[Telegram Webhook] Найден пользователь после конфликта:", user.id);
+            } else {
+              throw createError;
+            }
+          } else {
+            throw createError;
+          }
+        }
       }
 
-      // Привязываем Telegram chat_id к пользователю
-      await prisma.user.update({
+      // Привязываем Telegram chat_id к пользователю (если еще не привязан)
+      const updateData: any = {
+        telegramChatId: chatId,
+        telegramUsername: from?.username || user.telegramUsername || null,
+      };
+      
+      // Если authPhone еще не установлен, устанавливаем его
+      if (!user.authPhone && normalizedPhone) {
+        updateData.authPhone = normalizedPhone;
+        console.log("[Telegram Webhook] Устанавливаем authPhone при привязке Telegram:", normalizedPhone);
+      }
+      
+      // Обновляем номер телефона на нормализованный
+      if (user.phone !== normalizedPhone) {
+        updateData.phone = normalizedPhone;
+      }
+      
+      user = await prisma.user.update({
         where: { id: user.id },
-        data: {
-          telegramChatId: chatId,
-          telegramUsername: from.username || null,
-        },
+        data: updateData,
       });
 
-      console.log("[Telegram Webhook] Telegram успешно привязан к пользователю:", user.id);
+      console.log("[Telegram Webhook] ✅ Telegram успешно привязан к пользователю:", user.id);
 
-      // Отправляем приветственное сообщение
-      await sendWelcomeMessage(chatId);
+      // Отправляем сообщение об успешной привязке
+      await sendTelegramMessage(
+        chatId,
+        `✅ <b>Telegram успешно привязан!</b>
+
+Ваш номер телефона <code>${normalizedPhone}</code> теперь связан с Telegram.
+
+Теперь при входе через SMS код будет приходить в Telegram вместо платных SMS.
+
+Используйте команды:
+• /start login - войти в аккаунт
+• /phone - обновить номер телефона
+• /help - помощь`
+      );
 
       return NextResponse.json({ ok: true });
     }

@@ -221,15 +221,24 @@ export async function GET(request: NextRequest) {
             console.log("[Telegram Login] ✅ Аккаунты объединены, дубликат удалён");
           }
           
+          // Обновляем пользователя, устанавливаем authPhone если его еще нет
+          const updateData: any = {
+            telegramChatId: id,
+            telegramUsername: username || user.telegramUsername,
+            firstName: first_name || user.firstName,
+            lastName: last_name || user.lastName,
+            phone: normalizedPhone, // Нормализуем номер
+          };
+          
+          // Если authPhone еще не установлен, устанавливаем его (телефон первой авторизации)
+          if (!user.authPhone && normalizedPhone) {
+            updateData.authPhone = normalizedPhone;
+            console.log("[Telegram Login] Устанавливаем authPhone (первая авторизация через Telegram):", normalizedPhone);
+          }
+          
           user = await prisma.user.update({
             where: { id: user.id },
-            data: {
-              telegramChatId: id,
-              telegramUsername: username || user.telegramUsername,
-              firstName: first_name || user.firstName,
-              lastName: last_name || user.lastName,
-              phone: normalizedPhone, // Нормализуем номер
-            },
+            data: updateData,
           });
           
           console.log("[Telegram Login] ✅ Аккаунт синхронизирован: SMS ↔ Telegram");
@@ -283,6 +292,7 @@ export async function GET(request: NextRequest) {
                 firstName: first_name || null,
                 lastName: last_name || null,
                 phone: normalizedPhone,
+                authPhone: normalizedPhone, // Устанавливаем authPhone при первой авторизации через Telegram
                 role: "PENDING_MEMBER",
                 membershipStatus: "PROFILE_INCOMPLETE",
               },

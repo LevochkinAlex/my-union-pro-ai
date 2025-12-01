@@ -81,8 +81,28 @@ export default function QuestionnaireModal({
 
   useEffect(() => {
     if (isOpen) {
+      console.log("[QuestionnaireModal] Modal opened, loading data...");
       loadData();
+    } else {
+      console.log("[QuestionnaireModal] Modal closed");
+      // НЕ сбрасываем форму при закрытии, чтобы данные сохранились для следующего открытия
+      // setFormData({
+      //   firstName: "",
+      //   lastName: "",
+      //   middleName: "",
+      //   phone: "",
+      //   dateOfBirth: "",
+      //   address: "",
+      //   email: "",
+      //   jobTitle: "",
+      //   profession: "",
+      //   education: "",
+      //   organizationId: "",
+      //   avatarUrl: null,
+      // });
+      // setCurrentStep(1);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const loadData = async () => {
@@ -98,13 +118,16 @@ export default function QuestionnaireModal({
 
       if (profileRes.ok) {
         const profileData = await profileRes.json();
+        console.log("[QuestionnaireModal] Full profile data from API:", profileData);
         console.log("[QuestionnaireModal] Loading profile data:", {
           firstName: profileData.user?.firstName,
           lastName: profileData.user?.lastName,
           jobTitle: profileData.user?.jobTitle,
           profession: profileData.user?.profession,
-          organizationId: profileData.user?.organization?.id,
+          organizationId: profileData.user?.organizationId,
           organization: profileData.user?.organization,
+          phone: profileData.user?.phone,
+          email: profileData.user?.email,
         });
         const loadedData = {
           firstName: profileData.user?.firstName || "",
@@ -125,6 +148,10 @@ export default function QuestionnaireModal({
         console.log("[QuestionnaireModal] Setting form data:", loadedData);
         setFormData(loadedData);
         setEmailVerified(profileData.user?.emailVerified ? new Date(profileData.user.emailVerified) : null);
+      } else {
+        console.error("[QuestionnaireModal] Failed to load profile:", profileRes.status, profileRes.statusText);
+        const errorText = await profileRes.text();
+        console.error("[QuestionnaireModal] Error response:", errorText);
       }
 
       if (orgsRes.ok) {
@@ -148,7 +175,11 @@ export default function QuestionnaireModal({
         setDocuments(documentsData.documents || []);
       }
     } catch (error) {
-      console.error("Error loading data:", error);
+      console.error("[QuestionnaireModal] Error loading data:", error);
+      showAlert({
+        message: "Ошибка при загрузке данных профиля. Пожалуйста, обновите страницу.",
+        type: "error",
+      });
     } finally {
       setIsLoading(false);
     }
