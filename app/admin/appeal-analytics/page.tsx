@@ -27,7 +27,7 @@ export default function AppealAnalyticsPage() {
   const [records, setRecords] = useState<AnalyticsRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [days, setDays] = useState(7);
-  const [selectedType, setSelectedType] = useState<AppealType | "">("");
+  const [selectedType, setSelectedType] = useState<string>("");
 
   // Check if user is admin
   const role = session?.user?.role as string | undefined;
@@ -101,7 +101,7 @@ export default function AppealAnalyticsPage() {
     );
   }
 
-  const appealTypes: AppealType[] = ["LEGAL", "ACCOUNTING", "TECHNICAL", "OTHER"];
+  const appealTypes: string[] = ["LEGAL", "ACCOUNTING", "TECHNICAL", "OTHER"];
 
   return (
     <div className="space-y-6">
@@ -138,7 +138,7 @@ export default function AppealAnalyticsPage() {
           </label>
           <select
             value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value as AppealType | "")}
+            onChange={(e) => setSelectedType(e.target.value)}
             className="rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
           >
             <option value="">Все типы</option>
