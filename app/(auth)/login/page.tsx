@@ -419,6 +419,11 @@ function LoginForm() {
     router.refresh();
   };
 
+  // Показываем fallback пока компонент не смонтирован
+  if (!mounted) {
+    return null;
+  }
+
   return (
     <div className="flex flex-col flex-1 w-full">
       {/* Модалка с рекомендацией привязать Telegram */}
