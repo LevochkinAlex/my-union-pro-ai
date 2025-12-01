@@ -61,21 +61,27 @@ export default function Autocomplete({
       const filtered = [...exact, ...startsWith, ...contains].slice(0, 10); // Топ-10 результатов
       
       setFilteredOptions(filtered);
-      // Открываем dropdown если есть результаты и (пользователь вводит текст или поле в фокусе или есть совпадения)
+      // Открываем dropdown если есть результаты и поле в фокусе
       if (filtered.length > 0) {
-        // Всегда показываем dropdown если есть результаты и поле в фокусе или пользователь вводит
-        if (userTyping || document.activeElement === inputRef.current) {
+        // Показываем dropdown если поле в фокусе
+        const isFocused = document.activeElement === inputRef.current;
+        if (isFocused) {
           setIsOpen(true);
-        } else if (value.trim().length > 0) {
-          // Если есть текст, но фокус потерян - не показываем
-          setIsOpen(false);
         }
       } else {
         setIsOpen(false);
       }
     } else {
-      setFilteredOptions([]);
-      setIsOpen(false);
+      // Если поле пустое, но в фокусе - показываем все опции
+      const isFocused = document.activeElement === inputRef.current;
+      if (isFocused && options.length > 0) {
+        const allOptions = options.slice(0, 10);
+        setFilteredOptions(allOptions);
+        setIsOpen(true);
+      } else {
+        setFilteredOptions([]);
+        setIsOpen(false);
+      }
     }
     setHighlightedIndex(-1);
   }, [value, options, justSelected, userTyping]);
@@ -106,7 +112,10 @@ export default function Autocomplete({
     setJustSelected(true); // Устанавливаем флаг что значение выбрано
     setUserTyping(false); // Сбрасываем флаг ввода
     setIsOpen(false);
-    inputRef.current?.blur(); // Убираем фокус чтобы закрыть dropdown
+    // Не убираем фокус сразу, чтобы onBlur не сработал раньше времени
+    setTimeout(() => {
+      inputRef.current?.blur();
+    }, 100);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -146,9 +155,10 @@ export default function Autocomplete({
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
         onFocus={() => {
-          // Открываем dropdown при фокусе, если есть значение или начинаем вводить
-          setUserTyping(true); // Устанавливаем флаг при фокусе
+          // Открываем dropdown при фокусе
+          setUserTyping(true);
           if (value.trim().length >= 1) {
+            // Если есть текст, фильтруем опции
             const query = value.toLowerCase();
             const exact: string[] = [];
             const startsWith: string[] = [];
@@ -166,22 +176,29 @@ export default function Autocomplete({
             });
             
             const filtered = [...exact, ...startsWith, ...contains].slice(0, 10);
+            setFilteredOptions(filtered);
             if (filtered.length > 0) {
-              setFilteredOptions(filtered);
               setIsOpen(true);
             }
           } else {
             // Если поле пустое, показываем все опции при фокусе
             const allOptions = options.slice(0, 10);
+            setFilteredOptions(allOptions);
             if (allOptions.length > 0) {
-              setFilteredOptions(allOptions);
               setIsOpen(true);
             }
           }
         }}
         onBlur={(e) => {
           // Сбрасываем флаг ввода при потере фокуса
-          setTimeout(() => setUserTyping(false), 200); // Небольшая задержка для обработки клика по опции
+          // Задержка нужна, чтобы клик по опции успел обработаться
+          setTimeout(() => {
+            setUserTyping(false);
+            // Закрываем dropdown только если фокус действительно ушел (не на опцию)
+            if (!dropdownRef.current?.contains(document.activeElement)) {
+              setIsOpen(false);
+            }
+          }, 200);
           onBlur?.(e); // Вызываем переданный onBlur обработчик
         }}
         placeholder={placeholder}

@@ -622,6 +622,26 @@ ${loginUrl}
         }
       }
 
+      // Проверяем, не привязан ли уже этот telegramChatId к другому пользователю
+      if (user.telegramChatId && user.telegramChatId !== chatId) {
+        console.log("[Telegram Webhook] У пользователя уже есть другой telegramChatId, обновляем");
+      }
+      
+      // Проверяем, не используется ли этот chatId другим пользователем
+      const existingUserWithChatId = await prisma.user.findUnique({
+        where: { telegramChatId: chatId },
+      });
+      
+      if (existingUserWithChatId && existingUserWithChatId.id !== user.id) {
+        console.log("[Telegram Webhook] ⚠️ Этот telegramChatId уже привязан к другому пользователю:", existingUserWithChatId.id);
+        // Отвязываем от старого пользователя
+        await prisma.user.update({
+          where: { id: existingUserWithChatId.id },
+          data: { telegramChatId: null },
+        });
+        console.log("[Telegram Webhook] Старый пользователь отвязан от Telegram");
+      }
+      
       // Привязываем Telegram chat_id к пользователю (если еще не привязан)
       const updateData: any = {
         telegramChatId: chatId,
@@ -639,10 +659,35 @@ ${loginUrl}
         updateData.phone = normalizedPhone;
       }
       
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: updateData,
-      });
+      try {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: updateData,
+        });
+      } catch (updateError: any) {
+        if (updateError.code === "P2002" && updateError.meta?.target?.includes("telegramChatId")) {
+          // Если все еще конфликт, пробуем еще раз после небольшой задержки
+          console.log("[Telegram Webhook] Конфликт telegramChatId, пробуем еще раз...");
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Снова отвязываем от всех других пользователей
+          await prisma.user.updateMany({
+            where: { 
+              telegramChatId: chatId,
+              id: { not: user.id },
+            },
+            data: { telegramChatId: null },
+          });
+          
+          // Теперь обновляем текущего пользователя
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: updateData,
+          });
+        } else {
+          throw updateError;
+        }
+      }
 
       console.log("[Telegram Webhook] ✅ Telegram успешно привязан к пользователю:", user.id);
 

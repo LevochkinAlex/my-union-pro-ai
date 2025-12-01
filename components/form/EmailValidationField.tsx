@@ -26,6 +26,9 @@ export default function EmailValidationField({
   useEffect(() => {
     if (emailVerified) {
       setMode("verified");
+    } else if (mode === "verified" && !emailVerified) {
+      // Если emailVerified стал null, возвращаемся в initial режим
+      setMode("initial");
     }
   }, [emailVerified]);
 
@@ -139,21 +142,26 @@ export default function EmailValidationField({
               disabled={mode === "verified"}
               className="flex-1 h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
             />
-            {mode === "initial" && email && email.trim() && (
+            {mode === "initial" && (
               <button
                 type="button"
                 onClick={handleSendPin}
-                disabled={loading}
-                className="h-11 px-4 py-2.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors whitespace-nowrap"
+                disabled={loading || !email || !email.trim()}
+                className="h-11 px-4 py-2.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors whitespace-nowrap"
               >
                 {loading ? "Отправка..." : "Валидировать"}
               </button>
             )}
           </div>
           {mode === "verified" && (
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              💡 Email подтвержден и используется для доступа к скидкам BestBenefits. Изменение невозможно.
-            </p>
+            <>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                💡 Email подтвержден и используется для доступа к скидкам BestBenefits. Изменение невозможно.
+              </p>
+              <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+                ✓ Email {email} подтвержден
+              </p>
+            </>
           )}
         </>
       ) : (

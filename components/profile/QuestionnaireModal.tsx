@@ -166,12 +166,20 @@ export default function QuestionnaireModal({
 
       if (jobTitlesRes.ok) {
         const jobTitlesData = await jobTitlesRes.json();
-        setJobTitles(jobTitlesData.items || []);
+        const titles = jobTitlesData.items || [];
+        console.log("[QuestionnaireModal] Loaded job titles:", titles.length);
+        setJobTitles(titles);
+      } else {
+        console.error("[QuestionnaireModal] Failed to load job titles:", jobTitlesRes.status);
       }
 
       if (professionsRes.ok) {
         const professionsData = await professionsRes.json();
-        setProfessions(professionsData.items || []);
+        const profs = professionsData.items || [];
+        console.log("[QuestionnaireModal] Loaded professions:", profs.length);
+        setProfessions(profs);
+      } else {
+        console.error("[QuestionnaireModal] Failed to load professions:", professionsRes.status);
       }
 
       if (documentsRes.ok) {
