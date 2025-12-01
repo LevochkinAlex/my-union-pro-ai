@@ -59,7 +59,7 @@ export default async function DashboardPage() {
         documents: {
           where: {
             type: {
-              in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTIONS_APPLICATION"],
+              in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
             },
           },
         },
