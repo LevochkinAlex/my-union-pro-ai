@@ -33,8 +33,11 @@ export async function GET() {
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
+      console.error("[profile] GET: No session or user ID");
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
+
+    console.log("[profile] GET: Fetching user data for ID:", session.user.id);
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -78,8 +81,18 @@ export async function GET() {
     });
 
     if (!user) {
+      console.error("[profile] GET: User not found for ID:", session.user.id);
       return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
     }
+
+    console.log("[profile] GET: User found:", {
+      id: user.id,
+      phone: user.phone,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      hasAvatar: !!user.avatarUrl,
+    });
 
     return NextResponse.json({
       user: {
@@ -128,10 +141,12 @@ export async function PUT(request: NextRequest) {
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
+      console.error("[profile] PUT: No session or user ID");
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
     const body = await request.json();
+    console.log("[profile] PUT: Updating profile for user ID:", session.user.id, "Data:", body);
 
     const firstName = normalizeString(body.firstName);
     const lastName = normalizeString(body.lastName);
@@ -294,6 +309,13 @@ export async function PUT(request: NextRequest) {
     if (userBeforeUpdate?.email && email && userBeforeUpdate.email !== email) {
       console.warn("[profile] Attempt to change email from", userBeforeUpdate.email, "to", email, "- ignored");
     }
+
+    console.log("[profile] PUT: Updating user with data:", {
+      firstName: firstName ? capitalizeName(firstName) : null,
+      lastName: lastName ? capitalizeName(lastName) : null,
+      phone: normalizedPhone,
+      organizationId: organizationId || null,
+    });
 
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },

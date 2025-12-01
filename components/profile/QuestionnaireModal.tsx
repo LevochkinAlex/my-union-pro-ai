@@ -107,7 +107,9 @@ export default function QuestionnaireModal({
 
   const loadData = async () => {
     try {
+      console.log("[QuestionnaireModal] loadData called");
       setIsLoading(true);
+      console.log("[QuestionnaireModal] Fetching profile data from /api/profile...");
       const [profileRes, orgsRes, jobTitlesRes, professionsRes, documentsRes] = await Promise.all([
         fetch("/api/profile"),
         fetch("/api/organizations"),
@@ -115,6 +117,8 @@ export default function QuestionnaireModal({
         fetch("/api/dictionaries/professions"),
         fetch("/api/documents"),
       ]);
+
+      console.log("[QuestionnaireModal] Profile response status:", profileRes.status, profileRes.ok);
 
       if (profileRes.ok) {
         const profileData = await profileRes.json();
