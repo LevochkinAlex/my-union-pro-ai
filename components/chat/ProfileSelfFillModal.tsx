@@ -13,6 +13,7 @@ interface ProfileSelfFillModalProps {
   isOpen: boolean;
   onClose: () => void;
   sessionId: string;
+  initialStep?: Step; // Начальный шаг модалки (по умолчанию 1)
 }
 
 interface Organization {
@@ -132,10 +133,24 @@ export function ProfileSelfFillModal({
   isOpen,
   onClose,
   sessionId,
+  initialStep = 1,
 }: ProfileSelfFillModalProps) {
-  const [currentStep, setCurrentStep] = useState<Step>(1);
+  const [currentStep, setCurrentStep] = useState<Step>(initialStep);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showCloseWarning, setShowCloseWarning] = useState(false);
+
+  // Сбрасываем шаг на initialStep при открытии модалки
+  const [forceReloadDocuments, setForceReloadDocuments] = useState(false);
+  
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(initialStep);
+      // Если открываем на шаге 3, принудительно перезагружаем документы
+      if (initialStep === 3) {
+        setForceReloadDocuments(prev => !prev);
+      }
+    }
+  }, [isOpen, initialStep]);
   const [saving, setSaving] = useState(false);
   const [hasExistingDocuments, setHasExistingDocuments] = useState(false);
   const [existingDocs, setExistingDocs] = useState<{
@@ -622,40 +637,14 @@ export function ProfileSelfFillModal({
         throw new Error(errorMessage);
       }
 
-      // Если email изменился или это новый email - отправляем письмо с подтверждением
+      // Если email изменился или это новый email - сбрасываем статус верификации
+      // Пользователь подтвердит email через EmailValidationField с PIN кодом
       if (profileData.email && profileData.email !== originalEmail) {
-        console.log("[ProfileModal] Email changed, sending verification email");
+        console.log("[ProfileModal] Email changed, verification will be done via PIN code");
         
-        try {
-          const verifyResponse = await fetch("/api/user/send-verification-email", {
-        method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: profileData.email }),
-          });
-
-          if (verifyResponse.ok) {
-            const verifyData = await verifyResponse.json();
-            console.log("[ProfileModal] Verification email sent:", verifyData.message);
-            
-            // Обновляем originalEmail и сбрасываем emailVerified
-            setOriginalEmail(profileData.email);
-            setEmailVerified(null);
-            
-            // Показываем уведомление
-            alertSuccess(
-              "Профиль сохранен!\n\n" +
-              "На указанный email отправлено письмо с подтверждением. " +
-              "Пожалуйста, проверьте почту и перейдите по ссылке для активации доступа к скидкам.",
-              "Профиль сохранен!"
-            );
-          } else {
-            const error = await verifyResponse.json();
-            console.error("[ProfileModal] Failed to send verification email:", error);
-          }
-        } catch (emailError) {
-          console.error("[ProfileModal] Error sending verification email:", emailError);
-          // Не блокируем сохранение профиля из-за ошибки отправки письма
-        }
+        // Обновляем originalEmail и сбрасываем emailVerified
+        setOriginalEmail(profileData.email);
+        setEmailVerified(null);
       }
     } catch (error) {
       console.error("Error saving profile:", error);
@@ -906,6 +895,7 @@ export function ProfileSelfFillModal({
                 setHasUnsavedChanges(true);
               }}
               onDocumentsSubmitted={sendDocumentsUploadedMessage}
+              forceReload={forceReloadDocuments}
               onGenerateDocuments={async () => {
                 setSaving(true);
                 try {
@@ -1320,12 +1310,14 @@ function Step2DocumentsUpload({
   onGenerateDocuments,
   generating = false,
   onDocumentsSubmitted,
+  forceReload,
 }: {
   docs: any;
   onChange: (docs: any) => void;
   onGenerateDocuments?: () => Promise<void>;
   generating?: boolean;
   onDocumentsSubmitted?: () => Promise<void>;
+  forceReload?: boolean; // Флаг для принудительной перезагрузки документов
 }) {
   const [generatedDocs, setGeneratedDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1334,6 +1326,7 @@ function Step2DocumentsUpload({
   // Загружаем сгенерированные документы
   useEffect(() => {
     async function loadDocuments() {
+      setLoading(true);
       try {
         const response = await fetch("/api/documents");
         if (response.ok) {
@@ -1352,7 +1345,7 @@ function Step2DocumentsUpload({
       }
     }
     loadDocuments();
-  }, []);
+  }, [forceReload]); // Перезагружаем при изменении forceReload
 
   const membershipDoc = generatedDocs.find(d => d.type === "MEMBERSHIP_APPLICATION");
   const contributionDoc = generatedDocs.find(d => d.type === "CONTRIBUTION_APPLICATION");

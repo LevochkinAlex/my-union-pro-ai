@@ -108,9 +108,29 @@ export async function sendSystemMessage(
     // Отправляем в Telegram
     if (options?.sendTelegram && user?.telegramChatId) {
       try {
+        // Обрабатываем маркеры для Telegram кнопок
+        let telegramText = content.replace(/<[^>]*>/g, ""); // Убираем HTML
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
+        let inlineButtons: { text: string; url: string }[][] | undefined;
+        
+        // Проверяем наличие маркера [GENERATE_DOCUMENTS_BUTTON]
+        if (telegramText.includes("[GENERATE_DOCUMENTS_BUTTON]")) {
+          telegramText = telegramText.replace(/\[GENERATE_DOCUMENTS_BUTTON\]/g, "");
+          const dashboardUrl = `${appUrl}/dashboard?session=${session.id}`;
+          inlineButtons = [[{ text: "📝 Сгенерировать документы", url: dashboardUrl }]];
+        }
+        
+        // Проверяем наличие маркера [SHOW_DOCUMENTS_BUTTONS]
+        if (telegramText.includes("[SHOW_DOCUMENTS_BUTTONS]")) {
+          telegramText = telegramText.replace(/\[SHOW_DOCUMENTS_BUTTONS\]/g, "");
+          const documentsUrl = `${appUrl}/dashboard/documents`;
+          inlineButtons = [[{ text: "📄 Открыть документы", url: documentsUrl }]];
+        }
+        
         await sendTelegramMessage(
           user.telegramChatId,
-          `*${options?.pushTitle || "МойСоюз"}*\n\n${content.replace(/<[^>]*>/g, "")}`
+          `<b>${options?.pushTitle || "МойСоюз"}</b>\n\n${telegramText.trim()}`,
+          inlineButtons
         );
       } catch (error) {
         console.error("[system-messages] Telegram error:", error);

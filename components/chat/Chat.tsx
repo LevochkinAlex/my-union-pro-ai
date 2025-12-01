@@ -42,6 +42,7 @@ function ChatContent() {
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [showSelfFillModal, setShowSelfFillModal] = useState(false);
+  const [modalInitialStep, setModalInitialStep] = useState<1 | 2 | 3 | 4>(1);
   const [isApplicationFilled, setIsApplicationFilled] = useState<boolean | null>(false); // По умолчанию false - чат заблокирован
   const [isCheckingApplication, setIsCheckingApplication] = useState(true);
   const [userDocuments, setUserDocuments] = useState<Array<{ id: string; type: string; title: string | null; filePath: string | null }>>([]);
@@ -169,6 +170,7 @@ function ChatContent() {
             if (isFirstEntry && !data.applicationFilled && !showSelfFillModal) {
               console.log("[chat] First entry detected, will open modal in 10 seconds");
               const timer = setTimeout(() => {
+                setModalInitialStep(1); // Открываем с первого шага
                 setShowSelfFillModal(true);
                 console.log("[chat] Auto-opening self-fill modal after 10 seconds");
               }, 10000);
@@ -1046,7 +1048,10 @@ function ChatContent() {
                          sessionType === "STATEMENT" && (
                           <div className="mt-4">
                             <button
-                              onClick={() => setShowSelfFillModal(true)}
+                              onClick={() => {
+                                setModalInitialStep(1); // Открываем с первого шага
+                                setShowSelfFillModal(true);
+                              }}
                               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1101,7 +1106,10 @@ function ChatContent() {
                          sessionType === "STATEMENT" && (
                           <div className="mt-4">
                             <button
-                              onClick={() => setShowSelfFillModal(true)}
+                              onClick={() => {
+                                setModalInitialStep(3); // Открываем сразу на шаге 3 (документы)
+                                setShowSelfFillModal(true);
+                              }}
                               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                             >
                               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1308,6 +1316,7 @@ function ChatContent() {
                   // Если чат заблокирован - открываем модалку
                   if (sessionType === "STATEMENT" && isApplicationFilled === false) {
                     console.log("[Chat] Blocked textarea clicked, opening modal");
+                    setModalInitialStep(1); // Открываем с первого шага
                     setShowSelfFillModal(true);
                   }
                 }}
@@ -1399,10 +1408,12 @@ function ChatContent() {
           onClose={() => {
             // Закрываем модалку всегда
             setShowSelfFillModal(false);
+            setModalInitialStep(1); // Сбрасываем на шаг 1 при закрытии
             // Перезагружаем чат после закрытия
             loadMessages();
           }}
           sessionId={currentSessionId}
+          initialStep={modalInitialStep}
         />
       )}
     </div>
