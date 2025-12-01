@@ -80,8 +80,17 @@ export async function syncPushSubscription(): Promise<void> {
 
   try {
     // Get session
-    const sessionResponse = await fetch("/api/auth/session");
-    if (!sessionResponse.ok) {
+    const sessionResponse = await fetch("/api/auth/session", {
+      signal: AbortSignal.timeout(5000), // 5 second timeout
+    }).catch((error) => {
+      // Silently handle network errors - this is normal when user is not authenticated
+      if (error.name === 'AbortError' || error.name === 'TypeError') {
+        return null;
+      }
+      throw error;
+    });
+    
+    if (!sessionResponse || !sessionResponse.ok) {
       return;
     }
 

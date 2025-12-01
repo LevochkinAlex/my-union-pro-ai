@@ -12,7 +12,7 @@ export default function FirebasePushInit() {
 
   useEffect(() => {
     if (!session?.user?.id) {
-      console.log("[Firebase] No session, skipping sync");
+      // Не логируем как ошибку - это нормальное состояние для неавторизованных пользователей
       return;
     }
 
