@@ -4,7 +4,7 @@ import { generateEmbedding } from "@/lib/knowledge/embeddings";
 export interface RetrievedChunk {
   content: string;
   similarity: number;
-  metadata?: Record<string, unknown>;
+  metadata: Record<string, unknown>;
   documentId?: string;
 }
 
@@ -76,9 +76,9 @@ export async function retrieveRelevantChunks(
           documentId: chunk.documentId || undefined,
         };
       })
-      .filter((chunk): chunk is RetrievedChunk => chunk !== null)
+      .filter((chunk) => chunk !== null)
       .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, limit);
+      .slice(0, limit) as RetrievedChunk[];
 
     console.log(
       `[vector-search] Found ${chunksWithSimilarity.length} relevant chunks for query`

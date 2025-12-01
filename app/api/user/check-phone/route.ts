@@ -114,7 +114,6 @@ export async function POST(request: NextRequest) {
         _count: {
           select: {
             documents: true,
-            chatSessions: true,
           },
         },
       },
@@ -170,7 +169,6 @@ export async function POST(request: NextRequest) {
         organizationName: existingUser.organization?.name,
         createdAt: existingUser.createdAt,
         documentsCount: existingUser._count.documents,
-        sessionsCount: existingUser._count.chatSessions,
       },
       canMerge: true,
     });

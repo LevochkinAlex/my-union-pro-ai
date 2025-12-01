@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import NewsCard from "@/components/dashboard/news/NewsCard";
+import NewsList from "@/components/dashboard/news/NewsList";
 import DiscountCard from "@/components/dashboard/discounts/DiscountCard";
 
 export default async function DashboardPage() {
@@ -109,24 +109,13 @@ export default async function DashboardPage() {
             Все новости →
           </a>
         </div>
-        {recentNews.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {recentNews.map((news: any) => (
-              <NewsCard 
-                key={news.id} 
-                post={{ ...news, isLiked: false, polls: [] }} 
-                onLikeToggle={() => {}}
-                onPollVote={() => {}}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
-            <p className="text-gray-500 dark:text-gray-400">
-              Пока нет новостей
-            </p>
-          </div>
-        )}
+        <NewsList
+          news={recentNews.map((news: any) => ({
+            ...news,
+            isLiked: false,
+            polls: [],
+          }))}
+        />
       </section>
 
       {/* Новые пользователи */}

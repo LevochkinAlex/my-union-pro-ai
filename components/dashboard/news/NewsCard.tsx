@@ -14,10 +14,8 @@ interface NewsPost {
   publishedAt: string | null;
   viewCount: number;
   author: {
-    id: string;
     firstName: string | null;
     lastName: string | null;
-    email: string;
     avatarUrl: string | null;
   };
   _count: {
@@ -153,7 +151,7 @@ export default function NewsCard({
   const authorName =
     post.author.firstName && post.author.lastName
       ? `${post.author.firstName} ${post.author.lastName}`
-      : post.author.email;
+      : "Автор";
 
   return (
     <article ref={cardRef} className="rounded-xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md dark:border-gray-700 dark:bg-gray-800">

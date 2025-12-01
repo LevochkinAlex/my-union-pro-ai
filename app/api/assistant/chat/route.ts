@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { retrieveRelevantChunks } from "@/lib/vector-search";
-// DefaultBot импортируется динамически из prisma
+import type { ChatBot, ApiProvider } from "@prisma/client";
 
 /**
  * Простой чат-бот помощник для всех страниц
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Получаем бота по умолчанию
-    const bot = await prisma.defaultBot.findFirst({
+    const bot = await prisma.chatBot.findFirst({
       where: { isActive: true },
       include: {
         apiProvider: true,
@@ -163,7 +163,7 @@ ${chunks.length > 0 ? chunks.map((chunk, i) => `\n[Документ ${i + 1}]\n$
   return prompt;
 }
 
-async function callAI(bot: DefaultBot & { apiProvider: any }, messages: any[]): Promise<string> {
+async function callAI(bot: ChatBot & { apiProvider: ApiProvider | null }, messages: any[]): Promise<string> {
   const providerName = bot.apiProvider?.name || "openrouter";
   const apiKey = bot.apiProvider?.apiKey || process.env.OPENROUTER_API_KEY || "";
   const apiBaseUrl = bot.apiProvider?.apiBaseUrl || "https://openrouter.ai/api/v1/chat/completions";

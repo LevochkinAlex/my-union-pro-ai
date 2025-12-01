@@ -114,7 +114,9 @@ model User {
   updatedSettings            SystemSetting[]     @relation("SystemSettingUpdatedBy")
   uploadedKnowledgeDocuments KnowledgeDocument[] @relation("KnowledgeDocumentUploadedBy")
 
-  // Удалено: обращения (UserAppeal больше не используется)
+  // Тикеты (обращения)
+  tickets        Ticket[]        @relation("UserTickets")
+  ticketComments TicketComment[] @relation("UserTicketComments")
 
   // Push Notifications
   pushSubscriptions  PushSubscription[]
@@ -662,7 +664,126 @@ model ApiProvider {
   @@index([isDefault])
 }
 
-// Удалено: AppealType, AppealStatus, UserAppeal, AppealAnalytics - функция обращений больше не используется
+// Система тикетов (обращений)
+enum TicketType {
+  LEGAL // Юридическое обращение
+  ACCOUNTING // Бухгалтерское обращение
+  TECHNICAL // Техническая поддержка
+  HR // Кадровые вопросы
+  OTHER // Прочее
+}
+
+enum TicketStatus {
+  PENDING // Ожидание
+  IN_PROGRESS // В работе
+  RESOLVED // Решено
+  REJECTED // Отклонено
+  CLOSED // Закрыто
+}
+
+enum TicketPriority {
+  LOW // Низкая
+  MEDIUM // Средняя
+  HIGH // Высокая
+  URGENT // Срочная
+}
+
+model Ticket {
+  id String @id @default(cuid())
+
+  // 8-значный публичный ID для отслеживания (10000000-99999999)
+  publicId String @unique @db.Char(8)
+
+  userId String
+  user   User   @relation("UserTickets", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Основная информация
+  type     TicketType
+  status   TicketStatus   @default(PENDING)
+  priority TicketPriority @default(MEDIUM)
+  title    String
+  content  String         @db.Text // HTML контент с WYSIWYG
+
+  // Файлы, прикрепленные к тикету
+  attachments TicketAttachment[]
+
+  // Ответы на тикет (комментарии)
+  comments TicketComment[]
+
+  // Метаданные
+  tags       String? // JSON массив тегов для аналитики
+  resolved   Boolean   @default(false)
+  resolvedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([publicId])
+  @@index([type])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+}
+
+// Вложения к тикету
+model TicketAttachment {
+  id String @id @default(cuid())
+
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  fileName String
+  filePath String // Путь к файлу в файловой системе
+  fileSize Int // Размер в байтах
+  mimeType String
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+}
+
+// Комментарии к тикету (ответы)
+model TicketComment {
+  id String @id @default(cuid())
+
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation("UserTicketComments", fields: [userId], references: [id], onDelete: Cascade)
+
+  content String @db.Text // HTML контент с WYSIWYG
+
+  // Файлы, прикрепленные к комментарию
+  attachments TicketCommentAttachment[]
+
+  isInternal Boolean @default(false) // Внутренний комментарий (виден только админам)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ticketId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// Вложения к комментарию
+model TicketCommentAttachment {
+  id String @id @default(cuid())
+
+  commentId String
+  comment   TicketComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  fileName String
+  filePath String
+  fileSize Int
+  mimeType String
+
+  createdAt DateTime @default(now())
+
+  @@index([commentId])
+}
 
 // Push Notifications (Firebase Cloud Messaging)
 model PushSubscription {

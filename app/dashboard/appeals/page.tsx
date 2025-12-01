@@ -2,21 +2,25 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
-interface Appeal {
+interface Ticket {
   id: string;
   publicId: string;
   type: string;
   status: string;
+  priority: string;
   title: string;
-  description: string;
+  content: string;
   createdAt: string;
   updatedAt: string;
-  messageCount: number;
-  lastMessage: string | null;
+  attachmentsCount: number;
+  commentsCount: number;
+  lastCommentAt: string | null;
 }
 
-const APPEAL_TYPES = {
+const TICKET_TYPES = {
   LEGAL: "Юридическое обращение",
   ACCOUNTING: "Бухгалтерское обращение",
   TECHNICAL: "Техническая поддержка",
@@ -24,7 +28,7 @@ const APPEAL_TYPES = {
   OTHER: "Прочее",
 };
 
-const APPEAL_STATUSES = {
+const TICKET_STATUSES = {
   PENDING: { label: "Ожидание", color: "yellow" },
   IN_PROGRESS: { label: "В работе", color: "blue" },
   RESOLVED: { label: "Решено", color: "green" },
@@ -32,31 +36,47 @@ const APPEAL_STATUSES = {
   CLOSED: { label: "Закрыто", color: "gray" },
 };
 
+const PRIORITY_COLORS = {
+  LOW: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+  MEDIUM: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  HIGH: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+  URGENT: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+};
+
+const PRIORITY_LABELS = {
+  LOW: "Низкая",
+  MEDIUM: "Средняя",
+  HIGH: "Высокая",
+  URGENT: "Срочная",
+};
+
 export default function AppealsPage() {
   const { data: session } = useSession();
-  const [appeals, setAppeals] = useState<Appeal[]>([]);
+  const router = useRouter();
+  const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | keyof typeof APPEAL_STATUSES>("all");
+  const [filter, setFilter] = useState<"all" | keyof typeof TICKET_STATUSES>("all");
 
   useEffect(() => {
-    loadAppeals();
-  }, []);
+    loadTickets();
+  }, [filter]);
 
-  const loadAppeals = async () => {
+  const loadTickets = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch("/api/appeals");
+      const url = filter === "all" ? "/api/tickets" : `/api/tickets?status=${filter}`;
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error("Ошибка загрузки обращений");
       }
 
       const data = await response.json();
-      setAppeals(data.appeals || []);
+      setTickets(data.tickets || []);
     } catch (err) {
-      console.error("Error loading appeals:", err);
+      console.error("Error loading tickets:", err);
       setError(err instanceof Error ? err.message : "Не удалось загрузить обращения");
     } finally {
       setIsLoading(false);
@@ -64,7 +84,7 @@ export default function AppealsPage() {
   };
 
   const getStatusColor = (status: string) => {
-    const statusInfo = APPEAL_STATUSES[status as keyof typeof APPEAL_STATUSES];
+    const statusInfo = TICKET_STATUSES[status as keyof typeof TICKET_STATUSES];
     const colorMap = {
       yellow: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
       blue: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
@@ -74,10 +94,6 @@ export default function AppealsPage() {
     };
     return colorMap[statusInfo?.color || "gray"] || colorMap.gray;
   };
-
-  const filteredAppeals = filter === "all" 
-    ? appeals 
-    : appeals.filter(a => a.status === filter);
 
   if (isLoading) {
     return (
@@ -92,11 +108,19 @@ export default function AppealsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Мои обращения</h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Отслеживайте статус ваших обращений к профсоюзу
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Мои обращения</h1>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
+            Отслеживайте статус ваших обращений к профсоюзу
+          </p>
+        </div>
+        <Link
+          href="/dashboard/appeals/new"
+          className="rounded-lg bg-blue-600 px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700"
+        >
+          + Создать обращение
+        </Link>
       </div>
 
       {error && (
@@ -117,10 +141,10 @@ export default function AppealsPage() {
         >
           Все
         </button>
-        {Object.entries(APPEAL_STATUSES).map(([key, value]) => (
+        {Object.entries(TICKET_STATUSES).map(([key, value]) => (
           <button
             key={key}
-            onClick={() => setFilter(key as keyof typeof APPEAL_STATUSES)}
+            onClick={() => setFilter(key as keyof typeof TICKET_STATUSES)}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
               filter === key
                 ? "bg-blue-600 text-white"
@@ -132,7 +156,7 @@ export default function AppealsPage() {
         ))}
       </div>
 
-      {filteredAppeals.length === 0 ? (
+      {tickets.length === 0 ? (
         <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-700 dark:bg-gray-800">
           <svg
             className="mx-auto h-12 w-12 text-gray-400"
@@ -153,49 +177,66 @@ export default function AppealsPage() {
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
             Создайте новое обращение, чтобы получить помощь от профсоюза
           </p>
+          <Link
+            href="/dashboard/appeals/new"
+            className="mt-4 inline-block rounded-lg bg-blue-600 px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700"
+          >
+            Создать обращение
+          </Link>
         </div>
       ) : (
         <div className="grid gap-4">
-          {filteredAppeals.map((appeal) => (
+          {tickets.map((ticket) => (
             <div
-              key={appeal.id}
+              key={ticket.id}
               className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {appeal.title}
+                      {ticket.title}
                     </h3>
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-bold text-purple-700 bg-purple-100 dark:text-purple-300 dark:bg-purple-900/30">
-                      #{appeal.publicId}
+                      #{ticket.publicId}
                     </span>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(appeal.status)}`}>
-                      {APPEAL_STATUSES[appeal.status as keyof typeof APPEAL_STATUSES]?.label || appeal.status}
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(ticket.status)}`}>
+                      {TICKET_STATUSES[ticket.status as keyof typeof TICKET_STATUSES]?.label || ticket.status}
+                    </span>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLORS[ticket.priority as keyof typeof PRIORITY_COLORS] || PRIORITY_COLORS.MEDIUM}`}>
+                      {PRIORITY_LABELS[ticket.priority as keyof typeof PRIORITY_LABELS] || ticket.priority}
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                    {APPEAL_TYPES[appeal.type as keyof typeof APPEAL_TYPES] || appeal.type}
+                    {TICKET_TYPES[ticket.type as keyof typeof TICKET_TYPES] || ticket.type}
                   </p>
-                  {appeal.description && (
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                      {appeal.description}
-                    </p>
-                  )}
                   <div className="mt-4 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-gray-400">
-                    <span>Создано: {new Date(appeal.createdAt).toLocaleDateString("ru-RU")}</span>
-                    <span>•</span>
-                    <span>Сообщений: {appeal.messageCount}</span>
-                    {appeal.lastMessage && (
+                    <span>Создано: {new Date(ticket.createdAt).toLocaleDateString("ru-RU")}</span>
+                    {ticket.attachmentsCount > 0 && (
                       <>
                         <span>•</span>
-                        <span>Последнее: {new Date(appeal.lastMessage).toLocaleDateString("ru-RU")}</span>
+                        <span>Файлов: {ticket.attachmentsCount}</span>
+                      </>
+                    )}
+                    {ticket.commentsCount > 0 && (
+                      <>
+                        <span>•</span>
+                        <span>Комментариев: {ticket.commentsCount}</span>
+                      </>
+                    )}
+                    {ticket.lastCommentAt && (
+                      <>
+                        <span>•</span>
+                        <span>Последний ответ: {new Date(ticket.lastCommentAt).toLocaleDateString("ru-RU")}</span>
                       </>
                     )}
                   </div>
                 </div>
                 <div className="ml-4">
-                  <button className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700">
+                  <button
+                    onClick={() => router.push(`/dashboard/appeals/${ticket.id}`)}
+                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                  >
                     <svg
                       className="h-4 w-4"
                       fill="none"
@@ -206,7 +247,13 @@ export default function AppealsPage() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth={2}
-                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
                       />
                     </svg>
                     Подробнее
@@ -220,4 +267,3 @@ export default function AppealsPage() {
     </div>
   );
 }
-

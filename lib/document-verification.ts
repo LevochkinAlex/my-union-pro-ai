@@ -111,44 +111,21 @@ export async function verifyDocumentWithAI(
     };
   }
 
-  // Получаем сообщения из сессии для проверки
-  const messages = await prisma.chatMessage.findMany({
-    where: {
-      userId: userId,
-      sessionId: sessionId || undefined,
-    },
-    orderBy: {
-      createdAt: "asc",
-    },
-  });
-
-  // Извлекаем данные из сообщений для сравнения
-  const extractedData = await extractProfileDataFromMessages(
-    messages.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-    }))
-  );
+  // Проверка сообщений из сессии больше не доступна (chatMessage удален)
+  // Используем только данные из профиля пользователя
+  const extractedData = null;
 
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // Сравниваем данные из профиля с данными из чата
+  // Проверка данных из чата больше не доступна (chatMessage удален)
+  // Проверяем только базовую валидность документа
   const user = document.user;
   
+  // Базовая проверка обязательных полей
   if (document.type === "MEMBERSHIP_APPLICATION") {
-    if (extractedData.firstName && user.firstName !== extractedData.firstName) {
-      warnings.push(`Имя в документе может отличаться от указанного в чате: ${user.firstName} vs ${extractedData.firstName}`);
-    }
-    if (extractedData.lastName && user.lastName !== extractedData.lastName) {
-      warnings.push(`Фамилия в документе может отличаться от указанной в чате: ${user.lastName} vs ${extractedData.lastName}`);
-    }
-    if (extractedData.dateOfBirth && user.dateOfBirth) {
-      const chatDate = new Date(extractedData.dateOfBirth);
-      const profileDate = new Date(user.dateOfBirth);
-      if (chatDate.getTime() !== profileDate.getTime()) {
-        warnings.push("Дата рождения в документе может отличаться от указанной в чате");
-      }
+    if (!user.firstName || !user.lastName) {
+      errors.push("Не указаны обязательные поля: имя и фамилия");
     }
   }
 
@@ -156,7 +133,7 @@ export async function verifyDocumentWithAI(
     isValid: errors.length === 0,
     errors,
     warnings,
-    extractedData,
+    extractedData: null,
   };
 }
 
