@@ -346,6 +346,25 @@ function LoginForm() {
     try {
       const normalizedPhone = normalizePhone(input);
 
+      // Сначала проверяем PIN через API
+      const verifyResponse = await fetch("/api/auth/sms/verify-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: normalizedPhone,
+          pinCode,
+        }),
+      });
+
+      const verifyData = await verifyResponse.json();
+
+      if (!verifyResponse.ok || !verifyData.success) {
+        setError(verifyData.error || "Неверный PIN-код");
+        setLoading(false);
+        return;
+      }
+
+      // Если PIN верный, авторизуем через NextAuth
       const result = await signIn("sms", {
         phone: normalizedPhone,
         pinCode,
@@ -353,7 +372,7 @@ function LoginForm() {
       });
 
       if (result?.error || !result?.ok) {
-        setError("Неверный PIN-код");
+        setError("Ошибка при авторизации");
         setLoading(false);
       } else {
         // Если код был отправлен по SMS и у пользователя нет Telegram - показываем рекомендацию
@@ -363,10 +382,11 @@ function LoginForm() {
         } else {
           // Перенаправляем на callbackUrl
           router.push(callbackUrl);
-        router.refresh();
+          router.refresh();
         }
       }
     } catch (err) {
+      console.error("[Login] Ошибка при проверке PIN:", err);
       setError("Ошибка при входе");
       setLoading(false);
     }

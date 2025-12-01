@@ -526,6 +526,7 @@ ${loginUrl}
     // Проверяем ДО всех остальных команд, чтобы не попасть в техподдержку
     const trimmedText = text.trim();
     if (trimmedText.startsWith("/start AUTH_phone_") || trimmedText.startsWith("/start link_phone_")) {
+      console.log("[Telegram Webhook] 🔗 Обработка команды привязки телефона:", trimmedText);
       const phoneParam = trimmedText.replace("/start AUTH_phone_", "").replace("/start link_phone_", "").trim();
       // Нормализуем номер (добавляем + если его нет)
       let phone = phoneParam.startsWith("+") ? phoneParam : `+${phoneParam}`;
@@ -710,10 +711,13 @@ ${loginUrl}
     }
 
     // Команда /restart - то же самое, что /start
-    const commandText = (text === "/restart" || text === "/start") ? "/start" : text;
+    // НО проверяем, что это НЕ команда с параметром (link_phone_ или AUTH_phone_)
+    const isStartCommand = (text === "/restart" || text === "/start") && 
+                           !trimmedText.startsWith("/start AUTH_phone_") && 
+                           !trimmedText.startsWith("/start link_phone_");
 
     // Обычная команда /start (без параметра)
-    if (commandText === "/start") {
+    if (isStartCommand) {
       // Проверяем, есть ли уже пользователь с этим chat_id
       let user = await prisma.user.findUnique({
         where: { telegramChatId: chatId },
@@ -1052,24 +1056,26 @@ ${loginUrl}
     }
 
     // Обработка вопросов пользователей (техподдержка)
-    // Если пользователь привязан, сохраняем вопрос для техподдержки
-    const user = await prisma.user.findUnique({
-      where: { telegramChatId: chatId },
-    });
-
-    if (user) {
-      // Пользователь привязан - сохраняем вопрос и отправляем подтверждение
-      console.log("[Telegram Webhook] Вопрос от пользователя:", {
-        userId: user.id,
-        phone: user.phone,
-        question: text,
+    // НО только если это НЕ команда (команды уже обработаны выше)
+    // Игнорируем команды, которые начинаются с /
+    if (!text.startsWith("/")) {
+      const user = await prisma.user.findUnique({
+        where: { telegramChatId: chatId },
       });
 
-      // Сохраняем вопрос в БД (можно создать таблицу SupportTickets)
-      // Пока просто логируем и отправляем подтверждение
-      await sendTelegramMessage(
-        chatId,
-        `✅ <b>Ваш вопрос получен!</b>
+      if (user) {
+        // Пользователь привязан - сохраняем вопрос и отправляем подтверждение
+        console.log("[Telegram Webhook] Вопрос от пользователя:", {
+          userId: user.id,
+          phone: user.phone,
+          question: text,
+        });
+
+        // Сохраняем вопрос в БД (можно создать таблицу SupportTickets)
+        // Пока просто логируем и отправляем подтверждение
+        await sendTelegramMessage(
+          chatId,
+          `✅ <b>Ваш вопрос получен!</b>
 
 Мы получили ваше сообщение и ответим в ближайшее время.
 
@@ -1079,19 +1085,20 @@ ${loginUrl}
 <b>Часы работы техподдержки:</b> Пн-Пт, 9:00-18:00 МСК
 
 <i>Для срочных вопросов: support@myunion.pro</i>`
-      );
-    } else {
-      // Пользователь не привязан - отправляем инструкцию
-      await sendTelegramMessage(
-        chatId,
-        `❓ <b>Вопрос получен!</b>
+        );
+      } else {
+        // Пользователь не привязан - отправляем инструкцию
+        await sendTelegramMessage(
+          chatId,
+          `❓ <b>Вопрос получен!</b>
 
 Для получения помощи:
 1. Сначала привяжите Telegram к вашему аккаунту (команда /start)
 2. После привязки вы сможете задавать вопросы техподдержке
 
 Или напишите нам на email: support@myunion.pro`
-      );
+        );
+      }
     }
 
     return NextResponse.json({ ok: true });
