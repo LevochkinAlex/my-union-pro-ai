@@ -3,19 +3,17 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
-import type { AppealType } from "@prisma/client";
-
 interface Analytics {
   totalQuestions: number;
   totalResolved: number;
   averageResolutionTime: number;
   commonKeywords: string[];
-  byType?: Record<AppealType, any[]>;
+  byType?: Record<string, any[]>;
 }
 
 interface AnalyticsRecord {
   id: string;
-  appealType: AppealType;
+  appealType: string;
   totalCount: number;
   resolvedCount: number;
   averageResolutionTime?: number;
