@@ -81,24 +81,46 @@ export async function sendSMSViaExolve(
 
     // Проверяем ответ
     if (!response.ok) {
+      const errorMessage = data.error?.message || data.message || data.error || `Ошибка Exolve API: ${response.status} ${response.statusText}`;
       console.error("[Exolve SMS] ❌ Ошибка API:", {
         status: response.status,
         statusText: response.statusText,
+        error: errorMessage,
         data,
+        phone: normalizedPhone,
       });
+      
+      // Специальная обработка для "incorrect customer state"
+      if (errorMessage.toLowerCase().includes("incorrect customer state") || 
+          errorMessage.toLowerCase().includes("customer state")) {
+        console.error("[Exolve SMS] ⚠️ ПРОБЛЕМА С АККАУНТОМ EXOLVE: аккаунт не активирован или имеет неправильный статус. Проверьте настройки аккаунта в Exolve.");
+      }
+      
       return {
         success: false,
-        error: data.error?.message || data.message || data.error || `Ошибка Exolve API: ${response.status} ${response.statusText}`,
+        error: errorMessage,
         details: data,
       };
     }
 
     // Проверяем наличие ошибки в теле ответа
     if (data.error) {
-      console.error("[Exolve SMS] ❌ Ошибка в ответе:", data);
+      const errorMessage = data.error?.message || data.error || data.message || "Неизвестная ошибка Exolve API";
+      console.error("[Exolve SMS] ❌ Ошибка в ответе:", {
+        error: errorMessage,
+        data,
+        phone: normalizedPhone,
+      });
+      
+      // Специальная обработка для "incorrect customer state"
+      if (errorMessage.toLowerCase().includes("incorrect customer state") || 
+          errorMessage.toLowerCase().includes("customer state")) {
+        console.error("[Exolve SMS] ⚠️ ПРОБЛЕМА С АККАУНТОМ EXOLVE: аккаунт не активирован или имеет неправильный статус. Проверьте настройки аккаунта в Exolve.");
+      }
+      
       return {
         success: false,
-        error: data.error?.message || data.error || data.message || "Неизвестная ошибка Exolve API",
+        error: errorMessage,
         details: data,
       };
     }

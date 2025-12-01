@@ -175,16 +175,29 @@ export async function POST(request: NextRequest) {
         
         // Более информативное сообщение об ошибке
         let errorMessage = "Не удалось отправить код";
+        let userFriendlyMessage = "Проверьте правильность номера телефона и попробуйте позже";
+        
         if (smsResult.error?.includes("не настроен") || smsResult.error?.includes("не установлен")) {
           errorMessage = "Сервис отправки SMS временно недоступен. Обратитесь в поддержку.";
+          userFriendlyMessage = "Сервис отправки SMS временно недоступен. Пожалуйста, обратитесь в поддержку или попробуйте позже.";
+        } else if (smsResult.error?.toLowerCase().includes("incorrect customer state")) {
+          errorMessage = "Проблема с аккаунтом SMS-сервиса";
+          userFriendlyMessage = "Сервис отправки SMS временно недоступен. Пожалуйста, обратитесь в поддержку: support@myunion.pro";
+        } else if (smsResult.error?.toLowerCase().includes("insufficient funds") || smsResult.error?.toLowerCase().includes("баланс")) {
+          errorMessage = "Недостаточно средств на счете SMS-сервиса";
+          userFriendlyMessage = "Сервис отправки SMS временно недоступен. Пожалуйста, обратитесь в поддержку: support@myunion.pro";
         } else if (smsResult.error) {
           errorMessage = `Ошибка отправки SMS: ${smsResult.error}`;
+          // Для других ошибок показываем общее сообщение
+          if (process.env.NODE_ENV === "development") {
+            userFriendlyMessage = `Ошибка: ${smsResult.error}`;
+          }
         }
         
         return NextResponse.json(
           {
             error: errorMessage,
-            message: "Проверьте правильность номера телефона и попробуйте позже",
+            message: userFriendlyMessage,
             details: process.env.NODE_ENV === "development" ? {
               error: smsResult.error,
               details: smsResult.details,
