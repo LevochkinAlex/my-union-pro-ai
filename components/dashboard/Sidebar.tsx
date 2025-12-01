@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import ThemeToggle from "@/components/ThemeToggle";
 import { LogoIcon } from "@/components/Logo";
-import ChatMenu from "@/components/dashboard/ChatMenu";
 import { signOut } from "next-auth/react";
 
 interface NavItem {
@@ -65,15 +64,8 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
 
         {/* Navigation */}
         <nav className={`flex-1 py-4 space-y-2 overflow-y-auto ${isCollapsed ? "px-3" : "px-4"}`}>
-          {/* Chat menu with history and appeals - только для обычных пользователей */}
-          {!isAdmin && <ChatMenu isCollapsed={isCollapsed} />}
-
-          {/* Other menu items */}
+          {/* Menu items */}
           {items.map((item) => {
-            // Skip AI Chat item since it's now in ChatMenu
-            if (item.href === "/dashboard" && item.label === "AI Чат") {
-              return null;
-            }
 
             const hasSubItems = item.subItems && item.subItems.length > 0;
             

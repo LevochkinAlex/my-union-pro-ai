@@ -207,10 +207,6 @@ export async function GET(request: NextRequest) {
             });
             // Удалено: перенос чат-сессий и сообщений - больше не используется
             // Удалено: перенос обращений - функция обращений больше не используется
-            // await prisma.userAppeal.updateMany({
-              where: { userId: existingTgUser.id },
-              data: { userId: user.id },
-            });
             await prisma.membershipHistory.updateMany({
               where: { userId: existingTgUser.id },
               data: { userId: user.id },

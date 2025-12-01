@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import ChatMenu from "@/components/dashboard/ChatMenu";
 import { LogoIcon } from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -167,10 +166,7 @@ export default function MobileMenu({
 
           {/* Navigation */}
           <nav className="flex-1 py-4 space-y-2 overflow-y-auto px-4">
-            {/* Chat menu - только для обычных пользователей */}
-            {!isAdmin && <ChatMenu isCollapsed={false} />}
-
-            {/* Other menu items */}
+            {/* Menu items */}
             {items.map((item) => {
               const isExpanded = expandedItems.includes(item.href);
               const hasSubItems = item.subItems && item.subItems.length > 0;
