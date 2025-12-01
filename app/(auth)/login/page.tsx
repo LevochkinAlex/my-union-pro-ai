@@ -48,11 +48,9 @@ function LoginForm() {
   const [showTelegramRecommendation, setShowTelegramRecommendation] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   const [hasTelegram, setHasTelegram] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
   // Получаем callbackUrl из query параметров при монтировании
   useEffect(() => {
-    setMounted(true);
     try {
       const callback = searchParams?.get("callbackUrl");
       if (callback) {
@@ -418,11 +416,6 @@ function LoginForm() {
     router.push(callbackUrl);
     router.refresh();
   };
-
-  // Показываем fallback пока компонент не смонтирован
-  if (!mounted) {
-    return null;
-  }
 
   return (
     <div className="flex flex-col flex-1 w-full">
