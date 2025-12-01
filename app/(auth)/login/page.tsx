@@ -48,12 +48,18 @@ function LoginForm() {
   const [showTelegramRecommendation, setShowTelegramRecommendation] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   const [hasTelegram, setHasTelegram] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   // Получаем callbackUrl из query параметров при монтировании
   useEffect(() => {
-    const callback = searchParams.get("callbackUrl");
-    if (callback) {
-      setCallbackUrl(decodeURIComponent(callback));
+    setMounted(true);
+    try {
+      const callback = searchParams?.get("callbackUrl");
+      if (callback) {
+        setCallbackUrl(decodeURIComponent(callback));
+      }
+    } catch (err) {
+      console.error("[Login] Error reading searchParams:", err);
     }
   }, [searchParams]);
 
