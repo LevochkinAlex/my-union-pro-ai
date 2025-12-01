@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     // Нормализуем номер
     const normalizedPhone = normalizePhone(phone);
 
-    console.log("[2FA Auth] Проверка PIN-кода для номера:", normalizedPhone, "PIN:", pinCode);
+    console.log("[2FA Auth] Проверка PIN-кода для номера:", normalizedPhone, "(исходный:", phone, "), PIN:", pinCode);
 
     // Ищем неиспользованный PIN-код для этого номера (пробуем разные форматы)
     let pinRecord = await prisma.sMSPinCode.findFirst({
@@ -152,10 +152,35 @@ export async function POST(request: NextRequest) {
     });
 
     // Проверяем PIN-код
-    const isPinValid = await bcrypt.compare(pinCode, pinRecord.hashedPin);
+    // Убеждаемся, что PIN - это строка
+    const pinAsString = String(pinCode).trim();
+    
+    console.log("[2FA Auth] Сравниваю PIN-код:", {
+      введен: pinCode,
+      какСтрока: pinAsString,
+      тип: typeof pinCode,
+      длина: pinAsString.length,
+      хешВБД: pinRecord.hashedPin.substring(0, 30) + "...",
+      номерВБД: pinRecord.phone,
+      номерЗапроса: normalizedPhone,
+    });
+    
+    const isPinValid = await bcrypt.compare(pinAsString, pinRecord.hashedPin);
 
     if (!isPinValid) {
-      console.error("[2FA Auth] ❌ PIN-код неверный. Введен:", pinCode, "Хеш в БД:", pinRecord.hashedPin.substring(0, 20) + "...");
+      console.error("[2FA Auth] ❌ PIN-код неверный. Детали:", {
+        введен: pinCode,
+        какСтрока: pinAsString,
+        тип: typeof pinCode,
+        длинаХеша: pinRecord.hashedPin.length,
+        хешНачало: pinRecord.hashedPin.substring(0, 30),
+        номерВБД: pinRecord.phone,
+        номерЗапроса: normalizedPhone,
+        createdAt: pinRecord.createdAt,
+        expiresAt: pinRecord.expiresAt,
+        сейчас: new Date(),
+      });
+      
       return NextResponse.json(
         { error: "Неверный PIN-код" },
         { status: 400 }
