@@ -4,38 +4,30 @@ import React, { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { markUserInteracted } from "@/lib/chat-notifications";
 
 interface ChatMessage {
-  id: string;
   role: "user" | "assistant";
   content: string;
-  createdAt: Date;
+  timestamp: number;
 }
 
-export default function MiniChat() {
+export default function FloatingChatBot() {
   const { data: session } = useSession();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const shouldAutoScrollRef = useRef(false); // Флаг для контроля автоскролла
-  const isInitialLoadRef = useRef(true); // Флаг первой загрузки
-  const avatarLoadedRef = useRef(false);
-  const sessionLoadedRef = useRef(false);
+  const conversationHistoryRef = useRef<ChatMessage[]>([]);
 
-  // Загружаем аватарку пользователя (только один раз)
+  // Загружаем аватарку пользователя
   useEffect(() => {
-    if (!session?.user?.id || avatarLoadedRef.current) return;
-    avatarLoadedRef.current = true;
+    if (!session?.user?.id) return;
 
     const loadUserAvatar = async () => {
       try {
-        const response = await fetch('/api/profile');
+        const response = await fetch("/api/profile");
         if (response.ok) {
           const data = await response.json();
           if (data.user?.avatarUrl) {
@@ -43,129 +35,48 @@ export default function MiniChat() {
           }
         }
       } catch (error) {
-        console.error('[MiniChat] Failed to load user avatar:', error);
+        console.error("[FloatingChatBot] Failed to load user avatar:", error);
       }
     };
 
     loadUserAvatar();
   }, [session?.user?.id]);
 
-  // Загружаем сессию "Мой чат" (STATEMENT) только один раз
+  // Автоскролл к последнему сообщению
   useEffect(() => {
-    if (!session?.user?.id || sessionLoadedRef.current) return;
-    sessionLoadedRef.current = true;
-
-    const loadStatementSession = async () => {
-      try {
-        const response = await fetch("/api/chat/sessions");
-        if (response.ok) {
-          const data = await response.json();
-          const statementSession = data.sessions?.find(
-            (s: any) => s.type === "STATEMENT"
-          );
-          if (statementSession) {
-            setSessionId(statementSession.id);
-            loadMessages(statementSession.id);
-          } else {
-            // Если сессии нет, создаем новую
-            const createResponse = await fetch("/api/chat/sessions", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ type: "STATEMENT" }),
-            });
-            if (createResponse.ok) {
-              const newSession = await createResponse.json();
-              setSessionId(newSession.session.id);
-            }
-          }
-        }
-      } catch (error) {
-        console.error("[MiniChat] Error loading session:", error);
-        setIsLoadingHistory(false);
-      }
-    };
-
-    loadStatementSession();
-  }, [session?.user?.id]);
-
-  // Загружаем историю сообщений
-  const loadMessages = async (sid: string) => {
-    try {
-      setIsLoadingHistory(true);
-      const response = await fetch(`/api/chat/session/${sid}`);
-      if (response.ok) {
-        const data = await response.json();
-        setMessages(data.messages || []);
-        // Скроллим только при первой загрузке, чтобы показать последние сообщения
-        if (isInitialLoadRef.current) {
-          shouldAutoScrollRef.current = true;
-          isInitialLoadRef.current = false;
-        }
-      }
-    } catch (error) {
-      console.error("[MiniChat] Error loading messages:", error);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
-
-  // Скролл при открытии виджета (чтобы показать последние сообщения)
-  useEffect(() => {
-    if (isOpen && messages.length > 0 && !isLoadingHistory) {
-      // Скроллим при открытии, чтобы показать последние сообщения
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: "auto" });
-          }
-        }, 100);
-      });
-    }
-  }, [isOpen, isLoadingHistory]);
-
-  // Автоскролл к последнему сообщению (только когда нужно)
-  useEffect(() => {
-    if (isOpen && shouldAutoScrollRef.current && messages.length > 0) {
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-            shouldAutoScrollRef.current = false;
-          }
-        }, 50);
-      });
+    if (isOpen && messages.length > 0) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
     }
   }, [messages, isOpen]);
 
   // Отправка сообщения
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading || !sessionId) return;
+    if (!input.trim() || isLoading || !session?.user?.id) return;
 
     const userMessage = input.trim();
     setInput("");
     setIsLoading(true);
-    markUserInteracted(); // Гарантируем user interaction для звука
 
-    // Включаем автоскролл для нового сообщения
-    shouldAutoScrollRef.current = true;
-
-    // Оптимистично добавляем сообщение пользователя
-    const tempUserMessage: ChatMessage = {
-      id: `temp-${Date.now()}`,
+    // Добавляем сообщение пользователя
+    const userMsg: ChatMessage = {
       role: "user",
       content: userMessage,
-      createdAt: new Date(),
+      timestamp: Date.now(),
     };
-    setMessages((prev) => [...prev, tempUserMessage]);
+
+    setMessages((prev) => [...prev, userMsg]);
+    conversationHistoryRef.current.push(userMsg);
 
     try {
-      const response = await fetch("/api/chat", {
+      const response = await fetch("/api/assistant/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userMessage,
-          sessionId: sessionId,
+          conversationHistory: conversationHistoryRef.current.slice(-10), // Последние 10 сообщений
         }),
       });
 
@@ -174,38 +85,35 @@ export default function MiniChat() {
       }
 
       const data = await response.json();
-      
-      // Заменяем временное сообщение на настоящее
-      const realUserMessage: ChatMessage = data.userId ? {
-        id: data.userId,
-        role: "user",
-        content: userMessage,
-        createdAt: new Date(),
-      } : tempUserMessage;
 
       // Добавляем ответ AI
-      const aiMessage: ChatMessage = {
-        id: data.id || `ai-${Date.now()}`,
+      const aiMsg: ChatMessage = {
         role: "assistant",
         content: data.message,
-        createdAt: new Date(),
+        timestamp: Date.now(),
       };
 
-      // Включаем автоскролл для ответа бота
-      shouldAutoScrollRef.current = true;
-
-      setMessages((prev) => {
-        const filtered = prev.filter((msg) => msg.id !== tempUserMessage.id);
-        return [...filtered, realUserMessage, aiMessage];
-      });
+      setMessages((prev) => [...prev, aiMsg]);
+      conversationHistoryRef.current.push(aiMsg);
     } catch (error) {
-      console.error("[MiniChat] Error sending message:", error);
-      // Удаляем временное сообщение при ошибке
-      setMessages((prev) => prev.filter((msg) => msg.id !== tempUserMessage.id));
-      alert("Не удалось отправить сообщение. Попробуйте еще раз.");
+      console.error("[FloatingChatBot] Error sending message:", error);
+      const errorMsg: ChatMessage = {
+        role: "assistant",
+        content: "Извините, произошла ошибка. Попробуйте еще раз.",
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Сброс истории при закрытии
+  const handleClose = () => {
+    setIsOpen(false);
+    // Можно сохранить историю в localStorage для следующего открытия
+    // или сбросить её
+    // conversationHistoryRef.current = [];
   };
 
   if (!session?.user?.id) {
@@ -235,7 +143,7 @@ export default function MiniChat() {
         </svg>
       </button>
 
-      {/* Мини-чат виджет */}
+      {/* Чат виджет */}
       {isOpen && (
         <div className="fixed bottom-24 right-6 z-50 flex h-[600px] w-[400px] flex-col rounded-lg border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
           {/* Заголовок */}
@@ -245,12 +153,12 @@ export default function MiniChat() {
                 AI
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-white">Мой бот</h3>
+                <h3 className="text-sm font-semibold text-white">Помощник</h3>
                 <p className="text-xs text-blue-100">AI Ассистент</p>
               </div>
             </div>
             <button
-              onClick={() => setIsOpen(false)}
+              onClick={handleClose}
               className="text-white/80 hover:text-white transition-colors"
               aria-label="Закрыть чат"
             >
@@ -262,18 +170,14 @@ export default function MiniChat() {
 
           {/* Сообщения */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {isLoadingHistory ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
-              </div>
-            ) : messages.length === 0 ? (
+            {messages.length === 0 ? (
               <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 text-sm text-center px-4">
-                Привет! Я могу помочь с вопросами о профсоюзе, скидках и структуре организации. Задайте вопрос!
+                Привет! Я могу помочь с вопросами о системе MyUnion, навигации по сайту, скидках и документах. Задайте вопрос!
               </div>
             ) : (
-              messages.map((message) => (
+              messages.map((message, index) => (
                 <div
-                  key={message.id}
+                  key={index}
                   className={`flex gap-2 ${
                     message.role === "user" ? "justify-end" : "justify-start"
                   }`}
@@ -315,6 +219,22 @@ export default function MiniChat() {
                   )}
                 </div>
               ))
+            )}
+            {isLoading && (
+              <div className="flex justify-start gap-2">
+                <div className="flex-shrink-0">
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold shadow-sm">
+                    AI
+                  </div>
+                </div>
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl rounded-bl-md px-4 py-2">
+                  <div className="flex gap-1">
+                    <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                    <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                    <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                  </div>
+                </div>
+              </div>
             )}
             <div ref={messagesEndRef} />
           </div>

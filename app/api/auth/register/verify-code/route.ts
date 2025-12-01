@@ -65,44 +65,8 @@ export async function POST(request: NextRequest) {
     // Синхронизация с BestBenefits будет выполнена ПОСЛЕ заполнения профиля (ФИО)
     // в /api/profile при первом обновлении профиля с firstName и lastName
 
-    // Создаем начальный чат "Заявление" с ChatSession
-    try {
-      const defaultBot = await prisma.chatBot.findFirst({
-        where: { name: "MyUnion Pro" },
-      });
-
-      if (defaultBot) {
-        // Создаем ChatSession типа STATEMENT
-        const chatSession = await prisma.chatSession.create({
-          data: {
-            userId: updatedUser.id,
-            title: "Заявление",
-            type: "STATEMENT",
-          },
-        });
-
-        // Добавляем приветственное сообщение для первого входа
-        const welcomeMessage = `Здравствуйте! 👋 Я AI-помощник профсоюза МООП РЗ.
-
-Подайте заявление о вступлении в профсоюз, заполнив анкету.
-
-[SHOW_SELF_FILL_BUTTON]`;
-
-        await prisma.chatMessage.create({
-          data: {
-            content: welcomeMessage,
-            role: "assistant",
-            userId: updatedUser.id,
-            chatBotId: defaultBot.id,
-            sessionId: chatSession.id,
-            isSystemMessage: false, // Это сообщение от AI, не системное
-          },
-        });
-      }
-    } catch (error) {
-      console.error("Error creating initial chat session:", error);
-      // Don't fail registration if chat creation fails
-    }
+    // Удалено: создание ChatSession и ChatMessage - больше не используется
+    // Чат-бот теперь работает без сессий, просто как помощник на всех страницах
 
     // Добавляем устав в документы по умолчанию
     try {

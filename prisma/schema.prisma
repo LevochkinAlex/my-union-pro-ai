@@ -34,11 +34,11 @@ enum OrganizationType {
   FEDERAL // Федерация
 }
 
-  // Пользователь
+// Пользователь
 model User {
   id               String           @id @default(cuid())
   email            String?          @unique // Email теперь опционален (может быть заполнен позже)
-  password         String?          // Пароль опционален (SMS-авторизация)
+  password         String? // Пароль опционален (SMS-авторизация)
   role             UserRole         @default(PENDING_MEMBER)
   membershipStatus MembershipStatus @default(PENDING_VERIFICATION)
 
@@ -47,20 +47,20 @@ model User {
   lastName    String?
   middleName  String?
   dateOfBirth DateTime?
-  phone       String?  @unique // Текущий телефон профиля (может быть изменён)
-  authPhone   String?  @unique // Телефон, через который была первая авторизация (НЕ меняется)
+  phone       String?   @unique // Текущий телефон профиля (может быть изменён)
+  authPhone   String?   @unique // Телефон, через который была первая авторизация (НЕ меняется)
   address     String?
-  
+
   // История телефонов
   phoneHistory PhoneHistory[]
-  avatarUrl   String? // URL фотографии профиля
+  avatarUrl    String? // URL фотографии профиля
 
   // Telegram интеграция для 2FA
-  telegramChatId String? @unique // Chat ID пользователя в Telegram для отправки PIN-кодов
+  telegramChatId   String? @unique // Chat ID пользователя в Telegram для отправки PIN-кодов
   telegramUsername String? // Username пользователя в Telegram (для справки)
 
   // MAX Messenger интеграция для 2FA
-  maxChatId String? @unique // Chat ID пользователя в MAX для отправки PIN-кодов
+  maxChatId   String? @unique // Chat ID пользователя в MAX для отправки PIN-кодов
   maxUsername String? // Username пользователя в MAX (для справки)
 
   // Предпочтения для скидок
@@ -85,13 +85,13 @@ model User {
   additionalInfo     String?  @db.Text // Дополнительная информация (свободный текст)
 
   // База знаний о пользователе (для супер-админа)
-  knowledgeBase      String?  @db.Text // История обращений, проблем и заметок о пользователе в формате JSON
+  knowledgeBase String? @db.Text // История обращений, проблем и заметок о пользователе в формате JSON
 
   // Подпись (путь к файлу на сервере)
   signaturePath String?
 
   // Флаг изменения профиля после генерации документов
-  profileChangedAfterDocuments Boolean @default(false)
+  profileChangedAfterDocuments Boolean   @default(false)
   profileLastModified          DateTime? // Дата последнего изменения профиля
 
   // Организация
@@ -111,14 +111,10 @@ model User {
   resetToken        String?   @unique
   resetTokenExpires DateTime?
 
-  // Чат с AI
-  chatMessages               ChatMessage[]
-  chatSessions               ChatSession[]
   updatedSettings            SystemSetting[]     @relation("SystemSettingUpdatedBy")
   uploadedKnowledgeDocuments KnowledgeDocument[] @relation("KnowledgeDocumentUploadedBy")
 
-  // Обращения
-  appeals UserAppeal[]
+  // Удалено: обращения (UserAppeal больше не используется)
 
   // Push Notifications
   pushSubscriptions  PushSubscription[]
@@ -134,9 +130,9 @@ model User {
   unionCardNumber       String?   @unique // Номер профсоюзной карточки (16-значный код формата XXXX XXXX XXXX XXXX)
   membershipJoinedAt    DateTime? // Дата вступления в профсоюз (если принят вышестоящим органом)
   unionMembershipStatus String?   @default("NOT_ACCEPTED") // Статус членства: ACCEPTED (принят на учет), NOT_ACCEPTED (не принят), REMOVED (снят с учета)
-  
+
   // История членства
-  membershipHistory     MembershipHistory[]
+  membershipHistory MembershipHistory[]
 
   // Настройки уведомлений
   pushNotificationsEnabled Boolean @default(true) // Включены ли push уведомления
@@ -194,7 +190,7 @@ model SMSPinCode {
   expiresAt DateTime
 
   // Использован ли код
-  used Boolean @default(false)
+  used   Boolean   @default(false)
   usedAt DateTime?
 
   createdAt DateTime @default(now())
@@ -214,23 +210,23 @@ model PhoneHistory {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Телефон (нормализован: +7XXXXXXXXXX)
-  phone         String
+  phone           String
   phoneNormalized String // Только цифры без +
 
   // Тип изменения
-  changeType    String // AUTH (авторизация), PROFILE_UPDATE (обновление профиля), MERGE (слияние аккаунтов)
-  
+  changeType String // AUTH (авторизация), PROFILE_UPDATE (обновление профиля), MERGE (слияние аккаунтов)
+
   // Предыдущий телефон (если это смена)
   previousPhone String?
-  
+
   // Источник изменения
-  source        String? // "telegram", "sms", "profile", "admin"
-  
+  source String? // "telegram", "sms", "profile", "admin"
+
   // IP адрес при изменении (для безопасности)
-  ipAddress     String?
-  
+  ipAddress String?
+
   // Заметки (например, причина изменения)
-  notes         String?
+  notes String?
 
   createdAt DateTime @default(now())
 
@@ -284,7 +280,7 @@ model EmailPinCode {
   expiresAt DateTime
 
   // Использован ли код
-  used Boolean @default(false)
+  used   Boolean   @default(false)
   usedAt DateTime?
 
   createdAt DateTime @default(now())
@@ -305,13 +301,13 @@ model Organization {
   parentId String?
   parent   Organization?  @relation("OrganizationHierarchy", fields: [parentId], references: [id])
   children Organization[] @relation("OrganizationHierarchy")
-  
+
   // Уровень в иерархии (0 = корень, 1 = дочерняя организация первого уровня и т.д.)
   level Int @default(0)
-  
+
   // Порядок сортировки (для отображения в списке)
   sortOrder Int @default(0)
-  
+
   // Полный путь в иерархии (для быстрого поиска, например: "Федерация / Региональная / ППО")
   fullPath String?
 
@@ -409,60 +405,8 @@ model Document {
   @@index([driveFileId])
 }
 
-// Сессии чата
-enum ChatSessionType {
-  STATEMENT // Чат для создания заявления
-  APPEAL // Чат для обращения
-}
-
-model ChatSession {
-  id String @id @default(cuid())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  title String // Название сессии (например, "Заявление" или "Обращение №123456")
-  type  ChatSessionType @default(STATEMENT)
-
-  // Сообщения в этой сессии
-  messages ChatMessage[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId])
-  @@index([type])
-  @@index([createdAt])
-}
-
-// Сообщения AI чата для сбора данных профиля
-model ChatMessage {
-  id String @id @default(cuid())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  sessionId String?
-  session   ChatSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  chatBotId String?
-  chatBot   ChatBot? @relation(fields: [chatBotId], references: [id], onDelete: SetNull)
-
-  appealId String?
-  appeal   UserAppeal? @relation(fields: [appealId], references: [id], onDelete: Cascade)
-
-  role    String // "user" или "assistant"
-  content String @db.Text
-  isSystemMessage Boolean @default(false) // Системное сообщение (не от AI)
-
-  createdAt DateTime @default(now())
-
-  @@index([userId])
-  @@index([sessionId])
-  @@index([chatBotId])
-  @@index([appealId])
-  @@index([createdAt])
-}
+// Удалено: ChatSession и ChatMessage - больше не используются
+// Чат-бот теперь работает без сессий, просто как помощник на всех страницах
 
 // Удалено: Новости (для будущего функционала) - не используется
 // Удалено: Скидки (для будущего функционала) - не используется
@@ -655,8 +599,7 @@ model ChatBot {
   knowledgeBases  ChatBotKnowledgeBase[]
   retrievalConfig Json?
 
-  // Сообщения, созданные этим ботом
-  messages ChatMessage[]
+  // Удалено: связь с ChatMessage (ChatMessage больше не используется)
 
   // Активен ли бот
   isActive Boolean @default(true)
@@ -719,85 +662,7 @@ model ApiProvider {
   @@index([isDefault])
 }
 
-// Типы обращений
-enum AppealType {
-  LEGAL // Юридический вопрос
-  ACCOUNTING // Бухгалтерский вопрос
-  TECHNICAL // Технический вопрос
-  OTHER // Прочее
-}
-
-// Статусы обращений
-enum AppealStatus {
-  DRAFT // Черновик
-  SUBMITTED // Отправлено
-  IN_REVIEW // На рассмотрении
-  RESOLVED // Решено
-  REJECTED // Отклонено
-}
-
-// Обращения пользователей (для аналитики и обработки)
-model UserAppeal {
-  id String @id @default(cuid())
-
-  // 8-значный публичный ID для отслеживания (10000000-99999999)
-  publicId String @unique @db.Char(8)
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  type   AppealType
-  status AppealStatus @default(DRAFT)
-
-  // Основная информация
-  title       String
-  description String @db.Text
-  question    String @db.Text
-
-  // Связь с чатом
-  chatMessages ChatMessage[]
-
-  // Метаданные
-  tags       String? // JSON массив тегов для аналитики
-  resolved   Boolean   @default(false)
-  resolvedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId])
-  @@index([publicId])
-  @@index([type])
-  @@index([status])
-  @@index([createdAt])
-}
-
-// Аналитика обращений
-model AppealAnalytics {
-  id String @id @default(cuid())
-
-  appealType AppealType
-
-  // Статистика
-  totalCount    Int @default(0)
-  resolvedCount Int @default(0)
-
-  // Теги и ключевые слова для анализа
-  commonKeywords String? @db.Text // JSON массив ключевых слов
-
-  // Время средне обработки (в часах)
-  averageResolutionTime Float?
-
-  periodStart DateTime
-  periodEnd   DateTime
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([appealType, periodStart, periodEnd])
-  @@index([appealType])
-  @@index([periodStart])
-}
+// Удалено: AppealType, AppealStatus, UserAppeal, AppealAnalytics - функция обращений больше не используется
 
 // Push Notifications (Firebase Cloud Messaging)
 model PushSubscription {
@@ -943,8 +808,8 @@ model MembershipHistory {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Организация, в которой состоял на учете
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  organizationId   String?
+  organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   organizationName String? // Название организации (для истории, если организация удалена)
 
   // Статус в этой организации

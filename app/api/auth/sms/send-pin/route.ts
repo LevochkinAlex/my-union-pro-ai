@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     // Нормализуем номер перед валидацией (маска может содержать символы форматирования)
     const normalizedPhone = normalizePhone(phone);
-    console.log("[2FA Auth] Нормализованный номер:", normalizedPhone);
+    console.log("[2FA Auth] Нормализованный номер:", normalizedPhone, "(исходный:", phone, ")");
 
     // Валидируем нормализованный номер
     if (!validatePhone(normalizedPhone)) {
@@ -106,10 +106,19 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Удаляем старые неиспользованные PIN-коды для этого номера
+    // Удаляем старые неиспользованные PIN-коды для этого номера (все форматы)
+    const phoneVariants = normalizedPhone.startsWith("+") 
+      ? [
+          normalizedPhone,
+          normalizedPhone.replace("+", ""),
+          normalizedPhone.replace("+7", "7"),
+          normalizedPhone.replace("+7", "8"),
+        ]
+      : [normalizedPhone];
+    
     await prisma.sMSPinCode.deleteMany({
       where: {
-        phone: normalizedPhone,
+        OR: phoneVariants.map(phone => ({ phone })),
         used: false,
         expiresAt: {
           lt: new Date(),
@@ -118,13 +127,21 @@ export async function POST(request: NextRequest) {
     });
 
     // Сохраняем PIN-код в БД
-    await prisma.sMSPinCode.create({
+    const pinRecord = await prisma.sMSPinCode.create({
       data: {
         phone: normalizedPhone,
         hashedPin,
         expiresAt,
         userId: existingUser?.id,
       },
+    });
+    
+    console.log("[2FA Auth] ✅ PIN-код сохранен в БД:", {
+      id: pinRecord.id,
+      phone: pinRecord.phone,
+      expiresAt: pinRecord.expiresAt,
+      createdAt: pinRecord.createdAt,
+      pinCode: process.env.NODE_ENV === "development" ? pinCode : "***",
     });
 
     // Определяем способ доставки: Telegram (бесплатно) или SMS (платно)

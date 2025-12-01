@@ -52,18 +52,18 @@ export async function POST(request: NextRequest) {
         where: { id: primaryAccountId },
         include: {
           documents: true,
-          chatSessions: true,
+          // Удалено: chatSessions - больше не используется
           membershipHistory: true,
-          appeals: true,
+          // Удалено: appeals - функция обращений больше не используется
         },
       }),
       prisma.user.findUnique({
         where: { id: secondaryAccountId },
         include: {
           documents: true,
-          chatSessions: true,
+          // Удалено: chatSessions - больше не используется
           membershipHistory: true,
-          appeals: true,
+          // Удалено: appeals - функция обращений больше не используется
         },
       }),
     ]) as any; // Типизация для доступа к telegramChatId и другим полям
@@ -85,13 +85,7 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // 2. Переносим чат-сессии
-      if (secondaryAccount.chatSessions.length > 0) {
-        await tx.chatSession.updateMany({
-          where: { userId: secondaryAccountId },
-          data: { userId: primaryAccountId },
-        });
-      }
+      // Удалено: перенос чат-сессий - больше не используется
 
       // 3. Переносим историю членства
       if (secondaryAccount.membershipHistory.length > 0) {
@@ -101,13 +95,7 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // 4. Переносим обращения
-      if (secondaryAccount.appeals.length > 0) {
-        await tx.userAppeal.updateMany({
-          where: { userId: secondaryAccountId },
-          data: { userId: primaryAccountId },
-        });
-      }
+      // Удалено: перенос обращений - функция обращений больше не используется
 
       // 5. Записываем историю телефонов
       await tx.phoneHistory.create({
@@ -128,11 +116,7 @@ export async function POST(request: NextRequest) {
         data: { userId: primaryAccountId },
       });
 
-      // 7. Переносим сообщения чата
-      await tx.chatMessage.updateMany({
-        where: { userId: secondaryAccountId },
-        data: { userId: primaryAccountId },
-      });
+      // Удалено: перенос сообщений чата - больше не используется
 
       // 8. Обновляем главный аккаунт с новым телефоном и данными авторизации
       // Email НЕ меняется (остаётся от primary аккаунта)
@@ -174,7 +158,7 @@ export async function POST(request: NextRequest) {
         primaryAccount: updatedPrimary,
         deletedAccountId: secondaryAccountId,
         transferredDocuments: secondaryAccount.documents.length,
-        transferredSessions: secondaryAccount.chatSessions.length,
+        // Удалено: transferredSessions - больше не используется
       };
     });
 

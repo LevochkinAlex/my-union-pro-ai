@@ -64,10 +64,10 @@ export async function POST(request: NextRequest) {
     // Нормализуем номер
     const normalizedPhone = normalizePhone(phone);
 
-    console.log("[2FA Auth] Проверка PIN-кода для номера:", normalizedPhone);
+    console.log("[2FA Auth] Проверка PIN-кода для номера:", normalizedPhone, "PIN:", pinCode);
 
-    // Ищем неиспользованный PIN-код для этого номера
-    const pinRecord = await prisma.sMSPinCode.findFirst({
+    // Ищем неиспользованный PIN-код для этого номера (пробуем разные форматы)
+    let pinRecord = await prisma.sMSPinCode.findFirst({
       where: {
         phone: normalizedPhone,
         used: false,
@@ -80,22 +80,89 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Если не нашли, пробуем другие форматы номера
+    if (!pinRecord && normalizedPhone.startsWith("+")) {
+      const phoneWithoutPlus = normalizedPhone.replace("+", "");
+      const phoneWith7 = normalizedPhone.replace("+7", "7");
+      const phoneWith8 = normalizedPhone.replace("+7", "8");
+      
+      console.log("[2FA Auth] PIN не найден для", normalizedPhone, ", пробуем варианты:", {
+        phoneWithoutPlus,
+        phoneWith7,
+        phoneWith8,
+      });
+      
+      pinRecord = await prisma.sMSPinCode.findFirst({
+        where: {
+          OR: [
+            { phone: phoneWithoutPlus },
+            { phone: phoneWith7 },
+            { phone: phoneWith8 },
+          ],
+          used: false,
+          expiresAt: {
+            gt: new Date(),
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+    }
+
     if (!pinRecord) {
+      console.error("[2FA Auth] ❌ PIN-код не найден для номера:", normalizedPhone);
+      
+      // Проверяем, есть ли вообще PIN-коды для этого номера (даже использованные или истекшие)
+      const allPins = await prisma.sMSPinCode.findMany({
+        where: {
+          OR: [
+            { phone: normalizedPhone },
+            { phone: normalizedPhone.replace("+", "") },
+            { phone: normalizedPhone.replace("+7", "7") },
+            { phone: normalizedPhone.replace("+7", "8") },
+          ],
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 5,
+      });
+      
+      console.log("[2FA Auth] Найдено PIN-кодов для этого номера (все):", allPins.length);
+      if (allPins.length > 0) {
+        console.log("[2FA Auth] Последние PIN-коды:", allPins.map(p => ({
+          phone: p.phone,
+          used: p.used,
+          expiresAt: p.expiresAt,
+          createdAt: p.createdAt,
+        })));
+      }
+      
       return NextResponse.json(
         { error: "PIN-код не найден или истек. Запросите новый код." },
         { status: 400 }
       );
     }
 
+    console.log("[2FA Auth] ✅ PIN-код найден, проверяем...", {
+      phone: pinRecord.phone,
+      createdAt: pinRecord.createdAt,
+      expiresAt: pinRecord.expiresAt,
+    });
+
     // Проверяем PIN-код
     const isPinValid = await bcrypt.compare(pinCode, pinRecord.hashedPin);
 
     if (!isPinValid) {
+      console.error("[2FA Auth] ❌ PIN-код неверный. Введен:", pinCode, "Хеш в БД:", pinRecord.hashedPin.substring(0, 20) + "...");
       return NextResponse.json(
         { error: "Неверный PIN-код" },
         { status: 400 }
       );
     }
+
+    console.log("[2FA Auth] ✅ PIN-код верный!");
 
     // Помечаем PIN-код как использованный
     await prisma.sMSPinCode.update({

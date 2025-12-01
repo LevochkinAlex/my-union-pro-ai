@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { normalizePhone, getPhoneDigits, isSamePhone } from "@/lib/utils/phone";
-import { SystemMessages } from "@/lib/system-messages";
+// Удалено: SystemMessages - больше не используется
 
 function normalizeString(value: unknown): string | null {
   if (value === null || value === undefined) {
@@ -316,28 +316,9 @@ export async function PUT(request: NextRequest) {
       },
     }) > 0;
 
-    // Если профиль заполнен и документов еще нет - отправляем системное сообщение
+    // Удалено: отправка системных сообщений в чат - больше не используется
     if (isProfileComplete && !hasGeneratedDocs) {
-      try {
-        // Проверяем не отправляли ли уже это сообщение по уникальному маркеру
-        const existingMessage = await prisma.chatMessage.findFirst({
-          where: {
-            userId: session.user.id,
-            content: { contains: "[GENERATE_DOCUMENTS_BUTTON]" },
-            isSystemMessage: true,
-          },
-        });
-
-        if (!existingMessage) {
-          await SystemMessages.profileCompleted(session.user.id);
-          console.log("[profile] System message sent: profile completed");
-        } else {
-          console.log("[profile] System message already exists, skipping");
-        }
-      } catch (error) {
-        console.error("[profile] Error sending system message:", error);
-        // Не блокируем сохранение профиля из-за ошибки отправки сообщения
-      }
+      console.log("[profile] Profile completed, ready for document generation");
     }
 
     return NextResponse.json({

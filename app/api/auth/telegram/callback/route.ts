@@ -131,11 +131,7 @@ export async function GET(request: NextRequest) {
           data: { userId: session.user.id },
         });
         
-        // Переносим чат-сессии
-        await prisma.chatSession.updateMany({
-          where: { userId: existingTgUser.id },
-          data: { userId: session.user.id },
-        });
+        // Удалено: перенос чат-сессий - больше не используется
         
         // Переносим историю членства
         await prisma.membershipHistory.updateMany({
@@ -143,11 +139,7 @@ export async function GET(request: NextRequest) {
           data: { userId: session.user.id },
         });
         
-        // Переносим обращения
-        await prisma.userAppeal.updateMany({
-          where: { userId: existingTgUser.id },
-          data: { userId: session.user.id },
-        });
+        // Удалено: перенос обращений - функция обращений больше не используется
         
         // Удаляем связанные записи
         await prisma.sMSPinCode.deleteMany({ where: { userId: existingTgUser.id } });
@@ -213,15 +205,9 @@ export async function GET(request: NextRequest) {
               where: { userId: existingTgUser.id },
               data: { userId: user.id },
             });
-            await prisma.chatSession.updateMany({
-              where: { userId: existingTgUser.id },
-              data: { userId: user.id },
-            });
-            await prisma.chatMessage.updateMany({
-              where: { userId: existingTgUser.id },
-              data: { userId: user.id },
-            });
-            await prisma.userAppeal.updateMany({
+            // Удалено: перенос чат-сессий и сообщений - больше не используется
+            // Удалено: перенос обращений - функция обращений больше не используется
+            // await prisma.userAppeal.updateMany({
               where: { userId: existingTgUser.id },
               data: { userId: user.id },
             });

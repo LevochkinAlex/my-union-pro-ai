@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
-import { SystemMessages } from "@/lib/system-messages";
+// Удалено: SystemMessages - больше не используется
 
 /**
  * Проверяет что файл является PDF документом
@@ -215,31 +215,8 @@ export async function POST(request: NextRequest) {
     // Определяем тип документа по содержимому или используем forcedType
     let documentType = forcedType || (pdfText ? detectDocumentType(file.name, pdfText) : "OTHER");
     
-    // Дополнительная проверка по типу сессии
-    if (sessionId) {
-      const chatSession = await prisma.chatSession.findFirst({
-        where: {
-          id: sessionId,
-          userId: session.user.id,
-        },
-      });
-
-      if (chatSession?.type === "STATEMENT") {
-        // В чате заявления - если тип не определен, используем MEMBERSHIP_APPLICATION по умолчанию
-        if (documentType === "OTHER") {
-          console.log('[upload] Document type not detected, defaulting to MEMBERSHIP_APPLICATION for STATEMENT session');
-          documentType = "MEMBERSHIP_APPLICATION";
-        }
-      } else {
-        // Для других типов сессий проверяем что документ релевантен
-        if (documentType === "OTHER") {
-          return NextResponse.json(
-            { error: "Не удалось определить тип документа. Пожалуйста, загрузите подписанное заявление о вступлении или взносах." },
-            { status: 400 }
-          );
-        }
-      }
-    }
+    // Удалено: проверка ChatSession - больше не используется
+    // Тип документа определяется автоматически по содержимому файла
     
     // Валидация что в документе есть необходимые элементы
     // Для изображений (JPG/PNG) не проверяем содержимое - это нормально
@@ -380,37 +357,22 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Если оба документа загружены - отправляем системное сообщение
+    // Если оба документа загружены - обновляем статус на PENDING
     if (membershipDoc && contributionDoc) {
       try {
-        // Проверяем не отправляли ли уже это сообщение
-        const existingMessage = await prisma.chatMessage.findFirst({
+        // Обновляем статус документов на PENDING (отправлены на проверку)
+        await prisma.document.updateMany({
           where: {
             userId: session.user.id,
-            content: { contains: "Спасибо за ваши документы" },
-            isSystemMessage: true,
+            type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
+            status: "SIGNED",
           },
+          data: { status: "PENDING" },
         });
-
-        if (!existingMessage) {
-          // Обновляем статус документов на PENDING (отправлены на проверку)
-          await prisma.document.updateMany({
-            where: {
-              userId: session.user.id,
-              type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
-              status: "SIGNED",
-            },
-            data: { status: "PENDING" },
-          });
-
-          // Отправляем финальное системное сообщение
-          // Сообщение от пользователя будет отправлено из модалки через /api/chat с маркером [DOCUMENTS_UPLOADED]
-          await SystemMessages.documentsSubmitted(session.user.id);
-          console.log("[upload] ✅ System message sent: documents submitted");
-        }
-      } catch (sysMsgError) {
-        console.error("[upload] Error sending system message:", sysMsgError);
-        // Не блокируем загрузку документов из-за ошибки отправки сообщений
+        console.log("[upload] ✅ Documents status updated to PENDING");
+      } catch (error) {
+        console.error("[upload] Error updating document status:", error);
+        // Не блокируем загрузку документов из-за ошибки обновления статуса
       }
     }
 
