@@ -772,14 +772,27 @@ function TelegramLoginButton() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="flex flex-col flex-1 w-full items-center justify-center">
-        <div className="text-center">
-          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
-          <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
+    <Suspense 
+      fallback={
+        <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+          <div className="flex flex-1 w-full lg:w-1/2 bg-white dark:bg-gray-800">
+            <div className="flex flex-col flex-1 w-full items-center justify-center">
+              <div className="text-center">
+                <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+                <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
+              </div>
+            </div>
+          </div>
+          <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700">
+            <div className="relative z-10 flex items-center justify-center w-full p-12">
+              <div className="text-center text-white max-w-md">
+                <p className="text-xl text-white/90">Современная платформа для управления профсоюзом</p>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    }>
+      }
+    >
       <LoginForm />
     </Suspense>
   );
