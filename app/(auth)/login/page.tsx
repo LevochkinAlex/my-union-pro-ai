@@ -51,15 +51,14 @@ function LoginForm() {
 
   // Получаем callbackUrl из query параметров при монтировании
   useEffect(() => {
-    try {
-      const callback = searchParams?.get("callbackUrl");
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const callback = params.get("callbackUrl");
       if (callback) {
         setCallbackUrl(decodeURIComponent(callback));
       }
-    } catch (err) {
-      console.error("[Login] Error reading searchParams:", err);
     }
-  }, [searchParams]);
+  }, []);
 
   // Таймер для повторной отправки SMS
   useEffect(() => {
