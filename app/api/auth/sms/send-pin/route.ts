@@ -78,11 +78,21 @@ export async function POST(request: NextRequest) {
 
     // Ищем пользователя по телефону (если есть) - пробуем разные варианты номера
     // Проверяем и phone, и authPhone (телефон первой авторизации)
+    // ВАЖНО: ищем по всем возможным форматам, чтобы найти пользователя с привязанным Telegram
+    const phoneVariants = normalizedPhone.startsWith("+") 
+      ? [
+          normalizedPhone,
+          normalizedPhone.replace("+", ""),
+          normalizedPhone.replace("+7", "7"),
+          normalizedPhone.replace("+7", "8"),
+        ]
+      : [normalizedPhone];
+    
     let existingUser = await prisma.user.findFirst({
       where: {
         OR: [
-          { phone: normalizedPhone },
-          { authPhone: normalizedPhone },
+          ...phoneVariants.map(phone => ({ phone })),
+          ...phoneVariants.map(phone => ({ authPhone: phone })),
         ],
       },
       select: {
@@ -93,44 +103,16 @@ export async function POST(request: NextRequest) {
         authPhone: true,
       },
     });
-
-    // Если не нашли, пробуем без +
-    if (!existingUser && normalizedPhone.startsWith("+")) {
-      const phoneWithoutPlus = normalizedPhone.replace("+", "");
-      const phoneWith7 = normalizedPhone.replace("+7", "7");
-      const phoneWith8 = normalizedPhone.replace("+7", "8");
-      
-      existingUser = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { phone: phoneWithoutPlus },
-            { phone: phoneWith7 },
-            { phone: phoneWith8 },
-            { authPhone: phoneWithoutPlus },
-            { authPhone: phoneWith7 },
-            { authPhone: phoneWith8 },
-          ],
-        },
-        select: {
-          id: true,
-          telegramChatId: true,
-          maxChatId: true,
-          phone: true,
-          authPhone: true,
-        },
-      });
-    }
+    
+    console.log("[2FA Auth] Поиск пользователя для номера:", normalizedPhone, {
+      найдено: !!existingUser,
+      telegramChatId: existingUser?.telegramChatId || null,
+      phone: existingUser?.phone || null,
+      authPhone: existingUser?.authPhone || null,
+    });
 
     // Удаляем старые неиспользованные PIN-коды для этого номера (все форматы)
-    const phoneVariants = normalizedPhone.startsWith("+") 
-      ? [
-          normalizedPhone,
-          normalizedPhone.replace("+", ""),
-          normalizedPhone.replace("+7", "7"),
-          normalizedPhone.replace("+7", "8"),
-        ]
-      : [normalizedPhone];
-    
+    // Используем phoneVariants, которые уже определены выше
     await prisma.sMSPinCode.deleteMany({
       where: {
         OR: phoneVariants.map(phone => ({ phone })),

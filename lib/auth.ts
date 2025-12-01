@@ -85,10 +85,19 @@ export const authOptions: NextAuthOptions = {
         try {
           const normalizedPhone = normalizePhone(credentials.phone);
 
-          // Ищем неиспользованный PIN-код
-          const pinRecord = await prisma.sMSPinCode.findFirst({
+          // Ищем неиспользованный PIN-код (пробуем разные форматы номера)
+          const phoneVariants = normalizedPhone.startsWith("+") 
+            ? [
+                normalizedPhone,
+                normalizedPhone.replace("+", ""),
+                normalizedPhone.replace("+7", "7"),
+                normalizedPhone.replace("+7", "8"),
+              ]
+            : [normalizedPhone];
+          
+          let pinRecord = await prisma.sMSPinCode.findFirst({
             where: {
-              phone: normalizedPhone,
+              OR: phoneVariants.map(phone => ({ phone })),
               used: false,
               expiresAt: {
                 gt: new Date(),
@@ -100,14 +109,20 @@ export const authOptions: NextAuthOptions = {
           });
 
           if (!pinRecord) {
+            console.log("[NextAuth] PIN-код не найден для номера:", normalizedPhone, "варианты:", phoneVariants);
             return null;
           }
 
           // Проверяем PIN-код
-          const isPinValid = await bcrypt.compare(credentials.pinCode, pinRecord.hashedPin);
+          const pinAsString = String(credentials.pinCode).trim();
+          const isPinValid = await bcrypt.compare(pinAsString, pinRecord.hashedPin);
+          
           if (!isPinValid) {
+            console.log("[NextAuth] PIN-код неверный для номера:", normalizedPhone, "введен:", pinAsString);
             return null;
           }
+          
+          console.log("[NextAuth] ✅ PIN-код верный для номера:", normalizedPhone);
 
           // Помечаем PIN-код как использованный
           await prisma.sMSPinCode.update({
@@ -118,40 +133,27 @@ export const authOptions: NextAuthOptions = {
             },
           });
 
-          // Ищем или создаем пользователя
-          // Извлекаем только цифры для поиска (7XXXXXXXXXX)
-          const phoneDigits = normalizedPhone.replace(/\D/g, "");
-          
-          // Пробуем найти по точному совпадению
-          let user = await prisma.user.findUnique({
-            where: { phone: normalizedPhone },
+          // Ищем или создаем пользователя (пробуем все варианты номера)
+          // Используем те же варианты, что и для поиска PIN-кода
+          let user = await prisma.user.findFirst({
+            where: {
+              OR: [
+                ...phoneVariants.map(phone => ({ phone })),
+                ...phoneVariants.map(phone => ({ authPhone: phone })),
+              ],
+            },
           });
-
-          // Если не нашли, ищем по номеру в других форматах
-          if (!user) {
-            user = await prisma.user.findFirst({
-              where: {
-                OR: [
-                  { phone: { contains: phoneDigits.slice(-10) } }, // Последние 10 цифр
-                  { phone: `+7 (${phoneDigits.slice(1, 4)}) ${phoneDigits.slice(4, 7)}-${phoneDigits.slice(7, 9)}-${phoneDigits.slice(9)}` },
-                  { phone: `+${phoneDigits}` },
-                  { phone: phoneDigits },
-                  { phone: `8${phoneDigits.slice(1)}` },
-                ],
-              },
+          
+          if (user && user.phone !== normalizedPhone) {
+            // Обновляем телефон на нормализованный формат
+            console.log("[NextAuth] 📞 Найден пользователь с другим форматом телефона, обновляем:", {
+              oldPhone: user.phone,
+              newPhone: normalizedPhone,
             });
-            
-            if (user) {
-              // Обновляем телефон на нормализованный формат
-              console.log("[NextAuth] 📞 Найден пользователь с другим форматом телефона, обновляем:", {
-                oldPhone: user.phone,
-                newPhone: normalizedPhone,
-              });
-              user = await prisma.user.update({
-                where: { id: user.id },
-                data: { phone: normalizedPhone },
-              });
-            }
+            user = await prisma.user.update({
+              where: { id: user.id },
+              data: { phone: normalizedPhone },
+            });
           }
 
           if (!user) {

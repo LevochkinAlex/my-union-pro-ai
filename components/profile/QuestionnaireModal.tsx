@@ -218,7 +218,10 @@ export default function QuestionnaireModal({
       console.log(`[QuestionnaireModal] Auto-saved field ${fieldName}:`, value);
     } catch (error) {
       console.error(`[QuestionnaireModal] Error auto-saving field ${fieldName}:`, error);
-      // Не показываем ошибку пользователю при автосохранении, чтобы не мешать
+      showAlert({
+        message: `Ошибка при сохранении поля ${fieldName}. Попробуйте еще раз.`,
+        type: "error",
+      });
     } finally {
       setAutoSaving(false);
       setTimeout(() => setLastSavedField(null), 2000);
@@ -545,9 +548,15 @@ export default function QuestionnaireModal({
                   <EmailValidationField
                     email={formData.email}
                     emailVerified={emailVerified}
-                    onEmailChange={(value) => setFormData({ ...formData, email: value })}
+                    onEmailChange={(value) => {
+                      setFormData({ ...formData, email: value });
+                    }}
                     onVerified={() => {
                       setEmailVerified(new Date());
+                      // Сохраняем email после верификации
+                      if (formData.email) {
+                        handleFieldBlur("email", formData.email);
+                      }
                     }}
                   />
                 </div>

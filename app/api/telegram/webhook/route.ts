@@ -523,8 +523,10 @@ ${loginUrl}
 
     // Команда /start с параметром для привязки номера телефона
     // Форматы: /start AUTH_phone_79991234567 или /start link_phone_79991234567
-    if (text.startsWith("/start AUTH_phone_") || text.startsWith("/start link_phone_")) {
-      const phoneParam = text.replace("/start AUTH_phone_", "").replace("/start link_phone_", "");
+    // Проверяем ДО всех остальных команд, чтобы не попасть в техподдержку
+    const trimmedText = text.trim();
+    if (trimmedText.startsWith("/start AUTH_phone_") || trimmedText.startsWith("/start link_phone_")) {
+      const phoneParam = trimmedText.replace("/start AUTH_phone_", "").replace("/start link_phone_", "").trim();
       // Нормализуем номер (добавляем + если его нет)
       let phone = phoneParam.startsWith("+") ? phoneParam : `+${phoneParam}`;
       
