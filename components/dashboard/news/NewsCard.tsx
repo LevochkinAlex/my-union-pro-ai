@@ -232,12 +232,14 @@ export default function NewsCard({
               loading="lazy"
               decoding="async"
               onError={(e) => {
-                console.error("[NewsCard] Failed to load cover image:", post.coverImage?.substring(0, 100));
+                // Тихо скрываем изображение, если оно не найдено (не логируем ошибку в консоль)
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';
-              }}
-              onLoad={() => {
-                console.log("[NewsCard] Cover image loaded successfully");
+                // Скрываем родительский div, если изображение не загрузилось
+                const parent = target.parentElement;
+                if (parent) {
+                  parent.style.display = 'none';
+                }
               }}
             />
           </div>

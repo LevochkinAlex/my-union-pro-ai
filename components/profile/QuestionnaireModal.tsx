@@ -110,11 +110,10 @@ export default function QuestionnaireModal({
       console.log("[QuestionnaireModal] loadData called");
       setIsLoading(true);
       console.log("[QuestionnaireModal] Fetching profile data from /api/profile...");
-      const [profileRes, orgsRes, jobTitlesRes, professionsRes, documentsRes] = await Promise.all([
+      const [profileRes, orgsRes, dictionariesRes, documentsRes] = await Promise.all([
         fetch("/api/profile"),
         fetch("/api/organizations"),
-        fetch("/api/dictionaries/job-titles"),
-        fetch("/api/dictionaries/professions"),
+        fetch("/api/dictionaries"),
         fetch("/api/documents"),
       ]);
 
@@ -164,22 +163,16 @@ export default function QuestionnaireModal({
         setOrganizations(orgsData.flatList || orgsData.organizations || []);
       }
 
-      if (jobTitlesRes.ok) {
-        const jobTitlesData = await jobTitlesRes.json();
-        const titles = jobTitlesData.items || [];
+      if (dictionariesRes.ok) {
+        const dictionariesData = await dictionariesRes.json();
+        const titles = dictionariesData.jobTitles || [];
+        const profs = dictionariesData.professions || [];
         console.log("[QuestionnaireModal] Loaded job titles:", titles.length);
-        setJobTitles(titles);
-      } else {
-        console.error("[QuestionnaireModal] Failed to load job titles:", jobTitlesRes.status);
-      }
-
-      if (professionsRes.ok) {
-        const professionsData = await professionsRes.json();
-        const profs = professionsData.items || [];
         console.log("[QuestionnaireModal] Loaded professions:", profs.length);
+        setJobTitles(titles);
         setProfessions(profs);
       } else {
-        console.error("[QuestionnaireModal] Failed to load professions:", professionsRes.status);
+        console.error("[QuestionnaireModal] Failed to load dictionaries:", dictionariesRes.status);
       }
 
       if (documentsRes.ok) {
