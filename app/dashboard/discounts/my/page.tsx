@@ -21,9 +21,18 @@ export default function MyDiscountsPage() {
 
   useEffect(() => {
     // Синхронизация с BestBenefits при загрузке страницы, затем загрузка скидок
+    // Это гарантирует, что промокоды всегда актуальны
     const initPage = async () => {
-      await syncWithBestBenefits(false); // Ждем синхронизацию
-      await loadMyDiscounts(); // Затем загружаем скидки
+      try {
+        // Синхронизируемся с BestBenefits для получения актуальных промокодов
+        await syncWithBestBenefits(false);
+        // Загружаем скидки после синхронизации
+        await loadMyDiscounts();
+      } catch (error) {
+        console.error("[MyDiscounts] Error during initialization:", error);
+        // В случае ошибки все равно загружаем скидки (с локальными данными)
+        await loadMyDiscounts();
+      }
     };
     
     initPage();
@@ -82,10 +91,23 @@ export default function MyDiscountsPage() {
       const filters = prefsData.filters || {};
       
       // Extract IDs from claimed (может быть массив объектов или чисел)
-      const claimedData = filters.claimed || [];
-      const claimedIds = claimedData.map((item: any) => 
-        typeof item === 'object' && item.id ? item.id : item
-      ).filter(Boolean);
+      // Надежная обработка разных форматов данных
+      const claimedData = Array.isArray(filters.claimed) ? filters.claimed : [];
+      
+      // Нормализуем формат: преобразуем старый формат (числа) в новый (объекты)
+      const normalizedClaimedData = claimedData.map((item: any) => {
+        if (typeof item === 'object' && item !== null && item.id) {
+          // Уже в правильном формате
+          return item;
+        }
+        if (typeof item === 'number') {
+          // Старый формат: преобразуем в объект
+          return { id: item, promoCode: null };
+        }
+        return null;
+      }).filter(Boolean);
+      
+      const claimedIds = normalizedClaimedData.map((item: any) => item.id).filter(Boolean);
       
       const favoriteIds = filters.favorites || [];
       
@@ -122,23 +144,39 @@ export default function MyDiscountsPage() {
       console.log("[MyDiscounts] Raw claimed data:", claimedData);
       console.log("[MyDiscounts] Discounts from API:", discountsData.discounts);
       
+      // Надежная обработка промокодов для всех пользователей
       const discountsWithPromoCodes = (discountsData.discounts || []).map((discount: DiscountItem) => {
         if (activeTab === "claimed") {
-          const claimedItem = claimedData.find((item: any) => {
-            const itemId = typeof item === 'object' && item.id ? item.id : item;
-            return itemId === discount.id;
+          // Ищем claimed item для этой скидки в нормализованных данных
+          const claimedItem = normalizedClaimedData.find((item: any) => {
+            return item && item.id === discount.id;
           });
           
-          console.log(`[MyDiscounts] Discount ${discount.id}:`, { 
-            title: discount.title, 
-            claimedItem, 
-            hasPromoCode: claimedItem && typeof claimedItem === 'object' && !!claimedItem.promoCode 
-          });
+          // Извлекаем промокод из claimedItem
+          let promoCode: string | null | undefined = null;
           
-          if (claimedItem && typeof claimedItem === 'object' && claimedItem.promoCode) {
-            return { ...discount, promoCode: claimedItem.promoCode };
+          if (claimedItem) {
+            if (typeof claimedItem === 'object' && claimedItem !== null) {
+              // Новый формат: {id, promoCode}
+              promoCode = claimedItem.promoCode || null;
+            } else if (typeof claimedItem === 'number') {
+              // Старый формат: просто число, промокода нет
+              promoCode = null;
+            }
           }
+          
+          // Fallback: используем промокод из discount, если он есть
+          if (!promoCode && discount.promoCode && typeof discount.promoCode === 'string' && discount.promoCode.trim().length > 0) {
+            promoCode = discount.promoCode.trim();
+          }
+          
+          // Нормализуем: null/undefined/пустая строка -> undefined
+          const finalPromoCode = (promoCode && promoCode.trim().length > 0) ? promoCode.trim() : undefined;
+          
+          // Всегда возвращаем discount с промокодом (даже если undefined)
+          return { ...discount, promoCode: finalPromoCode };
         }
+        // Для избранного промокоды не нужны
         return discount;
       });
       
@@ -395,35 +433,60 @@ export default function MyDiscountsPage() {
                     </h3>
 
                     {/* Promo Code */}
-                    {discount.promoCode && activeTab === "claimed" && (
-                      <div className="mt-2">
-                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                          Код:
-                        </span>
-                        <div className="mt-1 flex items-center gap-2">
-                          <span className="font-mono text-sm font-bold text-blue-600 dark:text-blue-400">
-                            {discount.promoCode}
-                          </span>
-                          <button
-                            onClick={() => handleCopyPromoCode(discount)}
-                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                            title={copiedPromoId === discount.id ? "Скопировано!" : "Скопировать код"}
-                            disabled={!discount.promoCode}
-                          >
-                            {copiedPromoId === discount.id ? (
-                              <svg className="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    {activeTab === "claimed" && discount.promoCode && discount.promoCode.trim().length > 0 && (() => {
+                      // Проверяем, не является ли промокод специальным случаем
+                      const isSpecialCase = discount.promoCode === "Штрихкод в купоне" ||
+                        discount.promoCode.toLowerCase().includes("штрихкод") ||
+                        discount.promoCode.toLowerCase().includes("barcode");
+                      
+                      // Если специальный случай, показываем инструкцию
+                      if (isSpecialCase) {
+                        return (
+                          <div className="mt-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-700/50">
+                            <div className="flex items-center gap-2">
+                              <svg className="h-5 w-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                               </svg>
-                            ) : (
-                              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
-                                <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
-                              </svg>
-                            )}
-                          </button>
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Штрихкод в купоне
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      
+                      return (
+                        <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-700 dark:bg-blue-900/20">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                Промокод:
+                              </span>
+                              <span className="font-mono text-sm font-bold text-blue-700 dark:text-blue-300">
+                                {discount.promoCode}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => handleCopyPromoCode(discount)}
+                              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors p-1 rounded hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                              title={copiedPromoId === discount.id ? "Скопировано!" : "Скопировать код"}
+                              disabled={!discount.promoCode}
+                            >
+                              {copiedPromoId === discount.id ? (
+                                <svg className="h-5 w-5 text-green-600 dark:text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              ) : (
+                                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                  <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                                  <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Valid Until */}
                     {discount.validUntil && (
@@ -475,8 +538,8 @@ export default function MyDiscountsPage() {
 
       {/* Promo Card Modal */}
       {showPromoCardModal && promoCardData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="relative max-w-4xl w-full max-h-[90vh] overflow-auto rounded-xl bg-white shadow-2xl dark:bg-gray-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-md dark:backdrop-blur-lg p-4">
+          <div className="relative max-w-2xl lg:max-w-3xl w-full max-h-[90vh] overflow-auto rounded-xl bg-white shadow-2xl dark:bg-gray-800">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 dark:border-gray-700 dark:bg-gray-800">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Промокарта
@@ -513,16 +576,25 @@ export default function MyDiscountsPage() {
                   Скачать
                 </button>
                 
-                {/* Copy Promo Code Button - only if promo code exists */}
-                {promoCardData.discount.promoCode && (
-                  <button
-                    onClick={() => handleCopyPromoCode(promoCardData.discount)}
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-6 py-3 text-base font-semibold transition ${
-                      copiedPromoId === promoCardData.discount.id
-                        ? 'bg-green-600 text-white hover:bg-green-700'
-                        : 'border-2 border-green-600 bg-white text-green-600 hover:bg-green-50 dark:bg-gray-800 dark:hover:bg-gray-700'
-                    }`}
-                  >
+                {/* Copy Promo Code Button - only if promo code exists and is not special case */}
+                {promoCardData.discount.promoCode && (() => {
+                  const isSpecialCase = promoCardData.discount.promoCode === "Штрихкод в купоне" ||
+                    promoCardData.discount.promoCode.toLowerCase().includes("штрихкод") ||
+                    promoCardData.discount.promoCode.toLowerCase().includes("barcode");
+                  
+                  if (isSpecialCase) {
+                    return null; // Не показываем кнопку копирования для специальных случаев
+                  }
+                  
+                  return (
+                    <button
+                      onClick={() => handleCopyPromoCode(promoCardData.discount)}
+                      className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-6 py-3 text-base font-semibold transition ${
+                        copiedPromoId === promoCardData.discount.id
+                          ? 'bg-green-600 text-white hover:bg-green-700'
+                          : 'border-2 border-green-600 bg-white text-green-600 hover:bg-green-50 dark:bg-gray-800 dark:hover:bg-gray-700'
+                      }`}
+                    >
                     {copiedPromoId === promoCardData.discount.id ? (
                       <>
                         <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -540,7 +612,8 @@ export default function MyDiscountsPage() {
                       </>
                     )}
                   </button>
-                )}
+                  );
+                })()}
                 
                 <button
                   onClick={handleAddToWallet}

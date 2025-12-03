@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { UserRole } from "@prisma/client";
+import { sendNotification } from "@/lib/notifications";
 
 // GET /api/admin/news - получить все новости (включая неопубликованные)
 export async function GET(request: NextRequest) {
@@ -124,63 +125,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Если новость опубликована, отправляем push-уведомления
+    // Если новость опубликована, отправляем уведомления всем пользователям
     if (isPublished) {
       try {
-        const subscriptions = await prisma.pushSubscription.findMany({
-          where: {
-            fcmToken: {
-              not: null,
-            },
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
+        const result = await sendNotification({
+          sendToAll: true,
+          title: "📰 Новая новость",
+          message: title,
+          link: `${baseUrl}/dashboard/news/${newsPost.id}`,
+          data: {
+            type: "news_published",
+            newsId: newsPost.id,
           },
-          select: { fcmToken: true },
-          distinct: ["fcmToken"],
         });
-
-        const fcmTokens = subscriptions
-          .map((sub) => sub.fcmToken)
-          .filter(Boolean) as string[];
-
-        if (fcmTokens.length > 0) {
-          const { messaging } = await import("@/lib/firebase-admin");
-          const message = {
-            notification: {
-              title: "Новая новость",
-              body: title,
-            },
-            webpush: {
-              notification: {
-                title: "Новая новость",
-                body: title,
-                icon: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/icon.png`,
-                badge: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/icon.png`,
-              },
-              fcmOptions: {
-                link: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/dashboard/news`,
-              },
-            },
-            android: {
-              priority: "high" as const,
-              notification: {
-                sound: "default",
-              },
-            },
-            apns: {
-              payload: {
-                aps: {
-                  sound: "default",
-                },
-              },
-            },
-            tokens: fcmTokens,
-          };
-
-          await messaging.sendEachForMulticast(message);
-          console.log("[api/admin/news] Push notifications sent:", fcmTokens.length);
-        }
-      } catch (pushError) {
-        console.error("[api/admin/news] Failed to send push notifications:", pushError);
-        // Не прерываем создание новости из-за ошибки push-уведомлений
+        console.log("[api/admin/news] Уведомления отправлены:", {
+          push: result.push,
+          email: result.email,
+        });
+      } catch (notificationError) {
+        console.error("[api/admin/news] Ошибка отправки уведомлений:", notificationError);
+        // Не прерываем создание новости из-за ошибки уведомлений
       }
     }
 

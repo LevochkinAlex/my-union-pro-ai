@@ -44,9 +44,6 @@ export async function GET(request: NextRequest) {
       path.join(process.cwd(), "public", "uploads", "news", fileName),
     ];
 
-    console.log(`[news/image] Searching for image: ${imagePath}, fileName: ${fileName}`);
-    console.log(`[news/image] Trying paths:`, possiblePaths);
-
     let fileBuffer: Buffer | null = null;
     let mimeType = "image/jpeg";
 
@@ -61,32 +58,17 @@ export async function GET(request: NextRequest) {
         else if (ext === ".webp") mimeType = "image/webp";
         else if (ext === ".gif") mimeType = "image/gif";
         
-        console.log(`[news/image] ✅ Found file at: ${filePath}`);
         break;
       } catch (error) {
         // Файл не найден, пробуем следующий путь
-        console.log(`[news/image] ❌ File not found at: ${filePath}`);
         continue;
       }
     }
 
     if (!fileBuffer) {
-      console.error(`[news/image] ❌ File not found for path: ${imagePath}`);
-      console.error(`[news/image] Tried all paths:`, possiblePaths);
-      
-      // Попробуем посмотреть, какие файлы есть в директории
-      try {
-        const newsDir = path.join(process.cwd(), "public", "uploads", "news");
-        const files = await fs.readdir(newsDir);
-        console.log(`[news/image] Available files in news directory:`, files.slice(0, 10));
-      } catch (dirError) {
-        console.error(`[news/image] Could not read news directory:`, dirError);
-      }
-      
-      return NextResponse.json(
-        { error: "Image not found" },
-        { status: 404 }
-      );
+      // Файл не найден - это нормальное поведение, не логируем как ошибку
+      // Возвращаем 204 No Content вместо 404, чтобы браузер не показывал это как ошибку
+      return new NextResponse(null, { status: 204 });
     }
 
     return new NextResponse(fileBuffer as any, {

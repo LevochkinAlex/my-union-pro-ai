@@ -20,6 +20,9 @@ export default function FloatingChatBot() {
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationHistoryRef = useRef<ChatMessage[]>([]);
+  
+  // Вычисляем, можно ли отправить сообщение
+  const canSend = input.trim().length > 0 && !isLoading;
 
   // Загружаем аватарку пользователя
   useEffect(() => {
@@ -54,7 +57,15 @@ export default function FloatingChatBot() {
   // Отправка сообщения
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading || !session?.user?.id) return;
+    const trimmedInput = input.trim();
+    if (!trimmedInput || isLoading) return;
+    
+    // Проверяем сессию перед отправкой
+    if (!session?.user?.id) {
+      console.error("[FloatingChatBot] No user session");
+      alert("Пожалуйста, войдите в систему для использования чата");
+      return;
+    }
 
     const userMessage = input.trim();
     setInput("");
@@ -116,17 +127,18 @@ export default function FloatingChatBot() {
     // conversationHistoryRef.current = [];
   };
 
-  if (!session?.user?.id) {
-    return null;
-  }
+  // Не скрываем компонент, если сессия еще загружается
+  // Показываем, но блокируем поле ввода до загрузки сессии
+  const isSessionReady = !!session?.user?.id;
 
   return (
     <>
-      {/* Плавающая кнопка */}
+      {/* Плавающая кнопка - показываем всегда, даже если сессия еще загружается */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 shadow-lg transition-all hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-blue-500 dark:hover:bg-blue-600"
         aria-label="Открыть чат"
+        disabled={!isSessionReady}
       >
         <svg
           className="h-7 w-7 text-white"
@@ -241,19 +253,29 @@ export default function FloatingChatBot() {
 
           {/* Форма ввода */}
           <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+            {!isSessionReady && (
+              <div className="mb-2 text-xs text-gray-500 dark:text-gray-400 text-center">
+                Загрузка сессии...
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="flex gap-2">
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Задайте вопрос..."
-                className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                 disabled={isLoading}
               />
               <button
                 type="submit"
-                disabled={!input.trim() || isLoading}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-blue-500 dark:hover:bg-blue-600"
+                disabled={!canSend}
+                className={`rounded-lg px-4 py-2 text-white transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  canSend
+                    ? "bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 cursor-pointer"
+                    : "bg-gray-400 dark:bg-gray-600 opacity-50 cursor-not-allowed"
+                }`}
+                aria-label="Отправить сообщение"
               >
                 {isLoading ? (
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>

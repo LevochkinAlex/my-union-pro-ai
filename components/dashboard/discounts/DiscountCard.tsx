@@ -201,27 +201,43 @@ export default function DiscountCard({
           )}
         </div>
 
-        {discount.promoCode && (
-          <button
-            type="button"
-            onClick={handleCopyPromo}
-            className={clsx(
-              "inline-flex items-center justify-between rounded-lg border px-2.5 py-1.5 text-xs sm:text-sm font-medium transition",
-              copied
-                ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-200"
-                : "border-dashed border-gray-300 text-gray-700 hover:border-blue-300 hover:text-blue-700 dark:border-gray-600 dark:text-gray-200"
-            )}
-          >
-            <span className="truncate mr-2">
-              <span className="hidden sm:inline">Промокод: </span>
-              {discount.promoCode}
-            </span>
-            <svg className="h-4 w-4 flex-none" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M5 7a2 2 0 012-2h6a1 1 0 011 1v8a2 2 0 01-2 2H8a1 1 0 01-1-1V7H5z" />
-              <path d="M9 3a2 2 0 00-2 2h6a2 2 0 012 2v6a2 2 0 001-1.732V5a2 2 0 00-2-2H9z" />
-            </svg>
-          </button>
-        )}
+        {discount.promoCode && (() => {
+          // Проверяем, не является ли промокод специальным случаем
+          const isSpecialCase = discount.promoCode === "Штрихкод в купоне" ||
+            discount.promoCode.toLowerCase().includes("штрихкод") ||
+            discount.promoCode.toLowerCase().includes("barcode");
+          
+          // Если специальный случай, показываем инструкцию
+          if (isSpecialCase) {
+            return (
+              <div className="inline-flex items-center rounded-lg border border-dashed border-gray-300 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-gray-600 dark:border-gray-600 dark:text-gray-400">
+                <span className="truncate">Штрихкод в купоне</span>
+              </div>
+            );
+          }
+          
+          return (
+            <button
+              type="button"
+              onClick={handleCopyPromo}
+              className={clsx(
+                "inline-flex items-center justify-between rounded-lg border px-2.5 py-1.5 text-xs sm:text-sm font-medium transition",
+                copied
+                  ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-200"
+                  : "border-dashed border-gray-300 text-gray-700 hover:border-blue-300 hover:text-blue-700 dark:border-gray-600 dark:text-gray-200"
+              )}
+            >
+              <span className="truncate mr-2">
+                <span className="hidden sm:inline">Промокод: </span>
+                {discount.promoCode}
+              </span>
+              <svg className="h-4 w-4 flex-none" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5 7a2 2 0 012-2h6a1 1 0 011 1v8a2 2 0 01-2 2H8a1 1 0 01-1-1V7H5z" />
+                <path d="M9 3a2 2 0 00-2 2h6a2 2 0 012 2v6a2 2 0 001-1.732V5a2 2 0 00-2-2H9z" />
+              </svg>
+            </button>
+          );
+        })()}
 
         <div className="mt-auto space-y-2 pt-2">
           {discount.partnerUrl && (

@@ -20,7 +20,9 @@ export async function GET(
 
     // Check if file exists
     if (!existsSync(filepath)) {
-      return NextResponse.json({ error: "File not found" }, { status: 404 });
+      // Возвращаем 204 No Content вместо 404, чтобы браузер не показывал это как ошибку
+      // Это нормальное поведение - файл может не существовать
+      return new NextResponse(null, { status: 204 });
     }
 
     // Read file

@@ -1,5 +1,6 @@
 import type { NextAuthOptions, User } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import YandexProvider from "next-auth/providers/yandex";
 import { prisma } from "./prisma";
 import bcrypt from "bcryptjs";
 
@@ -19,6 +20,16 @@ function normalizePhone(phone: string): string {
 
 export const authOptions: NextAuthOptions = {
   providers: [
+    // Яндекс ID провайдер
+    ...(process.env.YANDEX_CLIENT_ID && process.env.YANDEX_CLIENT_SECRET
+      ? [
+          YandexProvider({
+            clientId: process.env.YANDEX_CLIENT_ID,
+            clientSecret: process.env.YANDEX_CLIENT_SECRET,
+            // Используем дефолтные scope от Яндекс (без явного указания)
+          }),
+        ]
+      : []),
     // Авторизация по временному токену (для соцсетей: Telegram, VK, Google)
     CredentialsProvider({
       id: "credentials",
@@ -161,6 +172,7 @@ export const authOptions: NextAuthOptions = {
             user = await prisma.user.create({
               data: {
                 phone: normalizedPhone,
+                authPhone: normalizedPhone, // Устанавливаем authPhone при первой SMS авторизации
                 role: "PENDING_MEMBER",
                 membershipStatus: "PROFILE_INCOMPLETE",
               },
@@ -168,11 +180,21 @@ export const authOptions: NextAuthOptions = {
             console.log("[NextAuth] ✅ Создан новый пользователь при первом входе:", {
               id: user.id,
               phone: user.phone,
+              authPhone: user.authPhone,
             });
           } else {
+            // Если authPhone не установлен, устанавливаем его (для старых пользователей)
+            if (!user.authPhone) {
+              user = await prisma.user.update({
+                where: { id: user.id },
+                data: { authPhone: normalizedPhone },
+              });
+              console.log("[NextAuth] 📞 Установлен authPhone для существующего пользователя:", user.id);
+            }
             console.log("[NextAuth] ✅ Найден существующий пользователь:", {
               id: user.id,
               phone: user.phone,
+              authPhone: user.authPhone,
               role: user.role,
             });
           }
@@ -189,6 +211,98 @@ export const authOptions: NextAuthOptions = {
           };
         } catch (error) {
           console.error("[NextAuth] SMS Authorize error:", error);
+          return null;
+        }
+      },
+    }),
+    // Impersonation провайдер (для входа от имени пользователя)
+    CredentialsProvider({
+      id: "impersonate",
+      name: "Impersonate",
+      credentials: {
+        userId: { label: "User ID", type: "text" },
+        originalAdminId: { label: "Original Admin ID", type: "text" },
+      },
+      async authorize(credentials): Promise<User | null> {
+        if (!credentials?.userId || !credentials?.originalAdminId) {
+          return null;
+        }
+
+        try {
+          // Проверяем, что админ существует и является супер-админом
+          const admin = await prisma.user.findUnique({
+            where: { id: credentials.originalAdminId },
+          });
+
+          if (!admin || admin.role !== "SUPER_ADMIN") {
+            return null;
+          }
+
+          // Получаем пользователя, от имени которого входим
+          const targetUser = await prisma.user.findUnique({
+            where: { id: credentials.userId },
+          });
+
+          if (!targetUser) {
+            return null;
+          }
+
+          // Возвращаем пользователя с флагом impersonation
+          return {
+            id: targetUser.id,
+            email: targetUser.email || undefined,
+            name: `${targetUser.firstName ?? ""} ${targetUser.lastName ?? ""}`.trim() || undefined,
+            role: targetUser.role,
+            membershipStatus: targetUser.membershipStatus,
+            firstName: targetUser.firstName,
+            lastName: targetUser.lastName,
+            avatarUrl: targetUser.avatarUrl,
+            // Добавляем метаданные для impersonation
+            originalAdminId: admin.id,
+            isImpersonating: true,
+          } as User & { originalAdminId: string; isImpersonating: boolean };
+        } catch (error) {
+          console.error("[Auth] Impersonate error:", error);
+          return null;
+        }
+      },
+    }),
+    // Восстановление сессии админа после impersonation
+    CredentialsProvider({
+      id: "restore-admin",
+      name: "Restore Admin",
+      credentials: {
+        adminId: { label: "Admin ID", type: "text" },
+        restoreToken: { label: "Restore Token", type: "text" },
+      },
+      async authorize(credentials): Promise<User | null> {
+        if (!credentials?.adminId) {
+          return null;
+        }
+
+        try {
+          // Проверяем существование админа и его роль
+          const admin = await prisma.user.findUnique({
+            where: { id: credentials.adminId },
+          });
+
+          if (!admin || admin.role !== "SUPER_ADMIN") {
+            return null;
+          }
+
+          // Возвращаем админа без флагов impersonation
+          return {
+            id: admin.id,
+            email: admin.email || undefined,
+            name: `${admin.firstName ?? ""} ${admin.lastName ?? ""}`.trim() || undefined,
+            role: admin.role,
+            membershipStatus: admin.membershipStatus,
+            firstName: admin.firstName,
+            lastName: admin.lastName,
+            avatarUrl: admin.avatarUrl,
+          };
+        } catch (error) {
+          console.error("[Auth] Restore admin error:", error);
           return null;
         }
       },
@@ -242,7 +356,264 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async signIn({ user, account, profile }) {
+      // Обработка входа через Яндекс
+      if (account?.provider === "yandex" && account?.access_token) {
+        try {
+          // Получаем дополнительную информацию от Яндекс API
+          const yandexUserInfo = await fetch("https://login.yandex.ru/info?format=json", {
+            headers: {
+              Authorization: `OAuth ${account.access_token}`,
+            },
+          }).then((res) => res.json());
+
+          console.log("[Yandex Auth] Получены данные от Яндекс:", {
+            id: yandexUserInfo.id,
+            email: yandexUserInfo.default_email,
+            phone: yandexUserInfo.default_phone?.number,
+            name: yandexUserInfo.real_name,
+          });
+
+          // Собираем все условия для поиска пользователя
+          const searchConditions: any[] = [];
+
+          // Поиск по yandexId (приоритетный)
+          if (yandexUserInfo.id) {
+            try {
+              searchConditions.push({ yandexId: yandexUserInfo.id.toString() });
+              console.log("[Yandex Auth] Добавлено условие поиска по yandexId:", yandexUserInfo.id.toString());
+            } catch (e) {
+              console.log("[Yandex Auth] yandexId поиск пропущен (поле еще не создано)");
+            }
+          }
+
+          // Поиск по email
+          if (yandexUserInfo.default_email) {
+            searchConditions.push({ email: yandexUserInfo.default_email });
+            console.log("[Yandex Auth] Добавлено условие поиска по email:", yandexUserInfo.default_email);
+          }
+          if (yandexUserInfo.emails?.[0] && yandexUserInfo.emails[0] !== yandexUserInfo.default_email) {
+            searchConditions.push({ email: yandexUserInfo.emails[0] });
+            console.log("[Yandex Auth] Добавлено условие поиска по альтернативному email:", yandexUserInfo.emails[0]);
+          }
+
+          // Поиск по телефону (все варианты формата)
+          if (yandexUserInfo.default_phone?.number) {
+            const normalizedPhone = normalizePhone(yandexUserInfo.default_phone.number);
+            const phoneVariants = [
+              normalizedPhone,
+              normalizedPhone.replace("+", ""),
+              normalizedPhone.replace("+7", "7"),
+              normalizedPhone.replace("+7", "8"),
+            ];
+            phoneVariants.forEach((p) => {
+              searchConditions.push({ phone: p });
+              searchConditions.push({ authPhone: p });
+            });
+            console.log("[Yandex Auth] Добавлено условие поиска по телефону (варианты):", phoneVariants);
+          }
+
+          console.log("[Yandex Auth] Всего условий поиска:", searchConditions.length);
+
+          // Ищем пользователя по всем условиям одновременно
+          let existingUser = null;
+          if (searchConditions.length > 0) {
+            try {
+              existingUser = await prisma.user.findFirst({
+                where: {
+                  OR: searchConditions,
+                },
+              });
+              console.log("[Yandex Auth] Результат поиска пользователя:", existingUser ? "НАЙДЕН" : "НЕ НАЙДЕН");
+            } catch (searchError) {
+              console.error("[Yandex Auth] Ошибка при поиске пользователя:", searchError);
+            }
+          } else {
+            console.log("[Yandex Auth] Нет условий для поиска пользователя");
+          }
+
+          // Если пользователь существует - обновляем данные (НЕ заменяя существующие email/phone)
+          if (existingUser) {
+            console.log("[Yandex Auth] Найден существующий пользователь:", {
+              id: existingUser.id,
+              email: existingUser.email,
+              phone: existingUser.phone,
+              authPhone: existingUser.authPhone,
+            });
+
+            const updateData: any = {};
+
+            // ВАЖНО: НЕ заменяем существующие email и phone, даже если в Яндекс другие
+            // Обновляем email ТОЛЬКО если его нет
+            if (yandexUserInfo.default_email && !existingUser.email) {
+              updateData.email = yandexUserInfo.default_email;
+              console.log("[Yandex Auth] Будет установлен email из Яндекс (т.к. отсутствует):", yandexUserInfo.default_email);
+            } else if (yandexUserInfo.default_email && existingUser.email && existingUser.email !== yandexUserInfo.default_email) {
+              console.log("[Yandex Auth] Email НЕ заменяется (существующий приоритетен):", {
+                существующий: existingUser.email,
+                изЯндекс: yandexUserInfo.default_email,
+              });
+            }
+
+            // Обновляем телефон ТОЛЬКО если его нет
+            if (yandexUserInfo.default_phone?.number) {
+              const normalizedPhone = normalizePhone(yandexUserInfo.default_phone.number);
+              if (!existingUser.phone) {
+                updateData.phone = normalizedPhone;
+                console.log("[Yandex Auth] Будет установлен phone из Яндекс (т.к. отсутствует):", normalizedPhone);
+              } else {
+                const existingPhoneNormalized = normalizePhone(existingUser.phone);
+                if (existingPhoneNormalized !== normalizedPhone) {
+                  console.log("[Yandex Auth] Phone НЕ заменяется (существующий приоритетен):", {
+                    существующий: existingUser.phone,
+                    изЯндекс: normalizedPhone,
+                  });
+                }
+              }
+              // Обновляем authPhone ТОЛЬКО если его нет
+              if (!existingUser.authPhone) {
+                updateData.authPhone = normalizedPhone;
+                console.log("[Yandex Auth] Будет установлен authPhone из Яндекс (т.к. отсутствует):", normalizedPhone);
+              }
+            }
+
+            // Обновляем имя и фамилию, если их нет
+            if (yandexUserInfo.real_name) {
+              const nameParts = yandexUserInfo.real_name.split(" ");
+              if (nameParts.length >= 2) {
+                if (!existingUser.firstName) {
+                  updateData.firstName = nameParts[1]; // Имя
+                }
+                if (!existingUser.lastName) {
+                  updateData.lastName = nameParts[0]; // Фамилия
+                }
+                if (nameParts.length >= 3 && !existingUser.middleName) {
+                  updateData.middleName = nameParts.slice(2).join(" "); // Отчество
+                }
+              }
+            }
+
+            // Обновляем аватар, если его нет
+            if (yandexUserInfo.default_avatar_id && !existingUser.avatarUrl) {
+              updateData.avatarUrl = `https://avatars.yandex.net/get-yapic/${yandexUserInfo.default_avatar_id}/islands-200`;
+            }
+
+            // Сохраняем Yandex ID для связи (всегда обновляем, если есть)
+            if (yandexUserInfo.id) {
+              updateData.yandexId = yandexUserInfo.id.toString();
+            }
+
+            if (Object.keys(updateData).length > 0) {
+              await prisma.user.update({
+                where: { id: existingUser.id },
+                data: updateData,
+              });
+              console.log("[Yandex Auth] Обновлены данные пользователя:", existingUser.id, updateData);
+            } else {
+              console.log("[Yandex Auth] Данные пользователя не требуют обновления");
+            }
+
+            // Обновляем user объект для NextAuth (используем существующие данные, не из Яндекс)
+            // Нужно получить актуальные данные из БД после обновления
+            const updatedUser = await prisma.user.findUnique({
+              where: { id: existingUser.id },
+            });
+            
+            if (updatedUser) {
+              user.id = updatedUser.id;
+              user.email = updatedUser.email || undefined;
+              user.name = updatedUser.firstName && updatedUser.lastName
+                ? `${updatedUser.firstName} ${updatedUser.lastName}`
+                : yandexUserInfo.real_name || yandexUserInfo.display_name || undefined;
+              (user as any).role = updatedUser.role;
+              (user as any).membershipStatus = updatedUser.membershipStatus;
+              (user as any).firstName = updatedUser.firstName;
+              (user as any).lastName = updatedUser.lastName;
+              (user as any).avatarUrl = updatedUser.avatarUrl;
+              (user as any).yandexId = (updatedUser as any).yandexId;
+              console.log("[Yandex Auth] User объект обновлен для NextAuth:", {
+                id: user.id,
+                email: user.email,
+                phone: updatedUser.phone,
+                authPhone: updatedUser.authPhone,
+                role: (user as any).role,
+              });
+            } else {
+              // Fallback на existingUser, если не удалось получить обновленные данные
+              user.id = existingUser.id;
+              user.email = existingUser.email || undefined;
+              user.name = existingUser.firstName && existingUser.lastName
+                ? `${existingUser.firstName} ${existingUser.lastName}`
+                : yandexUserInfo.real_name || yandexUserInfo.display_name || undefined;
+              (user as any).role = existingUser.role;
+              (user as any).membershipStatus = existingUser.membershipStatus;
+              (user as any).firstName = existingUser.firstName;
+              (user as any).lastName = existingUser.lastName;
+              (user as any).avatarUrl = existingUser.avatarUrl;
+            }
+          } else {
+            // Создаем нового пользователя (если авторизовался через Яндекс первым)
+            console.log("[Yandex Auth] Пользователь не найден, создаем нового");
+            
+            const normalizedPhone = yandexUserInfo.default_phone?.number
+              ? normalizePhone(yandexUserInfo.default_phone.number)
+              : null;
+
+            const newUserData: any = {
+              email: yandexUserInfo.default_email || null,
+              phone: normalizedPhone,
+              authPhone: normalizedPhone, // Устанавливаем authPhone при первой Яндекс авторизации
+              role: "PENDING_MEMBER",
+              membershipStatus: "PROFILE_INCOMPLETE",
+            };
+
+            // Парсим имя
+            if (yandexUserInfo.real_name) {
+              const nameParts = yandexUserInfo.real_name.split(" ");
+              if (nameParts.length >= 2) {
+                newUserData.firstName = nameParts[1];
+                newUserData.lastName = nameParts[0];
+                if (nameParts.length >= 3) {
+                  newUserData.middleName = nameParts.slice(2).join(" ");
+                }
+              }
+            }
+
+            // Аватар
+            if (yandexUserInfo.default_avatar_id) {
+              newUserData.avatarUrl = `https://avatars.yandex.net/get-yapic/${yandexUserInfo.default_avatar_id}/islands-200`;
+            }
+
+            // Yandex ID
+            if (yandexUserInfo.id) {
+              newUserData.yandexId = yandexUserInfo.id.toString();
+            }
+
+            const newUser = await prisma.user.create({
+              data: newUserData,
+            });
+
+            console.log("[Yandex Auth] Создан новый пользователь:", {
+              id: newUser.id,
+              email: newUser.email,
+              phone: newUser.phone,
+              authPhone: newUser.authPhone,
+            });
+            
+            user.id = newUser.id;
+            user.email = newUser.email || undefined;
+            user.name = newUser.firstName && newUser.lastName
+              ? `${newUser.firstName} ${newUser.lastName}`
+              : yandexUserInfo.real_name || yandexUserInfo.display_name || undefined;
+          }
+        } catch (error) {
+          console.error("[Yandex Auth] Ошибка при обработке входа:", error);
+          return false; // Отклоняем вход при ошибке
+        }
+      }
+      return true;
+    },
+    async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
@@ -253,6 +624,40 @@ export const authOptions: NextAuthOptions = {
         token.email = user.email;
         token.name = user.name;
       }
+      
+      // Если это вход через Яндекс, получаем актуальные данные пользователя
+      if (account?.provider === "yandex" && token.id) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+              role: true,
+              membershipStatus: true,
+            },
+          });
+
+          if (dbUser) {
+            token.id = dbUser.id;
+            token.email = dbUser.email || undefined;
+            token.name = dbUser.firstName && dbUser.lastName
+              ? `${dbUser.firstName} ${dbUser.lastName}`
+              : undefined;
+            token.firstName = dbUser.firstName;
+            token.lastName = dbUser.lastName;
+            token.avatarUrl = dbUser.avatarUrl;
+            token.role = dbUser.role;
+            token.membershipStatus = dbUser.membershipStatus;
+          }
+        } catch (error) {
+          console.error("[Yandex Auth] Ошибка при обновлении токена:", error);
+        }
+      }
+      
       return token;
     },
     async session({ session, token }) {
@@ -288,7 +693,6 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === "development",
-  trustHost: true, // Trust proxy headers (important for production)
 };
 
 // Логирование конфигурации при загрузке модуля

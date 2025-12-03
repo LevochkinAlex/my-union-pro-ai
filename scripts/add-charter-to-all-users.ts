@@ -4,11 +4,28 @@
  */
 
 import { prisma } from "../lib/prisma";
+import fs from "fs";
+import path from "path";
 
 const CHARTER_PATH = "/docs/union/Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
 const CHARTER_TITLE = "Устав Профсоюза работников здравоохранения РФ";
 const CHARTER_DESCRIPTION = "Устав Профсоюза работников здравоохранения РФ (принят на VII съезде, апрель 2021)";
 const CHARTER_FILENAME = "Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
+
+// Вычисляем размер файла устава, если он существует
+let charterFileSize: number | null = null;
+try {
+  const fullPath = path.join(process.cwd(), "public", CHARTER_PATH);
+  if (fs.existsSync(fullPath)) {
+    const stats = fs.statSync(fullPath);
+    charterFileSize = stats.size;
+    console.log(`📊 Размер файла устава: ${charterFileSize} байт (${(charterFileSize / 1024).toFixed(1)} КБ)`);
+  } else {
+    console.warn(`⚠️ Файл устава не найден по пути: ${fullPath}`);
+  }
+} catch (error) {
+  console.warn("⚠️ Не удалось получить размер файла устава:", error);
+}
 
 async function addCharterToAllUsers() {
   try {
@@ -57,6 +74,7 @@ async function addCharterToAllUsers() {
             description: CHARTER_DESCRIPTION,
             filePath: CHARTER_PATH,
             fileName: CHARTER_FILENAME,
+            fileSize: charterFileSize,
             mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           },
         });

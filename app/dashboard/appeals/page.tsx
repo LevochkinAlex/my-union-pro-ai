@@ -107,19 +107,22 @@ export default function AppealsPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Мои обращения</h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
+    <div className="space-y-6 sm:space-y-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Мои обращения</h1>
+          <p className="mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400">
             Отслеживайте статус ваших обращений к профсоюзу
           </p>
         </div>
         <Link
           href="/dashboard/appeals/new"
-          className="rounded-lg bg-blue-600 px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 sm:px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700 whitespace-nowrap flex-shrink-0"
         >
-          + Создать обращение
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          <span className="whitespace-nowrap">Создать обращение</span>
         </Link>
       </div>
 
@@ -130,10 +133,10 @@ export default function AppealsPage() {
       )}
 
       {/* Filter buttons */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 -mx-2 px-2 sm:mx-0 sm:px-0">
         <button
           onClick={() => setFilter("all")}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+          className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
             filter === "all"
               ? "bg-blue-600 text-white"
               : "bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200"
@@ -145,7 +148,7 @@ export default function AppealsPage() {
           <button
             key={key}
             onClick={() => setFilter(key as keyof typeof TICKET_STATUSES)}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
               filter === key
                 ? "bg-blue-600 text-white"
                 : "bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200"
@@ -157,9 +160,9 @@ export default function AppealsPage() {
       </div>
 
       {tickets.length === 0 ? (
-        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-700 dark:bg-gray-800">
+        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-6 sm:p-12 text-center dark:border-gray-700 dark:bg-gray-800">
           <svg
-            className="mx-auto h-12 w-12 text-gray-400"
+            className="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-gray-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -171,16 +174,19 @@ export default function AppealsPage() {
               d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">
+          <h3 className="mt-4 text-base sm:text-lg font-medium text-gray-900 dark:text-white">
             Обращений не найдено
           </h3>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             Создайте новое обращение, чтобы получить помощь от профсоюза
           </p>
           <Link
             href="/dashboard/appeals/new"
-            className="mt-4 inline-block rounded-lg bg-blue-600 px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700"
+            className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 sm:px-6 py-2 text-sm sm:text-base font-medium text-white transition-colors hover:bg-blue-700"
           >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
             Создать обращение
           </Link>
         </div>
@@ -189,56 +195,56 @@ export default function AppealsPage() {
           {tickets.map((ticket) => (
             <div
               key={ticket.id}
-              className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
+              className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white break-words">
                       {ticket.title}
                     </h3>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-bold text-purple-700 bg-purple-100 dark:text-purple-300 dark:bg-purple-900/30">
+                    <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-mono font-bold text-purple-700 bg-purple-100 dark:text-purple-300 dark:bg-purple-900/30 whitespace-nowrap flex-shrink-0">
                       #{ticket.publicId}
                     </span>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(ticket.status)}`}>
+                    <span className={`inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${getStatusColor(ticket.status)}`}>
                       {TICKET_STATUSES[ticket.status as keyof typeof TICKET_STATUSES]?.label || ticket.status}
                     </span>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLORS[ticket.priority as keyof typeof PRIORITY_COLORS] || PRIORITY_COLORS.MEDIUM}`}>
+                    <span className={`inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${PRIORITY_COLORS[ticket.priority as keyof typeof PRIORITY_COLORS] || PRIORITY_COLORS.MEDIUM}`}>
                       {PRIORITY_LABELS[ticket.priority as keyof typeof PRIORITY_LABELS] || ticket.priority}
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                     {TICKET_TYPES[ticket.type as keyof typeof TICKET_TYPES] || ticket.type}
                   </p>
-                  <div className="mt-4 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-gray-400">
-                    <span>Создано: {new Date(ticket.createdAt).toLocaleDateString("ru-RU")}</span>
+                  <div className="mt-3 sm:mt-4 flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:gap-2 sm:gap-4 text-xs text-gray-500 dark:text-gray-400">
+                    <span className="whitespace-nowrap">Создано: {new Date(ticket.createdAt).toLocaleDateString("ru-RU")}</span>
                     {ticket.attachmentsCount > 0 && (
                       <>
-                        <span>•</span>
-                        <span>Файлов: {ticket.attachmentsCount}</span>
+                        <span className="hidden sm:inline">•</span>
+                        <span className="whitespace-nowrap">Файлов: {ticket.attachmentsCount}</span>
                       </>
                     )}
                     {ticket.commentsCount > 0 && (
                       <>
-                        <span>•</span>
-                        <span>Комментариев: {ticket.commentsCount}</span>
+                        <span className="hidden sm:inline">•</span>
+                        <span className="whitespace-nowrap">Комментариев: {ticket.commentsCount}</span>
                       </>
                     )}
                     {ticket.lastCommentAt && (
                       <>
-                        <span>•</span>
-                        <span>Последний ответ: {new Date(ticket.lastCommentAt).toLocaleDateString("ru-RU")}</span>
+                        <span className="hidden sm:inline">•</span>
+                        <span className="whitespace-nowrap">Последний ответ: {new Date(ticket.lastCommentAt).toLocaleDateString("ru-RU")}</span>
                       </>
                     )}
                   </div>
                 </div>
-                <div className="ml-4">
+                <div className="flex-shrink-0 sm:ml-4">
                   <button
                     onClick={() => router.push(`/dashboard/appeals/${ticket.id}`)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                    className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                   >
                     <svg
-                      className="h-4 w-4"
+                      className="h-4 w-4 flex-shrink-0"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -256,7 +262,7 @@ export default function AppealsPage() {
                         d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
                       />
                     </svg>
-                    Подробнее
+                    <span>Подробнее</span>
                   </button>
                 </div>
               </div>

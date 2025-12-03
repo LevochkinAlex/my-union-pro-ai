@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import fs from "fs";
+import path from "path";
+
+// Константы для устава (системный документ, доступный всем)
+const CHARTER_PATH = "/docs/union/Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
+const CHARTER_TITLE = "Устав Профсоюза работников здравоохранения РФ";
+const CHARTER_DESCRIPTION = "Устав Профсоюза работников здравоохранения РФ (принят на VII съезде, апрель 2021)";
+const CHARTER_FILENAME = "Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,6 +40,56 @@ export async function GET(request: NextRequest) {
         updatedAt: true,
       },
     });
+
+    // Проверяем, есть ли устав в документах пользователя
+    const hasCharter = documents.some(
+      (doc) =>
+        doc.type === "OTHER" &&
+        (doc.title?.toLowerCase().includes("устав") ||
+          doc.description?.toLowerCase().includes("устав"))
+    );
+
+    // Если устава нет, добавляем его как виртуальный документ (доступен всем)
+    // Документы из public/docs/union/ НЕ показываются пользователям - они только для ИИ базы знаний
+    if (!hasCharter) {
+      // Вычисляем размер файла устава, если он существует
+      let charterFileSize: number | null = null;
+      let charterFilePath: string | null = CHARTER_PATH;
+      
+      try {
+        const fullPath = path.join(process.cwd(), "public", CHARTER_PATH);
+        if (fs.existsSync(fullPath)) {
+          const stats = fs.statSync(fullPath);
+          charterFileSize = stats.size;
+        } else {
+          // Файл не найден - убираем filePath, чтобы кнопка скачивания не показывалась
+          charterFilePath = null;
+        }
+      } catch (error) {
+        console.warn("[documents] Не удалось получить размер файла устава:", error);
+        charterFilePath = null;
+      }
+
+      // Добавляем устав в начало списка (виртуальный документ)
+      const charterDocument = {
+        id: "charter-system", // Специальный ID для системного документа
+        type: "OTHER" as const,
+        status: "GENERATED" as const,
+        title: CHARTER_TITLE,
+        description: CHARTER_DESCRIPTION,
+        fileName: CHARTER_FILENAME,
+        fileSize: charterFileSize,
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filePath: charterFilePath, // null если файл не найден
+        signedFilePath: null,
+        driveFileId: null,
+        driveUrl: null,
+        createdAt: new Date("2021-04-01"), // Дата принятия устава
+        updatedAt: new Date("2021-04-01"),
+      };
+
+      documents.unshift(charterDocument);
+    }
 
     // Сортируем документы по приоритету:
     // 1. Заявления (MEMBERSHIP_APPLICATION, CONTRIBUTION_APPLICATION) - по дате (новые сверху)

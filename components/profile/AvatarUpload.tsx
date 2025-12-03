@@ -182,12 +182,16 @@ export default function AvatarUpload({ currentAvatarUrl, onSave, userName }: Ava
               src={currentAvatarUrl}
               alt="Avatar"
               className="h-24 w-24 rounded-full object-cover ring-2 ring-gray-200 dark:ring-gray-700"
-              crossOrigin="anonymous"
-              onError={() => {
-                console.error("[AvatarUpload] Failed to load avatar image");
-                console.error("[AvatarUpload] Avatar URL length:", currentAvatarUrl?.length);
-                console.error("[AvatarUpload] Avatar URL is base64:", currentAvatarUrl?.startsWith('data:'));
-                console.error("[AvatarUpload] Avatar URL preview:", currentAvatarUrl?.substring(0, 100));
+              crossOrigin={currentAvatarUrl?.startsWith('http') || currentAvatarUrl?.startsWith('/api/') ? "anonymous" : undefined}
+              onError={(e) => {
+                const img = e.target as HTMLImageElement;
+                // Логируем только в development режиме, чтобы не засорять консоль пользователя
+                if (process.env.NODE_ENV === 'development') {
+                  console.warn("[AvatarUpload] Failed to load avatar image");
+                  console.warn("[AvatarUpload] Avatar URL:", currentAvatarUrl?.substring(0, 100));
+                  console.warn("[AvatarUpload] This is normal if the file doesn't exist yet");
+                }
+                // Устанавливаем флаг ошибки, чтобы показать placeholder
                 setImageLoadError(true);
               }}
               onLoad={() => {

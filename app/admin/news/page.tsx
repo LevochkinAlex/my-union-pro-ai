@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { alertError, confirm } from "@/lib/alert";
 
 interface NewsPost {
   id: string;
@@ -51,7 +52,8 @@ export default function AdminNewsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Вы уверены, что хотите удалить эту новость?")) {
+    const confirmed = await confirm("Вы уверены, что хотите удалить эту новость?");
+    if (!confirmed) {
       return;
     }
 
@@ -66,7 +68,7 @@ export default function AdminNewsPage() {
 
       await loadNews();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Произошла ошибка");
+      alertError(err instanceof Error ? err.message : "Произошла ошибка");
     }
   };
 

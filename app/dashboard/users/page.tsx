@@ -1,0 +1,273 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useSession } from "next-auth/react";
+import UserCard from "@/components/dashboard/users/UserCard";
+import CreatePost from "@/components/posts/CreatePost";
+import PostFeed from "@/components/posts/PostFeed";
+
+interface User {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  middleName: string | null;
+  email: string;
+  avatarUrl: string | null;
+  phone: string | null;
+  jobTitle: string | null;
+  profession: string | null;
+  createdAt: Date;
+  organization: {
+    id: string;
+    name: string;
+  } | null;
+}
+
+interface Organization {
+  id: string;
+  name: string;
+}
+
+export default function UsersPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { data: session } = useSession();
+  const [users, setUsers] = useState<User[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState(searchParams.get("search") || "");
+  const [selectedOrg, setSelectedOrg] = useState(searchParams.get("organizationId") || "");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const handlePostCreated = () => {
+    // Обновляем ключ для перезагрузки ленты
+    setRefreshKey((prev) => prev + 1);
+  };
+
+  useEffect(() => {
+    loadUsers();
+  }, [page, search, selectedOrg]);
+
+  const loadUsers = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (search) params.append("search", search);
+      if (selectedOrg) params.append("organizationId", selectedOrg);
+      params.append("page", page.toString());
+      params.append("limit", "20");
+
+      const response = await fetch(`/api/users?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error("Не удалось загрузить пользователей");
+      }
+
+      const data = await response.json();
+      // Преобразуем createdAt из строки в Date
+      const usersWithDates = (data.users || []).map((user: any) => ({
+        ...user,
+        createdAt: user.createdAt ? new Date(user.createdAt) : new Date(),
+      }));
+      setUsers(usersWithDates);
+      setOrganizations(data.organizations || []);
+      setTotalPages(data.totalPages || 1);
+      setTotal(data.total || 0);
+
+      // Обновляем URL без перезагрузки страницы
+      const newParams = new URLSearchParams();
+      if (search) newParams.append("search", search);
+      if (selectedOrg) newParams.append("organizationId", selectedOrg);
+      router.replace(`/dashboard/users?${newParams.toString()}`, { scroll: false });
+    } catch (error) {
+      console.error("Error loading users:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+    loadUsers();
+  };
+
+  const handleOrgChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedOrg(e.target.value);
+    setPage(1);
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+      {/* Левая колонка: Коллеги (50% ширины) */}
+      <div className="space-y-4 lg:space-y-6">
+        {/* Заголовок */}
+        <div>
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white">
+            Коллеги профсоюза
+          </h1>
+          <p className="mt-1 lg:mt-2 text-sm lg:text-base text-gray-600 dark:text-gray-400">
+            Найдите и свяжитесь с другими членами профсоюза
+          </p>
+        </div>
+
+        {/* Поиск и фильтры */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6">
+          <form onSubmit={handleSearch} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Поиск */}
+              <div className="sm:col-span-2">
+                <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Поиск по имени, email или телефону
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Введите имя, email или телефон..."
+                    className="w-full px-4 py-2 pl-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <svg
+                    className="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Фильтр по организации */}
+              <div>
+                <label htmlFor="organization" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Организация
+                </label>
+                <select
+                  id="organization"
+                  value={selectedOrg}
+                  onChange={handleOrgChange}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Все организации</option>
+                  {organizations.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <button
+                type="submit"
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+              >
+                Найти
+              </button>
+              {total > 0 && (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Найдено: {total} {total === 1 ? "участник" : total < 5 ? "участника" : "участников"}
+                </p>
+              )}
+            </div>
+          </form>
+        </div>
+
+        {/* Список пользователей */}
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 animate-pulse">
+                <div className="h-24 w-24 rounded-full bg-gray-200 dark:bg-gray-700 mx-auto mb-4"></div>
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mx-auto"></div>
+              </div>
+            ))}
+          </div>
+        ) : users.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {users.map((user) => (
+                <UserCard key={user.id} user={user} />
+              ))}
+            </div>
+
+            {/* Пагинация */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Назад
+                </button>
+                <span className="px-4 py-2 text-gray-700 dark:text-gray-300">
+                  Страница {page} из {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Вперед
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-12 text-center">
+            <div className="flex flex-col items-center">
+              <div className="h-16 w-16 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
+                <svg
+                  className="h-8 w-8 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+                  />
+                </svg>
+              </div>
+              <p className="text-gray-500 dark:text-gray-400 font-medium">
+                Коллеги не найдены
+              </p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
+                Попробуйте изменить параметры поиска
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Правая колонка: Лента постов (50% ширины) */}
+      <div className="space-y-4 lg:space-y-6">
+        {/* Форма создания поста */}
+        {session && (
+          <CreatePost onPostCreated={handlePostCreated} compact={true} />
+        )}
+
+        {/* Лента постов */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6">
+          <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Свежие посты
+          </h2>
+          <PostFeed key={refreshKey} limit={5} />
+        </div>
+      </div>
+    </div>
+  );
+}
+

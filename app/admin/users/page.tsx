@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import ImpersonateButton from "@/components/admin/users/ImpersonateButton";
 
 export default async function AdminUsers() {
   const users = await prisma.user.findMany({
@@ -75,12 +76,15 @@ export default async function AdminUsers() {
                   {user.createdAt.toLocaleDateString("ru-RU")}
                 </td>
                 <td className="px-6 py-4 text-sm">
-                  <Link
-                    href={`/admin/users/${user.id}`}
-                    className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                  >
-                    Просмотр
-                  </Link>
+                  <div className="flex items-center gap-3">
+                    <Link
+                      href={`/admin/users/${user.id}`}
+                      className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                    >
+                      Просмотр
+                    </Link>
+                    <ImpersonateButton userId={user.id} userEmail={user.email || ""} />
+                  </div>
                 </td>
               </tr>
             ))}

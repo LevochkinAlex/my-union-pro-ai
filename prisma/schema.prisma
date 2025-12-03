@@ -53,7 +53,7 @@ model User {
 
   // История телефонов
   phoneHistory PhoneHistory[]
-  avatarUrl    String? @db.Text // URL фотографии профиля (base64 data URL может быть очень длинным)
+  avatarUrl    String?        @db.Text // URL фотографии профиля (base64 data URL может быть очень длинным)
 
   // Telegram интеграция для 2FA
   telegramChatId   String? @unique // Chat ID пользователя в Telegram для отправки PIN-кодов
@@ -62,6 +62,9 @@ model User {
   // MAX Messenger интеграция для 2FA
   maxChatId   String? @unique // Chat ID пользователя в MAX для отправки PIN-кодов
   maxUsername String? // Username пользователя в MAX (для справки)
+
+  // Яндекс ID интеграция
+  yandexId String? @unique // Yandex ID пользователя для связи аккаунтов
 
   // Предпочтения для скидок
   preferredDiscountCity String? // Предпочтительный город для фильтра скидок (название города)
@@ -113,6 +116,8 @@ model User {
 
   updatedSettings            SystemSetting[]     @relation("SystemSettingUpdatedBy")
   uploadedKnowledgeDocuments KnowledgeDocument[] @relation("KnowledgeDocumentUploadedBy")
+  createdDocumentTemplates   DocumentTemplate[]  @relation("DocumentTemplateCreatedBy")
+  updatedDocumentTemplates   DocumentTemplate[]  @relation("DocumentTemplateUpdatedBy")
 
   // Тикеты (обращения)
   tickets        Ticket[]        @relation("UserTickets")
@@ -151,6 +156,23 @@ model User {
   newsLikes     NewsLike[]     @relation("NewsLikeUser")
   newsComments  NewsComment[]  @relation("NewsCommentUser")
   newsPollVotes NewsPollVote[] @relation("NewsPollVoteUser")
+
+  // Подписки (на кого подписан)
+  subscriptions UserSubscription[] @relation("UserSubscriptions")
+  // Подписчики (кто подписан на этого пользователя)
+  subscribers   UserSubscription[] @relation("UserSubscribers")
+
+  // Чаты (как участник 1)
+  chatsAsParticipant1 Chat[]        @relation("ChatParticipant1")
+  // Чаты (как участник 2)
+  chatsAsParticipant2 Chat[]        @relation("ChatParticipant2")
+  // Сообщения в чатах
+  chatMessages        ChatMessage[] @relation("ChatMessageSender")
+
+  // Посты пользователя
+  posts        UserPost[]    @relation("UserPostAuthor")
+  postLikes    PostLike[]    @relation("PostLikeUser")
+  postComments PostComment[] @relation("PostCommentUser")
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -320,7 +342,8 @@ model Organization {
   email   String?
 
   // Председатель
-  chairmanName String?
+  chairmanName     String? // ФИО председателя
+  chairmanJobTitle String? // Должность председателя (из справочника должностей)
 
   // Члены
   members User[]
@@ -393,6 +416,10 @@ model Document {
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
+  // Шаблон документа (если документ создан из шаблона)
+  templateId String?
+  template   DocumentTemplate? @relation("DocumentFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
+
   // Комментарий при отклонении
   rejectionReason String? @db.Text
 
@@ -405,6 +432,42 @@ model Document {
   @@index([status])
   @@index([type])
   @@index([driveFileId])
+}
+
+// Шаблоны документов для конструктора
+model DocumentTemplate {
+  id          String       @id @default(cuid())
+  name        String // Название шаблона
+  description String?      @db.Text // Описание шаблона
+  type        DocumentType // Тип документа (MEMBERSHIP_APPLICATION, CONTRIBUTION_APPLICATION и т.д.)
+
+  // HTML содержимое шаблона с переменными (например, {{firstName}}, {{lastName}})
+  htmlContent String @db.Text // HTML шаблон с переменными
+
+  // CSS стили для шаблона
+  cssStyles String? @db.Text // Дополнительные CSS стили
+
+  // Метаданные
+  isActive  Boolean @default(true) // Активен ли шаблон
+  isDefault Boolean @default(false) // Шаблон по умолчанию для данного типа
+
+  // Создатель и обновление
+  createdByUserId String?
+  createdBy       User?   @relation("DocumentTemplateCreatedBy", fields: [createdByUserId], references: [id])
+  updatedByUserId String?
+  updatedBy       User?   @relation("DocumentTemplateUpdatedBy", fields: [updatedByUserId], references: [id])
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Связь с документами, созданными из этого шаблона
+  documents Document[] @relation("DocumentFromTemplate")
+
+  @@unique([type, isDefault]) // Только один шаблон по умолчанию для каждого типа
+  @@index([type])
+  @@index([isActive])
+  @@index([isDefault])
 }
 
 // Удалено: ChatSession и ChatMessage - больше не используются
@@ -1038,4 +1101,235 @@ model Profession {
   updatedAt DateTime @updatedAt
 
   @@index([name])
+}
+
+// Подписки пользователей друг на друга (для уведомлений о готовности чата)
+model UserSubscription {
+  id String @id @default(cuid())
+
+  // Подписчик (кто подписывается)
+  subscriberId String
+  subscriber   User   @relation("UserSubscriptions", fields: [subscriberId], references: [id], onDelete: Cascade)
+
+  // На кого подписан
+  targetUserId String
+  targetUser   User   @relation("UserSubscribers", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  // Настройки уведомлений
+  emailNotifications Boolean @default(true) // Email уведомления
+  pushNotifications  Boolean @default(true) // Push уведомления
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([subscriberId, targetUserId])
+  @@index([subscriberId])
+  @@index([targetUserId])
+  @@index([createdAt])
+}
+
+// Чаты между пользователями
+model Chat {
+  id String @id @default(cuid())
+
+  // Участники чата (два пользователя)
+  participant1Id String
+  participant1   User   @relation("ChatParticipant1", fields: [participant1Id], references: [id], onDelete: Cascade)
+
+  participant2Id String
+  participant2   User   @relation("ChatParticipant2", fields: [participant2Id], references: [id], onDelete: Cascade)
+
+  // Последнее сообщение (для сортировки)
+  lastMessageAt DateTime?
+  lastMessage   String?   @db.Text
+
+  // Кто прочитал последнее сообщение
+  participant1ReadAt DateTime?
+  participant2ReadAt DateTime?
+
+  // Сообщения в чате
+  messages ChatMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([participant1Id, participant2Id])
+  @@index([participant1Id])
+  @@index([participant2Id])
+  @@index([lastMessageAt])
+}
+
+// Сообщения в чатах
+model ChatMessage {
+  id String @id @default(cuid())
+
+  chatId String
+  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  // Отправитель
+  senderId String
+  sender   User   @relation("ChatMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  // Текст сообщения
+  content String @db.Text
+
+  // Ответ на сообщение (reply)
+  replyToId String?
+  replyTo   ChatMessage?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   ChatMessage[] @relation("MessageReplies")
+
+  // Пересылка сообщения (forward)
+  forwardedFromId String?
+  forwardedFrom   ChatMessage? @relation("MessageForwards", fields: [forwardedFromId], references: [id], onDelete: SetNull)
+  forwards        ChatMessage[] @relation("MessageForwards")
+
+  // Вложения (файлы, изображения)
+  attachments ChatMessageAttachment[]
+
+  // Прочитано ли сообщение
+  readAt DateTime?
+
+  // Редактирование и удаление
+  editedAt  DateTime?
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([chatId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@index([replyToId])
+  @@index([deletedAt])
+}
+
+// Вложения к сообщениям в чате
+model ChatMessageAttachment {
+  id String @id @default(cuid())
+
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  // Тип вложения
+  type String // "image", "file", "video"
+
+  // Файл
+  fileName     String
+  originalName String
+  filePath     String  @db.Text
+  fileSize     Int
+  mimeType     String?
+
+  // Превью для изображений
+  thumbnailPath String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([messageId])
+}
+
+// Посты пользователей (стена)
+model UserPost {
+  id String @id @default(cuid())
+
+  // Автор поста
+  authorId String
+  author   User   @relation("UserPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  // Контент поста
+  content String @db.Text
+
+  // Тип поста
+  postType String @default("text") // "text", "image", "link", "video", "file"
+
+  // Вложения
+  attachments PostAttachment[]
+
+  // Метаданные для ссылок и видео
+  linkMetadata  Json? // {url, title, description, image, siteName} для ссылок
+  videoMetadata Json? // {provider: "youtube"|"rutube"|"vk", videoId, embedUrl} для видео
+
+  // Статистика
+  likesCount    Int @default(0)
+  commentsCount Int @default(0)
+
+  // Связи
+  likes    PostLike[]
+  comments PostComment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([authorId])
+  @@index([createdAt])
+  @@index([postType])
+}
+
+// Вложения к постам
+model PostAttachment {
+  id String @id @default(cuid())
+
+  postId String
+  post   UserPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  // Тип вложения
+  type String // "image", "file", "video"
+
+  // Файл
+  fileName     String
+  originalName String
+  filePath     String  @db.Text
+  fileSize     Int
+  mimeType     String?
+
+  // Превью для изображений и файлов
+  thumbnailPath String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([postId])
+}
+
+// Лайки постов
+model PostLike {
+  id String @id @default(cuid())
+
+  postId String
+  post   UserPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation("PostLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+}
+
+// Комментарии к постам
+model PostComment {
+  id String @id @default(cuid())
+
+  postId String
+  post   UserPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation("PostCommentUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Ответ на другой комментарий (для вложенных комментариев)
+  parentId String?
+  parent   PostComment?  @relation("PostCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  PostComment[] @relation("PostCommentReplies")
+
+  content String @db.Text
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([postId])
+  @@index([userId])
+  @@index([parentId])
+  @@index([createdAt])
 }

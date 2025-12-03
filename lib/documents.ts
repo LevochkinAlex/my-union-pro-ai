@@ -245,14 +245,27 @@ async function generatePDFFromHTML(html: string, outputPath: string): Promise<vo
   
   const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
     headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    args: [
+      "--no-sandbox", 
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-accelerated-2d-canvas",
+      "--disable-gpu",
+    ],
   };
   
   if (executablePath) {
     launchOptions.executablePath = executablePath;
   }
   
+  console.log("[documents] Launching Puppeteer...", { 
+    executablePath: executablePath || "auto-detect",
+    platform: process.platform 
+  });
+  
   const browser = await puppeteer.launch(launchOptions);
+  
+  console.log("[documents] Puppeteer launched successfully");
   
   try {
     const page = await browser.newPage();

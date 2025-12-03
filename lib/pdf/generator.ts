@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import { Readable } from "stream";
+import path from "path";
 
 export interface PDFGeneratorOptions {
   title: string;
@@ -25,25 +26,45 @@ export interface UserData {
 
 /**
  * Создает базовый PDFDocument с настройками
+ * Использует только встроенные шрифты PDFKit без явного указания имени шрифта
+ * Это предотвращает попытки загрузки шрифтов из файловой системы
  */
 export function createPDFDocument(options: PDFGeneratorOptions): InstanceType<typeof PDFDocument> {
-  const doc = new PDFDocument({
-    size: "A4",
-    margins: {
-      top: 50,
-      bottom: 50,
-      left: 50,
-      right: 50,
-    },
-    info: {
-      Title: options.title,
-      Author: options.author || "MyUnion Pro",
-      Subject: options.subject,
-      Keywords: options.keywords,
-    },
-  });
+  try {
+    // Создаем документ без указания шрифтов
+    // PDFKit по умолчанию использует Helvetica, который встроен и не требует загрузки из файлов
+    // Важно: не вызываем doc.font() явно, чтобы избежать попыток загрузки шрифтов из файловой системы
+    const doc = new PDFDocument({
+      size: "A4",
+      margins: {
+        top: 50,
+        bottom: 50,
+        left: 50,
+        right: 50,
+      },
+      info: {
+        Title: options.title,
+        Author: options.author || "MyUnion Pro",
+        Subject: options.subject,
+        Keywords: options.keywords,
+      },
+      // Не указываем fontPath - используем только встроенные шрифты
+    });
 
-  return doc;
+    // Важно: НЕ вызываем doc.font() здесь
+    // PDFKit автоматически использует встроенный Helvetica по умолчанию
+    // Вызов doc.font() заставит PDFKit искать файлы шрифтов в файловой системе
+    
+    return doc;
+  } catch (error) {
+    console.error("[pdf/generator] Ошибка создания PDFDocument:", error);
+    console.error("[pdf/generator] Детали ошибки:", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined,
+    });
+    throw new Error(`Не удалось создать PDF документ: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 type ReadableLike = Pick<Readable, "on">;
@@ -54,9 +75,48 @@ type ReadableLike = Pick<Readable, "on">;
 export async function streamToBuffer(stream: ReadableLike): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    stream.on("data", (chunk) => chunks.push(chunk));
-    stream.on("error", reject);
-    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    let resolved = false;
+    
+    // Таймаут на случай, если поток зависнет
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        reject(new Error("PDF generation timeout: stream did not complete within 30 seconds"));
+      }
+    }, 30000);
+    
+    const cleanup = () => {
+      clearTimeout(timeout);
+      resolved = true;
+    };
+    
+    stream.on("data", (chunk: Buffer) => {
+      if (!resolved) {
+        chunks.push(chunk);
+      }
+    });
+    
+    stream.on("error", (error: Error) => {
+      cleanup();
+      reject(error);
+    });
+    
+    stream.on("end", () => {
+      if (!resolved) {
+        cleanup();
+        resolve(Buffer.concat(chunks));
+      }
+    });
+    
+    // Также обрабатываем событие 'close' на случай, если 'end' не сработает
+    if ('on' in stream && typeof (stream as any).on === 'function') {
+      (stream as any).on("close", () => {
+        if (!resolved && chunks.length > 0) {
+          cleanup();
+          resolve(Buffer.concat(chunks));
+        }
+      });
+    }
   });
 }
 

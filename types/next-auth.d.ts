@@ -19,6 +19,8 @@ declare module "next-auth" {
       firstName?: string | null;
       lastName?: string | null;
       avatarUrl?: string | null;
+      originalAdminId?: string; // ID админа при impersonation
+      isImpersonating?: boolean; // Флаг режима impersonation
     };
   }
 }
@@ -33,5 +35,7 @@ declare module "next-auth/jwt" {
     avatarUrl?: string | null;
     email?: string | null;
     name?: string | null;
+    originalAdminId?: string; // ID админа при impersonation
+    isImpersonating?: boolean; // Флаг режима impersonation
   }
 }

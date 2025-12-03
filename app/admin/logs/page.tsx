@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { alertSuccess, alertError, confirm } from "@/lib/alert";
 
 interface SystemLog {
   id: string;
@@ -81,7 +82,8 @@ export default function AdminLogsPage() {
   };
 
   const handleClearOldLogs = async () => {
-    if (!confirm("Это удалит старые разрешенные логи (старше 30 дней). Продолжить?")) {
+    const confirmed = await confirm("Это удалит старые разрешенные логи (старше 30 дней). Продолжить?");
+    if (!confirmed) {
       return;
     }
 
@@ -92,7 +94,7 @@ export default function AdminLogsPage() {
 
       const data = await response.json();
       if (data.success) {
-        alert(`Удалено ${data.deletedCount} логов`);
+        alertSuccess(`Удалено ${data.deletedCount} логов`);
         fetchLogs();
       }
     } catch (error) {

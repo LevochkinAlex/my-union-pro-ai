@@ -28,6 +28,7 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [profileChanged, setProfileChanged] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regeneratingDocId, setRegeneratingDocId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
 
   useEffect(() => {
@@ -58,21 +59,22 @@ export default function DocumentsPage() {
       }
 
       const data = await response.json();
-      // Фильтруем документы: скрываем загруженные пользователем документы типа OTHER
-      // (но оставляем системные документы, например устав)
+      // Фильтруем документы: скрываем только загруженные пользователем документы типа OTHER
+      // (но оставляем системный документ - устав, который всегда доступен)
       const filteredDocuments = (data.documents || []).filter((doc: Document) => {
         // Показываем все документы, кроме загруженных пользователем OTHER документов
         if (doc.type === "OTHER") {
-          // Показываем устав и другие системные документы
-          const isSystemDocument = 
+          // Показываем устав (системный документ) - он всегда должен быть доступен
+          const isCharter = 
+            doc.id === "charter-system" ||
             doc.title?.toLowerCase().includes("устав") ||
             doc.description?.toLowerCase().includes("устав");
           
-          // Скрываем загруженные пользователем файлы (имеют путь в /uploads/documents/)
+          // Скрываем только загруженные пользователем файлы (имеют путь в /uploads/documents/)
           const isUploadedFile = doc.filePath?.startsWith("/uploads/documents/");
           
-          // Показываем только системные документы, скрываем загруженные
-          return isSystemDocument || !isUploadedFile;
+          // Показываем устав, скрываем только загруженные пользователем
+          return isCharter || !isUploadedFile;
         }
         return true;
       });
@@ -117,25 +119,104 @@ export default function DocumentsPage() {
     }
   };
 
+  const handleRegenerateSingleDocument = async (docId: string, docType: string) => {
+    const confirmed = await confirm(
+      "Вы уверены, что хотите перегенерировать документы? Оба заявления будут перегенерированы с актуальными данными.",
+      "Подтвердите перегенерацию"
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setRegeneratingDocId(docId);
+      setError(null);
+
+      // Используем API генерации, который генерирует оба документа
+      const response = await fetch("/api/documents/generate", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || data.details || "Ошибка перегенерации документов");
+      }
+
+      // Перезагружаем документы
+      await loadDocuments();
+      await loadProfileStatus();
+
+      alertSuccess("Документы успешно перегенерированы!");
+    } catch (err) {
+      console.error("Ошибка перегенерации:", err);
+      alertError(err instanceof Error ? err.message : "Не удалось перегенерировать документы");
+    } finally {
+      setRegeneratingDocId(null);
+    }
+  };
+
   const handleDownload = async (docId: string, fileName: string | null) => {
     try {
-      const response = await fetch(`/api/documents/${docId}/download`);
+      // Кодируем ID для безопасной передачи в URL
+      const encodedId = encodeURIComponent(docId);
+      console.log("[documents] Downloading document:", { docId, encodedId, fileName });
+      const response = await fetch(`/api/documents/${encodedId}/download`);
+      
       if (!response.ok) {
-        throw new Error("Ошибка скачивания документа");
+        // Пытаемся получить сообщение об ошибке из JSON
+        let errorMessage = "Ошибка скачивания документа";
+        try {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          }
+        } catch (e) {
+          console.error("Не удалось прочитать ошибку:", e);
+        }
+        throw new Error(errorMessage);
+      }
+
+      // Проверяем, что ответ действительно содержит файл
+      const contentType = response.headers.get("content-type");
+      if (!contentType || (!contentType.includes("application/pdf") && 
+          !contentType.includes("application/vnd.openxmlformats") && 
+          !contentType.includes("application/msword") &&
+          !contentType.includes("application/octet-stream"))) {
+        // Если это не файл, пытаемся прочитать как JSON (ошибка)
+        try {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Неверный тип ответа от сервера");
+        } catch (e) {
+          if (e instanceof Error && e.message.includes("Неверный тип")) {
+            throw e;
+          }
+        }
       }
 
       const blob = await response.blob();
+      
+      // Проверяем, что blob не пустой
+      if (blob.size === 0) {
+        throw new Error("Получен пустой файл");
+      }
+      
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = fileName || "document.pdf";
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      
+      // Небольшая задержка перед очисткой, чтобы браузер успел начать скачивание
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }, 100);
     } catch (err) {
       console.error("Ошибка скачивания:", err);
-      alertError("Не удалось скачать документ");
+      const errorMessage = err instanceof Error ? err.message : "Не удалось скачать документ";
+      alertError(errorMessage);
     }
   };
 
@@ -263,7 +344,7 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="space-y-6 md:space-y-8">
+    <div className="w-full max-w-full space-y-6 md:space-y-8">
       <div className="mb-6 md:mb-8">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white md:text-3xl">Мои документы</h1>
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 md:text-base">
@@ -354,48 +435,49 @@ export default function DocumentsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-4 w-full max-w-full">
           {documents.map((doc) => (
             <div
               key={doc.id}
-              className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800 md:p-6"
+              className="w-full max-w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800 sm:p-4 md:p-6 overflow-hidden"
             >
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="flex flex-col gap-3 sm:gap-4">
                 <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-white md:text-lg">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white sm:text-base md:text-lg break-words">
                       {doc.title}
                     </h3>
                     {getStatusBadge(doc.status)}
                   </div>
-                  <p className="mt-1 text-xs text-gray-600 dark:text-gray-400 md:text-sm">
+                  <p className="mt-1 text-xs text-gray-600 dark:text-gray-400 sm:text-sm">
                     {getTypeLabel(doc.type)}
                   </p>
                   {doc.description && (
-                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 md:text-sm">
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 sm:text-sm break-words">
                       {doc.description}
                     </p>
                   )}
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400 md:mt-4 md:gap-4">
+                  <div className="mt-3 flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400 sm:mt-4 sm:flex-row sm:flex-wrap sm:gap-2 md:gap-4">
                     <span className="whitespace-nowrap">Создан: {formatDate(doc.createdAt)}</span>
-                    <span className="hidden md:inline">•</span>
+                    <span className="hidden sm:inline">•</span>
                     <span className="whitespace-nowrap">Размер: {formatFileSize(doc.fileSize)}</span>
                     {doc.fileName && (
                       <>
-                        <span className="hidden md:inline">•</span>
-                        <span className="truncate max-w-full md:max-w-xs">{doc.fileName}</span>
+                        <span className="hidden sm:inline">•</span>
+                        <span className="truncate break-all sm:break-normal">{doc.fileName}</span>
                       </>
                     )}
                   </div>
                 </div>
-                <div className="flex flex-col gap-2 md:ml-4 md:flex-shrink-0">
-                  {doc.filePath && (
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                  {/* Кнопка скачивания - показываем для всех документов со статусом GENERATED или для устава */}
+                  {(doc.status === "GENERATED" || doc.id === "charter-system" || doc.filePath) && (
                     <button
                       onClick={() => handleDownload(doc.id, doc.fileName)}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:px-4"
                     >
                       <svg
-                        className="h-4 w-4"
+                        className="h-4 w-4 flex-shrink-0"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -407,27 +489,59 @@ export default function DocumentsPage() {
                           d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                         />
                       </svg>
-                      Скачать
+                      <span>Скачать</span>
+                    </button>
+                  )}
+                  {/* Кнопка перегенерации для заявлений */}
+                  {(doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION") && (
+                    <button
+                      onClick={() => handleRegenerateSingleDocument(doc.id, doc.type)}
+                      disabled={regeneratingDocId === doc.id}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 sm:w-auto sm:px-4"
+                    >
+                      {regeneratingDocId === doc.id ? (
+                        <>
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
+                          <span>Генерация...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="h-4 w-4 flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                            />
+                          </svg>
+                          <span className="hidden sm:inline">Сгенерировать повторно</span>
+                          <span className="sm:hidden">Перегенерировать</span>
+                        </>
+                      )}
                     </button>
                   )}
                   {/* Кнопка загрузки подписанного для GENERATED документов */}
                   {(doc.status === 'GENERATED' || doc.status === 'SIGNED') && 
                    (doc.type === 'MEMBERSHIP_APPLICATION' || doc.type === 'CONTRIBUTION_APPLICATION') && (
-                    <div className="relative">
+                    <div className="relative w-full sm:w-auto">
                       {uploadProgress[doc.id] !== undefined ? (
-                        <div className="flex items-center gap-2 rounded-lg border-2 border-purple-600 bg-purple-50 dark:bg-purple-900/20 px-4 py-2">
+                        <div className="flex items-center justify-center gap-2 rounded-lg border-2 border-purple-600 bg-purple-50 dark:bg-purple-900/20 px-3 py-2 sm:px-4">
                           <div className="h-4 w-4 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
                           <span className="text-sm text-purple-700 dark:text-purple-300">
                             {uploadProgress[doc.id]}%
                           </span>
                         </div>
                       ) : (
-                        <label className="inline-flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 cursor-pointer">
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <label className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 cursor-pointer sm:w-auto sm:px-4">
+                          <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                           </svg>
-                          <span className="hidden md:inline">Загрузить подписанный</span>
-                          <span className="md:hidden">Загрузить</span>
+                          <span className="whitespace-nowrap">Загрузить подписанный</span>
                           <input
                             type="file"
                             accept=".pdf,.jpg,.jpeg,.png"
@@ -472,7 +586,7 @@ export default function DocumentsPage() {
                           alertError("Не удалось скачать подписанное заявление");
                         }
                       }}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 sm:w-auto sm:px-4"
                     >
                       <svg
                         className="h-4 w-4 flex-shrink-0"
@@ -487,8 +601,8 @@ export default function DocumentsPage() {
                           d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                         />
                       </svg>
-                      <span className="hidden md:inline">Скачать подписанное заявление</span>
-                      <span className="md:hidden">Подписанное</span>
+                      <span className="hidden sm:inline">Скачать подписанное</span>
+                      <span className="sm:hidden">Подписанное</span>
                     </button>
                   )}
                 </div>

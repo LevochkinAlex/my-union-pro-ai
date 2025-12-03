@@ -3,9 +3,10 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import NewsList from "@/components/dashboard/news/NewsList";
-import DiscountCard from "@/components/dashboard/discounts/DiscountCard";
+import DiscountsScrollList from "@/components/dashboard/discounts/DiscountsScrollList";
 import MembershipBanner from "@/components/dashboard/MembershipBanner";
 import UserCard from "@/components/dashboard/users/UserCard";
+import PostsListClient from "@/components/posts/PostsListClient";
 import { calculateProfileProgress } from "@/lib/profile-progress";
 
 export default async function DashboardPage() {
@@ -19,6 +20,71 @@ export default async function DashboardPage() {
   if (!userId || typeof userId !== "string") {
     redirect("/login");
   }
+
+  // Получаем список пользователей, на которых подписан текущий пользователь
+  const subscriptions = await prisma.userSubscription.findMany({
+    where: {
+      subscriberId: userId,
+    },
+    select: {
+      targetUserId: true,
+    },
+  });
+
+  const subscribedUserIds = subscriptions.map((sub) => sub.targetUserId);
+
+  // Получаем посты от подписок (последние 10)
+  const postsFromSubscriptions = subscribedUserIds.length > 0
+    ? await prisma.userPost.findMany({
+        where: {
+          authorId: {
+            in: subscribedUserIds,
+          },
+        },
+        include: {
+          author: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+              avatarUrl: true,
+              jobTitle: true,
+              profession: true,
+              organization: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          attachments: {
+            orderBy: {
+              createdAt: "asc",
+            },
+          },
+          likes: {
+            where: {
+              userId: userId,
+            },
+            select: {
+              id: true,
+            },
+          },
+          _count: {
+            select: {
+              likes: true,
+              comments: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 10,
+      })
+    : [];
 
   // Получаем свежие новости (последние 5)
   const recentNews = await prisma.newsPost.findMany({
@@ -85,6 +151,9 @@ export default async function DashboardPage() {
 
   const newUsers = await prisma.user.findMany({
     where: {
+      id: {
+        not: userId, // Исключаем текущего пользователя
+      },
       createdAt: {
         gte: sevenDaysAgo,
       },
@@ -129,7 +198,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 min-w-0 w-full" suppressHydrationWarning>
       {/* Заголовок */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -148,6 +217,77 @@ export default async function DashboardPage() {
           membershipStatus={membershipStatus}
         />
       )}
+
+      {/* Посты от коллег */}
+      <section className="overflow-hidden">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
+            Посты от коллег
+          </h2>
+          <a
+            href="/dashboard/users"
+            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
+          >
+            Все коллеги →
+          </a>
+        </div>
+        {subscribedUserIds.length === 0 ? (
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
+            <div className="flex flex-col items-center">
+              <div className="h-16 w-16 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
+                <svg
+                  className="h-8 w-8 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4.354a4 4 0 110 5.292M15 19H9a6 6 0 016-6h0a6 6 0 016 6v1H9v-1a4 4 0 018 0z"
+                  />
+                </svg>
+              </div>
+              <p className="text-gray-500 dark:text-gray-400 font-medium mb-2">
+                У вас пока нет подписок
+              </p>
+              <p className="text-gray-400 dark:text-gray-500 text-sm mb-4">
+                Подпишитесь на коллег, чтобы видеть их посты
+              </p>
+              <a
+                href="/dashboard/users"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Найти коллег
+              </a>
+            </div>
+          </div>
+        ) : postsFromSubscriptions.length > 0 ? (
+          <PostsListClient
+            posts={postsFromSubscriptions.map((post: any) => ({
+              id: post.id,
+              content: post.content,
+              postType: post.postType,
+              author: post.author,
+              attachments: post.attachments,
+              linkMetadata: post.linkMetadata,
+              videoMetadata: post.videoMetadata,
+              isLiked: post.likes.length > 0,
+              likesCount: post._count.likes,
+              commentsCount: post._count.comments,
+              createdAt: post.createdAt.toISOString(),
+              updatedAt: post.updatedAt.toISOString(),
+            }))}
+          />
+        ) : (
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
+            <p className="text-gray-500 dark:text-gray-400">
+              Пока нет постов от ваших подписок
+            </p>
+          </div>
+        )}
+      </section>
 
       {/* Свежие новости */}
       <section>
@@ -172,19 +312,36 @@ export default async function DashboardPage() {
       </section>
 
       {/* Новые пользователи */}
-      <section>
+      <section className="min-w-0 overflow-hidden">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-            Новые участники
+            Новые коллеги
           </h2>
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            За последние 7 дней
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              За последние 7 дней
+            </span>
+            <a
+              href="/dashboard/users"
+              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
+            >
+              Все коллеги →
+            </a>
+          </div>
         </div>
         {newUsers.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div 
+            className="flex gap-4 pb-4 overflow-x-auto"
+            style={{ 
+              scrollbarWidth: 'none', 
+              msOverflowStyle: 'none',
+              WebkitOverflowScrolling: 'touch'
+            }}
+          >
             {newUsers.map((user) => (
-              <UserCard key={user.id} user={user} />
+              <div key={user.id} className="flex-none w-[280px] sm:w-[320px]">
+                <UserCard user={user} />
+              </div>
             ))}
           </div>
         ) : (
@@ -214,7 +371,7 @@ export default async function DashboardPage() {
       </section>
 
       {/* Свежие скидки */}
-      <section>
+      <section className="overflow-hidden">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
             Свежие скидки BestBenefits
@@ -227,11 +384,7 @@ export default async function DashboardPage() {
           </a>
         </div>
         {recentDiscounts.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {recentDiscounts.map((discount) => (
-              <DiscountCard key={discount.id} discount={discount} />
-            ))}
-          </div>
+          <DiscountsScrollList discounts={recentDiscounts} />
         ) : (
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
             <p className="text-gray-500 dark:text-gray-400">

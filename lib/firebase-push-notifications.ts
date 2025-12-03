@@ -321,8 +321,16 @@ export async function setupForegroundMessageHandler() {
 
         notification.onclick = () => {
           window.focus();
-          if (payload.data?.url) {
+          // Обработка ссылок из уведомлений
+          if (payload.data?.link) {
+            window.location.href = payload.data.link;
+          } else if (payload.data?.url) {
             window.location.href = payload.data.url;
+          } else if (payload.data?.type === "chat_message" && payload.data?.senderId) {
+            // Для сообщений чата перенаправляем на чат с отправителем
+            window.location.href = `/dashboard/chat?userId=${payload.data.senderId}`;
+          } else if (payload.fcmOptions?.link) {
+            window.location.href = payload.fcmOptions.link;
           }
           notification.close();
         };

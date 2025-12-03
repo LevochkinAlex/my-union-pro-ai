@@ -62,8 +62,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Синхронизация с BestBenefits будет выполнена ПОСЛЕ заполнения профиля (ФИО)
-    // в /api/profile при первом обновлении профиля с firstName и lastName
+    // Аккаунт BestBenefits НЕ создается при регистрации
+    // Аккаунт BestBenefits будет создан только после валидации email в анкете
+    // когда пользователь подтвердит email через /api/auth/email/verify-pin
 
     // Удалено: создание ChatSession и ChatMessage - больше не используется
     // Чат-бот теперь работает без сессий, просто как помощник на всех страницах

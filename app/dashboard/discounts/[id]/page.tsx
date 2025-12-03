@@ -98,11 +98,19 @@ export default function DiscountDetailPage() {
 
   // Обновляем промокод после загрузки discount
   useEffect(() => {
-    if (discount && isClaimed && !activatedPromoCode) {
-      // Проверяем промокод из discount, если его нет в preferences
-      if (discount.promoCode && discount.promoCode.trim().length > 0) {
+    if (discount && isClaimed) {
+      // Используем промокод из discount, если activatedPromoCode еще не установлен
+      if (!activatedPromoCode && discount.promoCode && discount.promoCode.trim().length > 0) {
         console.log("✅ Setting promo code from discount after load:", discount.promoCode);
         setActivatedPromoCode(discount.promoCode);
+      }
+      // Также обновляем discount.promoCode, если есть activatedPromoCode, но нет в discount
+      else if (activatedPromoCode && (!discount.promoCode || discount.promoCode.trim().length === 0)) {
+        console.log("✅ Updating discount.promoCode from activatedPromoCode:", activatedPromoCode);
+        setDiscount({
+          ...discount,
+          promoCode: activatedPromoCode,
+        });
       }
     }
   }, [discount, isClaimed, activatedPromoCode]);
@@ -485,45 +493,83 @@ export default function DiscountDetailPage() {
             )}
 
             {/* Promo Code */}
-            {discount.promoCode && (
-              <div className="mt-4 sm:mt-6">
-                <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Промокод</h3>
-                <div className="rounded-xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 p-4 shadow-sm dark:border-blue-700 dark:from-blue-900/30 dark:to-blue-900/20 sm:p-5">
-                  {/* Промокод с буквами в квадратах */}
-                  <div className="mb-3 flex flex-wrap justify-center gap-1.5 sm:gap-2">
-                    {discount.promoCode.split('').map((char, idx) => (
-                      <div
-                        key={idx}
-                        className="flex h-10 w-8 items-center justify-center rounded-lg border-2 border-blue-300 bg-white font-mono text-lg font-bold text-blue-700 shadow-sm dark:border-blue-700 dark:bg-gray-800 dark:text-blue-300 sm:h-12 sm:w-10 sm:text-xl"
-                      >
-                        {char}
+            {(() => {
+              // Используем промокод из activatedPromoCode или discount.promoCode
+              const promoCodeToShow = activatedPromoCode || discount.promoCode;
+              // Проверяем, не является ли промокод специальным случаем
+              const isSpecialCase = promoCodeToShow && (
+                promoCodeToShow === "Штрихкод в купоне" ||
+                promoCodeToShow.toLowerCase().includes("штрихкод") ||
+                promoCodeToShow.toLowerCase().includes("barcode")
+              );
+              
+              // Показываем промокод только если скидка активирована и есть промокод
+              if (!isClaimed || !promoCodeToShow || promoCodeToShow.trim().length === 0) {
+                return null;
+              }
+              
+              // Если специальный случай, показываем инструкцию
+              if (isSpecialCase) {
+                return (
+                  <div className="mt-4 sm:mt-6">
+                    <div className="rounded-xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 p-4 shadow-sm dark:border-blue-700 dark:from-blue-900/30 dark:to-blue-900/20 sm:p-5">
+                      <div className="mb-3 flex justify-center">
+                        <svg className="h-16 w-16 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                        </svg>
                       </div>
-                    ))}
+                      <h3 className="mb-2 text-center text-lg font-semibold text-gray-900 dark:text-white">
+                        Используйте штрихкод из купона
+                      </h3>
+                      <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+                        Покажите QR-код кассиру в магазине для получения скидки
+                      </p>
+                    </div>
                   </div>
-                  <button
-                    onClick={handleCopyPromo}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700 hover:shadow-lg active:scale-95 sm:text-base"
-                  >
-                    {copied ? (
-                      <>
-                        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                        Скопировано!
-                      </>
-                    ) : (
-                      <>
-                        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
-                          <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
-                        </svg>
-                        Скопировать код
-                      </>
-                    )}
-                  </button>
+                );
+              }
+              
+              // Обычный промокод
+              return (
+                <div className="mt-4 sm:mt-6">
+                  <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Промокод</h3>
+                  <div className="rounded-xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 p-4 shadow-sm dark:border-blue-700 dark:from-blue-900/30 dark:to-blue-900/20 sm:p-5">
+                    {/* Промокод с буквами в квадратах */}
+                    <div className="mb-3 flex flex-wrap justify-center gap-1.5 sm:gap-2">
+                      {promoCodeToShow.split('').map((char, idx) => (
+                        <div
+                          key={idx}
+                          className="flex h-10 w-8 items-center justify-center rounded-lg border-2 border-blue-300 bg-white font-mono text-lg font-bold text-blue-700 shadow-sm dark:border-blue-700 dark:bg-gray-800 dark:text-blue-300 sm:h-12 sm:w-10 sm:text-xl"
+                        >
+                          {char}
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={handleCopyPromo}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700 hover:shadow-lg active:scale-95 sm:text-base"
+                    >
+                      {copied ? (
+                        <>
+                          <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                          Скопировано!
+                        </>
+                      ) : (
+                        <>
+                          <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                            <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                          </svg>
+                          Скопировать код
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Valid Until */}
             {discount.validUntil && (
@@ -681,7 +727,7 @@ export default function DiscountDetailPage() {
 
         {/* Promo Code Modal */}
         {showPromoModal && discount && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-md dark:backdrop-blur-lg p-4">
             <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800">
               {/* Close button */}
               <button
@@ -706,88 +752,120 @@ export default function DiscountDetailPage() {
               </h2>
 
               {/* Promo Code or Instructions */}
-              {displayPromoCode && displayPromoCode.trim().length > 0 ? (
-                <div className="mb-6">
-                  <div className="text-center mb-3">
-                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      Ваш промокод
-                    </span>
-                  </div>
-                  <div className="relative rounded-xl border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-blue-100 p-6 text-center shadow-inner dark:border-blue-600 dark:from-blue-900/30 dark:to-blue-900/20">
-                    {/* Промокод с эффектом одноразового пароля */}
-                    <div className="mb-4 flex justify-center gap-1.5">
-                      {displayPromoCode.split('').map((char, idx) => (
-                        <div
-                          key={idx}
-                          className="flex h-12 w-10 items-center justify-center rounded-lg border-2 border-blue-300 bg-white font-mono text-2xl font-bold text-blue-700 shadow-sm dark:border-blue-700 dark:bg-gray-800 dark:text-blue-300"
-                        >
-                          {char}
+              {(() => {
+                // Проверяем, не является ли промокод специальным случаем
+                const isSpecialCase = displayPromoCode && (
+                  displayPromoCode === "Штрихкод в купоне" ||
+                  displayPromoCode.toLowerCase().includes("штрихкод") ||
+                  displayPromoCode.toLowerCase().includes("barcode")
+                );
+                
+                // Если специальный случай, показываем инструкцию вместо промокода
+                if (isSpecialCase) {
+                  return (
+                    <div className="mb-6">
+                      <div className="rounded-xl border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-blue-100 p-6 text-center shadow-inner dark:border-blue-600 dark:from-blue-900/30 dark:to-blue-900/20">
+                        <div className="mb-4">
+                          <svg className="mx-auto h-16 w-16 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                          </svg>
                         </div>
-                      ))}
+                        <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+                          Используйте штрихкод из купона
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Покажите QR-код кассиру в магазине для получения скидки
+                        </p>
+                      </div>
                     </div>
-                    <button
-                      onClick={handleCopyPromo}
-                      className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700 hover:shadow-lg active:scale-95"
-                    >
-                      {copied ? (
-                        <>
-                          <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                          Скопировано!
-                        </>
-                      ) : (
-                        <>
-                          <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
-                            <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
-                          </svg>
-                          Скопировать код
-                        </>
-                      )}
-                    </button>
+                  );
+                }
+                
+                return displayPromoCode && displayPromoCode.trim().length > 0 ? (
+                  <div className="mb-6">
+                    <div className="text-center mb-3">
+                      <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Ваш промокод
+                      </span>
+                    </div>
+                    <div className="relative rounded-xl border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-blue-100 p-6 text-center shadow-inner dark:border-blue-600 dark:from-blue-900/30 dark:to-blue-900/20">
+                      {/* Промокод с эффектом одноразового пароля */}
+                      <div className="mb-4 flex justify-center gap-1.5">
+                        {displayPromoCode.split('').map((char, idx) => (
+                          <div
+                            key={idx}
+                            className="flex h-12 w-10 items-center justify-center rounded-lg border-2 border-blue-300 bg-white font-mono text-2xl font-bold text-blue-700 shadow-sm dark:border-blue-700 dark:bg-gray-800 dark:text-blue-300"
+                          >
+                            {char}
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={handleCopyPromo}
+                        className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700 hover:shadow-lg active:scale-95"
+                      >
+                        {copied ? (
+                          <>
+                            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                            Скопировано!
+                          </>
+                        ) : (
+                          <>
+                            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                              <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                            </svg>
+                            Скопировать код
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ) : discount.shortDescription ? (
-                <div className="mb-6">
-                  <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
-                    <div 
-                      className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-words"
-                      dangerouslySetInnerHTML={{ 
-                        __html: sanitizeDescription(discount.shortDescription)
-                      }}
-                    />
+                ) : null;
+              })()}
+
+              {/* Description or Instructions */}
+              {(!displayPromoCode || displayPromoCode.trim().length === 0) && (
+                discount.shortDescription ? (
+                  <div className="mb-6">
+                    <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
+                      <div 
+                        className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-words"
+                        dangerouslySetInnerHTML={{ 
+                          __html: sanitizeDescription(discount.shortDescription)
+                        }}
+                      />
+                    </div>
                   </div>
-                </div>
-              ) : discount.description ? (
-                <div className="mb-6">
-                  <div className="max-h-48 overflow-y-auto rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
-                    <div 
-                      className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-words
-                        [&_ul]:space-y-1 [&_ul]:ml-4 [&_ul]:list-disc
-                        [&_ol]:space-y-1 [&_ol]:ml-4 [&_ol]:list-decimal
-                        [&_li]:break-words [&_li]:leading-relaxed"
-                      dangerouslySetInnerHTML={{ 
-                        __html: sanitizeDescription(
-                          discount.description.length > 500 
-                            ? discount.description.substring(0, 500) + '...' 
-                            : discount.description
-                        )
-                      }}
-                    />
-                  </div>
-                  <p className="mt-2 text-center text-xs text-gray-500 dark:text-gray-400">
-                    Подробнее читайте в разделе "Условия использования"
-                  </p>
-                </div>
-              ) : (
-                <div className="mb-6">
-                  <div className="rounded-lg bg-gray-50 p-4 text-center dark:bg-gray-700/50">
-                    <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                      Представьте при оплате или покажите эту страницу
+                ) : discount.description ? (
+                  <div className="mb-6">
+                    <div className="max-h-48 overflow-y-auto rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
+                      <div 
+                        className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-words [&_ul]:space-y-1 [&_ul]:ml-4 [&_ul]:list-disc [&_ol]:space-y-1 [&_ol]:ml-4 [&_ol]:list-decimal [&_li]:break-words [&_li]:leading-relaxed"
+                        dangerouslySetInnerHTML={{ 
+                          __html: sanitizeDescription(
+                            discount.description.length > 500 
+                              ? discount.description.substring(0, 500) + '...' 
+                              : discount.description
+                          )
+                        }}
+                      />
+                    </div>
+                    <p className="mt-2 text-center text-xs text-gray-500 dark:text-gray-400">
+                      Подробнее читайте в разделе "Условия использования"
                     </p>
                   </div>
-                </div>
+                ) : (
+                  <div className="mb-6">
+                    <div className="rounded-lg bg-gray-50 p-4 text-center dark:bg-gray-700/50">
+                      <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                        Представьте при оплате или покажите эту страницу
+                      </p>
+                    </div>
+                  </div>
+                )
               )}
 
               {/* Open Partner Button */}

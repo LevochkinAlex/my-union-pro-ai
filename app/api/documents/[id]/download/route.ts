@@ -12,18 +12,116 @@ function resolveFilePath(filePath: string) {
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
+  console.log("[documents/download] ===== ROUTE HANDLER CALLED =====");
+  console.log("[documents/download] Request URL:", request.url);
+  
   try {
     const session = await getServerSession(authOptions);
+    console.log("[documents/download] Session:", session ? "exists" : "null");
 
     if (!session?.user?.id) {
+      console.log("[documents/download] No session, returning 401");
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const { id } = await Promise.resolve(context.params);
+    const resolvedParams = await Promise.resolve(params);
+    let { id } = resolvedParams;
+    // Декодируем ID, если он был закодирован
+    if (id) {
+      try {
+        id = decodeURIComponent(id);
+      } catch (e) {
+        // Если декодирование не удалось, используем исходный ID
+        console.warn("[documents/download] Не удалось декодировать ID, используем исходный:", id);
+      }
+    }
+    console.log("[documents/download] Resolved ID:", id);
     const { searchParams } = new URL(request.url);
     const downloadSigned = searchParams.get("signed") === "true";
+
+    console.log("[documents/download] ===== START DOWNLOAD =====");
+    console.log("[documents/download] Document ID:", id);
+    console.log("[documents/download] ID type:", typeof id);
+    console.log("[documents/download] ID length:", id?.length);
+    console.log("[documents/download] Full URL:", request.url);
+    console.log("[documents/download] Session user ID:", session.user.id);
+
+    // Обработка системного документа устава (доступен всем пользователям)
+    // Проверяем как точное совпадение, так и возможные варианты
+    const isCharterSystem = id === "charter-system" || id?.includes("charter");
+    console.log("[documents/download] Is charter system?", isCharterSystem);
+    
+    if (isCharterSystem) {
+      console.log("[documents/download] Processing charter document request");
+      const CHARTER_PATH = "/docs/union/Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
+      const CHARTER_FILENAME = "Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
+      
+      // Сначала проверяем, есть ли устав в базе данных пользователя
+      const userCharter = await prisma.document.findFirst({
+        where: {
+          userId: session.user.id,
+          type: "OTHER",
+          title: {
+            contains: "Устав",
+          },
+        },
+      });
+      
+      // Если устав есть в БД пользователя, используем его
+      if (userCharter && userCharter.filePath) {
+        try {
+          const absolutePath = resolveFilePath(userCharter.filePath);
+          await fs.access(absolutePath);
+          const fileBuffer = await fs.readFile(absolutePath);
+          
+          const contentType = userCharter.mimeType || "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+          const fileName = userCharter.fileName || CHARTER_FILENAME;
+          
+          return new NextResponse(fileBuffer, {
+            status: 200,
+            headers: {
+              "Content-Type": contentType,
+              "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
+              "Content-Length": fileBuffer.length.toString(),
+            },
+          });
+        } catch (error) {
+          console.error("[documents/download] Ошибка при чтении файла устава из БД:", error);
+          // Продолжаем попытку найти системный файл
+        }
+      }
+      
+      // Пытаемся найти системный файл устава
+      try {
+        const absolutePath = resolveFilePath(CHARTER_PATH);
+        await fs.access(absolutePath);
+        const fileBuffer = await fs.readFile(absolutePath);
+        
+        return new NextResponse(fileBuffer, {
+          status: 200,
+          headers: {
+            "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "Content-Disposition": `attachment; filename="${encodeURIComponent(CHARTER_FILENAME)}"`,
+            "Content-Length": fileBuffer.length.toString(),
+          },
+        });
+      } catch (error) {
+        console.error("[documents/download] Ошибка при чтении системного файла устава:", error);
+        console.error("[documents/download] Путь:", CHARTER_PATH);
+        console.error("[documents/download] Абсолютный путь:", resolveFilePath(CHARTER_PATH));
+        
+        // Если файл не найден, возвращаем понятное сообщение
+        return NextResponse.json(
+          { 
+            error: "Файл устава не найден на сервере. Обратитесь к администратору для загрузки файла.",
+            details: "Файл должен находиться по пути: public/docs/union/Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx"
+          },
+          { status: 404 }
+        );
+      }
+    }
 
     // Получаем документ
     const document = await prisma.document.findUnique({
@@ -37,6 +135,39 @@ export async function GET(
     // Проверяем права доступа (пользователь может скачать только свои документы)
     if (document.userId !== session.user.id && session.user.role !== "SUPER_ADMIN") {
       return NextResponse.json({ error: "Доступ запрещен" }, { status: 403 });
+    }
+
+    // Проверяем, является ли документ уставом
+    const isCharterDocument = document.type === "OTHER" && 
+      (document.title?.toLowerCase().includes("устав") || 
+       document.description?.toLowerCase().includes("устав"));
+
+    // Если это устав и файл не найден, пытаемся использовать системный файл
+    if (isCharterDocument && !document.filePath) {
+      console.log("[documents/download] Устав без filePath, пытаемся найти системный файл");
+      const CHARTER_PATH = "/docs/union/Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
+      const CHARTER_FILENAME = document.fileName || "Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
+      
+      try {
+        const absolutePath = resolveFilePath(CHARTER_PATH);
+        await fs.access(absolutePath);
+        const fileBuffer = await fs.readFile(absolutePath);
+        
+        return new NextResponse(fileBuffer, {
+          status: 200,
+          headers: {
+            "Content-Type": document.mimeType || "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "Content-Disposition": `attachment; filename="${encodeURIComponent(CHARTER_FILENAME)}"`,
+            "Content-Length": fileBuffer.length.toString(),
+          },
+        });
+      } catch (error) {
+        console.error("[documents/download] Системный файл устава не найден:", error);
+        return NextResponse.json(
+          { error: "Файл устава не найден на сервере. Обратитесь к администратору." },
+          { status: 404 }
+        );
+      }
     }
 
     // Определяем, какой файл скачивать: подписанный или обычный
@@ -64,6 +195,31 @@ export async function GET(
           console.log("[documents/download] Файл существует");
         } catch (accessError) {
           console.error("[documents/download] Файл не существует:", absolutePath);
+          
+          // Если это устав и файл не найден, пытаемся использовать системный файл
+          if (isCharterDocument && !downloadSigned) {
+            console.log("[documents/download] Устав без файла, пытаемся найти системный файл");
+            const CHARTER_PATH = "/docs/union/Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
+            const CHARTER_FILENAME = document.fileName || "Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
+            
+            try {
+              const charterAbsolutePath = resolveFilePath(CHARTER_PATH);
+              await fs.access(charterAbsolutePath);
+              const fileBuffer = await fs.readFile(charterAbsolutePath);
+              
+              return new NextResponse(fileBuffer, {
+                status: 200,
+                headers: {
+                  "Content-Type": document.mimeType || "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                  "Content-Disposition": `attachment; filename="${encodeURIComponent(CHARTER_FILENAME)}"`,
+                  "Content-Length": fileBuffer.length.toString(),
+                },
+              });
+            } catch (charterError) {
+              console.error("[documents/download] Системный файл устава тоже не найден:", charterError);
+              // Продолжаем с обычной ошибкой
+            }
+          }
           
           // Если запрашивается подписанный файл, но он не найден - возвращаем ошибку
           if (downloadSigned) {
@@ -101,10 +257,6 @@ export async function GET(
       );
     }
 
-    const fileBytes = new Uint8Array(fileBuffer.length);
-    fileBytes.set(fileBuffer);
-    const arrayBuffer = fileBytes.buffer;
-
     // Определяем Content-Type на основе mimeType документа или расширения файла
     let contentType = document.mimeType || "application/pdf";
     const fileNameToUse = downloadSigned && document.signedFilePath
@@ -130,8 +282,8 @@ export async function GET(
       signed: downloadSigned,
     });
 
-    // Возвращаем файл
-    return new NextResponse(arrayBuffer, {
+    // Возвращаем файл напрямую как Buffer
+    return new NextResponse(fileBuffer as any, {
       status: 200,
       headers: {
         "Content-Type": contentType,

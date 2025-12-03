@@ -154,14 +154,20 @@ export async function GET(request: NextRequest) {
         console.log("[Telegram Login] ✅ Аккаунты объединены, дубликат удалён");
       }
       
+      // Получаем актуальные данные пользователя
+      const currentUser = await prisma.user.findUnique({
+        where: { id: session.user.id },
+      });
+      
       user = await prisma.user.update({
         where: { id: session.user.id },
         data: {
           telegramChatId: id,
-          telegramUsername: username || undefined,
-          // Обновляем имя только если его не было
-          firstName: first_name || undefined,
-          lastName: last_name || undefined,
+          telegramUsername: username || currentUser?.telegramUsername || undefined,
+          // Обновляем имя ТОЛЬКО если его не было (приоритет существующим данным)
+          firstName: currentUser?.firstName || first_name || undefined,
+          lastName: currentUser?.lastName || last_name || undefined,
+          avatarUrl: currentUser?.avatarUrl || photo_url || undefined,
         },
       });
       

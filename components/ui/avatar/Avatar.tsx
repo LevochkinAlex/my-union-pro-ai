@@ -38,17 +38,48 @@ const Avatar: React.FC<AvatarProps> = ({
   size = "medium",
   status = "none",
 }) => {
+  // Проверяем, является ли src base64 data URL или обычным URL
+  const isDataUrl = src.startsWith('data:');
+  const isHttpUrl = src.startsWith('http://') || src.startsWith('https://');
+  
   return (
     <div className={`relative  rounded-full ${sizeClasses[size]}`}>
       {/* Avatar Image */}
-      <Image
-        width="0"
-        height="0"
-        sizes="100vw"
-        src={src}
-        alt={alt}
-        className="object-cover w-full rounded-full"
-      />
+      {isDataUrl || isHttpUrl ? (
+        // Для base64 data URL и внешних URL используем обычный img
+        <img
+          src={src}
+          alt={alt}
+          className="object-cover w-full h-full rounded-full"
+          onError={(e) => {
+            // Тихо скрываем изображение при ошибке загрузки
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+            // Также скрываем родительский контейнер, если изображение не загрузилось
+            const parent = target.parentElement;
+            if (parent) {
+              parent.style.display = 'none';
+            }
+          }}
+        />
+      ) : (
+        // Для локальных путей используем обычный img с обработкой ошибок
+        <img
+          src={src}
+          alt={alt}
+          className="object-cover w-full h-full rounded-full"
+          onError={(e) => {
+            // Тихо скрываем изображение при ошибке загрузки
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+            // Также скрываем родительский контейнер, если изображение не загрузилось
+            const parent = target.parentElement;
+            if (parent) {
+              parent.style.display = 'none';
+            }
+          }}
+        />
+      )}
 
       {/* Status Indicator */}
       {status !== "none" && (

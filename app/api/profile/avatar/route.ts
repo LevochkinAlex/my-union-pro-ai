@@ -2,7 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { writeFile, mkdir } from "fs/promises";
+import path from "path";
+import { existsSync } from "fs";
 
+const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "avatars");
+
+async function ensureUploadDir() {
+  if (!existsSync(UPLOAD_DIR)) {
+    await mkdir(UPLOAD_DIR, { recursive: true });
+  }
+}
+
+/**
+ * Загрузка аватара пользователя
+ * POST /api/profile/avatar
+ */
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -12,88 +27,61 @@ export async function POST(request: NextRequest) {
     }
 
     const formData = await request.formData();
-    const file = formData.get("avatar") as File;
+    const avatarFile = formData.get("avatar") as File | null;
 
-    if (!file) {
-      return NextResponse.json({ error: "Файл не найден" }, { status: 400 });
+    if (!avatarFile) {
+      return NextResponse.json({ error: "Файл не предоставлен" }, { status: 400 });
     }
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
+    // Проверяем тип файла
+    if (!avatarFile.type.startsWith("image/")) {
       return NextResponse.json({ error: "Файл должен быть изображением" }, { status: 400 });
     }
 
-    // Validate file size (10MB max)
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
+    // Проверяем размер файла (максимум 10MB)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    if (avatarFile.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { error: "Размер файла не должен превышать 10MB" },
+        { error: `Размер файла не должен превышать ${MAX_FILE_SIZE / 1024 / 1024}MB` },
         { status: 400 }
       );
     }
 
-    // Convert file to base64
-    const bytes = await file.arrayBuffer();
+    await ensureUploadDir();
+
+    // Генерируем имя файла
+    const fileExtension = avatarFile.name.split(".").pop() || "jpg";
+    const filename = `${session.user.id}_${Date.now()}.${fileExtension}`;
+    const filePath = path.join(UPLOAD_DIR, filename);
+
+    // Сохраняем файл
+    const bytes = await avatarFile.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    const base64 = buffer.toString("base64");
-    const avatarUrl = `data:${file.type};base64,${base64}`;
+    await writeFile(filePath, buffer);
 
-    // Проверяем длину base64 строки (для диагностики)
-    console.log(`[avatar] Base64 length: ${avatarUrl.length} characters`);
-    console.log(`[avatar] File size: ${file.size} bytes, type: ${file.type}`);
-
-    // Update user avatar URL in database (stored as base64 data URL)
-    const updatedUser = await prisma.user.update({
+    // Обновляем URL аватара в базе данных
+    const avatarUrl = `/api/uploads/avatars/${filename}`;
+    
+    await prisma.user.update({
       where: { id: session.user.id },
       data: { avatarUrl },
-      select: { avatarUrl: true },
     });
 
-    // Проверяем, что avatarUrl сохранился полностью
-    const savedLength = updatedUser.avatarUrl?.length || 0;
-    console.log(`[avatar] ✅ Avatar uploaded for user ${session.user.id}`);
-    console.log(`[avatar] Saved avatarUrl length: ${savedLength} characters`);
-    
-    if (savedLength !== avatarUrl.length) {
-      console.error(`[avatar] ⚠️ WARNING: Avatar URL was truncated! Original: ${avatarUrl.length}, Saved: ${savedLength}`);
-    }
+    console.log("[profile/avatar] Avatar uploaded successfully:", {
+      userId: session.user.id,
+      filename,
+      size: avatarFile.size,
+    });
 
     return NextResponse.json({
       success: true,
       avatarUrl,
     });
   } catch (error) {
-    console.error("[avatar] Error uploading avatar:", error);
+    console.error("[profile/avatar] Error:", error);
     return NextResponse.json(
-      { error: "Ошибка при загрузке фото" },
+      { error: "Не удалось загрузить аватар" },
       { status: 500 }
     );
   }
 }
-
-export async function DELETE(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
-    }
-
-    // Remove avatar URL from database
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: { avatarUrl: null },
-    });
-
-    console.log(`[avatar] ✅ Avatar removed for user ${session.user.id}`);
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("[avatar] Error removing avatar:", error);
-    return NextResponse.json(
-      { error: "Ошибка при удалении фото" },
-      { status: 500 }
-    );
-  }
-}
-

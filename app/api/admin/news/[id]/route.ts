@@ -145,6 +145,31 @@ export async function PUT(
       }
     }
 
+    // Если новость была опубликована впервые, отправляем уведомления
+    if (isPublished && !existingPost.isPublished) {
+      try {
+        const { sendNotification } = await import("@/lib/notifications");
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
+        const result = await sendNotification({
+          sendToAll: true,
+          title: "📰 Новая новость",
+          message: newsPost.title,
+          link: `${baseUrl}/dashboard/news/${newsPost.id}`,
+          data: {
+            type: "news_published",
+            newsId: newsPost.id,
+          },
+        });
+        console.log("[api/admin/news] Уведомления отправлены:", {
+          push: result.push,
+          email: result.email,
+        });
+      } catch (notificationError) {
+        console.error("[api/admin/news] Ошибка отправки уведомлений:", notificationError);
+        // Не прерываем обновление новости из-за ошибки уведомлений
+      }
+    }
+
     // Если новость только что опубликована, отправляем push-уведомления
     if (isPublished && !existingPost.isPublished) {
       try {

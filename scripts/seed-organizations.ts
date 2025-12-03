@@ -1,220 +1,264 @@
-/**
- * Скрипт для заполнения справочника организаций
- * 
- * Структура из Figma: https://www.figma.com/board/5eya4cZhA4xyyYvCeglCkS/
- * 
- * Иерархия:
- * - МРОСПОМП (Московская региональная организация)
- *   - МСЧ-122 (Первичная профсоюзная организация)
- *   - МСЧ-123
- *   - ...
- * 
- * Запуск: pnpm tsx scripts/seed-organizations.ts
- */
-
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, OrganizationType } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-interface OrganizationData {
-  name: string;
-  type: "FEDERATION" | "REGIONAL" | "PRIMARY";
-  inn?: string;
-  address?: string;
-  phone?: string;
-  email?: string;
-  chairmanName?: string;
-  sortOrder?: number;
-  children?: OrganizationData[];
-}
-
 /**
- * Структура организаций
- * 
- * TODO: Заполнить полную структуру из Figma
- * Сейчас это пример для демонстрации
+ * Скрипт для заполнения начальных данных организаций
+ * Использует известные данные и придумывает недостающие
  */
-const organizationsData: OrganizationData[] = [
-  {
-    name: "МРОСПОМП",
-    type: "REGIONAL",
-    inn: "7700000000",
-    chairmanName: "Иванов Иван Иванович",
-    sortOrder: 1,
-    children: [
-      {
-        name: "МСЧ-122",
-        type: "PRIMARY",
-        sortOrder: 1,
-      },
-      {
-        name: "МСЧ-123",
-        type: "PRIMARY",
-        sortOrder: 2,
-      },
-      {
-        name: "МСЧ-125",
-        type: "PRIMARY",
-        sortOrder: 3,
-      },
-      {
-        name: "МСЧ-126",
-        type: "PRIMARY",
-        sortOrder: 4,
-      },
-    ],
-  },
-  {
-    name: "Профсоюз работников здравоохранения РФ",
-    type: "FEDERATION",
-    inn: "7707000000",
-    address: "г. Москва",
-    phone: "+7 (495) 123-45-67",
-    email: "info@medsoyuz.ru",
-    chairmanName: "Петров Петр Петрович",
-    sortOrder: 2,
-    children: [
-      {
-        name: "Региональная организация Москвы",
-        type: "REGIONAL",
-        sortOrder: 1,
-        children: [
-          {
-            name: "ППО Больница №1",
-            type: "PRIMARY",
-            sortOrder: 1,
-          },
-          {
-            name: "ППО Поликлиника №5",
-            type: "PRIMARY",
-            sortOrder: 2,
-          },
-        ],
-      },
-      {
-        name: "Региональная организация Санкт-Петербурга",
-        type: "REGIONAL",
-        sortOrder: 2,
-        children: [
-          {
-            name: "ППО Больница №10",
-            type: "PRIMARY",
-            sortOrder: 1,
-          },
-        ],
-      },
-    ],
-  },
-];
-
-/**
- * Рекурсивная функция для создания организаций и их детей
- */
-async function createOrganizationWithChildren(
-  data: OrganizationData,
-  parentId: string | null = null,
-  level: number = 0
-): Promise<string> {
-  // Формируем полный путь
-  let fullPath = data.name;
-  if (parentId) {
-    const parent = await prisma.organization.findUnique({
-      where: { id: parentId },
-      select: { fullPath: true, name: true },
-    });
-    if (parent) {
-      fullPath = `${parent.fullPath || parent.name} / ${data.name}`;
-    }
-  }
-
-  // Создаем организацию
-  const organization = await prisma.organization.create({
-    data: {
-      name: data.name,
-      type: data.type,
-      parentId: parentId,
-      level: level,
-      sortOrder: data.sortOrder || 0,
-      fullPath: fullPath,
-      inn: data.inn || null,
-      address: data.address || null,
-      phone: data.phone || null,
-      email: data.email || null,
-      chairmanName: data.chairmanName || null,
-      isActive: true,
-    },
-  });
-
-  console.log(`✅ Создана: ${"  ".repeat(level)}${data.name} (level: ${level})`);
-
-  // Создаем дочерние организации
-  if (data.children && data.children.length > 0) {
-    for (const child of data.children) {
-      await createOrganizationWithChildren(child, organization.id, level + 1);
-    }
-  }
-
-  return organization.id;
-}
-
-/**
- * Основная функция
- */
-async function main() {
-  console.log("🚀 Начинаем заполнение справочника организаций...\n");
+async function seedOrganizations() {
+  console.log("🌳 Начало заполнения организаций...\n");
 
   try {
-    // Проверяем, есть ли уже организации
-    const existingCount = await prisma.organization.count();
-    if (existingCount > 0) {
-      console.log(`⚠️  В базе уже есть ${existingCount} организаций.`);
-      console.log("Хотите удалить их и создать заново? (y/n)");
-      
-      // В production нужно добавить интерактивный промпт
-      // Для автоматического запуска закомментируйте следующую строку:
-      throw new Error("В базе уже есть организации. Остановлено.");
-      
-      // Если нужно очистить:
-      // await prisma.organization.deleteMany({});
-      // console.log("✅ Старые организации удалены\n");
+    // 1. Создаем федеральную организацию (корень)
+    let federal = await prisma.organization.findFirst({
+      where: { name: "МООП РЗ РФ", type: OrganizationType.FEDERAL },
+    });
+
+    if (!federal) {
+      federal = await prisma.organization.create({
+        data: {
+          name: "МООП РЗ РФ",
+          type: OrganizationType.FEDERAL,
+          level: 0,
+          sortOrder: 1,
+          fullPath: "МООП РЗ РФ",
+          chairmanName: "Еременко Виталий Николаевич",
+          chairmanJobTitle: "Председатель",
+          isActive: true,
+        },
+      });
+    } else {
+      // Обновляем данные, если организация уже существует
+      federal = await prisma.organization.update({
+        where: { id: federal.id },
+        data: {
+          chairmanName: "Еременко Виталий Николаевич",
+          chairmanJobTitle: "Председатель",
+        },
+      });
     }
 
-    // Создаем организации
-    for (const orgData of organizationsData) {
-      await createOrganizationWithChildren(orgData);
-      console.log(""); // Пустая строка между корневыми организациями
+    console.log("✅ Создана федеральная организация:", federal.name);
+
+    // 2. Создаем региональные отделения (примеры)
+    const regionalOrgs = [
+      {
+        name: "Московское региональное отделение",
+        chairmanName: "Петров Петр Петрович",
+        chairmanJobTitle: "Председатель регионального отделения",
+        inn: "7700000001",
+        address: "г. Москва, ул. Примерная, д. 1",
+        phone: "+7 (495) 123-45-67",
+        email: "moscow@moop-rz.ru",
+      },
+      {
+        name: "Санкт-Петербургское региональное отделение",
+        chairmanName: "Сидоров Сидор Сидорович",
+        chairmanJobTitle: "Председатель регионального отделения",
+        inn: "7800000001",
+        address: "г. Санкт-Петербург, ул. Примерная, д. 2",
+        phone: "+7 (812) 123-45-67",
+        email: "spb@moop-rz.ru",
+      },
+      {
+        name: "Московская областная организация профсоюза работников здравоохранения РФ",
+        chairmanName: "Кузнецов Кузьма Кузьмич",
+        chairmanJobTitle: "Председатель регионального отделения",
+        inn: "5000000001",
+        address: "Московская область, г. Подольск, ул. Примерная, д. 3",
+        phone: "+7 (496) 123-45-67",
+        email: "mo@moop-rz.ru",
+      },
+    ];
+
+    for (const [index, regData] of regionalOrgs.entries()) {
+      let regional = regData.inn
+        ? await prisma.organization.findFirst({
+            where: { inn: regData.inn },
+          })
+        : await prisma.organization.findFirst({
+            where: { name: regData.name, type: OrganizationType.REGIONAL },
+          });
+
+      if (!regional) {
+        regional = await prisma.organization.create({
+          data: {
+            name: regData.name,
+            type: OrganizationType.REGIONAL,
+            parentId: federal.id,
+            level: 1,
+            sortOrder: index + 1,
+            fullPath: `${federal.name} / ${regData.name}`,
+            chairmanName: regData.chairmanName,
+            chairmanJobTitle: regData.chairmanJobTitle,
+            inn: regData.inn,
+            address: regData.address,
+            phone: regData.phone,
+            email: regData.email,
+            isActive: true,
+          },
+        });
+      } else {
+        regional = await prisma.organization.update({
+          where: { id: regional.id },
+          data: {
+            parentId: federal.id,
+            level: 1,
+            fullPath: `${federal.name} / ${regData.name}`,
+            chairmanName: regData.chairmanName,
+            chairmanJobTitle: regData.chairmanJobTitle,
+            inn: regData.inn,
+            address: regData.address,
+            phone: regData.phone,
+            email: regData.email,
+          },
+        });
+      }
+
+      console.log(`✅ Создано региональное отделение: ${regional.name}`);
     }
+
+    // 3. Создаем ППО (первичные профсоюзные организации)
+    const ppoOrgs = [
+      {
+        name: 'ППО Аппарат МООП РЗ РФ',
+        parentName: "МООП РЗ РФ",
+        chairmanName: "Еременко Виталий Николаевич",
+        chairmanJobTitle: "Председатель ППО",
+        inn: "7700000002",
+        address: "г. Москва, ул. Примерная, д. 10",
+        phone: "+7 (495) 123-45-68",
+        email: "apparat@moop-rz.ru",
+      },
+      {
+        name: 'ППО ГБУЗ МО "МОССМП"',
+        parentName: "Московская областная организация профсоюза работников здравоохранения РФ",
+        chairmanName: "Сульдин Алексей Михайлович",
+        chairmanJobTitle: "Председатель",
+        inn: "5000000002",
+        address: "Московская область, г. Подольск, ул. Медицинская, д. 1",
+        phone: "+7 (496) 123-45-68",
+        email: "mossmp@moop-rz.ru",
+      },
+      {
+        name: 'ППО ГБУЗ "Городская больница №1"',
+        parentName: "Московское региональное отделение",
+        chairmanName: "Иванова Ирина Ивановна",
+        chairmanJobTitle: "Председатель ППО",
+        inn: "7700000003",
+        address: "г. Москва, ул. Больничная, д. 5",
+        phone: "+7 (495) 123-45-69",
+        email: "gb1@moop-rz.ru",
+      },
+      {
+        name: 'ППО ГБУЗ "Городская поликлиника №2"',
+        parentName: "Московское региональное отделение",
+        chairmanName: "Смирнов Сергей Сергеевич",
+        chairmanJobTitle: "Председатель ППО",
+        inn: "7700000004",
+        address: "г. Москва, ул. Поликлиническая, д. 10",
+        phone: "+7 (495) 123-45-70",
+        email: "gp2@moop-rz.ru",
+      },
+      {
+        name: 'ППО ГБУЗ "Санкт-Петербургская больница"',
+        parentName: "Санкт-Петербургское региональное отделение",
+        chairmanName: "Васильева Василиса Васильевна",
+        chairmanJobTitle: "Председатель ППО",
+        inn: "7800000002",
+        address: "г. Санкт-Петербург, ул. Больничная, д. 15",
+        phone: "+7 (812) 123-45-68",
+        email: "spb-hospital@moop-rz.ru",
+      },
+    ];
+
+    for (const [index, ppoData] of ppoOrgs.entries()) {
+      // Находим родительскую организацию
+      const parent = await prisma.organization.findFirst({
+        where: { name: ppoData.parentName },
+      });
+
+      if (!parent) {
+        console.warn(`⚠️  Родительская организация "${ppoData.parentName}" не найдена для ППО "${ppoData.name}"`);
+        continue;
+      }
+
+      let ppo = ppoData.inn
+        ? await prisma.organization.findFirst({
+            where: { inn: ppoData.inn },
+          })
+        : await prisma.organization.findFirst({
+            where: { name: ppoData.name, type: OrganizationType.PRIMARY },
+          });
+
+      if (!ppo) {
+        ppo = await prisma.organization.create({
+          data: {
+            name: ppoData.name,
+            type: OrganizationType.PRIMARY,
+            parentId: parent.id,
+            level: parent.level + 1,
+            sortOrder: index + 1,
+            fullPath: `${parent.fullPath} / ${ppoData.name}`,
+            chairmanName: ppoData.chairmanName,
+            chairmanJobTitle: ppoData.chairmanJobTitle,
+            inn: ppoData.inn,
+            address: ppoData.address,
+            phone: ppoData.phone,
+            email: ppoData.email,
+            isActive: true,
+          },
+        });
+      } else {
+        ppo = await prisma.organization.update({
+          where: { id: ppo.id },
+          data: {
+            parentId: parent.id,
+            level: parent.level + 1,
+            fullPath: `${parent.fullPath} / ${ppoData.name}`,
+            chairmanName: ppoData.chairmanName,
+            chairmanJobTitle: ppoData.chairmanJobTitle,
+            inn: ppoData.inn,
+            address: ppoData.address,
+            phone: ppoData.phone,
+            email: ppoData.email,
+          },
+        });
+      }
+
+      console.log(`✅ Создана ППО: ${ppo.name}`);
+    }
+
+    console.log("\n✅ Заполнение организаций завершено!\n");
 
     // Выводим статистику
-    const totalCount = await prisma.organization.count();
-    const byType = await prisma.organization.groupBy({
+    const stats = await prisma.organization.groupBy({
       by: ["type"],
-      _count: true,
+      _count: {
+        id: true,
+      },
     });
 
-    console.log("\n📊 Статистика:");
-    console.log(`   Всего организаций: ${totalCount}`);
-    byType.forEach((item) => {
-      const typeName = 
-        item.type === "FEDERATION" ? "Федеральных" :
-        item.type === "REGIONAL" ? "Региональных" :
-        "Первичных";
-      console.log(`   ${typeName}: ${item._count}`);
+    console.log("📊 Статистика:");
+    stats.forEach((stat) => {
+      const typeName =
+        stat.type === OrganizationType.FEDERAL
+          ? "Федерация"
+          : stat.type === OrganizationType.REGIONAL
+          ? "Региональные"
+          : "ППО";
+      console.log(`   ${typeName}: ${stat._count.id}`);
     });
 
-    console.log("\n✅ Справочник организаций успешно заполнен!");
-    console.log("\n💡 Теперь пользователи могут выбирать организацию из списка в анкете.");
+    const total = await prisma.organization.count();
+    console.log(`   Всего: ${total}\n`);
   } catch (error) {
-    console.error("\n❌ Ошибка:", error);
+    console.error("❌ Ошибка при заполнении организаций:", error);
     throw error;
   } finally {
     await prisma.$disconnect();
   }
 }
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
-
+seedOrganizations().catch(console.error);

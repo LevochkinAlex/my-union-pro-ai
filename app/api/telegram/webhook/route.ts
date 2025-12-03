@@ -140,13 +140,20 @@ export async function POST(request: NextRequest) {
         }
 
         // Привязываем Telegram к существующему пользователю
+        // ВАЖНО: НЕ заменяем существующие данные, только дополняем пустые поля
         const updateData: any = {
           telegramChatId: chatId,
-          telegramUsername: from?.username || null,
-          firstName: from?.first_name || user?.firstName || existingUserByPhone.firstName,
-          lastName: from?.last_name || user?.lastName || existingUserByPhone.lastName,
+          telegramUsername: from?.username || existingUserByPhone.telegramUsername || null,
+          // Приоритет существующим данным! Telegram данные только если пусто
+          firstName: existingUserByPhone.firstName || user?.firstName || from?.first_name || null,
+          lastName: existingUserByPhone.lastName || user?.lastName || from?.last_name || null,
           phone: normalizedPhone, // Обновляем номер на нормализованный
         };
+        
+        // Аватар ТОЛЬКО если его не было
+        if (!existingUserByPhone.avatarUrl && from?.photo_url) {
+          updateData.avatarUrl = from.photo_url;
+        }
         
         // Если authPhone еще не установлен, устанавливаем его
         if (!existingUserByPhone.authPhone && normalizedPhone) {
@@ -210,14 +217,23 @@ export async function POST(request: NextRequest) {
         });
 
         // Переносим Telegram данные в аккаунт с телефоном
+        // ВАЖНО: НЕ заменяем существующие данные, только дополняем пустые поля
+        const mergeUpdateData: any = {
+          telegramChatId: user.telegramChatId,
+          telegramUsername: user.telegramUsername || existingUser.telegramUsername,
+          // Приоритет существующим данным! Telegram данные только если пусто
+          firstName: existingUser.firstName || user.firstName,
+          lastName: existingUser.lastName || user.lastName,
+        };
+        
+        // Аватар ТОЛЬКО если его не было
+        if (!existingUser.avatarUrl && user.avatarUrl) {
+          mergeUpdateData.avatarUrl = user.avatarUrl;
+        }
+        
         await prisma.user.update({
           where: { id: existingUser.id },
-          data: {
-            telegramChatId: user.telegramChatId,
-            telegramUsername: user.telegramUsername,
-            firstName: user.firstName || existingUser.firstName,
-            lastName: user.lastName || existingUser.lastName,
-          },
+          data: mergeUpdateData,
         });
 
         // Удаляем дубликат

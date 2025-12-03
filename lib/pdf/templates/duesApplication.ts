@@ -3,6 +3,7 @@ import { createPDFDocument, UserData, formatDate, getFullName, streamToBuffer } 
 
 /**
  * Генерирует заявление о перечислении членских взносов
+ * Использует только встроенные шрифты PDFKit без явного указания имени шрифта
  */
 export async function generateDuesApplication(userData: UserData): Promise<Buffer> {
   const doc = createPDFDocument({
@@ -17,10 +18,12 @@ export async function generateDuesApplication(userData: UserData): Promise<Buffe
     middleName: userData.middleName,
   });
 
+  // Используем только шрифт по умолчанию (Helvetica) без явного указания
+  // Это предотвращает ошибки загрузки шрифтов из файловой системы
+
   // Заголовок
   doc
     .fontSize(14)
-    .font("Helvetica-Bold")
     .text("Председателю Межрегиональной общественной", { align: "right" })
     .text("организации профсоюза работников здравоохранения", { align: "right" })
     .moveDown(0.5)
@@ -30,7 +33,6 @@ export async function generateDuesApplication(userData: UserData): Promise<Buffe
   // Название документа
   doc
     .fontSize(16)
-    .font("Helvetica-Bold")
     .text("ЗАЯВЛЕНИЕ", { align: "center" })
     .fontSize(14)
     .text("о перечислении членских взносов", { align: "center" })
@@ -39,7 +41,6 @@ export async function generateDuesApplication(userData: UserData): Promise<Buffe
   // Текст заявления
   doc
     .fontSize(12)
-    .font("Helvetica")
     .text(
       "Прошу производить ежемесячное удержание из моей заработной платы членских взносов в размере 1% (один процент) и перечислять их в Межрегиональную общественную организацию профсоюза работников здравоохранения (МООП РЗ).",
       {
@@ -52,10 +53,8 @@ export async function generateDuesApplication(userData: UserData): Promise<Buffe
   // Реквизиты для перечисления (примерные, нужно уточнить)
   doc
     .fontSize(12)
-    .font("Helvetica-Bold")
     .text("Реквизиты для перечисления взносов:", { underline: true })
     .moveDown(0.5)
-    .font("Helvetica")
     .text("Получатель: Межрегиональная общественная организация профсоюза работников здравоохранения")
     .text("ИНН: [указать ИНН]")
     .text("КПП: [указать КПП]")
@@ -68,10 +67,8 @@ export async function generateDuesApplication(userData: UserData): Promise<Buffe
   // Персональные данные
   doc
     .fontSize(12)
-    .font("Helvetica-Bold")
     .text("Мои данные:", { underline: true })
-    .moveDown(0.5)
-    .font("Helvetica");
+    .moveDown(0.5);
 
   const personalData = [
     ["ФИО:", fullName],
@@ -88,9 +85,7 @@ export async function generateDuesApplication(userData: UserData): Promise<Buffe
 
   personalData.forEach(([label, value]) => {
     doc
-      .font("Helvetica-Bold")
       .text(label, { continued: true })
-      .font("Helvetica")
       .text(` ${value}`)
       .moveDown(0.5);
   });
@@ -100,7 +95,6 @@ export async function generateDuesApplication(userData: UserData): Promise<Buffe
   // Примечание
   doc
     .fontSize(11)
-    .font("Helvetica-Oblique")
     .text(
       "Примечание: Членские взносы составляют 1% от заработной платы в соответствии с Уставом МООП РЗ.",
       {
@@ -112,7 +106,6 @@ export async function generateDuesApplication(userData: UserData): Promise<Buffe
   // Подпись и дата
   doc
     .fontSize(12)
-    .font("Helvetica")
     .text(`Дата: ${formatDate(new Date())}`, { continued: false })
     .moveDown(2)
     .text("Подпись: __________________ / " + fullName + " /", { continued: false });
@@ -121,4 +114,3 @@ export async function generateDuesApplication(userData: UserData): Promise<Buffe
 
   return streamToBuffer(doc as unknown as Readable);
 }
-

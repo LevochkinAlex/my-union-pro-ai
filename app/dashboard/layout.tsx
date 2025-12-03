@@ -4,8 +4,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/dashboard/Sidebar";
-import MiniChatWrapper from "@/components/dashboard/MiniChatWrapper";
+import MiniChatWrapperConditional from "@/components/dashboard/MiniChatWrapperConditional";
 import MobileLayout from "@/components/dashboard/MobileLayout";
+import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 
 export default async function DashboardLayout({
   children,
@@ -20,9 +21,10 @@ export default async function DashboardLayout({
 
   const userRole = session.user.role;
   const membershipStatus = session.user.membershipStatus;
+  const isImpersonating = session.user.isImpersonating || false;
 
-  // Редирект супер-админов в админ-панель
-  if (userRole === "SUPER_ADMIN") {
+  // Редирект супер-админов в админ-панель (только если не в режиме impersonation)
+  if (userRole === "SUPER_ADMIN" && !isImpersonating) {
     redirect("/admin/dashboard");
   }
 
@@ -74,6 +76,28 @@ export default async function DashboardLayout({
     ),
   });
 
+  // Чат доступен всем пользователям
+  menuItems.push({
+    href: "/dashboard/chat",
+    label: "Чат",
+    icon: (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+      </svg>
+    ),
+  });
+
+  // Пользователи (члены профсоюза)
+  menuItems.push({
+    href: "/dashboard/users",
+    label: "Коллеги",
+    icon: (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+      </svg>
+    ),
+  });
+
   // Раздел скидок доступен всем
   menuItems.push({
         href: "/dashboard/discounts",
@@ -117,27 +141,40 @@ export default async function DashboardLayout({
     select: { avatarUrl: true },
   });
 
+  // Безопасное получение инициала пользователя
+  const getUserInitial = () => {
+    if (session?.user?.name) {
+      return session.user.name.charAt(0).toUpperCase();
+    }
+    if (session?.user?.email) {
+      return session.user.email.charAt(0).toUpperCase();
+    }
+    return "U";
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
       {/* Mobile Header and Menu */}
       <MobileLayout
         items={menuItems}
-        userInitial={session.user?.name?.charAt(0).toUpperCase() || "U"}
+        userInitial={getUserInitial()}
         avatarUrl={user?.avatarUrl || null}
       />
 
       {/* Desktop Sidebar */}
       <Sidebar
         items={menuItems}
-        userInitial={session.user?.name?.charAt(0).toUpperCase() || "U"}
+        userInitial={getUserInitial()}
         avatarUrl={user?.avatarUrl || null}
       />
 
       {/* Main content */}
-      <div id="main-content" className="flex flex-col flex-1 md:pl-64 transition-all duration-300">
-        <main className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden">
-          <div className="flex-1 overflow-y-auto pt-16 md:pt-0">
-            <div className="px-4 py-8 sm:px-8 lg:px-12 h-full">
+      <div id="main-content" className="flex flex-col flex-1 md:pl-64 transition-all duration-300 min-w-0">
+        {/* Impersonation Banner */}
+        {isImpersonating && <ImpersonationBanner />}
+        <main className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden min-w-0">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden pt-16 md:pt-0 min-w-0">
+            <div className="px-4 py-8 sm:px-8 lg:px-12 h-full w-full max-w-full min-w-0">
               {children}
             </div>
           </div>
@@ -145,7 +182,7 @@ export default async function DashboardLayout({
       </div>
       
       {/* Мини-чат виджет (показывается на всех страницах кроме чатов) */}
-      <MiniChatWrapper />
+      <MiniChatWrapperConditional />
     </div>
   );
 }

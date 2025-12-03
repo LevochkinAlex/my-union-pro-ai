@@ -40,6 +40,7 @@ interface Document {
   id: string;
   type: string;
   title: string;
+  description?: string;
   fileName: string;
   status: string;
 }
@@ -53,6 +54,7 @@ export default function QuestionnaireModal({
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [autoSaving, setAutoSaving] = useState(false);
   const [lastSavedField, setLastSavedField] = useState<string | null>(null);
@@ -110,12 +112,28 @@ export default function QuestionnaireModal({
       console.log("[QuestionnaireModal] loadData called");
       setIsLoading(true);
       console.log("[QuestionnaireModal] Fetching profile data from /api/profile...");
-      const [profileRes, orgsRes, dictionariesRes, documentsRes] = await Promise.all([
+      
+      // Используем Promise.allSettled, чтобы один запрос не блокировал остальные
+      const results = await Promise.allSettled([
         fetch("/api/profile"),
         fetch("/api/organizations"),
         fetch("/api/dictionaries"),
         fetch("/api/documents"),
       ]);
+      
+      // Обрабатываем результаты Promise.allSettled
+      const profileRes = results[0].status === 'fulfilled' 
+        ? results[0].value 
+        : { ok: false, status: 500, statusText: 'Request failed', text: () => Promise.resolve((results[0] as PromiseRejectedResult).reason?.message || 'Unknown error'), json: () => Promise.resolve({}) };
+      const orgsRes = results[1].status === 'fulfilled' 
+        ? results[1].value 
+        : { ok: false, status: 500, statusText: 'Request failed', text: () => Promise.resolve((results[1] as PromiseRejectedResult).reason?.message || 'Unknown error'), json: () => Promise.resolve({}) };
+      const dictionariesRes = results[2].status === 'fulfilled' 
+        ? results[2].value 
+        : { ok: false, status: 500, statusText: 'Request failed', text: () => Promise.resolve((results[2] as PromiseRejectedResult).reason?.message || 'Unknown error'), json: () => Promise.resolve({}) };
+      const documentsRes = results[3].status === 'fulfilled' 
+        ? results[3].value 
+        : { ok: false, status: 500, statusText: 'Request failed', text: () => Promise.resolve((results[3] as PromiseRejectedResult).reason?.message || 'Unknown error'), json: () => Promise.resolve({ documents: [] }) };
 
       console.log("[QuestionnaireModal] Profile response status:", profileRes.status, profileRes.ok);
 
@@ -177,7 +195,14 @@ export default function QuestionnaireModal({
 
       if (documentsRes.ok) {
         const documentsData = await documentsRes.json();
+        console.log("[QuestionnaireModal] Loaded documents:", documentsData.documents?.length || 0);
         setDocuments(documentsData.documents || []);
+      } else {
+        console.error("[QuestionnaireModal] Failed to load documents:", documentsRes.status, documentsRes.statusText);
+        const errorText = await documentsRes.text();
+        console.error("[QuestionnaireModal] Documents error response:", errorText);
+        // Устанавливаем пустой массив, чтобы не было ошибок в UI
+        setDocuments([]);
       }
     } catch (error) {
       console.error("[QuestionnaireModal] Error loading data:", error);
@@ -302,19 +327,28 @@ export default function QuestionnaireModal({
   const handleGenerateDocuments = async () => {
     setIsGenerating(true);
     try {
+      console.log("[QuestionnaireModal] Запрос на генерацию документов...");
       const response = await fetch("/api/documents/generate", {
         method: "POST",
       });
 
+      const data = await response.json();
+      console.log("[QuestionnaireModal] Ответ сервера:", { status: response.status, ok: response.ok, data });
+
       if (!response.ok) {
-        throw new Error("Ошибка при генерации документов");
+        const errorMessage = data.details || data.error || "Ошибка при генерации документов";
+        console.error("[QuestionnaireModal] Ошибка генерации:", errorMessage);
+        throw new Error(errorMessage);
       }
 
+      console.log("[QuestionnaireModal] ✅ Документы успешно сгенерированы");
       showAlert({ message: "Документы успешно сгенерированы", type: "success" });
       await loadData(); // Перезагружаем документы
     } catch (error) {
+      console.error("[QuestionnaireModal] Ошибка при генерации документов:", error);
+      const errorMessage = error instanceof Error ? error.message : "Ошибка при генерации документов";
       showAlert({
-        message: error instanceof Error ? error.message : "Ошибка при генерации документов",
+        message: errorMessage,
         type: "error",
       });
     } finally {
@@ -323,20 +357,84 @@ export default function QuestionnaireModal({
   };
 
   const handleDownloadDocument = async (documentId: string, fileName: string) => {
+    console.log("[QuestionnaireModal] ===== НАЧАЛО СКАЧИВАНИЯ =====");
+    console.log("[QuestionnaireModal] Document ID:", documentId);
+    console.log("[QuestionnaireModal] File name:", fileName);
+    
     try {
-      const response = await fetch(`/api/documents/${documentId}/download`);
-      if (!response.ok) throw new Error("Ошибка при скачивании");
+      setDownloadingDocId(documentId);
+      // Кодируем ID для безопасной передачи в URL
+      const encodedId = encodeURIComponent(documentId);
+      const downloadUrl = `/api/documents/${encodedId}/download`;
+      console.log("[QuestionnaireModal] Encoded ID:", encodedId);
+      console.log("[QuestionnaireModal] Download URL:", downloadUrl);
+      console.log("[QuestionnaireModal] Отправка запроса...");
+      
+      const response = await fetch(downloadUrl);
+      console.log("[QuestionnaireModal] Получен ответ:", {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: {
+          contentType: response.headers.get("content-type"),
+          contentLength: response.headers.get("content-length"),
+          contentDisposition: response.headers.get("content-disposition"),
+        }
+      });
+      
+      if (!response.ok) {
+        // Пытаемся получить сообщение об ошибке из JSON
+        let errorMessage = "Ошибка при скачивании";
+        try {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          }
+        } catch (e) {
+          console.error("Не удалось прочитать ошибку:", e);
+        }
+        throw new Error(errorMessage);
+      }
+
+      // Проверяем, что ответ действительно содержит файл
+      const contentType = response.headers.get("content-type");
+      if (!contentType || (!contentType.includes("application/pdf") && 
+          !contentType.includes("application/vnd.openxmlformats") && 
+          !contentType.includes("application/msword") &&
+          !contentType.includes("application/octet-stream"))) {
+        // Если это не файл, пытаемся прочитать как JSON (ошибка)
+        try {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Неверный тип ответа от сервера");
+        } catch (e) {
+          if (e instanceof Error && e.message.includes("Неверный тип")) {
+            throw e;
+          }
+        }
+      }
 
       const blob = await response.blob();
+      
+      // Проверяем, что blob не пустой
+      if (blob.size === 0) {
+        throw new Error("Получен пустой файл");
+      }
+      
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = fileName || "document.pdf";
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      
+      // Небольшая задержка перед очисткой, чтобы браузер успел начать скачивание
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }, 100);
     } catch (error) {
+      console.error("[QuestionnaireModal] Ошибка скачивания:", error);
       showAlert({
         message: error instanceof Error ? error.message : "Ошибка при скачивании документа",
         type: "error",
@@ -346,6 +444,19 @@ export default function QuestionnaireModal({
 
   const handleUploadSigned = async (documentId: string, file: File) => {
     try {
+      console.log("[QuestionnaireModal] Начало загрузки подписанного документа:", { documentId, fileName: file.name, fileSize: file.size, fileType: file.type });
+      
+      // Проверяем размер файла (50MB max)
+      if (file.size > 50 * 1024 * 1024) {
+        throw new Error("Файл слишком большой. Максимальный размер: 50MB");
+      }
+      
+      // Проверяем тип файла
+      const allowedTypes = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
+      if (!allowedTypes.includes(file.type)) {
+        throw new Error("Недопустимый формат файла. Разрешены: PDF, JPG, PNG");
+      }
+      
       const formDataToSend = new FormData();
       formDataToSend.append("file", file);
       formDataToSend.append("documentId", documentId);
@@ -355,12 +466,14 @@ export default function QuestionnaireModal({
       xhr.upload.addEventListener("progress", (e) => {
         if (e.lengthComputable) {
           const percentComplete = Math.round((e.loaded / e.total) * 100);
+          console.log(`[QuestionnaireModal] Прогресс загрузки: ${percentComplete}%`);
           setUploadProgress((prev) => ({ ...prev, [documentId]: percentComplete }));
         }
       });
 
       return new Promise<void>((resolve, reject) => {
         xhr.addEventListener("load", () => {
+          console.log("[QuestionnaireModal] Загрузка завершена, статус:", xhr.status);
           if (xhr.status === 200) {
             setUploadProgress((prev) => {
               const newProgress = { ...prev };
@@ -371,15 +484,41 @@ export default function QuestionnaireModal({
             loadData();
             resolve();
           } else {
-            reject(new Error("Ошибка при загрузке"));
+            // Пытаемся получить сообщение об ошибке из ответа
+            let errorMessage = "Ошибка при загрузке";
+            try {
+              const response = JSON.parse(xhr.responseText);
+              errorMessage = response.error || errorMessage;
+            } catch (e) {
+              console.error("[QuestionnaireModal] Не удалось распарсить ответ сервера:", xhr.responseText);
+            }
+            console.error("[QuestionnaireModal] Ошибка загрузки:", errorMessage);
+            reject(new Error(errorMessage));
           }
         });
 
-        xhr.addEventListener("error", () => reject(new Error("Ошибка при загрузке")));
+        xhr.addEventListener("error", () => {
+          console.error("[QuestionnaireModal] Ошибка сети при загрузке документа");
+          reject(new Error("Ошибка сети. Проверьте подключение к интернету"));
+        });
+        
+        xhr.addEventListener("timeout", () => {
+          console.error("[QuestionnaireModal] Таймаут при загрузке документа");
+          reject(new Error("Превышено время ожидания. Попробуйте еще раз"));
+        });
+        
+        xhr.timeout = 60000; // 60 секунд
         xhr.open("POST", "/api/documents/upload");
+        console.log("[QuestionnaireModal] Отправка файла на сервер...");
         xhr.send(formDataToSend);
       });
     } catch (error) {
+      console.error("[QuestionnaireModal] Ошибка при загрузке документа:", error);
+      setUploadProgress((prev) => {
+        const newProgress = { ...prev };
+        delete newProgress[documentId];
+        return newProgress;
+      });
       showAlert({
         message: error instanceof Error ? error.message : "Ошибка при загрузке документа",
         type: "error",
@@ -412,10 +551,11 @@ export default function QuestionnaireModal({
 
   if (isLoading) {
     return (
-      <Modal isOpen={isOpen} onClose={onClose}>
+      <Modal isOpen={isOpen} onClose={onClose} className="max-w-md">
         <div className="p-8 text-center">
-          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
-          <p className="text-gray-600 dark:text-gray-400">Загрузка данных...</p>
+          <div className="mb-4 inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+          <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">Загрузка анкеты...</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Получение данных профиля и документов</p>
         </div>
       </Modal>
     );
@@ -423,10 +563,10 @@ export default function QuestionnaireModal({
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} className="max-w-4xl">
-        <div className="max-h-[85vh] overflow-y-auto p-6">
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+      <Modal isOpen={isOpen} onClose={onClose} className="w-full max-w-2xl lg:max-w-3xl">
+        <div className="max-h-[calc(100vh-2rem)] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6 w-full">
+          <div className="mb-4 sm:mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white pr-8 sm:pr-0">
               Заполнение анкеты для вступления в профсоюз
             </h2>
             {autoSaving && (
@@ -442,8 +582,8 @@ export default function QuestionnaireModal({
           </div>
 
           {/* Прогресс */}
-          <div className="mb-6">
-            <div className="mb-2 flex items-center justify-between text-sm">
+          <div className="mb-4 sm:mb-6">
+            <div className="mb-2 flex items-center justify-between text-xs sm:text-sm">
               <span className="font-medium text-gray-700 dark:text-gray-300">
                 Шаг {currentStep} из 4
               </span>
@@ -461,8 +601,8 @@ export default function QuestionnaireModal({
 
           {/* Шаг 1: Основная информация */}
           {currentStep === 1 && (
-            <div className="space-y-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            <div className="space-y-4 sm:space-y-6">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
                 Основная информация
               </h3>
 
@@ -718,7 +858,47 @@ export default function QuestionnaireModal({
                 Генерация и загрузка документов
               </h3>
 
-              {documents.length === 0 ? (
+              {/* Показываем устав (системный документ) */}
+              {documents
+                .filter(
+                  (doc) =>
+                    doc.id === "charter-system" ||
+                    (doc.type === "OTHER" &&
+                      (doc.title?.toLowerCase().includes("устав") ||
+                        doc.description?.toLowerCase().includes("устав")))
+                )
+                .map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 sm:p-4"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-white sm:text-base break-words">
+                          {doc.title}
+                        </h4>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 sm:text-sm break-words">
+                          {doc.description || doc.fileName}
+                        </p>
+                      </div>
+                      <div className="flex-shrink-0 sm:ml-4">
+                        <button
+                          onClick={() => handleDownloadDocument(doc.id, doc.fileName)}
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:px-4"
+                        >
+                          <Download className="h-4 w-4 flex-shrink-0" />
+                          <span className="whitespace-nowrap">Скачать</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+              {documents.filter(
+                (doc) =>
+                  doc.type === "MEMBERSHIP_APPLICATION" ||
+                  doc.type === "CONTRIBUTION_APPLICATION"
+              ).length === 0 ? (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-900/40 dark:bg-blue-900/20">
                   <p className="mb-4 text-gray-700 dark:text-gray-300">
                     Нажмите кнопку ниже, чтобы сгенерировать документы для вступления в профсоюз.
@@ -743,62 +923,98 @@ export default function QuestionnaireModal({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {documents.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-900 dark:text-white">
-                            {doc.title}
-                          </h4>
-                          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                            {doc.fileName}
-                          </p>
-                        </div>
-                        <div className="ml-4 flex gap-2">
-                          <button
-                            onClick={() => handleDownloadDocument(doc.id, doc.fileName)}
-                            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                          >
-                            <Download className="h-4 w-4" />
-                            Скачать
-                          </button>
-                          {doc.status === "GENERATED" && (
-                            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700">
-                              <Upload className="h-4 w-4" />
-                              Загрузить подписанный
-                              <input
-                                type="file"
-                                accept=".pdf"
-                                className="hidden"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    handleUploadSigned(doc.id, file);
-                                  }
-                                }}
-                              />
-                            </label>
-                          )}
-                        </div>
-                      </div>
-                      {uploadProgress[doc.id] !== undefined && (
-                        <div className="mt-3">
-                          <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                            <div
-                              className="h-full rounded-full bg-purple-600 transition-all"
-                              style={{ width: `${uploadProgress[doc.id]}%` }}
-                            />
+                  {/* Показываем только заявления (MEMBERSHIP_APPLICATION, CONTRIBUTION_APPLICATION) */}
+                  {documents
+                    .filter(
+                      (doc) =>
+                        doc.type === "MEMBERSHIP_APPLICATION" ||
+                        doc.type === "CONTRIBUTION_APPLICATION"
+                    )
+                    .map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 sm:p-4"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-medium text-gray-900 dark:text-white sm:text-base break-words">
+                              {doc.title}
+                            </h4>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 sm:text-sm break-words">
+                              {doc.fileName}
+                            </p>
                           </div>
-                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            {uploadProgress[doc.id]}%
-                          </p>
+                          <div className="flex flex-col gap-2 sm:ml-4 sm:flex-row sm:flex-shrink-0">
+                            <button
+                              onClick={() => handleDownloadDocument(doc.id, doc.fileName)}
+                              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:px-4"
+                            >
+                              <Download className="h-4 w-4 flex-shrink-0" />
+                              <span className="whitespace-nowrap">Скачать</span>
+                            </button>
+                            {doc.status === "GENERATED" && (
+                              <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 sm:w-auto sm:px-4">
+                                <Upload className="h-4 w-4 flex-shrink-0" />
+                                <span className="whitespace-nowrap">Загрузить подписанный</span>
+                                <input
+                                  type="file"
+                                  accept=".pdf"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      handleUploadSigned(doc.id, file);
+                                    }
+                                  }}
+                                />
+                              </label>
+                            )}
+                          </div>
                         </div>
-                      )}
+                        {uploadProgress[doc.id] !== undefined && (
+                          <div className="mt-3">
+                            <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                              <div
+                                className="h-full rounded-full bg-purple-600 transition-all"
+                                style={{ width: `${uploadProgress[doc.id]}%` }}
+                              />
+                            </div>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                              {uploadProgress[doc.id]}%
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  {/* Если нет заявлений, показываем сообщение */}
+                  {documents.filter(
+                    (doc) =>
+                      doc.type === "MEMBERSHIP_APPLICATION" ||
+                      doc.type === "CONTRIBUTION_APPLICATION"
+                  ).length === 0 && (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-900/40 dark:bg-blue-900/20">
+                      <p className="text-gray-700 dark:text-gray-300">
+                        Заявления еще не сгенерированы. Нажмите кнопку ниже, чтобы создать их.
+                      </p>
+                      <button
+                        onClick={handleGenerateDocuments}
+                        disabled={isGenerating}
+                        className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isGenerating ? (
+                          <>
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                            Генерация...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="h-4 w-4" />
+                            Сгенерировать заявления
+                          </>
+                        )}
+                      </button>
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
@@ -886,7 +1102,20 @@ export default function QuestionnaireModal({
             {currentStep === 3 && (
               <button
                 onClick={() => setCurrentStep(4)}
-                disabled={documents.length === 0 || documents.some(doc => doc.status === "GENERATED")}
+                disabled={
+                  documents.filter(
+                    (doc) =>
+                      doc.type === "MEMBERSHIP_APPLICATION" ||
+                      doc.type === "CONTRIBUTION_APPLICATION"
+                  ).length === 0 ||
+                  documents
+                    .filter(
+                      (doc) =>
+                        doc.type === "MEMBERSHIP_APPLICATION" ||
+                        doc.type === "CONTRIBUTION_APPLICATION"
+                    )
+                    .some((doc) => doc.status === "GENERATED")
+                }
                 className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Далее

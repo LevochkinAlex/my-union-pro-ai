@@ -3,33 +3,43 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// GET /api/profile/[id] - получить публичный профиль пользователя
+// GET - получение публичного профиля пользователя
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
-
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
     const resolvedParams = await Promise.resolve(params);
-    const { id } = resolvedParams;
+    const userId = resolvedParams.id;
+
+    if (!userId) {
+      return NextResponse.json({ error: "ID пользователя не указан" }, { status: 400 });
+    }
 
     const user = await prisma.user.findUnique({
-      where: { id },
+      where: { id: userId },
       select: {
         id: true,
         firstName: true,
         lastName: true,
+        middleName: true,
         email: true,
         avatarUrl: true,
         phone: true,
+        jobTitle: true,
+        profession: true,
+        education: true,
+        aboutMe: true,
+        hobbies: true,
         createdAt: true,
         organization: {
           select: {
+            id: true,
             name: true,
             type: true,
           },
@@ -38,16 +48,18 @@ export async function GET(
     });
 
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
     }
 
-    return NextResponse.json(user);
+    // Проверяем, является ли это профиль текущего пользователя
+    const isOwnProfile = user.id === session.user.id;
+
+    return NextResponse.json({
+      ...user,
+      isOwnProfile,
+    });
   } catch (error) {
-    console.error("[profile/[id]] Error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch profile" },
-      { status: 500 }
-    );
+    console.error("[profile] GET Error:", error);
+    return NextResponse.json({ error: "Внутренняя ошибка сервера" }, { status: 500 });
   }
 }
-

@@ -1,0 +1,87 @@
+"use client";
+
+import { useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+
+export default function ImpersonationBanner() {
+  const { data: session } = useSession();
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  if (!session?.user?.isImpersonating) {
+    return null;
+  }
+
+  const handleStopImpersonation = async () => {
+    setLoading(true);
+    try {
+      if (!session?.user?.originalAdminId) {
+        throw new Error("Не найден ID админа");
+      }
+
+      const adminId = session.user.originalAdminId;
+      
+      // Восстанавливаем сессию админа через специальный провайдер
+      const result = await signIn("restore-admin", {
+        adminId: adminId,
+        restoreToken: "restore", // Токен не проверяется строго, только для совместимости
+        redirect: false,
+      });
+
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+
+      // Редиректим в админ-панель
+      window.location.href = "/admin/users";
+    } catch (error) {
+      console.error("[Stop Impersonation] Error:", error);
+      alert(error instanceof Error ? error.message : "Ошибка при выходе из режима impersonation");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-yellow-500 text-white px-4 py-3 flex items-center justify-between shadow-lg z-50 sticky top-0">
+      <div className="flex items-center gap-2 flex-1">
+        <svg
+          className="h-5 w-5 flex-shrink-0"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+          />
+        </svg>
+        <span className="font-medium text-sm sm:text-base">
+          ⚠️ Режим просмотра: Вы просматриваете личный кабинет от имени пользователя
+        </span>
+      </div>
+      <button
+        onClick={handleStopImpersonation}
+        disabled={loading}
+        className="bg-white text-yellow-600 px-4 py-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm sm:text-base ml-4 flex-shrink-0 transition-colors shadow-md"
+      >
+        {loading ? (
+          <span className="flex items-center gap-2">
+            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Выход...
+          </span>
+        ) : (
+          "Вернуться в админ-панель"
+        )}
+      </button>
+    </div>
+  );
+}
+

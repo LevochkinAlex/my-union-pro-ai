@@ -160,3 +160,23 @@
 .dark .news-content th {
   background-color: #1f2937;
 }
+
+/* Global select styles - fix chevron icon spacing */
+/* Apply to all select elements that don't already have custom styling */
+select:not([class*="appearance-none"]) {
+  padding-right: 2.5rem !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22%236b7280%22%3E%3Cpath d=%22M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z%22/%3E%3C/svg%3E");
+  background-size: 1.25rem 1.25rem;
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  appearance: none;
+}
+
+.dark select:not([class*="appearance-none"]) {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22%239ca3af%22%3E%3Cpath d=%22M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z%22/%3E%3C/svg%3E");
+}
+
+/* Override for Select component - it has its own custom icon */
+div.relative > select[class*="appearance-none"] {
+  padding-right: 3rem !important;
+}

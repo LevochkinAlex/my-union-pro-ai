@@ -111,13 +111,13 @@ export default function NewTicketPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="w-full max-w-2xl lg:max-w-3xl mx-auto space-y-4 sm:space-y-6">
       {/* Back Button */}
       <button
         onClick={() => router.back()}
-        className="mb-2 flex items-center gap-2 text-gray-600 transition hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+        className="mb-2 flex items-center gap-2 text-sm sm:text-base text-gray-600 transition hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
       >
-        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
           <path
             fillRule="evenodd"
             d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
@@ -128,10 +128,10 @@ export default function NewTicketPage() {
       </button>
 
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
           Создать обращение
         </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
+        <p className="mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400">
           Опишите вашу проблему или вопрос, и мы поможем вам
         </p>
       </div>
@@ -271,20 +271,20 @@ export default function NewTicketPage() {
         </div>
 
         {/* Кнопки */}
-        <div className="flex gap-4">
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="rounded-lg bg-blue-600 px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? "Создание..." : "Создать обращение"}
-          </button>
+        <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4">
           <button
             type="button"
             onClick={() => router.back()}
-            className="rounded-lg border border-gray-300 bg-white px-6 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+            className="w-full sm:w-auto rounded-lg border border-gray-300 bg-white px-4 sm:px-6 py-2.5 text-sm sm:text-base font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
           >
             Отмена
+          </button>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full sm:w-auto rounded-lg bg-blue-600 px-4 sm:px-6 py-2.5 text-sm sm:text-base font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? "Создание..." : "Создать обращение"}
           </button>
         </div>
       </form>
