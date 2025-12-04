@@ -440,10 +440,10 @@ export async function POST(request: NextRequest) {
   } // end for loop
 
   // Проверяем загружены ли оба обязательных документа (membership и contribution)
-    // Документ считается загруженным, если:
-    // 1. Статус PENDING или APPROVED (уже отправлен)
-    // 2. Статус SIGNED и есть signedFilePath (подписан и загружен)
-    const membershipDoc = await prisma.document.findFirst({
+  // Документ считается загруженным, если:
+  // 1. Статус PENDING или APPROVED (уже отправлен)
+  // 2. Статус SIGNED и есть signedFilePath (подписан и загружен)
+  const membershipDoc = await prisma.document.findFirst({
       where: {
         userId: session.user.id,
         type: "MEMBERSHIP_APPLICATION",
@@ -454,81 +454,81 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const contributionDoc = await prisma.document.findFirst({
-      where: {
-        userId: session.user.id,
-        type: "CONTRIBUTION_APPLICATION",
-        OR: [
-          { status: { in: ["PENDING", "APPROVED"] } },
-          { status: "SIGNED", signedFilePath: { not: null } },
-        ],
-      },
-    });
+  const contributionDoc = await prisma.document.findFirst({
+    where: {
+      userId: session.user.id,
+      type: "CONTRIBUTION_APPLICATION",
+      OR: [
+        { status: { in: ["PENDING", "APPROVED"] } },
+        { status: "SIGNED", signedFilePath: { not: null } },
+      ],
+    },
+  });
 
-    // Если оба документа загружены - обновляем статус на PENDING
-    if (membershipDoc && contributionDoc) {
-      try {
-        // Обновляем статус документов на PENDING (отправлены на проверку)
-        await prisma.document.updateMany({
-          where: {
-            userId: session.user.id,
-            type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
-            status: "SIGNED",
-          },
-          data: { status: "PENDING" },
-        });
-        console.log("[upload] ✅ Documents status updated to PENDING");
+  // Если оба документа загружены - обновляем статус на PENDING
+  if (membershipDoc && contributionDoc) {
+    try {
+      // Обновляем статус документов на PENDING (отправлены на проверку)
+      await prisma.document.updateMany({
+        where: {
+          userId: session.user.id,
+          type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
+          status: "SIGNED",
+        },
+        data: { status: "PENDING" },
+      });
+      console.log("[upload] ✅ Documents status updated to PENDING");
 
-        // Обновляем статус пользователя на DOCUMENTS_PENDING (если еще не APPROVED или REJECTED)
-        const currentUser = await prisma.user.findUnique({
+      // Обновляем статус пользователя на DOCUMENTS_PENDING (если еще не APPROVED или REJECTED)
+      const currentUser = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { membershipStatus: true },
+      });
+
+      if (currentUser && 
+          currentUser.membershipStatus !== "APPROVED" && 
+          currentUser.membershipStatus !== "REJECTED") {
+        await prisma.user.update({
           where: { id: session.user.id },
-          select: { membershipStatus: true },
+          data: { membershipStatus: "DOCUMENTS_PENDING" },
         });
-
-        if (currentUser && 
-            currentUser.membershipStatus !== "APPROVED" && 
-            currentUser.membershipStatus !== "REJECTED") {
-          await prisma.user.update({
-            where: { id: session.user.id },
-            data: { membershipStatus: "DOCUMENTS_PENDING" },
-          });
-          console.log("[upload] ✅ User membershipStatus updated to DOCUMENTS_PENDING");
-        }
-      } catch (error) {
-        console.error("[upload] Error updating document/user status:", error);
-        // Не блокируем загрузку документов из-за ошибки обновления статуса
+        console.log("[upload] ✅ User membershipStatus updated to DOCUMENTS_PENDING");
       }
+    } catch (error) {
+      console.error("[upload] Error updating document/user status:", error);
+      // Не блокируем загрузку документов из-за ошибки обновления статуса
     }
+  }
 
-    // Проверяем финальный статус документов для ответа
-    const finalMembershipDoc = await prisma.document.findFirst({
-      where: {
-        userId: session.user.id,
-        type: "MEMBERSHIP_APPLICATION",
-        status: { in: ["SIGNED", "PENDING", "APPROVED"] },
-        signedFilePath: { not: null },
-      },
-    });
+  // Проверяем финальный статус документов для ответа
+  const finalMembershipDoc = await prisma.document.findFirst({
+    where: {
+      userId: session.user.id,
+      type: "MEMBERSHIP_APPLICATION",
+      status: { in: ["SIGNED", "PENDING", "APPROVED"] },
+      signedFilePath: { not: null },
+    },
+  });
 
-    const finalContributionDoc = await prisma.document.findFirst({
-      where: {
-        userId: session.user.id,
-        type: "CONTRIBUTION_APPLICATION",
-        status: { in: ["SIGNED", "PENDING", "APPROVED"] },
-        signedFilePath: { not: null },
-      },
-    });
+  const finalContributionDoc = await prisma.document.findFirst({
+    where: {
+      userId: session.user.id,
+      type: "CONTRIBUTION_APPLICATION",
+      status: { in: ["SIGNED", "PENDING", "APPROVED"] },
+      signedFilePath: { not: null },
+    },
+  });
 
-    const allDocumentsUploaded = !!(finalMembershipDoc && finalContributionDoc);
+  const allDocumentsUploaded = !!(finalMembershipDoc && finalContributionDoc);
 
-    return NextResponse.json({
-      success: true,
-      documents: uploadedDocuments,
-      message: `Загружено файлов: ${uploadedDocuments.length}`,
-      allDocumentsUploaded, // Флаг, что оба документа загружены
-      membershipStatus: allDocumentsUploaded ? "DOCUMENTS_PENDING" : undefined,
-    });
-  } catch (error) {
+  return NextResponse.json({
+    success: true,
+    documents: uploadedDocuments,
+    message: `Загружено файлов: ${uploadedDocuments.length}`,
+    allDocumentsUploaded, // Флаг, что оба документа загружены
+    membershipStatus: allDocumentsUploaded ? "DOCUMENTS_PENDING" : undefined,
+  });
+} catch (error) {
     console.error("Error uploading file:", error);
     return NextResponse.json(
       { error: "Ошибка при загрузке файла" },
