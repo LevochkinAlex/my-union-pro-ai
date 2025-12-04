@@ -158,9 +158,13 @@ export default function MyDiscountsPage() {
       
       console.log("[MyDiscounts] Normalized claimed data:", normalizedClaimedData);
       
-      const claimedIds = normalizedClaimedData.map((item: any) => String(item.id)).filter(Boolean);
+      // Создаем массив ID полученных скидок (как числа для совместимости)
+      const claimedIds = normalizedClaimedData.map((item: any) => item.id).filter(Boolean);
       
-      const favoriteIds = (filters.favorites || []).map((id: any) => String(id));
+      // Создаем Set для быстрой проверки (строковые ключи для надежности)
+      const claimedIdsSet = new Set(claimedIds.map((id: any) => String(id)));
+      
+      const favoriteIds = (filters.favorites || []).map((id: any) => id);
       
       console.log("[MyDiscounts] IDs to fetch:", {
         activeTab,
@@ -209,7 +213,8 @@ export default function MyDiscountsPage() {
         // Проверяем, получена ли скидка (для обеих вкладок)
         // Нормализуем ID к строке для надежного сравнения
         const discountIdStr = String(discount.id);
-        const isClaimed = claimedIds.includes(discountIdStr);
+        // Проверяем, есть ли скидка в списке полученных (используем Set для надежности)
+        const isClaimed = claimedIdsSet.has(discountIdStr);
         
         // Находим элемент в списке полученных (для получения промокода из preferences)
         const claimedItem = normalizedClaimedData.find((item: any) => {
