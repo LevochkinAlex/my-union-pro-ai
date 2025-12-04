@@ -319,15 +319,66 @@ export async function POST(request: NextRequest) {
       }
     } else if (documentType === "MEMBERSHIP_APPLICATION" || documentType === "CONTRIBUTION_APPLICATION") {
       // Если documentId не передан, ищем существующий документ этого типа (для обратной совместимости)
+      // Приоритет: документы со статусом PENDING/APPROVED, затем SIGNED с signedFilePath, затем GENERATED
       const existingDoc = await prisma.document.findFirst({
         where: {
           userId: session.user.id,
           type: documentType,
         },
-        orderBy: {
-          createdAt: "desc",
-        },
+        orderBy: [
+          {
+            status: "asc", // PENDING/APPROVED будут первыми
+          },
+          {
+            createdAt: "desc",
+          },
+        ],
       });
+      
+      // Если нашли документ, но он уже подписан и отправлен (PENDING/APPROVED), 
+      // не обновляем его, а создаем новый или ищем GENERATED
+      if (existingDoc && (existingDoc.status === "PENDING" || existingDoc.status === "APPROVED")) {
+        // Ищем документ со статусом GENERATED для обновления
+        const generatedDoc = await prisma.document.findFirst({
+          where: {
+            userId: session.user.id,
+            type: documentType,
+            status: "GENERATED",
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        });
+        
+        if (generatedDoc) {
+          // Обновляем GENERATED документ
+          document = await prisma.document.update({
+            where: { id: generatedDoc.id },
+            data: {
+              status: "SIGNED",
+              signedFilePath: relativePath,
+              updatedAt: new Date(),
+            },
+          });
+          console.log(`[upload] Updated existing GENERATED ${documentType} with signed file:`, document.id);
+        } else {
+          // Создаем новый документ, так как старый уже отправлен
+          document = await prisma.document.create({
+            data: {
+              userId: session.user.id,
+              type: documentType,
+              status: "SIGNED",
+              title: file.name,
+              fileName: file.name,
+              filePath: relativePath,
+              signedFilePath: relativePath,
+              fileSize: file.size,
+              mimeType: file.type || "application/octet-stream",
+            },
+          });
+          console.log(`[upload] Created new ${documentType} (existing is PENDING/APPROVED):`, document.id);
+        }
+      } else if (existingDoc) {
 
       if (existingDoc) {
         // Обновляем существующий документ, добавляя подписанный файл

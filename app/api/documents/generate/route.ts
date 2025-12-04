@@ -144,6 +144,26 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Также удаляем все старые документы типа OTHER со статусом GENERATED или DRAFT
+    // (это могут быть документы, которые были неправильно определены ранее)
+    const oldOtherDocs = await prisma.document.findMany({
+      where: {
+        userId: user.id,
+        type: DocumentType.OTHER,
+        status: { in: ["GENERATED", "DRAFT"] },
+      },
+    });
+    
+    if (oldOtherDocs.length > 0) {
+      console.log(`[documents/generate] Удаление ${oldOtherDocs.length} старых документов типа OTHER...`);
+      await prisma.document.deleteMany({
+        where: {
+          id: { in: oldOtherDocs.map(d => d.id) },
+        },
+      });
+      console.log("[documents/generate] ✅ Старые документы типа OTHER удалены");
+    }
+
     const existingMembership = existingDocs.find((d) => d.type === DocumentType.MEMBERSHIP_APPLICATION);
     const existingDues = existingDocs.find((d) => d.type === DocumentType.CONTRIBUTION_APPLICATION);
     
@@ -154,6 +174,9 @@ export async function POST(request: NextRequest) {
       if (existingMembership && doc.id === existingMembership.id) return false;
       if (existingDues && doc.id === existingDues.id) return false;
       // Удаляем только документы со статусом GENERATED или DRAFT (не подписанные)
+      // НЕ удаляем документы со статусом PENDING, APPROVED, или SIGNED с signedFilePath
+      if (doc.status === "PENDING" || doc.status === "APPROVED") return false;
+      if (doc.status === "SIGNED" && doc.signedFilePath) return false;
       return doc.status === "GENERATED" || doc.status === "DRAFT";
     });
     

@@ -218,19 +218,42 @@ export async function GET(
             }
           }
         } else {
-          // Локальный файл
+          // Локальный файл - сначала пытаемся прочитать локально
           let absolutePath = resolveFilePath(filePathToDownload);
           console.log("[documents/download] Пытаемся прочитать файл:", absolutePath);
           console.log("[documents/download] Исходный путь из БД:", filePathToDownload);
           console.log("[documents/download] Скачиваем подписанный файл:", downloadSigned);
           
-          // Проверяем существование файла
+          // Проверяем существование файла локально
+          let fileExistsLocally = false;
           try {
             await fs.access(absolutePath);
-            console.log("[documents/download] Файл существует");
+            fileExistsLocally = true;
+            console.log("[documents/download] Файл существует локально");
           } catch (accessError) {
-            console.error("[documents/download] Файл не существует:", absolutePath);
-            
+            console.log("[documents/download] Файл не существует локально, проверяем VDS");
+            fileExistsLocally = false;
+          }
+          
+          // Если файл не найден локально и VDS настроен, пытаемся скачать с VDS
+          if (!fileExistsLocally && isVDSStorageConfigured()) {
+            try {
+              // Извлекаем fileKey из пути (убираем /uploads/ если есть)
+              const normalizedPath = filePathToDownload.startsWith("/") ? filePathToDownload.slice(1) : filePathToDownload;
+              const pathParts = normalizedPath.split("/");
+              const fileKey = pathParts.slice(pathParts[0] === "uploads" ? 1 : 0).join("/");
+              
+              console.log("[documents/download] Пытаемся скачать с VDS:", fileKey);
+              fileBuffer = await getFileFromVDS(fileKey);
+              console.log("[documents/download] Файл успешно скачан с VDS, размер:", fileBuffer.length);
+            } catch (vdsError) {
+              console.error("[documents/download] Ошибка скачивания с VDS:", vdsError);
+              // Продолжаем с проверкой устава или возвратом ошибки
+            }
+          }
+          
+          // Если файл все еще не найден
+          if (!fileBuffer && !fileExistsLocally) {
             // Если это устав и файл не найден, пытаемся использовать системный файл
             if (isCharterDocument && !downloadSigned) {
               console.log("[documents/download] Устав без файла, пытаемся найти системный файл");
@@ -270,9 +293,11 @@ export async function GET(
             );
           }
           
-          // Читаем файл
-          fileBuffer = await fs.readFile(absolutePath);
-          console.log("[documents/download] Файл успешно прочитан, размер:", fileBuffer.length);
+          // Если файл существует локально, читаем его
+          if (fileExistsLocally && !fileBuffer) {
+            fileBuffer = await fs.readFile(absolutePath);
+            console.log("[documents/download] Файл успешно прочитан локально, размер:", fileBuffer.length);
+          }
         }
       } catch (error) {
         console.error("[documents/download] Ошибка при чтении файла:", error);
