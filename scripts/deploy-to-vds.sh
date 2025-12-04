@@ -7,11 +7,12 @@ set -e
 
 echo "🚀 Deploying MyUnion Pro to VDS..."
 
-# VDS server details (from .env or hardcoded)
-VDS_HOST="${VDS_HOST:-194.87.49.210}"
+# VDS server details (from .env or environment variables)
+# ⚠️ ВАЖНО: Не храните пароли в коде! Используйте переменные окружения!
+VDS_HOST="${VDS_HOST:-YOUR_SERVER_IP}"
 VDS_USER="${VDS_USER:-root}"
 VDS_PATH="${VDS_PATH:-/opt/my-union-pro}"
-VDS_PASSWORD="${VDS_PASSWORD:-sAt,8?Bh+Ny_BW}"
+VDS_PASSWORD="${VDS_PASSWORD:-YOUR_SSH_PASSWORD}"
 
 echo "📡 Connecting to ${VDS_USER}@${VDS_HOST}..."
 
@@ -38,10 +39,17 @@ echo "✅ Adding WhatsApp environment variables to .env.local..."
 # Backup existing .env.local
 cp .env.local .env.local.backup 2>/dev/null || true
 
-# Add WhatsApp variables if not present
-grep -q "WHATSAPP_ACCESS_TOKEN" .env.local 2>/dev/null || echo "WHATSAPP_ACCESS_TOKEN=EAAd6IqvMNZBMBQHNJHWH3sMvZAYBR8ZCvnw8FoU0pnEM5TyCe9Fj0c82wp5t6jBEsAbocdhI0Y5dtzieKV2dZAPKkULpYabxbYh5hVLulP8OIfsLNs1iTDK0wFCICrr6QZAhTZCeUMZA5ZCQZAMkrJCHDfOTab2HNxKDODLVw4qZBqZCas94ZAWipwbZCsRH8jHqtvBWv1AZDZD" >> .env.local
-grep -q "WHATSAPP_PHONE_NUMBER_ID" .env.local 2>/dev/null || echo "WHATSAPP_PHONE_NUMBER_ID=867058486493985" >> .env.local
-grep -q "WHATSAPP_BUSINESS_ACCOUNT_ID" .env.local 2>/dev/null || echo "WHATSAPP_BUSINESS_ACCOUNT_ID=138596839968735" >> .env.local
+# Add WhatsApp variables if not present (using environment variables)
+# ⚠️ ВАЖНО: Не храните токены в коде! Используйте переменные окружения!
+if [ -n "$WHATSAPP_ACCESS_TOKEN" ]; then
+  grep -q "WHATSAPP_ACCESS_TOKEN" .env.local 2>/dev/null || echo "WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}" >> .env.local
+fi
+if [ -n "$WHATSAPP_PHONE_NUMBER_ID" ]; then
+  grep -q "WHATSAPP_PHONE_NUMBER_ID" .env.local 2>/dev/null || echo "WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}" >> .env.local
+fi
+if [ -n "$WHATSAPP_BUSINESS_ACCOUNT_ID" ]; then
+  grep -q "WHATSAPP_BUSINESS_ACCOUNT_ID" .env.local 2>/dev/null || echo "WHATSAPP_BUSINESS_ACCOUNT_ID=${WHATSAPP_BUSINESS_ACCOUNT_ID}" >> .env.local
+fi
 
 # Add MAX Bot Token if not present (optional - user needs to add it manually)
 # grep -q "MAX_BOT_TOKEN" .env.local 2>/dev/null || echo "# MAX_BOT_TOKEN=your_token_here" >> .env.local

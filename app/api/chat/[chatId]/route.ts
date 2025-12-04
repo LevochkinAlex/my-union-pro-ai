@@ -50,7 +50,7 @@ export async function GET(
       where: { 
         chatId,
         deletedAt: null, // Не показываем удаленные сообщения
-      },
+      } as any,
       include: {
         sender: {
           select: {
@@ -88,7 +88,7 @@ export async function GET(
             },
           },
         },
-      },
+      } as any,
       orderBy: {
         createdAt: "asc",
       },
@@ -190,7 +190,7 @@ export async function POST(
         senderId: userId,
         content: content.trim(),
         replyToId: replyToId || null,
-      },
+      } as any,
       include: {
         sender: {
           select: {

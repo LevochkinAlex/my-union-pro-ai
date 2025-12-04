@@ -288,13 +288,66 @@ export async function getUserActivatedDiscounts(
     const result = activatedProducts.map((p: any) => {
       const id = p.id;
       // Берем первый активный код (если есть)
-      const activeCode = p.codes?.find((c: any) => c.code && c.code !== 'Промокод деактивирован');
-      const promoCode = activeCode?.code || undefined;
+      // Проверяем разные варианты структуры данных
+      let promoCode: string | undefined = undefined;
       
-      console.log("[BestBenefits Activation] Processing product:", { id, promoCode, codesCount: p.codes?.length, raw: p });
+      if (p.codes && Array.isArray(p.codes) && p.codes.length > 0) {
+        // Ищем первый активный код
+        const activeCode = p.codes.find((c: any) => {
+          const code = c?.code || c?.promo_code || c?.promoCode;
+          return code && 
+                 typeof code === 'string' && 
+                 code.trim().length > 0 && 
+                 code !== 'Промокод деактивирован' &&
+                 code.toLowerCase() !== 'deactivated';
+        });
+        
+        if (activeCode) {
+          promoCode = activeCode.code || activeCode.promo_code || activeCode.promoCode;
+        }
+      } else if (p.promo_code) {
+        // Прямое поле promo_code - применяем валидацию
+        const code = String(p.promo_code).trim();
+        if (code && 
+            code.length > 0 && 
+            code !== 'Промокод деактивирован' &&
+            code.toLowerCase() !== 'deactivated') {
+          promoCode = code;
+        }
+      } else if (p.promoCode) {
+        // Прямое поле promoCode - применяем валидацию
+        const code = String(p.promoCode).trim();
+        if (code && 
+            code.length > 0 && 
+            code !== 'Промокод деактивирован' &&
+            code.toLowerCase() !== 'deactivated') {
+          promoCode = code;
+        }
+      } else if (p.code) {
+        // Прямое поле code - применяем валидацию
+        const code = String(p.code).trim();
+        if (code && 
+            code.length > 0 && 
+            code !== 'Промокод деактивирован' &&
+            code.toLowerCase() !== 'deactivated') {
+          promoCode = code;
+        }
+      }
+      
+      console.log("[BestBenefits Activation] Processing product:", { 
+        id, 
+        promoCode, 
+        codesCount: p.codes?.length, 
+        hasPromoCode: !!p.promo_code,
+        hasPromoCodeField: !!p.promoCode,
+        hasCodeField: !!p.code,
+        codes: p.codes,
+        raw: JSON.stringify(p, null, 2)
+      });
+      
       return {
         id: id ? parseInt(String(id)) : null,
-        promoCode: promoCode,
+        promoCode: promoCode?.trim() || undefined,
       };
     }).filter((p: any) => p.id !== null);
     

@@ -39,12 +39,12 @@ graph TD
 
 ```env
 # Telegram Bot
-TELEGRAM_BOT_TOKEN=8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo
+TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
 TELEGRAM_BOT_USERNAME=myunionpro_bot
 
 # SendPulse
-SENDPULSE_USER_ID=92d73a0d4d7eac351eb5c90b418cd3d8
-SENDPULSE_SECRET=5e28be602856d3d1e390e56bdce95ca7
+SENDPULSE_USER_ID=YOUR_SENDPULSE_USER_ID
+SENDPULSE_SECRET=YOUR_SENDPULSE_SECRET
 ```
 
 ### 2️⃣ Миграция БД
@@ -60,7 +60,8 @@ pnpm prisma db push
 ### 3️⃣ Настройка Telegram Webhook (после деплоя)
 
 ```bash
-curl -X POST "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/setWebhook" \
+# ⚠️ ВАЖНО: Замените YOUR_TELEGRAM_BOT_TOKEN на реальный токен из переменных окружения
+curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
   -d "url=https://myunion.pro/api/telegram/webhook"
 ```
 
@@ -294,12 +295,14 @@ Telegram позволяет **сэкономить до 90%** на достав�
 docker logs -f myunion-app | grep "2FA Auth"
 
 # Проверка Telegram webhook
-curl "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/getWebhookInfo"
+# ⚠️ ВАЖНО: Замените YOUR_TELEGRAM_BOT_TOKEN на реальный токен из переменных окружения
+curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo"
 
 # Проверка SendPulse токена
+# ⚠️ ВАЖНО: Замените YOUR_SENDPULSE_USER_ID и YOUR_SENDPULSE_SECRET на реальные значения из переменных окружения
 curl -X POST "https://api.sendpulse.com/oauth/access_token" \
   -H "Content-Type: application/json" \
-  -d '{"grant_type":"client_credentials","client_id":"92d73a0d4d7eac351eb5c90b418cd3d8","client_secret":"5e28be602856d3d1e390e56bdce95ca7"}'
+  -d "{\"grant_type\":\"client_credentials\",\"client_id\":\"${SENDPULSE_USER_ID}\",\"client_secret\":\"${SENDPULSE_SECRET}\"}"
 ```
 
 ---
@@ -335,7 +338,8 @@ curl -X POST "https://api.sendpulse.com/oauth/access_token" \
 ngrok http 3004
 
 # Настройте webhook на ngrok URL
-curl -X POST "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/setWebhook" \
+# ⚠️ ВАЖНО: Замените YOUR_TELEGRAM_BOT_TOKEN на реальный токен из переменных окружения
+curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
   -d "url=https://YOUR_NGROK_URL/api/telegram/webhook"
 ```
 

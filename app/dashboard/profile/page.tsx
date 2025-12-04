@@ -541,6 +541,14 @@ export default function ProfilePage() {
     }));
   };
 
+  // Отдельный обработчик для адреса (AddressInput может передавать строку напрямую)
+  const handleAddressChange = (value: string) => {
+    setProfileData((prev) => ({
+      ...prev,
+      address: value,
+    }));
+  };
+
   const handleNameChange = (name: "firstName" | "lastName" | "middleName") => (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     
@@ -957,7 +965,7 @@ export default function ProfilePage() {
               <AddressInput
                 name="address"
                 value={profileData.address}
-                onChange={handleProfileChange}
+                onChange={handleAddressChange}
                 onBlur={() => handleFieldBlur("address", profileData.address)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />

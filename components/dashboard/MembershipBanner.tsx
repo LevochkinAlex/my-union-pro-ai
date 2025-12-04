@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import QuestionnaireModal from "@/components/profile/QuestionnaireModal";
 
@@ -9,20 +10,185 @@ interface MembershipBannerProps {
   profileProgress: number; // 0-100
   hasDocuments: boolean;
   membershipStatus: string;
+  hasAdditionalInfo?: boolean; // Заполнена ли дополнительная информация
+  hasAwards?: boolean; // Заполнены ли награды
 }
 
 export default function MembershipBanner({
-  profileProgress,
-  hasDocuments,
-  membershipStatus,
+  profileProgress: initialProfileProgress,
+  hasDocuments: initialHasDocuments,
+  membershipStatus: initialMembershipStatus,
+  hasAdditionalInfo: initialHasAdditionalInfo = false,
+  hasAwards: initialHasAwards = false,
 }: MembershipBannerProps) {
   const router = useRouter();
+  const { data: session, update: updateSession } = useSession();
   const [isVisible, setIsVisible] = useState(true);
   const [isQuestionnaireOpen, setIsQuestionnaireOpen] = useState(false);
+  
+  // Локальное состояние для обновления данных
+  const [profileProgress, setProfileProgress] = useState(initialProfileProgress);
+  const [hasDocuments, setHasDocuments] = useState(initialHasDocuments);
+  const [membershipStatus, setMembershipStatus] = useState(initialMembershipStatus);
+  const [hasAdditionalInfo, setHasAdditionalInfo] = useState(initialHasAdditionalInfo);
+  const [hasAwards, setHasAwards] = useState(initialHasAwards);
 
-  // Скрываем баннер, если пользователь уже член профсоюза
-  if (membershipStatus === "APPROVED") {
+  // Обновляем данные при изменении пропсов
+  useEffect(() => {
+    setProfileProgress(initialProfileProgress);
+    setHasDocuments(initialHasDocuments);
+    setMembershipStatus(initialMembershipStatus);
+    setHasAdditionalInfo(initialHasAdditionalInfo);
+    setHasAwards(initialHasAwards);
+  }, [initialProfileProgress, initialHasDocuments, initialMembershipStatus, initialHasAdditionalInfo, initialHasAwards]);
+
+  // Периодически обновляем данные (каждые 5 секунд, если документы еще не отправлены)
+  useEffect(() => {
+    if (membershipStatus === "APPROVED") return; // Не обновляем для APPROVED
+    
+    const interval = setInterval(async () => {
+      try {
+        // Загружаем актуальные данные профиля
+        const response = await fetch("/api/profile");
+        if (response.ok) {
+          const data = await response.json();
+          const user = data.user;
+          
+          // Проверяем документы
+          const docsResponse = await fetch("/api/documents");
+          if (docsResponse.ok) {
+            const docsData = await docsResponse.json();
+            const signedDocs = docsData.documents?.filter(
+              (doc: any) => 
+                (doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION") &&
+                (doc.status === "SIGNED" || doc.status === "PENDING" || doc.status === "APPROVED")
+            ) || [];
+            
+            const newHasDocuments = signedDocs.length > 0;
+            const newMembershipStatus = user?.membershipStatus || membershipStatus;
+            
+            // Обновляем состояние только если что-то изменилось
+            if (newHasDocuments !== hasDocuments) {
+              setHasDocuments(newHasDocuments);
+            }
+            if (newMembershipStatus !== membershipStatus) {
+              setMembershipStatus(newMembershipStatus);
+              // Если статус изменился, обновляем страницу для получения актуальных данных
+              if (newMembershipStatus === "DOCUMENTS_PENDING" || newMembershipStatus === "APPROVED") {
+                router.refresh();
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error("[MembershipBanner] Ошибка обновления данных:", error);
+      }
+    }, 5000); // Обновляем каждые 5 секунд
+
+    return () => clearInterval(interval);
+  }, [membershipStatus, hasDocuments, router]);
+
+  // Если пользователь APPROVED и заполнил все доп. информацию и награды - скрываем баннер
+  if (membershipStatus === "APPROVED" && hasAdditionalInfo && hasAwards) {
     return null;
+  }
+
+  // Если пользователь APPROVED - показываем баннер для доп. информации
+  if (membershipStatus === "APPROVED") {
+    const getApprovedStatusInfo = () => {
+      if (!hasAdditionalInfo || !hasAwards) {
+        return {
+          title: "Заполните дополнительную информацию",
+          description: hasAdditionalInfo 
+            ? "Добавьте информацию о ваших наградах и достижениях"
+            : hasAwards
+            ? "Заполните дополнительную информацию о себе"
+            : "Заполните дополнительную информацию и добавьте награды",
+          buttonText: "Заполнить профиль",
+          buttonAction: () => router.push("/dashboard/profile?tab=additional"),
+        };
+      }
+      return null;
+    };
+
+    const approvedStatusInfo = getApprovedStatusInfo();
+    if (!approvedStatusInfo) {
+      return null; // Все заполнено
+    }
+
+    return (
+      <div className="relative overflow-hidden rounded-xl border border-green-200 bg-gradient-to-br from-green-50 via-green-50/50 to-blue-50 p-6 shadow-lg dark:border-green-900/50 dark:from-green-900/20 dark:via-green-900/10 dark:to-blue-900/20">
+        <div className="absolute right-0 top-0 -mr-20 -mt-20 h-40 w-40 rounded-full bg-green-200/30 blur-3xl dark:bg-green-500/20" />
+        <div className="absolute bottom-0 left-0 -mb-10 -ml-10 h-32 w-32 rounded-full bg-blue-200/30 blur-2xl dark:bg-blue-500/20" />
+
+        <div className="relative">
+          <div className="mb-4 flex items-start justify-between">
+            <div className="flex-1">
+              <div className="mb-2 flex items-center gap-2">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-600 text-white dark:bg-green-500">
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                  {approvedStatusInfo.title}
+                </h3>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                {approvedStatusInfo.description}
+              </p>
+            </div>
+            <button
+              onClick={() => setIsVisible(false)}
+              className="ml-4 rounded-lg p-1 text-gray-400 transition hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+              aria-label="Закрыть"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className={`flex items-center gap-2 rounded-lg p-2 ${
+              hasAdditionalInfo
+                ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
+                : "bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+            }`}>
+              {hasAdditionalInfo ? (
+                <svg className="h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <div className="h-5 w-5 flex-shrink-0 rounded-full border-2 border-current" />
+              )}
+              <span className="text-xs font-medium">Дополнительная информация</span>
+            </div>
+            <div className={`flex items-center gap-2 rounded-lg p-2 ${
+              hasAwards
+                ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
+                : "bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+            }`}>
+              {hasAwards ? (
+                <svg className="h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <div className="h-5 w-5 flex-shrink-0 rounded-full border-2 border-current" />
+              )}
+              <span className="text-xs font-medium">Награды</span>
+            </div>
+          </div>
+
+          <button
+            onClick={approvedStatusInfo.buttonAction}
+            className="w-full rounded-lg bg-green-600 px-6 py-3 font-semibold text-white shadow-md transition-all hover:bg-green-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:bg-green-500 dark:hover:bg-green-600"
+          >
+            {approvedStatusInfo.buttonText}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Определяем текст и статус
@@ -189,7 +355,7 @@ export default function MembershipBanner({
             ) : (
               <div className="h-5 w-5 flex-shrink-0 rounded-full border-2 border-current" />
             )}
-            <span className="text-xs font-medium">Стать членом</span>
+            <span className="text-xs font-medium">Стать членом профсоюза</span>
           </div>
         </div>
 

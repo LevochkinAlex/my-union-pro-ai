@@ -87,8 +87,8 @@ model User {
   training           String?  @db.Text // Обучение в формате JSON: [{"name": "название", "year": "YYYY", "description": "описание"}]
   additionalInfo     String?  @db.Text // Дополнительная информация (свободный текст)
 
-  // База знаний о пользователе (для супер-админа)
-  knowledgeBase String? @db.Text // История обращений, проблем и заметок о пользователе в формате JSON
+  // База знаний о пользователе (для ИИ)
+  userKnowledgeBase UserKnowledgeBase? @relation("UserKnowledgeBase")
 
   // Подпись (путь к файлу на сервере)
   signaturePath String?
@@ -626,6 +626,68 @@ model KnowledgeChunk {
 
   @@index([knowledgeBaseId])
   @@index([documentId])
+}
+
+// База знаний о пользователе (для ИИ)
+// Автоматически создается для каждого пользователя и хранит всю информацию о нем
+model UserKnowledgeBase {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation("UserKnowledgeBase", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Chunks с информацией о пользователе
+  chunks UserKnowledgeChunk[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Фрагменты информации о пользователе с векторными представлениями
+model UserKnowledgeChunk {
+  id                  String            @id @default(cuid())
+  userKnowledgeBaseId String
+  userKnowledgeBase   UserKnowledgeBase @relation(fields: [userKnowledgeBaseId], references: [id], onDelete: Cascade)
+
+  // Тип информации
+  type UserKnowledgeChunkType
+
+  // Содержимое фрагмента
+  content String @db.Text
+
+  // Векторное представление для поиска
+  embedding Float[]
+
+  // Метаданные (JSON)
+  metadata Json?
+
+  // Количество токенов
+  tokens Int?
+
+  // Источник информации (например, "profile_update", "ai_interaction", "document_generation")
+  source String
+
+  // Ссылка на связанную сущность (например, ID документа или сообщения)
+  relatedEntityId   String?
+  relatedEntityType String? // "document", "chat_message", "profile_update"
+
+  createdAt DateTime @default(now())
+
+  @@index([userKnowledgeBaseId])
+  @@index([type])
+  @@index([source])
+  @@index([relatedEntityId])
+}
+
+// Типы фрагментов информации о пользователе
+enum UserKnowledgeChunkType {
+  PROFILE_DATA // Данные профиля (ФИО, телефон, адрес и т.д.)
+  INTERACTION // Взаимодействие с ИИ (вопросы, ответы)
+  DOCUMENT_CONTENT // Содержимое документов пользователя
+  PREFERENCE // Предпочтения и настройки
+  HISTORY // История действий (вступление, изменения статуса и т.д.)
+  NOTE // Заметки администратора о пользователе
 }
 
 // Настройки AI бота (промпт, тон, контекст)
@@ -1180,7 +1242,7 @@ model ChatMessage {
 
   // Пересылка сообщения (forward)
   forwardedFromId String?
-  forwardedFrom   ChatMessage? @relation("MessageForwards", fields: [forwardedFromId], references: [id], onDelete: SetNull)
+  forwardedFrom   ChatMessage?  @relation("MessageForwards", fields: [forwardedFromId], references: [id], onDelete: SetNull)
   forwards        ChatMessage[] @relation("MessageForwards")
 
   // Вложения (файлы, изображения)

@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { normalizePhone, getPhoneDigits, isSamePhone } from "@/lib/utils/phone";
+import { saveUserProfileToKnowledgeBase } from "@/lib/user-knowledge-base";
+import { sendNotification } from "@/lib/notifications";
 // Удалено: SystemMessages - больше не используется
 
 function normalizeString(value: unknown): string | null {
@@ -201,6 +203,7 @@ export async function PUT(request: NextRequest) {
         jobTitle: true,
         profession: true,
         education: true,
+        organizationId: true,
         bestBenefitsUserId: true,
         bestBenefitsPassword: true,
       },
@@ -277,17 +280,50 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // ВАЖНО: Вычисляем фактические значения, которые будут сохранены (с учетом логики сохранения старых значений)
+    // Это нужно для правильного определения hasProfileChanges
+    const actualFirstName = firstName ? capitalizeName(firstName) : (userBeforeUpdate?.firstName || null);
+    const actualLastName = lastName ? capitalizeName(lastName) : (userBeforeUpdate?.lastName || null);
+    const actualMiddleName = middleName ? capitalizeName(middleName) : (userBeforeUpdate?.middleName || null);
+    const actualDateOfBirth = dateOfBirth || (userBeforeUpdate?.dateOfBirth || null);
+    const actualPhone = normalizedPhone || (userBeforeUpdate?.phone || null);
+    const actualAddress = address || (userBeforeUpdate?.address || null);
+    const actualJobTitle = jobTitle || (userBeforeUpdate?.jobTitle || null);
+    const actualProfession = profession || (userBeforeUpdate?.profession || null);
+    const actualEducation = education || (userBeforeUpdate?.education || null);
+
+    // Функция для нормализации даты к ISO строке для сравнения
+    const normalizeDateForComparison = (date: Date | string | null | undefined): string | null => {
+      if (!date) return null;
+      if (date instanceof Date) {
+        return date.toISOString();
+      }
+      if (typeof date === 'string') {
+        const parsed = new Date(date);
+        return isNaN(parsed.getTime()) ? null : parsed.toISOString();
+      }
+      return null;
+    };
+
     // Проверяем, изменились ли ключевые поля профиля, которые влияют на документы
+    // Используем фактические значения, которые будут сохранены
+    // ВАЖНО: organizationId сравниваем только если он явно передан в body
+    // Это предотвращает ложное определение изменений при автосохранении других полей
+    const actualOrganizationId = body.organizationId !== undefined 
+      ? (organizationId || null)
+      : (userBeforeUpdate?.organizationId || null);
+    
     const documentsAffectingFields = [
-      { old: userBeforeUpdate?.firstName, new: firstName ? capitalizeName(firstName) : null },
-      { old: userBeforeUpdate?.lastName, new: lastName ? capitalizeName(lastName) : null },
-      { old: userBeforeUpdate?.middleName, new: middleName ? capitalizeName(middleName) : null },
-      { old: userBeforeUpdate?.dateOfBirth?.toISOString(), new: dateOfBirth?.toISOString() },
-      { old: normalizePhone(userBeforeUpdate?.phone), new: normalizedPhone },
-      { old: userBeforeUpdate?.address, new: address },
-      { old: userBeforeUpdate?.jobTitle, new: jobTitle },
-      { old: userBeforeUpdate?.profession, new: profession },
-      { old: userBeforeUpdate?.education, new: education },
+      { old: userBeforeUpdate?.firstName, new: actualFirstName },
+      { old: userBeforeUpdate?.lastName, new: actualLastName },
+      { old: userBeforeUpdate?.middleName, new: actualMiddleName },
+      { old: normalizeDateForComparison(userBeforeUpdate?.dateOfBirth), new: normalizeDateForComparison(actualDateOfBirth) },
+      { old: normalizePhone(userBeforeUpdate?.phone), new: normalizePhone(actualPhone) },
+      { old: userBeforeUpdate?.address, new: actualAddress },
+      { old: userBeforeUpdate?.jobTitle, new: actualJobTitle },
+      { old: userBeforeUpdate?.profession, new: actualProfession },
+      { old: userBeforeUpdate?.education, new: actualEducation },
+      { old: userBeforeUpdate?.organizationId, new: actualOrganizationId },
     ];
 
     const hasProfileChanges = documentsAffectingFields.some(
@@ -317,27 +353,83 @@ export async function PUT(request: NextRequest) {
       organizationId: organizationId || null,
     });
 
+    // ВАЖНО: Не перезаписываем существующие данные на null, если приходят пустые строки
+    // Используем существующие значения, если новые пустые
+    const updateData: any = {};
+    
+    // Обновляем только если новое значение не пустое, или если нужно установить null явно
+    if (firstName !== null) {
+      updateData.firstName = firstName ? capitalizeName(firstName) : (userBeforeUpdate?.firstName || null);
+    }
+    if (lastName !== null) {
+      updateData.lastName = lastName ? capitalizeName(lastName) : (userBeforeUpdate?.lastName || null);
+    }
+    if (middleName !== null) {
+      updateData.middleName = middleName ? capitalizeName(middleName) : (userBeforeUpdate?.middleName || null);
+    }
+    if (address !== null) {
+      updateData.address = address || (userBeforeUpdate?.address || null);
+    }
+    if (jobTitle !== null) {
+      updateData.jobTitle = jobTitle || (userBeforeUpdate?.jobTitle || null);
+    }
+    if (profession !== null) {
+      updateData.profession = profession || (userBeforeUpdate?.profession || null);
+    }
+    if (education !== null) {
+      updateData.education = education || (userBeforeUpdate?.education || null);
+    }
+    if (dateOfBirth !== null || body.dateOfBirth !== undefined) {
+      updateData.dateOfBirth = dateOfBirth || (userBeforeUpdate?.dateOfBirth || null);
+    }
+    if (preferredDiscountCity !== null) {
+      updateData.preferredDiscountCity = preferredDiscountCity ? capitalizeName(preferredDiscountCity) : null;
+    }
+    
+    // Телефон и email обрабатываются отдельно (уже проверены выше)
+    updateData.email = emailToSave;
+    updateData.phone = normalizedPhone || (userBeforeUpdate?.phone || null);
+    
+    // ВАЖНО: organizationId обновляем только если он явно передан в body
+    // Это предотвращает случайное стирание организации при автосохранении других полей
+    if (body.organizationId !== undefined) {
+      updateData.organizationId = organizationId || null;
+      updateData.organizationName = null; // Очищаем старое текстовое поле (теперь используем только ID)
+    }
+    
+    // Устанавливаем флаг изменения профиля, если есть документы и данные изменились
+    const wasProfileChangedAfterDocuments = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { profileChangedAfterDocuments: true },
+    }).then(user => user?.profileChangedAfterDocuments || false);
+    
+    if (hasGeneratedDocuments && hasProfileChanges) {
+      updateData.profileChangedAfterDocuments = true;
+    }
+    if (hasProfileChanges) {
+      updateData.profileLastModified = new Date();
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
-      data: {
-        firstName: firstName ? capitalizeName(firstName) : null,
-        lastName: lastName ? capitalizeName(lastName) : null,
-        middleName: middleName ? capitalizeName(middleName) : null,
-        email: emailToSave, // Email не меняется если уже установлен
-        phone: normalizedPhone, // Телефон всегда сохраняется в нормализованном формате
-        address,
-        preferredDiscountCity: preferredDiscountCity ? capitalizeName(preferredDiscountCity) : null,
-        jobTitle,
-        profession,
-        education,
-        dateOfBirth,
-        organizationId: organizationId || null, // ID выбранной организации
-        organizationName: null, // Очищаем старое текстовое поле (теперь используем только ID)
-        // Устанавливаем флаг изменения профиля, если есть документы и данные изменились
-        profileChangedAfterDocuments: hasGeneratedDocuments && hasProfileChanges ? true : undefined,
-        profileLastModified: hasProfileChanges ? new Date() : undefined,
+      data: updateData,
+      include: {
+        organization: true,
       },
     });
+
+    // Сохраняем данные профиля в базу знаний для ИИ (асинхронно, не блокируем ответ)
+    saveUserProfileToKnowledgeBase(updatedUser).catch((error) => {
+      console.error("[profile] Ошибка при сохранении в базу знаний:", error);
+    });
+
+    // Если флаг изменился с false на true - уведомляем супер админов
+    if (hasGeneratedDocuments && hasProfileChanges && !wasProfileChangedAfterDocuments) {
+      // Уведомляем супер админов асинхронно (не блокируем ответ)
+      notifySuperAdminsAboutDocumentRegeneration(updatedUser.id, session.user.id).catch((error) => {
+        console.error("[profile] Ошибка при отправке уведомления супер админам:", error);
+      });
+    }
 
     // Синхронизация с BestBenefits перенесена в /api/user/verify-email
     // Аккаунт создается только ПОСЛЕ подтверждения email пользователем
@@ -382,5 +474,65 @@ export async function PUT(request: NextRequest) {
       { error: "Не удалось обновить профиль" },
       { status: 500 },
     );
+  }
+}
+
+/**
+ * Уведомляет супер админов о необходимости перегенерации документов
+ */
+async function notifySuperAdminsAboutDocumentRegeneration(userId: string, changedByUserId: string): Promise<void> {
+  try {
+    // Получаем информацию о пользователе
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+      },
+    });
+
+    if (!user) {
+      console.warn("[profile] Пользователь не найден для уведомления:", userId);
+      return;
+    }
+
+    // Получаем всех супер админов
+    const superAdmins = await prisma.user.findMany({
+      where: { role: "SUPER_ADMIN" },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+      },
+    });
+
+    if (superAdmins.length === 0) {
+      console.warn("[profile] Супер админы не найдены");
+      return;
+    }
+
+    const userName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "Пользователь";
+    const adminUserIds = superAdmins.map(admin => admin.id);
+
+    // Отправляем уведомления
+    await sendNotification({
+      title: "⚠️ Требуется перегенерация документов",
+      message: `Пользователь ${userName} изменил данные профиля после генерации документов. Требуется перегенерация документов.`,
+      userIds: adminUserIds,
+      data: {
+        type: "document_regeneration_required",
+        userId: userId,
+        changedByUserId: changedByUserId,
+      },
+      link: `/admin/users/${userId}`,
+    });
+
+    console.log(`[profile] Уведомление о перегенерации документов отправлено ${superAdmins.length} супер админам для пользователя ${userId}`);
+  } catch (error) {
+    console.error("[profile] Ошибка при отправке уведомления супер админам:", error);
+    // Не пробрасываем ошибку, чтобы не блокировать обновление профиля
   }
 }

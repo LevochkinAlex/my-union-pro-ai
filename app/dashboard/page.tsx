@@ -128,6 +128,9 @@ export default async function DashboardPage() {
             type: {
               in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
             },
+            status: {
+              in: ["SIGNED", "PENDING", "APPROVED"], // Документы отправлены на проверку
+            },
           },
         },
       },
@@ -138,7 +141,10 @@ export default async function DashboardPage() {
       membershipStatus = currentUser.membershipStatus;
       const progressResult = calculateProfileProgress(currentUser);
       profileProgress = progressResult.total;
-      hasDocuments = (currentUser.documents.length || 0) > 0;
+      // Проверяем, что есть подписанные документы (отправленные на проверку)
+      hasDocuments = currentUser.documents.some(
+        (doc) => doc.status === "SIGNED" || doc.status === "PENDING" || doc.status === "APPROVED"
+      );
     }
   } catch (error) {
     console.error("[Dashboard] Error fetching current user:", error);
@@ -198,7 +204,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8 min-w-0 w-full" suppressHydrationWarning>
+    <div className="space-y-8 min-w-0 w-full">
       {/* Заголовок */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -210,13 +216,20 @@ export default async function DashboardPage() {
       </div>
 
       {/* Баннер для новых пользователей или тех, кто не заполнил профиль */}
-      {membershipStatus !== "APPROVED" && (
-        <MembershipBanner
-          profileProgress={profileProgress}
-          hasDocuments={hasDocuments}
-          membershipStatus={membershipStatus}
-        />
-      )}
+      <MembershipBanner
+        profileProgress={profileProgress}
+        hasDocuments={hasDocuments}
+        membershipStatus={membershipStatus}
+        hasAdditionalInfo={currentUser ? Boolean(
+          currentUser.aboutMe || 
+          currentUser.hobbies || 
+          currentUser.maritalStatus || 
+          currentUser.hasChildren !== null ||
+          currentUser.childrenInfo ||
+          currentUser.spouseInfo
+        ) : false}
+        hasAwards={currentUser ? Boolean(currentUser.awards) : false}
+      />
 
       {/* Посты от коллег */}
       <section className="overflow-hidden">
@@ -374,7 +387,7 @@ export default async function DashboardPage() {
       <section className="overflow-hidden">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-            Свежие скидки BestBenefits
+            Свежие скидки от партнеров
           </h2>
           <a
             href="/dashboard/discounts"

@@ -133,6 +133,7 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const sessionId = formData.get("sessionId") as string;
+    const documentId = formData.get("documentId") as string | null; // ID существующего документа для обновления
     
     // Поддержка как одиночного файла, так и множественных (membership, contribution)
     const membershipFile = formData.get("membership") as File | null;
@@ -265,10 +266,37 @@ export async function POST(request: NextRequest) {
     // Сохраняем информацию о документе в базе данных
     const relativePath = `/uploads/documents/${uniqueFileName}`;
     
-    // Если это заявление, проверяем, есть ли уже документ этого типа (не создаем новый)
     let document;
-    if (documentType === "MEMBERSHIP_APPLICATION" || documentType === "CONTRIBUTION_APPLICATION") {
-      // Ищем любой существующий документ этого типа (независимо от статуса)
+    
+    // Если передан documentId, обновляем именно этот документ
+    if (documentId) {
+      // Проверяем, что документ принадлежит текущему пользователю
+      const existingDoc = await prisma.document.findFirst({
+        where: {
+          id: documentId,
+          userId: session.user.id,
+        },
+      });
+
+      if (existingDoc) {
+        // Обновляем существующий документ, добавляя подписанный файл
+        document = await prisma.document.update({
+          where: { id: documentId },
+          data: {
+            status: "SIGNED",
+            signedFilePath: relativePath,
+            updatedAt: new Date(),
+          },
+        });
+        console.log(`[upload] Updated existing document ${documentId} with signed file`);
+      } else {
+        return NextResponse.json(
+          { error: "Документ не найден или не принадлежит вам" },
+          { status: 404 }
+        );
+      }
+    } else if (documentType === "MEMBERSHIP_APPLICATION" || documentType === "CONTRIBUTION_APPLICATION") {
+      // Если documentId не передан, ищем существующий документ этого типа (для обратной совместимости)
       const existingDoc = await prisma.document.findFirst({
         where: {
           userId: session.user.id,
@@ -280,7 +308,7 @@ export async function POST(request: NextRequest) {
       });
 
       if (existingDoc) {
-        // Всегда обновляем существующий документ, добавляя подписанный файл
+        // Обновляем существующий документ, добавляя подписанный файл
         document = await prisma.document.update({
           where: { id: existingDoc.id },
           data: {
@@ -370,8 +398,24 @@ export async function POST(request: NextRequest) {
           data: { status: "PENDING" },
         });
         console.log("[upload] ✅ Documents status updated to PENDING");
+
+        // Обновляем статус пользователя на DOCUMENTS_PENDING (если еще не APPROVED или REJECTED)
+        const currentUser = await prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: { membershipStatus: true },
+        });
+
+        if (currentUser && 
+            currentUser.membershipStatus !== "APPROVED" && 
+            currentUser.membershipStatus !== "REJECTED") {
+          await prisma.user.update({
+            where: { id: session.user.id },
+            data: { membershipStatus: "DOCUMENTS_PENDING" },
+          });
+          console.log("[upload] ✅ User membershipStatus updated to DOCUMENTS_PENDING");
+        }
       } catch (error) {
-        console.error("[upload] Error updating document status:", error);
+        console.error("[upload] Error updating document/user status:", error);
         // Не блокируем загрузку документов из-за ошибки обновления статуса
       }
     }

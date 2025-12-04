@@ -5,8 +5,9 @@
  * Usage: node scripts/test-whatsapp-template.mjs +79991234567
  */
 
-const SENDPULSE_USER_ID = "92d73a0d4d7eac351eb5c90b418cd3d8";
-const SENDPULSE_SECRET = "5e28be602856d3d1e390e56bdce95ca7";
+// ⚠️ ВАЖНО: Используйте переменные окружения для секретов!
+const SENDPULSE_USER_ID = process.env.SENDPULSE_USER_ID || "YOUR_SENDPULSE_USER_ID";
+const SENDPULSE_SECRET = process.env.SENDPULSE_SECRET || "YOUR_SENDPULSE_SECRET";
 const SENDPULSE_WHATSAPP_BOT_ID = "69285cff0016f7374d089440";
 const SENDPULSE_API_BASE = "https://api.sendpulse.com";
 

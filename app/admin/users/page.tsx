@@ -6,6 +6,18 @@ export default async function AdminUsers() {
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
     take: 50,
+    include: {
+      documents: {
+        where: {
+          type: {
+            in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
+          },
+          status: {
+            in: ["SIGNED", "PENDING"],
+          },
+        },
+      },
+    },
   });
 
   return (
@@ -48,8 +60,22 @@ export default async function AdminUsers() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {users.map((user) => (
-              <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+            {users.map((user) => {
+              // Проверяем, есть ли документы, ожидающие валидации
+              const hasPendingDocuments = user.documents.length > 0;
+              const needsAttention = hasPendingDocuments && 
+                (user.membershipStatus === "DOCUMENTS_PENDING" || 
+                 user.membershipStatus === "PENDING_VERIFICATION");
+              
+              return (
+              <tr 
+                key={user.id} 
+                className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                  needsAttention 
+                    ? "bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 animate-pulse" 
+                    : ""
+                }`}
+              >
                 <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
                   {user.email}
                 </td>
@@ -87,7 +113,8 @@ export default async function AdminUsers() {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

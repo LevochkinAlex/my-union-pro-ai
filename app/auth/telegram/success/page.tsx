@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, useSession, getSession } from "next-auth/react";
 
 /**
  * Страница успешной авторизации через Telegram
@@ -11,6 +11,7 @@ import { signIn } from "next-auth/react";
 function TelegramSuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { update: updateSession } = useSession();
   const [error, setError] = useState<string | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
 
@@ -32,26 +33,45 @@ function TelegramSuccessContent() {
 
     // Авторизуем пользователя по токену автоматически
     const authenticate = async () => {
+      let result;
       try {
         console.log("[Telegram Success] Попытка авторизации по токену");
-        const result = await signIn("credentials", {
+        result = await signIn("credentials", {
           loginToken: token,
           redirect: false,
         });
-
-        if (result?.error) {
-          console.error("[Telegram Success] Ошибка авторизации:", result.error);
-          setError("Ошибка авторизации. Попробуйте использовать кнопку в Telegram боте.");
-          setShowInstructions(true);
-        } else if (result?.ok) {
-          console.log("[Telegram Success] Авторизация успешна, редирект в dashboard");
-          // Успешная авторизация - редирект в dashboard
-          router.push("/dashboard");
-        }
       } catch (err) {
         console.error("[Telegram Success] Ошибка:", err);
         setError("Произошла ошибка. Попробуйте использовать кнопку в Telegram боте.");
         setShowInstructions(true);
+        return;
+      }
+
+      // Обрабатываем результат авторизации вне try-catch
+      if (result?.error) {
+        console.error("[Telegram Success] Ошибка авторизации:", result.error);
+        setError("Ошибка авторизации. Попробуйте использовать кнопку в Telegram боте.");
+        setShowInstructions(true);
+      } else if (result?.ok) {
+        console.log("[Telegram Success] Авторизация успешна, редирект в dashboard");
+        // Обновляем сессию на клиенте
+        await updateSession();
+        // Успешная авторизация - редирект в dashboard
+        // Используем задержку 1.5 секунды, чтобы cookie сессии успел установиться
+        setTimeout(async () => {
+          console.log("[Telegram Success] Выполняем редирект в dashboard");
+          // Проверяем сессию перед редиректом
+          const session = await getSession();
+          if (session?.user?.id) {
+            console.log("[Telegram Success] Сессия подтверждена, редирект");
+            window.location.href = "/dashboard";
+          } else {
+            console.warn("[Telegram Success] Сессия не найдена, повторная попытка через 1 секунду");
+            setTimeout(() => {
+              window.location.href = "/dashboard";
+            }, 1000);
+          }
+        }, 1500);
       }
     };
 

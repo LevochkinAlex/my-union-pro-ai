@@ -7,7 +7,12 @@ echo "🚀 Деплой на продакшн сервер myunion.pro"
 echo "========================================="
 
 # Подключаемся к серверу и выполняем команды
-sshpass -p 'sAt,8?Bh+Ny_BW' ssh -o StrictHostKeyChecking=no root@194.87.49.210 << 'ENDSSH'
+# ⚠️ ВАЖНО: Используйте переменные окружения для паролей!
+# Установите VDS_PASSWORD в переменных окружения перед запуском
+VDS_PASSWORD="${VDS_PASSWORD:-YOUR_SSH_PASSWORD}"
+VDS_HOST="${VDS_HOST:-YOUR_SERVER_IP}"
+
+sshpass -p "${VDS_PASSWORD}" ssh -o StrictHostKeyChecking=no root@${VDS_HOST} << 'ENDSSH'
   cd /opt/my-union-pro || exit 1
   
   echo "🛑 Останавливаем приложение..."

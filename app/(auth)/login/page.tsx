@@ -1,6 +1,6 @@
 "use client";
 
-import { signIn } from "next-auth/react";
+import { signIn, useSession, getSession } from "next-auth/react";
 import Image from "next/image";
 import { useState, useEffect, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -33,6 +33,7 @@ function formatPhoneForDisplay(phone: string): string {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { update: updateSession } = useSession();
   const [loginMethod, setLoginMethod] = useState<"sms" | "email">("sms"); // Вкладка: SMS или Email
   const [input, setInput] = useState(""); // Универсальное поле: телефон или email
   const [inputType, setInputType] = useState<"phone" | "email" | null>(null);
@@ -370,14 +371,51 @@ function LoginForm() {
         return;
       }
 
-      // Если код был отправлен по SMS и у пользователя нет Telegram - показываем рекомендацию
+      // Авторизация успешна - перенаправляем на callbackUrl
+      console.log("[Login] ✅ Авторизация успешна, редирект на:", callbackUrl);
+      console.log("[Login] Метод доставки PIN:", deliveryMethod, "hasTelegram:", hasTelegram);
+      
+      // Обновляем сессию на клиенте
+      await updateSession();
+      
+      // Показываем рекомендацию о Telegram только если PIN был отправлен по SMS и нет Telegram
       if (deliveryMethod === "sms" && !hasTelegram) {
+        // Показываем рекомендацию, но не блокируем редирект
         setShowTelegramRecommendation(true);
         setLoading(false);
+        // Автоматически редиректим через 3 секунды
+        setTimeout(async () => {
+          console.log("[Login] Автоматический редирект после показа рекомендации");
+          // Проверяем сессию перед редиректом
+          const session = await getSession();
+          if (session?.user?.id) {
+            console.log("[Login] Сессия подтверждена, редирект");
+            window.location.href = callbackUrl;
+          } else {
+            console.warn("[Login] Сессия не найдена, повторная попытка через 1 секунду");
+            setTimeout(() => {
+              window.location.href = callbackUrl;
+            }, 1000);
+          }
+        }, 3000);
       } else {
-        // Перенаправляем на callbackUrl
-        router.push(callbackUrl);
-        router.refresh();
+        // Сразу перенаправляем (PIN был отправлен в Telegram или уже есть привязка)
+        // Используем задержку 1.5 секунды, чтобы cookie сессии успел установиться
+        setTimeout(async () => {
+          console.log("[Login] Выполняем редирект на:", callbackUrl);
+          // Проверяем сессию перед редиректом
+          const session = await getSession();
+          if (session?.user?.id) {
+            console.log("[Login] Сессия подтверждена, редирект");
+            window.location.href = callbackUrl;
+          } else {
+            console.warn("[Login] Сессия не найдена, повторная попытка через 1 секунду");
+            setTimeout(() => {
+              window.location.href = callbackUrl;
+            }, 1000);
+          }
+        }, 1500);
+        // Не сбрасываем loading - показываем индикатор загрузки во время перехода
       }
     } catch (err) {
       console.error("[Login] Ошибка при проверке PIN:", err);
@@ -746,21 +784,12 @@ function LoginForm() {
 }
 
 function TelegramLoginButton() {
-  const [isMobile, setIsMobile] = useState(false);
-  
-  useEffect(() => {
-    // Определяем мобильное устройство
-    const checkMobile = () => {
-      const userAgent = navigator.userAgent || navigator.vendor;
-      return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
-    };
-    setIsMobile(checkMobile());
-  }, []);
-
   const handleTelegramLogin = () => {
+    // Определяем мобильное устройство напрямую из userAgent
+    const userAgent = navigator.userAgent || navigator.vendor || "";
+    const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+    
     // Deeplink для входа через бота
-    // Для мобильных - открываем напрямую в Telegram
-    // Для десктопа - тоже deeplink, Telegram сам откроется
     const loginDeeplink = "https://t.me/myunionpro_bot?start=login";
     
     if (isMobile) {

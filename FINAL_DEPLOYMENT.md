@@ -40,7 +40,8 @@
 
 ```env
 # Telegram Bot (единственный канал для 2FA)
-TELEGRAM_BOT_TOKEN=8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo
+# ⚠️ ВАЖНО: Используйте переменные окружения для токенов!
+TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
 TELEGRAM_BOT_USERNAME=myunionpro_bot
 ```
 
@@ -76,14 +77,16 @@ git push origin main
 **Важно:** Webhook настраивается **ПОСЛЕ** деплоя на продакшен!
 
 ```bash
-curl -X POST "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/setWebhook" \
+# ⚠️ ВАЖНО: Замените YOUR_TELEGRAM_BOT_TOKEN на реальный токен из переменных окружения
+curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
   -d "url=https://myunion.pro/api/telegram/webhook"
 ```
 
 **Проверка webhook:**
 
 ```bash
-curl "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/getWebhookInfo"
+# ⚠️ ВАЖНО: Замените YOUR_TELEGRAM_BOT_TOKEN на реальный токен из переменных окружения
+curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo"
 ```
 
 **Ожидаемый ответ:**

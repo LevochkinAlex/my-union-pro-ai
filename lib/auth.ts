@@ -475,6 +475,13 @@ export const authOptions: NextAuthOptions = {
                 updateData.authPhone = normalizedPhone;
                 console.log("[Yandex Auth] Будет установлен authPhone из Яндекс (т.к. отсутствует):", normalizedPhone);
               }
+            } else {
+              // ВАЖНО: Если в Яндекс нет телефона, но у пользователя есть authPhone, восстанавливаем phone из authPhone
+              // Это защита от потери данных, если phone был случайно установлен в null
+              if (!existingUser.phone && existingUser.authPhone) {
+                updateData.phone = existingUser.authPhone;
+                console.log("[Yandex Auth] Восстанавливаем phone из authPhone (защита от потери данных):", existingUser.authPhone);
+              }
             }
 
             // Обновляем имя и фамилию, если их нет
@@ -615,14 +622,28 @@ export const authOptions: NextAuthOptions = {
     },
     async jwt({ token, user, account }) {
       if (user) {
+        // Храним только минимально необходимые данные для уменьшения размера JWT токена
         token.id = user.id;
         token.role = user.role;
         token.membershipStatus = user.membershipStatus;
-        token.firstName = user.firstName;
-        token.lastName = user.lastName;
-        token.avatarUrl = user.avatarUrl;
-        token.email = user.email;
-        token.name = user.name;
+        // Ограничиваем длину строковых полей и не храним undefined/null
+        token.firstName = user.firstName && user.firstName.length > 0 ? user.firstName.substring(0, 50) : undefined;
+        token.lastName = user.lastName && user.lastName.length > 0 ? user.lastName.substring(0, 50) : undefined;
+        // Не храним avatarUrl в токене (слишком длинный URL) - будем получать из БД при необходимости
+        token.email = user.email && user.email.length > 0 ? user.email.substring(0, 100) : undefined;
+        // Не храним name (можно вычислить из firstName + lastName)
+        // Копируем поля impersonation из объекта пользователя в токен
+        // ВАЖНО: Явно очищаем поля, если их нет в объекте пользователя
+        if ('originalAdminId' in user && user.originalAdminId) {
+          token.originalAdminId = user.originalAdminId as string;
+        } else {
+          token.originalAdminId = undefined;
+        }
+        if ('isImpersonating' in user && user.isImpersonating) {
+          token.isImpersonating = user.isImpersonating as boolean;
+        } else {
+          token.isImpersonating = undefined;
+        }
       }
       
       // Если это вход через Яндекс, получаем актуальные данные пользователя
@@ -643,13 +664,11 @@ export const authOptions: NextAuthOptions = {
 
           if (dbUser) {
             token.id = dbUser.id;
-            token.email = dbUser.email || undefined;
-            token.name = dbUser.firstName && dbUser.lastName
-              ? `${dbUser.firstName} ${dbUser.lastName}`
-              : undefined;
-            token.firstName = dbUser.firstName;
-            token.lastName = dbUser.lastName;
-            token.avatarUrl = dbUser.avatarUrl;
+            token.email = dbUser.email && dbUser.email.length > 0 ? dbUser.email.substring(0, 100) : undefined;
+            // Не храним name (можно вычислить из firstName + lastName)
+            token.firstName = dbUser.firstName && dbUser.firstName.length > 0 ? dbUser.firstName.substring(0, 50) : undefined;
+            token.lastName = dbUser.lastName && dbUser.lastName.length > 0 ? dbUser.lastName.substring(0, 50) : undefined;
+            // Не храним avatarUrl в токене (слишком длинный URL)
             token.role = dbUser.role;
             token.membershipStatus = dbUser.membershipStatus;
           }
@@ -667,7 +686,20 @@ export const authOptions: NextAuthOptions = {
         session.user.membershipStatus = token.membershipStatus;
         session.user.firstName = token.firstName;
         session.user.lastName = token.lastName;
-        session.user.avatarUrl = token.avatarUrl;
+        // avatarUrl не хранится в токене (слишком длинный URL), будет получаться из БД при необходимости
+        session.user.avatarUrl = undefined;
+        // Копируем поля impersonation из токена в сессию
+        // ВАЖНО: Явно очищаем поля, если их нет в токене
+        if (token.originalAdminId) {
+          (session.user as any).originalAdminId = token.originalAdminId;
+        } else {
+          (session.user as any).originalAdminId = undefined;
+        }
+        if (token.isImpersonating !== undefined) {
+          (session.user as any).isImpersonating = token.isImpersonating;
+        } else {
+          (session.user as any).isImpersonating = undefined;
+        }
       }
       return session;
     },

@@ -156,7 +156,7 @@ export default function EmailValidationField({
           {mode === "verified" && (
             <>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                💡 Email подтвержден и используется для доступа к скидкам BestBenefits. Изменение невозможно.
+                💡 Email подтвержден и используется для доступа к скидкам от партнеров. Изменение невозможно.
               </p>
               <p className="mt-1 text-xs text-green-600 dark:text-green-400">
                 ✓ Email {email} подтвержден
@@ -241,7 +241,7 @@ export default function EmailValidationField({
 
       {mode === "initial" && !emailVerified && email && (
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Для доступа к скидкам BestBenefits подтвердите email
+          Для доступа к скидкам от партнеров подтвердите email
         </p>
       )}
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import PhoneInput from "@/components/form/PhoneInput";
 import AddressInput from "@/components/form/AddressInput";
@@ -50,11 +51,12 @@ export default function QuestionnaireModal({
   onClose,
   onComplete,
 }: QuestionnaireModalProps) {
+  const router = useRouter();
   const { showAlert, AlertComponent } = useAlert();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
+  const [downloadingDocIds, setDownloadingDocIds] = useState<Set<string>>(new Set());
   const [currentStep, setCurrentStep] = useState(1);
   const [autoSaving, setAutoSaving] = useState(false);
   const [lastSavedField, setLastSavedField] = useState<string | null>(null);
@@ -362,7 +364,8 @@ export default function QuestionnaireModal({
     console.log("[QuestionnaireModal] File name:", fileName);
     
     try {
-      setDownloadingDocId(documentId);
+      // Добавляем ID в Set загружающихся документов
+      setDownloadingDocIds((prev) => new Set(prev).add(documentId));
       // Кодируем ID для безопасной передачи в URL
       const encodedId = encodeURIComponent(documentId);
       const downloadUrl = `/api/documents/${encodedId}/download`;
@@ -439,6 +442,13 @@ export default function QuestionnaireModal({
         message: error instanceof Error ? error.message : "Ошибка при скачивании документа",
         type: "error",
       });
+    } finally {
+      // Удаляем ID из Set загружающихся документов
+      setDownloadingDocIds((prev) => {
+        const next = new Set(prev);
+        next.delete(documentId);
+        return next;
+      });
     }
   };
 
@@ -482,6 +492,10 @@ export default function QuestionnaireModal({
             });
             showAlert({ message: "Документ успешно загружен", type: "success" });
             loadData();
+            // Обновляем страницу после загрузки документа, чтобы обновить баннер
+            setTimeout(() => {
+              router.refresh();
+            }, 1500);
             resolve();
           } else {
             // Пытаемся получить сообщение об ошибке из ответа
@@ -947,23 +961,55 @@ export default function QuestionnaireModal({
                           <div className="flex flex-col gap-2 sm:ml-4 sm:flex-row sm:flex-shrink-0">
                             <button
                               onClick={() => handleDownloadDocument(doc.id, doc.fileName)}
-                              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:px-4"
+                              disabled={downloadingDocIds.has(doc.id)}
+                              className={`inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:px-4 ${
+                                downloadingDocIds.has(doc.id)
+                                  ? "cursor-wait bg-blue-400"
+                                  : "bg-blue-600 hover:bg-blue-700"
+                              }`}
                             >
-                              <Download className="h-4 w-4 flex-shrink-0" />
-                              <span className="whitespace-nowrap">Скачать</span>
+                              {downloadingDocIds.has(doc.id) ? (
+                                <>
+                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent flex-shrink-0" />
+                                  <span className="whitespace-nowrap">Загрузка...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="h-4 w-4 flex-shrink-0" />
+                                  <span className="whitespace-nowrap">Скачать</span>
+                                </>
+                              )}
                             </button>
                             {doc.status === "GENERATED" && (
-                              <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 sm:w-auto sm:px-4">
-                                <Upload className="h-4 w-4 flex-shrink-0" />
-                                <span className="whitespace-nowrap">Загрузить подписанный</span>
+                              <label 
+                                className={`inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 sm:w-auto sm:px-4 ${
+                                  uploadProgress[doc.id] !== undefined
+                                    ? "cursor-wait bg-purple-400"
+                                    : "cursor-pointer bg-purple-600 hover:bg-purple-700"
+                                }`}
+                              >
+                                {uploadProgress[doc.id] !== undefined ? (
+                                  <>
+                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent flex-shrink-0" />
+                                    <span className="whitespace-nowrap">Загрузка {uploadProgress[doc.id]}%</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="h-4 w-4 flex-shrink-0" />
+                                    <span className="whitespace-nowrap">Загрузить подписанный</span>
+                                  </>
+                                )}
                                 <input
                                   type="file"
-                                  accept=".pdf"
+                                  accept=".pdf,.jpg,.jpeg,.png"
                                   className="hidden"
+                                  disabled={uploadProgress[doc.id] !== undefined}
                                   onChange={(e) => {
                                     const file = e.target.files?.[0];
                                     if (file) {
                                       handleUploadSigned(doc.id, file);
+                                      // Сбрасываем input для возможности повторной загрузки того же файла
+                                      e.target.value = '';
                                     }
                                   }}
                                 />

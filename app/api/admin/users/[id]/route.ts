@@ -46,6 +46,15 @@ export async function GET(
       where: { id: userId },
       include: {
         organization: true,
+        documents: {
+          orderBy: { createdAt: "desc" },
+        },
+        membershipHistory: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            organization: true,
+          },
+        },
       },
     });
 
