@@ -40,6 +40,7 @@ export default function PostFeed({ userId, limit }: PostFeedProps) {
 
   useEffect(() => {
     loadPosts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, limit]);
 
   const loadPosts = async () => {
