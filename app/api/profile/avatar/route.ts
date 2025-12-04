@@ -5,6 +5,12 @@ import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { existsSync } from "fs";
+import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+
+// Инициализируем VDS хранилище при загрузке модуля
+if (typeof window === "undefined") {
+  initVDSStorageFromEnv();
+}
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "avatars");
 
@@ -47,20 +53,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await ensureUploadDir();
-
     // Генерируем имя файла
     const fileExtension = avatarFile.name.split(".").pop() || "jpg";
     const filename = `${session.user.id}_${Date.now()}.${fileExtension}`;
-    const filePath = path.join(UPLOAD_DIR, filename);
-
+    
     // Сохраняем файл
     const bytes = await avatarFile.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    await writeFile(filePath, buffer);
-
-    // Обновляем URL аватара в базе данных
-    const avatarUrl = `/api/uploads/avatars/${filename}`;
+    
+    let avatarUrl: string;
+    
+    // Загружаем файл на VDS или локально
+    if (isVDSStorageConfigured()) {
+      try {
+        const fileKey = `avatars/${filename}`;
+        const relativePath = await uploadFileToVDS(fileKey, buffer, avatarFile.type);
+        avatarUrl = relativePath; // VDS возвращает полный URL
+        console.log(`[profile/avatar] Avatar uploaded to VDS: ${avatarUrl}`);
+      } catch (vdsError) {
+        console.error("[profile/avatar] VDS upload failed, falling back to local:", vdsError);
+        // Fallback на локальное хранилище
+        await ensureUploadDir();
+        const filePath = path.join(UPLOAD_DIR, filename);
+        await writeFile(filePath, buffer);
+        avatarUrl = `/uploads/avatars/${filename}`;
+      }
+    } else {
+      // Локальное хранилище
+      await ensureUploadDir();
+      const filePath = path.join(UPLOAD_DIR, filename);
+      await writeFile(filePath, buffer);
+      avatarUrl = `/uploads/avatars/${filename}`;
+    }
     
     await prisma.user.update({
       where: { id: session.user.id },

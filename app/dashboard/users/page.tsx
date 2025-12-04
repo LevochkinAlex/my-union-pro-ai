@@ -316,26 +316,24 @@ export default function UsersPage() {
 
       {/* Мобильный drawer для панели коллег */}
       {showUsersPanel && (
-        <>
+        <div className="lg:hidden fixed inset-0 z-[100] pointer-events-none">
           {/* Overlay */}
           <div 
-            className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm transition-opacity duration-300"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 pointer-events-auto"
             onClick={() => setShowUsersPanel(false)}
-            style={{ touchAction: 'none' }}
           />
           
           {/* Drawer */}
           <div 
-            className="lg:hidden fixed top-0 right-0 bottom-0 z-[60] w-full max-w-sm bg-white dark:bg-gray-800 shadow-2xl overflow-y-auto overscroll-contain"
+            className="fixed top-0 right-0 bottom-0 w-full max-w-sm bg-white dark:bg-gray-800 shadow-2xl overflow-hidden flex flex-col pointer-events-auto"
             onClick={(e) => e.stopPropagation()}
             style={{ 
-              WebkitOverflowScrolling: 'touch',
               transform: showUsersPanel ? 'translateX(0)' : 'translateX(100%)',
               transition: 'transform 0.3s ease-out',
             }}
           >
             {/* Заголовок с кнопкой закрытия */}
-            <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4 flex items-center justify-between shadow-sm">
+            <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4 flex items-center justify-between shadow-sm">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                 Коллеги профсоюза
               </h2>
@@ -350,8 +348,8 @@ export default function UsersPage() {
               </button>
             </div>
             
-            {/* Контент */}
-            <div className="px-4 py-4 space-y-4 pb-6">
+            {/* Контент с прокруткой */}
+            <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 space-y-4" style={{ WebkitOverflowScrolling: 'touch' }}>
               {/* Поиск и фильтры */}
               <div className="bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                 <form onSubmit={handleSearch} className="space-y-4">
@@ -486,7 +484,7 @@ export default function UsersPage() {
               )}
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

@@ -4,6 +4,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { initVDSStorageFromEnv, getFileFromVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+
+// Инициализируем VDS хранилище при загрузке модуля
+if (typeof window === "undefined") {
+  initVDSStorageFromEnv();
+}
 
 function resolveFilePath(filePath: string) {
   const normalized = filePath.startsWith("/") ? filePath.slice(1) : filePath;
@@ -182,62 +188,92 @@ export async function GET(
       fileBuffer = Buffer.from(document.content, "base64");
       console.log("[documents/download] Загружен из базы данных (base64), размер:", fileBuffer.length);
     } else if (filePathToDownload) {
-      // Документ хранится как файл на диске
+      // Документ хранится как файл на диске или VDS
       try {
-        let absolutePath = resolveFilePath(filePathToDownload);
-        console.log("[documents/download] Пытаемся прочитать файл:", absolutePath);
-        console.log("[documents/download] Исходный путь из БД:", filePathToDownload);
-        console.log("[documents/download] Скачиваем подписанный файл:", downloadSigned);
+        // Проверяем, является ли путь VDS URL (начинается с http:// или https://)
+        const isVDSFile = filePathToDownload.startsWith("http://") || filePathToDownload.startsWith("https://");
         
-        // Проверяем существование файла
-        try {
-          await fs.access(absolutePath);
-          console.log("[documents/download] Файл существует");
-        } catch (accessError) {
-          console.error("[documents/download] Файл не существует:", absolutePath);
-          
-          // Если это устав и файл не найден, пытаемся использовать системный файл
-          if (isCharterDocument && !downloadSigned) {
-            console.log("[documents/download] Устав без файла, пытаемся найти системный файл");
-            const CHARTER_PATH = "/docs/union/Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
-            const CHARTER_FILENAME = document.fileName || "Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
+        if (isVDSFile && isVDSStorageConfigured()) {
+          // Файл на VDS - извлекаем fileKey из URL
+          try {
+            const url = new URL(filePathToDownload);
+            // Извлекаем путь после домена (например, /uploads/documents/file.pdf)
+            const pathParts = url.pathname.split("/").filter(p => p);
+            // Убираем первый элемент если это "uploads" или оставляем как есть
+            const fileKey = pathParts.slice(pathParts[0] === "uploads" ? 1 : 0).join("/");
             
+            console.log("[documents/download] Downloading from VDS:", fileKey);
+            fileBuffer = await getFileFromVDS(fileKey);
+            console.log("[documents/download] File downloaded from VDS, size:", fileBuffer.length);
+          } catch (vdsError) {
+            console.error("[documents/download] VDS download failed:", vdsError);
+            // Fallback на локальное хранилище
+            let absolutePath = resolveFilePath(filePathToDownload);
             try {
-              const charterAbsolutePath = resolveFilePath(CHARTER_PATH);
-              await fs.access(charterAbsolutePath);
-              const fileBuffer = await fs.readFile(charterAbsolutePath);
-              
-              return new NextResponse(fileBuffer, {
-                status: 200,
-                headers: {
-                  "Content-Type": document.mimeType || "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                  "Content-Disposition": `attachment; filename="${encodeURIComponent(CHARTER_FILENAME)}"`,
-                  "Content-Length": fileBuffer.length.toString(),
-                },
-              });
-            } catch (charterError) {
-              console.error("[documents/download] Системный файл устава тоже не найден:", charterError);
-              // Продолжаем с обычной ошибкой
+              await fs.access(absolutePath);
+              fileBuffer = await fs.readFile(absolutePath);
+              console.log("[documents/download] Fallback to local file, size:", fileBuffer.length);
+            } catch (localError) {
+              throw new Error(`File not found on VDS or locally: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
             }
           }
+        } else {
+          // Локальный файл
+          let absolutePath = resolveFilePath(filePathToDownload);
+          console.log("[documents/download] Пытаемся прочитать файл:", absolutePath);
+          console.log("[documents/download] Исходный путь из БД:", filePathToDownload);
+          console.log("[documents/download] Скачиваем подписанный файл:", downloadSigned);
           
-          // Если запрашивается подписанный файл, но он не найден - возвращаем ошибку
-          if (downloadSigned) {
+          // Проверяем существование файла
+          try {
+            await fs.access(absolutePath);
+            console.log("[documents/download] Файл существует");
+          } catch (accessError) {
+            console.error("[documents/download] Файл не существует:", absolutePath);
+            
+            // Если это устав и файл не найден, пытаемся использовать системный файл
+            if (isCharterDocument && !downloadSigned) {
+              console.log("[documents/download] Устав без файла, пытаемся найти системный файл");
+              const CHARTER_PATH = "/docs/union/Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
+              const CHARTER_FILENAME = document.fileName || "Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
+              
+              try {
+                const charterAbsolutePath = resolveFilePath(CHARTER_PATH);
+                await fs.access(charterAbsolutePath);
+                const fileBuffer = await fs.readFile(charterAbsolutePath);
+                
+                return new NextResponse(fileBuffer, {
+                  status: 200,
+                  headers: {
+                    "Content-Type": document.mimeType || "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "Content-Disposition": `attachment; filename="${encodeURIComponent(CHARTER_FILENAME)}"`,
+                    "Content-Length": fileBuffer.length.toString(),
+                  },
+                });
+              } catch (charterError) {
+                console.error("[documents/download] Системный файл устава тоже не найден:", charterError);
+                // Продолжаем с обычной ошибкой
+              }
+            }
+            
+            // Если запрашивается подписанный файл, но он не найден - возвращаем ошибку
+            if (downloadSigned) {
+              return NextResponse.json(
+                { error: `Подписанный документ не найден. Пожалуйста, загрузите подписанный документ.` },
+                { status: 404 }
+              );
+            }
+            
             return NextResponse.json(
-              { error: `Подписанный документ не найден. Пожалуйста, загрузите подписанный документ.` },
+              { error: `Файл не найден: ${filePathToDownload}` },
               { status: 404 }
             );
           }
           
-          return NextResponse.json(
-            { error: `Файл не найден: ${filePathToDownload}` },
-            { status: 404 }
-          );
+          // Читаем файл
+          fileBuffer = await fs.readFile(absolutePath);
+          console.log("[documents/download] Файл успешно прочитан, размер:", fileBuffer.length);
         }
-        
-        // Читаем файл
-        fileBuffer = await fs.readFile(absolutePath);
-        console.log("[documents/download] Файл успешно прочитан, размер:", fileBuffer.length);
       } catch (error) {
         console.error("[documents/download] Ошибка при чтении файла:", error);
         console.error("[documents/download] Путь:", filePathToDownload);
