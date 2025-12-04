@@ -211,6 +211,38 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
     }
   };
 
+  const handleAiImprove = async () => {
+    if (!content.trim()) return;
+    
+    setAiLoading(true);
+    try {
+      const response = await fetch("/api/ai/improve-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: content }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.improvedText) {
+          // Извлекаем текст из HTML, если он вернулся
+          const tempDiv = document.createElement("div");
+          tempDiv.innerHTML = data.improvedText;
+          const plainText = tempDiv.textContent || tempDiv.innerText || data.improvedText;
+          setContent(plainText);
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        alert(errorData.error || "Ошибка при улучшении текста с помощью AI");
+      }
+    } catch (error) {
+      console.error("Error improving text with AI:", error);
+      alert("Ошибка при улучшении текста с помощью AI");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const finalContent = postType === "article" ? htmlContent : content;
@@ -496,12 +528,27 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                     </button>
                   </div>
                 ) : (
-                  <textarea
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder="О чем вы думаете?"
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none min-h-[200px]"
-                  />
+                  <div className="space-y-3">
+                    <textarea
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
+                      placeholder="О чем вы думаете?"
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none min-h-[200px]"
+                    />
+                    {content.trim() && (
+                      <button
+                        type="button"
+                        onClick={handleAiImprove}
+                        disabled={aiLoading}
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                        </svg>
+                        {aiLoading ? "Улучшение..." : "Улучшить с AI"}
+                      </button>
+                    )}
+                  </div>
                 )}
 
                 {/* Выбор типа поста */}
