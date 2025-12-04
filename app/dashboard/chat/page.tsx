@@ -1363,7 +1363,26 @@ function ChatPageContent() {
                               })}
                             </div>
                           )}
-                          <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                          {message.content ? (
+                            <p className="text-sm whitespace-pre-wrap break-words">
+                              {message.content.split(/(https?:\/\/[^\s]+)/g).map((part, index) => {
+                                if (part.match(/^https?:\/\//)) {
+                                  return (
+                                    <a
+                                      key={index}
+                                      href={part}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-400 hover:text-blue-300 underline break-all"
+                                    >
+                                      {part}
+                                    </a>
+                                  );
+                                }
+                                return <span key={index}>{part}</span>;
+                              })}
+                            </p>
+                          ) : null}
                           <div className="flex items-center gap-2 mt-1">
                             <p
                               className={`text-xs ${
