@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -20,9 +20,23 @@ export default function FloatingChatBot() {
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationHistoryRef = useRef<ChatMessage[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   // Вычисляем, можно ли отправить сообщение
   const canSend = input.trim().length > 0 && !isLoading;
+
+  // Авторесайз textarea
+  const adjustTextareaHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = Math.min(textarea.scrollHeight, 120) + "px";
+    }
+  }, []);
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [input, adjustTextareaHeight]);
 
   // Загружаем аватарку пользователя
   useEffect(() => {
@@ -258,13 +272,23 @@ export default function FloatingChatBot() {
                 Загрузка сессии...
               </div>
             )}
-            <form onSubmit={handleSubmit} className="flex gap-2">
-              <input
-                type="text"
+            <form onSubmit={handleSubmit} className="flex gap-2 items-end">
+              <textarea
+                ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (canSend) {
+                      handleSubmit(e);
+                    }
+                  }
+                }}
                 placeholder="Задайте вопрос..."
-                className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                rows={1}
+                className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 resize-none overflow-hidden"
+                style={{ minHeight: "40px", maxHeight: "120px" }}
                 disabled={isLoading}
               />
               <button

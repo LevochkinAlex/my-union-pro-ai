@@ -113,6 +113,10 @@ function ChatPageContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isUserScrolling = useRef(false);
+  const lastScrollTop = useRef(0);
+  const shouldScrollToBottom = useRef(true);
 
   // Используем useEffect для получения userId после монтирования, чтобы избежать ошибок гидратации
   const [userId, setUserId] = useState<string | null>(null);
@@ -148,23 +152,22 @@ function ChatPageContent() {
 
   useEffect(() => {
     if (selectedChat) {
+      shouldScrollToBottom.current = true; // При открытии нового чата всегда скроллим вниз
       loadMessages(selectedChat.id);
       // Обновляем список чатов после выбора
       loadChats();
-      // Прокручиваем к последнему сообщению при открытии чата
-      setTimeout(() => {
-        scrollToBottom(true); // Используем мгновенную прокрутку при открытии
-      }, 200);
     }
   }, [selectedChat]);
 
   useEffect(() => {
-    // Прокручиваем к последнему сообщению при изменении списка сообщений
-    // Используем небольшую задержку для гарантии, что DOM обновлен
-    const timer = setTimeout(() => {
-    scrollToBottom();
-    }, 100);
-    return () => clearTimeout(timer);
+    // Прокручиваем к последнему сообщению только если нужно
+    if (shouldScrollToBottom.current && messages.length > 0) {
+      const timer = setTimeout(() => {
+        scrollToBottom(true);
+        shouldScrollToBottom.current = false;
+      }, 100);
+      return () => clearTimeout(timer);
+    }
   }, [messages]);
 
   useEffect(() => {
@@ -203,20 +206,61 @@ function ChatPageContent() {
   }, [selectedChat]);
 
   const scrollToBottom = (force = false) => {
-    // Используем requestAnimationFrame для гарантии, что DOM обновлен
     requestAnimationFrame(() => {
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ 
-          behavior: force ? "auto" : "smooth",
-          block: "end",
-          inline: "nearest"
-        });
-      } else if (messagesContainerRef.current) {
-        // Если якорь не найден, прокручиваем контейнер к концу
-        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      if (messagesContainerRef.current) {
+        const container = messagesContainerRef.current;
+        if (force) {
+          container.scrollTop = container.scrollHeight;
+        } else {
+          container.scrollTo({
+            top: container.scrollHeight,
+            behavior: "smooth"
+          });
+        }
       }
     });
   };
+
+  // Проверяем, находится ли пользователь внизу чата
+  const isNearBottom = () => {
+    if (!messagesContainerRef.current) return true;
+    const container = messagesContainerRef.current;
+    const threshold = 150; // Порог в пикселях
+    return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+  };
+
+  // Обработчик скролла для отслеживания позиции пользователя
+  const handleScroll = () => {
+    if (!messagesContainerRef.current) return;
+    const container = messagesContainerRef.current;
+    
+    // Определяем направление скролла
+    const scrollingUp = container.scrollTop < lastScrollTop.current;
+    lastScrollTop.current = container.scrollTop;
+    
+    // Если пользователь скроллит вверх, помечаем это
+    if (scrollingUp) {
+      isUserScrolling.current = true;
+    }
+    
+    // Если пользователь дошел до низа, сбрасываем флаг
+    if (isNearBottom()) {
+      isUserScrolling.current = false;
+    }
+  };
+
+  // Авторесайз textarea
+  const adjustTextareaHeight = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = Math.min(textarea.scrollHeight, 150) + "px";
+    }
+  };
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [messageText]);
 
   const loadChats = async () => {
     try {
@@ -242,25 +286,26 @@ function ChatPageContent() {
 
   const loadMessages = async (chatId: string, silent = false) => {
     try {
-      console.log(`[chat] Loading messages for chat ${chatId}`);
-      const response = await fetch(`/api/chat/${chatId}?t=${Date.now()}`); // Добавляем timestamp для предотвращения кэширования
+      const response = await fetch(`/api/chat/${chatId}?t=${Date.now()}`);
       if (response.ok) {
         const data = await response.json();
-        console.log(`[chat] Loaded ${data.messages?.length || 0} messages`);
-        setMessages(data.messages || []);
-        if (!silent) {
-          // Используем двойную задержку для гарантии, что DOM обновлен
-          // Сначала мгновенная прокрутка, затем плавная
-          setTimeout(() => {
-            scrollToBottom(true); // Мгновенная прокрутка
-          }, 50);
-          setTimeout(() => {
-            scrollToBottom(false); // Плавная прокрутка для финальной позиции
-          }, 150);
+        const newMessages = data.messages || [];
+        
+        // При тихом обновлении проверяем, есть ли новые сообщения
+        if (silent) {
+          const hasNewMessages = newMessages.length !== messages.length;
+          // Только если пользователь внизу чата и есть новые сообщения - скроллим
+          if (hasNewMessages && isNearBottom() && !isUserScrolling.current) {
+            setMessages(newMessages);
+            setTimeout(() => scrollToBottom(true), 50);
+          } else {
+            setMessages(newMessages);
+          }
+        } else {
+          setMessages(newMessages);
+          // При первой загрузке чата всегда скроллим вниз
+          shouldScrollToBottom.current = true;
         }
-      } else {
-        const errorData = await response.json();
-        console.error("Error loading messages:", errorData);
       }
     } catch (error) {
       console.error("Error loading messages:", error);
@@ -410,6 +455,13 @@ function ChatPageContent() {
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }
+        // Сбрасываем высоту textarea
+        if (textareaRef.current) {
+          textareaRef.current.style.height = "44px";
+        }
+        // После отправки сообщения нужно прокрутить вниз
+        shouldScrollToBottom.current = true;
+        isUserScrolling.current = false;
         // Перезагружаем сообщения
         loadMessages(selectedChat.id);
         // Обновляем список чатов
@@ -522,23 +574,18 @@ function ChatPageContent() {
         setAlertDialog((prev) => ({ ...prev, isOpen: false }));
         if (!selectedChat) return;
 
+        // Оптимистичное обновление - сразу удаляем из UI
+        setMessages(prev => prev.filter(m => m.id !== messageId));
+
         try {
-          console.log(`[chat] Deleting message ${messageId} from chat ${selectedChat.id}`);
           const response = await fetch(`/api/chat/${selectedChat.id}/messages/${messageId}`, {
             method: "DELETE",
           });
 
-          const result = await response.json();
-          console.log(`[chat] DELETE response:`, { ok: response.ok, status: response.status, result });
-          
-          if (response.ok) {
-            console.log(`[chat] ✅ Message ${messageId} deleted successfully, reloading messages...`);
-            // Принудительно обновляем список сообщений с небольшой задержкой
-            setTimeout(async () => {
-              await loadMessages(selectedChat.id, false);
-            }, 100);
-          } else {
-            console.error(`[chat] ❌ Failed to delete message ${messageId}:`, result);
+          if (!response.ok) {
+            const result = await response.json();
+            // Откатываем изменения при ошибке
+            loadMessages(selectedChat.id, true);
             setAlertDialog({
               isOpen: true,
               title: "Ошибка",
@@ -549,6 +596,8 @@ function ChatPageContent() {
           }
         } catch (error) {
           console.error("Error deleting message:", error);
+          // Откатываем изменения при ошибке
+          loadMessages(selectedChat.id, true);
           setAlertDialog({
             isOpen: true,
             title: "Ошибка",
@@ -977,8 +1026,8 @@ function ChatPageContent() {
             {/* Сообщения */}
             <div
               ref={messagesContainerRef}
-              className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth"
-              style={{ scrollBehavior: 'smooth' }}
+              onScroll={handleScroll}
+              className="flex-1 overflow-y-auto p-4 space-y-4"
             >
               {messages.map((message) => {
                 const isOwn = message.senderId !== selectedChat.otherUser.id;
@@ -1537,7 +1586,7 @@ function ChatPageContent() {
                   )}
                 </div>
               )}
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-end">
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -1547,30 +1596,38 @@ function ChatPageContent() {
                 />
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="p-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  className="p-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0"
                   title="Прикрепить файл"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                   </svg>
                 </button>
-                <input
-                  type="text"
+                <textarea
+                  ref={textareaRef}
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
-                  onKeyPress={(e) => {
+                  onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       sendMessage();
                     }
                   }}
                   placeholder="Введите сообщение..."
-                  className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base"
+                  rows={1}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base resize-none overflow-hidden"
+                  style={{ minHeight: "44px", maxHeight: "150px" }}
                 />
                 <button
-                  onClick={sendMessage}
+                  onClick={() => {
+                    sendMessage();
+                    // Сбрасываем высоту textarea после отправки
+                    if (textareaRef.current) {
+                      textareaRef.current.style.height = "44px";
+                    }
+                  }}
                   disabled={(!messageText.trim() && !selectedFile) || sending}
-                  className="px-4 md:px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm md:text-base"
+                  className="px-4 md:px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm md:text-base flex-shrink-0"
                 >
                   <span className="hidden md:inline">Отправить</span>
                   <svg className="md:hidden w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
