@@ -389,12 +389,17 @@ export async function POST(request: NextRequest) {
     } // end for loop
 
     // Проверяем загружены ли оба обязательных документа (membership и contribution)
+    // Документ считается загруженным, если:
+    // 1. Статус PENDING или APPROVED (уже отправлен)
+    // 2. Статус SIGNED и есть signedFilePath (подписан и загружен)
     const membershipDoc = await prisma.document.findFirst({
       where: {
         userId: session.user.id,
         type: "MEMBERSHIP_APPLICATION",
-        status: { in: ["SIGNED", "PENDING", "APPROVED"] },
-        signedFilePath: { not: null },
+        OR: [
+          { status: { in: ["PENDING", "APPROVED"] } },
+          { status: "SIGNED", signedFilePath: { not: null } },
+        ],
       },
     });
 
@@ -402,8 +407,10 @@ export async function POST(request: NextRequest) {
       where: {
         userId: session.user.id,
         type: "CONTRIBUTION_APPLICATION",
-        status: { in: ["SIGNED", "PENDING", "APPROVED"] },
-        signedFilePath: { not: null },
+        OR: [
+          { status: { in: ["PENDING", "APPROVED"] } },
+          { status: "SIGNED", signedFilePath: { not: null } },
+        ],
       },
     });
 
