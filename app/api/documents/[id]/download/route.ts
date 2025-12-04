@@ -180,6 +180,14 @@ export async function GET(
     let filePathToDownload = downloadSigned && document.signedFilePath 
       ? document.signedFilePath 
       : document.filePath;
+    
+    console.log("[documents/download] File selection:", {
+      downloadSigned,
+      hasSignedFilePath: !!document.signedFilePath,
+      signedFilePath: document.signedFilePath,
+      filePath: document.filePath,
+      selectedPath: filePathToDownload
+    });
 
     let fileBuffer: Buffer | null = null;
 
@@ -288,10 +296,42 @@ export async function GET(
             
             // Если запрашивается подписанный файл, но он не найден - возвращаем ошибку
             if (downloadSigned) {
-              return NextResponse.json(
-                { error: `Подписанный документ не найден. Пожалуйста, загрузите подписанный документ.` },
-                { status: 404 }
-              );
+              console.error("[documents/download] Подписанный документ не найден:");
+              console.error("[documents/download]   - Локальный путь:", absolutePath);
+              console.error("[documents/download]   - VDS попытка:", isVDSStorageConfigured() ? "выполнена" : "не выполнена (VDS не настроен)");
+              console.error("[documents/download]   - filePathToDownload:", filePathToDownload);
+              
+              // Если VDS настроен, пытаемся еще раз с правильным fileKey
+              if (isVDSStorageConfigured() && !fileBuffer) {
+                try {
+                  const normalizedPath = filePathToDownload.startsWith("/") ? filePathToDownload.slice(1) : filePathToDownload;
+                  const pathParts = normalizedPath.split("/");
+                  const fileKey = pathParts[0] === "uploads" 
+                    ? pathParts.slice(1).join("/")
+                    : normalizedPath;
+                  
+                  console.log("[documents/download] Последняя попытка скачать с VDS, fileKey:", fileKey);
+                  fileBuffer = await getFileFromVDS(fileKey);
+                  console.log("[documents/download] ✅ Файл найден на VDS!");
+                } catch (finalVdsError) {
+                  console.error("[documents/download] ❌ Финальная попытка VDS также не удалась:", finalVdsError);
+                }
+              }
+              
+              // Если все еще не найден, возвращаем ошибку
+              if (!fileBuffer) {
+                return NextResponse.json(
+                  { 
+                    error: `Подписанный документ не найден. Пожалуйста, загрузите подписанный документ.`,
+                    details: process.env.NODE_ENV === "development" ? {
+                      localPath: absolutePath,
+                      vdsConfigured: isVDSStorageConfigured(),
+                      filePath: filePathToDownload
+                    } : undefined
+                  },
+                  { status: 404 }
+                );
+              }
             }
             
             return NextResponse.json(
