@@ -522,6 +522,29 @@ async function normalizeResponse(
     filtered = filtered.filter((discount) => discount.isPremium);
   }
   
+  // Filter by expiration date - скрываем скидки с истекшим сроком действия
+  const now = new Date();
+  filtered = filtered.filter((discount) => {
+    if (!discount.validUntil) {
+      // Если дата окончания не указана, показываем скидку
+      return true;
+    }
+    
+    try {
+      const expirationDate = new Date(discount.validUntil);
+      // Сравниваем только даты (без времени), чтобы скидка была видна в последний день действия
+      const expirationDateOnly = new Date(expirationDate.getFullYear(), expirationDate.getMonth(), expirationDate.getDate());
+      const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      // Показываем скидку, если дата окончания >= сегодня
+      return expirationDateOnly >= nowDateOnly;
+    } catch (error) {
+      console.warn(`[best-benefits] Failed to parse expiration date for discount ${discount.id}:`, discount.validUntil, error);
+      // При ошибке парсинга показываем скидку
+      return true;
+    }
+  });
+  
   // Filter by specific IDs (for detail page or favorites/claimed)
   if (params.ids) {
     const idList = params.ids

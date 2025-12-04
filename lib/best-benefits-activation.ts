@@ -292,14 +292,41 @@ export async function getUserActivatedDiscounts(
       let promoCode: string | undefined = undefined;
       
       if (p.codes && Array.isArray(p.codes) && p.codes.length > 0) {
-        // Ищем первый активный код
+        // Ищем первый активный код с неистекшей датой
+        const now = new Date();
         const activeCode = p.codes.find((c: any) => {
           const code = c?.code || c?.promo_code || c?.promoCode;
-          return code && 
-                 typeof code === 'string' && 
-                 code.trim().length > 0 && 
-                 code !== 'Промокод деактивирован' &&
-                 code.toLowerCase() !== 'deactivated';
+          const endDate = c?.end_date;
+          
+          // Проверяем валидность кода
+          if (!code || 
+              typeof code !== 'string' || 
+              code.trim().length === 0 || 
+              code === 'Промокод деактивирован' ||
+              code.toLowerCase() === 'deactivated') {
+            return false;
+          }
+          
+          // Проверяем дату окончания действия промокода
+          if (endDate) {
+            try {
+              const expirationDate = new Date(endDate);
+              // Сравниваем только даты (без времени)
+              const expirationDateOnly = new Date(expirationDate.getFullYear(), expirationDate.getMonth(), expirationDate.getDate());
+              const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              
+              // Промокод действителен, если дата окончания >= сегодня
+              if (expirationDateOnly < nowDateOnly) {
+                console.log(`[BestBenefits Activation] Promo code ${code} expired on ${endDate}`);
+                return false;
+              }
+            } catch (error) {
+              console.warn(`[BestBenefits Activation] Failed to parse end_date for code ${code}:`, endDate, error);
+              // При ошибке парсинга считаем промокод валидным
+            }
+          }
+          
+          return true;
         });
         
         if (activeCode) {
