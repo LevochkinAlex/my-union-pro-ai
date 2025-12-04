@@ -216,7 +216,7 @@ export default function MyDiscountsPage() {
             // Приоритет 3: пытаемся найти промокод в исходных данных (для старого формата)
             const rawClaimedItem = claimedData.find((item: any) => {
               const itemId = typeof item === 'object' && item !== null ? item.id : item;
-              return String(itemId) === String(discount.id);
+              return String(itemId) === discountIdStr;
             });
             
             if (rawClaimedItem && typeof rawClaimedItem === 'object' && rawClaimedItem.promoCode) {
@@ -226,6 +226,12 @@ export default function MyDiscountsPage() {
               if (promoCode) {
                 console.log(`[MyDiscounts] ✅ Using promo code from raw claimed data for discount ${discount.id}:`, promoCode);
               }
+            }
+            
+            // Если промокод все еще не найден, но скидка получена - это значит данные в старом формате
+            // Промокод должен быть получен через синхронизацию с BestBenefits
+            if (!promoCode && isClaimed) {
+              console.log(`[MyDiscounts] ⚠️ Discount ${discount.id} is claimed but promo code is missing. Data might be in old format. User should sync with BestBenefits.`);
             }
           }
           
