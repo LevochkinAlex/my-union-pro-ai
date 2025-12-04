@@ -59,6 +59,9 @@ export async function POST(request: NextRequest) {
 
     const userPrompt = `Улучши следующий текст, сохранив HTML разметку:\n\n${textContent}`;
 
+    // Убеждаемся, что используем рабочую модель
+    const finalModel = model && model !== "openrouter/auto" ? model : "openai/gpt-4o-mini";
+
     // Вызываем OpenRouter API
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -69,7 +72,7 @@ export async function POST(request: NextRequest) {
         "X-Title": "MyUnion Pro",
       },
       body: JSON.stringify({
-        model: model || "openai/gpt-4o-mini",
+        model: finalModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -81,9 +84,18 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[ai/improve-text] OpenRouter API error:", errorText);
+      let errorMessage = "Ошибка при обращении к AI";
+      
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.error?.message || errorData.error || errorMessage;
+        console.error("[ai/improve-text] OpenRouter API error:", errorData);
+      } catch {
+        console.error("[ai/improve-text] OpenRouter API error (raw):", errorText);
+      }
+      
       return NextResponse.json(
-        { error: "Ошибка при обращении к AI" },
+        { error: errorMessage },
         { status: 500 }
       );
     }
@@ -103,10 +115,11 @@ export async function POST(request: NextRequest) {
       success: true,
       improvedText: finalText,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[ai/improve-text] Error:", error);
+    const errorMessage = error?.message || "Ошибка при улучшении текста";
     return NextResponse.json(
-      { error: "Ошибка при улучшении текста" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

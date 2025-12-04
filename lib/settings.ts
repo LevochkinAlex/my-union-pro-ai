@@ -89,9 +89,15 @@ export async function getOpenRouterConfig() {
     getSettingValue("openrouter.model"),
   ]);
 
+  // Используем рабочую модель по умолчанию, если модель не настроена или "openrouter/auto"
+  let finalModel = model;
+  if (!finalModel || finalModel === "openrouter/auto" || finalModel.trim() === "") {
+    finalModel = "openai/gpt-4o-mini"; // Надежная модель по умолчанию
+  }
+
   return {
     apiKey: apiKey ?? "",
-    model: model ?? "openrouter/auto",
+    model: finalModel,
   };
 }
 

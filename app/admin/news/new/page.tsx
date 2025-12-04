@@ -27,6 +27,8 @@ export default function NewNewsPage() {
   const [polls, setPolls] = useState<Poll[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiLoadingField, setAiLoadingField] = useState<"title" | "content" | null>(null);
 
   const handleAddPoll = () => {
     setPolls([
@@ -99,6 +101,137 @@ export default function NewNewsPage() {
           : poll
       )
     );
+  };
+
+  const handleAiImproveTitle = async () => {
+    if (!title.trim()) return;
+    
+    setAiLoading(true);
+    setAiLoadingField("title");
+    try {
+      const response = await fetch("/api/ai/improve-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: title }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.improvedText) {
+          // Извлекаем текст из HTML
+          const tempDiv = document.createElement("div");
+          tempDiv.innerHTML = data.improvedText;
+          const plainText = tempDiv.textContent || tempDiv.innerText || data.improvedText;
+          setTitle(plainText);
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        alert(errorData.error || "Ошибка при улучшении заголовка с помощью AI");
+      }
+    } catch (error) {
+      console.error("Error improving title with AI:", error);
+      alert("Ошибка при улучшении заголовка с помощью AI");
+    } finally {
+      setAiLoading(false);
+      setAiLoadingField(null);
+    }
+  };
+
+  const handleAiImproveContent = async () => {
+    if (!content.trim()) return;
+    
+    setAiLoading(true);
+    setAiLoadingField("content");
+    try {
+      const response = await fetch("/api/ai/improve-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: content }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.improvedText) {
+          setContent(data.improvedText);
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        alert(errorData.error || "Ошибка при улучшении содержания с помощью AI");
+      }
+    } catch (error) {
+      console.error("Error improving content with AI:", error);
+      alert("Ошибка при улучшении содержания с помощью AI");
+    } finally {
+      setAiLoading(false);
+      setAiLoadingField(null);
+    }
+  };
+
+  const handleAiRewriteContent = async () => {
+    if (!content.trim()) return;
+    
+    setAiLoading(true);
+    setAiLoadingField("content");
+    try {
+      const response = await fetch("/api/ai/rewrite-article", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.rewritten) {
+          setContent(data.rewritten);
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        alert(errorData.error || "Ошибка при переписывании содержания с помощью AI");
+      }
+    } catch (error) {
+      console.error("Error rewriting content with AI:", error);
+      alert("Ошибка при переписывании содержания с помощью AI");
+    } finally {
+      setAiLoading(false);
+      setAiLoadingField(null);
+    }
+  };
+
+  const handleAiContinueContent = async () => {
+    if (!content.trim()) return;
+    
+    setAiLoading(true);
+    setAiLoadingField("content");
+    try {
+      // Извлекаем текст из HTML для промпта
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = content;
+      const plainText = tempDiv.textContent || tempDiv.innerText || content;
+      
+      const response = await fetch("/api/ai/rewrite-article", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          content: plainText + "\n\n[Продолжи текст, развивая основную мысль и добавляя детали]" 
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.rewritten) {
+          setContent(data.rewritten);
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        alert(errorData.error || "Ошибка при дописывании содержания с помощью AI");
+      }
+    } catch (error) {
+      console.error("Error continuing content with AI:", error);
+      alert("Ошибка при дописывании содержания с помощью AI");
+    } finally {
+      setAiLoading(false);
+      setAiLoadingField(null);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -197,12 +330,27 @@ export default function NewNewsPage() {
         <div className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <div className="space-y-4">
             <div>
-              <label
-                htmlFor="title"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-              >
-                Заголовок *
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label
+                  htmlFor="title"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  Заголовок *
+                </label>
+                {title.trim() && (
+                  <button
+                    type="button"
+                    onClick={handleAiImproveTitle}
+                    disabled={aiLoading}
+                    className="flex items-center gap-1.5 px-3 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                    </svg>
+                    {aiLoading && aiLoadingField === "title" ? "Улучшение..." : "Улучшить с AI"}
+                  </button>
+                )}
+              </div>
               <input
                 type="text"
                 id="title"
@@ -221,9 +369,48 @@ export default function NewNewsPage() {
             />
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Содержание *
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Содержание *
+                </label>
+                {content.trim() && (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAiImproveContent}
+                      disabled={aiLoading}
+                      className="flex items-center gap-1.5 px-3 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                      </svg>
+                      {aiLoading && aiLoadingField === "content" ? "Улучшение..." : "Улучшить"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAiRewriteContent}
+                      disabled={aiLoading}
+                      className="flex items-center gap-1.5 px-3 py-1 text-xs text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      {aiLoading && aiLoadingField === "content" ? "Переписывание..." : "Переписать"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAiContinueContent}
+                      disabled={aiLoading}
+                      className="flex items-center gap-1.5 px-3 py-1 text-xs text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      {aiLoading && aiLoadingField === "content" ? "Дописывание..." : "Дописать"}
+                    </button>
+                  </div>
+                )}
+              </div>
               <RichTextEditor
                 value={content}
                 onChange={setContent}

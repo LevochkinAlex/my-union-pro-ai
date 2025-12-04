@@ -184,52 +184,110 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
     setAiLoading(true);
     try {
       const textToRewrite = htmlContent || content;
-      // Извлекаем текст из HTML
-      const tempDiv = document.createElement("div");
-      tempDiv.innerHTML = textToRewrite;
-      const plainText = tempDiv.textContent || tempDiv.innerText || "";
       
       const response = await fetch("/api/ai/rewrite-article", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: plainText }),
+        body: JSON.stringify({ content: textToRewrite }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        if (postType === "article") {
-          setHtmlContent(data.rewritten);
+        if (data.rewritten) {
+          if (postType === "article") {
+            setHtmlContent(data.rewritten);
+          } else {
+            // Для обычного текста извлекаем текст из HTML
+            const tempDiv = document.createElement("div");
+            tempDiv.innerHTML = data.rewritten;
+            const plainText = tempDiv.textContent || tempDiv.innerText || data.rewritten;
+            setContent(plainText);
+          }
         } else {
-          setContent(data.rewritten);
+          throw new Error("Пустой ответ от сервера");
         }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Ошибка при переписывании текста");
       }
     } catch (error) {
       console.error("Error rewriting with AI:", error);
-      alert("Ошибка при переписывании текста с помощью AI");
+      const errorMessage = error instanceof Error ? error.message : "Ошибка при переписывании текста с помощью AI";
+      alert(errorMessage);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleAiContinue = async () => {
+    if (!htmlContent && !content) return;
+    
+    setAiLoading(true);
+    try {
+      const currentText = htmlContent || content;
+      
+      // Извлекаем текст из HTML для промпта
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = currentText;
+      const plainText = tempDiv.textContent || tempDiv.innerText || currentText;
+      
+      const response = await fetch("/api/ai/rewrite-article", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          content: plainText + "\n\n[Продолжи текст, развивая основную мысль и добавляя детали]" 
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.rewritten) {
+          if (postType === "article") {
+            setHtmlContent(data.rewritten);
+          } else {
+            // Для обычного текста извлекаем текст из HTML
+            const tempDiv2 = document.createElement("div");
+            tempDiv2.innerHTML = data.rewritten;
+            const plainText2 = tempDiv2.textContent || tempDiv2.innerText || data.rewritten;
+            setContent(plainText2);
+          }
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        alert(errorData.error || "Ошибка при дописывании текста с помощью AI");
+      }
+    } catch (error) {
+      console.error("Error continuing with AI:", error);
+      alert("Ошибка при дописывании текста с помощью AI");
     } finally {
       setAiLoading(false);
     }
   };
 
   const handleAiImprove = async () => {
-    if (!content.trim()) return;
+    const textToImprove = postType === "article" ? htmlContent : content;
+    if (!textToImprove || !textToImprove.trim()) return;
     
     setAiLoading(true);
     try {
       const response = await fetch("/api/ai/improve-text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: content }),
+        body: JSON.stringify({ text: textToImprove }),
       });
 
       if (response.ok) {
         const data = await response.json();
         if (data.improvedText) {
-          // Извлекаем текст из HTML, если он вернулся
-          const tempDiv = document.createElement("div");
-          tempDiv.innerHTML = data.improvedText;
-          const plainText = tempDiv.textContent || tempDiv.innerText || data.improvedText;
-          setContent(plainText);
+          if (postType === "article") {
+            setHtmlContent(data.improvedText);
+          } else {
+            // Извлекаем текст из HTML, если он вернулся
+            const tempDiv = document.createElement("div");
+            tempDiv.innerHTML = data.improvedText;
+            const plainText = tempDiv.textContent || tempDiv.innerText || data.improvedText;
+            setContent(plainText);
+          }
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -458,9 +516,9 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
       {/* Модальное окно */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 backdrop-blur-md dark:backdrop-blur-lg" onClick={(e) => e.target === e.currentTarget && closeModal()}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             {/* Заголовок модалки */}
-            <div className="flex items-center justify-between p-4 lg:p-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between p-4 lg:p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-800">
               <div className="flex items-center gap-3">
                 {avatarUrl ? (
                   <img
@@ -505,8 +563,8 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
             </div>
 
             {/* Контент модалки */}
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
-              <div className="p-4 lg:p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-800">
+              <form onSubmit={handleSubmit} className="p-4 lg:p-6 space-y-4">
                 {/* WYSIWYG редактор для статей */}
                 {postType === "article" ? (
                   <div className="space-y-3">
@@ -515,17 +573,43 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                       onChange={setHtmlContent}
                       placeholder="Начните писать статью..."
                     />
-                    <button
-                      type="button"
-                      onClick={handleAiRewrite}
-                      disabled={aiLoading || !htmlContent}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                      </svg>
-                      {aiLoading ? "Переписывание..." : "Переписать с AI"}
-                    </button>
+                    {htmlContent.trim() && (
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={handleAiImprove}
+                          disabled={aiLoading}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                          </svg>
+                          {aiLoading ? "Улучшение..." : "Улучшить с AI"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAiRewrite}
+                          disabled={aiLoading}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          {aiLoading ? "Переписывание..." : "Переписать с AI"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAiContinue}
+                          disabled={aiLoading}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          {aiLoading ? "Дописывание..." : "Дописать с AI"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -536,17 +620,41 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                       className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none min-h-[200px]"
                     />
                     {content.trim() && (
-                      <button
-                        type="button"
-                        onClick={handleAiImprove}
-                        disabled={aiLoading}
-                        className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                        </svg>
-                        {aiLoading ? "Улучшение..." : "Улучшить с AI"}
-                      </button>
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={handleAiImprove}
+                          disabled={aiLoading}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                          </svg>
+                          {aiLoading ? "Улучшение..." : "Улучшить с AI"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAiRewrite}
+                          disabled={aiLoading}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          {aiLoading ? "Переписывание..." : "Переписать с AI"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAiContinue}
+                          disabled={aiLoading}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          {aiLoading ? "Дописывание..." : "Дописать с AI"}
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
@@ -744,31 +852,32 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                     />
                   </div>
                 )}
-              </div>
+              </form>
+            </div>
 
-              {/* Футер модалки */}
-              <div className="flex items-center justify-between p-4 lg:p-6 border-t border-gray-200 dark:border-gray-700">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                    title="Прикрепить файл"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                    </svg>
-                  </button>
-                </div>
+            {/* Футер модалки */}
+            <div className="flex items-center justify-between p-4 lg:p-6 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-800 rounded-b-xl">
+              <div className="flex items-center gap-2">
                 <button
-                  type="submit"
-                  disabled={loading || ((!content.trim() && !htmlContent.trim()) && selectedFiles.length === 0 && !linkUrl && !videoUrl)}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  title="Прикрепить файл"
                 >
-                  {loading ? "Публикация..." : "Опубликовать"}
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
                 </button>
               </div>
-            </form>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={loading || ((!content.trim() && !htmlContent.trim()) && selectedFiles.length === 0 && !linkUrl && !videoUrl)}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? "Публикация..." : "Опубликовать"}
+              </button>
+            </div>
           </div>
         </div>
       )}
