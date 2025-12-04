@@ -79,7 +79,7 @@ export async function extractUserVariables(
     phone: user.phone || "",
     email: user.email || "",
     address: user.address || "",
-    jobTitle: user.jobTitle || "",
+    jobTitle: user.jobTitle ? `работающего(ей) ${user.jobTitle}` : "",
     profession: user.profession || "",
     education: user.education || "",
     organizationName: user.organization?.name || user.organizationName || "",

@@ -124,22 +124,26 @@ const CONTRIBUTION_TEMPLATE_HTML = `<!DOCTYPE html>
 </head>
 <body>
   <div class="header">
-    В {{organizationName}}<br>
-    от {{fullNameGenitive}}.<br>
+    Руководителю (главному врачу, директору)<br>
+    {{organizationName}}<br>
+    {{organizationChairmanFullName}}
+  </div>
+  
+  <div style="text-align: right; margin-bottom: 2em;">
+    от {{fullNameGenitive}}<br>
     работающего(ей) {{jobTitle}}
   </div>
   
   <div class="title">
-    ЗАЯВЛЕНИЕ
+    ЗАЯВЛЕНИЕ.
   </div>
   
   <div class="content">
-    Прошу удерживать из моей заработной платы членские взносы в Профсоюз работников здравоохранения РФ и перечислять их на счет первичной профсоюзной организации.
+    На основании ст.28 Федерального закона «О профессиональных союзах, их правах и гарантиях деятельности» прошу ежемесячно удерживать из моей заработной платы членские профсоюзные взносы в размере 1% (один процент) и перечислять их на счет профсоюзной организации с {{currentDate}}
   </div>
   
   <div class="signature">
-    {{currentDate}}<br>
-    Личная подпись<br>
+    Подпись<br>
     <div class="signature-line"></div>
   </div>
 </body>
