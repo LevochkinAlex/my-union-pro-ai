@@ -188,6 +188,15 @@ export async function GET(
       filePath: document.filePath,
       selectedPath: filePathToDownload
     });
+    
+    // Если запрашивается подписанный файл, но его нет - возвращаем ошибку сразу
+    if (downloadSigned && !document.signedFilePath) {
+      console.error("[documents/download] Подписанный файл не указан в документе");
+      return NextResponse.json(
+        { error: "Подписанный документ не найден. Пожалуйста, загрузите подписанный документ." },
+        { status: 404 }
+      );
+    }
 
     let fileBuffer: Buffer | null = null;
 
@@ -259,11 +268,21 @@ export async function GET(
               console.log("[documents/download] Нормализованный путь:", normalizedPath);
               
               fileBuffer = await getFileFromVDS(fileKey);
-              console.log("[documents/download] Файл успешно скачан с VDS, размер:", fileBuffer.length);
+              console.log("[documents/download] ✅ Файл успешно скачан с VDS, размер:", fileBuffer.length);
             } catch (vdsError) {
-              console.error("[documents/download] Ошибка скачивания с VDS:", vdsError);
+              console.error("[documents/download] ❌ Ошибка скачивания с VDS:", vdsError);
               console.error("[documents/download] Детали ошибки:", vdsError instanceof Error ? vdsError.message : String(vdsError));
               // Продолжаем с проверкой устава или возвратом ошибки
+            }
+          }
+          
+          // Если файл существует локально, но еще не прочитан - читаем его
+          if (fileExistsLocally && !fileBuffer) {
+            try {
+              fileBuffer = await fs.readFile(absolutePath);
+              console.log("[documents/download] ✅ Файл успешно прочитан локально, размер:", fileBuffer.length);
+            } catch (readError) {
+              console.error("[documents/download] ❌ Ошибка чтения локального файла:", readError);
             }
           }
           
