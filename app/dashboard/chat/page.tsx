@@ -1066,11 +1066,13 @@ function ChatPageContent() {
                             <button
                               onClick={() => {
                                 setForwardingMessage(message);
+                                setShowForwardModal(true);
                                 setHoveredMessageId(null);
                               }}
                               onTouchEnd={(e) => {
                                 e.preventDefault();
                                 setForwardingMessage(message);
+                                setShowForwardModal(true);
                                 setHoveredMessageId(null);
                               }}
                               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 active:bg-gray-200 dark:active:bg-gray-600 rounded transition-colors touch-manipulation"

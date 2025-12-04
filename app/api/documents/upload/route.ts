@@ -4,7 +4,13 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 // Удалено: SystemMessages - больше не используется
+
+// Инициализируем VDS хранилище при загрузке модуля
+if (typeof window === "undefined") {
+  initVDSStorageFromEnv();
+}
 
 /**
  * Проверяет что файл является PDF документом
@@ -238,10 +244,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Создаем директорию для загрузок если её нет
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "documents");
-    await mkdir(uploadDir, { recursive: true });
-
     // Генерируем уникальное имя файла
     const timestamp = Date.now();
     let fileExtension = path.extname(file.name);
@@ -258,13 +260,33 @@ export async function POST(request: NextRequest) {
     const baseName = path.basename(file.name, path.extname(file.name));
     const sanitizedBaseName = baseName.replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, "_");
     const uniqueFileName = `${sanitizedBaseName}_${session.user.id}_${timestamp}${fileExtension}`;
-    const filePath = path.join(uploadDir, uniqueFileName);
+    
+    // Определяем путь к файлу
+    const fileKey = `documents/${uniqueFileName}`;
+    let relativePath: string;
 
-    // Сохраняем файл
-    await writeFile(filePath, buffer);
-
-    // Сохраняем информацию о документе в базе данных
-    const relativePath = `/uploads/documents/${uniqueFileName}`;
+    // Загружаем файл на VDS или локально
+    if (isVDSStorageConfigured()) {
+      try {
+        relativePath = await uploadFileToVDS(fileKey, buffer, file.type);
+        console.log(`[upload] File uploaded to VDS: ${relativePath}`);
+      } catch (vdsError) {
+        console.error("[upload] VDS upload failed, falling back to local:", vdsError);
+        // Fallback на локальное хранилище
+        const uploadDir = path.join(process.cwd(), "public", "uploads", "documents");
+        await mkdir(uploadDir, { recursive: true });
+        const filePath = path.join(uploadDir, uniqueFileName);
+        await writeFile(filePath, buffer);
+        relativePath = `/uploads/documents/${uniqueFileName}`;
+      }
+    } else {
+      // Локальное хранилище
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "documents");
+      await mkdir(uploadDir, { recursive: true });
+      const filePath = path.join(uploadDir, uniqueFileName);
+      await writeFile(filePath, buffer);
+      relativePath = `/uploads/documents/${uniqueFileName}`;
+    }
     
     let document;
     

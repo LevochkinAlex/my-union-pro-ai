@@ -128,15 +128,13 @@ export default async function DashboardPage() {
             type: {
               in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
             },
-            status: {
-              in: ["SIGNED", "PENDING", "APPROVED"], // Документы отправлены на проверку
-            },
           },
           select: {
             id: true,
             type: true,
             status: true,
             signedFilePath: true,
+            filePath: true,
           },
         },
       },
@@ -148,13 +146,22 @@ export default async function DashboardPage() {
       const progressResult = calculateProfileProgress(currentUser);
       profileProgress = progressResult.total;
       // Проверяем, что есть подписанные документы (отправленные на проверку)
-      // Считаем, что документы отправлены, если есть хотя бы один документ со статусом SIGNED, PENDING или APPROVED
-      // Если статус PENDING или APPROVED, значит документ уже отправлен на проверку (signedFilePath не обязателен для проверки)
+      // Документ считается отправленным, если:
+      // 1. Статус PENDING или APPROVED (уже отправлен на проверку)
+      // 2. Статус SIGNED и есть signedFilePath (подписан и загружен)
       hasDocuments = currentUser.documents.some(
         (doc) => {
-          const isSentStatus = doc.status === "PENDING" || doc.status === "APPROVED";
-          const isSignedWithFile = doc.status === "SIGNED" && doc.signedFilePath !== null;
-          return isSentStatus || isSignedWithFile;
+          // Если статус PENDING или APPROVED - документ точно отправлен
+          if (doc.status === "PENDING" || doc.status === "APPROVED") {
+            return true;
+          }
+          
+          // Если статус SIGNED и есть signedFilePath - документ подписан и загружен
+          if (doc.status === "SIGNED" && doc.signedFilePath) {
+            return true;
+          }
+          
+          return false;
         }
       );
     }
@@ -218,7 +225,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8 min-w-0 w-full">
       {/* Заголовок */}
-      <div>
+      <div className="">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           Добро пожаловать, {session.user?.name || "Пользователь"}!
         </h1>

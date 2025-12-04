@@ -59,3 +59,10 @@ SERVER_ACCESS.md
 # Uploaded files (но сохраняем структуру папок)
 /public/uploads/news/*
 !/public/uploads/news/.gitkeep
+
+# PDF documents and uploaded files
+*.pdf
+/public/uploads/documents/*
+!/public/uploads/documents/.gitkeep
+/public/uploads/avatars/*
+!/public/uploads/avatars/.gitkeep
