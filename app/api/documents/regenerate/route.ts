@@ -69,6 +69,29 @@ export async function POST() {
         },
       },
     });
+    
+    // Удаляем все старые документы того же типа, кроме тех, которые обновляем
+    // Это предотвращает накопление дубликатов
+    const existingMembership = existingDocs.find((d) => d.type === "MEMBERSHIP_APPLICATION");
+    const existingContributions = existingDocs.find((d) => d.type === "CONTRIBUTION_APPLICATION");
+    
+    const docsToDelete = existingDocs.filter((doc) => {
+      // Не удаляем документы, которые будем обновлять
+      if (existingMembership && doc.id === existingMembership.id) return false;
+      if (existingContributions && doc.id === existingContributions.id) return false;
+      // Удаляем только документы со статусом GENERATED или DRAFT (не подписанные)
+      return doc.status === "GENERATED" || doc.status === "DRAFT";
+    });
+    
+    if (docsToDelete.length > 0) {
+      console.log(`[regenerate-documents] Удаление ${docsToDelete.length} старых документов...`);
+      await prisma.document.deleteMany({
+        where: {
+          id: { in: docsToDelete.map(d => d.id) },
+        },
+      });
+      console.log("[regenerate-documents] ✅ Старые документы удалены");
+    }
 
     // Получаем размеры файлов
     const fs = await import("fs/promises");
@@ -78,7 +101,6 @@ export async function POST() {
     const contributionsStats = await fs.stat(pathModule.join(process.cwd(), "public", contributionsPath));
 
     // Обновляем или создаем документы
-    const existingMembership = existingDocs.find((d) => d.type === "MEMBERSHIP_APPLICATION");
     if (existingMembership) {
       await prisma.document.update({
         where: { id: existingMembership.id },
@@ -111,7 +133,6 @@ export async function POST() {
       console.log("[regenerate-documents] ✅ Membership application created");
     }
 
-    const existingContributions = existingDocs.find((d) => d.type === "CONTRIBUTION_APPLICATION");
     if (existingContributions) {
       await prisma.document.update({
         where: { id: existingContributions.id },

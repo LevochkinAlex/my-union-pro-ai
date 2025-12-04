@@ -147,6 +147,26 @@ export async function POST(request: NextRequest) {
     const existingMembership = existingDocs.find((d) => d.type === DocumentType.MEMBERSHIP_APPLICATION);
     const existingDues = existingDocs.find((d) => d.type === DocumentType.CONTRIBUTION_APPLICATION);
     
+    // Удаляем все старые документы того же типа, кроме тех, которые обновляем
+    // Это предотвращает накопление дубликатов
+    const docsToDelete = existingDocs.filter((doc) => {
+      // Не удаляем документы, которые будем обновлять
+      if (existingMembership && doc.id === existingMembership.id) return false;
+      if (existingDues && doc.id === existingDues.id) return false;
+      // Удаляем только документы со статусом GENERATED или DRAFT (не подписанные)
+      return doc.status === "GENERATED" || doc.status === "DRAFT";
+    });
+    
+    if (docsToDelete.length > 0) {
+      console.log(`[documents/generate] Удаление ${docsToDelete.length} старых документов...`);
+      await prisma.document.deleteMany({
+        where: {
+          id: { in: docsToDelete.map(d => d.id) },
+        },
+      });
+      console.log("[documents/generate] ✅ Старые документы удалены");
+    }
+    
     let membershipDoc, duesDoc;
     
     try {
