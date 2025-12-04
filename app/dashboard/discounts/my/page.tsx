@@ -216,9 +216,10 @@ export default function MyDiscountsPage() {
           return item && String(item.id) === discountIdStr;
         });
         
-        console.log(`[MyDiscounts] Processing discount ${discount.id} (${discount.title}): isClaimed=${isClaimed}, activeTab=${activeTab}, hasPromoCodeFromAPI=${!!discount.promoCode}, claimedIds includes: ${claimedIds.includes(discountIdStr)}`);
+        console.log(`[MyDiscounts] Processing discount ${discount.id} (${discount.title}): isClaimed=${isClaimed}, activeTab=${activeTab}, hasPromoCodeFromAPI=${!!discount.promoCode}, claimedIds: [${claimedIds.join(', ')}], discountIdStr: ${discountIdStr}`);
         
         // Промокоды показываем только если скидка получена (независимо от активной вкладки)
+        // ВАЖНО: для вкладки "Избранное" скидка может быть и в избранном, и в полученных
         if (isClaimed) {
           // Приоритет 1: промокод из API (уже обогащен из preferences)
           let promoCode: string | undefined = undefined;
