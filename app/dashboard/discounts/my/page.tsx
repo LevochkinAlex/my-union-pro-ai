@@ -147,34 +147,32 @@ export default function MyDiscountsPage() {
       // Надежная обработка промокодов для всех пользователей
       const discountsWithPromoCodes = (discountsData.discounts || []).map((discount: DiscountItem) => {
         if (activeTab === "claimed") {
-          // Ищем claimed item для этой скидки в нормализованных данных
-          const claimedItem = normalizedClaimedData.find((item: any) => {
-            return item && item.id === discount.id;
-          });
+          // Приоритет 1: промокод из API (уже обогащен из preferences)
+          let promoCode: string | undefined = undefined;
           
-          // Извлекаем промокод из claimedItem
-          let promoCode: string | null | undefined = null;
-          
-          if (claimedItem) {
-            if (typeof claimedItem === 'object' && claimedItem !== null) {
-              // Новый формат: {id, promoCode}
-              promoCode = claimedItem.promoCode || null;
-            } else if (typeof claimedItem === 'number') {
-              // Старый формат: просто число, промокода нет
-              promoCode = null;
+          if (discount.promoCode && typeof discount.promoCode === 'string' && discount.promoCode.trim().length > 0) {
+            promoCode = discount.promoCode.trim();
+            console.log(`[MyDiscounts] Using promo code from API for discount ${discount.id}:`, promoCode);
+          } else {
+            // Приоритет 2: промокод из normalizedClaimedData (fallback)
+            const claimedItem = normalizedClaimedData.find((item: any) => {
+              return item && item.id === discount.id;
+            });
+            
+            if (claimedItem) {
+              if (typeof claimedItem === 'object' && claimedItem !== null && claimedItem.promoCode) {
+                promoCode = typeof claimedItem.promoCode === 'string' && claimedItem.promoCode.trim().length > 0
+                  ? claimedItem.promoCode.trim()
+                  : undefined;
+                if (promoCode) {
+                  console.log(`[MyDiscounts] Using promo code from preferences for discount ${discount.id}:`, promoCode);
+                }
+              }
             }
           }
           
-          // Fallback: используем промокод из discount, если он есть
-          if (!promoCode && discount.promoCode && typeof discount.promoCode === 'string' && discount.promoCode.trim().length > 0) {
-            promoCode = discount.promoCode.trim();
-          }
-          
-          // Нормализуем: null/undefined/пустая строка -> undefined
-          const finalPromoCode = (promoCode && promoCode.trim().length > 0) ? promoCode.trim() : undefined;
-          
           // Всегда возвращаем discount с промокодом (даже если undefined)
-          return { ...discount, promoCode: finalPromoCode };
+          return { ...discount, promoCode };
         }
         // Для избранного промокоды не нужны
         return discount;

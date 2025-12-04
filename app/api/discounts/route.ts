@@ -29,14 +29,21 @@ export async function GET(request: NextRequest) {
       const promoCodesMap = new Map<number, string>();
       claimed.forEach((item: any) => {
         if (typeof item === 'object' && item.id && item.promoCode) {
-          promoCodesMap.set(item.id, item.promoCode);
+          const promoCode = typeof item.promoCode === 'string' ? item.promoCode.trim() : String(item.promoCode).trim();
+          if (promoCode && promoCode.length > 0) {
+            promoCodesMap.set(item.id, promoCode);
+            console.log(`[api/discounts] Mapped promo code for discount ${item.id}:`, promoCode);
+          }
         }
       });
+      
+      console.log(`[api/discounts] Total promo codes in map: ${promoCodesMap.size}`);
 
-      // Добавляем промокоды к скидкам
+      // Добавляем промокоды к скидкам (промокоды из preferences имеют приоритет)
       payload.discounts = payload.discounts.map((discount: any) => {
         const savedPromoCode = promoCodesMap.get(discount.id);
-        if (savedPromoCode && (!discount.promoCode || discount.promoCode.trim().length === 0)) {
+        if (savedPromoCode) {
+          // Промокод из preferences всегда имеет приоритет
           console.log(`[api/discounts] Enriching discount ${discount.id} with saved promo code:`, savedPromoCode);
           return {
             ...discount,
