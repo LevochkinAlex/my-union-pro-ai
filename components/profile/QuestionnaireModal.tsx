@@ -490,12 +490,33 @@ export default function QuestionnaireModal({
               delete newProgress[documentId];
               return newProgress;
             });
-            showAlert({ message: "Документ успешно загружен", type: "success" });
+            
+            // Парсим ответ для проверки статуса
+            let responseData: any = {};
+            try {
+              responseData = JSON.parse(xhr.responseText);
+            } catch (e) {
+              console.warn("[QuestionnaireModal] Не удалось распарсить ответ:", e);
+            }
+            
+            const message = responseData.allDocumentsUploaded 
+              ? "Оба документа успешно загружены и отправлены на проверку!"
+              : "Документ успешно загружен";
+            
+            showAlert({ message, type: "success" });
             loadData();
+            
             // Обновляем страницу после загрузки документа, чтобы обновить баннер
+            // Используем более короткую задержку и принудительное обновление
             setTimeout(() => {
               router.refresh();
-            }, 1500);
+              // Дополнительно обновляем через window.location если router.refresh не сработал
+              setTimeout(() => {
+                if (typeof window !== "undefined") {
+                  window.location.reload();
+                }
+              }, 500);
+            }, 1000);
             resolve();
           } else {
             // Пытаемся получить сообщение об ошибке из ответа

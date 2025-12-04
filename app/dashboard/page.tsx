@@ -142,8 +142,12 @@ export default async function DashboardPage() {
       const progressResult = calculateProfileProgress(currentUser);
       profileProgress = progressResult.total;
       // Проверяем, что есть подписанные документы (отправленные на проверку)
+      // Считаем, что документы отправлены, если есть хотя бы один документ со статусом SIGNED, PENDING или APPROVED
+      // и у него есть signedFilePath (файл загружен)
       hasDocuments = currentUser.documents.some(
-        (doc) => doc.status === "SIGNED" || doc.status === "PENDING" || doc.status === "APPROVED"
+        (doc) => 
+          (doc.status === "SIGNED" || doc.status === "PENDING" || doc.status === "APPROVED") &&
+          doc.signedFilePath !== null
       );
     }
   } catch (error) {

@@ -420,10 +420,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Проверяем финальный статус документов для ответа
+    const finalMembershipDoc = await prisma.document.findFirst({
+      where: {
+        userId: session.user.id,
+        type: "MEMBERSHIP_APPLICATION",
+        status: { in: ["SIGNED", "PENDING", "APPROVED"] },
+        signedFilePath: { not: null },
+      },
+    });
+
+    const finalContributionDoc = await prisma.document.findFirst({
+      where: {
+        userId: session.user.id,
+        type: "CONTRIBUTION_APPLICATION",
+        status: { in: ["SIGNED", "PENDING", "APPROVED"] },
+        signedFilePath: { not: null },
+      },
+    });
+
+    const allDocumentsUploaded = !!(finalMembershipDoc && finalContributionDoc);
+
     return NextResponse.json({
       success: true,
       documents: uploadedDocuments,
       message: `Загружено файлов: ${uploadedDocuments.length}`,
+      allDocumentsUploaded, // Флаг, что оба документа загружены
+      membershipStatus: allDocumentsUploaded ? "DOCUMENTS_PENDING" : undefined,
     });
   } catch (error) {
     console.error("Error uploading file:", error);

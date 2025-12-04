@@ -87,7 +87,7 @@ export async function sendMembershipStatusNotification(
       if (fcmTokens.length > 0) {
         try {
           const { messaging } = await import("./firebase-admin");
-          const message = {
+          const fcmMessage = {
             notification: {
               title: title,
               body: message,
@@ -100,7 +100,7 @@ export async function sendMembershipStatusNotification(
             tokens: fcmTokens,
           };
 
-          const response = await messaging.sendEachForMulticast(message);
+          const response = await messaging.sendEachForMulticast(fcmMessage);
           console.log("[membership-notifications] FCM уведомления отправлены:", {
             successCount: response.successCount,
             failureCount: response.failureCount,
@@ -135,10 +135,17 @@ export async function sendMembershipStatusNotification(
           <p>Если у вас есть вопросы, пожалуйста, свяжитесь с администрацией профсоюза.</p>
         `;
 
+      // Создаем текстовую версию письма (убираем HTML теги)
+      const textBody = emailBody
+        .replace(/<[^>]*>/g, '') // Убираем HTML теги
+        .replace(/\s+/g, ' ') // Убираем лишние пробелы
+        .trim();
+
       await sendEmail({
         to: user.email,
         subject: emailSubject,
         html: emailBody,
+        text: textBody,
       });
 
       console.log("[membership-notifications] Email уведомление отправлено:", user.email);

@@ -70,6 +70,10 @@ export default function MembershipBanner({
             // Обновляем состояние только если что-то изменилось
             if (newHasDocuments !== hasDocuments) {
               setHasDocuments(newHasDocuments);
+              // Если документы появились, обновляем страницу
+              if (newHasDocuments) {
+                router.refresh();
+              }
             }
             if (newMembershipStatus !== membershipStatus) {
               setMembershipStatus(newMembershipStatus);
