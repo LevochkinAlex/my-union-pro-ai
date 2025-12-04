@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import QuestionnaireModal from "@/components/profile/QuestionnaireModal";
+import { calculateProfileProgress } from "@/lib/profile-progress";
 
 interface MembershipBannerProps {
   profileProgress: number; // 0-100
@@ -87,7 +88,9 @@ export default function MembershipBanner({
         
         const newHasDocuments = sentDocuments.length > 0;
         const newMembershipStatus = user?.membershipStatus || membershipStatus;
-        const newProfileProgress = user ? Math.round((user.profileProgress || 0) * 100) : profileProgress;
+        
+        // Вычисляем прогресс профиля на клиенте
+        const newProfileProgress = user ? calculateProfileProgress(user).total : profileProgress;
         
         if (!mounted) return;
         
