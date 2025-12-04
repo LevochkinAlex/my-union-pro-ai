@@ -398,10 +398,7 @@ export async function PUT(request: NextRequest) {
     }
     
     // Устанавливаем флаг изменения профиля, если есть документы и данные изменились
-    const wasProfileChangedAfterDocuments = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { profileChangedAfterDocuments: true },
-    }).then(user => user?.profileChangedAfterDocuments || false);
+    const wasProfileChangedAfterDocuments = userBeforeUpdate?.profileChangedAfterDocuments || false;
     
     if (hasGeneratedDocuments && hasProfileChanges) {
       updateData.profileChangedAfterDocuments = true;
