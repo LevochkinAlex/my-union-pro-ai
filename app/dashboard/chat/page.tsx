@@ -162,7 +162,7 @@ function ChatPageContent() {
     // Прокручиваем к последнему сообщению при изменении списка сообщений
     // Используем небольшую задержку для гарантии, что DOM обновлен
     const timer = setTimeout(() => {
-      scrollToBottom();
+    scrollToBottom();
     }, 100);
     return () => clearTimeout(timer);
   }, [messages]);
@@ -242,9 +242,11 @@ function ChatPageContent() {
 
   const loadMessages = async (chatId: string, silent = false) => {
     try {
-      const response = await fetch(`/api/chat/${chatId}`);
+      console.log(`[chat] Loading messages for chat ${chatId}`);
+      const response = await fetch(`/api/chat/${chatId}?t=${Date.now()}`); // Добавляем timestamp для предотвращения кэширования
       if (response.ok) {
         const data = await response.json();
+        console.log(`[chat] Loaded ${data.messages?.length || 0} messages`);
         setMessages(data.messages || []);
         if (!silent) {
           // Используем двойную задержку для гарантии, что DOM обновлен
@@ -257,7 +259,8 @@ function ChatPageContent() {
           }, 150);
         }
       } else {
-        console.error("Error loading messages:", await response.json());
+        const errorData = await response.json();
+        console.error("Error loading messages:", errorData);
       }
     } catch (error) {
       console.error("Error loading messages:", error);
@@ -387,10 +390,10 @@ function ChatPageContent() {
       } else {
         // Отправляем текстовое сообщение
         response = await fetch(`/api/chat/${selectedChat.id}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
           body: JSON.stringify(messageData),
-        });
+      });
       }
 
       const data = await response.json();
@@ -520,12 +523,16 @@ function ChatPageContent() {
         if (!selectedChat) return;
 
         try {
+          console.log(`[chat] Deleting message ${messageId} from chat ${selectedChat.id}`);
           const response = await fetch(`/api/chat/${selectedChat.id}/messages/${messageId}`, {
             method: "DELETE",
           });
 
           if (response.ok) {
-            loadMessages(selectedChat.id);
+            const result = await response.json();
+            console.log(`[chat] Message deleted successfully:`, result);
+            // Принудительно обновляем список сообщений
+            await loadMessages(selectedChat.id, false);
           } else {
             const data = await response.json();
             setAlertDialog({
@@ -857,16 +864,16 @@ function ChatPageContent() {
                       return null;
                     }
                     return (
-                      <button
-                        key={chat.id}
-                        onClick={() => {
-                          setSelectedChat(chat);
-                          setShowChatView(true);
-                        }}
-                        className={`w-full px-3 md:px-4 py-3 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700 active:bg-gray-200 dark:active:bg-gray-600 border-b border-gray-100 dark:border-gray-700/50 transition-colors ${
-                          selectedChat?.id === chat.id ? "bg-blue-50 dark:bg-blue-900/20" : ""
-                        }`}
-                      >
+                <button
+                  key={chat.id}
+                  onClick={() => {
+                    setSelectedChat(chat);
+                    setShowChatView(true);
+                  }}
+                  className={`w-full px-3 md:px-4 py-3 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700 active:bg-gray-200 dark:active:bg-gray-600 border-b border-gray-100 dark:border-gray-700/50 transition-colors ${
+                    selectedChat?.id === chat.id ? "bg-blue-50 dark:bg-blue-900/20" : ""
+                  }`}
+                >
                   {chat.otherUser.avatarUrl ? (
                     <div className="relative flex-shrink-0">
                       <img
@@ -939,27 +946,27 @@ function ChatPageContent() {
                 }}
                 className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity"
               >
-                {selectedChat.otherUser.avatarUrl ? (
-                  <img
-                    src={selectedChat.otherUser.avatarUrl}
-                    alt={getUserName(selectedChat.otherUser)}
+              {selectedChat.otherUser.avatarUrl ? (
+                <img
+                  src={selectedChat.otherUser.avatarUrl}
+                  alt={getUserName(selectedChat.otherUser)}
                     className="w-10 h-10 rounded-full flex-shrink-0"
-                  />
-                ) : (
+                />
+              ) : (
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                    {getInitials(selectedChat.otherUser)}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0 text-left">
-                  <p className="font-medium text-gray-900 dark:text-white truncate">
-                    {getUserName(selectedChat.otherUser)}
-                  </p>
-                  {selectedChat.otherUser.phone && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                      {selectedChat.otherUser.phone}
-                    </p>
-                  )}
+                  {getInitials(selectedChat.otherUser)}
                 </div>
+              )}
+                <div className="flex-1 min-w-0 text-left">
+                <p className="font-medium text-gray-900 dark:text-white truncate">
+                  {getUserName(selectedChat.otherUser)}
+                </p>
+                {selectedChat.otherUser.phone && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                    {selectedChat.otherUser.phone}
+                  </p>
+                )}
+              </div>
               </button>
             </div>
 
@@ -1425,9 +1432,9 @@ function ChatPageContent() {
                           <div className="flex items-center gap-2 mt-1">
                             <p
                               className={`text-xs ${
-                                isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"
-                              }`}
-                            >
+                          isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"
+                        }`}
+                      >
                               {mounted ? formatTime(message.createdAt) : ""}
                             </p>
                             {message.editedAt && (

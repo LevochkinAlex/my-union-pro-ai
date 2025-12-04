@@ -46,6 +46,7 @@ export async function GET(
     }
 
     // Получаем сообщения (исключаем удаленные)
+    // Используем явную фильтрацию для deletedAt
     const messages = await prisma.chatMessage.findMany({
       where: { 
         chatId,
