@@ -193,18 +193,18 @@ export default function PublicProfilePage() {
       {/* Профиль в стиле LinkedIn */}
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
         {/* Баннер (как в LinkedIn) */}
-        <div className="h-32 sm:h-40 bg-gray-200 dark:bg-gray-700 relative">
+        <div className="h-32 sm:h-40 bg-gray-200 dark:bg-gray-700 relative z-0">
           {/* Можно добавить фоновое изображение позже */}
         </div>
 
         {/* Основная информация */}
         <div className="px-4 sm:px-6 pb-6">
           {/* Аватар и имя - в стиле LinkedIn */}
-          <div className="flex flex-col items-center sm:items-start -mt-16 sm:-mt-20 mb-4">
+          <div className="flex flex-col items-center sm:items-start -mt-16 sm:-mt-20 mb-4 relative z-10">
             {/* Аватар */}
-            <div className="mb-4">
+            <div className="mb-4 relative z-10">
               {profile.avatarUrl ? (
-                <div className="relative h-32 w-32 sm:h-40 sm:w-40 rounded-full border-4 border-white dark:border-gray-800 shadow-lg overflow-hidden">
+                <div className="relative h-32 w-32 sm:h-40 sm:w-40 rounded-full border-4 border-white dark:border-gray-800 shadow-lg overflow-hidden bg-white dark:bg-gray-800">
                   <img
                     src={profile.avatarUrl}
                     alt={getUserName()}
@@ -212,7 +212,7 @@ export default function PublicProfilePage() {
                   />
                 </div>
               ) : (
-                <div className={`h-32 w-32 sm:h-40 sm:w-40 rounded-full border-4 border-white dark:border-gray-800 shadow-lg bg-gradient-to-br ${getAvatarGradient()} flex items-center justify-center text-white font-bold text-4xl sm:text-5xl`}>
+                <div className={`relative h-32 w-32 sm:h-40 sm:w-40 rounded-full border-4 border-white dark:border-gray-800 shadow-lg bg-gradient-to-br ${getAvatarGradient()} flex items-center justify-center text-white font-bold text-4xl sm:text-5xl z-10`}>
                   {getInitials()}
                 </div>
               )}
