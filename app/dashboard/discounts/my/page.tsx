@@ -116,6 +116,30 @@ export default function MyDiscountsPage() {
       // Надежная обработка разных форматов данных
       const claimedData = Array.isArray(filters.claimed) ? filters.claimed : [];
       
+      // Проверяем, есть ли данные в старом формате (числа)
+      const hasOldFormat = claimedData.some((item: any) => typeof item === 'number');
+      
+      // Если данные в старом формате, принудительно синхронизируемся с BestBenefits
+      if (hasOldFormat) {
+        console.log("[MyDiscounts] ⚠️ Old format detected in claimed data, forcing sync with BestBenefits...");
+        try {
+          await syncWithBestBenefits(true); // Принудительная синхронизация
+          // Перезагружаем preferences после синхронизации
+          const prefsResponseAfterSync = await fetch("/api/discounts/preferences");
+          if (prefsResponseAfterSync.ok) {
+            const prefsDataAfterSync = await prefsResponseAfterSync.json();
+            const filtersAfterSync = prefsDataAfterSync.filters || {};
+            const claimedDataAfterSync = Array.isArray(filtersAfterSync.claimed) ? filtersAfterSync.claimed : [];
+            // Обновляем claimedData на новые данные
+            claimedData.length = 0;
+            claimedData.push(...claimedDataAfterSync);
+            console.log("[MyDiscounts] ✅ Updated claimed data after sync:", claimedDataAfterSync);
+          }
+        } catch (error) {
+          console.error("[MyDiscounts] Failed to sync with BestBenefits:", error);
+        }
+      }
+      
       // Нормализуем формат: преобразуем старый формат (числа) в новый (объекты)
       const normalizedClaimedData = claimedData.map((item: any) => {
         if (typeof item === 'object' && item !== null && item.id) {
