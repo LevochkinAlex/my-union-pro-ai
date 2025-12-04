@@ -173,11 +173,20 @@ export default function MyDiscountsPage() {
       
       // Надежная обработка промокодов для всех пользователей
       // Промокоды показываем для всех скидок, которые есть в списке полученных
+      // ВАЖНО: это работает независимо от активной вкладки (claimed или favorites)
+      console.log("[MyDiscounts] Processing discounts for promo codes...");
+      console.log("[MyDiscounts] Active tab:", activeTab);
+      console.log("[MyDiscounts] Normalized claimed data:", normalizedClaimedData);
+      console.log("[MyDiscounts] Discounts from API:", discountsData.discounts?.map((d: any) => ({ id: d.id, title: d.title, promoCode: d.promoCode })));
+      
       const discountsWithPromoCodes = (discountsData.discounts || []).map((discount: DiscountItem) => {
-        // Проверяем, есть ли эта скидка в списке полученных (для показа промокода)
-        const isClaimed = normalizedClaimedData.some((item: any) => {
+        // Находим элемент в списке полученных (для проверки и получения промокода)
+        const claimedItem = normalizedClaimedData.find((item: any) => {
           return item && String(item.id) === String(discount.id);
         });
+        const isClaimed = !!claimedItem;
+        
+        console.log(`[MyDiscounts] Processing discount ${discount.id} (${discount.title}): isClaimed=${isClaimed}, activeTab=${activeTab}, hasPromoCodeFromAPI=${!!discount.promoCode}`);
         
         // Промокоды показываем только если скидка получена (независимо от активной вкладки)
         if (isClaimed) {
@@ -186,37 +195,58 @@ export default function MyDiscountsPage() {
           
           if (discount.promoCode && typeof discount.promoCode === 'string' && discount.promoCode.trim().length > 0) {
             promoCode = discount.promoCode.trim();
-            console.log(`[MyDiscounts] Using promo code from API for discount ${discount.id}:`, promoCode);
-          } else {
+            console.log(`[MyDiscounts] ✅ Using promo code from API for discount ${discount.id}:`, promoCode);
+          } else if (claimedItem) {
             // Приоритет 2: промокод из normalizedClaimedData (fallback)
-            const claimedItem = normalizedClaimedData.find((item: any) => {
-              // Нормализуем ID к строкам для надежного сравнения
-              return item && String(item.id) === String(discount.id);
-            });
-            
-            if (claimedItem) {
-              if (typeof claimedItem === 'object' && claimedItem !== null && claimedItem.promoCode) {
-                promoCode = typeof claimedItem.promoCode === 'string' && claimedItem.promoCode.trim().length > 0
-                  ? claimedItem.promoCode.trim()
-                  : undefined;
-                if (promoCode) {
-                  console.log(`[MyDiscounts] Using promo code from preferences for discount ${discount.id}:`, promoCode);
-                }
+            // Это особенно важно для вкладки "Избранное", где API может не обогатить промокодом
+            console.log(`[MyDiscounts] Found claimed item for discount ${discount.id}:`, claimedItem);
+            if (typeof claimedItem === 'object' && claimedItem !== null && claimedItem.promoCode) {
+              promoCode = typeof claimedItem.promoCode === 'string' && claimedItem.promoCode.trim().length > 0
+                ? claimedItem.promoCode.trim()
+                : undefined;
+              if (promoCode) {
+                console.log(`[MyDiscounts] ✅ Using promo code from preferences for discount ${discount.id}:`, promoCode);
+              } else {
+                console.log(`[MyDiscounts] ⚠️ Claimed item has invalid promo code:`, claimedItem.promoCode);
               }
+            } else {
+              console.log(`[MyDiscounts] ⚠️ Claimed item has no promo code:`, claimedItem);
             }
           }
           
-          // Возвращаем discount с промокодом
+          // Возвращаем discount с промокодом (даже если promoCode undefined, чтобы сохранить структуру)
           return { ...discount, promoCode };
         }
         
         // Если скидка не получена, возвращаем без промокода
+        console.log(`[MyDiscounts] ⚠️ Discount ${discount.id} is not claimed, no promo code`);
         return discount;
       });
       
       console.log("[MyDiscounts] Discounts with promo codes:", discountsWithPromoCodes.map(d => ({ id: d.id, title: d.title, promoCode: d.promoCode })));
       
-      setDiscounts(discountsWithPromoCodes);
+      // Убеждаемся, что промокоды действительно сохранены в каждом объекте
+      const finalDiscounts = discountsWithPromoCodes.map(d => {
+        const claimedItem = normalizedClaimedData.find((item: any) => {
+          return item && String(item.id) === String(d.id);
+        });
+        
+        // Если скидка получена, но промокод отсутствует, пытаемся восстановить его
+        if (claimedItem && !d.promoCode && claimedItem.promoCode) {
+          const promoCode = typeof claimedItem.promoCode === 'string' && claimedItem.promoCode.trim().length > 0
+            ? claimedItem.promoCode.trim()
+            : undefined;
+          if (promoCode) {
+            console.log(`[MyDiscounts] 🔧 Restoring missing promo code for discount ${d.id}:`, promoCode);
+            return { ...d, promoCode };
+          }
+        }
+        return d;
+      });
+      
+      console.log("[MyDiscounts] Final discounts with promo codes:", finalDiscounts.map(d => ({ id: d.id, title: d.title, promoCode: d.promoCode })));
+      
+      setDiscounts(finalDiscounts);
     } catch (error) {
       console.error("[MyDiscounts] Failed to load my discounts:", error);
       // Показываем пустой список вместо вечной загрузки
@@ -478,7 +508,8 @@ export default function MyDiscountsPage() {
                     </h3>
 
                     {/* Promo Code */}
-                    {activeTab === "claimed" && discount.promoCode && discount.promoCode.trim().length > 0 && (() => {
+                    {/* Показываем промокод для всех полученных скидок, независимо от активной вкладки */}
+                    {discount.promoCode && discount.promoCode.trim().length > 0 && (() => {
                       // Проверяем, не является ли промокод специальным случаем
                       const isSpecialCase = discount.promoCode === "Штрихкод в купоне" ||
                         discount.promoCode.toLowerCase().includes("штрихкод") ||
