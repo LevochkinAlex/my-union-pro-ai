@@ -288,38 +288,54 @@ export default function UsersPage() {
 
         {/* Правая колонка: Лента постов (50% ширины) - на мобильных показывается первой */}
         <div className="space-y-4 lg:space-y-6 order-first lg:order-last">
-        {/* Форма создания поста */}
-        {session && (
-          <CreatePost onPostCreated={handlePostCreated} compact={true} />
-        )}
+          {/* Форма создания поста */}
+          {session && (
+            <CreatePost onPostCreated={handlePostCreated} compact={true} />
+          )}
 
-        {/* Лента постов */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6">
-          <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Свежие посты
-          </h2>
-          <PostFeed key={refreshKey} limit={5} />
+          {/* Лента постов */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6">
+            <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Свежие посты
+            </h2>
+            <PostFeed key={refreshKey} limit={5} />
+          </div>
         </div>
       </div>
 
       {/* Мобильное модальное окно для панели коллег */}
       {showUsersPanel && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-black/50" onClick={() => setShowUsersPanel(false)}>
-          <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-800 rounded-t-2xl shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
+        <div 
+          className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowUsersPanel(false)}
+          style={{ touchAction: 'none' }}
+        >
+          <div 
+            className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-800 rounded-t-2xl shadow-2xl max-h-[85vh] overflow-y-auto overscroll-contain"
+            onClick={(e) => e.stopPropagation()}
+            style={{ 
+              maxHeight: '85vh',
+              WebkitOverflowScrolling: 'touch',
+            }}
+          >
+            {/* Заголовок с кнопкой закрытия */}
+            <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between shadow-sm">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Коллеги профсоюза
               </h2>
               <button
                 onClick={() => setShowUsersPanel(false)}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="p-2 -mr-2 rounded-lg active:bg-gray-100 dark:active:bg-gray-700 transition-colors touch-manipulation"
+                aria-label="Закрыть"
               >
-                <svg className="h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-6 w-6 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <div className="p-4 space-y-4">
+            
+            {/* Контент с отступами для безопасной зоны */}
+            <div className="px-4 py-4 space-y-4 pb-safe">
               {/* Поиск и фильтры */}
               <div className="bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                 <form onSubmit={handleSearch} className="space-y-4">
@@ -334,10 +350,11 @@ export default function UsersPage() {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Введите имя, email или телефон..."
-                        className="w-full px-4 py-2 pl-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-4 py-3 pl-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                        autoComplete="off"
                       />
                       <svg
-                        className="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
+                        className="absolute left-3 top-3.5 h-5 w-5 text-gray-400 pointer-events-none"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -355,7 +372,7 @@ export default function UsersPage() {
                       id="mobile-organization"
                       value={selectedOrg}
                       onChange={handleOrgChange}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation"
                     >
                       <option value="">Все организации</option>
                       {organizations.map((org) => (
@@ -366,15 +383,15 @@ export default function UsersPage() {
                     </select>
                   </div>
 
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     <button
                       type="submit"
-                      className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                      className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-lg font-medium active:bg-blue-700 transition-colors touch-manipulation text-base"
                     >
                       Найти
                     </button>
                     {total > 0 && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 text-center sm:text-right whitespace-nowrap">
                         Найдено: {total} {total === 1 ? "участник" : total < 5 ? "участника" : "участников"}
                       </p>
                     )}
@@ -384,7 +401,7 @@ export default function UsersPage() {
 
               {/* Список пользователей */}
               {loading ? (
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 gap-3">
                   {[...Array(4)].map((_, i) => (
                     <div key={i} className="bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 animate-pulse">
                       <div className="h-16 w-16 rounded-full bg-gray-200 dark:bg-gray-700 mx-auto mb-3"></div>
@@ -395,7 +412,7 @@ export default function UsersPage() {
                 </div>
               ) : users.length > 0 ? (
                 <>
-                  <div className="grid grid-cols-1 gap-4">
+                  <div className="grid grid-cols-1 gap-3">
                     {users.map((user) => (
                       <UserCard key={user.id} user={user} />
                     ))}
@@ -403,21 +420,21 @@ export default function UsersPage() {
 
                   {/* Пагинация */}
                   {totalPages > 1 && (
-                    <div className="flex items-center justify-center gap-2 pt-4">
+                    <div className="flex items-center justify-center gap-2 pt-4 pb-4">
                       <button
                         onClick={() => setPage((p) => Math.max(1, p - 1))}
                         disabled={page === 1}
-                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+                        className="px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed active:bg-gray-50 dark:active:bg-gray-700 touch-manipulation text-base min-w-[80px]"
                       >
                         Назад
                       </button>
-                      <span className="px-4 py-2 text-gray-700 dark:text-gray-300">
+                      <span className="px-4 py-2.5 text-gray-700 dark:text-gray-300 text-sm">
                         Страница {page} из {totalPages}
                       </span>
                       <button
                         onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                         disabled={page === totalPages}
-                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+                        className="px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed active:bg-gray-50 dark:active:bg-gray-700 touch-manipulation text-base min-w-[80px]"
                       >
                         Вперед
                       </button>
