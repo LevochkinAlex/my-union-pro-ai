@@ -63,9 +63,17 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: {
-        lastMessageAt: "desc",
-      },
+      orderBy: [
+        {
+          lastMessageAt: {
+            sort: "desc",
+            nulls: "last",
+          },
+        },
+        {
+          updatedAt: "desc",
+        },
+      ],
     });
 
     // Получаем количество непрочитанных сообщений для каждого чата
