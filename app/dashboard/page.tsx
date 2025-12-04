@@ -132,6 +132,12 @@ export default async function DashboardPage() {
               in: ["SIGNED", "PENDING", "APPROVED"], // Документы отправлены на проверку
             },
           },
+          select: {
+            id: true,
+            type: true,
+            status: true,
+            signedFilePath: true,
+          },
         },
       },
     });
@@ -143,11 +149,13 @@ export default async function DashboardPage() {
       profileProgress = progressResult.total;
       // Проверяем, что есть подписанные документы (отправленные на проверку)
       // Считаем, что документы отправлены, если есть хотя бы один документ со статусом SIGNED, PENDING или APPROVED
-      // и у него есть signedFilePath (файл загружен)
+      // Если статус PENDING или APPROVED, значит документ уже отправлен на проверку (signedFilePath не обязателен для проверки)
       hasDocuments = currentUser.documents.some(
-        (doc) => 
-          (doc.status === "SIGNED" || doc.status === "PENDING" || doc.status === "APPROVED") &&
-          doc.signedFilePath !== null
+        (doc) => {
+          const isSentStatus = doc.status === "PENDING" || doc.status === "APPROVED";
+          const isSignedWithFile = doc.status === "SIGNED" && doc.signedFilePath !== null;
+          return isSentStatus || isSignedWithFile;
+        }
       );
     }
   } catch (error) {

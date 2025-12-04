@@ -59,9 +59,12 @@ export default function MembershipBanner({
           if (docsResponse.ok) {
             const docsData = await docsResponse.json();
             const signedDocs = docsData.documents?.filter(
-              (doc: any) => 
-                (doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION") &&
-                (doc.status === "SIGNED" || doc.status === "PENDING" || doc.status === "APPROVED")
+              (doc: any) => {
+                const isCorrectType = doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION";
+                const isSentStatus = doc.status === "PENDING" || doc.status === "APPROVED";
+                const isSignedWithFile = doc.status === "SIGNED" && doc.signedFilePath;
+                return isCorrectType && (isSentStatus || isSignedWithFile);
+              }
             ) || [];
             
             const newHasDocuments = signedDocs.length > 0;
