@@ -177,36 +177,35 @@ export async function POST(request: NextRequest) {
     const uploadedDocuments = [];
     
     for (const {file, type: forcedType} of filesToUpload) {
+      // Ограничиваем размер файла до 50MB (как указано в UI)
+      if (file.size > 50 * 1024 * 1024) {
+        return NextResponse.json(
+          { error: "Файл слишком большой. Максимальный размер: 50MB" },
+          { status: 400 }
+        );
+      }
 
-    // Ограничиваем размер файла до 50MB (как указано в UI)
-    if (file.size > 50 * 1024 * 1024) {
-      return NextResponse.json(
-        { error: "Файл слишком большой. Максимальный размер: 50MB" },
-        { status: 400 }
-      );
-    }
-
-    // Проверяем тип файла
-    const allowedTypes = [
+      // Проверяем тип файла
+      const allowedTypes = [
       "application/pdf",
       "image/jpeg",
       "image/jpg",
       "image/png",
-    ];
+      ];
 
-    if (!allowedTypes.includes(file.type)) {
+      if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
         { error: "Недопустимый формат файла. Разрешены: PDF, JPG, PNG" },
         { status: 400 }
       );
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
     
-    // Для PDF проверяем валидность, для изображений просто пропускаем
-    let pdfText = "";
-    if (file.type === "application/pdf") {
+      // Для PDF проверяем валидность, для изображений просто пропускаем
+      let pdfText = "";
+      if (file.type === "application/pdf") {
       const pdfValidation = validatePDF(buffer);
       if (!pdfValidation.valid) {
         return NextResponse.json(
@@ -219,16 +218,16 @@ export async function POST(request: NextRequest) {
       console.log('[upload] Extracted PDF text length:', pdfText.length);
     }
     
-    // Определяем тип документа по содержимому или используем forcedType
-    let documentType = forcedType || (pdfText ? detectDocumentType(file.name, pdfText) : "OTHER");
+      // Определяем тип документа по содержимому или используем forcedType
+      let documentType = forcedType || (pdfText ? detectDocumentType(file.name, pdfText) : "OTHER");
     
-    // Удалено: проверка ChatSession - больше не используется
-    // Тип документа определяется автоматически по содержимому файла
+      // Удалено: проверка ChatSession - больше не используется
+      // Тип документа определяется автоматически по содержимому файла
     
-    // Валидация что в документе есть необходимые элементы
-    // Для изображений (JPG/PNG) не проверяем содержимое - это нормально
-    // Для PDF: НЕ блокируем если текст не извлечен - может быть сканированный документ (изображения)
-    if (documentType === "MEMBERSHIP_APPLICATION" || documentType === "CONTRIBUTION_APPLICATION") {
+      // Валидация что в документе есть необходимые элементы
+      // Для изображений (JPG/PNG) не проверяем содержимое - это нормально
+      // Для PDF: НЕ блокируем если текст не извлечен - может быть сканированный документ (изображения)
+      if (documentType === "MEMBERSHIP_APPLICATION" || documentType === "CONTRIBUTION_APPLICATION") {
       if (file.type === "application/pdf") {
         // Проверяем только что PDF валидный (уже проверили выше)
         // Если текст извлечен - хорошо, если нет - возможно это сканированный документ
@@ -244,11 +243,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Генерируем уникальное имя файла
-    const timestamp = Date.now();
-    let fileExtension = path.extname(file.name);
-    // Если расширение не определено, определяем по MIME типу
-    if (!fileExtension) {
+      // Генерируем уникальное имя файла
+      const timestamp = Date.now();
+      let fileExtension = path.extname(file.name);
+      // Если расширение не определено, определяем по MIME типу
+      if (!fileExtension) {
       if (file.type === "image/jpeg" || file.type === "image/jpg") {
         fileExtension = ".jpg";
       } else if (file.type === "image/png") {
@@ -257,16 +256,16 @@ export async function POST(request: NextRequest) {
         fileExtension = ".pdf";
       }
     }
-    const baseName = path.basename(file.name, path.extname(file.name));
-    const sanitizedBaseName = baseName.replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, "_");
-    const uniqueFileName = `${sanitizedBaseName}_${session.user.id}_${timestamp}${fileExtension}`;
+      const baseName = path.basename(file.name, path.extname(file.name));
+      const sanitizedBaseName = baseName.replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, "_");
+      const uniqueFileName = `${sanitizedBaseName}_${session.user.id}_${timestamp}${fileExtension}`;
     
-    // Определяем путь к файлу
-    const fileKey = `documents/${uniqueFileName}`;
-    let relativePath: string;
+      // Определяем путь к файлу
+      const fileKey = `documents/${uniqueFileName}`;
+      let relativePath: string;
 
-    // Загружаем файл на VDS или локально
-    if (isVDSStorageConfigured()) {
+      // Загружаем файл на VDS или локально
+      if (isVDSStorageConfigured()) {
       try {
         relativePath = await uploadFileToVDS(fileKey, buffer, file.type);
         console.log(`[upload] File uploaded to VDS: ${relativePath}`);
@@ -288,10 +287,10 @@ export async function POST(request: NextRequest) {
       relativePath = `/uploads/documents/${uniqueFileName}`;
     }
     
-    let document;
+      let document;
     
-    // Если передан documentId, обновляем именно этот документ
-    if (documentId) {
+      // Если передан documentId, обновляем именно этот документ
+      if (documentId) {
       // Проверяем, что документ принадлежит текущему пользователю
       const existingDoc = await prisma.document.findFirst({
         where: {
@@ -379,8 +378,6 @@ export async function POST(request: NextRequest) {
           console.log(`[upload] Created new ${documentType} (existing is PENDING/APPROVED):`, document.id);
         }
       } else if (existingDoc) {
-
-      if (existingDoc) {
         // Обновляем существующий документ, добавляя подписанный файл
         document = await prisma.document.update({
           where: { id: existingDoc.id },
@@ -424,14 +421,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    console.log(`[upload] Document uploaded successfully:`, {
+      console.log(`[upload] Document uploaded successfully:`, {
       id: document.id,
       type: documentType,
       status: document.status,
       fileName: file.name
     });
     
-    uploadedDocuments.push({
+      uploadedDocuments.push({
       documentId: document.id,
       documentType,
       fileName: file.name,
