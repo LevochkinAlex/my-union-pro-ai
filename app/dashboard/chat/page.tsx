@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import AlertDialog from "@/components/ui/AlertDialog";
+import { convertHeicToJpeg, createHeicPreview } from "@/lib/heic-to-jpeg";
 
 interface Chat {
   id: string;
@@ -332,13 +333,16 @@ function ChatPageContent() {
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setSelectedFile(file);
-      // Создаем превью для изображений (включая HEIC)
-      if (file.type.startsWith("image/") || file.name.toLowerCase().endsWith(".heic") || file.name.toLowerCase().endsWith(".heif")) {
-        const preview = URL.createObjectURL(file);
+      // Конвертируем HEIC в JPEG если нужно
+      const processedFile = await convertHeicToJpeg(file);
+      setSelectedFile(processedFile);
+      
+      // Создаем превью для изображений
+      if (processedFile.type.startsWith("image/")) {
+        const preview = await createHeicPreview(file);
         setFilePreview(preview);
       } else {
         setFilePreview(null);
@@ -712,6 +716,18 @@ function ChatPageContent() {
     // Use API endpoint for serving files
     return `/api/uploads/chat/${filename}`;
   };
+
+  // Защита от hydration mismatch
+  if (!mounted) {
+    return (
+      <div className="flex h-[calc(100vh-8rem)] bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[calc(100vh-8rem)] bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -1237,13 +1253,16 @@ function ChatPageContent() {
                           <input
                             type="file"
                             ref={editMessageFileInputRef}
-                            onChange={(e) => {
+                            onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (file) {
-                                setEditMessageFile(file);
+                                // Конвертируем HEIC в JPEG если нужно
+                                const processedFile = await convertHeicToJpeg(file);
+                                setEditMessageFile(processedFile);
+                                
                                 // Создаем превью для изображений
-                                if (file.type.startsWith("image/") || file.name.toLowerCase().endsWith(".heic") || file.name.toLowerCase().endsWith(".heif")) {
-                                  const preview = URL.createObjectURL(file);
+                                if (processedFile.type.startsWith("image/")) {
+                                  const preview = await createHeicPreview(file);
                                   setEditMessageFilePreview(preview);
                                 } else {
                                   setEditMessageFilePreview(null);
