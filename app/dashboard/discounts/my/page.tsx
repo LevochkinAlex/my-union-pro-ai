@@ -20,6 +20,28 @@ export default function MyDiscountsPage() {
   const [promoCardData, setPromoCardData] = useState<{ dataUrl: string; blob: Blob; discount: DiscountItem } | null>(null);
 
   useEffect(() => {
+    // Пытаемся восстановить состояние из sessionStorage при возврате на страницу
+    if (typeof window !== 'undefined') {
+      const savedState = sessionStorage.getItem('myDiscountsState');
+      if (savedState) {
+        try {
+          const parsed = JSON.parse(savedState);
+          if (parsed.discounts && Array.isArray(parsed.discounts) && parsed.discounts.length > 0) {
+            console.log("[MyDiscounts] Restoring state from sessionStorage");
+            setDiscounts(parsed.discounts);
+            setActiveTab(parsed.activeTab || "claimed");
+            setLoading(false);
+            // Очищаем сохраненное состояние после восстановления
+            sessionStorage.removeItem('myDiscountsState');
+            return; // Не выполняем полную загрузку, если восстановили состояние
+          }
+        } catch (error) {
+          console.warn("[MyDiscounts] Failed to restore state:", error);
+          sessionStorage.removeItem('myDiscountsState');
+        }
+      }
+    }
+    
     // Синхронизация с BestBenefits при загрузке страницы, затем загрузка скидок
     // Это гарантирует, что промокоды всегда актуальны
     const initPage = async () => {
@@ -312,6 +334,17 @@ export default function MyDiscountsPage() {
   };
 
   const handleViewDiscount = (discountId: number) => {
+    // Сохраняем текущее состояние перед навигацией
+    const currentState = {
+      discounts,
+      activeTab,
+    };
+    
+    // Сохраняем в sessionStorage для восстановления при возврате
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('myDiscountsState', JSON.stringify(currentState));
+    }
+    
     router.push(`/dashboard/discounts/${discountId}`);
   };
 
