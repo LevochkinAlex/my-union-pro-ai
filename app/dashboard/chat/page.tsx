@@ -699,6 +699,20 @@ function ChatPageContent() {
     }
   }, [selectedChat]);
 
+  // Helper function to get file URL (for production compatibility)
+  const getFileUrl = (filePath: string) => {
+    if (!filePath) return "";
+    // If it's already a full URL, return as is
+    if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+      return filePath;
+    }
+    // Extract filename from path
+    const filename = filePath.split("/").pop();
+    if (!filename) return filePath;
+    // Use API endpoint for serving files
+    return `/api/uploads/chat/${filename}`;
+  };
+
   return (
     <div className="flex h-[calc(100vh-8rem)] bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
       {/* Список чатов */}
@@ -1112,7 +1126,7 @@ function ChatPageContent() {
                                     {isImage ? (
                                       <div className="relative">
                                         <img
-                                          src={attachment.filePath}
+                                          src={getFileUrl(attachment.filePath)}
                                           alt={attachment.originalName}
                                           className="max-w-full max-h-32 rounded-lg object-contain border border-gray-200 dark:border-gray-600"
                                         />
@@ -1314,10 +1328,10 @@ function ChatPageContent() {
                                     {isImage ? (
                                       <div className="relative group">
                                         <img
-                                          src={attachment.filePath}
+                                          src={getFileUrl(attachment.filePath)}
                                           alt={attachment.originalName}
                                           className="max-w-full max-h-64 rounded-lg cursor-pointer object-contain border border-gray-200 dark:border-gray-600"
-                                          onClick={() => window.open(attachment.filePath, "_blank")}
+                                          onClick={() => window.open(getFileUrl(attachment.filePath), "_blank")}
                                           onError={(e) => {
                                             const target = e.target as HTMLImageElement;
                                             target.style.display = "none";
@@ -1340,7 +1354,7 @@ function ChatPageContent() {
                                       </div>
                                     ) : (
                                       <a
-                                        href={attachment.filePath}
+                                        href={getFileUrl(attachment.filePath)}
                                         download={attachment.originalName}
                                         className="flex items-center gap-2 p-2 bg-white/10 dark:bg-gray-800/50 rounded hover:bg-white/20 dark:hover:bg-gray-800/70 transition-colors"
                                       >

@@ -569,7 +569,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                     setEditFilePreviews(previews);
                   }}
                   className="hidden"
-                  accept="image/*,video/*,.pdf,.doc,.docx,.txt"
+                  accept="image/*,video/*,.pdf,.doc,.docx,.txt,.heic,.heif"
                   multiple
                 />
 

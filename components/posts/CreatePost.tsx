@@ -590,7 +590,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                   ref={fileInputRef}
                   onChange={handleFileSelect}
                   className="hidden"
-                  accept="image/*,video/*,.pdf,.doc,.docx,.txt"
+                  accept="image/*,video/*,.pdf,.doc,.docx,.txt,.heic,.heif"
                   multiple
                 />
 
