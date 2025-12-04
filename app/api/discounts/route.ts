@@ -26,29 +26,35 @@ export async function GET(request: NextRequest) {
       const claimed = Array.isArray(filters.claimed) ? filters.claimed : [];
       
       // Создаем Map для быстрого поиска промокодов
-      const promoCodesMap = new Map<number, string>();
+      // Используем строковые ключи для надежности (ID могут быть числами или строками)
+      const promoCodesMap = new Map<string, string>();
       claimed.forEach((item: any) => {
         if (typeof item === 'object' && item.id && item.promoCode) {
+          const discountId = String(item.id); // Нормализуем ID к строке
           const promoCode = typeof item.promoCode === 'string' ? item.promoCode.trim() : String(item.promoCode).trim();
-          if (promoCode && promoCode.length > 0) {
-            promoCodesMap.set(item.id, promoCode);
-            console.log(`[api/discounts] Mapped promo code for discount ${item.id}:`, promoCode);
+          if (promoCode && promoCode.length > 0 && promoCode !== 'null' && promoCode !== 'undefined') {
+            promoCodesMap.set(discountId, promoCode);
+            console.log(`[api/discounts] Mapped promo code for discount ${discountId}:`, promoCode);
           }
         }
       });
       
       console.log(`[api/discounts] Total promo codes in map: ${promoCodesMap.size}`);
+      console.log(`[api/discounts] Claimed items:`, claimed.length);
 
       // Добавляем промокоды к скидкам (промокоды из preferences имеют приоритет)
       payload.discounts = payload.discounts.map((discount: any) => {
-        const savedPromoCode = promoCodesMap.get(discount.id);
+        const discountId = String(discount.id); // Нормализуем ID к строке для сравнения
+        const savedPromoCode = promoCodesMap.get(discountId);
         if (savedPromoCode) {
           // Промокод из preferences всегда имеет приоритет
-          console.log(`[api/discounts] Enriching discount ${discount.id} with saved promo code:`, savedPromoCode);
+          console.log(`[api/discounts] ✅ Enriching discount ${discountId} with saved promo code:`, savedPromoCode);
           return {
             ...discount,
             promoCode: savedPromoCode,
           };
+        } else {
+          console.log(`[api/discounts] ⚠️ No promo code found for discount ${discountId} (type: ${typeof discount.id})`);
         }
         return discount;
       });
