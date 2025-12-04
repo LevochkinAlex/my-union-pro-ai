@@ -156,7 +156,8 @@ export default function MyDiscountsPage() {
           } else {
             // Приоритет 2: промокод из normalizedClaimedData (fallback)
             const claimedItem = normalizedClaimedData.find((item: any) => {
-              return item && item.id === discount.id;
+              // Нормализуем ID к строкам для надежного сравнения
+              return item && String(item.id) === String(discount.id);
             });
             
             if (claimedItem) {
