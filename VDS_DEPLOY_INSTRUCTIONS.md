@@ -40,6 +40,7 @@ SSH данные сохранены в `.deploy/vds-config.sh` (не комми�
 ## 🚀 Быстрый деплой
 
 ```bash
+export VDS_PASSWORD='sAt,8?Bh+Ny_BW'
 ./scripts/deploy-to-vds.sh
 ```
 
@@ -49,9 +50,32 @@ SSH данные сохранены в `.deploy/vds-config.sh` (не комми�
 3. ✅ Подключится к серверу
 4. ✅ Обновит код из репозитория
 5. ✅ Установит зависимости
-6. ✅ Обновит Prisma схему
+6. ✅ Обновит Prisma схему (использует `prisma migrate deploy`)
 7. ✅ Соберет приложение
 8. ✅ Перезапустит приложение (PM2/systemd/Docker)
+
+## ⚙️ Настройка nginx для больших файлов (HEIC, видео)
+
+**Важно:** Для загрузки больших файлов (HEIC, видео) нужно увеличить лимит в nginx:
+
+```bash
+# Подключитесь к серверу
+ssh root@194.87.49.210
+
+# Добавьте или обновите client_max_body_size в nginx конфигурации
+sed -i '/server {/a\    client_max_body_size 50M;' /etc/nginx/sites-enabled/myunion.pro
+
+# Проверьте конфигурацию
+nginx -t
+
+# Перезагрузите nginx
+systemctl reload nginx
+```
+
+Или одной командой:
+```bash
+ssh root@194.87.49.210 'sed -i "/server {/a\    client_max_body_size 50M;" /etc/nginx/sites-enabled/myunion.pro && nginx -t && systemctl reload nginx'
+```
 
 ## 📝 Ручной деплой (если нужен другой путь или ветка)
 

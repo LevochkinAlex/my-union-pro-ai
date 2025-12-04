@@ -10,7 +10,19 @@ ssh root@194.87.49.210
 # Пароль: sAt,8?Bh+Ny_BW
 ```
 
-### 2. Выполните деплой на сервере
+### 2. Настройте nginx для больших файлов (если еще не сделано)
+```bash
+# Добавьте client_max_body_size в nginx конфигурацию
+sed -i '/server {/a\    client_max_body_size 50M;' /etc/nginx/sites-enabled/myunion.pro
+
+# Проверьте конфигурацию
+nginx -t
+
+# Перезагрузите nginx
+systemctl reload nginx
+```
+
+### 3. Выполните деплой на сервере
 ```bash
 cd /opt/my-union-pro
 
@@ -50,10 +62,12 @@ pm2 logs my-union-pro --lines 50
 ## Или одной командой с вашего компьютера:
 
 ```bash
-ssh root@194.87.49.210 'cd /opt/my-union-pro && pm2 stop my-union-pro && git pull origin main && pnpm install && npx prisma generate && npx prisma migrate deploy && pnpm build && pm2 restart my-union-pro && pm2 logs my-union-pro --lines 50'
+ssh root@194.87.49.210 'sed -i "/server {/a\    client_max_body_size 50M;" /etc/nginx/sites-enabled/myunion.pro 2>/dev/null; nginx -t && systemctl reload nginx; cd /opt/my-union-pro && pm2 stop my-union-pro && git pull origin main && pnpm install && npx prisma generate && npx prisma migrate deploy && pnpm build && pm2 restart my-union-pro && pm2 logs my-union-pro --lines 50'
 ```
 
 Пароль: `sAt,8?Bh+Ny_BW`
+
+**Примечание:** Команда автоматически настроит nginx (если еще не настроен) и выполнит полный деплой.
 
 ---
 
