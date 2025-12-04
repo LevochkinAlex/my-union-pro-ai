@@ -66,3 +66,6 @@ SERVER_ACCESS.md
 !/public/uploads/documents/.gitkeep
 /public/uploads/avatars/*
 !/public/uploads/avatars/.gitkeep
+
+# Export files
+document-templates-export.json
