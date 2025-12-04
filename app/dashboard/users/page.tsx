@@ -43,6 +43,7 @@ export default function UsersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showUsersPanel, setShowUsersPanel] = useState(false); // Для мобильной версии
 
   const handlePostCreated = () => {
     // Обновляем ключ для перезагрузки ленты
@@ -102,9 +103,42 @@ export default function UsersPage() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
-      {/* Левая колонка: Коллеги (50% ширины) */}
-      <div className="space-y-4 lg:space-y-6">
+    <div className="space-y-4 lg:space-y-6">
+      {/* Мобильная версия: Кнопка для открытия панели коллег */}
+      <div className="lg:hidden">
+        <button
+          onClick={() => setShowUsersPanel(!showUsersPanel)}
+          className="w-full flex items-center justify-between bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+              <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            </div>
+            <div className="text-left">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                Коллеги профсоюза
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {total > 0 ? `Найдено: ${total} ${total === 1 ? "участник" : total < 5 ? "участника" : "участников"}` : "Найти коллег"}
+              </p>
+            </div>
+          </div>
+          <svg
+            className={`h-5 w-5 text-gray-400 transition-transform ${showUsersPanel ? "rotate-180" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+        {/* Левая колонка: Коллеги (50% ширины) - скрыта на мобильных, показывается в модальном окне */}
+        <div className={`space-y-4 lg:space-y-6 ${showUsersPanel ? "block" : "hidden lg:block"}`}>
         {/* Заголовок */}
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white">
@@ -250,10 +284,10 @@ export default function UsersPage() {
             </div>
           </div>
         )}
-      </div>
+        </div>
 
-      {/* Правая колонка: Лента постов (50% ширины) */}
-      <div className="space-y-4 lg:space-y-6">
+        {/* Правая колонка: Лента постов (50% ширины) - на мобильных показывается первой */}
+        <div className="space-y-4 lg:space-y-6 order-first lg:order-last">
         {/* Форма создания поста */}
         {session && (
           <CreatePost onPostCreated={handlePostCreated} compact={true} />
@@ -267,6 +301,160 @@ export default function UsersPage() {
           <PostFeed key={refreshKey} limit={5} />
         </div>
       </div>
+
+      {/* Мобильное модальное окно для панели коллег */}
+      {showUsersPanel && (
+        <div className="lg:hidden fixed inset-0 z-50 bg-black/50" onClick={() => setShowUsersPanel(false)}>
+          <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-800 rounded-t-2xl shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Коллеги профсоюза
+              </h2>
+              <button
+                onClick={() => setShowUsersPanel(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <svg className="h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              {/* Поиск и фильтры */}
+              <div className="bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <form onSubmit={handleSearch} className="space-y-4">
+                  <div>
+                    <label htmlFor="mobile-search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Поиск по имени, email или телефону
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        id="mobile-search"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Введите имя, email или телефон..."
+                        className="w-full px-4 py-2 pl-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <svg
+                        className="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="mobile-organization" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Организация
+                    </label>
+                    <select
+                      id="mobile-organization"
+                      value={selectedOrg}
+                      onChange={handleOrgChange}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Все организации</option>
+                      {organizations.map((org) => (
+                        <option key={org.id} value={org.id}>
+                          {org.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="submit"
+                      className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                    >
+                      Найти
+                    </button>
+                    {total > 0 && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Найдено: {total} {total === 1 ? "участник" : total < 5 ? "участника" : "участников"}
+                      </p>
+                    )}
+                  </div>
+                </form>
+              </div>
+
+              {/* Список пользователей */}
+              {loading ? (
+                <div className="grid grid-cols-1 gap-4">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 animate-pulse">
+                      <div className="h-16 w-16 rounded-full bg-gray-200 dark:bg-gray-700 mx-auto mb-3"></div>
+                      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+                      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mx-auto"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : users.length > 0 ? (
+                <>
+                  <div className="grid grid-cols-1 gap-4">
+                    {users.map((user) => (
+                      <UserCard key={user.id} user={user} />
+                    ))}
+                  </div>
+
+                  {/* Пагинация */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-2 pt-4">
+                      <button
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        Назад
+                      </button>
+                      <span className="px-4 py-2 text-gray-700 dark:text-gray-300">
+                        Страница {page} из {totalPages}
+                      </span>
+                      <button
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={page === totalPages}
+                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        Вперед
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-8 text-center">
+                  <div className="flex flex-col items-center">
+                    <div className="h-12 w-12 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-3">
+                      <svg
+                        className="h-6 w-6 text-gray-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+                        />
+                      </svg>
+                    </div>
+                    <p className="text-gray-500 dark:text-gray-400 font-medium">
+                      Коллеги не найдены
+                    </p>
+                    <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                      Попробуйте изменить параметры поиска
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -225,7 +225,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8 min-w-0 w-full">
       {/* Заголовок */}
-      <div className="">
+      <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           Добро пожаловать, {session.user?.name || "Пользователь"}!
         </h1>
