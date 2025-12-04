@@ -38,8 +38,8 @@ sshpass -p "${VDS_PASSWORD}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFi
   echo "🔧 Обновляем Prisma Client..."
   npx prisma generate
   
-  echo "🗄️ Синхронизируем схему БД..."
-  npx prisma db push
+  echo "🗄️ Применяем миграции БД..."
+  npx prisma migrate deploy
   
   echo "📚 Добавляем справочники должностей и профессий..."
   npx tsx prisma/seed-dictionaries.ts
