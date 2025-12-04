@@ -69,8 +69,8 @@ export async function GET(
         const fileKey = `posts/${filename}`;
         const fileBuffer = await getFileFromVDS(fileKey);
         
-        if (fileBuffer) {
-          return new NextResponse(fileBuffer, {
+        if (fileBuffer && fileBuffer.length > 0) {
+          return new NextResponse(fileBuffer as any, {
             status: 200,
             headers: {
               "Content-Type": contentType,
