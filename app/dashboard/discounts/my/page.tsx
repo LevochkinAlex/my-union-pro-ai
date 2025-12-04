@@ -290,9 +290,12 @@ export default function MyDiscountsPage() {
           return item && String(item.id) === String(d.id);
         });
         
-        // Если скидка получена, но промокод отсутствует, пытаемся восстановить его
-        if (claimedItem && !d.promoCode && claimedItem.promoCode) {
-          const promoCode = typeof claimedItem.promoCode === 'string' && claimedItem.promoCode.trim().length > 0
+        // Если скидка получена, но промокод отсутствует или невалидный, пытаемся восстановить его
+        const hasValidPromoCode = d.promoCode && d.promoCode.trim().length > 0 && d.promoCode.toLowerCase() !== 'null';
+        if (claimedItem && !hasValidPromoCode && claimedItem.promoCode) {
+          const promoCode = typeof claimedItem.promoCode === 'string' && 
+            claimedItem.promoCode.trim().length > 0 && 
+            claimedItem.promoCode.toLowerCase() !== 'null'
             ? claimedItem.promoCode.trim()
             : undefined;
           if (promoCode) {
