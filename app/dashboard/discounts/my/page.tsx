@@ -224,14 +224,14 @@ export default function MyDiscountsPage() {
           // Приоритет 1: промокод из API (уже обогащен из preferences)
           let promoCode: string | undefined = undefined;
           
-          if (discount.promoCode && typeof discount.promoCode === 'string' && discount.promoCode.trim().length > 0) {
+          if (discount.promoCode && typeof discount.promoCode === 'string' && discount.promoCode.trim().length > 0 && discount.promoCode.toLowerCase() !== 'null') {
             promoCode = discount.promoCode.trim();
             console.log(`[MyDiscounts] ✅ Using promo code from API for discount ${discount.id}:`, promoCode);
           } else if (claimedItem && claimedItem.promoCode) {
             // Приоритет 2: промокод из normalizedClaimedData (fallback)
             // Это особенно важно для вкладки "Избранное", где API может не обогатить промокодом
             console.log(`[MyDiscounts] Found claimed item for discount ${discount.id}:`, claimedItem);
-            if (typeof claimedItem.promoCode === 'string' && claimedItem.promoCode.trim().length > 0) {
+            if (typeof claimedItem.promoCode === 'string' && claimedItem.promoCode.trim().length > 0 && claimedItem.promoCode.toLowerCase() !== 'null') {
               promoCode = claimedItem.promoCode.trim();
               console.log(`[MyDiscounts] ✅ Using promo code from preferences for discount ${discount.id}:`, promoCode);
             } else {
@@ -244,8 +244,10 @@ export default function MyDiscountsPage() {
               return String(itemId) === discountIdStr;
             });
             
+            console.log(`[MyDiscounts] Checking raw claimed data for discount ${discount.id}:`, { rawClaimedItem, claimedData });
+            
             if (rawClaimedItem && typeof rawClaimedItem === 'object' && rawClaimedItem.promoCode) {
-              promoCode = typeof rawClaimedItem.promoCode === 'string' && rawClaimedItem.promoCode.trim().length > 0
+              promoCode = typeof rawClaimedItem.promoCode === 'string' && rawClaimedItem.promoCode.trim().length > 0 && rawClaimedItem.promoCode.toLowerCase() !== 'null'
                 ? rawClaimedItem.promoCode.trim()
                 : undefined;
               if (promoCode) {
@@ -257,6 +259,15 @@ export default function MyDiscountsPage() {
             // Промокод должен быть получен через синхронизацию с BestBenefits
             if (!promoCode && isClaimed) {
               console.log(`[MyDiscounts] ⚠️ Discount ${discount.id} is claimed but promo code is missing. Data might be in old format. User should sync with BestBenefits.`);
+              console.log(`[MyDiscounts] Debug info:`, {
+                discountId: discount.id,
+                discountIdStr,
+                claimedIds,
+                normalizedClaimedData,
+                claimedItem,
+                rawClaimedItem,
+                activeTab,
+              });
             }
           }
           
@@ -557,7 +568,8 @@ export default function MyDiscountsPage() {
 
                     {/* Promo Code */}
                     {/* Показываем промокод для всех полученных скидок, независимо от активной вкладки */}
-                    {discount.promoCode && discount.promoCode.trim().length > 0 && (() => {
+                    {/* Исключаем строку "null" и пустые значения */}
+                    {discount.promoCode && discount.promoCode.trim().length > 0 && discount.promoCode.toLowerCase() !== 'null' && (() => {
                       // Проверяем, не является ли промокод специальным случаем
                       const isSpecialCase = discount.promoCode === "Штрихкод в купоне" ||
                         discount.promoCode.toLowerCase().includes("штрихкод") ||

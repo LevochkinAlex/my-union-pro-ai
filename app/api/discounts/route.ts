@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
         }
         
         if (discountId) {
-          if (promoCode && promoCode.length > 0 && promoCode !== 'null' && promoCode !== 'undefined') {
+          if (promoCode && promoCode.length > 0 && promoCode.toLowerCase() !== 'null' && promoCode.toLowerCase() !== 'undefined') {
             promoCodesMap.set(discountId, promoCode);
             console.log(`[api/discounts] ✅ Mapped promo code for discount ${discountId}:`, promoCode);
           } else {
