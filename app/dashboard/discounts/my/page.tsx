@@ -134,14 +134,16 @@ export default function MyDiscountsPage() {
       
       console.log("[MyDiscounts] Normalized claimed data:", normalizedClaimedData);
       
-      const claimedIds = normalizedClaimedData.map((item: any) => item.id).filter(Boolean);
+      const claimedIds = normalizedClaimedData.map((item: any) => String(item.id)).filter(Boolean);
       
-      const favoriteIds = filters.favorites || [];
+      const favoriteIds = (filters.favorites || []).map((id: any) => String(id));
       
       console.log("[MyDiscounts] IDs to fetch:", {
         activeTab,
         claimedIds: claimedIds.length,
         favoriteIds: favoriteIds.length,
+        claimedIdsList: claimedIds,
+        favoriteIdsList: favoriteIds,
       });
       
       // Determine which IDs to fetch
@@ -181,14 +183,16 @@ export default function MyDiscountsPage() {
       
       const discountsWithPromoCodes = (discountsData.discounts || []).map((discount: DiscountItem) => {
         // Проверяем, получена ли скидка (для обеих вкладок)
-        const isClaimed = claimedIds.includes(discount.id);
+        // Нормализуем ID к строке для надежного сравнения
+        const discountIdStr = String(discount.id);
+        const isClaimed = claimedIds.includes(discountIdStr);
         
         // Находим элемент в списке полученных (для получения промокода из preferences)
         const claimedItem = normalizedClaimedData.find((item: any) => {
-          return item && String(item.id) === String(discount.id);
+          return item && String(item.id) === discountIdStr;
         });
         
-        console.log(`[MyDiscounts] Processing discount ${discount.id} (${discount.title}): isClaimed=${isClaimed}, activeTab=${activeTab}, hasPromoCodeFromAPI=${!!discount.promoCode}`);
+        console.log(`[MyDiscounts] Processing discount ${discount.id} (${discount.title}): isClaimed=${isClaimed}, activeTab=${activeTab}, hasPromoCodeFromAPI=${!!discount.promoCode}, claimedIds includes: ${claimedIds.includes(discountIdStr)}`);
         
         // Промокоды показываем только если скидка получена (независимо от активной вкладки)
         if (isClaimed) {
