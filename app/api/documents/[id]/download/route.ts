@@ -241,13 +241,20 @@ export async function GET(
               // Извлекаем fileKey из пути (убираем /uploads/ если есть)
               const normalizedPath = filePathToDownload.startsWith("/") ? filePathToDownload.slice(1) : filePathToDownload;
               const pathParts = normalizedPath.split("/");
-              const fileKey = pathParts.slice(pathParts[0] === "uploads" ? 1 : 0).join("/");
+              // Если путь начинается с "uploads", пропускаем его
+              const fileKey = pathParts[0] === "uploads" 
+                ? pathParts.slice(1).join("/")
+                : normalizedPath;
               
-              console.log("[documents/download] Пытаемся скачать с VDS:", fileKey);
+              console.log("[documents/download] Пытаемся скачать с VDS, fileKey:", fileKey);
+              console.log("[documents/download] Исходный путь:", filePathToDownload);
+              console.log("[documents/download] Нормализованный путь:", normalizedPath);
+              
               fileBuffer = await getFileFromVDS(fileKey);
               console.log("[documents/download] Файл успешно скачан с VDS, размер:", fileBuffer.length);
             } catch (vdsError) {
               console.error("[documents/download] Ошибка скачивания с VDS:", vdsError);
+              console.error("[documents/download] Детали ошибки:", vdsError instanceof Error ? vdsError.message : String(vdsError));
               // Продолжаем с проверкой устава или возвратом ошибки
             }
           }
