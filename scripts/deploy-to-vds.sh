@@ -9,16 +9,25 @@ echo "🚀 Deploying MyUnion Pro to VDS..."
 
 # VDS server details (from .env or environment variables)
 # ⚠️ ВАЖНО: Не храните пароли в коде! Используйте переменные окружения!
-VDS_HOST="${VDS_HOST:-YOUR_SERVER_IP}"
+VDS_HOST="${VDS_HOST:-194.87.49.210}"
 VDS_USER="${VDS_USER:-root}"
 VDS_PATH="${VDS_PATH:-/opt/my-union-pro}"
 VDS_PASSWORD="${VDS_PASSWORD:-YOUR_SSH_PASSWORD}"
 
+if [ "$VDS_PASSWORD" = "YOUR_SSH_PASSWORD" ]; then
+  echo "❌ Ошибка: Необходимо установить переменную окружения VDS_PASSWORD"
+  echo "Пример: export VDS_PASSWORD='your_password'"
+  exit 1
+fi
+
 echo "📡 Connecting to ${VDS_USER}@${VDS_HOST}..."
 
 # SSH and deploy using sshpass
-sshpass -p "${VDS_PASSWORD}" ssh -o StrictHostKeyChecking=no ${VDS_USER}@${VDS_HOST} << 'ENDSSH'
+sshpass -p "${VDS_PASSWORD}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${VDS_USER}@${VDS_HOST} << 'ENDSSH'
 cd /opt/my-union-pro || exit 1
+
+echo "🛑 Останавливаем приложение..."
+pm2 stop my-union-pro || true
 
 echo "📥 Pulling latest changes..."
 git pull origin main
@@ -32,8 +41,24 @@ npx prisma generate
 echo "🗄️  Pushing database schema..."
 npx prisma db push --accept-data-loss
 
+echo "📚 Добавляем справочники должностей и профессий..."
+npx tsx prisma/seed-dictionaries.ts || echo "⚠️  Seed dictionaries skipped (file may not exist)"
+
 echo "🏗️  Building application..."
 pnpm build
+
+echo "🔄 Перезапускаем PM2..."
+pm2 restart my-union-pro
+pm2 save
+
+echo "✅ Деплой завершен!"
+echo ""
+echo "📊 Статус приложения:"
+pm2 list
+
+echo ""
+echo "📋 Последние логи:"
+pm2 logs my-union-pro --lines 20 --nostream
 
 echo "✅ Adding WhatsApp environment variables to .env.local..."
 # Backup existing .env.local

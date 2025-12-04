@@ -10,9 +10,18 @@ echo "========================================="
 # ⚠️ ВАЖНО: Используйте переменные окружения для паролей!
 # Установите VDS_PASSWORD в переменных окружения перед запуском
 VDS_PASSWORD="${VDS_PASSWORD:-YOUR_SSH_PASSWORD}"
-VDS_HOST="${VDS_HOST:-YOUR_SERVER_IP}"
+VDS_HOST="${VDS_HOST:-194.87.49.210}"
+VDS_USER="${VDS_USER:-root}"
 
-sshpass -p "${VDS_PASSWORD}" ssh -o StrictHostKeyChecking=no root@${VDS_HOST} << 'ENDSSH'
+if [ "$VDS_PASSWORD" = "YOUR_SSH_PASSWORD" ] || [ "$VDS_HOST" = "YOUR_SERVER_IP" ]; then
+  echo "❌ Ошибка: Необходимо установить переменные окружения VDS_PASSWORD и VDS_HOST"
+  echo "Пример: export VDS_PASSWORD='your_password' && export VDS_HOST='194.87.49.210'"
+  exit 1
+fi
+
+echo "🔐 Подключение к ${VDS_USER}@${VDS_HOST}..."
+
+sshpass -p "${VDS_PASSWORD}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${VDS_USER}@${VDS_HOST} << 'ENDSSH'
   cd /opt/my-union-pro || exit 1
   
   echo "🛑 Останавливаем приложение..."
