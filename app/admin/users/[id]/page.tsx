@@ -184,9 +184,9 @@ export default function AdminUserDetailsPage() {
               {user.dateOfBirth ? new Date(user.dateOfBirth).toLocaleDateString("ru-RU") : "Не указана"}
             </p>
           </div>
-          <div>
+          <div className="col-span-2">
             <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Адрес</label>
-            <p className="text-gray-900 dark:text-white">{user.address || "Не указан"}</p>
+            <p className="text-gray-900 dark:text-white break-words whitespace-pre-wrap">{user.address || "Не указан"}</p>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Должность</label>
