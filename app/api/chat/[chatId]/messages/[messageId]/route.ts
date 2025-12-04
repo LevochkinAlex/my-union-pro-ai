@@ -197,7 +197,10 @@ export async function DELETE(
 
     const resolvedParams = await Promise.resolve(params);
     const { chatId, messageId } = resolvedParams;
-    const userId = session.user.id;
+    // Учитываем имперсонализацию: если админ имперсонирует пользователя, используем ID имперсонируемого
+    const userId = (session.user as any).originalAdminId && (session.user as any).isImpersonating 
+      ? session.user.id 
+      : session.user.id;
 
     // Проверяем, что пользователь является участником чата
     const chat = await prisma.chat.findUnique({
@@ -243,7 +246,7 @@ export async function DELETE(
     }
 
     // Помечаем сообщение как удаленное (мягкое удаление)
-    await prisma.chatMessage.update({
+    const updatedMessage = await prisma.chatMessage.update({
       where: { id: messageId },
       data: {
         deletedAt: new Date(),
@@ -251,7 +254,9 @@ export async function DELETE(
       },
     });
 
-    return NextResponse.json({ success: true });
+    console.log(`[chat] Message ${messageId} deleted by user ${userId}, deletedAt: ${updatedMessage.deletedAt}`);
+
+    return NextResponse.json({ success: true, deletedAt: updatedMessage.deletedAt });
   } catch (error: any) {
     console.error("[chat] DELETE Error:", error);
     return NextResponse.json(

@@ -4,7 +4,6 @@ import { useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import AlertDialog from "@/components/ui/AlertDialog";
-import { convertHeicToJpeg, createHeicPreview } from "@/lib/heic-to-jpeg";
 
 interface Chat {
   id: string;
@@ -336,14 +335,19 @@ function ChatPageContent() {
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Конвертируем HEIC в JPEG если нужно
-      const processedFile = await convertHeicToJpeg(file);
-      setSelectedFile(processedFile);
+      setSelectedFile(file);
       
-      // Создаем превью для изображений
-      if (processedFile.type.startsWith("image/")) {
-        const preview = await createHeicPreview(file);
-        setFilePreview(preview);
+      // Создаем превью для изображений (кроме HEIC - браузер не может их отобразить)
+      const isHeic = file.name.toLowerCase().endsWith('.heic') || 
+                     file.name.toLowerCase().endsWith('.heif') ||
+                     file.type === 'image/heic' ||
+                     file.type === 'image/heif';
+      
+      if (file.type.startsWith("image/") && !isHeic) {
+        setFilePreview(URL.createObjectURL(file));
+      } else if (isHeic) {
+        // Для HEIC показываем только имя файла, превью не создаем
+        setFilePreview(null);
       } else {
         setFilePreview(null);
       }
@@ -1253,17 +1257,19 @@ function ChatPageContent() {
                           <input
                             type="file"
                             ref={editMessageFileInputRef}
-                            onChange={async (e) => {
+                            onChange={(e) => {
                               const file = e.target.files?.[0];
                               if (file) {
-                                // Конвертируем HEIC в JPEG если нужно
-                                const processedFile = await convertHeicToJpeg(file);
-                                setEditMessageFile(processedFile);
+                                setEditMessageFile(file);
                                 
-                                // Создаем превью для изображений
-                                if (processedFile.type.startsWith("image/")) {
-                                  const preview = await createHeicPreview(file);
-                                  setEditMessageFilePreview(preview);
+                                // Создаем превью для изображений (кроме HEIC)
+                                const isHeic = file.name.toLowerCase().endsWith('.heic') || 
+                                               file.name.toLowerCase().endsWith('.heif') ||
+                                               file.type === 'image/heic' ||
+                                               file.type === 'image/heif';
+                                
+                                if (file.type.startsWith("image/") && !isHeic) {
+                                  setEditMessageFilePreview(URL.createObjectURL(file));
                                 } else {
                                   setEditMessageFilePreview(null);
                                 }

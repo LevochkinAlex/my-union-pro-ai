@@ -50,7 +50,7 @@ export async function GET(
       where: { 
         chatId,
         deletedAt: null, // Не показываем удаленные сообщения
-      } as any,
+      },
       include: {
         sender: {
           select: {
