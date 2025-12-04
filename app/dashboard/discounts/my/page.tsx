@@ -167,8 +167,15 @@ export default function MyDiscountsPage() {
       console.log("[MyDiscounts] Discounts from API:", discountsData.discounts);
       
       // Надежная обработка промокодов для всех пользователей
+      // Промокоды показываем для всех скидок, которые есть в списке полученных
       const discountsWithPromoCodes = (discountsData.discounts || []).map((discount: DiscountItem) => {
-        if (activeTab === "claimed") {
+        // Проверяем, есть ли эта скидка в списке полученных (для показа промокода)
+        const isClaimed = normalizedClaimedData.some((item: any) => {
+          return item && String(item.id) === String(discount.id);
+        });
+        
+        // Промокоды показываем только если скидка получена (независимо от активной вкладки)
+        if (isClaimed) {
           // Приоритет 1: промокод из API (уже обогащен из preferences)
           let promoCode: string | undefined = undefined;
           
@@ -194,10 +201,11 @@ export default function MyDiscountsPage() {
             }
           }
           
-          // Всегда возвращаем discount с промокодом (даже если undefined)
+          // Возвращаем discount с промокодом
           return { ...discount, promoCode };
         }
-        // Для избранного промокоды не нужны
+        
+        // Если скидка не получена, возвращаем без промокода
         return discount;
       });
       

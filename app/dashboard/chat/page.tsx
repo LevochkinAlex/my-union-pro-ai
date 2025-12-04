@@ -528,17 +528,21 @@ function ChatPageContent() {
             method: "DELETE",
           });
 
+          const result = await response.json();
+          console.log(`[chat] DELETE response:`, { ok: response.ok, status: response.status, result });
+          
           if (response.ok) {
-            const result = await response.json();
-            console.log(`[chat] Message deleted successfully:`, result);
-            // Принудительно обновляем список сообщений
-            await loadMessages(selectedChat.id, false);
+            console.log(`[chat] ✅ Message ${messageId} deleted successfully, reloading messages...`);
+            // Принудительно обновляем список сообщений с небольшой задержкой
+            setTimeout(async () => {
+              await loadMessages(selectedChat.id, false);
+            }, 100);
           } else {
-            const data = await response.json();
+            console.error(`[chat] ❌ Failed to delete message ${messageId}:`, result);
             setAlertDialog({
               isOpen: true,
               title: "Ошибка",
-              message: data.error || "Ошибка при удалении сообщения",
+              message: result.error || "Ошибка при удалении сообщения",
               type: "alert",
               onConfirm: () => setAlertDialog((prev) => ({ ...prev, isOpen: false })),
             });

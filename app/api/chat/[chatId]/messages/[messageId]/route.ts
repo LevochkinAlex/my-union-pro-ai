@@ -244,17 +244,31 @@ export async function DELETE(
     }
 
     // Помечаем сообщение как удаленное (мягкое удаление)
+    const deletedAt = new Date();
     const updatedMessage = await prisma.chatMessage.update({
       where: { id: messageId },
       data: {
-        deletedAt: new Date(),
+        deletedAt: deletedAt,
         content: "Сообщение удалено",
       },
     });
 
-    console.log(`[chat] Message ${messageId} deleted by user ${userId}, deletedAt: ${updatedMessage.deletedAt}`);
+    console.log(`[chat] ✅ Message ${messageId} deleted by user ${userId}`);
+    console.log(`[chat] DeletedAt: ${updatedMessage.deletedAt}, ChatId: ${chatId}`);
 
-    return NextResponse.json({ success: true, deletedAt: updatedMessage.deletedAt });
+    // Проверяем, что сообщение действительно помечено как удаленное
+    const verifyMessage = await prisma.chatMessage.findUnique({
+      where: { id: messageId },
+      select: { deletedAt: true, chatId: true },
+    });
+    console.log(`[chat] Verification: message ${messageId} deletedAt = ${verifyMessage?.deletedAt}`);
+
+    return NextResponse.json({ 
+      success: true, 
+      deletedAt: updatedMessage.deletedAt,
+      messageId: messageId,
+      chatId: chatId,
+    });
   } catch (error: any) {
     console.error("[chat] DELETE Error:", error);
     return NextResponse.json(
