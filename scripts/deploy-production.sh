@@ -28,7 +28,9 @@ sshpass -p "${VDS_PASSWORD}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFi
   pm2 stop my-union-pro || true
   
   echo "📥 Подтягиваем изменения из Git..."
+  git stash --include-untracked || true
   git pull origin main
+  git stash pop || true
   
   echo "📦 Устанавливаем зависимости..."
   npm install
