@@ -204,6 +204,7 @@ export async function PUT(request: NextRequest) {
         profession: true,
         education: true,
         organizationId: true,
+        profileChangedAfterDocuments: true, // Нужен для проверки изменения флага
         bestBenefitsUserId: true,
         bestBenefitsPassword: true,
       },
