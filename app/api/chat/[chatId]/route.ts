@@ -45,7 +45,7 @@ export async function GET(
       return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
     }
 
-    // Получаем сообщения
+    // Получаем сообщения (исключаем удаленные)
     const messages = await prisma.chatMessage.findMany({
       where: { 
         chatId,

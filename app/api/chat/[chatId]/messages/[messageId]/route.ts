@@ -198,9 +198,7 @@ export async function DELETE(
     const resolvedParams = await Promise.resolve(params);
     const { chatId, messageId } = resolvedParams;
     // Учитываем имперсонализацию: если админ имперсонирует пользователя, используем ID имперсонируемого
-    const userId = (session.user as any).originalAdminId && (session.user as any).isImpersonating 
-      ? session.user.id 
-      : session.user.id;
+    const userId = session.user.id;
 
     // Проверяем, что пользователь является участником чата
     const chat = await prisma.chat.findUnique({
