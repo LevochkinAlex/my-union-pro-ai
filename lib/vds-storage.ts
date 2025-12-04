@@ -251,20 +251,26 @@ export async function getFileFromVDS(fileKey: string): Promise<Buffer> {
   // Если файл доступен через HTTP, скачиваем его
   const fileUrl = `${vdsConfig.publicUrl}/${fileKey}`;
   
+  console.log("[vds-storage] Attempting to fetch file via HTTP:", fileUrl);
   try {
     const response = await fetch(fileUrl);
     if (!response.ok) {
-      throw new Error(`Failed to fetch file: ${response.statusText}`);
+      console.error(`[vds-storage] HTTP fetch failed: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
     }
     
     const arrayBuffer = await response.arrayBuffer();
+    console.log("[vds-storage] File fetched successfully via HTTP, size:", arrayBuffer.byteLength);
     return Buffer.from(arrayBuffer);
   } catch (error) {
     console.error("[vds-storage] Error fetching file via HTTP, trying SCP:", error);
+    console.error("[vds-storage] File URL was:", fileUrl);
     
     // Fallback: скачиваем через SCP
     try {
       const remoteFilePath = path.join(vdsConfig.remotePath, fileKey).replace(/\\/g, "/");
+      console.log("[vds-storage] Attempting to download via SCP from:", remoteFilePath);
+      
       const tempDir = path.join(process.cwd(), "tmp", "downloads");
       await mkdir(tempDir, { recursive: true });
       
@@ -276,9 +282,11 @@ export async function getFileFromVDS(fileKey: string): Promise<Buffer> {
         `${vdsConfig.user}@${vdsConfig.host}:${remoteFilePath}`,
         tempFilePath
       );
+      console.log("[vds-storage] Executing SCP command...");
       await execAsync(scpCommand);
       
       const buffer = await readFile(tempFilePath);
+      console.log("[vds-storage] File downloaded successfully via SCP, size:", buffer.length);
       
       // Удаляем временный файл
       try {
@@ -289,7 +297,9 @@ export async function getFileFromVDS(fileKey: string): Promise<Buffer> {
       
       return buffer;
     } catch (scpError) {
-      throw new Error(`Failed to get file from VDS: ${scpError instanceof Error ? scpError.message : String(scpError)}`);
+      console.error("[vds-storage] SCP download also failed:", scpError);
+      console.error("[vds-storage] Remote file path was:", path.join(vdsConfig.remotePath, fileKey));
+      throw new Error(`Failed to get file from VDS (HTTP and SCP both failed): ${scpError instanceof Error ? scpError.message : String(scpError)}`);
     }
   }
 }
