@@ -53,6 +53,20 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     return user.firstName?.[0] || user.lastName?.[0] || "?";
   };
 
+  // Helper function to get file URL (for production compatibility)
+  const getFileUrl = (filePath: string) => {
+    if (!filePath) return "";
+    // If it's already a full URL, return as is
+    if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+      return filePath;
+    }
+    // Extract filename from path
+    const filename = filePath.split("/").pop();
+    if (!filename) return filePath;
+    // Use API endpoint for serving files
+    return `/api/uploads/posts/${filename}`;
+  };
+
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -253,13 +267,20 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
               <div key={attachment.id}>
                 {attachment.type === "image" ? (
                   <img
-                    src={attachment.filePath}
+                    src={getFileUrl(attachment.filePath)}
                     alt={attachment.originalName}
                     className="max-w-full rounded-lg"
+                    onError={(e) => {
+                      // Fallback на прямой путь, если API не работает
+                      const target = e.target as HTMLImageElement;
+                      if (target.src !== attachment.filePath) {
+                        target.src = attachment.filePath;
+                      }
+                    }}
                   />
                 ) : (
                   <a
-                    href={attachment.filePath}
+                    href={getFileUrl(attachment.filePath)}
                     download={attachment.originalName}
                     className="flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                   >
