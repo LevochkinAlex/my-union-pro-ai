@@ -367,14 +367,14 @@ export default function MembershipBanner({
           </div>
           <div
             className={`flex items-center gap-2 rounded-lg p-2 ${
-              profileProgress >= 100 && hasDocuments
+              hasDocuments
                 ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
                 : profileProgress >= 100
                 ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
                 : "bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
             }`}
           >
-            {profileProgress >= 100 && hasDocuments ? (
+            {hasDocuments ? (
               <svg className="h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"
