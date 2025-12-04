@@ -81,10 +81,17 @@ export async function POST(request: NextRequest) {
 
     // Replace local claimed with BestBenefits activated discounts (single source of truth)
     // Синхронизация ЗАМЕНЯЕТ локальные данные на данные из BestBenefits
-    const updatedClaimed = bbActivated.map(bbItem => ({
-      id: bbItem.id,
-      promoCode: bbItem.promoCode,
-    }));
+    const updatedClaimed = bbActivated.map(bbItem => {
+      // Нормализуем промокод: строки "null", "undefined" и пустые значения превращаем в null
+      let promoCode = bbItem.promoCode;
+      if (promoCode && (promoCode.toLowerCase() === 'null' || promoCode.toLowerCase() === 'undefined' || promoCode.trim() === '')) {
+        promoCode = null;
+      }
+      return {
+        id: bbItem.id,
+        promoCode: promoCode,
+      };
+    });
 
     // Save merged preferences
     await prisma.discountPreference.upsert({

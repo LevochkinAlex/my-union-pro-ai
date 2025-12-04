@@ -330,7 +330,11 @@ export async function getUserActivatedDiscounts(
         });
         
         if (activeCode) {
-          promoCode = activeCode.code || activeCode.promo_code || activeCode.promoCode;
+          const code = activeCode.code || activeCode.promo_code || activeCode.promoCode;
+          // Нормализуем: строки "null" и "undefined" игнорируем
+          if (code && code.toLowerCase() !== 'null' && code.toLowerCase() !== 'undefined') {
+            promoCode = code;
+          }
         }
       } else if (p.promo_code) {
         // Прямое поле promo_code - применяем валидацию
@@ -338,7 +342,9 @@ export async function getUserActivatedDiscounts(
         if (code && 
             code.length > 0 && 
             code !== 'Промокод деактивирован' &&
-            code.toLowerCase() !== 'deactivated') {
+            code.toLowerCase() !== 'deactivated' &&
+            code.toLowerCase() !== 'null' &&
+            code.toLowerCase() !== 'undefined') {
           promoCode = code;
         }
       } else if (p.promoCode) {
@@ -347,7 +353,9 @@ export async function getUserActivatedDiscounts(
         if (code && 
             code.length > 0 && 
             code !== 'Промокод деактивирован' &&
-            code.toLowerCase() !== 'deactivated') {
+            code.toLowerCase() !== 'deactivated' &&
+            code.toLowerCase() !== 'null' &&
+            code.toLowerCase() !== 'undefined') {
           promoCode = code;
         }
       } else if (p.code) {
@@ -356,7 +364,9 @@ export async function getUserActivatedDiscounts(
         if (code && 
             code.length > 0 && 
             code !== 'Промокод деактивирован' &&
-            code.toLowerCase() !== 'deactivated') {
+            code.toLowerCase() !== 'deactivated' &&
+            code.toLowerCase() !== 'null' &&
+            code.toLowerCase() !== 'undefined') {
           promoCode = code;
         }
       }
