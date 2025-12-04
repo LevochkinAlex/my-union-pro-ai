@@ -119,8 +119,11 @@ export default function MyDiscountsPage() {
       // Нормализуем формат: преобразуем старый формат (числа) в новый (объекты)
       const normalizedClaimedData = claimedData.map((item: any) => {
         if (typeof item === 'object' && item !== null && item.id) {
-          // Уже в правильном формате
-          return item;
+          // Уже в правильном формате - убеждаемся, что promoCode есть
+          return {
+            id: item.id,
+            promoCode: item.promoCode || null,
+          };
         }
         if (typeof item === 'number') {
           // Старый формат: преобразуем в объект
@@ -128,6 +131,8 @@ export default function MyDiscountsPage() {
         }
         return null;
       }).filter(Boolean);
+      
+      console.log("[MyDiscounts] Normalized claimed data:", normalizedClaimedData);
       
       const claimedIds = normalizedClaimedData.map((item: any) => item.id).filter(Boolean);
       
