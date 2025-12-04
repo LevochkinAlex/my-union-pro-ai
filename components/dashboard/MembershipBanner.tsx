@@ -87,6 +87,13 @@ export default function MembershipBanner({
         });
         
         const newHasDocuments = sentDocuments.length > 0;
+        console.log("[MembershipBanner] Checking documents:", {
+          totalDocuments: documents.length,
+          sentDocuments: sentDocuments.length,
+          sentDocsDetails: sentDocuments.map((d: any) => ({ type: d.type, status: d.status, hasSignedPath: !!d.signedFilePath })),
+          newHasDocuments,
+          currentHasDocuments: hasDocuments,
+        });
         const newMembershipStatus = user?.membershipStatus || membershipStatus;
         
         // Вычисляем прогресс профиля на клиенте
