@@ -180,11 +180,13 @@ export default function MyDiscountsPage() {
       console.log("[MyDiscounts] Discounts from API:", discountsData.discounts?.map((d: any) => ({ id: d.id, title: d.title, promoCode: d.promoCode })));
       
       const discountsWithPromoCodes = (discountsData.discounts || []).map((discount: DiscountItem) => {
-        // Находим элемент в списке полученных (для проверки и получения промокода)
+        // Проверяем, получена ли скидка (для обеих вкладок)
+        const isClaimed = claimedIds.includes(discount.id);
+        
+        // Находим элемент в списке полученных (для получения промокода из preferences)
         const claimedItem = normalizedClaimedData.find((item: any) => {
           return item && String(item.id) === String(discount.id);
         });
-        const isClaimed = !!claimedItem;
         
         console.log(`[MyDiscounts] Processing discount ${discount.id} (${discount.title}): isClaimed=${isClaimed}, activeTab=${activeTab}, hasPromoCodeFromAPI=${!!discount.promoCode}`);
         
@@ -196,26 +198,37 @@ export default function MyDiscountsPage() {
           if (discount.promoCode && typeof discount.promoCode === 'string' && discount.promoCode.trim().length > 0) {
             promoCode = discount.promoCode.trim();
             console.log(`[MyDiscounts] ✅ Using promo code from API for discount ${discount.id}:`, promoCode);
-          } else if (claimedItem) {
+          } else if (claimedItem && claimedItem.promoCode) {
             // Приоритет 2: промокод из normalizedClaimedData (fallback)
             // Это особенно важно для вкладки "Избранное", где API может не обогатить промокодом
             console.log(`[MyDiscounts] Found claimed item for discount ${discount.id}:`, claimedItem);
-            if (typeof claimedItem === 'object' && claimedItem !== null && claimedItem.promoCode) {
-              promoCode = typeof claimedItem.promoCode === 'string' && claimedItem.promoCode.trim().length > 0
-                ? claimedItem.promoCode.trim()
+            if (typeof claimedItem.promoCode === 'string' && claimedItem.promoCode.trim().length > 0) {
+              promoCode = claimedItem.promoCode.trim();
+              console.log(`[MyDiscounts] ✅ Using promo code from preferences for discount ${discount.id}:`, promoCode);
+            } else {
+              console.log(`[MyDiscounts] ⚠️ Claimed item has invalid promo code:`, claimedItem.promoCode);
+            }
+          } else {
+            // Приоритет 3: пытаемся найти промокод в исходных данных (для старого формата)
+            const rawClaimedItem = claimedData.find((item: any) => {
+              const itemId = typeof item === 'object' && item !== null ? item.id : item;
+              return String(itemId) === String(discount.id);
+            });
+            
+            if (rawClaimedItem && typeof rawClaimedItem === 'object' && rawClaimedItem.promoCode) {
+              promoCode = typeof rawClaimedItem.promoCode === 'string' && rawClaimedItem.promoCode.trim().length > 0
+                ? rawClaimedItem.promoCode.trim()
                 : undefined;
               if (promoCode) {
-                console.log(`[MyDiscounts] ✅ Using promo code from preferences for discount ${discount.id}:`, promoCode);
-              } else {
-                console.log(`[MyDiscounts] ⚠️ Claimed item has invalid promo code:`, claimedItem.promoCode);
+                console.log(`[MyDiscounts] ✅ Using promo code from raw claimed data for discount ${discount.id}:`, promoCode);
               }
-            } else {
-              console.log(`[MyDiscounts] ⚠️ Claimed item has no promo code:`, claimedItem);
             }
           }
           
-          // Возвращаем discount с промокодом (даже если promoCode undefined, чтобы сохранить структуру)
-          return { ...discount, promoCode };
+          // Возвращаем discount с промокодом
+          const result = { ...discount, promoCode };
+          console.log(`[MyDiscounts] Final discount ${discount.id}:`, { id: result.id, title: result.title, promoCode: result.promoCode });
+          return result;
         }
         
         // Если скидка не получена, возвращаем без промокода
