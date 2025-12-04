@@ -46,17 +46,24 @@ export default function PostFeed({ userId, limit }: PostFeedProps) {
   const loadPosts = async () => {
     try {
       setLoading(true);
-      const url = userId ? `/api/posts?userId=${userId}${limit ? `&limit=${limit}` : ""}` : `/api/posts${limit ? `?limit=${limit}` : ""}`;
+      const params = new URLSearchParams();
+      if (userId) params.append("userId", userId);
+      if (limit) params.append("limit", limit.toString());
+      
+      const url = `/api/posts?${params.toString()}`;
+      console.log("[PostFeed] Loading posts from:", url);
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
+        console.log("[PostFeed] Posts loaded:", data.posts?.length || 0);
         setPosts(data.posts || []);
       } else {
-        console.error("Error loading posts:", response.status, response.statusText);
+        const errorData = await response.json().catch(() => ({}));
+        console.error("[PostFeed] Error loading posts:", response.status, response.statusText, errorData);
         setPosts([]);
       }
     } catch (error) {
-      console.error("Error loading posts:", error);
+      console.error("[PostFeed] Error loading posts:", error);
       setPosts([]);
     } finally {
       setLoading(false);
