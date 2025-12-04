@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import RichTextEditor from "@/components/admin/RichTextEditor";
+import { compressImages } from "@/lib/compress-image";
 
 interface CreatePostProps {
   onPostCreated?: () => void;
@@ -231,7 +232,9 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         formData.append("videoMetadata", JSON.stringify(videoMetadata));
       }
 
-      selectedFiles.forEach((file) => {
+      // Сжимаем изображения перед отправкой
+      const filesToUpload = await compressImages(selectedFiles);
+      filesToUpload.forEach((file) => {
         formData.append("attachments", file);
       });
 

@@ -107,14 +107,19 @@ export async function POST(request: NextRequest) {
     }
 
     const formData = await request.formData();
-    const content = formData.get("content") as string;
+    const content = (formData.get("content") as string) || "";
     const postType = (formData.get("postType") as string) || "text";
     const linkMetadata = formData.get("linkMetadata");
     const videoMetadata = formData.get("videoMetadata");
+    const files = formData.getAll("attachments") as File[];
 
-    if (!content || !content.trim()) {
+    // Проверяем, что есть либо текст, либо файлы
+    const hasContent = content && content.trim().length > 0;
+    const hasFiles = files.length > 0 && files.some(f => f && f.size > 0);
+
+    if (!hasContent && !hasFiles) {
       return NextResponse.json(
-        { error: "Содержимое поста не может быть пустым" },
+        { error: "Пост должен содержать текст или вложения" },
         { status: 400 }
       );
     }
@@ -143,7 +148,7 @@ export async function POST(request: NextRequest) {
     const post = await prisma.userPost.create({
       data: {
         authorId: session.user.id,
-        content: content.trim(),
+        content: content.trim() || "", // Разрешаем пустой контент, если есть вложения
         postType,
         linkMetadata: parsedLinkMetadata,
         videoMetadata: parsedVideoMetadata,
@@ -178,7 +183,6 @@ export async function POST(request: NextRequest) {
 
     // Обрабатываем вложения
     const attachments: any[] = [];
-    const files = formData.getAll("attachments") as File[];
 
     if (files.length > 0) {
       // Создаем директорию для загрузок
@@ -243,10 +247,11 @@ export async function POST(request: NextRequest) {
         const authorName = `${post.author.firstName || ""} ${post.author.middleName || ""} ${post.author.lastName || ""}`.trim() || "Пользователь";
 
         for (const subscription of subscribers) {
+          const messageText = content.trim() || (attachments.length > 0 ? "Новое изображение" : "Новый пост");
           await sendNotification({
             userId: subscription.subscriberId,
             title: `📝 Новый пост от ${authorName}`,
-            message: content.trim().substring(0, 100),
+            message: messageText.substring(0, 100),
             link: `/dashboard/profile/${session.user.id}`,
             data: {
               type: "user_post",
@@ -271,9 +276,17 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error("[posts] POST Error:", error);
+    console.error("[posts] POST Error:", {
+      message: error?.message,
+      stack: error?.stack,
+      code: error?.code,
+      name: error?.name,
+    });
     return NextResponse.json(
-      { error: "Внутренняя ошибка сервера" },
+      { 
+        error: "Внутренняя ошибка сервера",
+        details: process.env.NODE_ENV === "development" ? error?.message : undefined,
+      },
       { status: 500 }
     );
   }
