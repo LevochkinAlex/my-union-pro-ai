@@ -17,6 +17,8 @@
     "prisma:fix": "bash scripts/fix-prisma.sh",
     "seed:default-bot": "dotenv -e .env.local -- node scripts/create-default-bot.mjs",
     "seed:document-templates": "dotenv -e .env.local -- node scripts/seed-document-templates.mjs",
+    "export:templates": "dotenv -e .env.local -- node scripts/export-document-templates.mjs",
+    "import:templates": "dotenv -e .env.local -- node scripts/import-document-templates.mjs",
     "worker": "dotenv -e .env.local -- tsx scripts/worker.ts",
     "worker:prod": "node dist/scripts/worker.js",
     "load-documents": "dotenv -e .env.local -- node scripts/load-appeal-bot-documents.mjs",
