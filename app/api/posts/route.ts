@@ -4,6 +4,12 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+
+// Инициализируем VDS хранилище при загрузке модуля
+if (typeof window === "undefined") {
+  initVDSStorageFromEnv();
+}
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "posts");
 
@@ -185,7 +191,7 @@ export async function POST(request: NextRequest) {
     const attachments: any[] = [];
 
     if (files.length > 0) {
-      // Создаем директорию для загрузок
+      // Создаем директорию для загрузок (для локального fallback)
       await mkdir(UPLOAD_DIR, { recursive: true });
 
       for (const file of files) {
@@ -193,11 +199,10 @@ export async function POST(request: NextRequest) {
 
         const fileExtension = path.extname(file.name);
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExtension}`;
-        const filePath = path.join(UPLOAD_DIR, fileName);
+        const localFilePath = path.join(UPLOAD_DIR, fileName);
 
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
-        await writeFile(filePath, buffer);
 
         // Определяем тип файла
         const mimeType = file.type || "";
@@ -208,13 +213,38 @@ export async function POST(request: NextRequest) {
           attachmentType = "video";
         }
 
+        let finalFilePath = `/uploads/posts/${fileName}`;
+
+        // Пробуем загрузить на VDS
+        if (isVDSStorageConfigured()) {
+          try {
+            const fileKey = `posts/${fileName}`;
+            const vdsUrl = await uploadFileToVDS(fileKey, buffer, mimeType);
+            if (vdsUrl) {
+              finalFilePath = vdsUrl;
+              console.log(`[posts] File uploaded to VDS: ${vdsUrl}`);
+            } else {
+              // Fallback на локальное сохранение
+              await writeFile(localFilePath, buffer);
+              console.log(`[posts] VDS upload failed, saved locally: ${localFilePath}`);
+            }
+          } catch (vdsError) {
+            console.error(`[posts] VDS upload error, using local fallback:`, vdsError);
+            // Fallback на локальное сохранение
+            await writeFile(localFilePath, buffer);
+          }
+        } else {
+          // Если VDS не настроен, сохраняем локально
+          await writeFile(localFilePath, buffer);
+        }
+
         const attachment = await prisma.postAttachment.create({
           data: {
             postId: post.id,
             type: attachmentType,
             fileName: fileName,
             originalName: file.name,
-            filePath: `/uploads/posts/${fileName}`,
+            filePath: finalFilePath,
             fileSize: file.size,
             mimeType: mimeType || null,
           },
