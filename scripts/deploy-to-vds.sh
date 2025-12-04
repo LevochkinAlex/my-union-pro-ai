@@ -38,8 +38,8 @@ pnpm install --frozen-lockfile
 echo "🔄 Generating Prisma client..."
 npx prisma generate
 
-echo "🗄️  Pushing database schema..."
-npx prisma db push --accept-data-loss
+echo "🗄️  Applying database migrations..."
+npx prisma migrate deploy
 
 echo "📚 Добавляем справочники должностей и профессий..."
 npx tsx prisma/seed-dictionaries.ts || echo "⚠️  Seed dictionaries skipped (file may not exist)"
