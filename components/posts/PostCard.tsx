@@ -320,7 +320,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       // Используем как обложку
       setEditCoverImage(fullImageUrl);
     } else {
-      // Вставляем в контент
+      // Вставляем в контент - только img тег без wrapper и кнопки
       if (editArticleEditorRef.current) {
         const editor = editArticleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
         console.log("[PostCard] Found editor:", !!editor, "Has insertImage:", !!(editor as any)?.insertImage);
@@ -331,9 +331,9 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           (editor as any).insertImage(fullImageUrl, "Сгенерированное изображение");
           console.log("[PostCard] Image inserted successfully");
         } else {
-          // Fallback: добавляем напрямую в контент
+          // Fallback: добавляем только img тег без wrapper и кнопки
           console.log("[PostCard] Using fallback - updating editContent directly");
-          const imgHtml = `<div class="image-wrapper" style="position: relative; display: inline-block; max-width: 100%; margin: 8px 0;"><img src="${fullImageUrl}" alt="Сгенерированное изображение" style="max-width: 100%; height: auto; border-radius: 8px; display: block;" /><button type="button" class="image-delete-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1;" title="Удалить изображение">×</button></div>`;
+          const imgHtml = `<img src="${fullImageUrl}" alt="Сгенерированное изображение" style="max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0;" />`;
           setEditContent(prev => prev + imgHtml);
         }
       }
@@ -940,10 +940,26 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                         onChange={setEditContent}
                         placeholder="Начните писать статью..."
                         onInsertImage={() => {
+                          // Сохраняем позицию курсора перед открытием модалки
+                          if (editArticleEditorRef.current) {
+                            const editor = editArticleEditorRef.current.querySelector('[contenteditable="true"]') as any;
+                            if (editor?.saveSelection) {
+                              editor.saveSelection();
+                            }
+                          }
                           setImageInsertMode("content");
                           setIsEditImageModalOpen(true);
                         }}
-                        onInsertVideo={() => setIsEditVideoModalOpen(true)}
+                        onInsertVideo={() => {
+                          // Сохраняем позицию курсора перед открытием модалки
+                          if (editArticleEditorRef.current) {
+                            const editor = editArticleEditorRef.current.querySelector('[contenteditable="true"]') as any;
+                            if (editor?.saveSelection) {
+                              editor.saveSelection();
+                            }
+                          }
+                          setIsEditVideoModalOpen(true);
+                        }}
                       />
                     </div>
                     

@@ -19,6 +19,7 @@ export default function RichTextEditor({
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const isUpdating = useRef(false);
+  const savedSelectionRef = useRef<Range | null>(null);
 
   useEffect(() => {
     if (editorRef.current && !isUpdating.current) {
@@ -111,21 +112,68 @@ export default function RichTextEditor({
     handleInput();
   };
 
+  // Сохраняем позицию курсора
+  const saveSelection = () => {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      savedSelectionRef.current = selection.getRangeAt(0).cloneRange();
+    }
+  };
+
+  // Восстанавливаем позицию курсора
+  const restoreSelection = () => {
+    if (savedSelectionRef.current && editorRef.current) {
+      editorRef.current.focus();
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(savedSelectionRef.current);
+      }
+    }
+  };
+
   const insertHTML = (html: string) => {
     document.execCommand("insertHTML", false, html);
     editorRef.current?.focus();
     handleInput();
   };
 
-  // Экспортируем функцию для вставки изображения извне
+  // Вставка с восстановлением позиции курсора
+  const insertHTMLAtSavedPosition = (html: string) => {
+    if (editorRef.current) {
+      editorRef.current.focus();
+      
+      // Восстанавливаем сохранённую позицию курсора
+      if (savedSelectionRef.current) {
+        const selection = window.getSelection();
+        if (selection) {
+          selection.removeAllRanges();
+          selection.addRange(savedSelectionRef.current);
+        }
+      }
+      
+      // Вставляем HTML
+      document.execCommand("insertHTML", false, html);
+      handleInput();
+      
+      // Очищаем сохранённую позицию
+      savedSelectionRef.current = null;
+    }
+  };
+
+  // Экспортируем функции для использования извне
   useEffect(() => {
     if (editorRef.current) {
+      // Сохранение позиции курсора перед открытием модалки
+      (editorRef.current as any).saveSelection = saveSelection;
+      
+      // Вставка изображения в сохранённую позицию
       (editorRef.current as any).insertImage = (url: string, alt: string = "Изображение") => {
         // Вставляем только img тег - обертка и кнопка удаления добавляются автоматически в useEffect
-        insertHTML(`<img src="${url}" alt="${alt}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0;" />`);
+        insertHTMLAtSavedPosition(`<img src="${url}" alt="${alt}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0;" />`);
       };
       (editorRef.current as any).insertVideo = (embedUrl: string) => {
-        insertHTML(`<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; margin: 16px 0; border-radius: 8px;"><iframe src="${embedUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" frameborder="0" allowfullscreen></iframe></div>`);
+        insertHTMLAtSavedPosition(`<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; margin: 16px 0; border-radius: 8px;"><iframe src="${embedUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" frameborder="0" allowfullscreen></iframe></div>`);
       };
     }
   }, []);

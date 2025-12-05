@@ -177,12 +177,26 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
   };
 
   const handleInsertImage = () => {
+    // Сохраняем позицию курсора перед открытием модалки
+    if (articleEditorRef.current) {
+      const editor = articleEditorRef.current.querySelector('[contenteditable="true"]') as any;
+      if (editor?.saveSelection) {
+        editor.saveSelection();
+      }
+    }
     // Вставка через WYSIWYG - в HTML, не cover
     setIsImageModalForCover(false);
     setIsImageModalOpen(true);
   };
 
   const handleInsertVideo = () => {
+    // Сохраняем позицию курсора перед открытием модалки
+    if (articleEditorRef.current) {
+      const editor = articleEditorRef.current.querySelector('[contenteditable="true"]') as any;
+      if (editor?.saveSelection) {
+        editor.saveSelection();
+      }
+    }
     setIsVideoModalOpen(true);
   };
 
