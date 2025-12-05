@@ -860,6 +860,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                   // Обновляем coverImage из ответа
                   if (data.post?.coverImage !== undefined) {
                     setCoverImage(data.post.coverImage);
+                    setEditCoverImage(data.post.coverImage);
                   }
                   // Очищаем превью
                   editFilePreviews.forEach((preview) => {
