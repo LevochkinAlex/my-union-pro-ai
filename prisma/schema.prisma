@@ -91,6 +91,8 @@ model User {
   spouseInfo         String?  @db.Text // Информация о супруге/супруге
   awards             String?  @db.Text // Награды в формате JSON: [{"type": "ведомственная"|"государственная"|"профсоюзная", "year": "YYYY", "description": "описание"}] 
   training           String?  @db.Text // Обучение в формате JSON: [{"name": "название", "year": "YYYY", "description": "описание"}]
+  professions        String?  @db.Text // Профессии в формате JSON: [{"name": "название профессии", "experience": "опыт работы"}]
+  educations         String?  @db.Text // Образование в формате JSON: [{"level": "уровень", "institution": "учебное заведение", "year": "год окончания", "specialty": "специальность"}]
   additionalInfo     String?  @db.Text // Дополнительная информация (свободный текст)
 
   // База знаний о пользователе (для ИИ)

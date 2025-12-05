@@ -86,11 +86,23 @@ interface Training {
   description: string;
 }
 
+interface Profession {
+  name: string;
+  experience: string;
+}
+
+interface Education {
+  level: string;
+  institution: string;
+  year: string;
+  specialty: string;
+}
+
 interface ChildrenState {
   children: Child[];
 }
 
-type TabKey = "profile" | "additional" | "membership" | "security";
+type TabKey = "profile" | "additional" | "membership" | "awards" | "security";
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
@@ -384,6 +396,8 @@ export default function ProfilePage() {
           childrenBirthDates: data.childrenBirthDates ?? "",
           maritalStatus: displayMaritalStatus,
           spouseInfo: data.spouseInfo ?? "",
+          profession: data.profession ?? "",
+          education: data.education ?? "",
           awards: data.awards ?? "",
           training: data.training ?? "",
           additionalInfo: data.additionalInfo ?? "",
@@ -899,6 +913,16 @@ export default function ProfilePage() {
             Членство
           </button>
           <button
+            onClick={() => setActiveTab("awards")}
+            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
+              activeTab === "awards"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Награды
+          </button>
+          <button
             onClick={() => setActiveTab("security")}
             className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
               activeTab === "security"
@@ -991,21 +1015,6 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                Предпочтительный город для скидок
-                <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">(управляет фильтром скидок)</span>
-              </label>
-              <input
-                type="text"
-                name="preferredDiscountCity"
-                value={profileData.preferredDiscountCity}
-                onChange={handleProfileChange}
-                onBlur={() => handleFieldBlur("preferredDiscountCity", profileData.preferredDiscountCity)}
-                placeholder="Например: Москва, Санкт-Петербург, Казань..."
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              />
-            </div>
-            <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Должность</label>
               <Autocomplete
                 name="jobTitle"
@@ -1054,6 +1063,21 @@ export default function ProfilePage() {
                   }
                 }}
                 required
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Предпочтительный город для скидок
+                <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">(управляет фильтром скидок)</span>
+              </label>
+              <input
+                type="text"
+                name="preferredDiscountCity"
+                value={profileData.preferredDiscountCity}
+                onChange={handleProfileChange}
+                onBlur={() => handleFieldBlur("preferredDiscountCity", profileData.preferredDiscountCity)}
+                placeholder="Например: Москва, Санкт-Петербург, Казань..."
+                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>
           </div>
@@ -1382,99 +1406,6 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* Награды */}
-                <div className="md:col-span-2">
-              <div className="mb-4 flex items-center justify-between">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
-                  Награды (ведомственные, государственные, профсоюзные)
-                  </label>
-                <button
-                  type="button"
-                  onClick={addAward}
-                  className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Добавить награду
-                </button>
-              </div>
-              
-              {awards.length === 0 ? (
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center dark:border-gray-700 dark:bg-gray-900">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Нажмите "Добавить награду" чтобы указать информацию о награде
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {awards.map((award, index) => (
-                    <div
-                      key={index}
-                      className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900"
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                        <div className="w-full sm:w-48">
-                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                            Тип награды
-                          </label>
-                          <select
-                            value={award.type}
-                            onChange={(e) => updateAward(index, "type", e.target.value as Award["type"])}
-                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                          >
-                            <option value="ведомственная">Ведомственная</option>
-                            <option value="государственная">Государственная</option>
-                            <option value="профсоюзная">Профсоюзная</option>
-                          </select>
-                        </div>
-                        
-                        <div className="w-full sm:w-32">
-                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                            Год
-                          </label>
-                          <input
-                            type="text"
-                            value={award.year}
-                            onChange={(e) => updateAward(index, "year", e.target.value)}
-                            placeholder="YYYY"
-                            maxLength={4}
-                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                          />
-                        </div>
-                        
-                        <div className="flex-1">
-                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                            Описание
-                          </label>
-                          <input
-                            type="text"
-                            value={award.description}
-                            onChange={(e) => updateAward(index, "description", e.target.value)}
-                            placeholder="Описание награды"
-                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                          />
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => removeAward(index)}
-                            className="inline-flex items-center justify-center rounded-lg bg-red-600 p-2 text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 h-[38px] w-[38px]"
-                            title="Удалить"
-                          >
-                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
             {/* Обучение */}
             <div className="md:col-span-2">
               <div className="mb-4 flex items-center justify-between">
@@ -1786,6 +1717,118 @@ export default function ProfilePage() {
             Не удалось загрузить данные о членстве
           </div>
         )}
+      </div>
+      )}
+
+      {activeTab === "awards" && (
+      <div className="w-full max-w-5xl rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 md:p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white md:text-lg">Награды и достижения</h3>
+        <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 md:text-sm">
+          Укажите ваши награды (ведомственные, государственные, профсоюзные)
+        </p>
+        <form onSubmit={handleAdditionalInfoSubmit} className="mt-6 space-y-6">
+          <div>
+            <div className="mb-4 flex items-center justify-between">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Награды (ведомственные, государственные, профсоюзные)
+              </label>
+              <button
+                type="button"
+                onClick={addAward}
+                className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Добавить награду
+              </button>
+            </div>
+            
+            {awards.length === 0 ? (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center dark:border-gray-700 dark:bg-gray-900">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Нажмите "Добавить награду" чтобы указать информацию о награде
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {awards.map((award, index) => (
+                  <div
+                    key={index}
+                    className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                      <div className="w-full sm:w-48">
+                        <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                          Тип награды
+                        </label>
+                        <select
+                          value={award.type}
+                          onChange={(e) => updateAward(index, "type", e.target.value as Award["type"])}
+                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                        >
+                          <option value="ведомственная">Ведомственная</option>
+                          <option value="государственная">Государственная</option>
+                          <option value="профсоюзная">Профсоюзная</option>
+                        </select>
+                      </div>
+                      
+                      <div className="w-full sm:w-32">
+                        <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                          Год
+                        </label>
+                        <input
+                          type="text"
+                          value={award.year}
+                          onChange={(e) => updateAward(index, "year", e.target.value)}
+                          placeholder="YYYY"
+                          maxLength={4}
+                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                          Описание
+                        </label>
+                        <input
+                          type="text"
+                          value={award.description}
+                          onChange={(e) => updateAward(index, "description", e.target.value)}
+                          placeholder="Описание награды"
+                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => removeAward(index)}
+                          className="inline-flex items-center justify-center rounded-lg bg-red-600 p-2 text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 h-[38px] w-[38px]"
+                          title="Удалить"
+                        >
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <button
+              type="submit"
+              disabled={savingAdditionalInfo}
+              className="inline-flex items-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {savingAdditionalInfo ? "Сохранение..." : "Сохранить награды"}
+            </button>
+          </div>
+        </form>
       </div>
       )}
 
