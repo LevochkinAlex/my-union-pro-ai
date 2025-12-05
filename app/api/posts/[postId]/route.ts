@@ -132,6 +132,28 @@ export async function PATCH(
     const postType = (formData.get("postType") as string) || existingPost.postType;
     const linkMetadata = formData.get("linkMetadata");
     const videoMetadata = formData.get("videoMetadata");
+    const deletedAttachmentIdsRaw = formData.get("deletedAttachmentIds");
+
+    // Обрабатываем удаление вложений
+    if (deletedAttachmentIdsRaw) {
+      try {
+        const deletedAttachmentIds = JSON.parse(deletedAttachmentIdsRaw as string) as string[];
+        console.log("[posts] Deleting attachments:", deletedAttachmentIds);
+        
+        if (deletedAttachmentIds.length > 0) {
+          // Удаляем вложения из базы данных
+          await prisma.postAttachment.deleteMany({
+            where: {
+              id: { in: deletedAttachmentIds },
+              postId: postId, // Убеждаемся, что вложения принадлежат этому посту
+            },
+          });
+          console.log("[posts] Attachments deleted successfully");
+        }
+      } catch (e) {
+        console.error("[posts] Error deleting attachments:", e);
+      }
+    }
 
     if (!content || !content.trim()) {
       return NextResponse.json(

@@ -675,18 +675,33 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                             {Array.from(images).map((img, index) => {
                               const src = img.getAttribute('src') || '';
                               const alt = img.getAttribute('alt') || `Изображение ${index + 1}`;
+                              const isBroken = !src || src.startsWith('generated-') || (!src.startsWith('/') && !src.startsWith('http') && !src.startsWith('data:'));
                               
                               return (
-                                <div key={index} className="relative group">
-                                  <div className="relative aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden">
-                                    <img
-                                      src={src}
-                                      alt={alt}
-                                      className="w-full h-full object-cover"
-                                      onError={(e) => {
-                                        (e.target as HTMLImageElement).style.display = 'none';
-                                      }}
-                                    />
+                                <div key={index} className="relative">
+                                  <div className="relative aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                                    {isBroken ? (
+                                      <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 p-2">
+                                        <svg className="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                        <span className="text-xs text-center break-all">{alt || 'Сломанное изображение'}</span>
+                                      </div>
+                                    ) : (
+                                      <img
+                                        src={src}
+                                        alt={alt}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                          const target = e.target as HTMLImageElement;
+                                          target.style.display = 'none';
+                                          if (target.nextElementSibling) {
+                                            (target.nextElementSibling as HTMLElement).style.display = 'flex';
+                                          }
+                                        }}
+                                      />
+                                    )}
+                                    {/* Кнопка удаления - всегда видима */}
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -699,62 +714,17 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                                           setEditContent(tempDiv.innerHTML);
                                         }
                                       }}
-                                      className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
+                                      className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full hover:bg-red-700 shadow-lg"
                                       title="Удалить изображение"
                                     >
                                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                       </svg>
                                     </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        // Заменяем изображение
-                                        const input = document.createElement('input');
-                                        input.type = 'file';
-                                        input.accept = 'image/*';
-                                        input.onchange = async (e) => {
-                                          const file = (e.target as HTMLInputElement).files?.[0];
-                                          if (!file) return;
-                                          
-                                          // Загружаем новое изображение
-                                          const formData = new FormData();
-                                          formData.append('file', file);
-                                          
-                                          try {
-                                            const response = await fetch('/api/posts/upload-image', {
-                                              method: 'POST',
-                                              body: formData,
-                                            });
-                                            
-                                            if (response.ok) {
-                                              const data = await response.json();
-                                              // Заменяем src изображения в HTML
-                                              const tempDiv = document.createElement('div');
-                                              tempDiv.innerHTML = editContent;
-                                              const tempImages = tempDiv.querySelectorAll('img');
-                                              if (tempImages[index]) {
-                                                tempImages[index].setAttribute('src', data.url);
-                                                setEditContent(tempDiv.innerHTML);
-                                              }
-                                            } else {
-                                              alert('Ошибка при загрузке изображения');
-                                            }
-                                          } catch (error) {
-                                            console.error('Error uploading image:', error);
-                                            alert('Ошибка при загрузке изображения');
-                                          }
-                                        };
-                                        input.click();
-                                      }}
-                                      className="absolute top-2 left-2 p-2 bg-blue-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-700"
-                                      title="Заменить изображение"
-                                    >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                                      </svg>
-                                    </button>
                                   </div>
+                                  {isBroken && (
+                                    <p className="text-xs text-red-500 mt-1">⚠️ Сломанный путь - удалите это изображение</p>
+                                  )}
                                 </div>
                               );
                             })}
@@ -785,43 +755,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        Фото
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => editFileInputRef.current?.click()}
-                        className="px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                        </svg>
-                        Файл
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditFiles([]);
-                          setEditVideoUrl("");
-                        }}
-                        className="px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                        </svg>
-                        Ссылка
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditFiles([]);
-                          setEditLinkUrl("");
-                        }}
-                        className="px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                        Видео
+                        Заменить фото
                       </button>
                     </div>
 
@@ -935,49 +869,59 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                                     (e.target as HTMLImageElement).style.display = 'none';
                                   }}
                                 />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setDeletedAttachmentIds([...deletedAttachmentIds, attachment.id]);
-                                  }}
-                                  className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
-                                  title="Удалить изображение"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    // Заменяем изображение
-                                    const input = document.createElement('input');
-                                    input.type = 'file';
-                                    input.accept = 'image/*';
-                                    input.onchange = async (e) => {
-                                      const file = (e.target as HTMLInputElement).files?.[0];
-                                      if (!file) return;
-                                      
-                                      // Помечаем старое вложение на удаление
+                                {/* Кнопки всегда видимые */}
+                                <div className="absolute top-2 right-2 flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      // Заменяем изображение
+                                      const input = document.createElement('input');
+                                      input.type = 'file';
+                                      input.accept = 'image/*,.heic,.heif';
+                                      input.onchange = async (e) => {
+                                        const file = (e.target as HTMLInputElement).files?.[0];
+                                        if (!file) return;
+                                        
+                                        // Помечаем ВСЕ существующие вложения на удаление
+                                        if (post.attachments && post.attachments.length > 0) {
+                                          setDeletedAttachmentIds(post.attachments.map((a: any) => a.id));
+                                        }
+                                        
+                                        // Очищаем старые превью
+                                        editFilePreviews.forEach((preview) => {
+                                          if (preview) URL.revokeObjectURL(preview);
+                                        });
+                                        
+                                        // Устанавливаем новый файл (заменяет все)
+                                        setEditFiles([file]);
+                                        
+                                        // Создаем превью
+                                        const preview = URL.createObjectURL(file);
+                                        setEditFilePreviews([preview]);
+                                      };
+                                      input.click();
+                                    }}
+                                    className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 shadow-lg"
+                                    title="Заменить изображение"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      // Помечаем на удаление
                                       setDeletedAttachmentIds([...deletedAttachmentIds, attachment.id]);
-                                      
-                                      // Добавляем новый файл
-                                      const newFiles = [...editFiles, file];
-                                      setEditFiles(newFiles);
-                                      
-                                      // Создаем превью
-                                      const preview = URL.createObjectURL(file);
-                                      setEditFilePreviews([...editFilePreviews, preview]);
-                                    };
-                                    input.click();
-                                  }}
-                                  className="absolute top-2 left-2 p-2 bg-blue-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-700"
-                                  title="Заменить изображение"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                                  </svg>
-                                </button>
+                                    }}
+                                    className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 shadow-lg"
+                                    title="Удалить изображение"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-700/50">
