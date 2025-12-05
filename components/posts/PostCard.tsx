@@ -38,6 +38,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   const [editVideoUrl, setEditVideoUrl] = useState("");
   const [editLinkMetadata, setEditLinkMetadata] = useState<any>(post.linkMetadata);
   const [editVideoMetadata, setEditVideoMetadata] = useState<any>(post.videoMetadata);
+  const [coverImage, setCoverImage] = useState<string | null>((post as any).coverImage || null);
   const [editCoverImage, setEditCoverImage] = useState<string | null>((post as any).coverImage || null);
   const [isEditImageModalOpen, setIsEditImageModalOpen] = useState(false);
   const [isEditVideoModalOpen, setIsEditVideoModalOpen] = useState(false);
@@ -93,6 +94,14 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       }
     };
   }, [post.id]);
+
+  // Синхронизируем coverImage с пропсами post
+  useEffect(() => {
+    if ((post as any).coverImage !== undefined) {
+      setCoverImage((post as any).coverImage || null);
+      setEditCoverImage((post as any).coverImage || null);
+    }
+  }, [(post as any).coverImage]);
   
   // Для статей извлекаем текст из HTML, для обычных постов используем как есть
   const getPlainText = (html: string) => {
@@ -464,10 +473,10 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       {/* Контент */}
       <div className="mb-4">
         {/* Cover Image для статей */}
-        {isArticle && (post as any).coverImage && (
+        {isArticle && (coverImage || (post as any).coverImage) && (
           <div className="mb-4">
             <img
-              src={(post as any).coverImage}
+              src={coverImage || (post as any).coverImage}
               alt="Обложка статьи"
               className="w-full h-64 object-cover rounded-lg"
               onError={(e) => {
@@ -847,6 +856,11 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                 });
 
                 if (response.ok) {
+                  const data = await response.json();
+                  // Обновляем coverImage из ответа
+                  if (data.post?.coverImage !== undefined) {
+                    setCoverImage(data.post.coverImage);
+                  }
                   // Очищаем превью
                   editFilePreviews.forEach((preview) => {
                     if (preview) URL.revokeObjectURL(preview);

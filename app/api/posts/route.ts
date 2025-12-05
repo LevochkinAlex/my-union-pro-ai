@@ -88,9 +88,11 @@ export async function GET(request: NextRequest) {
       attachments: post.attachments,
       linkMetadata: post.linkMetadata,
       videoMetadata: post.videoMetadata,
+      coverImage: (post as any).coverImage || null,
       isLiked: post.likes.length > 0,
       likesCount: post._count.likes,
       commentsCount: post._count.comments,
+      viewCount: (post as any).viewCount || 0,
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
     }));

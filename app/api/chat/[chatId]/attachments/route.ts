@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
-import { convertHeicToJpegServer } from "@/lib/heic-convert-server";
+import { processMediaFile, detectFileType } from "@/lib/media-processor";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 
 // Инициализируем VDS хранилище при загрузке модуля
@@ -77,21 +77,28 @@ export async function POST(
     const bytes = await file.arrayBuffer();
     let buffer: Buffer = Buffer.from(bytes) as Buffer;
     let originalName = file.name;
-    let mimeType = file.type || "";
-
-    // Конвертируем HEIC/HEIF в JPEG, если это изображение (но не GIF и не WebP)
-    if (mimeType.startsWith("image/") && mimeType !== "image/gif" && mimeType !== "image/webp") {
-      try {
-        const converted = await convertHeicToJpegServer(buffer, originalName, mimeType);
-        buffer = converted.buffer as Buffer;
-        originalName = converted.fileName;
-        mimeType = converted.mimeType;
-      } catch (error) {
-        console.error(`[chat/attachments] Error converting HEIC for ${originalName}:`, error);
-        // Продолжаем с оригинальным файлом при ошибке конвертации
+    
+    // Используем универсальный медиа-процессор для определения типа и обработки
+    let processedFile;
+    try {
+      processedFile = await processMediaFile(buffer, originalName, {
+        convertHeic: true,
+        maxWidth: 2048, // Ограничиваем размер для чата
+        maxHeight: 2048,
+        quality: 85,
+      });
+      buffer = processedFile.buffer;
+      originalName = processedFile.fileName;
+    } catch (error) {
+      console.error(`[chat/attachments] Error processing media file:`, error);
+      // Если обработка не удалась, определяем тип файла хотя бы
+      const detectedType = await detectFileType(buffer, originalName);
+      if (detectedType) {
+        originalName = originalName.replace(/\.[^.]+$/, `.${detectedType.ext}`);
       }
     }
-
+    
+    const mimeType = processedFile?.mimeType || file.type || "application/octet-stream";
     const fileExtension = path.extname(originalName);
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExtension}`;
     const fileKey = `chat/${fileName}`;
