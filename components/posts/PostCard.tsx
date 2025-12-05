@@ -829,20 +829,32 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                       type="file"
                       ref={editFileInputRef}
                       onChange={(e) => {
-                        const files = Array.from(e.target.files || []);
-                        setEditFiles(files);
-                        // Создаем превью для изображений
-                        const previews = files.map((file) => {
-                          if (file.type.startsWith("image/")) {
-                            return URL.createObjectURL(file);
-                          }
-                          return "";
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        
+                        // Очищаем предыдущие превью
+                        editFilePreviews.forEach((preview) => {
+                          if (preview) URL.revokeObjectURL(preview);
                         });
-                        setEditFilePreviews(previews);
+                        
+                        // Новый файл заменяет старый (только 1 файл разрешён)
+                        setEditFiles([file]);
+                        
+                        // Помечаем ВСЕ существующие вложения на удаление
+                        if (post.attachments && post.attachments.length > 0) {
+                          setDeletedAttachmentIds(post.attachments.map((a: any) => a.id));
+                        }
+                        
+                        // Создаем превью для изображения
+                        if (file.type.startsWith("image/") || file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')) {
+                          const preview = URL.createObjectURL(file);
+                          setEditFilePreviews([preview]);
+                        } else {
+                          setEditFilePreviews([""]);
+                        }
                       }}
                       className="hidden"
-                      accept="image/*,video/*,.pdf,.doc,.docx,.txt,.heic,.heif"
-                      multiple
+                      accept="image/*,.heic,.heif"
                     />
 
                     {/* Выбранные файлы */}
@@ -901,8 +913,8 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                   </>
                 )}
 
-                {/* Существующие вложения - не показываем для статей, так как изображения уже в HTML */}
-                {post.postType !== "article" && post.attachments && post.attachments.length > 0 && (
+                {/* Существующие вложения - показываем для всех типов постов */}
+                {post.attachments && post.attachments.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Текущие вложения:</p>
                     {post.attachments

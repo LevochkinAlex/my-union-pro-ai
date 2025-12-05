@@ -181,8 +181,14 @@ export async function uploadFileToVDS(
     throw new Error("VDS storage not initialized. Call initVDSStorage() or initVDSStorageFromEnv() first.");
   }
 
+  // Если мы уже НА VDS сервере, сохраняем файл напрямую без SCP
+  if (isRunningOnVDS()) {
+    console.log("[vds-storage] Running on VDS, saving file directly");
+    return saveFileDirectlyOnVDS(fileKey, buffer);
+  }
+
   try {
-    // Создаем временный локальный файл
+    // Создаем временный локальный файл для SCP передачи
     const tempDir = path.join(process.cwd(), "tmp", "uploads");
     await mkdir(tempDir, { recursive: true });
     
@@ -231,6 +237,30 @@ export async function uploadFileToVDS(
 }
 
 /**
+ * Сохраняет файл напрямую на VDS (когда код уже запущен на VDS)
+ */
+async function saveFileDirectlyOnVDS(fileKey: string, buffer: Buffer): Promise<string> {
+  if (!vdsConfig) {
+    throw new Error("VDS storage not initialized");
+  }
+
+  const filePath = path.join(vdsConfig.remotePath, fileKey).replace(/\\/g, "/");
+  const fileDir = path.dirname(filePath);
+  
+  // Создаем директорию локально (мы уже на VDS)
+  await mkdir(fileDir, { recursive: true });
+  
+  // Сохраняем файл напрямую
+  await writeFile(filePath, buffer);
+  
+  const relativePath = `/uploads/${fileKey}`;
+  console.log("[vds-storage] File saved directly on VDS:", filePath);
+  console.log("[vds-storage] File will be served via:", relativePath);
+  
+  return relativePath;
+}
+
+/**
  * Загружает файл локально (fallback)
  */
 async function uploadFileLocally(fileKey: string, buffer: Buffer): Promise<string> {
@@ -249,6 +279,20 @@ async function uploadFileLocally(fileKey: string, buffer: Buffer): Promise<strin
 export async function getFileFromVDS(fileKey: string): Promise<Buffer> {
   if (!vdsConfig) {
     throw new Error("VDS storage not initialized");
+  }
+
+  // Если мы уже НА VDS сервере, читаем файл напрямую
+  if (isRunningOnVDS()) {
+    console.log("[vds-storage] Running on VDS, reading file directly");
+    const filePath = path.join(vdsConfig.remotePath, fileKey).replace(/\\/g, "/");
+    
+    if (existsSync(filePath)) {
+      const buffer = await readFile(filePath);
+      console.log("[vds-storage] File read directly from VDS, size:", buffer.length);
+      return buffer;
+    } else {
+      throw new Error(`File not found on VDS: ${filePath}`);
+    }
   }
 
   // Если файл доступен через HTTP, скачиваем его
@@ -315,8 +359,21 @@ export async function deleteFileFromVDS(fileKey: string): Promise<void> {
     throw new Error("VDS storage not initialized");
   }
 
+  const remoteFilePath = path.join(vdsConfig.remotePath, fileKey).replace(/\\/g, "/");
+
+  // Если мы на VDS, удаляем напрямую
+  if (isRunningOnVDS()) {
+    try {
+      await unlink(remoteFilePath);
+      console.log("[vds-storage] File deleted directly on VDS:", fileKey);
+    } catch (error) {
+      // Игнорируем ошибку, если файл не существует
+      console.warn("[vds-storage] File may not exist:", fileKey);
+    }
+    return;
+  }
+
   try {
-    const remoteFilePath = path.join(vdsConfig.remotePath, fileKey).replace(/\\/g, "/");
     const command = buildSSHCommand(`rm -f '${remoteFilePath}'`);
     await execAsync(command);
     console.log("[vds-storage] File deleted successfully:", fileKey);
@@ -334,8 +391,14 @@ export async function fileExistsOnVDS(fileKey: string): Promise<boolean> {
     return false;
   }
 
+  const remoteFilePath = path.join(vdsConfig.remotePath, fileKey).replace(/\\/g, "/");
+
+  // Если мы на VDS, проверяем напрямую
+  if (isRunningOnVDS()) {
+    return existsSync(remoteFilePath);
+  }
+
   try {
-    const remoteFilePath = path.join(vdsConfig.remotePath, fileKey).replace(/\\/g, "/");
     const command = buildSSHCommand(`test -f '${remoteFilePath}' && echo 'exists' || echo 'not found'`);
     const { stdout } = await execAsync(command);
     return stdout.trim() === "exists";
@@ -361,5 +424,24 @@ export function getPublicUrl(fileKey: string): string | null {
  */
 export function isVDSStorageConfigured(): boolean {
   return vdsConfig !== null;
+}
+
+/**
+ * Проверяет, запущен ли код на самом VDS сервере
+ * В этом случае файлы сохраняются напрямую, без SCP
+ */
+export function isRunningOnVDS(): boolean {
+  // Если установлена переменная окружения VDS_IS_LOCAL=true, значит мы на VDS
+  if (process.env.VDS_IS_LOCAL === "true") {
+    return true;
+  }
+  
+  // Также проверяем по hostname или NEXTAUTH_URL
+  const nextAuthUrl = process.env.NEXTAUTH_URL || "";
+  if (nextAuthUrl.includes("myunion.pro") && !nextAuthUrl.includes("localhost")) {
+    return true;
+  }
+  
+  return false;
 }
 
