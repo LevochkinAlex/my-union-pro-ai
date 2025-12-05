@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import RichTextEditor from "@/components/admin/RichTextEditor";
 
 interface PostCardProps {
@@ -11,8 +12,10 @@ interface PostCardProps {
 
 export default function PostCard({ post, onUpdate }: PostCardProps) {
   const { data: session } = useSession();
+  const router = useRouter();
   const [isLiked, setIsLiked] = useState(post.isLiked);
   const [likesCount, setLikesCount] = useState(post.likesCount);
+  const [viewCount, setViewCount] = useState(post.viewCount || 0);
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState("");
@@ -34,12 +37,30 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   const editFileInputRef = useRef<HTMLInputElement>(null);
   
   const isOwnPost = session?.user?.id === post.author.id;
+  const isArticle = post.postType === "article";
   
-  // Определяем, нужно ли сокращать текст (больше 300 символов)
-  const shouldTruncate = post.content.length > 300;
+  // Для статей извлекаем текст из HTML, для обычных постов используем как есть
+  const getPlainText = (html: string) => {
+    if (!html) return "";
+    // Удаляем HTML теги и декодируем HTML entities
+    const text = html
+      .replace(/<[^>]*>/g, " ") // Удаляем HTML теги
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\s+/g, " ") // Заменяем множественные пробелы на один
+      .trim();
+    return text;
+  };
+  
+  const plainContent = isArticle ? getPlainText(post.content) : post.content;
+  const shouldTruncate = plainContent.length > 300;
   const displayContent = shouldTruncate && !isExpanded 
-    ? post.content.substring(0, 300) + "..."
-    : post.content;
+    ? plainContent.substring(0, 300) + "..."
+    : plainContent;
 
   const getUserName = (user: any) => {
     const parts = [user.firstName, user.middleName, user.lastName].filter(Boolean);
@@ -269,12 +290,18 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                   <img
                     src={getFileUrl(attachment.filePath)}
                     alt={attachment.originalName}
-                    className="max-w-full rounded-lg"
+                    className="max-w-full rounded-lg object-contain"
+                    style={{ maxHeight: '500px' }}
                     onError={(e) => {
                       // Fallback на прямой путь, если API не работает
                       const target = e.target as HTMLImageElement;
-                      if (target.src !== attachment.filePath) {
-                        target.src = attachment.filePath;
+                      const fallbackUrl = attachment.filePath.startsWith('http') 
+                        ? attachment.filePath 
+                        : attachment.filePath.startsWith('/') 
+                          ? attachment.filePath 
+                          : `/uploads/posts/${attachment.fileName || attachment.filePath.split('/').pop()}`;
+                      if (target.src !== fallbackUrl) {
+                        target.src = fallbackUrl;
                       }
                     }}
                   />
@@ -362,6 +389,24 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
             </svg>
             <span>{post.commentsCount}</span>
           </button>
+          <div className="flex items-center gap-2 px-4 py-2 text-gray-600 dark:text-gray-400">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            <span>{viewCount}</span>
+          </div>
+          {isArticle && (
+            <button
+              onClick={() => router.push(`/posts/${post.id}`)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors ml-auto"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+              </svg>
+              <span>Развернуть статью</span>
+            </button>
+          )}
         </div>
 
         {/* Комментарии */}

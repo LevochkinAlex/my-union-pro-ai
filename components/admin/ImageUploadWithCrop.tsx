@@ -19,6 +19,14 @@ export default function ImageUploadWithCrop({
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const aspectRatioPresets = [
+    { label: "16:9 (широкий)", value: 16 / 9 },
+    { label: "4:3 (стандартный)", value: 4 / 3 },
+    { label: "1:1 (квадрат)", value: 1 },
+    { label: "21:9 (ультраширокий)", value: 21 / 9 },
+    { label: "3:2 (фото)", value: 3 / 2 },
+    { label: "9:16 (вертикальный)", value: 9 / 16 },
+  ];
   const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
   const [uploading, setUploading] = useState(false);
   const [showCropper, setShowCropper] = useState(false);
@@ -208,29 +216,21 @@ export default function ImageUploadWithCrop({
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Соотношение сторон
               </label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAspectRatio(16 / 9)}
-                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition ${
-                    aspectRatio === 16 / 9
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600"
-                  }`}
-                >
-                  16:9 (широкий)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAspectRatio(4 / 3)}
-                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition ${
-                    aspectRatio === 4 / 3
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600"
-                  }`}
-                >
-                  4:3 (стандартный)
-                </button>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {aspectRatioPresets.map((preset) => (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    onClick={() => setAspectRatio(preset.value)}
+                    className={`px-3 py-2 text-xs sm:text-sm font-medium rounded-lg border transition ${
+                      aspectRatio === preset.value
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600"
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
               </div>
             </div>
 

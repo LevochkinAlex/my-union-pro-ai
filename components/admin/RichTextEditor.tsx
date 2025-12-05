@@ -6,12 +6,16 @@ interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  onInsertImage?: () => void;
+  onInsertVideo?: () => void;
 }
 
 export default function RichTextEditor({
   value,
   onChange,
   placeholder = "Введите текст...",
+  onInsertImage,
+  onInsertVideo,
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const isUpdating = useRef(false);
@@ -78,6 +82,18 @@ export default function RichTextEditor({
     editorRef.current?.focus();
     handleInput();
   };
+
+  // Экспортируем функцию для вставки изображения извне
+  useEffect(() => {
+    if (editorRef.current) {
+      (editorRef.current as any).insertImage = (url: string, alt: string = "Изображение") => {
+        insertHTML(`<img src="${url}" alt="${alt}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0;" />`);
+      };
+      (editorRef.current as any).insertVideo = (embedUrl: string) => {
+        insertHTML(`<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; margin: 16px 0; border-radius: 8px;"><iframe src="${embedUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" frameborder="0" allowfullscreen></iframe></div>`);
+      };
+    }
+  }, []);
 
   const formatButtons = [
     {
@@ -168,6 +184,61 @@ export default function RichTextEditor({
       ),
       label: "Нумерованный список",
       action: () => executeCommand("insertOrderedList"),
+    },
+    {
+      type: "separator"
+    },
+    {
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      ),
+      label: "Вставить изображение",
+      action: () => {
+        if (onInsertImage) {
+          onInsertImage();
+        } else {
+          const url = prompt("Введите URL изображения:");
+          if (url) {
+            insertHTML(`<img src="${url}" alt="Изображение" style="max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0;" />`);
+          }
+        }
+      },
+    },
+    {
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      ),
+      label: "Вставить видео",
+      action: () => {
+        if (onInsertVideo) {
+          onInsertVideo();
+        } else {
+          const url = prompt("Введите URL видео (YouTube, Rutube, VK):");
+          if (url) {
+            let embedUrl = "";
+            if (url.includes("youtube.com/watch") || url.includes("youtu.be/")) {
+              const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1] || "";
+              embedUrl = `https://www.youtube.com/embed/${videoId}`;
+            } else if (url.includes("rutube.ru/video/")) {
+              const videoId = url.match(/rutube\.ru\/video\/([^\/\n?#]+)/)?.[1] || "";
+              embedUrl = `https://rutube.ru/play/embed/${videoId}`;
+            } else if (url.includes("vk.com/video")) {
+              const match = url.match(/vk\.com\/video(-?\d+_\d+)/);
+              if (match) {
+                const videoId = match[1];
+                embedUrl = `https://vk.com/video_ext.php?oid=${videoId.split("_")[0]}&id=${videoId.split("_")[1]}`;
+              }
+            }
+            if (embedUrl) {
+              insertHTML(`<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; margin: 16px 0; border-radius: 8px;"><iframe src="${embedUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" frameborder="0" allowfullscreen></iframe></div>`);
+            }
+          }
+        }
+      },
     },
     {
       type: "separator"

@@ -5,6 +5,12 @@ import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { convertHeicToJpegServer } from "@/lib/heic-convert-server";
+import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+
+// Инициализируем VDS хранилище при загрузке модуля
+if (typeof window === "undefined") {
+  initVDSStorageFromEnv();
+}
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "chat");
 
@@ -69,7 +75,7 @@ export async function POST(
     await mkdir(UPLOAD_DIR, { recursive: true });
 
     const bytes = await file.arrayBuffer();
-    let buffer = Buffer.from(bytes);
+    let buffer: Buffer = Buffer.from(bytes) as Buffer;
     let originalName = file.name;
     let mimeType = file.type || "";
 
@@ -77,7 +83,7 @@ export async function POST(
     if (mimeType.startsWith("image/")) {
       try {
         const converted = await convertHeicToJpegServer(buffer, originalName);
-        buffer = converted.buffer;
+        buffer = converted.buffer as Buffer;
         originalName = converted.fileName;
         mimeType = converted.mimeType;
       } catch (error) {
@@ -88,8 +94,27 @@ export async function POST(
 
     const fileExtension = path.extname(originalName);
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExtension}`;
-    const filePath = path.join(UPLOAD_DIR, fileName);
-    await writeFile(filePath, buffer);
+    const fileKey = `chat/${fileName}`;
+    
+    let filePath: string;
+    
+    // Всегда загружаем на VDS, если он настроен
+    if (isVDSStorageConfigured()) {
+      try {
+        filePath = await uploadFileToVDS(fileKey, buffer, mimeType);
+        console.log(`[chat/attachments] File uploaded to VDS: ${filePath}`);
+      } catch (vdsError) {
+        console.error("[chat/attachments] VDS upload failed:", vdsError);
+        throw new Error(`Не удалось загрузить файл на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
+      }
+    } else {
+      // Локальное хранилище (только для разработки)
+      await mkdir(UPLOAD_DIR, { recursive: true });
+      const localFilePath = path.join(UPLOAD_DIR, fileName);
+      await writeFile(localFilePath, buffer);
+      filePath = `/uploads/chat/${fileName}`;
+      console.log(`[chat/attachments] File saved locally (VDS not configured): ${filePath}`);
+    }
 
     // Определяем тип файла
     let attachmentType = "file";

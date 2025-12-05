@@ -4,6 +4,13 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
+import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+import { convertHeicToJpegServer } from "@/lib/heic-convert-server";
+
+// Инициализируем VDS хранилище при загрузке модуля
+if (typeof window === "undefined") {
+  initVDSStorageFromEnv();
+}
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "posts");
 
@@ -211,15 +218,53 @@ export async function PATCH(
       for (const file of files) {
         if (!file || file.size === 0) continue;
 
-        const fileExtension = path.extname(file.name);
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExtension}`;
-        const filePath = path.join(UPLOAD_DIR, fileName);
-
         const bytes = await file.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-        await writeFile(filePath, buffer);
+        let buffer: Buffer = Buffer.from(bytes) as Buffer;
+        let originalName = file.name;
+        let mimeType = file.type || "";
 
-        const mimeType = file.type || "";
+        // Конвертируем HEIC/HEIF в JPEG, если это изображение
+        if (mimeType.startsWith("image/")) {
+          try {
+            const converted = await convertHeicToJpegServer(buffer, originalName);
+            buffer = converted.buffer as Buffer;
+            originalName = converted.fileName;
+            mimeType = converted.mimeType;
+          } catch (error) {
+            console.error(`[posts/PATCH] Error converting HEIC for ${originalName}:`, error);
+            // Продолжаем с оригинальным файлом при ошибке конвертации
+          }
+        }
+
+        const fileExtension = path.extname(originalName);
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExtension}`;
+        const localFilePath = path.join(UPLOAD_DIR, fileName);
+        
+        let finalFilePath = `/uploads/posts/${fileName}`;
+
+        // Пытаемся загрузить на VDS, если он настроен, иначе сохраняем локально
+        if (isVDSStorageConfigured()) {
+          try {
+            const fileKey = `posts/${fileName}`;
+            const vdsUrl = await uploadFileToVDS(fileKey, buffer, mimeType);
+            if (vdsUrl) {
+              finalFilePath = vdsUrl;
+              console.log(`[posts/PATCH] File uploaded to VDS: ${vdsUrl}`);
+            } else {
+              throw new Error("VDS upload returned no URL");
+            }
+          } catch (vdsError) {
+            console.error(`[posts/PATCH] VDS upload error, falling back to local:`, vdsError);
+            // Fallback на локальное сохранение, если VDS не работает
+            await writeFile(localFilePath, buffer);
+            console.log(`[posts/PATCH] File saved locally (VDS fallback): ${localFilePath}`);
+          }
+        } else {
+          // Если VDS не настроен, сохраняем локально (для разработки)
+          await writeFile(localFilePath, buffer);
+          console.log(`[posts/PATCH] File saved locally (VDS not configured): ${localFilePath}`);
+        }
+
         let attachmentType = "file";
         if (mimeType.startsWith("image/")) {
           attachmentType = "image";
@@ -232,8 +277,8 @@ export async function PATCH(
             postId: post.id,
             type: attachmentType,
             fileName: fileName,
-            originalName: file.name,
-            filePath: `/uploads/posts/${fileName}`,
+            originalName: originalName,
+            filePath: finalFilePath,
             fileSize: file.size,
             mimeType: mimeType || null,
           },

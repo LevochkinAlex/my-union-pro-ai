@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
         if (!file || file.size === 0) continue;
 
         const bytes = await file.arrayBuffer();
-        let buffer = Buffer.from(bytes);
+        let buffer: Buffer = Buffer.from(bytes) as Buffer;
         let originalName = file.name;
         let mimeType = file.type || "";
 
@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
         if (mimeType.startsWith("image/")) {
           try {
             const converted = await convertHeicToJpegServer(buffer, originalName);
-            buffer = converted.buffer;
+            buffer = converted.buffer as Buffer;
             originalName = converted.fileName;
             mimeType = converted.mimeType;
           } catch (error) {
@@ -230,7 +230,7 @@ export async function POST(request: NextRequest) {
 
         let finalFilePath = `/uploads/posts/${fileName}`;
 
-        // Пробуем загрузить на VDS
+        // Пытаемся загрузить на VDS, если он настроен, иначе сохраняем локально
         if (isVDSStorageConfigured()) {
           try {
             const fileKey = `posts/${fileName}`;
@@ -239,18 +239,20 @@ export async function POST(request: NextRequest) {
               finalFilePath = vdsUrl;
               console.log(`[posts] File uploaded to VDS: ${vdsUrl}`);
             } else {
-              // Fallback на локальное сохранение
-              await writeFile(localFilePath, buffer);
-              console.log(`[posts] VDS upload failed, saved locally: ${localFilePath}`);
+              throw new Error("VDS upload returned no URL");
             }
           } catch (vdsError) {
-            console.error(`[posts] VDS upload error, using local fallback:`, vdsError);
-            // Fallback на локальное сохранение
+            console.error(`[posts] VDS upload error, falling back to local:`, vdsError);
+            // Fallback на локальное сохранение, если VDS не работает
             await writeFile(localFilePath, buffer);
+            finalFilePath = `/uploads/posts/${fileName}`;
+            console.log(`[posts] File saved locally (VDS fallback): ${localFilePath}`);
           }
         } else {
-          // Если VDS не настроен, сохраняем локально
+          // Если VDS не настроен, сохраняем локально (для разработки)
           await writeFile(localFilePath, buffer);
+          finalFilePath = `/uploads/posts/${fileName}`;
+          console.log(`[posts] File saved locally (VDS not configured): ${localFilePath}`);
         }
 
         const attachment = await prisma.postAttachment.create({

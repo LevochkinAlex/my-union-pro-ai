@@ -264,28 +264,24 @@ export async function POST(request: NextRequest) {
       const fileKey = `documents/${uniqueFileName}`;
       let relativePath: string;
 
-      // Загружаем файл на VDS или локально
+      // Всегда загружаем на VDS, если он настроен
       if (isVDSStorageConfigured()) {
-      try {
-        relativePath = await uploadFileToVDS(fileKey, buffer, file.type);
-        console.log(`[upload] File uploaded to VDS: ${relativePath}`);
-      } catch (vdsError) {
-        console.error("[upload] VDS upload failed, falling back to local:", vdsError);
-        // Fallback на локальное хранилище
+        try {
+          relativePath = await uploadFileToVDS(fileKey, buffer, file.type);
+          console.log(`[upload] File uploaded to VDS: ${relativePath}`);
+        } catch (vdsError) {
+          console.error("[upload] VDS upload failed:", vdsError);
+          throw new Error(`Не удалось загрузить файл на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
+        }
+      } else {
+        // Локальное хранилище (только для разработки)
         const uploadDir = path.join(process.cwd(), "public", "uploads", "documents");
         await mkdir(uploadDir, { recursive: true });
         const filePath = path.join(uploadDir, uniqueFileName);
         await writeFile(filePath, buffer);
         relativePath = `/uploads/documents/${uniqueFileName}`;
+        console.log(`[upload] File saved locally (VDS not configured): ${relativePath}`);
       }
-    } else {
-      // Локальное хранилище
-      const uploadDir = path.join(process.cwd(), "public", "uploads", "documents");
-      await mkdir(uploadDir, { recursive: true });
-      const filePath = path.join(uploadDir, uniqueFileName);
-      await writeFile(filePath, buffer);
-      relativePath = `/uploads/documents/${uniqueFileName}`;
-    }
     
       let document;
     

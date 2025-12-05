@@ -63,27 +63,23 @@ export async function POST(request: NextRequest) {
     
     let avatarUrl: string;
     
-    // Загружаем файл на VDS или локально
+    // Всегда загружаем на VDS, если он настроен
     if (isVDSStorageConfigured()) {
       try {
         const fileKey = `avatars/${filename}`;
-        const relativePath = await uploadFileToVDS(fileKey, buffer, avatarFile.type);
-        avatarUrl = relativePath; // VDS возвращает полный URL
+        avatarUrl = await uploadFileToVDS(fileKey, buffer, avatarFile.type);
         console.log(`[profile/avatar] Avatar uploaded to VDS: ${avatarUrl}`);
       } catch (vdsError) {
-        console.error("[profile/avatar] VDS upload failed, falling back to local:", vdsError);
-        // Fallback на локальное хранилище
-        await ensureUploadDir();
-        const filePath = path.join(UPLOAD_DIR, filename);
-        await writeFile(filePath, buffer);
-        avatarUrl = `/uploads/avatars/${filename}`;
+        console.error("[profile/avatar] VDS upload failed:", vdsError);
+        throw new Error(`Не удалось загрузить аватар на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
       }
     } else {
-      // Локальное хранилище
+      // Локальное хранилище (только для разработки)
       await ensureUploadDir();
       const filePath = path.join(UPLOAD_DIR, filename);
       await writeFile(filePath, buffer);
       avatarUrl = `/uploads/avatars/${filename}`;
+      console.log(`[profile/avatar] Avatar saved locally (VDS not configured): ${avatarUrl}`);
     }
     
     await prisma.user.update({

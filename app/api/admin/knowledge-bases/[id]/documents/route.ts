@@ -5,6 +5,12 @@ import path from "path";
 import { writeFile } from "fs/promises";
 import { getKnowledgeQueue } from "@/lib/queues/knowledgeQueue";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
+import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+
+// Инициализируем VDS хранилище при загрузке модуля
+if (typeof window === "undefined") {
+  initVDSStorageFromEnv();
+}
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "knowledge");
 
@@ -83,16 +89,33 @@ export async function POST(
       );
     }
 
-    await ensureUploadDir();
-
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    
     // Сохраняем файл
     const fileExtension = path.extname(file.name) || `.${extension}`;
     const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}${fileExtension}`;
-    const filePath = path.join(UPLOAD_DIR, fileName);
-
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(filePath, buffer);
+    const fileKey = `knowledge/${fileName}`;
+    
+    let filePath: string;
+    
+    // Всегда загружаем на VDS, если он настроен
+    if (isVDSStorageConfigured()) {
+      try {
+        filePath = await uploadFileToVDS(fileKey, buffer, file.type || "application/octet-stream");
+        console.log(`[knowledge/documents] File uploaded to VDS: ${filePath}`);
+      } catch (vdsError) {
+        console.error("[knowledge/documents] VDS upload failed:", vdsError);
+        throw new Error(`Не удалось загрузить файл на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
+      }
+    } else {
+      // Локальное хранилище (только для разработки)
+      await ensureUploadDir();
+      const localFilePath = path.join(UPLOAD_DIR, fileName);
+      await writeFile(localFilePath, buffer);
+      filePath = `/uploads/knowledge/${fileName}`;
+      console.log(`[knowledge/documents] File saved locally (VDS not configured): ${filePath}`);
+    }
 
     // Определяем тип файла для базы данных
     const dbFileType = fileExtension.slice(1).toLowerCase();
@@ -122,7 +145,7 @@ export async function POST(
         originalName: file.name,
         fileType: dbFileType,
         fileSize: file.size,
-        filePath: `/uploads/knowledge/${fileName}`,
+        filePath: filePath,
         mimeType: file.type || null,
         contentType,
         processingStatus: "QUEUED",

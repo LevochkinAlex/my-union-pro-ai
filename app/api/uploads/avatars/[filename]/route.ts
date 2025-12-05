@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import path from "path";
 import { existsSync } from "fs";
+import { initVDSStorageFromEnv, getFileFromVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+
+// Инициализируем VDS хранилище при загрузке модуля
+if (typeof window === "undefined") {
+  initVDSStorageFromEnv();
+}
 
 export async function GET(
   request: NextRequest,
@@ -15,18 +21,28 @@ export async function GET(
       return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
     }
 
-    // Get file path
-    const filepath = path.join(process.cwd(), "public", "uploads", "avatars", filename);
-
-    // Check if file exists
-    if (!existsSync(filepath)) {
+    // Сначала пробуем локальный файл
+    const localFilePath = path.join(process.cwd(), "public", "uploads", "avatars", filename);
+    
+    let fileBuffer: Buffer | null = null;
+    
+    if (existsSync(localFilePath)) {
+      fileBuffer = await readFile(localFilePath);
+    } else if (isVDSStorageConfigured()) {
+      // Если локального файла нет, пробуем VDS
+      try {
+        const fileKey = `avatars/${filename}`;
+        fileBuffer = await getFileFromVDS(fileKey);
+      } catch (vdsError) {
+        console.error("[uploads/avatars] VDS error:", vdsError);
+      }
+    }
+    
+    if (!fileBuffer) {
       // Возвращаем 204 No Content вместо 404, чтобы браузер не показывал это как ошибку
       // Это нормальное поведение - файл может не существовать
       return new NextResponse(null, { status: 204 });
     }
-
-    // Read file
-    const fileBuffer = await readFile(filepath);
 
     // Determine content type based on extension
     const ext = filename.split(".").pop()?.toLowerCase();
@@ -40,7 +56,7 @@ export async function GET(
     const contentType = contentTypes[ext || ""] || "application/octet-stream";
 
     // Return file with proper headers
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(fileBuffer as any, {
       status: 200,
       headers: {
         "Content-Type": contentType,

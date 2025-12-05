@@ -4,6 +4,12 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+
+// Инициализируем VDS хранилище при загрузке модуля
+if (typeof window === "undefined") {
+  initVDSStorageFromEnv();
+}
 
 /**
  * POST /api/documents/upload-signed
@@ -75,19 +81,34 @@ export async function POST(request: NextRequest) {
     }
 
     // Сохраняем файл
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "signed");
-    await mkdir(uploadDir, { recursive: true });
-
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    
     const extension = path.extname(file.name);
     const timestamp = Date.now();
     const safeFileName = `signed_${documentId}_${timestamp}${extension}`;
-    const filePath = path.join(uploadDir, safeFileName);
-
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(filePath, buffer);
-
-    const publicPath = `/uploads/signed/${safeFileName}`;
+    const fileKey = `signed/${safeFileName}`;
+    
+    let publicPath: string;
+    
+    // Всегда загружаем на VDS, если он настроен
+    if (isVDSStorageConfigured()) {
+      try {
+        publicPath = await uploadFileToVDS(fileKey, buffer, file.type);
+        console.log(`[upload-signed] File uploaded to VDS: ${publicPath}`);
+      } catch (vdsError) {
+        console.error("[upload-signed] VDS upload failed:", vdsError);
+        throw new Error(`Не удалось загрузить файл на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
+      }
+    } else {
+      // Локальное хранилище (только для разработки)
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "signed");
+      await mkdir(uploadDir, { recursive: true });
+      const filePath = path.join(uploadDir, safeFileName);
+      await writeFile(filePath, buffer);
+      publicPath = `/uploads/signed/${safeFileName}`;
+      console.log(`[upload-signed] File saved locally (VDS not configured): ${publicPath}`);
+    }
 
     console.log("[upload-signed] File saved:", publicPath);
 

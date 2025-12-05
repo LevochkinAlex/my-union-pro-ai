@@ -53,7 +53,7 @@ export async function GET(
     
     if (existsSync(localFilePath)) {
       const fileBuffer = await readFile(localFilePath);
-      return new NextResponse(fileBuffer, {
+      return new NextResponse(fileBuffer as any, {
         status: 200,
         headers: {
           "Content-Type": contentType,

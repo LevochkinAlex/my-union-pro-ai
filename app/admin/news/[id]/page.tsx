@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import ImageUploadWithCrop from "@/components/admin/ImageUploadWithCrop";
+import ImageInsertWithCrop from "@/components/admin/ImageInsertWithCrop";
 import RichTextEditor from "@/components/admin/RichTextEditor";
 
 interface PollOption {
@@ -36,6 +37,8 @@ export default function EditNewsPage() {
   const [aiLoadingField, setAiLoadingField] = useState<"title" | "content" | null>(null);
   const [generatingImage, setGeneratingImage] = useState(false);
   const [imagePrompt, setImagePrompt] = useState("");
+  const [showImageInsertModal, setShowImageInsertModal] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (id) {
@@ -555,11 +558,14 @@ export default function EditNewsPage() {
                   </div>
                 )}
               </div>
-              <RichTextEditor
-                value={content}
-                onChange={setContent}
-                placeholder="Введите содержание новости..."
-              />
+              <div ref={editorRef}>
+                <RichTextEditor
+                  value={content}
+                  onChange={setContent}
+                  placeholder="Введите содержание новости..."
+                  onInsertImage={() => setShowImageInsertModal(true)}
+                />
+              </div>
               <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                 Используйте панель инструментов для форматирования текста
               </p>
@@ -729,6 +735,71 @@ export default function EditNewsPage() {
           </button>
         </div>
       </form>
+
+      {/* Модалка для вставки изображения с кропом */}
+      {showImageInsertModal && (
+        <ImageInsertWithCrop
+          onInsert={(imageUrl) => {
+            if (editorRef.current) {
+              const editor = editorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+              if (editor) {
+                const img = document.createElement('img');
+                img.src = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
+                img.alt = "Изображение";
+                img.style.maxWidth = '100%';
+                img.style.height = 'auto';
+                img.style.borderRadius = '8px';
+                img.style.margin = '8px 0';
+                
+                const selection = window.getSelection();
+                if (selection && selection.rangeCount > 0) {
+                  const range = selection.getRangeAt(0);
+                  range.insertNode(img);
+                  range.collapse(false);
+                  selection.removeAllRanges();
+                  selection.addRange(range);
+                } else {
+                  editor.appendChild(img);
+                }
+                
+                const event = new Event('input', { bubbles: true });
+                editor.dispatchEvent(event);
+              }
+            }
+            setShowImageInsertModal(false);
+          }}
+          onClose={() => setShowImageInsertModal(false)}
+          onGenerate={async (imageUrl) => {
+            if (editorRef.current) {
+              const editor = editorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+              if (editor) {
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.alt = "Сгенерированное изображение";
+                img.style.maxWidth = '100%';
+                img.style.height = 'auto';
+                img.style.borderRadius = '8px';
+                img.style.margin = '8px 0';
+                
+                const selection = window.getSelection();
+                if (selection && selection.rangeCount > 0) {
+                  const range = selection.getRangeAt(0);
+                  range.insertNode(img);
+                  range.collapse(false);
+                  selection.removeAllRanges();
+                  selection.addRange(range);
+                } else {
+                  editor.appendChild(img);
+                }
+                
+                const event = new Event('input', { bubbles: true });
+                editor.dispatchEvent(event);
+              }
+            }
+            setShowImageInsertModal(false);
+          }}
+        />
+      )}
     </div>
   );
 }

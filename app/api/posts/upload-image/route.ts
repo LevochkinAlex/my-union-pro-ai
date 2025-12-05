@@ -1,0 +1,84 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+import { convertHeicToJpegServer } from "@/lib/heic-convert-server";
+import { writeFile, mkdir } from "fs/promises";
+import path from "path";
+
+const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "posts");
+
+if (typeof window === "undefined") {
+  initVDSStorageFromEnv();
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    const formData = await request.formData();
+    const file = formData.get("file") as File;
+
+    if (!file) {
+      return NextResponse.json({ error: "Файл не предоставлен" }, { status: 400 });
+    }
+
+    const bytes = await file.arrayBuffer();
+    let buffer: Buffer = Buffer.from(bytes) as Buffer;
+    let originalName = file.name;
+    let mimeType = file.type || "";
+
+    if (mimeType.startsWith("image/")) {
+      try {
+        const converted = await convertHeicToJpegServer(buffer, originalName);
+        buffer = converted.buffer as Buffer;
+        originalName = converted.fileName;
+        mimeType = converted.mimeType;
+      } catch (error) {
+        console.error(`[posts/upload-image] Error converting HEIC for ${originalName}:`, error);
+      }
+    }
+
+    const fileExtension = path.extname(originalName);
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExtension}`;
+    const localFilePath = path.join(UPLOAD_DIR, fileName);
+
+    let finalFilePath = `/uploads/posts/${fileName}`;
+
+    if (isVDSStorageConfigured()) {
+      try {
+        const fileKey = `posts/${fileName}`;
+        const vdsUrl = await uploadFileToVDS(fileKey, buffer, mimeType);
+        if (vdsUrl) {
+          finalFilePath = vdsUrl;
+          console.log(`[posts/upload-image] File uploaded to VDS: ${vdsUrl}`);
+        } else {
+          throw new Error("VDS upload returned no URL");
+        }
+      } catch (vdsError) {
+        console.error(`[posts/upload-image] VDS upload error:`, vdsError);
+        throw new Error(`Не удалось загрузить файл на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
+      }
+    } else {
+      await mkdir(UPLOAD_DIR, { recursive: true });
+      await writeFile(localFilePath, buffer);
+      console.log(`[posts/upload-image] File saved locally (VDS not configured): ${localFilePath}`);
+    }
+
+    return NextResponse.json({
+      success: true,
+      url: finalFilePath,
+      fileName: originalName,
+    });
+  } catch (error: any) {
+    console.error("[posts/upload-image] Error:", error);
+    return NextResponse.json(
+      { error: error.message || "Не удалось загрузить изображение" },
+      { status: 500 }
+    );
+  }
+}
+

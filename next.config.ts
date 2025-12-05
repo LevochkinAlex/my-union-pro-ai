@@ -26,6 +26,14 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'myunion.pro',
+      },
+      {
+        protocol: 'https',
+        hostname: 'dnznrvs05pmza.cloudfront.net', // RunwayML CDN
+      },
+      {
+        protocol: 'https',
         hostname: 'images.unsplash.com',
       },
       {
@@ -34,7 +42,7 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'myunion.pro',
+        hostname: 'dnznrvs05pmza.cloudfront.net', // RunwayML CDN
       },
     ],
     // Разрешаем data URLs и blob URLs для загруженных изображений

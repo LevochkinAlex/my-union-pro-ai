@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import path from "path";
 import { existsSync } from "fs";
+import { initVDSStorageFromEnv, getFileFromVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+
+// Инициализируем VDS хранилище при загрузке модуля
+if (typeof window === "undefined") {
+  initVDSStorageFromEnv();
+}
 
 export async function GET(
   request: NextRequest,
@@ -20,15 +26,26 @@ export async function GET(
       return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
     }
 
-    const filePath = path.join(process.cwd(), "public", "uploads", "chat", filename);
-
-    // Проверяем существование файла
-    if (!existsSync(filePath)) {
+    // Сначала пробуем локальный файл
+    const localFilePath = path.join(process.cwd(), "public", "uploads", "chat", filename);
+    
+    let fileBuffer: Buffer | null = null;
+    
+    if (existsSync(localFilePath)) {
+      fileBuffer = await readFile(localFilePath);
+    } else if (isVDSStorageConfigured()) {
+      // Если локального файла нет, пробуем VDS
+      try {
+        const fileKey = `chat/${filename}`;
+        fileBuffer = await getFileFromVDS(fileKey);
+      } catch (vdsError) {
+        console.error("[uploads/chat] VDS error:", vdsError);
+      }
+    }
+    
+    if (!fileBuffer) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
-
-    // Читаем файл
-    const fileBuffer = await readFile(filePath);
 
     // Определяем MIME тип по расширению
     const ext = path.extname(filename).toLowerCase();
@@ -53,7 +70,7 @@ export async function GET(
     const contentType = mimeTypes[ext] || "application/octet-stream";
 
     // Возвращаем файл с правильными заголовками
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(fileBuffer as any, {
       status: 200,
       headers: {
         "Content-Type": contentType,
