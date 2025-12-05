@@ -6,6 +6,7 @@
 const DADATA_CLEAN_ADDRESS_URL = "https://cleaner.dadata.ru/api/v1/clean/address";
 const DADATA_SUGGEST_ADDRESS_URL = "https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address";
 const DADATA_CLEAN_NAME_URL = "https://cleaner.dadata.ru/api/v1/clean/name";
+const DADATA_SUGGEST_PARTY_URL = "https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/party";
 
 function getDaDataToken(): string {
   return process.env.DADATA_API_KEY || "";
@@ -401,5 +402,136 @@ function fallbackDeclension(
   }
   
   return `${lastNameGenitive} ${firstNameGenitive}${middleNameGenitive ? ` ${middleNameGenitive}` : ""}`.trim();
+}
+
+/**
+ * Интерфейс для данных компании из Dadata
+ */
+export interface CompanyData {
+  inn: string;
+  ogrn?: string;
+  name: {
+    full: string; // Полное наименование
+    short?: string; // Краткое наименование
+  };
+  address?: {
+    value: string; // Адрес одной строкой
+  };
+  management?: {
+    name: string; // ФИО руководителя
+    post: string; // Должность руководителя
+  };
+  state?: {
+    status: string; // Статус (ACTIVE, LIQUIDATING, LIQUIDATED)
+  };
+}
+
+/**
+ * Интерфейс для результата поиска компаний
+ */
+export interface CompanySuggestion {
+  value: string; // Название для отображения
+  unrestricted_value: string; // Полное название
+  data: CompanyData;
+}
+
+/**
+ * Поиск компаний по наименованию или ИНН через Dadata
+ * @param query Поисковый запрос (название или ИНН)
+ * @param count Количество результатов (по умолчанию 10)
+ * @returns Массив подсказок с данными компаний
+ */
+export async function searchCompanies(query: string, count: number = 10): Promise<CompanySuggestion[]> {
+  const token = getDaDataToken();
+  
+  if (!query || !token) {
+    console.warn("[dadata] No query or API token provided");
+    return [];
+  }
+
+  try {
+    console.log(`[dadata] Searching companies: ${query}`);
+
+    const response = await fetch(DADATA_SUGGEST_PARTY_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Token ${token}`,
+      },
+      body: JSON.stringify({ 
+        query: query.trim(), 
+        count,
+        status: ["ACTIVE"] // Только активные компании
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn(`[dadata] Company search API error: ${response.status}`);
+      return [];
+    }
+
+    const result = await response.json();
+    
+    if (!result.suggestions || result.suggestions.length === 0) {
+      console.log(`[dadata] No companies found for: ${query}`);
+      return [];
+    }
+
+    console.log(`[dadata] Found ${result.suggestions.length} companies`);
+    return result.suggestions as CompanySuggestion[];
+  } catch (error) {
+    console.error("[dadata] Error searching companies:", error);
+    return [];
+  }
+}
+
+/**
+ * Получает детальную информацию о компании по ИНН
+ * @param inn ИНН компании
+ * @returns Данные компании или null
+ */
+export async function getCompanyByInn(inn: string): Promise<CompanyData | null> {
+  const token = getDaDataToken();
+  
+  if (!inn || !token) {
+    console.warn("[dadata] No INN or API token provided");
+    return null;
+  }
+
+  try {
+    console.log(`[dadata] Getting company by INN: ${inn}`);
+
+    const response = await fetch(DADATA_SUGGEST_PARTY_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Token ${token}`,
+      },
+      body: JSON.stringify({ 
+        query: inn,
+        count: 1
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn(`[dadata] Company API error: ${response.status}`);
+      return null;
+    }
+
+    const result = await response.json();
+    
+    if (!result.suggestions || result.suggestions.length === 0) {
+      console.warn(`[dadata] Company not found for INN: ${inn}`);
+      return null;
+    }
+
+    const companyData = result.suggestions[0].data as CompanyData;
+    console.log(`[dadata] Company found: ${companyData.name.full}`);
+    
+    return companyData;
+  } catch (error) {
+    console.error("[dadata] Error getting company by INN:", error);
+    return null;
+  }
 }
 

@@ -71,8 +71,14 @@ model User {
 
   // Профессиональная информация
   jobTitle   String? // Занимаемая должность
-  profession String? // Основная профессия
-  education  String? // Образование
+  profession String? // Основная профессия (перемещена в дополнительную информацию)
+  education  String? // Образование (перемещено в дополнительную информацию)
+  
+  // Место работы (обязательное для заявлений)
+  workplace         String? // Название компании места работы
+  workplaceInn      String? // ИНН компании места работы
+  directorName      String? // ФИО руководителя компании (из ФНС через Dadata)
+  directorPosition  String? // Должность руководителя компании (из ФНС через Dadata)
 
   // Дополнительная информация профиля
   employmentStatus   String? // Занятость: WORK (работа), STUDY (учеба), RETIREMENT (пенсия)

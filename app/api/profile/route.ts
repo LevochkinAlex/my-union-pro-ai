@@ -56,6 +56,10 @@ export async function GET() {
         preferredDiscountCity: true,
         avatarUrl: true,
         jobTitle: true,
+        workplace: true,
+        workplaceInn: true,
+        directorName: true,
+        directorPosition: true,
         profession: true,
         education: true,
         employmentStatus: true,
@@ -110,6 +114,10 @@ export async function GET() {
         preferredDiscountCity: user.preferredDiscountCity,
         avatarUrl: user.avatarUrl,
         jobTitle: user.jobTitle,
+        workplace: user.workplace,
+        workplaceInn: user.workplaceInn,
+        directorName: user.directorName,
+        directorPosition: user.directorPosition,
         profession: user.profession,
         education: user.education,
         employmentStatus: user.employmentStatus,
@@ -158,6 +166,10 @@ export async function PUT(request: NextRequest) {
     const address = normalizeString(body.address);
     const preferredDiscountCity = normalizeString(body.preferredDiscountCity);
     const jobTitle = normalizeString(body.jobTitle);
+    const workplace = normalizeString(body.workplace);
+    const workplaceInn = normalizeString(body.workplaceInn);
+    const directorName = normalizeString(body.directorName);
+    const directorPosition = normalizeString(body.directorPosition);
     const profession = normalizeString(body.profession);
     const education = normalizeEducation(body.education);
     const organizationId = normalizeString(body.organizationId);
@@ -201,6 +213,10 @@ export async function PUT(request: NextRequest) {
         phone: true,
         address: true,
         jobTitle: true,
+        workplace: true,
+        workplaceInn: true,
+        directorName: true,
+        directorPosition: true,
         profession: true,
         education: true,
         organizationId: true,
@@ -290,6 +306,10 @@ export async function PUT(request: NextRequest) {
     const actualPhone = normalizedPhone || (userBeforeUpdate?.phone || null);
     const actualAddress = address || (userBeforeUpdate?.address || null);
     const actualJobTitle = jobTitle || (userBeforeUpdate?.jobTitle || null);
+    const actualWorkplace = workplace || (userBeforeUpdate?.workplace || null);
+    const actualWorkplaceInn = workplaceInn || (userBeforeUpdate?.workplaceInn || null);
+    const actualDirectorName = directorName || (userBeforeUpdate?.directorName || null);
+    const actualDirectorPosition = directorPosition || (userBeforeUpdate?.directorPosition || null);
     const actualProfession = profession || (userBeforeUpdate?.profession || null);
     const actualEducation = education || (userBeforeUpdate?.education || null);
 
@@ -322,6 +342,10 @@ export async function PUT(request: NextRequest) {
       { old: normalizePhone(userBeforeUpdate?.phone), new: normalizePhone(actualPhone) },
       { old: userBeforeUpdate?.address, new: actualAddress },
       { old: userBeforeUpdate?.jobTitle, new: actualJobTitle },
+      { old: userBeforeUpdate?.workplace, new: actualWorkplace },
+      { old: userBeforeUpdate?.workplaceInn, new: actualWorkplaceInn },
+      { old: userBeforeUpdate?.directorName, new: actualDirectorName },
+      { old: userBeforeUpdate?.directorPosition, new: actualDirectorPosition },
       { old: userBeforeUpdate?.profession, new: actualProfession },
       { old: userBeforeUpdate?.education, new: actualEducation },
       { old: userBeforeUpdate?.organizationId, new: actualOrganizationId },
@@ -373,6 +397,18 @@ export async function PUT(request: NextRequest) {
     }
     if (jobTitle !== null) {
       updateData.jobTitle = jobTitle || (userBeforeUpdate?.jobTitle || null);
+    }
+    if (workplace !== null) {
+      updateData.workplace = workplace || (userBeforeUpdate?.workplace || null);
+    }
+    if (workplaceInn !== null) {
+      updateData.workplaceInn = workplaceInn || (userBeforeUpdate?.workplaceInn || null);
+    }
+    if (directorName !== null) {
+      updateData.directorName = directorName || (userBeforeUpdate?.directorName || null);
+    }
+    if (directorPosition !== null) {
+      updateData.directorPosition = directorPosition || (userBeforeUpdate?.directorPosition || null);
     }
     if (profession !== null) {
       updateData.profession = profession || (userBeforeUpdate?.profession || null);

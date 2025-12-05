@@ -8,6 +8,7 @@ import AvatarUpload from "@/components/profile/AvatarUpload";
 import Autocomplete from "@/components/form/Autocomplete";
 import OrganizationAutocomplete from "@/components/form/OrganizationAutocomplete";
 import EmailValidationField from "@/components/form/EmailValidationField";
+import WorkplaceSearch from "@/components/profile/WorkplaceSearch";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
 
@@ -33,8 +34,11 @@ interface ProfileData {
   dateOfBirth: string;
   address: string;
   jobTitle: string;
-  profession: string;
-  education: string;
+  // Место работы (обязательное для заявлений)
+  workplace: string;
+  workplaceInn: string;
+  directorName: string;
+  directorPosition: string;
   email: string;
   preferredDiscountCity: string; // Предпочтительный город для скидок
   avatarUrl: string | null;
@@ -65,6 +69,9 @@ interface AdditionalInfo {
   awards: string;
   training: string;
   additionalInfo: string;
+  // Профессия и образование перенесены из основного профиля
+  profession: string;
+  education: string;
 }
 
 interface Award {
@@ -108,8 +115,10 @@ export default function ProfilePage() {
     dateOfBirth: "",
     address: "",
     jobTitle: "",
-    profession: "",
-    education: "",
+    workplace: "",
+    workplaceInn: "",
+    directorName: "",
+    directorPosition: "",
     email: "",
     preferredDiscountCity: "",
     avatarUrl: null,
@@ -135,6 +144,8 @@ export default function ProfilePage() {
     awards: "",
     training: "",
     additionalInfo: "",
+    profession: "",
+    education: "",
   });
   
   const [children, setChildren] = useState<Child[]>([]);
@@ -293,8 +304,10 @@ export default function ProfilePage() {
         dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split("T")[0] : "",
         address: user.address ?? "",
         jobTitle: user.jobTitle ?? "",
-        profession: user.profession ?? "",
-        education: user.education ?? "",
+        workplace: user.workplace ?? "",
+        workplaceInn: user.workplaceInn ?? "",
+        directorName: user.directorName ?? "",
+        directorPosition: user.directorPosition ?? "",
         email: user.email,
         preferredDiscountCity: user.preferredDiscountCity ?? "",
         avatarUrl: user.avatarUrl ?? null,
@@ -302,6 +315,13 @@ export default function ProfilePage() {
         organization: user.organization,
       });
       setEmailVerified(user.emailVerified ? new Date(user.emailVerified) : null);
+      
+      // Обновляем дополнительную информацию (включая профессию и образование)
+      setAdditionalInfo(prev => ({
+        ...prev,
+        profession: user.profession ?? "",
+        education: user.education ?? "",
+      }));
     } catch (error) {
       console.error(error);
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка загрузки профиля" });
@@ -1003,45 +1023,38 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Профессия</label>
-              <Autocomplete
-                name="profession"
-                value={profileData.profession}
-                onChange={(value) => {
-                  setProfileData({ ...profileData, profession: value });
-                  // Автосохранение при выборе из списка
-                  if (professions.includes(value)) {
-                    handleFieldBlur("profession", value);
+              <WorkplaceSearch
+                value={profileData.workplace ? {
+                  name: profileData.workplace,
+                  inn: profileData.workplaceInn,
+                  directorName: profileData.directorName,
+                  directorPosition: profileData.directorPosition,
+                } : null}
+                onChange={(workplace) => {
+                  if (workplace) {
+                    const updatedData = {
+                      ...profileData,
+                      workplace: workplace.name,
+                      workplaceInn: workplace.inn,
+                      directorName: workplace.directorName,
+                      directorPosition: workplace.directorPosition,
+                    };
+                    setProfileData(updatedData);
+                    // Автосохранение
+                    handleFieldBlur("workplace", workplace.name);
+                  } else {
+                    const updatedData = {
+                      ...profileData,
+                      workplace: "",
+                      workplaceInn: "",
+                      directorName: "",
+                      directorPosition: "",
+                    };
+                    setProfileData(updatedData);
                   }
                 }}
-                options={professions}
-                placeholder="Начните вводить профессию..."
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                required
               />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Образование</label>
-              <div className="relative">
-              <select
-                name="education"
-                value={profileData.education}
-                onChange={handleProfileChange}
-                onBlur={() => handleFieldBlur("education", profileData.education)}
-                  className="block w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2.5 pr-12 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              >
-                <option value="">Выберите уровень образования</option>
-                {EDUCATION_LEVELS.map((level) => (
-                  <option key={level} value={level}>
-                    {level}
-                  </option>
-                ))}
-              </select>
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 dark:text-gray-400">
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </span>
-              </div>
             </div>
           </div>
 
@@ -1114,6 +1127,49 @@ export default function ProfilePage() {
           Заполните дополнительные сведения о себе для более персонализированного общения с AI-ботом
         </p>
         <form onSubmit={handleAdditionalInfoSubmit} className="mt-6 space-y-6">
+          {/* Секция: Образование и профессиональные навыки */}
+          <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-900/50">
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">Образование и профессиональные навыки</h4>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Профессия</label>
+                <Autocomplete
+                  name="profession"
+                  value={additionalInfo.profession}
+                  onChange={(value) => {
+                    setAdditionalInfo({ ...additionalInfo, profession: value });
+                  }}
+                  options={professions}
+                  placeholder="Начните вводить профессию..."
+                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Образование</label>
+                <div className="relative">
+                  <select
+                    name="education"
+                    value={additionalInfo.education}
+                    onChange={handleAdditionalInfoChange}
+                    className="block w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2.5 pr-12 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                  >
+                    <option value="">Выберите уровень образования</option>
+                    {EDUCATION_LEVELS.map((level) => (
+                      <option key={level} value={level}>
+                        {level}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 dark:text-gray-400">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Занятость</label>
