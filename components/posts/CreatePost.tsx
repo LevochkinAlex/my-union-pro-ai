@@ -637,7 +637,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
     } else if (type === "video") {
       setPostType("text");
       setSelectedFiles([]);
-      setVideoUrl("");
+      setVideoUrl(" "); // Устанавливаем пробел чтобы показать поле ввода
       openModal();
     } else if (type === "article") {
       openArticleModal();
@@ -893,10 +893,16 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                 {videoUrl && (
                   <input
                     type="url"
-                    value={videoUrl}
+                    value={videoUrl.trim()}
                     onChange={(e) => handleVideoUrlChange(e.target.value)}
+                    onFocus={(e) => {
+                      if (e.target.value.trim() === "") {
+                        setVideoUrl("");
+                      }
+                    }}
                     placeholder="Вставьте ссылку на YouTube, Rutube или VK видео"
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    autoFocus
                   />
                 )}
 
