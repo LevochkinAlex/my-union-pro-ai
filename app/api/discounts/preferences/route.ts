@@ -86,10 +86,26 @@ async function updatePreferences(request: NextRequest) {
 
     const existingFilters = (existingPreference?.filters as any) || {};
     
-    // Мерджим filters из запроса с существующими
-    const updatedFilters = body.filters 
+    // Мерджим filters из запроса с существующими, но сохраняем массивы favorites и claimed
+    let updatedFilters = body.filters 
       ? { ...existingFilters, ...body.filters }
       : existingFilters;
+    
+    // Если favorites переданы, мерджим их правильно (объединяем массивы и убираем дубликаты)
+    if (body.filters?.favorites && Array.isArray(body.filters.favorites)) {
+      const existingFavorites = Array.isArray(existingFilters.favorites) 
+        ? existingFilters.favorites 
+        : [];
+      // Объединяем и убираем дубликаты
+      const mergedFavorites = [...new Set([...existingFavorites, ...body.filters.favorites])];
+      updatedFilters = { ...updatedFilters, favorites: mergedFavorites };
+    } else if (body.filters && 'favorites' in body.filters && body.filters.favorites === null) {
+      // Если явно передано null, очищаем favorites
+      updatedFilters = { ...updatedFilters, favorites: [] };
+    } else if (!updatedFilters.favorites && existingFilters.favorites) {
+      // Сохраняем существующие favorites, если они не были переданы
+      updatedFilters = { ...updatedFilters, favorites: existingFilters.favorites };
+    }
 
     // Валидируем только pushEnabled и geolocation через схему
     const parsed = preferenceSchema.partial().safeParse({

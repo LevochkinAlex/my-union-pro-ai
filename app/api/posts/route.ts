@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+import { convertHeicToJpegServer } from "@/lib/heic-convert-server";
 
 // Инициализируем VDS хранилище при загрузке модуля
 if (typeof window === "undefined") {
@@ -197,15 +198,29 @@ export async function POST(request: NextRequest) {
       for (const file of files) {
         if (!file || file.size === 0) continue;
 
-        const fileExtension = path.extname(file.name);
+        const bytes = await file.arrayBuffer();
+        let buffer = Buffer.from(bytes);
+        let originalName = file.name;
+        let mimeType = file.type || "";
+
+        // Конвертируем HEIC/HEIF в JPEG, если это изображение
+        if (mimeType.startsWith("image/")) {
+          try {
+            const converted = await convertHeicToJpegServer(buffer, originalName);
+            buffer = converted.buffer;
+            originalName = converted.fileName;
+            mimeType = converted.mimeType;
+          } catch (error) {
+            console.error(`[posts] Error converting HEIC for ${originalName}:`, error);
+            // Продолжаем с оригинальным файлом при ошибке конвертации
+          }
+        }
+
+        const fileExtension = path.extname(originalName);
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExtension}`;
         const localFilePath = path.join(UPLOAD_DIR, fileName);
 
-        const bytes = await file.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-
         // Определяем тип файла
-        const mimeType = file.type || "";
         let attachmentType = "file";
         if (mimeType.startsWith("image/")) {
           attachmentType = "image";
@@ -243,7 +258,7 @@ export async function POST(request: NextRequest) {
             postId: post.id,
             type: attachmentType,
             fileName: fileName,
-            originalName: file.name,
+            originalName: originalName,
             filePath: finalFilePath,
             fileSize: file.size,
             mimeType: mimeType || null,

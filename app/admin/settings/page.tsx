@@ -12,6 +12,8 @@ interface EnvVariables {
   NEXT_PUBLIC_FIREBASE_VAPID_PUBLIC_KEY?: string;
   FIREBASE_PRIVATE_KEY?: string;
   OPENROUTER_API_KEY?: string;
+  RUNWAYML_API_KEY?: string;
+  RUNWAYML_API_VERSION?: string;
   DADATA_API_KEY?: string;
 }
 
@@ -261,6 +263,41 @@ export default function AdminSettingsPage() {
                 setEnvVariables({ ...envVariables, OPENROUTER_API_KEY: e.target.value })
               }
               placeholder="sk-or-v1-..."
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            />
+          </div>
+
+          {/* RunwayML API Key */}
+          <div>
+            <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+              RunwayML API Key
+            </label>
+            <input
+              type="password"
+              value={envVariables.RUNWAYML_API_KEY || ""}
+              onChange={(e) =>
+                setEnvVariables({ ...envVariables, RUNWAYML_API_KEY: e.target.value })
+              }
+              placeholder="key_..."
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Используется для генерации изображений в новостях и постах
+            </p>
+          </div>
+
+          {/* RunwayML API Version */}
+          <div>
+            <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+              RunwayML API Version
+            </label>
+            <input
+              type="text"
+              value={envVariables.RUNWAYML_API_VERSION || "2024-11-06"}
+              onChange={(e) =>
+                setEnvVariables({ ...envVariables, RUNWAYML_API_VERSION: e.target.value })
+              }
+              placeholder="2024-11-06"
               className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             />
           </div>

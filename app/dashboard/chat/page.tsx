@@ -117,6 +117,7 @@ function ChatPageContent() {
   const isUserScrolling = useRef(false);
   const lastScrollTop = useRef(0);
   const shouldScrollToBottom = useRef(true);
+  const deletedMessageIds = useRef<Set<string>>(new Set()); // Храним ID удаленных сообщений
 
   // Используем useEffect для получения userId после монтирования, чтобы избежать ошибок гидратации
   const [userId, setUserId] = useState<string | null>(null);
@@ -171,11 +172,14 @@ function ChatPageContent() {
   }, [messages]);
 
   useEffect(() => {
-    // Автообновление сообщений каждые 3 секунды
+    // Умное автообновление сообщений - каждые 5 секунд, но пропускаем если есть удаленные
     if (selectedChat) {
       const interval = setInterval(() => {
-        loadMessages(selectedChat.id, true);
-      }, 3000);
+        // Пропускаем обновление, если есть локально удаленные сообщения (ждем подтверждения сервера)
+        if (deletedMessageIds.current.size === 0) {
+          loadMessages(selectedChat.id, true);
+        }
+      }, 5000); // Увеличили с 3 до 5 секунд для снижения нагрузки
       return () => clearInterval(interval);
     }
   }, [selectedChat]);
@@ -291,18 +295,54 @@ function ChatPageContent() {
         const data = await response.json();
         const newMessages = data.messages || [];
         
+        // Фильтруем удаленные сообщения и те, что в процессе удаления
+        const filteredMessages = newMessages.filter((m: Message) => 
+          !m.deletedAt && !deletedMessageIds.current.has(m.id)
+        );
+        
         // При тихом обновлении проверяем, есть ли новые сообщения
         if (silent) {
-          const hasNewMessages = newMessages.length !== messages.length;
-          // Только если пользователь внизу чата и есть новые сообщения - скроллим
-          if (hasNewMessages && isNearBottom() && !isUserScrolling.current) {
-            setMessages(newMessages);
-            setTimeout(() => scrollToBottom(true), 50);
+          // Если есть локально удаленные сообщения, не обновляем (ждем подтверждения)
+          if (deletedMessageIds.current.size > 0) {
+            // Проверяем, есть ли среди новых сообщений те, что мы удалили
+            const stillDeleted = Array.from(deletedMessageIds.current).filter(id => 
+              !newMessages.find((m: Message) => m.id === id)
+            );
+            // Если сообщение действительно удалено на сервере, убираем из списка
+            stillDeleted.forEach(id => deletedMessageIds.current.delete(id));
+            
+            // Обновляем только если нет локально удаленных или они подтверждены
+            if (deletedMessageIds.current.size === 0) {
+              const hasNewMessages = filteredMessages.length !== messages.length || 
+                filteredMessages.some((m: Message, i: number) => 
+                  !messages[i] || messages[i].id !== m.id || messages[i].content !== m.content
+                );
+              
+              if (hasNewMessages && isNearBottom() && !isUserScrolling.current) {
+                setMessages(filteredMessages);
+                setTimeout(() => scrollToBottom(true), 50);
+              } else {
+                setMessages(filteredMessages);
+              }
+            }
           } else {
-            setMessages(newMessages);
+            const hasNewMessages = filteredMessages.length !== messages.length || 
+              filteredMessages.some((m: Message, i: number) => 
+                !messages[i] || messages[i].id !== m.id || messages[i].content !== m.content
+              );
+            
+            // Только если пользователь внизу чата и есть новые сообщения - скроллим
+            if (hasNewMessages && isNearBottom() && !isUserScrolling.current) {
+              setMessages(filteredMessages);
+              setTimeout(() => scrollToBottom(true), 50);
+            } else {
+              setMessages(filteredMessages);
+            }
           }
         } else {
-          setMessages(newMessages);
+          // Очищаем список удаленных при полной перезагрузке
+          deletedMessageIds.current.clear();
+          setMessages(filteredMessages);
           // При первой загрузке чата всегда скроллим вниз
           shouldScrollToBottom.current = true;
         }
@@ -405,27 +445,81 @@ function ChatPageContent() {
   const sendMessage = async () => {
     if (!selectedChat || (!messageText.trim() && !selectedFile) || sending) return;
 
+    const content = messageText.trim();
+    const file = selectedFile;
+    const replyTo = replyingToMessage;
+    
+    // Сохраняем исходное состояние для отката
+    const originalMessages = [...messages];
+    
+    // Оптимистичное обновление - сразу показываем сообщение в UI
+    const tempMessageId = `temp-${Date.now()}-${Math.random()}`;
+    const optimisticMessage: Message = {
+      id: tempMessageId,
+      content: content || (file ? file.name : ""),
+      senderId: currentUserId || "",
+      createdAt: new Date().toISOString(),
+      sender: {
+        id: currentUserId || "",
+        firstName: session?.user?.firstName || session?.user?.name?.split(" ")[0] || null,
+        lastName: session?.user?.lastName || session?.user?.name?.split(" ")[1] || null,
+        middleName: session?.user?.name?.split(" ")[2] || null,
+        avatarUrl: session?.user?.avatarUrl || null,
+      },
+      replyToId: replyTo?.id || null,
+      replyTo: replyTo || null,
+      attachments: file ? [{
+        id: `temp-attachment-${Date.now()}`,
+        type: file.type.startsWith("image/") ? "image" : "file",
+        fileName: file.name,
+        originalName: file.name,
+        filePath: filePreview || "",
+        fileSize: file.size,
+        mimeType: file.type,
+      }] : undefined,
+    };
+    
+    setMessages(prev => [...prev, optimisticMessage]);
     setSending(true);
+    
+    // Очищаем поля сразу для быстрой отправки следующего сообщения
+    if (filePreview) {
+      URL.revokeObjectURL(filePreview);
+    }
+    setMessageText("");
+    setSelectedFile(null);
+    setFilePreview(null);
+    setReplyingToMessage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "44px";
+    }
+    shouldScrollToBottom.current = true;
+    isUserScrolling.current = false;
+    scrollToBottom(true);
+
     try {
       let response;
       
       const messageData: any = {
-        content: messageText.trim(),
+        content: content,
       };
 
-      if (replyingToMessage) {
-        messageData.replyToId = replyingToMessage.id;
+      if (replyTo) {
+        messageData.replyToId = replyTo.id;
       }
       
-      if (selectedFile) {
+      if (file) {
         // Отправляем файл
         const formData = new FormData();
-        formData.append("file", selectedFile);
-        if (messageText.trim()) {
-          formData.append("content", messageText.trim());
+        formData.append("file", file);
+        if (content) {
+          formData.append("content", content);
         }
-        if (replyingToMessage) {
-          formData.append("replyToId", replyingToMessage.id);
+        if (replyTo) {
+          formData.append("replyToId", replyTo.id);
         }
         
         response = await fetch(`/api/chat/${selectedChat.id}/attachments`, {
@@ -435,38 +529,29 @@ function ChatPageContent() {
       } else {
         // Отправляем текстовое сообщение
         response = await fetch(`/api/chat/${selectedChat.id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(messageData),
-      });
+        });
       }
 
       const data = await response.json();
 
       if (response.ok) {
-        // Очищаем превью
-        if (filePreview) {
-          URL.revokeObjectURL(filePreview);
-        }
-        setMessageText("");
-        setSelectedFile(null);
-        setFilePreview(null);
-        setReplyingToMessage(null);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
-        // Сбрасываем высоту textarea
-        if (textareaRef.current) {
-          textareaRef.current.style.height = "44px";
-        }
-        // После отправки сообщения нужно прокрутить вниз
-        shouldScrollToBottom.current = true;
-        isUserScrolling.current = false;
-        // Перезагружаем сообщения
-        loadMessages(selectedChat.id);
-        // Обновляем список чатов
+        // Заменяем временное сообщение на реальное
+        setMessages(prev => {
+          const filtered = prev.filter(m => m.id !== tempMessageId);
+          if (data.message) {
+            return [...filtered, data.message];
+          }
+          return filtered;
+        });
+        
+        // Обновляем список чатов в фоне (не блокируем UI)
         loadChats();
       } else {
+        // Откатываем изменения при ошибке
+        setMessages(originalMessages);
         console.error("Error sending message:", data);
         const errorMessage = data.details 
           ? `${data.error}: ${data.details}`
@@ -480,6 +565,8 @@ function ChatPageContent() {
         });
       }
     } catch (error) {
+      // Откатываем изменения при ошибке
+      setMessages(originalMessages);
       console.error("Error sending message:", error);
       setAlertDialog({
         isOpen: true,
@@ -574,8 +661,18 @@ function ChatPageContent() {
         setAlertDialog((prev) => ({ ...prev, isOpen: false }));
         if (!selectedChat) return;
 
-        // Оптимистичное обновление - сразу удаляем из UI
-        setMessages(prev => prev.filter(m => m.id !== messageId));
+        // Сохраняем исходное состояние для отката
+        const originalMessages = [...messages];
+        
+        // Добавляем в список удаленных (блокируем polling)
+        deletedMessageIds.current.add(messageId);
+        
+        // Оптимистичное обновление - сразу помечаем как удаленное в UI
+        setMessages(prev => prev.map(m => 
+          m.id === messageId 
+            ? { ...m, deletedAt: new Date().toISOString(), content: "Сообщение удалено" }
+            : m
+        ));
 
         try {
           const response = await fetch(`/api/chat/${selectedChat.id}/messages/${messageId}`, {
@@ -585,7 +682,8 @@ function ChatPageContent() {
           if (!response.ok) {
             const result = await response.json();
             // Откатываем изменения при ошибке
-            loadMessages(selectedChat.id, true);
+            deletedMessageIds.current.delete(messageId);
+            setMessages(originalMessages);
             setAlertDialog({
               isOpen: true,
               title: "Ошибка",
@@ -593,11 +691,20 @@ function ChatPageContent() {
               type: "alert",
               onConfirm: () => setAlertDialog((prev) => ({ ...prev, isOpen: false })),
             });
+          } else {
+            // Успешно удалено - убираем из списка удаленных и из UI
+            deletedMessageIds.current.delete(messageId);
+            setMessages(prev => prev.filter(m => m.id !== messageId));
+            // Принудительно обновляем сообщения, чтобы убедиться, что удаление синхронизировано
+            setTimeout(() => {
+              loadMessages(selectedChat.id, true);
+            }, 500);
           }
         } catch (error) {
           console.error("Error deleting message:", error);
           // Откатываем изменения при ошибке
-          loadMessages(selectedChat.id, true);
+          deletedMessageIds.current.delete(messageId);
+          setMessages(originalMessages);
           setAlertDialog({
             isOpen: true,
             title: "Ошибка",
@@ -1079,7 +1186,7 @@ function ChatPageContent() {
                       } ${isDeleted ? "opacity-60" : ""}`}
                     >
                       {/* Действия при наведении (десктоп) или долгом нажатии (мобильный) */}
-                      {isHovered && !isDeleted && (
+                      {isHovered && !isDeleted && !isEditing && (
                         <>
                           {/* Overlay для закрытия при клике вне меню на мобильных */}
                           <div 

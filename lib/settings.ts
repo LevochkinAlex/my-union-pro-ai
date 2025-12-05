@@ -9,6 +9,8 @@ type SettingKey =
   | "openrouter.apiKey"
   | "openrouter.model"
   | "openrouter.embeddingModel"
+  | "runwayml.apiKey"
+  | "runwayml.apiVersion"
   | "dadata.apiKey"
   | "dadata.secretKey"
   | "onesignal.appId"
@@ -24,6 +26,8 @@ const ENV_FALLBACKS: Record<SettingKey, string | undefined> = {
   "openrouter.apiKey": process.env.OPENROUTER_API_KEY,
   "openrouter.model": process.env.OPENROUTER_MODEL,
   "openrouter.embeddingModel": process.env.OPENROUTER_EMBEDDING_MODEL,
+  "runwayml.apiKey": process.env.RUNWAYML_API_KEY,
+  "runwayml.apiVersion": process.env.RUNWAYML_API_VERSION,
   "dadata.apiKey": process.env.DADATA_API_KEY,
   "dadata.secretKey": process.env.DADATA_SECRET_KEY,
   "onesignal.appId": process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID,
@@ -136,6 +140,18 @@ export async function getOneSignalConfig() {
     appId: appId ?? "",
     safariWebId: safariWebId ?? "",
     restApiKey: restApiKey ?? "",
+  };
+}
+
+export async function getRunwayMLConfig() {
+  const [apiKey, apiVersion] = await Promise.all([
+    getSettingValue("runwayml.apiKey"),
+    getSettingValue("runwayml.apiVersion"),
+  ]);
+
+  return {
+    apiKey: apiKey ?? "",
+    apiVersion: apiVersion ?? "2024-11-06",
   };
 }
 

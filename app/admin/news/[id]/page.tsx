@@ -34,6 +34,8 @@ export default function EditNewsPage() {
   const [error, setError] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiLoadingField, setAiLoadingField] = useState<"title" | "content" | null>(null);
+  const [generatingImage, setGeneratingImage] = useState(false);
+  const [imagePrompt, setImagePrompt] = useState("");
 
   useEffect(() => {
     if (id) {
@@ -235,6 +237,67 @@ export default function EditNewsPage() {
     }
   };
 
+  const handleGenerateImage = async () => {
+    if (!imagePrompt.trim()) {
+      alert("Введите описание изображения");
+      return;
+    }
+    
+    setGeneratingImage(true);
+    try {
+      // Запускаем генерацию
+      const response = await fetch("/api/ai/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: imagePrompt }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Ошибка при генерации изображения");
+      }
+
+      const data = await response.json();
+      const taskId = data.taskId;
+
+      // Опрашиваем статус задачи
+      let attempts = 0;
+      const maxAttempts = 60; // 5 минут максимум
+      
+      const checkStatus = async (): Promise<string> => {
+        const statusResponse = await fetch(`/api/ai/generate-image?taskId=${taskId}`);
+        if (!statusResponse.ok) {
+          throw new Error("Ошибка при проверке статуса");
+        }
+        
+        const statusData = await statusResponse.json();
+        const task = statusData.task;
+        
+        if (task.status === "completed" && task.result?.imageUrl) {
+          return task.result.imageUrl;
+        } else if (task.status === "failed") {
+          throw new Error(task.error || "Генерация изображения не удалась");
+        } else if (attempts >= maxAttempts) {
+          throw new Error("Превышено время ожидания генерации");
+        }
+        
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Ждем 5 секунд
+        return checkStatus();
+      };
+
+      const imageUrl = await checkStatus();
+      setCoverImage(imageUrl);
+      setImagePrompt("");
+      alert("Изображение успешно сгенерировано!");
+    } catch (error: any) {
+      console.error("Error generating image:", error);
+      alert(error.message || "Ошибка при генерации изображения");
+    } finally {
+      setGeneratingImage(false);
+    }
+  };
+
   const handleAiContinueContent = async () => {
     if (!content.trim()) return;
     
@@ -407,11 +470,47 @@ export default function EditNewsPage() {
               />
             </div>
 
-            <ImageUploadWithCrop
-              value={coverImage}
-              onChange={setCoverImage}
-              label="Изображение обложки"
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Изображение обложки
+              </label>
+              <ImageUploadWithCrop
+                value={coverImage}
+                onChange={setCoverImage}
+                label=""
+              />
+              <div className="mt-3 space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={imagePrompt}
+                    onChange={(e) => setImagePrompt(e.target.value)}
+                    placeholder="Опишите изображение для генерации..."
+                    className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleGenerateImage();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleGenerateImage}
+                    disabled={generatingImage || !imagePrompt.trim()}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    {generatingImage ? "Генерация..." : "Сгенерировать"}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Используйте AI для генерации изображения по описанию
+                </p>
+              </div>
+            </div>
 
             <div>
               <div className="flex items-center justify-between mb-2">
