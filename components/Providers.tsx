@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import FirebasePushInit from "./firebase-push-init";
 import { LanguageProvider } from "@/lib/language-context";
 import { AlertProvider } from "./providers/AlertProvider";
+import { ToastProvider } from "./ui/Toast";
 import ErrorHandler from "./ErrorHandler";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -19,9 +20,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       >
         <LanguageProvider>
           <AlertProvider>
-            <ErrorHandler />
-            <FirebasePushInit />
-            {children}
+            <ToastProvider>
+              <ErrorHandler />
+              <FirebasePushInit />
+              {children}
+            </ToastProvider>
           </AlertProvider>
         </LanguageProvider>
       </ThemeProvider>

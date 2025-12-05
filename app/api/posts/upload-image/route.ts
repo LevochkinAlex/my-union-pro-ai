@@ -31,14 +31,16 @@ export async function POST(request: NextRequest) {
     let originalName = file.name;
     let mimeType = file.type || "";
 
-    if (mimeType.startsWith("image/")) {
+    // Конвертируем HEIC/HEIF в JPEG, если это изображение (но не GIF)
+    if (mimeType.startsWith("image/") && mimeType !== "image/gif") {
       try {
-        const converted = await convertHeicToJpegServer(buffer, originalName);
+        const converted = await convertHeicToJpegServer(buffer, originalName, mimeType);
         buffer = converted.buffer as Buffer;
         originalName = converted.fileName;
         mimeType = converted.mimeType;
       } catch (error) {
         console.error(`[posts/upload-image] Error converting HEIC for ${originalName}:`, error);
+        // Продолжаем с оригинальным файлом при ошибке конвертации
       }
     }
 
@@ -46,7 +48,11 @@ export async function POST(request: NextRequest) {
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExtension}`;
     const localFilePath = path.join(UPLOAD_DIR, fileName);
 
-    let finalFilePath = `/uploads/posts/${fileName}`;
+    let finalFilePath: string;
+    let returnUrl: string;
+
+    // Всегда создаём директорию
+    await mkdir(UPLOAD_DIR, { recursive: true });
 
     if (isVDSStorageConfigured()) {
       try {
@@ -54,23 +60,30 @@ export async function POST(request: NextRequest) {
         const vdsUrl = await uploadFileToVDS(fileKey, buffer, mimeType);
         if (vdsUrl) {
           finalFilePath = vdsUrl;
+          returnUrl = vdsUrl; // Используем VDS URL напрямую
           console.log(`[posts/upload-image] File uploaded to VDS: ${vdsUrl}`);
         } else {
           throw new Error("VDS upload returned no URL");
         }
       } catch (vdsError) {
-        console.error(`[posts/upload-image] VDS upload error:`, vdsError);
-        throw new Error(`Не удалось загрузить файл на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
+        console.error(`[posts/upload-image] VDS upload error, falling back to local:`, vdsError);
+        // Fallback на локальное сохранение
+        await writeFile(localFilePath, buffer);
+        finalFilePath = localFilePath;
+        returnUrl = `/api/uploads/posts/${fileName}`; // Используем API endpoint для локальных файлов
+        console.log(`[posts/upload-image] File saved locally (VDS fallback): ${localFilePath}`);
       }
     } else {
-      await mkdir(UPLOAD_DIR, { recursive: true });
+      // Локальное сохранение (для разработки)
       await writeFile(localFilePath, buffer);
+      finalFilePath = localFilePath;
+      returnUrl = `/api/uploads/posts/${fileName}`; // Используем API endpoint
       console.log(`[posts/upload-image] File saved locally (VDS not configured): ${localFilePath}`);
     }
 
     return NextResponse.json({
       success: true,
-      url: finalFilePath,
+      url: returnUrl,
       fileName: originalName,
     });
   } catch (error: any) {

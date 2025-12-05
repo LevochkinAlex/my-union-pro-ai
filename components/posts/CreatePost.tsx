@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import RichTextEditor from "@/components/admin/RichTextEditor";
 import ImageInsertModal from "./ImageInsertModal";
 import { compressImages } from "@/lib/compress-image";
+import { useToast } from "@/components/ui/Toast";
+import PromptModal from "@/components/ui/PromptModal";
 
 interface CreatePostProps {
   onPostCreated?: () => void;
@@ -15,6 +17,7 @@ interface CreatePostProps {
 export default function CreatePost({ onPostCreated, compact = false }: CreatePostProps = {} as CreatePostProps) {
   const { data: session } = useSession();
   const router = useRouter();
+  const { showToast } = useToast();
   const [content, setContent] = useState("");
   const [htmlContent, setHtmlContent] = useState("");
   const [postType, setPostType] = useState<"text" | "article">("text");
@@ -24,17 +27,19 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
   const [videoUrl, setVideoUrl] = useState("");
   const [linkMetadata, setLinkMetadata] = useState<any>(null);
   const [videoMetadata, setVideoMetadata] = useState<any>(null);
+  const [coverImage, setCoverImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isArticleModalOpen, setIsArticleModalOpen] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [isImageModalForCover, setIsImageModalForCover] = useState(false);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>("");
-  const editorRef = useRef<HTMLDivElement>(null);
   const articleEditorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -172,6 +177,8 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
   };
 
   const handleInsertImage = () => {
+    // Вставка через WYSIWYG - в HTML, не cover
+    setIsImageModalForCover(false);
     setIsImageModalOpen(true);
   };
 
@@ -189,70 +196,89 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         body: formData,
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      const data = await response.json();
+
+      if (response.ok && data.url) {
         const imageUrl = data.url;
+        const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
         
-        if (articleEditorRef.current) {
-          const editor = articleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
-          if (editor) {
-            const img = document.createElement('img');
-            img.src = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
-            img.alt = file.name;
-            img.style.maxWidth = '100%';
-            img.style.height = 'auto';
-            img.style.borderRadius = '8px';
-            img.style.margin = '8px 0';
-            
-            const selection = window.getSelection();
-            if (selection && selection.rangeCount > 0) {
-              const range = selection.getRangeAt(0);
-              range.insertNode(img);
-              range.collapse(false);
-              selection.removeAllRanges();
-              selection.addRange(range);
-            } else {
-              editor.appendChild(img);
+        if (isImageModalForCover) {
+          // Если это cover изображение (через нижнюю иконку)
+          setCoverImage(fullImageUrl);
+          setIsImageModalOpen(false);
+        } else {
+          // Если это вставка в HTML (через WYSIWYG)
+          if (articleEditorRef.current) {
+            const editor = articleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+            if (editor) {
+              const img = document.createElement('img');
+              img.src = fullImageUrl;
+              img.alt = file.name;
+              img.style.maxWidth = '100%';
+              img.style.height = 'auto';
+              img.style.borderRadius = '8px';
+              img.style.margin = '8px 0';
+              
+              const selection = window.getSelection();
+              if (selection && selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                range.insertNode(img);
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+              } else {
+                editor.appendChild(img);
+              }
+              
+              const event = new Event('input', { bubbles: true });
+              editor.dispatchEvent(event);
             }
-            
-            const event = new Event('input', { bubbles: true });
-            editor.dispatchEvent(event);
           }
+          setIsImageModalOpen(false);
         }
       } else {
-        throw new Error("Ошибка при загрузке изображения");
+        const errorMessage = data.error || "Ошибка при загрузке изображения";
+        console.error("[CreatePost] Upload error:", errorMessage, data);
+        showToast(errorMessage, "error");
       }
     } catch (error) {
       console.error("Error uploading image:", error);
-      alert("Ошибка при загрузке изображения");
+      const errorMessage = error instanceof Error ? error.message : "Ошибка при загрузке изображения";
+      showToast(errorMessage, "error");
     }
   };
 
   const handleImageGenerate = async (imageUrl: string) => {
-    if (articleEditorRef.current) {
-      const editor = articleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
-      if (editor) {
-        const img = document.createElement('img');
-        img.src = imageUrl;
-        img.alt = "Сгенерированное изображение";
-        img.style.maxWidth = '100%';
-        img.style.height = 'auto';
-        img.style.borderRadius = '8px';
-        img.style.margin = '8px 0';
-        
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          range.insertNode(img);
-          range.collapse(false);
-          selection.removeAllRanges();
-          selection.addRange(range);
-        } else {
-          editor.appendChild(img);
+    if (isImageModalForCover) {
+      // Если это cover изображение (через нижнюю иконку)
+      setCoverImage(imageUrl);
+    } else {
+      // Если это вставка в HTML (через WYSIWYG)
+      if (articleEditorRef.current) {
+        const editor = articleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+        if (editor) {
+          const img = document.createElement('img');
+          img.src = imageUrl;
+          img.alt = "Сгенерированное изображение";
+          img.style.maxWidth = '100%';
+          img.style.height = 'auto';
+          img.style.borderRadius = '8px';
+          img.style.margin = '8px 0';
+          
+          const selection = window.getSelection();
+          if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            range.insertNode(img);
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          } else {
+            editor.appendChild(img);
+          }
+          
+          const event = new Event('input', { bubbles: true });
+          editor.dispatchEvent(event);
         }
-        
-        const event = new Event('input', { bubbles: true });
-        editor.dispatchEvent(event);
       }
     }
   };
@@ -346,7 +372,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
     } catch (error) {
       console.error("Error rewriting with AI:", error);
       const errorMessage = error instanceof Error ? error.message : "Ошибка при переписывании текста с помощью AI";
-      alert(errorMessage);
+      showToast(errorMessage, "error");
     } finally {
       setAiLoading(false);
     }
@@ -384,18 +410,22 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(errorData.error || "Ошибка при дописывании текста с помощью AI");
+        showToast(errorData.error || "Ошибка при дописывании текста с помощью AI", "error");
       }
     } catch (error) {
       console.error("Error continuing with AI:", error);
-      alert("Ошибка при дописывании текста с помощью AI");
+      showToast("Ошибка при дописывании текста с помощью AI", "error");
     } finally {
       setAiLoading(false);
     }
   };
 
-  const handleAiWrite = async () => {
-    const userPrompt = window.prompt("О чем вы хотите написать?");
+  const handleAiWrite = () => {
+    setIsPromptModalOpen(true);
+  };
+
+  const handlePromptConfirm = async (userPrompt: string) => {
+    setIsPromptModalOpen(false);
     if (!userPrompt || !userPrompt.trim()) return;
     
     setAiLoading(true);
@@ -425,11 +455,11 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(errorData.error || "Ошибка при генерации текста с помощью AI");
+        showToast(errorData.error || "Ошибка при генерации текста с помощью AI", "error");
       }
     } catch (error) {
       console.error("Error writing with AI:", error);
-      alert("Ошибка при генерации текста с помощью AI");
+      showToast("Ошибка при генерации текста с помощью AI", "error");
     } finally {
       setAiLoading(false);
     }
@@ -461,11 +491,11 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(errorData.error || "Ошибка при улучшении текста с помощью AI");
+        showToast(errorData.error || "Ошибка при улучшении текста с помощью AI", "error");
       }
     } catch (error) {
       console.error("Error improving text with AI:", error);
-      alert("Ошибка при улучшении текста с помощью AI");
+      showToast("Ошибка при улучшении текста с помощью AI", "error");
     } finally {
       setAiLoading(false);
     }
@@ -492,6 +522,10 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         formData.append("videoMetadata", JSON.stringify(videoMetadata));
       }
 
+      if (coverImage) {
+        formData.append("coverImage", coverImage);
+      }
+
       const filesToUpload = await compressImages(selectedFiles);
       filesToUpload.forEach((file) => {
         formData.append("attachments", file);
@@ -516,6 +550,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         setVideoUrl("");
         setLinkMetadata(null);
         setVideoMetadata(null);
+        setCoverImage(null);
         setPostType("text");
         setIsModalOpen(false);
         setIsArticleModalOpen(false);
@@ -531,11 +566,11 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
           router.refresh();
         }
       } else {
-        alert(data.error || "Ошибка при создании поста");
+        showToast(data.error || "Ошибка при создании поста", "error");
       }
     } catch (error) {
       console.error("Error creating post:", error);
-      alert("Ошибка при создании поста");
+      showToast("Ошибка при создании поста", "error");
     } finally {
       setLoading(false);
     }
@@ -851,9 +886,12 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsImageModalOpen(true)}
+                  onClick={() => {
+                    setIsImageModalForCover(true);
+                    setIsImageModalOpen(true);
+                  }}
                   className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                  title="Добавить изображение"
+                  title="Добавить обложку"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -1113,6 +1151,16 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
           </div>
         </div>
       )}
+
+      {/* Модалка для ввода текста (prompt) */}
+      <PromptModal
+        isOpen={isPromptModalOpen}
+        title="Написать с ИИ"
+        message="О чем вы хотите написать?"
+        placeholder="Введите тему поста..."
+        onConfirm={handlePromptConfirm}
+        onCancel={() => setIsPromptModalOpen(false)}
+      />
 
       <input
         type="file"

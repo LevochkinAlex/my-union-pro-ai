@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 
 interface ImageInsertModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export default function ImageInsertModal({
   onGenerate,
   generating = false,
 }: ImageInsertModalProps) {
+  const { showToast } = useToast();
   const [imagePrompt, setImagePrompt] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -35,16 +37,22 @@ export default function ImageInsertModal({
     }
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (selectedFile) {
-      onUpload(selectedFile);
-      handleClose();
+      try {
+        await onUpload(selectedFile);
+        // Не закрываем модалку здесь - пусть родительский компонент решает
+        // handleClose() будет вызван в родительском компоненте после успешной загрузки
+      } catch (error) {
+        console.error("Error in handleUpload:", error);
+        // Ошибка уже обработана в родительском компоненте
+      }
     }
   };
 
   const handleGenerate = async () => {
     if (!imagePrompt.trim()) {
-      alert("Введите описание изображения");
+      showToast("Введите описание изображения", "warning");
       return;
     }
 
@@ -107,7 +115,7 @@ export default function ImageInsertModal({
       // Не закрываем модалку сразу, показываем превью
     } catch (error: any) {
       console.error("Error generating image:", error);
-      alert(error.message || "Ошибка при генерации изображения");
+      showToast(error.message || "Ошибка при генерации изображения", "error");
       setIsGenerating(false);
       setGenerationProgress(0);
     }

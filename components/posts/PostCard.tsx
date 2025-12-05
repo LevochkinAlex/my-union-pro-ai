@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import RichTextEditor from "@/components/admin/RichTextEditor";
 import ImageInsertModal from "@/components/posts/ImageInsertModal";
+import { useToast } from "@/components/ui/Toast";
 
 interface PostCardProps {
   post: any;
@@ -14,6 +15,7 @@ interface PostCardProps {
 export default function PostCard({ post, onUpdate }: PostCardProps) {
   const { data: session } = useSession();
   const router = useRouter();
+  const { showToast } = useToast();
   const [isLiked, setIsLiked] = useState(post.isLiked);
   const [likesCount, setLikesCount] = useState(post.likesCount);
   const [viewCount, setViewCount] = useState(post.viewCount || 0);
@@ -22,6 +24,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   const [commentText, setCommentText] = useState("");
   const [loadingComments, setLoadingComments] = useState(false);
   const [sendingComment, setSendingComment] = useState(false);
+  const [isCommentAreaHovered, setIsCommentAreaHovered] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -35,14 +38,61 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   const [editVideoUrl, setEditVideoUrl] = useState("");
   const [editLinkMetadata, setEditLinkMetadata] = useState<any>(post.linkMetadata);
   const [editVideoMetadata, setEditVideoMetadata] = useState<any>(post.videoMetadata);
+  const [editCoverImage, setEditCoverImage] = useState<string | null>((post as any).coverImage || null);
   const [isEditImageModalOpen, setIsEditImageModalOpen] = useState(false);
   const [isEditVideoModalOpen, setIsEditVideoModalOpen] = useState(false);
+  const [imageInsertMode, setImageInsertMode] = useState<"content" | "cover">("content");
   const [deletedAttachmentIds, setDeletedAttachmentIds] = useState<string[]>([]);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const editArticleEditorRef = useRef<HTMLDivElement>(null);
+  const commentAreaTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const postCardRef = useRef<HTMLDivElement>(null);
+  const hasIncrementedView = useRef(false);
   
   const isOwnPost = session?.user?.id === post.author.id;
   const isArticle = post.postType === "article";
+
+  // Отслеживание видимости поста для инкремента просмотров
+  useEffect(() => {
+    if (!postCardRef.current || hasIncrementedView.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          // Когда пост становится видимым (более 50% в видимой области)
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.5 && !hasIncrementedView.current) {
+            hasIncrementedView.current = true;
+            
+            // Увеличиваем счётчик просмотров
+            fetch(`/api/posts/${post.id}/view`, {
+              method: "POST",
+            })
+              .then((res) => res.json())
+              .then((data) => {
+                if (data.viewCount !== undefined) {
+                  setViewCount(data.viewCount);
+                }
+              })
+              .catch((err) => {
+                console.error("Failed to increment view count:", err);
+              });
+          }
+        });
+      },
+      {
+        threshold: 0.5, // 50% видимости
+        rootMargin: "0px",
+      }
+    );
+
+    observer.observe(postCardRef.current);
+
+    return () => {
+      if (postCardRef.current) {
+        observer.unobserve(postCardRef.current);
+      }
+    };
+  }, [post.id]);
   
   // Для статей извлекаем текст из HTML, для обычных постов используем как есть
   const getPlainText = (html: string) => {
@@ -140,8 +190,12 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
 
   const loadComments = async () => {
     if (showComments) {
-      setShowComments(false);
-      return;
+      // Если комментарии уже открыты и мышь не в области комментариев, закрываем
+      if (!isCommentAreaHovered) {
+        setShowComments(false);
+        return;
+      }
+      // Если мышь в области, просто обновляем комментарии
     }
 
     setLoadingComments(true);
@@ -162,18 +216,35 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   const sendComment = async () => {
     if (!commentText.trim() || sendingComment) return;
 
+    const commentToSend = commentText.trim();
     setSendingComment(true);
     try {
       const response = await fetch(`/api/posts/${post.id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: commentText }),
+        body: JSON.stringify({ content: commentToSend }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
+        // Очищаем поле ввода, но оставляем форму открытой
         setCommentText("");
+        // Обновляем комментарии, добавляя новый в начало списка оптимистично
+        const newComment = {
+          id: data.comment?.id || `temp-${Date.now()}`,
+          content: commentToSend,
+          createdAt: new Date().toISOString(),
+          user: {
+            id: session?.user?.id,
+            firstName: session?.user?.name?.split(' ')[0] || '',
+            lastName: session?.user?.name?.split(' ')[1] || '',
+            middleName: '',
+            avatarUrl: null,
+          },
+        };
+        setComments(prev => [newComment, ...prev]);
+        // Перезагружаем комментарии для получения актуальных данных
         loadComments();
         onUpdate();
       }
@@ -195,46 +266,66 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
         body: formData,
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      const data = await response.json();
+
+      if (response.ok && data.url) {
         const imageUrl = data.url;
+        const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
         
-        if (editArticleEditorRef.current) {
-          const editor = editArticleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
-          if (editor && (editor as any).insertImage) {
-            (editor as any).insertImage(imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`, file.name);
+        if (imageInsertMode === "cover") {
+          // Используем как обложку
+          setEditCoverImage(fullImageUrl);
+        } else {
+          // Вставляем в контент
+          if (editArticleEditorRef.current) {
+            const editor = editArticleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+            if (editor && (editor as any).insertImage) {
+              (editor as any).insertImage(fullImageUrl, file.name);
+            }
           }
         }
         setIsEditImageModalOpen(false);
+        setImageInsertMode("content"); // Сбрасываем режим
       } else {
-        throw new Error("Ошибка при загрузке изображения");
+        const errorMessage = data.error || "Ошибка при загрузке изображения";
+        console.error("[PostCard] Upload error:", errorMessage, data);
+        showToast(errorMessage, "error");
       }
     } catch (error) {
       console.error("Error uploading image:", error);
-      alert("Ошибка при загрузке изображения");
+      const errorMessage = error instanceof Error ? error.message : "Ошибка при загрузке изображения";
+      showToast(errorMessage, "error");
     }
   };
 
   const handleEditImageGenerate = async (imageUrl: string) => {
     console.log("[PostCard] handleEditImageGenerate called with:", imageUrl);
+    const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
     
-    if (editArticleEditorRef.current) {
-      const editor = editArticleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
-      console.log("[PostCard] Found editor:", !!editor, "Has insertImage:", !!(editor as any)?.insertImage);
-      
-      if (editor && (editor as any).insertImage) {
-        // Фокусируемся на редакторе перед вставкой
-        editor.focus();
-        (editor as any).insertImage(imageUrl, "Сгенерированное изображение");
-        console.log("[PostCard] Image inserted successfully");
-      } else {
-        // Fallback: добавляем напрямую в контент
-        console.log("[PostCard] Using fallback - updating editContent directly");
-        const imgHtml = `<div class="image-wrapper" style="position: relative; display: inline-block; max-width: 100%; margin: 8px 0;"><img src="${imageUrl}" alt="Сгенерированное изображение" style="max-width: 100%; height: auto; border-radius: 8px; display: block;" /><button type="button" class="image-delete-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1;" title="Удалить изображение">×</button></div>`;
-        setEditContent(prev => prev + imgHtml);
+    if (imageInsertMode === "cover") {
+      // Используем как обложку
+      setEditCoverImage(fullImageUrl);
+    } else {
+      // Вставляем в контент
+      if (editArticleEditorRef.current) {
+        const editor = editArticleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+        console.log("[PostCard] Found editor:", !!editor, "Has insertImage:", !!(editor as any)?.insertImage);
+        
+        if (editor && (editor as any).insertImage) {
+          // Фокусируемся на редакторе перед вставкой
+          editor.focus();
+          (editor as any).insertImage(fullImageUrl, "Сгенерированное изображение");
+          console.log("[PostCard] Image inserted successfully");
+        } else {
+          // Fallback: добавляем напрямую в контент
+          console.log("[PostCard] Using fallback - updating editContent directly");
+          const imgHtml = `<div class="image-wrapper" style="position: relative; display: inline-block; max-width: 100%; margin: 8px 0;"><img src="${fullImageUrl}" alt="Сгенерированное изображение" style="max-width: 100%; height: auto; border-radius: 8px; display: block;" /><button type="button" class="image-delete-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1;" title="Удалить изображение">×</button></div>`;
+          setEditContent(prev => prev + imgHtml);
+        }
       }
     }
     setIsEditImageModalOpen(false);
+    setImageInsertMode("content"); // Сбрасываем режим
   };
 
   const handleEditVideoInsert = (url: string) => {
@@ -263,7 +354,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+    <div ref={postCardRef} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
       {/* Автор */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -318,6 +409,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                       setEditVideoUrl(post.videoMetadata?.embedUrl || "");
                       setEditLinkMetadata(post.linkMetadata || null);
                       setEditVideoMetadata(post.videoMetadata || null);
+                      setEditCoverImage((post as any).coverImage || null);
                       setEditFiles([]);
                     }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
@@ -338,11 +430,11 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                           if (response.ok) {
                             onUpdate();
                           } else {
-                            alert("Ошибка при удалении поста");
+                            showToast("Ошибка при удалении поста", "error");
                           }
                         } catch (error) {
                           console.error("Error deleting post:", error);
-                          alert("Ошибка при удалении поста");
+                          showToast("Ошибка при удалении поста", "error");
                         } finally {
                           setIsDeleting(false);
                           setShowMenu(false);
@@ -366,10 +458,32 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
 
       {/* Контент */}
       <div className="mb-4">
+        {/* Cover Image для статей */}
+        {isArticle && (post as any).coverImage && (
+          <div className="mb-4">
+            <img
+              src={(post as any).coverImage}
+              alt="Обложка статьи"
+              className="w-full h-64 object-cover rounded-lg"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+              }}
+            />
+          </div>
+        )}
+        
         <div className="mb-4">
-          <p className="text-gray-900 dark:text-white whitespace-pre-wrap break-words">
-            {displayContent}
-          </p>
+          {isArticle ? (
+            <div 
+              className="text-gray-900 dark:text-white prose prose-sm max-w-none dark:prose-invert"
+              dangerouslySetInnerHTML={{ __html: isExpanded ? post.content : displayContent }}
+            />
+          ) : (
+            <p className="text-gray-900 dark:text-white whitespace-pre-wrap break-words">
+              {displayContent}
+            </p>
+          )}
           {shouldTruncate && (
             <button
               onClick={() => setIsExpanded(!isExpanded)}
@@ -516,7 +630,28 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
 
         {/* Комментарии */}
         {showComments && (
-          <div className="mt-4 space-y-4">
+          <div 
+            className="mt-4 space-y-4"
+            onMouseEnter={() => {
+              setIsCommentAreaHovered(true);
+              // Отменяем таймер закрытия, если он был установлен
+              if (commentAreaTimeoutRef.current) {
+                clearTimeout(commentAreaTimeoutRef.current);
+                commentAreaTimeoutRef.current = null;
+              }
+            }}
+            onMouseLeave={() => {
+              setIsCommentAreaHovered(false);
+              // Закрываем комментарии только если поле ввода пустое
+              if (!commentText.trim()) {
+                commentAreaTimeoutRef.current = setTimeout(() => {
+                  if (!isCommentAreaHovered) {
+                    setShowComments(false);
+                  }
+                }, 500); // Задержка для плавности
+              }
+            }}
+          >
             {comments.map((comment) => (
               <div key={comment.id} className="flex gap-3">
                 {comment.user.avatarUrl ? (
@@ -612,7 +747,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
             <form onSubmit={async (e) => {
               e.preventDefault();
               if (!editContent.trim() && editFiles.length === 0 && !editLinkUrl && !editVideoUrl) {
-                alert("Пост не может быть пустым");
+                showToast("Пост не может быть пустым", "warning");
                 return;
               }
               setIsSaving(true);
@@ -622,27 +757,68 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                 // Очищаем контент от артефактов перед отправкой
                 let cleanedContent = editContent.trim();
                 if (editPostType === "article") {
-                  // Удаляем сломанные img теги
-                  cleanedContent = cleanedContent.replace(/<img[^>]*src=["']?(generated-[^"'\s>]+)["']?[^>]*>/gi, '');
-                  cleanedContent = cleanedContent.replace(/<img[^>]*src=["']?["']?[^>]*>/gi, '');
+                  // Создаём временный DOM для правильной очистки
+                  const tempDiv = document.createElement('div');
+                  tempDiv.innerHTML = cleanedContent;
                   
-                  // Удаляем текст "generated-*.jpg" который остался в любом месте
-                  cleanedContent = cleanedContent.replace(/generated-\d+-\w+\.(jpg|jpeg|png|gif|webp|heic|heif)/gi, '');
+                  // Удаляем все кнопки удаления изображений
+                  const deleteButtons = tempDiv.querySelectorAll('.image-delete-btn');
+                  deleteButtons.forEach(btn => btn.remove());
                   
-                  // Удаляем параграфы, которые содержат только имя файла
-                  cleanedContent = cleanedContent.replace(/<p[^>]*>\s*generated-\d+-\w+\.(jpg|jpeg|png|gif|webp|heic|heif)\s*<\/p>/gi, '');
-                  cleanedContent = cleanedContent.replace(/<p[^>]*>\s*<\/p>/gi, '');
+                  // Разворачиваем image-wrapper, оставляя только img
+                  const wrappers = tempDiv.querySelectorAll('.image-wrapper');
+                  wrappers.forEach(wrapper => {
+                    const img = wrapper.querySelector('img');
+                    if (img && wrapper.parentNode) {
+                      wrapper.parentNode.insertBefore(img, wrapper);
+                      wrapper.remove();
+                    }
+                  });
                   
-                  // Удаляем разрывы строк и лишние пробелы
-                  cleanedContent = cleanedContent.replace(/\n\s*\n/g, '\n');
-                  cleanedContent = cleanedContent.replace(/\s+/g, ' ').trim();
+                  // Удаляем сломанные img теги (без src или с невалидным src)
+                  const images = tempDiv.querySelectorAll('img');
+                  images.forEach(img => {
+                    const src = img.getAttribute('src') || '';
+                    if (!src || src.trim() === '' || src.startsWith('generated-') || 
+                        (!src.startsWith('/') && !src.startsWith('http') && !src.startsWith('data:'))) {
+                      img.remove();
+                    }
+                  });
+                  
+                  // Удаляем пустые параграфы
+                  const paragraphs = tempDiv.querySelectorAll('p');
+                  paragraphs.forEach(p => {
+                    const text = p.textContent?.trim() || '';
+                    if (!text || text === 'generated-' || /^generated-\d+-\w+\.(jpg|jpeg|png|gif|webp|heic|heif)$/i.test(text)) {
+                      p.remove();
+                    }
+                  });
                   
                   // Удаляем пустые div'ы
-                  cleanedContent = cleanedContent.replace(/<div[^>]*>\s*<\/div>/gi, '');
+                  const divs = tempDiv.querySelectorAll('div');
+                  divs.forEach(div => {
+                    if (!div.textContent?.trim() && div.children.length === 0) {
+                      div.remove();
+                    }
+                  });
+                  
+                  cleanedContent = tempDiv.innerHTML.trim();
+                  
+                  // Финальная очистка текстовых артефактов
+                  cleanedContent = cleanedContent.replace(/generated-\d+-\w+\.(jpg|jpeg|png|gif|webp|heic|heif)/gi, '');
+                  cleanedContent = cleanedContent.replace(/\s+/g, ' ').trim();
                 }
                 
                 formData.append("content", cleanedContent);
                 formData.append("postType", editPostType);
+                
+                // Сохраняем cover image для статей
+                if (editPostType === "article" && editCoverImage) {
+                  formData.append("coverImage", editCoverImage);
+                } else if (editPostType === "article" && !editCoverImage) {
+                  // Если cover image удален, отправляем пустую строку
+                  formData.append("coverImage", "");
+                }
                 
                 if (editLinkMetadata) {
                   formData.append("linkMetadata", JSON.stringify(editLinkMetadata));
@@ -677,11 +853,11 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                   onUpdate();
                 } else {
                   const data = await response.json();
-                  alert(data.error || "Ошибка при сохранении поста");
+                  showToast(data.error || "Ошибка при сохранении поста", "error");
                 }
               } catch (error) {
                 console.error("Error updating post:", error);
-                alert("Ошибка при сохранении поста");
+                showToast("Ошибка при сохранении поста", "error");
               } finally {
                 setIsSaving(false);
               }
@@ -690,12 +866,57 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                 {/* WYSIWYG редактор для статей */}
                 {post.postType === "article" ? (
                   <>
+                    {/* Cover Image */}
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Обложка статьи:
+                      </label>
+                      {editCoverImage ? (
+                        <div className="relative">
+                          <img
+                            src={editCoverImage}
+                            alt="Обложка"
+                            className="w-full h-48 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setEditCoverImage(null)}
+                            className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-2"
+                            title="Удалить обложку"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImageInsertMode("cover");
+                            setIsEditImageModalOpen(true);
+                          }}
+                          className="w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 hover:border-blue-500 hover:text-blue-500 transition"
+                        >
+                          <div className="text-center">
+                            <svg className="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <p className="text-sm">Добавить обложку</p>
+                          </div>
+                        </button>
+                      )}
+                    </div>
+                    
                     <div ref={editArticleEditorRef}>
                       <RichTextEditor
                         value={editContent}
                         onChange={setEditContent}
                         placeholder="Начните писать статью..."
-                        onInsertImage={() => setIsEditImageModalOpen(true)}
+                        onInsertImage={() => {
+                          setImageInsertMode("content");
+                          setIsEditImageModalOpen(true);
+                        }}
                         onInsertVideo={() => setIsEditVideoModalOpen(true)}
                       />
                     </div>

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { writeFile, mkdir, unlink } from "fs/promises";
+import { writeFile, mkdir, unlink, readFile } from "fs/promises";
 import path from "path";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import { convertHeicToJpegServer } from "@/lib/heic-convert-server";
@@ -132,7 +132,78 @@ export async function PATCH(
     const postType = (formData.get("postType") as string) || existingPost.postType;
     const linkMetadata = formData.get("linkMetadata");
     const videoMetadata = formData.get("videoMetadata");
+    const coverImageRaw = formData.get("coverImage");
     const deletedAttachmentIdsRaw = formData.get("deletedAttachmentIds");
+    
+    // Обрабатываем cover image для статей
+    let coverImage: string | null = null;
+    if (postType === "article" && coverImageRaw) {
+      const coverImageValue = coverImageRaw as string;
+      if (coverImageValue.trim() === "") {
+        // Пустая строка означает удаление cover image
+        coverImage = null;
+      } else if (coverImageValue.startsWith("http://") || coverImageValue.startsWith("https://")) {
+        // Если это внешний URL, загружаем на сервер
+        try {
+          console.log(`[posts] Downloading cover image from: ${coverImageValue}`);
+          const imageResponse = await fetch(coverImageValue);
+          if (imageResponse.ok) {
+            const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+            const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+            
+            // Конвертируем HEIC если нужно
+            let finalBuffer = imageBuffer;
+            if (contentType.includes("heic") || contentType.includes("heif") || 
+                coverImageValue.toLowerCase().endsWith('.heic') || coverImageValue.toLowerCase().endsWith('.heif')) {
+              try {
+                const converted = await convertHeicToJpegServer(imageBuffer, coverImageValue, contentType);
+                finalBuffer = Buffer.from(converted.buffer);
+              } catch (convertError) {
+                console.error(`[posts] Error converting cover HEIC:`, convertError);
+              }
+            }
+            
+            let extension = ".jpg";
+            if (contentType.includes("png")) extension = ".png";
+            else if (contentType.includes("webp")) extension = ".webp";
+            else if (contentType.includes("gif")) extension = ".gif";
+            
+            const fileName = `cover-${Date.now()}-${Math.random().toString(36).substring(7)}${extension}`;
+            const fileKey = `posts/${fileName}`;
+            
+            if (isVDSStorageConfigured()) {
+              try {
+                coverImage = await uploadFileToVDS(fileKey, finalBuffer, contentType);
+                console.log(`[posts] Cover image uploaded to VDS: ${coverImage}`);
+              } catch (vdsError) {
+                console.error(`[posts] VDS upload error for cover, using local:`, vdsError);
+                await mkdir(UPLOAD_DIR, { recursive: true });
+                const localFilePath = path.join(UPLOAD_DIR, fileName);
+                await writeFile(localFilePath, finalBuffer);
+                coverImage = `/api/uploads/posts/${fileName}`;
+              }
+            } else {
+              await mkdir(UPLOAD_DIR, { recursive: true });
+              const localFilePath = path.join(UPLOAD_DIR, fileName);
+              await writeFile(localFilePath, finalBuffer);
+              coverImage = `/api/uploads/posts/${fileName}`;
+            }
+          } else {
+            console.error(`[posts] Failed to download cover image: ${imageResponse.status}`);
+            coverImage = coverImageValue; // Используем оригинальный URL
+          }
+        } catch (error) {
+          console.error(`[posts] Error processing cover image:`, error);
+          coverImage = coverImageValue; // Используем оригинальный URL
+        }
+      } else {
+        // Локальный путь или data URL
+        coverImage = coverImageValue;
+      }
+    } else if (postType === "article") {
+      // Сохраняем существующий cover image
+      coverImage = (existingPost as any).coverImage || null;
+    }
 
     // Обрабатываем удаление вложений
     if (deletedAttachmentIdsRaw) {
@@ -189,69 +260,113 @@ export async function PATCH(
       try {
         // Извлекаем все img теги из HTML
         const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
-        const imageUrls: string[] = [];
+        const imageMap = new Map<string, string>(); // Старый URL -> Новый путь
         let match;
         
         while ((match = imgRegex.exec(content)) !== null) {
           const imageUrl = match[1];
-          // Пропускаем уже локальные пути и data: URLs
-          if (!imageUrl.startsWith("/") && !imageUrl.startsWith("data:") && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))) {
-            imageUrls.push(imageUrl);
+          // Пропускаем уже локальные пути через API и data: URLs
+          if (imageUrl.startsWith("/api/uploads/") || imageUrl.startsWith("data:")) {
+            continue;
           }
-        }
-
-        // Загружаем каждое изображение на сервер
-        for (const imageUrl of imageUrls) {
-          try {
-            console.log(`[posts] Downloading image from: ${imageUrl}`);
-            const imageResponse = await fetch(imageUrl);
-            if (!imageResponse.ok) {
-              console.error(`[posts] Failed to download image: ${imageResponse.status}`);
+          
+          // Если это внешний URL или локальный путь без /api/, загружаем на сервер
+          if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://") || 
+              (imageUrl.startsWith("/uploads/") && !imageUrl.startsWith("/api/"))) {
+            
+            // Проверяем, не обработали ли мы уже это изображение
+            if (imageMap.has(imageUrl)) {
               continue;
             }
-
-            const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
-            const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
             
-            // Определяем расширение файла
-            let extension = ".jpg";
-            if (contentType.includes("png")) extension = ".png";
-            else if (contentType.includes("webp")) extension = ".webp";
-            else if (contentType.includes("gif")) extension = ".gif";
-            
-            // Создаем уникальное имя файла
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${extension}`;
-            const fileKey = `posts/${fileName}`;
-            
-            let finalFilePath: string;
-            
-            if (isVDSStorageConfigured()) {
-              try {
-                finalFilePath = await uploadFileToVDS(fileKey, imageBuffer, contentType);
-                console.log(`[posts] Image uploaded to VDS: ${finalFilePath}`);
-              } catch (vdsError) {
-                console.error(`[posts] VDS upload error, using local:`, vdsError);
+            try {
+              let imageBuffer: Buffer;
+              let contentType = "image/jpeg";
+              
+              if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+                // Загружаем с внешнего URL
+                console.log(`[posts] Downloading image from: ${imageUrl}`);
+                const imageResponse = await fetch(imageUrl);
+                if (!imageResponse.ok) {
+                  console.error(`[posts] Failed to download image: ${imageResponse.status}`);
+                  continue;
+                }
+                imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+                contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+              } else {
+                // Читаем локальный файл
+                const localPath = path.join(process.cwd(), "public", imageUrl);
+                try {
+                  imageBuffer = await readFile(localPath);
+                  contentType = "image/jpeg"; // Определим по расширению
+                } catch (readError) {
+                  console.error(`[posts] Failed to read local file ${localPath}:`, readError);
+                  continue;
+                }
+              }
+              
+              // Конвертируем HEIC/HEIF если нужно
+              if (contentType.includes("heic") || contentType.includes("heif") || 
+                  imageUrl.toLowerCase().endsWith('.heic') || imageUrl.toLowerCase().endsWith('.heif')) {
+                try {
+                  const converted = await convertHeicToJpegServer(imageBuffer, imageUrl, contentType);
+                  imageBuffer = converted.buffer as Buffer;
+                  contentType = converted.mimeType;
+                } catch (convertError) {
+                  console.error(`[posts] Error converting HEIC:`, convertError);
+                  // Продолжаем с оригиналом
+                }
+              }
+              
+              // Определяем расширение файла
+              let extension = ".jpg";
+              if (contentType.includes("png")) extension = ".png";
+              else if (contentType.includes("webp")) extension = ".webp";
+              else if (contentType.includes("gif")) extension = ".gif";
+              
+              // Создаем уникальное имя файла
+              const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${extension}`;
+              const fileKey = `posts/${fileName}`;
+              
+              let finalFilePath: string;
+              
+              if (isVDSStorageConfigured()) {
+                try {
+                  finalFilePath = await uploadFileToVDS(fileKey, imageBuffer, contentType);
+                  console.log(`[posts] Image uploaded to VDS: ${finalFilePath}`);
+                } catch (vdsError) {
+                  console.error(`[posts] VDS upload error, using local:`, vdsError);
+                  await mkdir(UPLOAD_DIR, { recursive: true });
+                  const localFilePath = path.join(UPLOAD_DIR, fileName);
+                  await writeFile(localFilePath, imageBuffer);
+                  finalFilePath = `/uploads/posts/${fileName}`;
+                }
+              } else {
                 await mkdir(UPLOAD_DIR, { recursive: true });
                 const localFilePath = path.join(UPLOAD_DIR, fileName);
                 await writeFile(localFilePath, imageBuffer);
                 finalFilePath = `/uploads/posts/${fileName}`;
               }
-            } else {
-              await mkdir(UPLOAD_DIR, { recursive: true });
-              const localFilePath = path.join(UPLOAD_DIR, fileName);
-              await writeFile(localFilePath, imageBuffer);
-              finalFilePath = `/uploads/posts/${fileName}`;
-            }
 
-            // Заменяем URL в HTML на локальный путь через API
-            const apiPath = `/api/uploads/posts/${fileName}`;
-            content = content.replace(imageUrl, apiPath);
-            console.log(`[posts] Replaced image URL: ${imageUrl} -> ${apiPath}`);
-          } catch (error) {
-            console.error(`[posts] Error processing image ${imageUrl}:`, error);
-            // Продолжаем обработку других изображений
+              // Сохраняем маппинг для замены
+              const apiPath = `/api/uploads/posts/${fileName}`;
+              imageMap.set(imageUrl, apiPath);
+              console.log(`[posts] Mapped image URL: ${imageUrl} -> ${apiPath}`);
+            } catch (error) {
+              console.error(`[posts] Error processing image ${imageUrl}:`, error);
+              // Продолжаем обработку других изображений
+            }
           }
         }
+        
+        // Заменяем все URL в HTML
+        imageMap.forEach((newPath, oldUrl) => {
+          // Экранируем специальные символы для regex
+          const escapedUrl = oldUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          content = content.replace(new RegExp(escapedUrl, 'g'), newPath);
+        });
+        
+        console.log(`[posts] Processed ${imageMap.size} images from HTML`);
       } catch (error) {
         console.error("[posts] Error extracting images from HTML:", error);
         // Продолжаем сохранение поста даже если не удалось обработать изображения
@@ -279,14 +394,21 @@ export async function PATCH(
     }
 
     // Обновляем пост
+    const updateData: any = {
+      content: content.trim(),
+      postType,
+      linkMetadata: parsedLinkMetadata,
+      videoMetadata: parsedVideoMetadata,
+    };
+    
+    // Добавляем coverImage только для статей
+    if (postType === "article") {
+      updateData.coverImage = coverImage;
+    }
+    
     const post = await prisma.userPost.update({
       where: { id: postId },
-      data: {
-        content: content.trim(),
-        postType,
-        linkMetadata: parsedLinkMetadata,
-        videoMetadata: parsedVideoMetadata,
-      },
+      data: updateData,
       include: {
         author: {
           select: {
@@ -327,10 +449,10 @@ export async function PATCH(
       },
     });
 
-    // Обрабатываем новые вложения
+    // Обрабатываем новые вложения (только для НЕ-статей, т.к. для статей изображения в HTML)
     const files = formData.getAll("attachments") as File[];
 
-    if (files.length > 0) {
+    if (files.length > 0 && postType !== "article") {
       await mkdir(UPLOAD_DIR, { recursive: true });
 
       for (const file of files) {
@@ -341,10 +463,10 @@ export async function PATCH(
         let originalName = file.name;
         let mimeType = file.type || "";
 
-        // Конвертируем HEIC/HEIF в JPEG, если это изображение
-        if (mimeType.startsWith("image/")) {
+        // Конвертируем HEIC/HEIF в JPEG, если это изображение (но не GIF)
+        if (mimeType.startsWith("image/") && mimeType !== "image/gif") {
           try {
-            const converted = await convertHeicToJpegServer(buffer, originalName);
+            const converted = await convertHeicToJpegServer(buffer, originalName, mimeType);
             buffer = converted.buffer as Buffer;
             originalName = converted.fileName;
             mimeType = converted.mimeType;

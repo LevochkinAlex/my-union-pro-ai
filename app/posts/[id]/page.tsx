@@ -56,25 +56,15 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
     notFound();
   }
 
-  // Увеличиваем счетчик просмотров (безопасно, даже если поле не существует)
+  // Получаем текущий счетчик просмотров (без увеличения - просмотры считаются через Intersection Observer в ленте)
   let currentViewCount = 0;
   try {
     const viewCount = (post as any).viewCount;
     if (viewCount !== null && viewCount !== undefined) {
       currentViewCount = Number(viewCount) || 0;
     }
-    // Пытаемся обновить через raw SQL, который безопасно обработает отсутствие поля
-    await prisma.$executeRawUnsafe(`
-      UPDATE "UserPost" 
-      SET "viewCount" = COALESCE("viewCount", 0) + 1 
-      WHERE id = $1
-    `, id);
-    currentViewCount += 1;
   } catch (error: any) {
-    // Если поле не существует, просто игнорируем ошибку
-    if (!error.message?.includes('column "viewCount" does not exist')) {
-      console.error("[posts/[id]] Error updating viewCount:", error);
-    }
+    console.error("[posts/[id]] Error getting viewCount:", error);
   }
 
   const postData = {
