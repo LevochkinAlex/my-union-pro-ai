@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     // Конвертируем изображение
     const bytes = await file.arrayBuffer();
-    let buffer = Buffer.from(bytes);
+    let buffer: Buffer = Buffer.from(bytes) as Buffer;
     let originalName = file.name;
     let mimeType = file.type || "";
 
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     if (mimeType.startsWith("image/")) {
       try {
         const converted = await convertHeicToJpegServer(buffer, originalName);
-        buffer = converted.buffer;
+        buffer = converted.buffer as Buffer;
         originalName = converted.fileName;
         mimeType = converted.mimeType;
       } catch (error) {
