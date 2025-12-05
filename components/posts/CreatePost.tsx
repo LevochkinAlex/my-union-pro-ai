@@ -202,13 +202,15 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         const imageUrl = data.url;
         const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
         
-        if (isImageModalForCover) {
-          // Если это cover изображение (через нижнюю иконку)
+        if (isImageModalForCover || postType === "text") {
+          // Для обычного поста или cover изображения - добавляем как превью
+          setFilePreviews([fullImageUrl]);
+          setSelectedFiles([]); // Очищаем файлы, т.к. используем URL
           setCoverImage(fullImageUrl);
           setIsImageModalOpen(false);
           setIsImageModalForCover(false);
         } else {
-          // Если это вставка в HTML (через WYSIWYG)
+          // Если это вставка в HTML (через WYSIWYG) для статьи
           if (articleEditorRef.current) {
             const editor = articleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
             if (editor) {
@@ -252,13 +254,16 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
   const handleImageGenerate = async (imageUrl: string) => {
     const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
     
-    if (isImageModalForCover) {
-      // Если это cover изображение (через нижнюю иконку)
-      setCoverImage(fullImageUrl);
+    if (isImageModalForCover || postType === "text") {
+      // Для обычного поста или cover изображения - добавляем как превью
+      // Для обычного поста заменяем существующее изображение
+      setFilePreviews([fullImageUrl]);
+      setSelectedFiles([]); // Очищаем файлы, т.к. используем URL
+      setCoverImage(fullImageUrl); // Также сохраняем как cover
       setIsImageModalOpen(false);
       setIsImageModalForCover(false);
     } else {
-      // Если это вставка в HTML (через WYSIWYG)
+      // Если это вставка в HTML (через WYSIWYG) для статьи
       if (articleEditorRef.current) {
         const editor = articleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
         if (editor) {
