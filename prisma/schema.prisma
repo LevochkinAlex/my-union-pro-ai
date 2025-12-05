@@ -1319,6 +1319,9 @@ model UserPost {
   linkMetadata  Json? // {url, title, description, image, siteName} для ссылок
   videoMetadata Json? // {provider: "youtube"|"rutube"|"vk", videoId, embedUrl} для видео
 
+  // Обложка для статей
+  coverImage String? @db.Text // URL изображения обложки для статей
+
   // Статистика
   likesCount    Int @default(0)
   commentsCount Int @default(0)

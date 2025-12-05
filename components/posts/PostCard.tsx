@@ -244,9 +244,14 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           },
         };
         setComments(prev => [newComment, ...prev]);
-        // Перезагружаем комментарии для получения актуальных данных
-        loadComments();
-        onUpdate();
+        // Обновляем счетчик комментариев локально
+        // Перезагружаем комментарии для получения актуальных данных (без закрытия)
+        const refreshResponse = await fetch(`/api/posts/${post.id}/comments`);
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json();
+          setComments(refreshData.comments || []);
+        }
+        // НЕ вызываем onUpdate() чтобы не перезагружать весь список постов
       }
     } catch (error) {
       console.error("Error sending comment:", error);
