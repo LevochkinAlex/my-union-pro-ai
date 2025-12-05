@@ -489,10 +489,16 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
         
         <div className="mb-4">
           {isArticle ? (
-            <div 
-              className="text-gray-900 dark:text-white prose prose-sm max-w-none dark:prose-invert"
-              dangerouslySetInnerHTML={{ __html: isExpanded ? post.content : displayContent }}
-            />
+            isExpanded ? (
+              <div 
+                className="text-gray-900 dark:text-white prose prose-sm max-w-none dark:prose-invert"
+                dangerouslySetInnerHTML={{ __html: post.content || "" }}
+              />
+            ) : (
+              <p className="text-gray-900 dark:text-white whitespace-pre-wrap break-words">
+                {displayContent}
+              </p>
+            )
           ) : (
             <p className="text-gray-900 dark:text-white whitespace-pre-wrap break-words">
               {displayContent}
