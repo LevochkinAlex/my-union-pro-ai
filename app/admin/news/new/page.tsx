@@ -518,7 +518,16 @@ export default function NewNewsPage() {
                   value={content}
                   onChange={setContent}
                   placeholder="Введите содержание новости..."
-                  onInsertImage={() => setShowImageInsertModal(true)}
+                  onInsertImage={() => {
+                    // Сохраняем позицию курсора перед открытием модалки
+                    if (editorRef.current) {
+                      const editor = editorRef.current.querySelector('[contenteditable="true"]') as any;
+                      if (editor?.saveSelection) {
+                        editor.saveSelection();
+                      }
+                    }
+                    setShowImageInsertModal(true);
+                  }}
                 />
               </div>
               <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
@@ -699,29 +708,11 @@ export default function NewNewsPage() {
         <ImageInsertWithCrop
           onInsert={(imageUrl) => {
             if (editorRef.current) {
-              const editor = editorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
-              if (editor) {
-                const img = document.createElement('img');
-                img.src = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
-                img.alt = "Изображение";
-                img.style.maxWidth = '100%';
-                img.style.height = 'auto';
-                img.style.borderRadius = '8px';
-                img.style.margin = '8px 0';
-                
-                const selection = window.getSelection();
-                if (selection && selection.rangeCount > 0) {
-                  const range = selection.getRangeAt(0);
-                  range.insertNode(img);
-                  range.collapse(false);
-                  selection.removeAllRanges();
-                  selection.addRange(range);
-                } else {
-                  editor.appendChild(img);
-                }
-                
-                const event = new Event('input', { bubbles: true });
-                editor.dispatchEvent(event);
+              const editor = editorRef.current.querySelector('[contenteditable="true"]') as any;
+              const fullUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
+              if (editor?.insertImage) {
+                // Используем метод редактора, который восстанавливает позицию курсора
+                editor.insertImage(fullUrl, "Изображение");
               }
             }
             setShowImageInsertModal(false);
@@ -729,29 +720,10 @@ export default function NewNewsPage() {
           onClose={() => setShowImageInsertModal(false)}
           onGenerate={async (imageUrl) => {
             if (editorRef.current) {
-              const editor = editorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
-              if (editor) {
-                const img = document.createElement('img');
-                img.src = imageUrl;
-                img.alt = "Сгенерированное изображение";
-                img.style.maxWidth = '100%';
-                img.style.height = 'auto';
-                img.style.borderRadius = '8px';
-                img.style.margin = '8px 0';
-                
-                const selection = window.getSelection();
-                if (selection && selection.rangeCount > 0) {
-                  const range = selection.getRangeAt(0);
-                  range.insertNode(img);
-                  range.collapse(false);
-                  selection.removeAllRanges();
-                  selection.addRange(range);
-                } else {
-                  editor.appendChild(img);
-                }
-                
-                const event = new Event('input', { bubbles: true });
-                editor.dispatchEvent(event);
+              const editor = editorRef.current.querySelector('[contenteditable="true"]') as any;
+              if (editor?.insertImage) {
+                // Используем метод редактора, который восстанавливает позицию курсора
+                editor.insertImage(imageUrl, "Сгенерированное изображение");
               }
             }
             setShowImageInsertModal(false);
