@@ -293,7 +293,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         iframe.style.width = '100%';
         iframe.style.height = '100%';
         iframe.frameBorder = '0';
-        iframe.allowFullScreen = true;
+        iframe.allowFullscreen = true;
         
         wrapper.appendChild(iframe);
         
@@ -839,7 +839,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                     <iframe
                       src={videoMetadata.embedUrl}
                       className="w-full h-64 rounded"
-                      allowFullScreen
+                      allowFullscreen
                     />
                   </div>
                 )}
