@@ -839,7 +839,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                     <iframe
                       src={videoMetadata.embedUrl}
                       className="w-full h-64 rounded"
-                      allowFullscreen
+                      allowFullScreen
                     />
                   </div>
                 )}
