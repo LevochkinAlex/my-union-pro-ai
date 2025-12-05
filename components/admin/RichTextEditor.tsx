@@ -23,7 +23,22 @@ export default function RichTextEditor({
   useEffect(() => {
     if (editorRef.current && !isUpdating.current) {
       if (editorRef.current.innerHTML !== value) {
-        editorRef.current.innerHTML = value || "";
+        let html = value || "";
+        // Обертываем все изображения, которые еще не обернуты
+        html = html.replace(/<img([^>]*)>/gi, (match, attrs) => {
+          // Проверяем, не обернуто ли уже изображение
+          if (match.includes('image-wrapper')) {
+            return match;
+          }
+          // Извлекаем существующие стили из атрибутов
+          const styleMatch = attrs.match(/style=["']([^"']*)["']/);
+          const existingStyle = styleMatch ? styleMatch[1] : '';
+          const baseStyle = 'max-width: 100%; height: auto; border-radius: 8px; display: block;';
+          const finalStyle = existingStyle ? `${existingStyle}; ${baseStyle}` : baseStyle;
+          const cleanAttrs = attrs.replace(/style=["'][^"']*["']/, '').trim();
+          return `<div class="image-wrapper" style="position: relative; display: inline-block; max-width: 100%; margin: 8px 0;"><img${cleanAttrs ? ' ' + cleanAttrs : ''} style="${finalStyle}" /><button type="button" class="image-delete-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1;" title="Удалить изображение">×</button></div>`;
+        });
+        editorRef.current.innerHTML = html;
       }
     }
   }, [value]);
@@ -87,12 +102,61 @@ export default function RichTextEditor({
   useEffect(() => {
     if (editorRef.current) {
       (editorRef.current as any).insertImage = (url: string, alt: string = "Изображение") => {
-        insertHTML(`<img src="${url}" alt="${alt}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0;" />`);
+        insertHTML(`<div class="image-wrapper" style="position: relative; display: inline-block; max-width: 100%; margin: 8px 0;"><img src="${url}" alt="${alt}" style="max-width: 100%; height: auto; border-radius: 8px; display: block;" /><button type="button" class="image-delete-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1;" title="Удалить изображение">×</button></div>`);
       };
       (editorRef.current as any).insertVideo = (embedUrl: string) => {
         insertHTML(`<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; margin: 16px 0; border-radius: 8px;"><iframe src="${embedUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" frameborder="0" allowfullscreen></iframe></div>`);
       };
     }
+  }, []);
+
+  // Обработка кликов для удаления изображений
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      
+      // Если клик по кнопке удаления изображения
+      if (target.classList.contains('image-delete-btn')) {
+        e.preventDefault();
+        e.stopPropagation();
+        const wrapper = target.closest('.image-wrapper');
+        if (wrapper) {
+          wrapper.remove();
+          handleInput();
+        }
+        return;
+      }
+
+      // Если клик по изображению, показываем кнопку удаления
+      if (target.tagName === 'IMG') {
+        const wrapper = target.closest('.image-wrapper');
+        if (!wrapper) {
+          // Обертываем изображение, если оно еще не обернуто
+          const newWrapper = document.createElement('div');
+          newWrapper.className = 'image-wrapper';
+          newWrapper.style.cssText = 'position: relative; display: inline-block; max-width: 100%; margin: 8px 0;';
+          
+          const deleteBtn = document.createElement('button');
+          deleteBtn.type = 'button';
+          deleteBtn.className = 'image-delete-btn';
+          deleteBtn.style.cssText = 'position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1;';
+          deleteBtn.textContent = '×';
+          deleteBtn.title = 'Удалить изображение';
+          
+          target.parentNode?.insertBefore(newWrapper, target);
+          newWrapper.appendChild(target);
+          newWrapper.appendChild(deleteBtn);
+        }
+      }
+    };
+
+    editor.addEventListener('click', handleClick);
+    return () => {
+      editor.removeEventListener('click', handleClick);
+    };
   }, []);
 
   const formatButtons = [

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import NewsCard from "./NewsCard";
 
 interface NewsPost {
@@ -38,15 +39,68 @@ interface NewsListProps {
   news: NewsPost[];
 }
 
-export default function NewsList({ news }: NewsListProps) {
+export default function NewsList({ news: initialNews }: NewsListProps) {
+  const [news, setNews] = useState(initialNews);
+
   const handleLikeToggle = async (newsId: string) => {
-    // TODO: Реализовать лайк/дизлайк через API
-    console.log("Like toggle for news:", newsId);
+    try {
+      const response = await fetch(`/api/news/${newsId}/like`, {
+        method: "POST",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setNews((prevNews) =>
+          prevNews.map((post) =>
+            post.id === newsId
+              ? {
+                  ...post,
+                  isLiked: data.liked,
+                  _count: {
+                    ...post._count,
+                    likes: data.liked
+                      ? post._count.likes + 1
+                      : post._count.likes - 1,
+                  },
+                }
+              : post
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Error toggling like:", error);
+    }
   };
 
   const handlePollVote = async (pollId: string, optionId: string) => {
-    // TODO: Реализовать голосование через API
-    console.log("Poll vote:", pollId, optionId);
+    try {
+      const response = await fetch(`/api/news/polls/${pollId}/vote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ optionId }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setNews((prevNews) =>
+          prevNews.map((post) => ({
+            ...post,
+            polls: post.polls.map((poll) =>
+              poll.id === pollId
+                ? {
+                    ...poll,
+                    options: data.poll.options,
+                    totalVotes: data.poll.totalVotes,
+                    userVote: optionId,
+                  }
+                : poll
+            ),
+          }))
+        );
+      }
+    } catch (error) {
+      console.error("Error voting in poll:", error);
+    }
   };
 
   if (news.length === 0) {
@@ -60,14 +114,22 @@ export default function NewsList({ news }: NewsListProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div 
+      className="flex gap-6 pb-4 overflow-x-auto"
+      style={{ 
+        scrollbarWidth: 'thin', 
+        msOverflowStyle: 'none',
+        WebkitOverflowScrolling: 'touch'
+      }}
+    >
       {news.map((post) => (
-        <NewsCard
-          key={post.id}
-          post={post}
-          onLikeToggle={handleLikeToggle}
-          onPollVote={handlePollVote}
-        />
+        <div key={post.id} className="flex-none w-[320px] sm:w-[380px] lg:w-[400px]">
+          <NewsCard
+            post={post}
+            onLikeToggle={handleLikeToggle}
+            onPollVote={handlePollVote}
+          />
+        </div>
       ))}
     </div>
   );

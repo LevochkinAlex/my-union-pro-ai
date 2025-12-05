@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import RichTextEditor from "@/components/admin/RichTextEditor";
+import ImageInsertModal from "@/components/posts/ImageInsertModal";
 
 interface PostCardProps {
   post: any;
@@ -34,7 +35,10 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   const [editVideoUrl, setEditVideoUrl] = useState("");
   const [editLinkMetadata, setEditLinkMetadata] = useState<any>(post.linkMetadata);
   const [editVideoMetadata, setEditVideoMetadata] = useState<any>(post.videoMetadata);
+  const [isEditImageModalOpen, setIsEditImageModalOpen] = useState(false);
+  const [isEditVideoModalOpen, setIsEditVideoModalOpen] = useState(false);
   const editFileInputRef = useRef<HTMLInputElement>(null);
+  const editArticleEditorRef = useRef<HTMLDivElement>(null);
   
   const isOwnPost = session?.user?.id === post.author.id;
   const isArticle = post.postType === "article";
@@ -177,6 +181,72 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     } finally {
       setSendingComment(false);
     }
+  };
+
+  // Обработчики для вставки изображений и видео при редактировании
+  const handleEditImageUpload = async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    try {
+      const response = await fetch("/api/posts/upload-image", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const imageUrl = data.url;
+        
+        if (editArticleEditorRef.current) {
+          const editor = editArticleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+          if (editor && (editor as any).insertImage) {
+            (editor as any).insertImage(imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`, file.name);
+          }
+        }
+        setIsEditImageModalOpen(false);
+      } else {
+        throw new Error("Ошибка при загрузке изображения");
+      }
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      alert("Ошибка при загрузке изображения");
+    }
+  };
+
+  const handleEditImageGenerate = async (imageUrl: string) => {
+    if (editArticleEditorRef.current) {
+      const editor = editArticleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+      if (editor && (editor as any).insertImage) {
+        (editor as any).insertImage(imageUrl, "Сгенерированное изображение");
+      }
+    }
+    setIsEditImageModalOpen(false);
+  };
+
+  const handleEditVideoInsert = (url: string) => {
+    let embedUrl = "";
+    if (url.includes("youtube.com/watch") || url.includes("youtu.be/")) {
+      const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1] || "";
+      embedUrl = `https://www.youtube.com/embed/${videoId}`;
+    } else if (url.includes("rutube.ru/video/")) {
+      const videoId = url.match(/rutube\.ru\/video\/([^\/\n?#]+)/)?.[1] || "";
+      embedUrl = `https://rutube.ru/play/embed/${videoId}`;
+    } else if (url.includes("vk.com/video")) {
+      const match = url.match(/vk\.com\/video(-?\d+_\d+)/);
+      if (match) {
+        const videoId = match[1];
+        embedUrl = `https://vk.com/video_ext.php?oid=${videoId.split("_")[0]}&id=${videoId.split("_")[1]}`;
+      }
+    }
+
+    if (embedUrl && editArticleEditorRef.current) {
+      const editor = editArticleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+      if (editor && (editor as any).insertVideo) {
+        (editor as any).insertVideo(embedUrl);
+      }
+    }
+    setIsEditVideoModalOpen(false);
   };
 
   return (
@@ -571,11 +641,15 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
               <div className="p-4 lg:p-6 space-y-4">
                 {/* WYSIWYG редактор для статей */}
                 {post.postType === "article" ? (
-                  <RichTextEditor
-                    value={editContent}
-                    onChange={setEditContent}
-                    placeholder="Начните писать статью..."
-                  />
+                  <div ref={editArticleEditorRef}>
+                    <RichTextEditor
+                      value={editContent}
+                      onChange={setEditContent}
+                      placeholder="Начните писать статью..."
+                      onInsertImage={() => setIsEditImageModalOpen(true)}
+                      onInsertVideo={() => setIsEditVideoModalOpen(true)}
+                    />
+                  </div>
                 ) : (
                   <textarea
                     value={editContent}
@@ -585,132 +659,137 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                   />
                 )}
 
-                {/* Выбор типа поста */}
-                <div className="flex gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => editFileInputRef.current?.click()}
-                    className="px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    Фото
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => editFileInputRef.current?.click()}
-                    className="px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                    </svg>
-                    Файл
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditFiles([]);
-                      setEditVideoUrl("");
-                    }}
-                    className="px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                    </svg>
-                    Ссылка
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditFiles([]);
-                      setEditLinkUrl("");
-                    }}
-                    className="px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    Видео
-                  </button>
-                </div>
+                {/* Для статей не показываем кнопки добавления файлов - изображения вставляются через редактор */}
+                {post.postType !== "article" && (
+                  <>
+                    {/* Выбор типа поста */}
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => editFileInputRef.current?.click()}
+                        className="px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Фото
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => editFileInputRef.current?.click()}
+                        className="px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                        Файл
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditFiles([]);
+                          setEditVideoUrl("");
+                        }}
+                        className="px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                        </svg>
+                        Ссылка
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditFiles([]);
+                          setEditLinkUrl("");
+                        }}
+                        className="px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Видео
+                      </button>
+                    </div>
 
-                <input
-                  type="file"
-                  ref={editFileInputRef}
-                  onChange={(e) => {
-                    const files = Array.from(e.target.files || []);
-                    setEditFiles(files);
-                    // Создаем превью для изображений
-                    const previews = files.map((file) => {
-                      if (file.type.startsWith("image/")) {
-                        return URL.createObjectURL(file);
-                      }
-                      return "";
-                    });
-                    setEditFilePreviews(previews);
-                  }}
-                  className="hidden"
-                  accept="image/*,video/*,.pdf,.doc,.docx,.txt,.heic,.heif"
-                  multiple
-                />
+                    <input
+                      type="file"
+                      ref={editFileInputRef}
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        setEditFiles(files);
+                        // Создаем превью для изображений
+                        const previews = files.map((file) => {
+                          if (file.type.startsWith("image/")) {
+                            return URL.createObjectURL(file);
+                          }
+                          return "";
+                        });
+                        setEditFilePreviews(previews);
+                      }}
+                      className="hidden"
+                      accept="image/*,video/*,.pdf,.doc,.docx,.txt,.heic,.heif"
+                      multiple
+                    />
 
-                {/* Выбранные файлы */}
-                {editFiles.length > 0 && (
-                  <div className="space-y-2">
-                    {editFiles.map((file, index) => (
-                      <div key={index} className="space-y-2">
-                        {file.type.startsWith("image/") && editFilePreviews[index] ? (
-                          <div className="relative">
-                            <img
-                              src={editFilePreviews[index]}
-                              alt={file.name}
-                              className="w-full max-h-64 object-contain rounded-lg border border-gray-200 dark:border-gray-700"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                URL.revokeObjectURL(editFilePreviews[index]);
-                                setEditFiles(editFiles.filter((_, i) => i !== index));
-                                setEditFilePreviews(editFilePreviews.filter((_, i) => i !== index));
-                              }}
-                              className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
+                    {/* Выбранные файлы */}
+                    {editFiles.length > 0 && (
+                      <div className="space-y-2">
+                        {editFiles.map((file, index) => (
+                          <div key={index} className="space-y-2">
+                            {file.type.startsWith("image/") && editFilePreviews[index] ? (
+                              <div className="relative">
+                                <img
+                                  src={editFilePreviews[index]}
+                                  alt={file.name}
+                                  className="w-full max-h-64 object-contain rounded-lg border border-gray-200 dark:border-gray-700"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    URL.revokeObjectURL(editFilePreviews[index]);
+                                    setEditFiles(editFiles.filter((_, i) => i !== index));
+                                    setEditFilePreviews(editFilePreviews.filter((_, i) => i !== index));
+                                  }}
+                                  className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700 rounded text-sm">
+                                <svg className="w-5 h-5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                </svg>
+                                <span className="text-gray-700 dark:text-gray-300 truncate flex-1">
+                                  {file.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (editFilePreviews[index]) {
+                                      URL.revokeObjectURL(editFilePreviews[index]);
+                                    }
+                                    setEditFiles(editFiles.filter((_, i) => i !== index));
+                                    setEditFilePreviews(editFilePreviews.filter((_, i) => i !== index));
+                                  }}
+                                  className="text-red-500 hover:text-red-700 flex-shrink-0"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        ) : (
-                          <div className="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700 rounded text-sm">
-                            <svg className="w-5 h-5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                            </svg>
-                            <span className="text-gray-700 dark:text-gray-300 truncate flex-1">
-                              {file.name}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (editFilePreviews[index]) {
-                                  URL.revokeObjectURL(editFilePreviews[index]);
-                                }
-                                setEditFiles(editFiles.filter((_, i) => i !== index));
-                                setEditFilePreviews(editFilePreviews.filter((_, i) => i !== index));
-                              }}
-                              className="text-red-500 hover:text-red-700 flex-shrink-0"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        )}
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
 
-                {/* Существующие вложения */}
-                {post.attachments && post.attachments.length > 0 && (
+                {/* Существующие вложения - не показываем для статей, так как изображения уже в HTML */}
+                {post.postType !== "article" && post.attachments && post.attachments.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-sm text-gray-600 dark:text-gray-400">Текущие вложения:</p>
                     {post.attachments.map((attachment: any) => (
@@ -844,6 +923,103 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Модалки для вставки изображений и видео при редактировании */}
+      {isEditImageModalOpen && (
+        <ImageInsertModal
+          isOpen={isEditImageModalOpen}
+          onClose={() => setIsEditImageModalOpen(false)}
+          onUpload={handleEditImageUpload}
+          onGenerate={async (prompt: string) => {
+            // Генерация изображения через AI
+            try {
+              const response = await fetch("/api/ai/generate-image", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prompt }),
+              });
+
+              if (response.ok) {
+                const data = await response.json();
+                const taskId = data.taskId;
+
+                // Опрашиваем статус генерации
+                const pollStatus = async () => {
+                  const statusResponse = await fetch(`/api/ai/generate-image?taskId=${taskId}`);
+                  if (statusResponse.ok) {
+                    const statusData = await statusResponse.json();
+                    if (statusData.status === "completed" && statusData.result?.imageUrl) {
+                      handleEditImageGenerate(statusData.result.imageUrl);
+                    } else if (statusData.status === "processing" || statusData.status === "pending") {
+                      setTimeout(pollStatus, 2000);
+                    }
+                  }
+                };
+                pollStatus();
+              }
+            } catch (error) {
+              console.error("Error generating image:", error);
+              alert("Ошибка при генерации изображения");
+            }
+          }}
+          generating={false}
+        />
+      )}
+
+      {isEditVideoModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 backdrop-blur-md"
+          onClick={() => setIsEditVideoModalOpen(false)}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Вставить видео
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsEditVideoModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <input
+              type="url"
+              placeholder="Вставьте ссылку на YouTube, Rutube или VK видео"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-4"
+              onKeyPress={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  const input = e.target as HTMLInputElement;
+                  if (input.value) {
+                    handleEditVideoInsert(input.value);
+                    input.value = "";
+                  }
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const input = document.querySelector('input[type="url"]') as HTMLInputElement;
+                if (input?.value) {
+                  handleEditVideoInsert(input.value);
+                  input.value = "";
+                }
+              }}
+              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Вставить
+            </button>
           </div>
         </div>
       )}
