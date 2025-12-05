@@ -40,18 +40,11 @@ export async function generateImageWithRunwayML(
 
   try {
     // Формируем body для запроса
-    // Для gen4_image referenceImages обязателен и должен содержать минимум 1 элемент
-    // Используем placeholder изображение, если referenceImages не предоставлен
+    // Используем gen4_image без referenceImages — чистая генерация по тексту
     const body: any = {
       model: "gen4_image",
       promptText: request.prompt,
       ratio: request.aspectRatio || (request.width && request.height ? `${request.width}:${request.height}` : "1024:1024"),
-      referenceImages: [
-        {
-          uri: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png",
-          tag: "reference"
-        }
-      ],
     };
     
     if (request.seed !== undefined) {
