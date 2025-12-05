@@ -97,23 +97,38 @@ export async function POST(
     const fileKey = `chat/${fileName}`;
     
     let filePath: string;
+    let dbFilePath: string; // Путь для сохранения в БД
     
     // Всегда загружаем на VDS, если он настроен
     if (isVDSStorageConfigured()) {
       try {
         filePath = await uploadFileToVDS(fileKey, buffer, mimeType);
-        console.log(`[chat/attachments] File uploaded to VDS: ${filePath}`);
+        // Для VDS используем путь через API endpoint
+        dbFilePath = `/api/uploads/chat/${fileName}`;
+        console.log(`[chat/attachments] File uploaded to VDS: ${filePath}, DB path: ${dbFilePath}`);
       } catch (vdsError) {
         console.error("[chat/attachments] VDS upload failed:", vdsError);
-        throw new Error(`Не удалось загрузить файл на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
+        // Пробуем сохранить локально как fallback
+        try {
+          await mkdir(UPLOAD_DIR, { recursive: true });
+          const localFilePath = path.join(UPLOAD_DIR, fileName);
+          await writeFile(localFilePath, buffer);
+          dbFilePath = `/uploads/chat/${fileName}`;
+          filePath = dbFilePath;
+          console.log(`[chat/attachments] VDS failed, saved locally as fallback: ${dbFilePath}`);
+        } catch (localError) {
+          console.error("[chat/attachments] Local fallback also failed:", localError);
+          throw new Error(`Не удалось загрузить файл: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
+        }
       }
     } else {
       // Локальное хранилище (только для разработки)
       await mkdir(UPLOAD_DIR, { recursive: true });
       const localFilePath = path.join(UPLOAD_DIR, fileName);
       await writeFile(localFilePath, buffer);
-      filePath = `/uploads/chat/${fileName}`;
-      console.log(`[chat/attachments] File saved locally (VDS not configured): ${filePath}`);
+      dbFilePath = `/uploads/chat/${fileName}`;
+      filePath = dbFilePath;
+      console.log(`[chat/attachments] File saved locally (VDS not configured): ${dbFilePath}`);
     }
 
     // Определяем тип файла
@@ -137,8 +152,8 @@ export async function POST(
             type: attachmentType,
             fileName: fileName,
             originalName: originalName,
-            filePath: `/uploads/chat/${fileName}`,
-            fileSize: file.size,
+            filePath: dbFilePath,
+            fileSize: buffer.length, // Используем размер буфера после возможной конвертации
             mimeType: mimeType || null,
           },
         },
@@ -213,8 +228,17 @@ export async function POST(
     return NextResponse.json({ message });
   } catch (error: any) {
     console.error("[chat/attachments] Error:", error);
+    console.error("[chat/attachments] Error stack:", error?.stack);
+    console.error("[chat/attachments] Error details:", {
+      message: error?.message,
+      name: error?.name,
+      code: error?.code,
+    });
     return NextResponse.json(
-      { error: "Внутренняя ошибка сервера" },
+      { 
+        error: "Внутренняя ошибка сервера",
+        details: process.env.NODE_ENV === "development" ? error?.message : undefined
+      },
       { status: 500 }
     );
   }

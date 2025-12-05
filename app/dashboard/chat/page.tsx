@@ -525,9 +525,15 @@ function ChatPageContent() {
       if (response.ok) {
         // Заменяем временное сообщение на реальное
         setMessages(prev => {
+          // Удаляем временное сообщение
           const filtered = prev.filter(m => m.id !== tempMessageId);
           if (data.message) {
-            return [...filtered, data.message];
+            // Проверяем, нет ли уже такого сообщения в списке (по ID)
+            const messageExists = filtered.some(m => m.id === data.message.id);
+            if (!messageExists) {
+              return [...filtered, data.message];
+            }
+            return filtered;
           }
           return filtered;
         });
