@@ -26,6 +26,7 @@ export default function UserCard({ user }: UserCardProps) {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { showToast } = useToast();
   
   const fullName = `${user.firstName || ""} ${user.middleName || ""} ${user.lastName || ""}`.trim() || "Пользователь";
   const initials = user.firstName && user.lastName
