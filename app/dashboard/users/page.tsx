@@ -4,9 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import UserCard from "@/components/dashboard/users/UserCard";
+import dynamic from "next/dynamic";
 import CreatePost from "@/components/posts/CreatePost";
 import PostFeed from "@/components/posts/PostFeed";
+
+const UserCard = dynamic(() => import("@/components/dashboard/users/UserCard"), {
+  ssr: false,
+  loading: () => <div className="animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg h-32"></div>,
+});
 
 interface User {
   id: string;
