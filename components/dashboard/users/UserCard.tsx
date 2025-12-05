@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useToast } from "@/components/ui/Toast";
 
 interface UserCardProps {
   user: {
@@ -72,13 +73,14 @@ export default function UserCard({ user }: UserCardProps) {
 
       if (response.ok) {
         setIsSubscribed(!isSubscribed);
+        showToast(isSubscribed ? "Подписка отменена" : "Подписка оформлена", "success");
       } else {
         const error = await response.json();
-        alert(error.error || "Ошибка при изменении подписки");
+        showToast(error.error || "Ошибка при изменении подписки", "error");
       }
     } catch (error) {
       console.error("Error toggling subscription:", error);
-      alert("Ошибка при изменении подписки");
+      showToast("Ошибка при изменении подписки", "error");
     } finally {
       setIsLoading(false);
     }

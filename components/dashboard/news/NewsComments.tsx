@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
+import { useToast } from "@/components/ui/Toast";
 
 interface Comment {
   id: string;
@@ -27,6 +28,7 @@ interface NewsCommentsProps {
 
 export default function NewsComments({ newsId }: NewsCommentsProps) {
   const { data: session } = useSession();
+  const { showToast } = useToast();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState("");
@@ -79,7 +81,7 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
       setNewComment("");
     } catch (err) {
       console.error("Failed to submit comment:", err);
-      alert(err instanceof Error ? err.message : "Произошла ошибка");
+      showToast(err instanceof Error ? err.message : "Произошла ошибка", "error");
     } finally {
       setSubmitting(false);
     }
@@ -117,7 +119,7 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
       setReplyingTo(null);
     } catch (err) {
       console.error("Failed to submit reply:", err);
-      alert(err instanceof Error ? err.message : "Произошла ошибка");
+      showToast(err instanceof Error ? err.message : "Произошла ошибка", "error");
     } finally {
       setSubmitting(false);
     }

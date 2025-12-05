@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import AlertDialog from "@/components/ui/AlertDialog";
+import { useToast } from "@/components/ui/Toast";
 
 interface Chat {
   id: string;
@@ -340,7 +341,7 @@ function ChatPageContent() {
   const createOrOpenChat = async (targetUserId: string) => {
     // Проверяем, что это не попытка создать чат с самим собой
     if (currentUserId && targetUserId === currentUserId) {
-      alert("Нельзя создать чат с самим собой");
+      showToast("Нельзя создать чат с самим собой", "warning");
       router.replace("/dashboard/chat", { scroll: false });
       return;
     }
@@ -791,13 +792,14 @@ function ChatPageContent() {
 
       if (response.ok) {
         loadMessages(selectedChat.id);
+        showToast("Сообщение удалено", "success");
       } else {
         const data = await response.json();
-        alert(data.error || "Ошибка при удалении сообщения");
+        showToast(data.error || "Ошибка при удалении сообщения", "error");
       }
     } catch (error) {
       console.error("Error deleting message:", error);
-      alert("Ошибка при удалении сообщения");
+      showToast("Ошибка при удалении сообщения", "error");
     }
   };
 
