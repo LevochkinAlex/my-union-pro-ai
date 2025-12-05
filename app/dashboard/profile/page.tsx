@@ -1029,9 +1029,33 @@ export default function ProfilePage() {
         </div>
         
         <form onSubmit={handleProfileSubmit} className="mt-4 space-y-6">
+          {/* Организация профсоюза - ПЕРВОЕ ПОЛЕ, на всю ширину */}
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+              Организация профсоюза <span className="text-red-500">*</span>
+            </label>
+            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+              В какую организацию профсоюза вы хотите вступить?
+            </p>
+            <OrganizationAutocomplete
+              value={profileData.organizationId || ""}
+              onChange={(organizationId) => {
+                setProfileData({ ...profileData, organizationId: organizationId || null });
+                // Автосохранение при выборе организации
+                if (organizationId) {
+                  handleFieldBlur("organizationId", organizationId);
+                }
+              }}
+              options={organizations}
+              placeholder="Начните вводить название организации..."
+            />
+          </div>
+
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Фамилия</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Фамилия <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
                 name="lastName"
@@ -1039,10 +1063,13 @@ export default function ProfilePage() {
                 onChange={handleNameChange("lastName")}
                 onBlur={() => handleFieldBlur("lastName", profileData.lastName)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                required
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Имя</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Имя <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
                 name="firstName"
@@ -1050,10 +1077,13 @@ export default function ProfilePage() {
                 onChange={handleNameChange("firstName")}
                 onBlur={() => handleFieldBlur("firstName", profileData.firstName)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                required
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Отчество</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Отчество <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
                 name="middleName"
@@ -1062,10 +1092,13 @@ export default function ProfilePage() {
                 onBlur={() => handleFieldBlur("middleName", profileData.middleName)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                 placeholder="Например: Петрович"
+                required
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Дата рождения</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Дата рождения <span className="text-red-500">*</span>
+              </label>
               <DateInput
                 name="dateOfBirth"
                 value={profileData.dateOfBirth}
@@ -1075,7 +1108,9 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Телефон</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Телефон <span className="text-red-500">*</span>
+              </label>
               <PhoneInput
                 name="phone"
                 value={profileData.phone}
@@ -1085,29 +1120,14 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Адрес проживания</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Адрес проживания <span className="text-red-500">*</span>
+              </label>
               <AddressInput
                 name="address"
                 value={profileData.address}
                 onChange={handleAddressChange}
                 onBlur={() => handleFieldBlur("address", profileData.address)}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Должность</label>
-              <Autocomplete
-                name="jobTitle"
-                value={profileData.jobTitle}
-                onChange={(value) => {
-                  setProfileData({ ...profileData, jobTitle: value });
-                  // Автосохранение при выборе из списка
-                  if (jobTitles.includes(value)) {
-                    handleFieldBlur("jobTitle", value);
-                  }
-                }}
-                options={jobTitles}
-                placeholder="Начните вводить должность..."
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>
@@ -1143,6 +1163,25 @@ export default function ProfilePage() {
                   }
                 }}
                 required
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Должность <span className="text-red-500">*</span>
+              </label>
+              <Autocomplete
+                name="jobTitle"
+                value={profileData.jobTitle}
+                onChange={(value) => {
+                  setProfileData({ ...profileData, jobTitle: value });
+                  // Автосохранение при выборе из списка
+                  if (jobTitles.includes(value)) {
+                    handleFieldBlur("jobTitle", value);
+                  }
+                }}
+                options={jobTitles}
+                placeholder="Начните вводить должность..."
+                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>
             <div>
@@ -1189,23 +1228,6 @@ export default function ProfilePage() {
                       console.error("Failed to reload profile:", error);
                     }
                   }}
-                />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                  Организация
-                </label>
-                <OrganizationAutocomplete
-                  value={profileData.organizationId || ""}
-                  onChange={(organizationId) => {
-                    setProfileData({ ...profileData, organizationId: organizationId || null });
-                    // Автосохранение при выборе организации
-                    if (organizationId) {
-                      handleFieldBlur("organizationId", organizationId);
-                    }
-                  }}
-                  options={organizations}
-                  placeholder="Начните вводить название организации..."
                 />
               </div>
             </div>

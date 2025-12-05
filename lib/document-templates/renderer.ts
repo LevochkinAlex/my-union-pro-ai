@@ -30,6 +30,12 @@ export interface TemplateVariables {
   organizationChairmanJobTitle?: string; // Должность председателя организации
   organizationChairmanFullName?: string; // Полное ФИО председателя с должностью (для шапки "Кому")
   
+  // Место работы
+  workplace?: string; // Название компании/организации места работы
+  workplaceInn?: string; // ИНН места работы
+  directorName?: string; // ФИО руководителя с места работы
+  directorPosition?: string; // Должность руководителя с места работы
+  
   // Даты
   dateOfBirth?: string; // Формат: ДД.ММ.ГГГГ
   currentDate?: string; // Текущая дата в формате: ДД.ММ.ГГГГ
@@ -89,6 +95,11 @@ export async function extractUserVariables(
     organizationChairmanFullName: user.organization?.chairmanName && user.organization?.chairmanJobTitle
       ? `${user.organization.chairmanJobTitle} ${user.organization.chairmanName}`
       : user.organization?.chairmanName || "",
+    // Место работы и руководитель
+    workplace: (user as any).workplace || "",
+    workplaceInn: (user as any).workplaceInn || "",
+    directorName: (user as any).directorName || "",
+    directorPosition: (user as any).directorPosition || "",
     dateOfBirth,
     currentDate,
   };

@@ -11,8 +11,7 @@ import OrganizationAutocomplete from "@/components/form/OrganizationAutocomplete
 import EmailValidationField from "@/components/form/EmailValidationField";
 import AvatarUpload from "@/components/profile/AvatarUpload";
 import ChangePhoneModal from "@/components/profile/ChangePhoneModal";
-import Select from "@/components/ui/Select";
-import { EDUCATION_LEVELS } from "@/lib/constants/education";
+import WorkplaceSearch from "@/components/profile/WorkplaceSearch";
 import { useAlert } from "@/components/ui/Alert";
 import { Download, Upload, Check, X, Edit2 } from "lucide-react";
 
@@ -30,9 +29,11 @@ interface FormData {
   dateOfBirth: string;
   address: string;
   email: string;
+  workplace: string;
+  workplaceInn: string;
+  directorName: string;
+  directorPosition: string;
   jobTitle: string;
-  profession: string;
-  education: string;
   organizationId: string;
   avatarUrl: string | null;
 }
@@ -68,9 +69,11 @@ export default function QuestionnaireModal({
     dateOfBirth: "",
     address: "",
     email: "",
+    workplace: "",
+    workplaceInn: "",
+    directorName: "",
+    directorPosition: "",
     jobTitle: "",
-    profession: "",
-    education: "",
     organizationId: "",
     avatarUrl: null,
   });
@@ -78,7 +81,6 @@ export default function QuestionnaireModal({
 
   const [organizations, setOrganizations] = useState<Array<{ id: string; name: string; fullPath?: string; indentedName?: string; type?: string; level?: number }>>([]);
   const [jobTitles, setJobTitles] = useState<string[]>([]);
-  const [professions, setProfessions] = useState<string[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [isChangePhoneModalOpen, setIsChangePhoneModalOpen] = useState(false);
@@ -162,9 +164,11 @@ export default function QuestionnaireModal({
             : "",
           address: profileData.user?.address || "",
           email: profileData.user?.email || "",
+          workplace: profileData.user?.workplace || "",
+          workplaceInn: profileData.user?.workplaceInn || "",
+          directorName: profileData.user?.directorName || "",
+          directorPosition: profileData.user?.directorPosition || "",
           jobTitle: profileData.user?.jobTitle || "",
-          profession: profileData.user?.profession || "",
-          education: profileData.user?.education || "",
           organizationId: profileData.user?.organizationId || profileData.user?.organization?.id || "",
           avatarUrl: profileData.user?.avatarUrl || null,
         };
@@ -186,11 +190,8 @@ export default function QuestionnaireModal({
       if (dictionariesRes.ok) {
         const dictionariesData = await dictionariesRes.json();
         const titles = dictionariesData.jobTitles || [];
-        const profs = dictionariesData.professions || [];
         console.log("[QuestionnaireModal] Loaded job titles:", titles.length);
-        console.log("[QuestionnaireModal] Loaded professions:", profs.length);
         setJobTitles(titles);
-        setProfessions(profs);
       } else {
         console.error("[QuestionnaireModal] Failed to load dictionaries:", dictionariesRes.status);
       }
@@ -302,9 +303,11 @@ export default function QuestionnaireModal({
           dateOfBirth: formData.dateOfBirth,
           address: formData.address,
           email: formData.email,
+          workplace: formData.workplace,
+          workplaceInn: formData.workplaceInn,
+          directorName: formData.directorName,
+          directorPosition: formData.directorPosition,
           jobTitle: formData.jobTitle,
-          profession: formData.profession,
-          education: formData.education,
           organizationId: formData.organizationId || null,
         }),
       });
@@ -576,9 +579,8 @@ export default function QuestionnaireModal({
       formData.email &&
       formData.address &&
       formData.organizationId &&
-      formData.jobTitle &&
-      formData.profession &&
-      formData.education
+      formData.workplace &&
+      formData.jobTitle
     );
   };
 
@@ -653,6 +655,25 @@ export default function QuestionnaireModal({
                 />
               </div>
 
+              {/* Организация профсоюза - ПЕРВОЕ ПОЛЕ, на всю ширину */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Организация профсоюза <span className="text-red-500">*</span>
+                </label>
+                <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                  В какую организацию профсоюза вы хотите вступить?
+                </p>
+                <OrganizationAutocomplete
+                  value={formData.organizationId}
+                  onChange={(organizationId) => {
+                    setFormData({ ...formData, organizationId });
+                    handleFieldBlur("organizationId", organizationId || null);
+                  }}
+                  options={organizations}
+                  placeholder="Начните вводить название организации..."
+                />
+              </div>
+
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -662,6 +683,7 @@ export default function QuestionnaireModal({
                     type="text"
                     value={formData.lastName}
                     onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                    onBlur={() => handleFieldBlur("lastName", formData.lastName)}
                     className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
                     required
                   />
@@ -681,7 +703,7 @@ export default function QuestionnaireModal({
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Отчество
+                    Отчество <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -689,6 +711,7 @@ export default function QuestionnaireModal({
                     onChange={(e) => setFormData({ ...formData, middleName: e.target.value })}
                     onBlur={() => handleFieldBlur("middleName", formData.middleName)}
                     className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
+                    required
                   />
                 </div>
                 <div>
@@ -747,6 +770,37 @@ export default function QuestionnaireModal({
                   />
                 </div>
                 <div>
+                  <WorkplaceSearch
+                    value={formData.workplace ? {
+                      name: formData.workplace,
+                      inn: formData.workplaceInn,
+                      directorName: formData.directorName,
+                      directorPosition: formData.directorPosition,
+                    } : null}
+                    onChange={(workplace) => {
+                      if (workplace) {
+                        setFormData({
+                          ...formData,
+                          workplace: workplace.name,
+                          workplaceInn: workplace.inn,
+                          directorName: workplace.directorName,
+                          directorPosition: workplace.directorPosition,
+                        });
+                        handleFieldBlur("workplace", workplace.name);
+                      } else {
+                        setFormData({
+                          ...formData,
+                          workplace: "",
+                          workplaceInn: "",
+                          directorName: "",
+                          directorPosition: "",
+                        });
+                      }
+                    }}
+                    required
+                  />
+                </div>
+                <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Должность <span className="text-red-500">*</span>
                   </label>
@@ -758,50 +812,6 @@ export default function QuestionnaireModal({
                     placeholder="Начните вводить должность..."
                     className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
                   />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Организация <span className="text-red-500">*</span>
-                  </label>
-                  <OrganizationAutocomplete
-                    value={formData.organizationId}
-                    onChange={(organizationId) => {
-                      setFormData({ ...formData, organizationId });
-                      handleFieldBlur("organizationId", organizationId || null);
-                    }}
-                    options={organizations}
-                    placeholder="Начните вводить название организации..."
-                  />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Профессия <span className="text-red-500">*</span>
-                  </label>
-                  <Autocomplete
-                    value={formData.profession}
-                    onChange={(value) => setFormData({ ...formData, profession: value })}
-                    onBlur={() => handleFieldBlur("profession", formData.profession)}
-                    options={professions}
-                    placeholder="Начните вводить профессию..."
-                    className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
-                  />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Образование <span className="text-red-500">*</span>
-                  </label>
-                  <Select
-                    value={formData.education}
-                    onChange={(e) => setFormData({ ...formData, education: e.target.value })}
-                    onBlur={() => handleFieldBlur("education", formData.education)}
-                  >
-                    <option value="">Выберите образование</option>
-                    {EDUCATION_LEVELS.map((level) => (
-                      <option key={level} value={level}>
-                        {level}
-                      </option>
-                    ))}
-                  </Select>
                 </div>
               </div>
             </div>
@@ -815,6 +825,15 @@ export default function QuestionnaireModal({
               </h3>
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800/50">
                 <div className="space-y-4">
+                  {/* Организация профсоюза - ПЕРВОЕ ПОЛЕ */}
+                  <div className="md:col-span-2">
+                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      Организация профсоюза:
+                    </span>
+                    <p className="mt-1 text-gray-900 dark:text-white">
+                      {selectedOrganization?.name || ""}
+                    </p>
+                  </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                       <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -856,29 +875,25 @@ export default function QuestionnaireModal({
                     </div>
                     <div className="md:col-span-2">
                       <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Организация:
+                        Место работы:
                       </span>
-                      <p className="mt-1 text-gray-900 dark:text-white">
-                        {selectedOrganization?.name || ""}
-                      </p>
+                      <p className="mt-1 text-gray-900 dark:text-white">{formData.workplace || "Не указано"}</p>
+                      {formData.directorName && (
+                        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                          {formData.directorPosition}: {formData.directorName}
+                        </p>
+                      )}
+                      {formData.workplaceInn && (
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+                          ИНН: {formData.workplaceInn}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                         Должность:
                       </span>
                       <p className="mt-1 text-gray-900 dark:text-white">{formData.jobTitle}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Профессия:
-                      </span>
-                      <p className="mt-1 text-gray-900 dark:text-white">{formData.profession}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Образование:
-                      </span>
-                      <p className="mt-1 text-gray-900 dark:text-white">{formData.education}</p>
                     </div>
                   </div>
                 </div>

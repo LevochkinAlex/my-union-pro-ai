@@ -31,14 +31,40 @@ export default function WorkplaceSearch({
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [isFocused, setIsFocused] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Синхронизируем query с value при изменении value извне (но не открываем dropdown)
+  useEffect(() => {
+    if (value?.name && value.name !== query) {
+      setQuery(value.name);
+      setIsOpen(false); // Гарантируем, что dropdown закрыт
+      setIsFocused(false); // Гарантируем, что поле не в фокусе
+    } else if (!value && query) {
+      // Если value был очищен, очищаем и query
+      setQuery("");
+      setIsOpen(false);
+      setIsFocused(false);
+    }
+  }, [value?.name]); // Только при изменении value.name, не query
+
+  // При монтировании компонента гарантируем, что dropdown закрыт
+  useEffect(() => {
+    setIsOpen(false);
+    setIsFocused(false);
+  }, []);
 
   // Закрываем список при клике вне компонента
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
         setIsOpen(false);
+        setIsFocused(false);
+        // Убираем фокус с инпута, если он был в фокусе
+        if (document.activeElement === inputRef.current) {
+          inputRef.current?.blur();
+        }
       }
     }
 
@@ -48,11 +74,23 @@ export default function WorkplaceSearch({
     };
   }, []);
 
-  // Поиск компаний при изменении запроса
+  // Поиск компаний при изменении запроса (только если поле в фокусе)
   useEffect(() => {
+    // Не выполняем поиск, если поле не в фокусе
+    if (!isFocused) {
+      return;
+    }
+
     if (!query || query.length < 2) {
       setSuggestions([]);
       setIsOpen(false);
+      return;
+    }
+
+    // Если query совпадает с уже выбранным значением, не показываем dropdown
+    if (value && query === value.name) {
+      setIsOpen(false);
+      setSuggestions([]);
       return;
     }
 
@@ -63,7 +101,12 @@ export default function WorkplaceSearch({
         if (response.ok) {
           const data = await response.json();
           setSuggestions(data.suggestions || []);
-          setIsOpen(true);
+          // Открываем только если есть результаты и инпут все еще в фокусе
+          if (data.suggestions && data.suggestions.length > 0 && isFocused) {
+            setIsOpen(true);
+          } else {
+            setIsOpen(false);
+          }
           setSelectedIndex(-1);
         }
       } catch (error) {
@@ -74,7 +117,7 @@ export default function WorkplaceSearch({
     }, 300); // Debounce 300ms
 
     return () => clearTimeout(timeoutId);
-  }, [query]);
+  }, [query, value, isFocused]);
 
   const handleSelect = (suggestion: CompanySuggestion) => {
     const { data } = suggestion;
@@ -91,6 +134,9 @@ export default function WorkplaceSearch({
     onChange(workplace);
     setIsOpen(false);
     setSuggestions([]);
+    setIsFocused(false);
+    // Убираем фокус с инпута после выбора
+    inputRef.current?.blur();
   };
 
   const handleClear = () => {
@@ -142,14 +188,25 @@ export default function WorkplaceSearch({
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => {
-            if (suggestions.length > 0) {
+            setIsFocused(true);
+            // Открываем dropdown только если есть suggestions И текущий query НЕ совпадает с выбранным значением
+            if (suggestions.length > 0 && (!value || query !== value.name)) {
               setIsOpen(true);
             }
           }}
+          onBlur={() => {
+            // Не закрываем сразу, чтобы можно было кликнуть на элемент в dropdown
+            // Закроется через handleClickOutside
+            setTimeout(() => {
+              if (document.activeElement !== inputRef.current && !wrapperRef.current?.contains(document.activeElement)) {
+                setIsFocused(false);
+              }
+            }, 200);
+          }}
           placeholder="Введите название компании или ИНН"
-          className={`w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
+          className={`block w-full rounded-lg border ${
             error ? "border-red-500" : "border-gray-300"
-          }`}
+          } bg-white px-3 py-2.5 pr-10 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white`}
           required={required}
         />
         
@@ -176,13 +233,14 @@ export default function WorkplaceSearch({
 
       {/* Список подсказок */}
       {isOpen && suggestions.length > 0 && (
-        <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-80 overflow-y-auto">
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-80 overflow-y-auto">
           {suggestions.map((suggestion, index) => (
             <button
               key={suggestion.data.inn}
               type="button"
               onClick={() => handleSelect(suggestion)}
-              className={`w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 last:border-b-0 ${
+              onMouseEnter={() => setSelectedIndex(index)}
+              className={`w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 last:border-b-0 transition-colors ${
                 index === selectedIndex ? "bg-gray-100 dark:bg-gray-700" : ""
               }`}
             >
@@ -193,12 +251,12 @@ export default function WorkplaceSearch({
                 ИНН: {suggestion.data.inn}
               </div>
               {suggestion.data.management && (
-                <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {suggestion.data.management.post}: {suggestion.data.management.name}
                 </div>
               )}
               {suggestion.data.address && (
-                <div className="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
                   {suggestion.data.address.value}
                 </div>
               )}

@@ -35,6 +35,10 @@ const AVAILABLE_VARIABLES = [
   { key: "organizationChairmanName", label: "ФИО председателя организации" },
   { key: "organizationChairmanJobTitle", label: "Должность председателя организации" },
   { key: "organizationChairmanFullName", label: "Полное ФИО председателя с должностью (для шапки 'Кому')" },
+  { key: "workplace", label: "Место работы (компания)" },
+  { key: "workplaceInn", label: "ИНН места работы" },
+  { key: "directorName", label: "ФИО руководителя с места работы" },
+  { key: "directorPosition", label: "Должность руководителя с места работы" },
   { key: "dateOfBirth", label: "Дата рождения (ДД.ММ.ГГГГ)" },
   { key: "currentDate", label: "Текущая дата (ДД.ММ.ГГГГ)" },
 ];
