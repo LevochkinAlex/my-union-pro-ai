@@ -79,8 +79,8 @@ export async function POST(
     let originalName = file.name;
     let mimeType = file.type || "";
 
-    // Конвертируем HEIC/HEIF в JPEG, если это изображение (но не GIF)
-    if (mimeType.startsWith("image/") && mimeType !== "image/gif") {
+    // Конвертируем HEIC/HEIF в JPEG, если это изображение (но не GIF и не WebP)
+    if (mimeType.startsWith("image/") && mimeType !== "image/gif" && mimeType !== "image/webp") {
       try {
         const converted = await convertHeicToJpegServer(buffer, originalName, mimeType);
         buffer = converted.buffer as Buffer;

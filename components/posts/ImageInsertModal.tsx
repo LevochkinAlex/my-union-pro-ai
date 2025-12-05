@@ -112,6 +112,7 @@ export default function ImageInsertModal({
       };
 
       const imageUrl = await checkStatus();
+      setIsGenerating(false);
       // Не закрываем модалку сразу, показываем превью
     } catch (error: any) {
       console.error("Error generating image:", error);
