@@ -216,10 +216,22 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   };
 
   const handleEditImageGenerate = async (imageUrl: string) => {
+    console.log("[PostCard] handleEditImageGenerate called with:", imageUrl);
+    
     if (editArticleEditorRef.current) {
       const editor = editArticleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+      console.log("[PostCard] Found editor:", !!editor, "Has insertImage:", !!(editor as any)?.insertImage);
+      
       if (editor && (editor as any).insertImage) {
+        // Фокусируемся на редакторе перед вставкой
+        editor.focus();
         (editor as any).insertImage(imageUrl, "Сгенерированное изображение");
+        console.log("[PostCard] Image inserted successfully");
+      } else {
+        // Fallback: добавляем напрямую в контент
+        console.log("[PostCard] Using fallback - updating editContent directly");
+        const imgHtml = `<div class="image-wrapper" style="position: relative; display: inline-block; max-width: 100%; margin: 8px 0;"><img src="${imageUrl}" alt="Сгенерированное изображение" style="max-width: 100%; height: auto; border-radius: 8px; display: block;" /><button type="button" class="image-delete-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1;" title="Удалить изображение">×</button></div>`;
+        setEditContent(prev => prev + imgHtml);
       }
     }
     setIsEditImageModalOpen(false);
@@ -368,15 +380,21 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           )}
         </div>
 
-        {/* Вложения */}
+        {/* Вложения - для статей показываем только не-изображения, т.к. картинки встроены в HTML */}
         {post.attachments && post.attachments.length > 0 && (
           <div className="space-y-2 mb-4">
-            {post.attachments.map((attachment: any) => (
+            {post.attachments
+              .filter((attachment: any) => {
+                // Для статей не показываем изображения отдельно - они в HTML
+                if (isArticle && attachment.type === "image") return false;
+                return true;
+              })
+              .map((attachment: any) => (
               <div key={attachment.id}>
                 {attachment.type === "image" ? (
                   <img
                     src={getFileUrl(attachment.filePath)}
-                    alt={attachment.originalName}
+                    alt={attachment.fileName || "Изображение"}
                     className="max-w-full rounded-lg object-contain"
                     style={{ maxHeight: '500px' }}
                     onError={(e) => {
@@ -600,7 +618,30 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
               setIsSaving(true);
               try {
                 const formData = new FormData();
-                formData.append("content", editContent.trim());
+                
+                // Очищаем контент от артефактов перед отправкой
+                let cleanedContent = editContent.trim();
+                if (editPostType === "article") {
+                  // Удаляем сломанные img теги
+                  cleanedContent = cleanedContent.replace(/<img[^>]*src=["']?(generated-[^"'\s>]+)["']?[^>]*>/gi, '');
+                  cleanedContent = cleanedContent.replace(/<img[^>]*src=["']?["']?[^>]*>/gi, '');
+                  
+                  // Удаляем текст "generated-*.jpg" который остался в любом месте
+                  cleanedContent = cleanedContent.replace(/generated-\d+-\w+\.(jpg|jpeg|png|gif|webp|heic|heif)/gi, '');
+                  
+                  // Удаляем параграфы, которые содержат только имя файла
+                  cleanedContent = cleanedContent.replace(/<p[^>]*>\s*generated-\d+-\w+\.(jpg|jpeg|png|gif|webp|heic|heif)\s*<\/p>/gi, '');
+                  cleanedContent = cleanedContent.replace(/<p[^>]*>\s*<\/p>/gi, '');
+                  
+                  // Удаляем разрывы строк и лишние пробелы
+                  cleanedContent = cleanedContent.replace(/\n\s*\n/g, '\n');
+                  cleanedContent = cleanedContent.replace(/\s+/g, ' ').trim();
+                  
+                  // Удаляем пустые div'ы
+                  cleanedContent = cleanedContent.replace(/<div[^>]*>\s*<\/div>/gi, '');
+                }
+                
+                formData.append("content", cleanedContent);
                 formData.append("postType", editPostType);
                 
                 if (editLinkMetadata) {
@@ -710,8 +751,30 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                                         tempDiv.innerHTML = editContent;
                                         const tempImages = tempDiv.querySelectorAll('img');
                                         if (tempImages[index]) {
+                                          const imgSrc = tempImages[index].getAttribute('src') || '';
                                           tempImages[index].remove();
-                                          setEditContent(tempDiv.innerHTML);
+                                          
+                                          // Очищаем артефакты - удаляем текст "generated-*.jpg" если он остался
+                                          let cleanedContent = tempDiv.innerHTML;
+                                          
+                                          // Удаляем текст с именем файла, если он остался (в любом месте)
+                                          if (imgSrc.includes('generated-')) {
+                                            const fileName = imgSrc.split('/').pop() || '';
+                                            // Удаляем имя файла в любом контексте
+                                            cleanedContent = cleanedContent.replace(new RegExp(fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '');
+                                            // Также удаляем общий паттерн generated-*.jpg
+                                            cleanedContent = cleanedContent.replace(/generated-\d+-\w+\.(jpg|jpeg|png|gif|webp|heic|heif)/gi, '');
+                                          }
+                                          
+                                          // Удаляем параграфы с именами файлов
+                                          cleanedContent = cleanedContent.replace(/<p[^>]*>\s*generated-\d+-\w+\.(jpg|jpeg|png|gif|webp|heic|heif)\s*<\/p>/gi, '');
+                                          cleanedContent = cleanedContent.replace(/<p[^>]*>\s*<\/p>/gi, '');
+                                          
+                                          // Удаляем лишние пробелы
+                                          cleanedContent = cleanedContent.replace(/\n\s*\n/g, '\n');
+                                          cleanedContent = cleanedContent.replace(/\s+/g, ' ').trim();
+                                          
+                                          setEditContent(cleanedContent);
                                         }
                                       }}
                                       className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full hover:bg-red-700 shadow-lg"
@@ -1082,37 +1145,10 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           isOpen={isEditImageModalOpen}
           onClose={() => setIsEditImageModalOpen(false)}
           onUpload={handleEditImageUpload}
-          onGenerate={async (prompt: string) => {
-            // Генерация изображения через AI
-            try {
-              const response = await fetch("/api/ai/generate-image", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt }),
-              });
-
-              if (response.ok) {
-                const data = await response.json();
-                const taskId = data.taskId;
-
-                // Опрашиваем статус генерации
-                const pollStatus = async () => {
-                  const statusResponse = await fetch(`/api/ai/generate-image?taskId=${taskId}`);
-                  if (statusResponse.ok) {
-                    const statusData = await statusResponse.json();
-                    if (statusData.status === "completed" && statusData.result?.imageUrl) {
-                      handleEditImageGenerate(statusData.result.imageUrl);
-                    } else if (statusData.status === "processing" || statusData.status === "pending") {
-                      setTimeout(pollStatus, 2000);
-                    }
-                  }
-                };
-                pollStatus();
-              }
-            } catch (error) {
-              console.error("Error generating image:", error);
-              alert("Ошибка при генерации изображения");
-            }
+          onGenerate={(imageUrl: string) => {
+            // ImageInsertModal уже сгенерировал изображение и передает готовый URL
+            console.log("[PostCard] Inserting generated image:", imageUrl);
+            handleEditImageGenerate(imageUrl);
           }}
           generating={false}
         />

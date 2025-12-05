@@ -162,6 +162,28 @@ export async function PATCH(
       );
     }
 
+    // Очищаем контент от артефактов изображений (сломанные пути, текст "generated-*.jpg" и т.д.)
+    if (postType === "article" && content) {
+      // Удаляем сломанные img теги с путями типа "generated-*.jpg" или без src
+      content = content.replace(/<img[^>]*src=["']?(generated-[^"'\s>]+|data:image\/[^"'\s>]+)["']?[^>]*>/gi, '');
+      content = content.replace(/<img[^>]*src=["']?["']?[^>]*>/gi, ''); // Удаляем img без src
+      
+      // Удаляем текст "generated-*.jpg" который остался в любом месте (в тегах, между тегами, в параграфах)
+      // Более агрессивная очистка - удаляем в любом контексте
+      content = content.replace(/generated-\d+-\w+\.(jpg|jpeg|png|gif|webp|heic|heif)/gi, '');
+      
+      // Удаляем параграфы, которые содержат только имя файла или пустые
+      content = content.replace(/<p[^>]*>\s*generated-\d+-\w+\.(jpg|jpeg|png|gif|webp|heic|heif)\s*<\/p>/gi, '');
+      content = content.replace(/<p[^>]*>\s*<\/p>/gi, '');
+      
+      // Удаляем разрывы строк и лишние пробелы, которые могли остаться после удаления
+      content = content.replace(/\n\s*\n/g, '\n');
+      content = content.replace(/\s+/g, ' ').trim();
+      
+      // Удаляем пустые div'ы и другие пустые теги
+      content = content.replace(/<div[^>]*>\s*<\/div>/gi, '');
+    }
+
     // Если это статья, извлекаем и загружаем изображения из HTML
     if (postType === "article" && content) {
       try {
