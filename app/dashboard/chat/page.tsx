@@ -117,7 +117,6 @@ function ChatPageContent() {
   const isUserScrolling = useRef(false);
   const lastScrollTop = useRef(0);
   const shouldScrollToBottom = useRef(true);
-  const deletedMessageIds = useRef<Set<string>>(new Set()); // Храним ID удаленных сообщений
 
   // Используем useEffect для получения userId после монтирования, чтобы избежать ошибок гидратации
   const [userId, setUserId] = useState<string | null>(null);
@@ -172,14 +171,11 @@ function ChatPageContent() {
   }, [messages]);
 
   useEffect(() => {
-    // Умное автообновление сообщений - каждые 5 секунд, но пропускаем если есть удаленные
+    // Автообновление сообщений каждые 5 секунд
     if (selectedChat) {
       const interval = setInterval(() => {
-        // Пропускаем обновление, если есть локально удаленные сообщения (ждем подтверждения сервера)
-        if (deletedMessageIds.current.size === 0) {
-          loadMessages(selectedChat.id, true);
-        }
-      }, 5000); // Увеличили с 3 до 5 секунд для снижения нагрузки
+        loadMessages(selectedChat.id, true);
+      }, 5000);
       return () => clearInterval(interval);
     }
   }, [selectedChat]);
@@ -295,53 +291,25 @@ function ChatPageContent() {
         const data = await response.json();
         const newMessages = data.messages || [];
         
-        // Фильтруем удаленные сообщения и те, что в процессе удаления
-        const filteredMessages = newMessages.filter((m: Message) => 
-          !m.deletedAt && !deletedMessageIds.current.has(m.id)
-        );
+        // Фильтруем удаленные сообщения
+        const filteredMessages = newMessages.filter((m: Message) => !m.deletedAt);
         
-        // При тихом обновлении проверяем, есть ли новые сообщения
+        // При тихом обновлении проверяем, есть ли изменения
         if (silent) {
-          // Если есть локально удаленные сообщения, не обновляем (ждем подтверждения)
-          if (deletedMessageIds.current.size > 0) {
-            // Проверяем, есть ли среди новых сообщений те, что мы удалили
-            const stillDeleted = Array.from(deletedMessageIds.current).filter(id => 
-              !newMessages.find((m: Message) => m.id === id)
+          const hasNewMessages = filteredMessages.length !== messages.length || 
+            filteredMessages.some((m: Message, i: number) => 
+              !messages[i] || messages[i].id !== m.id || messages[i].content !== m.content || messages[i].deletedAt !== m.deletedAt
             );
-            // Если сообщение действительно удалено на сервере, убираем из списка
-            stillDeleted.forEach(id => deletedMessageIds.current.delete(id));
-            
-            // Обновляем только если нет локально удаленных или они подтверждены
-            if (deletedMessageIds.current.size === 0) {
-              const hasNewMessages = filteredMessages.length !== messages.length || 
-                filteredMessages.some((m: Message, i: number) => 
-                  !messages[i] || messages[i].id !== m.id || messages[i].content !== m.content
-                );
-              
-              if (hasNewMessages && isNearBottom() && !isUserScrolling.current) {
-                setMessages(filteredMessages);
-                setTimeout(() => scrollToBottom(true), 50);
-              } else {
-                setMessages(filteredMessages);
-              }
-            }
-          } else {
-            const hasNewMessages = filteredMessages.length !== messages.length || 
-              filteredMessages.some((m: Message, i: number) => 
-                !messages[i] || messages[i].id !== m.id || messages[i].content !== m.content
-              );
-            
-            // Только если пользователь внизу чата и есть новые сообщения - скроллим
-            if (hasNewMessages && isNearBottom() && !isUserScrolling.current) {
-              setMessages(filteredMessages);
+          
+          if (hasNewMessages) {
+            setMessages(filteredMessages);
+            // Автоскролл только если пользователь внизу
+            if (isNearBottom() && !isUserScrolling.current) {
               setTimeout(() => scrollToBottom(true), 50);
-            } else {
-              setMessages(filteredMessages);
             }
           }
         } else {
-          // Очищаем список удаленных при полной перезагрузке
-          deletedMessageIds.current.clear();
+          // При полной загрузке всегда обновляем
           setMessages(filteredMessages);
           // При первой загрузке чата всегда скроллим вниз
           shouldScrollToBottom.current = true;
@@ -664,9 +632,6 @@ function ChatPageContent() {
         // Сохраняем исходное состояние для отката
         const originalMessages = [...messages];
         
-        // Добавляем в список удаленных (блокируем polling)
-        deletedMessageIds.current.add(messageId);
-        
         // Оптимистичное обновление - сразу скрываем сообщение из UI
         setMessages(prev => prev.filter(m => m.id !== messageId));
 
@@ -678,7 +643,6 @@ function ChatPageContent() {
           if (!response.ok) {
             const result = await response.json();
             // Откатываем изменения при ошибке
-            deletedMessageIds.current.delete(messageId);
             setMessages(originalMessages);
             setAlertDialog({
               isOpen: true,
@@ -688,15 +652,12 @@ function ChatPageContent() {
               onConfirm: () => setAlertDialog((prev) => ({ ...prev, isOpen: false })),
             });
           } else {
-            // Успешно удалено - убираем из списка удаленных
-            deletedMessageIds.current.delete(messageId);
-            // Обновляем сообщения с сервера, чтобы получить актуальное состояние
+            // Успешно удалено - обновляем сообщения с сервера
             await loadMessages(selectedChat.id, false);
           }
         } catch (error) {
           console.error("Error deleting message:", error);
           // Откатываем изменения при ошибке
-          deletedMessageIds.current.delete(messageId);
           setMessages(originalMessages);
           setAlertDialog({
             isOpen: true,
@@ -1296,10 +1257,15 @@ function ChatPageContent() {
                             <div className="space-y-2">
                               <p className="text-xs text-gray-500 dark:text-gray-400">Текущие вложения:</p>
                               {message.attachments.map((attachment) => {
+                                // Проверяем тип по mimeType или type, а не по originalName
+                                // (originalName может быть .heic, но файл уже конвертирован в JPEG)
                                 const isImage = attachment.type === "image" || 
-                                  attachment.originalName.toLowerCase().endsWith(".heic") ||
-                                  attachment.originalName.toLowerCase().endsWith(".heif") ||
-                                  attachment.mimeType?.startsWith("image/");
+                                  attachment.mimeType?.startsWith("image/") ||
+                                  attachment.fileName.toLowerCase().endsWith(".jpg") ||
+                                  attachment.fileName.toLowerCase().endsWith(".jpeg") ||
+                                  attachment.fileName.toLowerCase().endsWith(".png") ||
+                                  attachment.fileName.toLowerCase().endsWith(".gif") ||
+                                  attachment.fileName.toLowerCase().endsWith(".webp");
                                 
                                 return (
                                   <div key={attachment.id} className="relative">
@@ -1503,10 +1469,15 @@ function ChatPageContent() {
                           {message.attachments && message.attachments.length > 0 && (
                             <div className="mb-2 space-y-2">
                               {message.attachments.map((attachment) => {
+                                // Проверяем тип по mimeType или type, а не по originalName
+                                // (originalName может быть .heic, но файл уже конвертирован в JPEG)
                                 const isImage = attachment.type === "image" || 
-                                  attachment.originalName.toLowerCase().endsWith(".heic") ||
-                                  attachment.originalName.toLowerCase().endsWith(".heif") ||
-                                  attachment.mimeType?.startsWith("image/");
+                                  attachment.mimeType?.startsWith("image/") ||
+                                  attachment.fileName.toLowerCase().endsWith(".jpg") ||
+                                  attachment.fileName.toLowerCase().endsWith(".jpeg") ||
+                                  attachment.fileName.toLowerCase().endsWith(".png") ||
+                                  attachment.fileName.toLowerCase().endsWith(".gif") ||
+                                  attachment.fileName.toLowerCase().endsWith(".webp");
                                 
                                 return (
                                   <div key={attachment.id} className="relative">
