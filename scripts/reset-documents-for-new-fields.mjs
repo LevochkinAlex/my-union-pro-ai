@@ -6,8 +6,13 @@ import { dirname, join } from "path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Загружаем переменные окружения
-dotenv.config({ path: join(__dirname, "..", ".env.local") });
+// Загружаем переменные окружения (пробуем .env.prod для продакшена, затем .env.local)
+const envPath = process.env.NODE_ENV === "production" 
+  ? join(__dirname, "..", ".env.prod")
+  : join(__dirname, "..", ".env.local");
+dotenv.config({ path: envPath });
+// Также загружаем системные переменные окружения
+dotenv.config();
 
 const prisma = new PrismaClient();
 
