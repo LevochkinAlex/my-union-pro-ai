@@ -46,7 +46,26 @@ export default function RichTextEditor({
   const handleInput = () => {
     if (editorRef.current) {
       isUpdating.current = true;
-      onChange(editorRef.current.innerHTML);
+      
+      // Создаём копию DOM для очистки, не изменяя оригинал
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = editorRef.current.innerHTML;
+      
+      // Удаляем все кнопки удаления изображений
+      const deleteButtons = tempDiv.querySelectorAll('.image-delete-btn');
+      deleteButtons.forEach(btn => btn.remove());
+      
+      // Разворачиваем image-wrapper, оставляя только содержимое (img)
+      const wrappers = tempDiv.querySelectorAll('.image-wrapper');
+      wrappers.forEach(wrapper => {
+        const img = wrapper.querySelector('img');
+        if (img && wrapper.parentNode) {
+          wrapper.parentNode.insertBefore(img, wrapper);
+          wrapper.remove();
+        }
+      });
+      
+      onChange(tempDiv.innerHTML);
       setTimeout(() => {
         isUpdating.current = false;
       }, 0);
