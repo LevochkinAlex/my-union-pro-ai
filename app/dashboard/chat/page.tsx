@@ -667,12 +667,8 @@ function ChatPageContent() {
         // Добавляем в список удаленных (блокируем polling)
         deletedMessageIds.current.add(messageId);
         
-        // Оптимистичное обновление - сразу помечаем как удаленное в UI
-        setMessages(prev => prev.map(m => 
-          m.id === messageId 
-            ? { ...m, deletedAt: new Date().toISOString(), content: "Сообщение удалено" }
-            : m
-        ));
+        // Оптимистичное обновление - сразу скрываем сообщение из UI
+        setMessages(prev => prev.filter(m => m.id !== messageId));
 
         try {
           const response = await fetch(`/api/chat/${selectedChat.id}/messages/${messageId}`, {
@@ -692,13 +688,10 @@ function ChatPageContent() {
               onConfirm: () => setAlertDialog((prev) => ({ ...prev, isOpen: false })),
             });
           } else {
-            // Успешно удалено - убираем из списка удаленных и из UI
+            // Успешно удалено - убираем из списка удаленных
             deletedMessageIds.current.delete(messageId);
-            setMessages(prev => prev.filter(m => m.id !== messageId));
-            // Принудительно обновляем сообщения, чтобы убедиться, что удаление синхронизировано
-            setTimeout(() => {
-              loadMessages(selectedChat.id, true);
-            }, 500);
+            // Обновляем сообщения с сервера, чтобы получить актуальное состояние
+            await loadMessages(selectedChat.id, false);
           }
         } catch (error) {
           console.error("Error deleting message:", error);

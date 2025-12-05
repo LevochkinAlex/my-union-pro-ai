@@ -209,11 +209,14 @@ export async function uploadFileToVDS(
       // Игнорируем ошибки удаления временного файла
     }
 
-    // Возвращаем публичный URL
-    const publicUrl = `${vdsConfig.publicUrl}/${fileKey}`;
-    console.log("[vds-storage] File uploaded successfully:", publicUrl);
+    // Возвращаем относительный путь для использования через API роуты
+    // Файл будет доступен через /api/uploads/{category}/{filename}
+    // Формат: /uploads/posts/filename.jpg
+    const relativePath = `/uploads/${fileKey}`;
+    console.log("[vds-storage] File uploaded successfully to VDS:", fileKey);
+    console.log("[vds-storage] File will be served via API route:", relativePath);
     
-    return publicUrl;
+    return relativePath;
   } catch (error) {
     console.error("[vds-storage] Error uploading file to VDS:", error);
     

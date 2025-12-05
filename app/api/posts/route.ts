@@ -114,11 +114,85 @@ export async function POST(request: NextRequest) {
     }
 
     const formData = await request.formData();
-    const content = (formData.get("content") as string) || "";
+    let content = (formData.get("content") as string) || "";
     const postType = (formData.get("postType") as string) || "text";
     const linkMetadata = formData.get("linkMetadata");
     const videoMetadata = formData.get("videoMetadata");
     const files = formData.getAll("attachments") as File[];
+
+    // Если это статья, извлекаем и загружаем изображения из HTML
+    if (postType === "article" && content) {
+      try {
+        // Извлекаем все img теги из HTML
+        const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+        const imageUrls: string[] = [];
+        let match;
+        
+        while ((match = imgRegex.exec(content)) !== null) {
+          const imageUrl = match[1];
+          // Пропускаем уже локальные пути и data: URLs
+          if (!imageUrl.startsWith("/") && !imageUrl.startsWith("data:") && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))) {
+            imageUrls.push(imageUrl);
+          }
+        }
+
+        // Загружаем каждое изображение на сервер
+        for (const imageUrl of imageUrls) {
+          try {
+            console.log(`[posts] Downloading image from: ${imageUrl}`);
+            const imageResponse = await fetch(imageUrl);
+            if (!imageResponse.ok) {
+              console.error(`[posts] Failed to download image: ${imageResponse.status}`);
+              continue;
+            }
+
+            const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+            const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+            
+            // Определяем расширение файла
+            let extension = ".jpg";
+            if (contentType.includes("png")) extension = ".png";
+            else if (contentType.includes("webp")) extension = ".webp";
+            else if (contentType.includes("gif")) extension = ".gif";
+            
+            // Создаем уникальное имя файла
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${extension}`;
+            const fileKey = `posts/${fileName}`;
+            
+            let finalFilePath: string;
+            
+            if (isVDSStorageConfigured()) {
+              try {
+                finalFilePath = await uploadFileToVDS(fileKey, imageBuffer, contentType);
+                console.log(`[posts] Image uploaded to VDS: ${finalFilePath}`);
+              } catch (vdsError) {
+                console.error(`[posts] VDS upload error, using local:`, vdsError);
+                await mkdir(UPLOAD_DIR, { recursive: true });
+                const localFilePath = path.join(UPLOAD_DIR, fileName);
+                await writeFile(localFilePath, imageBuffer);
+                finalFilePath = `/uploads/posts/${fileName}`;
+              }
+            } else {
+              await mkdir(UPLOAD_DIR, { recursive: true });
+              const localFilePath = path.join(UPLOAD_DIR, fileName);
+              await writeFile(localFilePath, imageBuffer);
+              finalFilePath = `/uploads/posts/${fileName}`;
+            }
+
+            // Заменяем URL в HTML на локальный путь через API
+            const apiPath = `/api/uploads/posts/${fileName}`;
+            content = content.replace(imageUrl, apiPath);
+            console.log(`[posts] Replaced image URL: ${imageUrl} -> ${apiPath}`);
+          } catch (error) {
+            console.error(`[posts] Error processing image ${imageUrl}:`, error);
+            // Продолжаем обработку других изображений
+          }
+        }
+      } catch (error) {
+        console.error("[posts] Error extracting images from HTML:", error);
+        // Продолжаем сохранение поста даже если не удалось обработать изображения
+      }
+    }
 
     // Проверяем, что есть либо текст, либо файлы
     const hasContent = content && content.trim().length > 0;
