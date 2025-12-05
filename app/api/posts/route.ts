@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
     const postType = (formData.get("postType") as string) || "text";
     const linkMetadata = formData.get("linkMetadata");
     const videoMetadata = formData.get("videoMetadata");
+    const coverImageRaw = formData.get("coverImage");
     const files = formData.getAll("attachments") as File[];
 
     // Если это статья, извлекаем и загружаем изображения из HTML
@@ -227,6 +228,72 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Обрабатываем cover image для статей
+    let coverImage: string | null = null;
+    if (postType === "article" && coverImageRaw) {
+      const coverImageValue = coverImageRaw as string;
+      if (coverImageValue.trim() === "") {
+        coverImage = null;
+      } else if (coverImageValue.startsWith("http://") || coverImageValue.startsWith("https://")) {
+        // Если это внешний URL, загружаем на сервер
+        try {
+          console.log(`[posts] Downloading cover image from: ${coverImageValue}`);
+          const imageResponse = await fetch(coverImageValue);
+          if (imageResponse.ok) {
+            const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+            const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+            
+            // Конвертируем HEIC если нужно
+            let finalBuffer = imageBuffer;
+            if (contentType.includes("heic") || contentType.includes("heif") || 
+                coverImageValue.toLowerCase().endsWith('.heic') || coverImageValue.toLowerCase().endsWith('.heif')) {
+              try {
+                const converted = await convertHeicToJpegServer(imageBuffer, coverImageValue, contentType);
+                finalBuffer = Buffer.from(converted.buffer);
+              } catch (convertError) {
+                console.error(`[posts] Error converting cover HEIC:`, convertError);
+              }
+            }
+            
+            let extension = ".jpg";
+            if (contentType.includes("png")) extension = ".png";
+            else if (contentType.includes("webp")) extension = ".webp";
+            else if (contentType.includes("gif")) extension = ".gif";
+            
+            const fileName = `cover-${Date.now()}-${Math.random().toString(36).substring(7)}${extension}`;
+            const fileKey = `posts/${fileName}`;
+            
+            if (isVDSStorageConfigured()) {
+              try {
+                coverImage = await uploadFileToVDS(fileKey, finalBuffer, contentType);
+                console.log(`[posts] Cover image uploaded to VDS: ${coverImage}`);
+              } catch (vdsError) {
+                console.error(`[posts] VDS upload error for cover, using local:`, vdsError);
+                await mkdir(UPLOAD_DIR, { recursive: true });
+                const localFilePath = path.join(UPLOAD_DIR, fileName);
+                await writeFile(localFilePath, finalBuffer);
+                coverImage = `/api/uploads/posts/${fileName}`;
+              }
+            } else {
+              await mkdir(UPLOAD_DIR, { recursive: true });
+              const localFilePath = path.join(UPLOAD_DIR, fileName);
+              await writeFile(localFilePath, finalBuffer);
+              coverImage = `/api/uploads/posts/${fileName}`;
+            }
+          } else {
+            console.error(`[posts] Failed to download cover image: ${imageResponse.status}`);
+            coverImage = coverImageValue; // Используем оригинальный URL
+          }
+        } catch (error) {
+          console.error(`[posts] Error processing cover image:`, error);
+          coverImage = coverImageValue; // Используем оригинальный URL
+        }
+      } else {
+        // Локальный путь или data URL
+        coverImage = coverImageValue;
+      }
+    }
+
     // Создаем пост
     const post = await prisma.userPost.create({
       data: {
@@ -235,6 +302,7 @@ export async function POST(request: NextRequest) {
         postType,
         linkMetadata: parsedLinkMetadata,
         videoMetadata: parsedVideoMetadata,
+        ...(postType === "article" && coverImage !== null ? { coverImage } : {}),
       },
       include: {
         author: {

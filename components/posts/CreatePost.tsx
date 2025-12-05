@@ -206,6 +206,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
           // Если это cover изображение (через нижнюю иконку)
           setCoverImage(fullImageUrl);
           setIsImageModalOpen(false);
+          setIsImageModalForCover(false);
         } else {
           // Если это вставка в HTML (через WYSIWYG)
           if (articleEditorRef.current) {
@@ -249,16 +250,20 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
   };
 
   const handleImageGenerate = async (imageUrl: string) => {
+    const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
+    
     if (isImageModalForCover) {
       // Если это cover изображение (через нижнюю иконку)
-      setCoverImage(imageUrl);
+      setCoverImage(fullImageUrl);
+      setIsImageModalOpen(false);
+      setIsImageModalForCover(false);
     } else {
       // Если это вставка в HTML (через WYSIWYG)
       if (articleEditorRef.current) {
         const editor = articleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
         if (editor) {
           const img = document.createElement('img');
-          img.src = imageUrl;
+          img.src = fullImageUrl;
           img.alt = "Сгенерированное изображение";
           img.style.maxWidth = '100%';
           img.style.height = 'auto';
@@ -280,6 +285,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
           editor.dispatchEvent(event);
         }
       }
+      setIsImageModalOpen(false);
     }
   };
 
@@ -987,6 +993,27 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
             <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-800">
               <form onSubmit={handleSubmit} className="p-4 lg:p-6 space-y-4">
                 {/* WYSIWYG редактор */}
+                {/* Превью обложки статьи */}
+                {coverImage && (
+                  <div className="relative mb-4">
+                    <img
+                      src={coverImage}
+                      alt="Обложка статьи"
+                      className="w-full h-64 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCoverImage(null)}
+                      className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                      title="Удалить обложку"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+
                 <div ref={articleEditorRef}>
                   <RichTextEditor
                     value={htmlContent}
