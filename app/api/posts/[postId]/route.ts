@@ -240,26 +240,33 @@ export async function PATCH(
       );
     }
 
-    // Очищаем контент от артефактов изображений (сломанные пути, текст "generated-*.jpg" и т.д.)
+    // Очищаем контент от артефактов (сломанные пути, текст "generated-*.jpg" и т.д.)
+    // НО НЕ ТРОГАЕМ нормальные изображения с валидными src
     if (postType === "article" && content) {
-      // Удаляем сломанные img теги с путями типа "generated-*.jpg" или без src
-      content = content.replace(/<img[^>]*src=["']?(generated-[^"'\s>]+|data:image\/[^"'\s>]+)["']?[^>]*>/gi, '');
-      content = content.replace(/<img[^>]*src=["']?["']?[^>]*>/gi, ''); // Удаляем img без src
+      // Удаляем только img теги с путями типа "generated-*.jpg" БЕЗ полного URL
+      content = content.replace(/<img[^>]*src=["']generated-[^"']+["'][^>]*\/?>/gi, '');
       
-      // Удаляем текст "generated-*.jpg" который остался в любом месте (в тегах, между тегами, в параграфах)
-      // Более агрессивная очистка - удаляем в любом контексте
-      content = content.replace(/generated-\d+-\w+\.(jpg|jpeg|png|gif|webp|heic|heif)/gi, '');
+      // Удаляем текст "generated-*.jpg" который остался НЕ в src атрибуте
+      // (т.е. просто текст в параграфах или между тегами)
+      content = content.replace(/>(\s*)generated-\d+[^<]*\.(jpg|jpeg|png|gif|webp|heic|heif)(\s*)</gi, '>$1$3<');
       
-      // Удаляем параграфы, которые содержат только имя файла или пустые
-      content = content.replace(/<p[^>]*>\s*generated-\d+-\w+\.(jpg|jpeg|png|gif|webp|heic|heif)\s*<\/p>/gi, '');
+      // Удаляем параграфы, которые содержат только имя файла
+      content = content.replace(/<p[^>]*>\s*generated-\d+[^<]*\.(jpg|jpeg|png|gif|webp|heic|heif)\s*<\/p>/gi, '');
+      
+      // Удаляем пустые параграфы
       content = content.replace(/<p[^>]*>\s*<\/p>/gi, '');
       
-      // Удаляем разрывы строк и лишние пробелы, которые могли остаться после удаления
-      content = content.replace(/\n\s*\n/g, '\n');
-      content = content.replace(/\s+/g, ' ').trim();
-      
-      // Удаляем пустые div'ы и другие пустые теги
+      // Удаляем пустые div'ы
       content = content.replace(/<div[^>]*>\s*<\/div>/gi, '');
+      
+      // Удаляем кнопки удаления изображений (image-delete-btn)
+      content = content.replace(/<button[^>]*class=["'][^"']*image-delete-btn[^"']*["'][^>]*>.*?<\/button>/gi, '');
+      
+      // Разворачиваем image-wrapper, оставляя только img
+      content = content.replace(/<div[^>]*class=["'][^"']*image-wrapper[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi, (match, inner) => {
+        const imgMatch = inner.match(/<img[^>]+>/i);
+        return imgMatch ? imgMatch[0] : '';
+      });
     }
 
     // Если это статья, извлекаем и загружаем изображения из HTML

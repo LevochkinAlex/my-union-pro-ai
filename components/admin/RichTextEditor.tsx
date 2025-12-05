@@ -121,7 +121,8 @@ export default function RichTextEditor({
   useEffect(() => {
     if (editorRef.current) {
       (editorRef.current as any).insertImage = (url: string, alt: string = "Изображение") => {
-        insertHTML(`<div class="image-wrapper" style="position: relative; display: inline-block; max-width: 100%; margin: 8px 0;"><img src="${url}" alt="${alt}" style="max-width: 100%; height: auto; border-radius: 8px; display: block;" /><button type="button" class="image-delete-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1;" title="Удалить изображение">×</button></div>`);
+        // Вставляем только img тег - обертка и кнопка удаления добавляются автоматически в useEffect
+        insertHTML(`<img src="${url}" alt="${alt}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0;" />`);
       };
       (editorRef.current as any).insertVideo = (embedUrl: string) => {
         insertHTML(`<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; margin: 16px 0; border-radius: 8px;"><iframe src="${embedUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" frameborder="0" allowfullscreen></iframe></div>`);
