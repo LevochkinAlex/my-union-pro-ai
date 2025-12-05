@@ -803,6 +803,27 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                   className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none min-h-[200px]"
                 />
 
+                {/* Превью обложки для обычного поста */}
+                {coverImage && (
+                  <div className="relative">
+                    <img
+                      src={coverImage}
+                      alt="Обложка поста"
+                      className="w-full max-h-64 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCoverImage(null)}
+                      className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                      title="Удалить обложку"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+
                 {/* Выбранные файлы */}
                 {selectedFiles.length > 0 && (
                   <div className="space-y-2">
