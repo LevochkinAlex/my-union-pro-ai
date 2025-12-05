@@ -17,8 +17,14 @@ export interface UserData {
   address: string;
   phone: string;
   jobTitle: string;
-  profession: string;
-  education: string;
+  // Новые поля для места работы
+  workplace?: string; // Название компании места работы
+  workplaceInn?: string; // ИНН компании места работы
+  directorName?: string; // ФИО руководителя (из ФНС через Dadata)
+  directorPosition?: string; // Должность руководителя (из ФНС через Dadata)
+  // Старые поля (перенесены в дополнительную информацию, оставлены для обратной совместимости)
+  profession?: string;
+  education?: string;
   organizationName: string;
   organizationInn?: string;
   region?: string; // Регион России

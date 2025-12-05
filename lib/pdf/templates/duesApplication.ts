@@ -21,14 +21,29 @@ export async function generateDuesApplication(userData: UserData): Promise<Buffe
   // Используем только шрифт по умолчанию (Helvetica) без явного указания
   // Это предотвращает ошибки загрузки шрифтов из файловой системы
 
-  // Заголовок
+  // Заголовок с данными о месте работы и руководителе
   doc
-    .fontSize(14)
-    .text("Председателю Межрегиональной общественной", { align: "right" })
-    .text("организации профсоюза работников здравоохранения", { align: "right" })
-    .moveDown(0.5)
-    .text(`от ${fullName}`, { align: "right" })
-    .moveDown(2);
+    .fontSize(14);
+  
+  // Если есть данные о месте работы и руководителе
+  if (userData.workplace && userData.directorName && userData.directorPosition) {
+    doc
+      .text(`${userData.directorPosition}`, { align: "right" })
+      .text(`${userData.workplace}`, { align: "right" })
+      .text(`${userData.directorName}`, { align: "right" })
+      .moveDown(0.5)
+      .text(`от ${fullName}`, { align: "right" })
+      .text(`${userData.jobTitle}`, { align: "right" })
+      .moveDown(2);
+  } else {
+    // Fallback на старый формат
+    doc
+      .text("Председателю Межрегиональной общественной", { align: "right" })
+      .text("организации профсоюза работников здравоохранения", { align: "right" })
+      .moveDown(0.5)
+      .text(`от ${fullName}`, { align: "right" })
+      .moveDown(2);
+  }
 
   // Название документа
   doc
@@ -74,14 +89,26 @@ export async function generateDuesApplication(userData: UserData): Promise<Buffe
     ["ФИО:", fullName],
     ["Дата рождения:", formatDate(userData.dateOfBirth)],
     ["Должность:", userData.jobTitle],
-    ["Организация:", userData.organizationName],
-    ["Адрес:", userData.address],
-    ["Телефон:", userData.phone],
   ];
 
-  if (userData.organizationInn) {
-    personalData.push(["ИНН организации:", userData.organizationInn]);
+  // Добавляем данные о месте работы (приоритет новым полям)
+  if (userData.workplace) {
+    personalData.push(["Место работы:", userData.workplace]);
+    if (userData.workplaceInn) {
+      personalData.push(["ИНН места работы:", userData.workplaceInn]);
+    }
+  } else if (userData.organizationName) {
+    // Fallback на старое поле
+    personalData.push(["Организация:", userData.organizationName]);
+    if (userData.organizationInn) {
+      personalData.push(["ИНН организации:", userData.organizationInn]);
+    }
   }
+
+  personalData.push(
+    ["Адрес:", userData.address],
+    ["Телефон:", userData.phone]
+  );
 
   personalData.forEach(([label, value]) => {
     doc

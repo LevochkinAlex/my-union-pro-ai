@@ -32,8 +32,9 @@ export async function POST(request: NextRequest) {
       address: !!user.address,
       phone: !!user.phone,
       jobTitle: !!user.jobTitle,
-      profession: !!user.profession,
-      education: !!user.education,
+      workplace: !!user.workplace,
+      directorName: !!user.directorName,
+      directorPosition: !!user.directorPosition,
       organization: !!user.organization,
       organizationId: user.organizationId,
     });
@@ -48,8 +49,7 @@ export async function POST(request: NextRequest) {
       !user.address ||
       !user.phone ||
       !user.jobTitle ||
-      !user.profession ||
-      !user.education ||
+      !user.workplace ||
       !hasOrganization
     ) {
       const missingFields = [];
@@ -59,9 +59,8 @@ export async function POST(request: NextRequest) {
       if (!user.address) missingFields.push("Адрес");
       if (!user.phone) missingFields.push("Телефон");
       if (!user.jobTitle) missingFields.push("Должность");
-      if (!user.profession) missingFields.push("Профессия");
-      if (!user.education) missingFields.push("Образование");
-      if (!hasOrganization) missingFields.push("Организация");
+      if (!user.workplace) missingFields.push("Место работы");
+      if (!hasOrganization) missingFields.push("Организация профсоюза");
       
       console.error("[documents/generate] ❌ Профиль не полностью заполнен. Отсутствуют поля:", missingFields);
       return NextResponse.json(
