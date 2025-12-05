@@ -120,10 +120,12 @@ function ChatPageContent() {
 
   // Используем useEffect для получения userId после монтирования, чтобы избежать ошибок гидратации
   const [userId, setUserId] = useState<string | null>(null);
+  const [botChatId, setBotChatId] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
     setUserId(searchParams.get("userId"));
+    setBotChatId(searchParams.get("botChatId"));
     
     // Очистка превью при размонтировании
     return () => {
@@ -136,6 +138,17 @@ function ChatPageContent() {
   useEffect(() => {
     loadChats();
   }, []);
+
+  // Открываем чат с ботом, если передан botChatId
+  useEffect(() => {
+    if (botChatId && chats.length > 0) {
+      const botChat = chats.find((chat) => chat.id === botChatId);
+      if (botChat) {
+        setSelectedChat(botChat);
+        loadMessages(botChat.id, false);
+      }
+    }
+  }, [botChatId, chats]);
 
   useEffect(() => {
     if (userId && currentUserId) {
@@ -292,7 +305,11 @@ function ChatPageContent() {
         const newMessages = data.messages || [];
         
         // Фильтруем удаленные сообщения
-        const filteredMessages = newMessages.filter((m: Message) => !m.deletedAt);
+        // API уже фильтрует по deletedAt: null, но для безопасности проверяем и на фронтенде
+        const filteredMessages = newMessages.filter((m: Message) => {
+          // Сообщение не удалено, если deletedAt отсутствует, равен null, undefined или пустой строке
+          return !m.deletedAt;
+        });
         
         // При тихом обновлении проверяем, есть ли изменения
         if (silent) {
@@ -642,6 +659,7 @@ function ChatPageContent() {
 
           if (!response.ok) {
             const result = await response.json();
+            console.error("[chat] Delete error:", result);
             // Откатываем изменения при ошибке
             setMessages(originalMessages);
             setAlertDialog({
@@ -652,8 +670,12 @@ function ChatPageContent() {
               onConfirm: () => setAlertDialog((prev) => ({ ...prev, isOpen: false })),
             });
           } else {
-            // Успешно удалено - обновляем сообщения с сервера
+            const result = await response.json();
+            console.log("[chat] Delete success:", result);
+            // Успешно удалено - обновляем сообщения с сервера (не тихое обновление, чтобы точно обновилось)
             await loadMessages(selectedChat.id, false);
+            // Также принудительно обновляем список чатов, чтобы обновилось последнее сообщение
+            await loadChats();
           }
         } catch (error) {
           console.error("Error deleting message:", error);
@@ -1840,6 +1862,16 @@ function ChatPageContent() {
           </div>
         )}
       </div>
+
+      {/* AlertDialog для подтверждения удаления и других сообщений */}
+      <AlertDialog
+        isOpen={alertDialog.isOpen}
+        title={alertDialog.title}
+        message={alertDialog.message}
+        type={alertDialog.type}
+        onConfirm={alertDialog.onConfirm}
+        onCancel={alertDialog.onCancel}
+      />
     </div>
   );
 }

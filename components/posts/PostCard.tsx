@@ -37,6 +37,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   const [editVideoMetadata, setEditVideoMetadata] = useState<any>(post.videoMetadata);
   const [isEditImageModalOpen, setIsEditImageModalOpen] = useState(false);
   const [isEditVideoModalOpen, setIsEditVideoModalOpen] = useState(false);
+  const [deletedAttachmentIds, setDeletedAttachmentIds] = useState<string[]>([]);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const editArticleEditorRef = useRef<HTMLDivElement>(null);
   
@@ -613,6 +614,11 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                   formData.append("attachments", file);
                 });
 
+                // Отправляем список удаленных вложений
+                if (deletedAttachmentIds.length > 0) {
+                  formData.append("deletedAttachmentIds", JSON.stringify(deletedAttachmentIds));
+                }
+
                 const response = await fetch(`/api/posts/${post.id}`, {
                   method: "PATCH",
                   body: formData,
@@ -626,6 +632,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                   setShowEditModal(false);
                   setEditFiles([]);
                   setEditFilePreviews([]);
+                  setDeletedAttachmentIds([]);
                   onUpdate();
                 } else {
                   const data = await response.json();
@@ -641,15 +648,121 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
               <div className="p-4 lg:p-6 space-y-4">
                 {/* WYSIWYG редактор для статей */}
                 {post.postType === "article" ? (
-                  <div ref={editArticleEditorRef}>
-                    <RichTextEditor
-                      value={editContent}
-                      onChange={setEditContent}
-                      placeholder="Начните писать статью..."
-                      onInsertImage={() => setIsEditImageModalOpen(true)}
-                      onInsertVideo={() => setIsEditVideoModalOpen(true)}
-                    />
-                  </div>
+                  <>
+                    <div ref={editArticleEditorRef}>
+                      <RichTextEditor
+                        value={editContent}
+                        onChange={setEditContent}
+                        placeholder="Начните писать статью..."
+                        onInsertImage={() => setIsEditImageModalOpen(true)}
+                        onInsertVideo={() => setIsEditVideoModalOpen(true)}
+                      />
+                    </div>
+                    
+                    {/* Показываем существующие изображения из HTML с возможностью удаления */}
+                    {(() => {
+                      const parser = new DOMParser();
+                      const doc = parser.parseFromString(editContent, 'text/html');
+                      const images = doc.querySelectorAll('img');
+                      if (images.length === 0) return null;
+                      
+                      return (
+                        <div className="mt-4 space-y-3">
+                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Изображения в статье:
+                          </p>
+                          <div className="grid grid-cols-2 gap-3">
+                            {Array.from(images).map((img, index) => {
+                              const src = img.getAttribute('src') || '';
+                              const alt = img.getAttribute('alt') || `Изображение ${index + 1}`;
+                              
+                              return (
+                                <div key={index} className="relative group">
+                                  <div className="relative aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden">
+                                    <img
+                                      src={src}
+                                      alt={alt}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        // Удаляем изображение из HTML
+                                        const tempDiv = document.createElement('div');
+                                        tempDiv.innerHTML = editContent;
+                                        const tempImages = tempDiv.querySelectorAll('img');
+                                        if (tempImages[index]) {
+                                          tempImages[index].remove();
+                                          setEditContent(tempDiv.innerHTML);
+                                        }
+                                      }}
+                                      className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
+                                      title="Удалить изображение"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        // Заменяем изображение
+                                        const input = document.createElement('input');
+                                        input.type = 'file';
+                                        input.accept = 'image/*';
+                                        input.onchange = async (e) => {
+                                          const file = (e.target as HTMLInputElement).files?.[0];
+                                          if (!file) return;
+                                          
+                                          // Загружаем новое изображение
+                                          const formData = new FormData();
+                                          formData.append('file', file);
+                                          
+                                          try {
+                                            const response = await fetch('/api/posts/upload-image', {
+                                              method: 'POST',
+                                              body: formData,
+                                            });
+                                            
+                                            if (response.ok) {
+                                              const data = await response.json();
+                                              // Заменяем src изображения в HTML
+                                              const tempDiv = document.createElement('div');
+                                              tempDiv.innerHTML = editContent;
+                                              const tempImages = tempDiv.querySelectorAll('img');
+                                              if (tempImages[index]) {
+                                                tempImages[index].setAttribute('src', data.url);
+                                                setEditContent(tempDiv.innerHTML);
+                                              }
+                                            } else {
+                                              alert('Ошибка при загрузке изображения');
+                                            }
+                                          } catch (error) {
+                                            console.error('Error uploading image:', error);
+                                            alert('Ошибка при загрузке изображения');
+                                          }
+                                        };
+                                        input.click();
+                                      }}
+                                      className="absolute top-2 left-2 p-2 bg-blue-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-700"
+                                      title="Заменить изображение"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </>
                 ) : (
                   <textarea
                     value={editContent}
@@ -791,14 +904,94 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                 {/* Существующие вложения - не показываем для статей, так как изображения уже в HTML */}
                 {post.postType !== "article" && post.attachments && post.attachments.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Текущие вложения:</p>
-                    {post.attachments.map((attachment: any) => (
-                      <div key={attachment.id} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded text-sm">
-                        <span className="text-gray-700 dark:text-gray-300 truncate flex-1">
-                          {attachment.originalName}
-                        </span>
-                      </div>
-                    ))}
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Текущие вложения:</p>
+                    {post.attachments
+                      .filter((attachment: any) => !deletedAttachmentIds.includes(attachment.id))
+                      .map((attachment: any) => {
+                        const fileUrl = getFileUrl(attachment.filePath);
+                        const isImage = attachment.type === "image";
+                        
+                        return (
+                          <div key={attachment.id} className="relative group border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                            {isImage ? (
+                              <div className="relative">
+                                <img
+                                  src={fileUrl}
+                                  alt={attachment.originalName}
+                                  className="w-full max-h-64 object-contain bg-gray-50 dark:bg-gray-800"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDeletedAttachmentIds([...deletedAttachmentIds, attachment.id]);
+                                  }}
+                                  className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
+                                  title="Удалить изображение"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    // Заменяем изображение
+                                    const input = document.createElement('input');
+                                    input.type = 'file';
+                                    input.accept = 'image/*';
+                                    input.onchange = async (e) => {
+                                      const file = (e.target as HTMLInputElement).files?.[0];
+                                      if (!file) return;
+                                      
+                                      // Помечаем старое вложение на удаление
+                                      setDeletedAttachmentIds([...deletedAttachmentIds, attachment.id]);
+                                      
+                                      // Добавляем новый файл
+                                      const newFiles = [...editFiles, file];
+                                      setEditFiles(newFiles);
+                                      
+                                      // Создаем превью
+                                      const preview = URL.createObjectURL(file);
+                                      setEditFilePreviews([...editFilePreviews, preview]);
+                                    };
+                                    input.click();
+                                  }}
+                                  className="absolute top-2 left-2 p-2 bg-blue-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-700"
+                                  title="Заменить изображение"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-700/50">
+                                <svg className="w-5 h-5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                </svg>
+                                <span className="text-gray-700 dark:text-gray-300 truncate flex-1 text-sm">
+                                  {attachment.originalName}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDeletedAttachmentIds([...deletedAttachmentIds, attachment.id]);
+                                  }}
+                                  className="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                  title="Удалить файл"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                   </div>
                 )}
 

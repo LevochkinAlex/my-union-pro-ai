@@ -20,6 +20,9 @@ export default function ImageInsertModal({
   const [imagePrompt, setImagePrompt] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -45,6 +48,10 @@ export default function ImageInsertModal({
       return;
     }
 
+    setIsGenerating(true);
+    setGenerationProgress(0);
+    setGeneratedImageUrl(null);
+
     try {
       // Запускаем генерацию
       const response = await fetch("/api/ai/generate-image", {
@@ -64,6 +71,8 @@ export default function ImageInsertModal({
       // Опрашиваем статус задачи
       let attempts = 0;
       const maxAttempts = 60; // 5 минут максимум
+      const startTime = Date.now();
+      const estimatedTime = 30000; // Примерно 30 секунд
 
       const checkStatus = async (): Promise<string> => {
         const statusResponse = await fetch(`/api/ai/generate-image?taskId=${taskId}`);
@@ -74,7 +83,14 @@ export default function ImageInsertModal({
         const statusData = await statusResponse.json();
         const task = statusData.task;
 
+        // Обновляем прогресс
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(90, Math.floor((elapsed / estimatedTime) * 100));
+        setGenerationProgress(progress);
+
         if (task.status === "completed" && task.result?.imageUrl) {
+          setGenerationProgress(100);
+          setGeneratedImageUrl(task.result.imageUrl);
           return task.result.imageUrl;
         } else if (task.status === "failed") {
           throw new Error(task.error || "Генерация изображения не удалась");
@@ -88,17 +104,28 @@ export default function ImageInsertModal({
       };
 
       const imageUrl = await checkStatus();
-      onGenerate(imageUrl);
-      handleClose();
+      // Не закрываем модалку сразу, показываем превью
     } catch (error: any) {
       console.error("Error generating image:", error);
       alert(error.message || "Ошибка при генерации изображения");
+      setIsGenerating(false);
+      setGenerationProgress(0);
+    }
+  };
+
+  const handleInsertGenerated = () => {
+    if (generatedImageUrl) {
+      onGenerate(generatedImageUrl);
+      handleClose();
     }
   };
 
   const handleClose = () => {
     setImagePrompt("");
     setSelectedFile(null);
+    setIsGenerating(false);
+    setGenerationProgress(0);
+    setGeneratedImageUrl(null);
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
@@ -190,21 +217,73 @@ export default function ImageInsertModal({
                   placeholder="Опишите изображение..."
                   className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
                   onKeyPress={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
+                    if (e.key === "Enter" && !e.shiftKey && !isGenerating) {
                       e.preventDefault();
                       handleGenerate();
                     }
                   }}
+                  disabled={isGenerating}
                 />
                 <button
                   type="button"
                   onClick={handleGenerate}
-                  disabled={generating || !imagePrompt.trim()}
+                  disabled={isGenerating || !imagePrompt.trim()}
                   className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {generating ? "Генерация..." : "Сгенерировать"}
+                  {isGenerating ? "Генерация..." : "Сгенерировать"}
                 </button>
               </div>
+
+              {/* Прогресс генерации */}
+              {isGenerating && (
+                <div className="mt-3 space-y-2">
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div
+                      className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${generationProgress}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                    Генерация изображения... {generationProgress}%
+                  </p>
+                </div>
+              )}
+
+              {/* Превью сгенерированного изображения */}
+              {generatedImageUrl && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Изображение готово:
+                  </p>
+                  <div className="relative">
+                    <img
+                      src={generatedImageUrl}
+                      alt="Сгенерированное изображение"
+                      className="w-full max-h-64 object-contain rounded-lg border border-gray-200 dark:border-gray-700"
+                    />
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleInsertGenerated}
+                        className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                      >
+                        Вставить изображение
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGeneratedImageUrl(null);
+                          setIsGenerating(false);
+                          setGenerationProgress(0);
+                        }}
+                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        Отмена
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
 
 // Проверка доступности prisma
 if (!prisma) {
@@ -27,6 +28,15 @@ export async function GET(request: NextRequest) {
 
     const userId = session.user.id;
 
+    // Получаем пользователя-бота (не критично, если не получится)
+    let botUser = null;
+    try {
+      botUser = await getOrCreateAIBotUser();
+    } catch (error) {
+      console.error("[chat] Error getting bot user:", error);
+      // Продолжаем выполнение, даже если не удалось получить бота
+    }
+
     // Получаем все чаты, где пользователь является участником
     const chats = await prisma.chat.findMany({
       where: {
@@ -44,6 +54,7 @@ export async function GET(request: NextRequest) {
             middleName: true,
             avatarUrl: true,
             phone: true,
+            email: true,
           },
         },
         participant2: {
@@ -54,6 +65,7 @@ export async function GET(request: NextRequest) {
             middleName: true,
             avatarUrl: true,
             phone: true,
+            email: true,
           },
         },
         messages: {

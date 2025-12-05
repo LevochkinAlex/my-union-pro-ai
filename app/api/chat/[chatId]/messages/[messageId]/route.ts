@@ -235,13 +235,18 @@ export async function DELETE(
       return NextResponse.json({ error: "Сообщение не принадлежит этому чату" }, { status: 403 });
     }
 
+    // Проверяем, что пользователь является отправителем сообщения
     if (message.senderId !== userId) {
+      console.log(`[chat] DELETE: User ${userId} tried to delete message ${messageId} from sender ${message.senderId}`);
       return NextResponse.json({ error: "Вы можете удалять только свои сообщения" }, { status: 403 });
     }
 
     if (message.deletedAt) {
+      console.log(`[chat] DELETE: Message ${messageId} already deleted at ${message.deletedAt}`);
       return NextResponse.json({ error: "Сообщение уже удалено" }, { status: 400 });
     }
+
+    console.log(`[chat] DELETE: Deleting message ${messageId} by user ${userId} in chat ${chatId}`);
 
     // Помечаем сообщение как удаленное (мягкое удаление)
     const deletedAt = new Date();

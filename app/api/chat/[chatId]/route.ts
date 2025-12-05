@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
+import { saveChatConversationToKnowledgeBase } from "@/lib/chat-knowledge-learning";
 import { sendNotification } from "@/lib/notifications";
 
 // GET - получение сообщений чата
@@ -171,6 +173,7 @@ export async function POST(
     const chat = await prisma.chat.findUnique({
       where: { id: chatId },
       select: {
+        id: true,
         participant1Id: true,
         participant2Id: true,
       },
@@ -210,6 +213,10 @@ export async function POST(
       ? chat.participant2Id 
       : chat.participant1Id;
 
+    // Проверяем, является ли получатель ботом
+    const botUser = await getOrCreateAIBotUser();
+    const isBotChat = recipientId === botUser.id;
+
     // Получаем информацию о чате с временем последнего чтения
     const chatWithReadTime = await prisma.chat.findUnique({
       where: { id: chatId },
@@ -229,6 +236,131 @@ export async function POST(
       ? (Date.now() - new Date(recipientReadAt).getTime()) < 30000 // 30 секунд
       : false;
 
+    // Если это чат с ботом, получаем ответ от бота
+    if (isBotChat) {
+      try {
+        // Импортируем функции для работы с ботом
+        const { retrieveRelevantChunks } = await import("@/lib/vector-search");
+        const bot = await prisma.chatBot.findFirst({
+          where: { isActive: true },
+          include: { apiProvider: true },
+        });
+
+        if (bot) {
+          // Загружаем историю чата
+          const chatHistory = await prisma.chatMessage.findMany({
+            where: {
+              chatId: chat.id,
+              deletedAt: null,
+            },
+            orderBy: { createdAt: "asc" },
+            take: 20,
+          });
+
+          // Получаем пользователя
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            include: { organization: true },
+          });
+
+          if (user) {
+            // Поиск релевантных chunks
+            const chunks = await retrieveRelevantChunks(content.trim(), bot.id, 5);
+
+            // Строим системный промпт
+            const userName = user.firstName || user.email?.split("@")[0] || "друг";
+            const userOrg = user.organization?.name || "не указана";
+            const systemPrompt = `Ты AI-помощник профсоюза МООП РЗ. Твоя задача - помогать пользователям ориентироваться в системе MyUnion.
+
+### КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ:
+- Имя: ${userName}
+- Организация: ${userOrg}
+- Email: ${user.email || "не указан"}
+
+### ТВОЯ РОЛЬ:
+Ты помощник-консультант, который:
+- Отвечает на вопросы о системе MyUnion
+- Подсказывает, где найти нужную информацию
+- Объясняет, как использовать функции платформы
+- Помогает с навигацией по сайту
+- Отвечает на вопросы о профсоюзе, скидках, документах
+
+### БАЗА ЗНАНИЙ:
+${chunks.length > 0 ? chunks.map((chunk, i) => `\n[Документ ${i + 1}]\n${chunk.content}`).join("\n\n") : "База знаний пуста"}
+
+Отвечай кратко и по делу. Будь дружелюбным и тёплым.`;
+
+            // Формируем историю сообщений
+            const conversationHistory = chatHistory.map((msg) => ({
+              role: msg.senderId === botUser.id ? "assistant" : "user",
+              content: msg.content,
+            }));
+
+            const messages = [
+              { role: "system", content: systemPrompt },
+              ...conversationHistory.slice(-10),
+              { role: "user", content: content.trim() },
+            ];
+
+            // Вызываем AI (используем функцию из assistant/chat)
+            const assistantRoute = await import("@/app/api/assistant/chat/route");
+            const aiResponse = await assistantRoute.callAI(bot, messages);
+
+            // Сохраняем ответ бота
+            const botMessage = await prisma.chatMessage.create({
+              data: {
+                chatId: chat.id,
+                senderId: botUser.id,
+                content: aiResponse,
+              } as any,
+              include: {
+                sender: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    middleName: true,
+                    avatarUrl: true,
+                  },
+                },
+              },
+            });
+
+            // Сохраняем переписку в базу знаний для обучения
+            saveChatConversationToKnowledgeBase(
+              bot.id,
+              content.trim(),
+              aiResponse,
+              userId,
+              chat.id,
+              botMessage.id
+            ).catch((error) => {
+              console.error("[chat] Error saving conversation to knowledge base:", error);
+            });
+
+            // Обновляем последнее сообщение в чате
+            await prisma.chat.update({
+              where: { id: chatId },
+              data: {
+                lastMessage: aiResponse.substring(0, 200),
+                lastMessageAt: new Date(),
+                participant1ReadAt: new Date(),
+                participant2ReadAt: new Date(),
+              },
+            });
+
+            return NextResponse.json({ 
+              message,
+              botMessage, // Возвращаем также ответ бота
+            });
+          }
+        }
+      } catch (botError) {
+        console.error("[chat] Error getting bot response:", botError);
+        // Продолжаем выполнение, даже если бот не ответил
+      }
+    }
+
     // Обновляем последнее сообщение в чате
     await prisma.chat.update({
       where: { id: chatId },
@@ -242,7 +374,7 @@ export async function POST(
       },
     });
 
-    // Отправляем пуш-уведомление получателю
+    // Отправляем пуш-уведомление получателю (только если это не бот)
     // Отправляем всегда, но логируем статус открытости чата
     try {
       // Получаем информацию об отправителе для уведомления

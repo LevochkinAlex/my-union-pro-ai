@@ -18,6 +18,7 @@ export default function FloatingChatBot() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
+  const [chatId, setChatId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationHistoryRef = useRef<ChatMessage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -59,6 +60,13 @@ export default function FloatingChatBot() {
     loadUserAvatar();
   }, [session?.user?.id]);
 
+  // Загружаем историю чата с ботом при открытии
+  useEffect(() => {
+    if (isOpen && session?.user?.id) {
+      loadChatHistory();
+    }
+  }, [isOpen, session?.user?.id]);
+
   // Автоскролл к последнему сообщению
   useEffect(() => {
     if (isOpen && messages.length > 0) {
@@ -67,6 +75,41 @@ export default function FloatingChatBot() {
       }, 100);
     }
   }, [messages, isOpen]);
+
+  // Загрузка истории чата с ботом
+  const loadChatHistory = async () => {
+    if (!session?.user?.id) return;
+
+    try {
+      // Получаем список чатов и ищем чат с ботом
+      const chatsResponse = await fetch("/api/chat");
+      if (chatsResponse.ok) {
+        const chatsData = await chatsResponse.json();
+        const botChat = chatsData.chats?.find((chat: any) => 
+          chat.otherUser?.email === "ai-assistant@myunion.pro" ||
+          (chat.otherUser?.firstName === "AI" && chat.otherUser?.lastName === "Помощник")
+        );
+
+        if (botChat) {
+          setChatId(botChat.id);
+          // Загружаем сообщения из чата
+          const messagesResponse = await fetch(`/api/chat/${botChat.id}`);
+          if (messagesResponse.ok) {
+            const messagesData = await messagesResponse.json();
+            const chatMessages = (messagesData.messages || []).map((msg: any) => ({
+              role: msg.senderId === session.user.id ? "user" : "assistant",
+              content: msg.content,
+              timestamp: new Date(msg.createdAt).getTime(),
+            }));
+            setMessages(chatMessages);
+            conversationHistoryRef.current = chatMessages;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[FloatingChatBot] Error loading chat history:", error);
+    }
+  };
 
   // Отправка сообщения
   const handleSubmit = async (e: React.FormEvent) => {
@@ -101,7 +144,6 @@ export default function FloatingChatBot() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userMessage,
-          conversationHistory: conversationHistoryRef.current.slice(-10), // Последние 10 сообщений
         }),
       });
 
@@ -110,6 +152,11 @@ export default function FloatingChatBot() {
       }
 
       const data = await response.json();
+
+      // Сохраняем chatId если его еще нет
+      if (data.chatId && !chatId) {
+        setChatId(data.chatId);
+      }
 
       // Добавляем ответ AI
       const aiMsg: ChatMessage = {
@@ -120,6 +167,13 @@ export default function FloatingChatBot() {
 
       setMessages((prev) => [...prev, aiMsg]);
       conversationHistoryRef.current.push(aiMsg);
+
+      // Если есть chatId, обновляем историю из чата
+      if (data.chatId) {
+        setTimeout(() => {
+          loadChatHistory();
+        }, 500);
+      }
     } catch (error) {
       console.error("[FloatingChatBot] Error sending message:", error);
       const errorMsg: ChatMessage = {
@@ -182,6 +236,18 @@ export default function FloatingChatBot() {
                 <h3 className="text-sm font-semibold text-white">Помощник</h3>
                 <p className="text-xs text-blue-100">AI Ассистент</p>
               </div>
+              {chatId && (
+                <a
+                  href={`/dashboard/chat?botChatId=${chatId}`}
+                  className="ml-2 text-xs text-blue-100 hover:text-white underline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.location.href = `/dashboard/chat?botChatId=${chatId}`;
+                  }}
+                >
+                  Открыть в чате
+                </a>
+              )}
             </div>
             <button
               onClick={handleClose}
