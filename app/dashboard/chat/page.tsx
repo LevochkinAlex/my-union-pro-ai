@@ -69,6 +69,7 @@ function ChatPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
+  const { showToast } = useToast();
   const currentUserId = session?.user?.id || null;
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
