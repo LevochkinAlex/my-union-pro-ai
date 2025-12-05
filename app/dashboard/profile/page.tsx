@@ -163,6 +163,8 @@ export default function ProfilePage() {
   const [children, setChildren] = useState<Child[]>([]);
   const [awards, setAwards] = useState<Award[]>([]);
   const [training, setTraining] = useState<Training[]>([]);
+  const [professionsData, setProfessionsData] = useState<Profession[]>([]);
+  const [educationsData, setEducationsData] = useState<Education[]>([]);
   const [childErrors, setChildErrors] = useState<Record<number, string>>({});
   
   // Данные о членстве
@@ -295,6 +297,46 @@ export default function ProfilePage() {
       [field]: value,
     };
     setTraining(updatedTraining);
+  };
+
+  // Добавить профессию
+  const addProfession = () => {
+    setProfessionsData([...professionsData, { name: "", experience: "" }]);
+  };
+
+  // Удалить профессию
+  const removeProfession = (index: number) => {
+    setProfessionsData(professionsData.filter((_, i) => i !== index));
+  };
+
+  // Обновить профессию
+  const updateProfession = (index: number, field: keyof Profession, value: string) => {
+    const updatedProfessions = [...professionsData];
+    updatedProfessions[index] = {
+      ...updatedProfessions[index],
+      [field]: value,
+    };
+    setProfessionsData(updatedProfessions);
+  };
+
+  // Добавить образование
+  const addEducation = () => {
+    setEducationsData([...educationsData, { level: "", institution: "", year: "", specialty: "" }]);
+  };
+
+  // Удалить образование
+  const removeEducation = (index: number) => {
+    setEducationsData(educationsData.filter((_, i) => i !== index));
+  };
+
+  // Обновить образование
+  const updateEducation = (index: number, field: keyof Education, value: string) => {
+    const updatedEducations = [...educationsData];
+    updatedEducations[index] = {
+      ...updatedEducations[index],
+      [field]: value,
+    };
+    setEducationsData(updatedEducations);
   };
 
   const [savingAdditionalInfo, setSavingAdditionalInfo] = useState(false);
@@ -454,6 +496,36 @@ export default function ProfilePage() {
           } catch (error) {
             console.error("Failed to parse training data:", error);
           }
+        }
+
+        // Парсим профессии из JSON (новое поле professions)
+        if (data.professions) {
+          try {
+            const parsedProfessions = JSON.parse(data.professions);
+            if (Array.isArray(parsedProfessions)) {
+              setProfessionsData(parsedProfessions);
+            }
+          } catch (error) {
+            console.error("Failed to parse professions data:", error);
+          }
+        } else if (data.profession) {
+          // Миграция со старого поля profession на новое professions
+          setProfessionsData([{ name: data.profession, experience: "" }]);
+        }
+
+        // Парсим образования из JSON (новое поле educations)
+        if (data.educations) {
+          try {
+            const parsedEducations = JSON.parse(data.educations);
+            if (Array.isArray(parsedEducations)) {
+              setEducationsData(parsedEducations);
+            }
+          } catch (error) {
+            console.error("Failed to parse educations data:", error);
+          }
+        } else if (data.education) {
+          // Миграция со старого поля education на новое educations
+          setEducationsData([{ level: data.education, institution: "", year: "", specialty: "" }]);
         }
       } catch (error) {
         console.error(error);
@@ -790,12 +862,20 @@ export default function ProfilePage() {
       // Преобразуем обучение в JSON формат
       const trainingJSON = training.length > 0 ? JSON.stringify(training) : "";
       
+      // Преобразуем профессии в JSON формат
+      const professionsJSON = professionsData.length > 0 ? JSON.stringify(professionsData) : "";
+      
+      // Преобразуем образования в JSON формат
+      const educationsJSON = educationsData.length > 0 ? JSON.stringify(educationsData) : "";
+      
       const dataToSend = {
         ...additionalInfo,
         maritalStatus: enumMaritalStatus,
         childrenBirthDates: childrenJSON,
         awards: awardsJSON,
         training: trainingJSON,
+        professions: professionsJSON,
+        educations: educationsJSON,
         hasChildren: children.length > 0 ? true : additionalInfo.hasChildren,
       };
       
@@ -1154,43 +1234,190 @@ export default function ProfilePage() {
           {/* Секция: Образование и профессиональные навыки */}
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-900/50">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">Образование и профессиональные навыки</h4>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Профессия</label>
-                <Autocomplete
-                  name="profession"
-                  value={additionalInfo.profession}
-                  onChange={(value) => {
-                    setAdditionalInfo({ ...additionalInfo, profession: value });
-                  }}
-                  options={professions}
-                  placeholder="Начните вводить профессию..."
-                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                />
+            
+            {/* Профессии */}
+            <div className="mb-6">
+              <div className="mb-3 flex items-center justify-between">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                  Профессии
+                </label>
+                <button
+                  type="button"
+                  onClick={addProfession}
+                  className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Добавить профессию
+                </button>
               </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Образование</label>
-                <div className="relative">
-                  <select
-                    name="education"
-                    value={additionalInfo.education}
-                    onChange={handleAdditionalInfoChange}
-                    className="block w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2.5 pr-12 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                  >
-                    <option value="">Выберите уровень образования</option>
-                    {EDUCATION_LEVELS.map((level) => (
-                      <option key={level} value={level}>
-                        {level}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 dark:text-gray-400">
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </span>
+              
+              {professionsData.length === 0 ? (
+                <div className="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Нажмите "Добавить профессию" чтобы указать вашу профессию и опыт
+                  </p>
                 </div>
+              ) : (
+                <div className="space-y-3">
+                  {professionsData.map((prof, index) => (
+                    <div
+                      key={index}
+                      className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 sm:flex-row sm:items-end"
+                    >
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                          Название профессии
+                        </label>
+                        <Autocomplete
+                          name={`profession-${index}`}
+                          value={prof.name}
+                          onChange={(value) => updateProfession(index, "name", value)}
+                          options={professions}
+                          placeholder="Например: Медсестра, Врач..."
+                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        />
+                      </div>
+                      
+                      <div className="w-full sm:w-40">
+                        <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                          Опыт работы
+                        </label>
+                        <input
+                          type="text"
+                          value={prof.experience}
+                          onChange={(e) => updateProfession(index, "experience", e.target.value)}
+                          placeholder="5 лет"
+                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        />
+                      </div>
+                      
+                      <div className="flex items-center">
+                        <button
+                          type="button"
+                          onClick={() => removeProfession(index)}
+                          className="inline-flex items-center justify-center rounded-lg bg-red-600 p-2 text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 h-[38px] w-[38px]"
+                          title="Удалить"
+                        >
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Образование */}
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                  Образование
+                </label>
+                <button
+                  type="button"
+                  onClick={addEducation}
+                  className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Добавить образование
+                </button>
               </div>
+              
+              {educationsData.length === 0 ? (
+                <div className="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Нажмите "Добавить образование" чтобы указать ваше образование
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {educationsData.map((edu, index) => (
+                    <div
+                      key={index}
+                      className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
+                    >
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                            Уровень образования
+                          </label>
+                          <select
+                            value={edu.level}
+                            onChange={(e) => updateEducation(index, "level", e.target.value)}
+                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          >
+                            <option value="">Выберите уровень</option>
+                            {EDUCATION_LEVELS.map((level) => (
+                              <option key={level} value={level}>
+                                {level}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                            Год окончания
+                          </label>
+                          <input
+                            type="text"
+                            value={edu.year}
+                            onChange={(e) => updateEducation(index, "year", e.target.value)}
+                            placeholder="YYYY"
+                            maxLength={4}
+                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                            Учебное заведение
+                          </label>
+                          <input
+                            type="text"
+                            value={edu.institution}
+                            onChange={(e) => updateEducation(index, "institution", e.target.value)}
+                            placeholder="Название университета/колледжа..."
+                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                            Специальность
+                          </label>
+                          <input
+                            type="text"
+                            value={edu.specialty}
+                            onChange={(e) => updateEducation(index, "specialty", e.target.value)}
+                            placeholder="Например: Медицина, Информатика..."
+                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => removeEducation(index)}
+                          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          Удалить
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

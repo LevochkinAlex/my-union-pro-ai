@@ -57,6 +57,10 @@ export async function GET() {
         spouseInfo: true,
         awards: true,
         training: true,
+        professions: true,
+        educations: true,
+        profession: true,
+        education: true,
         additionalInfo: true,
       },
     });
@@ -138,6 +142,8 @@ export async function PUT(request: NextRequest) {
     const spouseInfo = normalizeString(body.spouseInfo);
     const awards = normalizeString(body.awards);
     const training = normalizeString(body.training);
+    const professions = normalizeString(body.professions);
+    const educations = normalizeString(body.educations);
     const additionalInfo = normalizeString(body.additionalInfo);
 
     const updatedUser = await prisma.user.update({
@@ -153,6 +159,8 @@ export async function PUT(request: NextRequest) {
         spouseInfo,
         awards,
         training,
+        professions,
+        educations,
         additionalInfo,
       },
       select: {
@@ -166,6 +174,8 @@ export async function PUT(request: NextRequest) {
         spouseInfo: true,
         awards: true,
         training: true,
+        professions: true,
+        educations: true,
         additionalInfo: true,
       },
     });
