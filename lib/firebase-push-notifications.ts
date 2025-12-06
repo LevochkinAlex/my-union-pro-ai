@@ -61,7 +61,20 @@ export async function requestPushPermission(): Promise<boolean> {
     if (permission === "granted") {
       // Sync subscription after permission granted
       setTimeout(() => {
-        syncPushSubscription();
+        syncPushSubscription().catch((error: any) => {
+          // Suppress known non-critical errors from browser extensions
+          const errorMessage = error?.message || String(error);
+          if (
+            typeof errorMessage === "string" &&
+            (errorMessage.includes("message channel closed") ||
+              errorMessage.includes("listener indicated an asynchronous response") ||
+              errorMessage.includes("Extension context invalidated"))
+          ) {
+            // Suppress these errors - they're from browser extensions
+            return;
+          }
+          console.warn("[Firebase] Sync error after permission (non-critical):", error);
+        });
       }, 1000);
       return true;
     }
@@ -208,8 +221,22 @@ export async function syncPushSubscription(): Promise<void> {
 
     // Save subscription to backend
     console.log("[Firebase] Saving token to backend...");
-    await saveSubscription(token);
-  } catch (error) {
+    await saveSubscription(token).catch((err) => {
+      // Silently handle subscription save errors - not critical
+      console.warn("[Firebase] Subscription save failed (non-critical):", err);
+    });
+  } catch (error: any) {
+    // Suppress known non-critical errors from browser extensions
+    const errorMessage = error?.message || String(error);
+    if (
+      typeof errorMessage === "string" &&
+      (errorMessage.includes("message channel closed") ||
+        errorMessage.includes("listener indicated an asynchronous response") ||
+        errorMessage.includes("Extension context invalidated"))
+    ) {
+      // Suppress these errors - they're from browser extensions
+      return;
+    }
     console.error("[Firebase] Sync error:", error);
   }
 }
@@ -273,12 +300,13 @@ export async function setupForegroundMessageHandler() {
     return;
   }
 
-  const messaging = await getMessagingInstance();
-  if (!messaging) {
-    return;
-  }
+  try {
+    const messaging = await getMessagingInstance();
+    if (!messaging) {
+      return;
+    }
 
-  onMessage(messaging, async (payload) => {
+    onMessage(messaging, async (payload) => {
     if (Notification.permission !== "granted") {
       return;
     }
@@ -340,11 +368,36 @@ export async function setupForegroundMessageHandler() {
         }, 10000);
       } catch (notifError) {
         console.error("[Firebase] Notification error:", notifError);
-        throw notifError;
+        // Don't throw - just log the error
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Suppress known non-critical errors from browser extensions
+      const errorMessage = error?.message || String(error);
+      if (
+        typeof errorMessage === "string" &&
+        (errorMessage.includes("message channel closed") ||
+          errorMessage.includes("listener indicated an asynchronous response") ||
+          errorMessage.includes("Extension context invalidated"))
+      ) {
+        // Suppress these errors - they're from browser extensions
+        return;
+      }
       console.error("[Firebase] Error showing notification:", error);
     }
-  });
+    });
+  } catch (error: any) {
+    // Suppress known non-critical errors from browser extensions
+    const errorMessage = error?.message || String(error);
+    if (
+      typeof errorMessage === "string" &&
+      (errorMessage.includes("message channel closed") ||
+        errorMessage.includes("listener indicated an asynchronous response") ||
+        errorMessage.includes("Extension context invalidated"))
+    ) {
+      // Suppress these errors - they're from browser extensions
+      return;
+    }
+    console.error("[Firebase] Error setting up message handler:", error);
+  }
 }
 

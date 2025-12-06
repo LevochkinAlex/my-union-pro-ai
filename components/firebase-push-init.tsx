@@ -19,7 +19,20 @@ export default function FirebasePushInit() {
     console.log("[Firebase] Session ready, initializing FCM...");
 
     // Setup foreground message handler (async)
-    setupForegroundMessageHandler().catch(console.error);
+    setupForegroundMessageHandler().catch((error: any) => {
+      // Suppress known non-critical errors from browser extensions
+      const errorMessage = error?.message || String(error);
+      if (
+        typeof errorMessage === "string" &&
+        (errorMessage.includes("message channel closed") ||
+          errorMessage.includes("listener indicated an asynchronous response") ||
+          errorMessage.includes("Extension context invalidated"))
+      ) {
+        // Suppress these errors - they're from browser extensions
+        return;
+      }
+      console.error("[Firebase] Error setting up message handler:", error);
+    });
 
     // Check notification permission
     const checkPermission = async () => {
@@ -31,7 +44,20 @@ export default function FirebasePushInit() {
           console.log("[Firebase] ✅ Notifications are allowed");
           // Sync subscription after a delay to ensure Firebase is initialized
           setTimeout(() => {
-            syncPushSubscription();
+            syncPushSubscription().catch((error: any) => {
+              // Suppress known non-critical errors from browser extensions
+              const errorMessage = error?.message || String(error);
+              if (
+                typeof errorMessage === "string" &&
+                (errorMessage.includes("message channel closed") ||
+                  errorMessage.includes("listener indicated an asynchronous response") ||
+                  errorMessage.includes("Extension context invalidated"))
+              ) {
+                // Suppress these errors - they're from browser extensions
+                return;
+              }
+              console.warn("[Firebase] Sync error (non-critical):", error);
+            });
           }, 2000);
         } else if (permission === "default") {
           console.log("[Firebase] ⚠️ Notification permission not requested yet");
@@ -49,7 +75,20 @@ export default function FirebasePushInit() {
     // Periodic sync every 60 seconds
     const intervalId = setInterval(() => {
       console.log("[Firebase] Periodic sync...");
-      syncPushSubscription();
+      syncPushSubscription().catch((error: any) => {
+        // Suppress known non-critical errors from browser extensions
+        const errorMessage = error?.message || String(error);
+        if (
+          typeof errorMessage === "string" &&
+          (errorMessage.includes("message channel closed") ||
+            errorMessage.includes("listener indicated an asynchronous response") ||
+            errorMessage.includes("Extension context invalidated"))
+        ) {
+          // Suppress these errors - they're from browser extensions
+          return;
+        }
+        console.warn("[Firebase] Periodic sync error (non-critical):", error);
+      });
     }, 60000);
 
     return () => clearInterval(intervalId);
