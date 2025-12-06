@@ -18,7 +18,7 @@
 
 3. **Переменные окружения** (`.env.local`)
    ```bash
-   BB_LOGIN="p-crusader@yandex.ru"
+   BB_LOGIN="YOUR_BESTBENEFITS_EMAIL"
    BB_PASSWORD="123"
    USE_REAL_BB_API="true"
    BEST_BENEFITS_API_URL="https://bestbenefits.ru/api/products"
@@ -54,7 +54,7 @@ POST https://bestbenefits.ru/api/auth
 Content-Type: application/json
 
 {
-  "email": "p-crusader@yandex.ru",
+  "email": "YOUR_BESTBENEFITS_EMAIL",
   "password": "123"
 }
 ```

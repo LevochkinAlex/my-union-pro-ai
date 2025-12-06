@@ -25,15 +25,15 @@
 1. В личном кабинете: **Settings → API**
 2. Или прямая ссылка: https://login.sendpulse.com/settings/#api
 3. Скопируйте:
-   - **ID** (client_id): `92d73a0d4d7eac351eb5c90b418cd3d8`
-   - **Secret** (client_secret): `5e28be602856d3d1e390e56bdce95ca7`
+   - **ID** (client_id): `YOUR_SENDPULSE_USER_ID`
+   - **Secret** (client_secret): `YOUR_SENDPULSE_SECRET`
 
 ### 1.3. Добавьте в `.env.local`:
 
 ```env
 # SendPulse для WhatsApp и SMS
-SENDPULSE_USER_ID=92d73a0d4d7eac351eb5c90b418cd3d8
-SENDPULSE_SECRET=5e28be602856d3d1e390e56bdce95ca7
+SENDPULSE_USER_ID=YOUR_SENDPULSE_USER_ID
+SENDPULSE_SECRET=YOUR_SENDPULSE_SECRET
 ```
 
 ---

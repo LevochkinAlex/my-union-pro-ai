@@ -25,7 +25,7 @@ bestBenefitsCreatedAt DateTime?          // Дата создания в BB
 
 ### Учетные данные для API:
 ```env
-BB_LOGIN="p-crusader@yandex.ru"     # Учетка организации для API
+BB_LOGIN="YOUR_BESTBENEFITS_EMAIL"     # Учетка организации для API
 BB_PASSWORD="123"                    # Пароль организации для API
 ```
 

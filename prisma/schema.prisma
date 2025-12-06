@@ -1263,6 +1263,9 @@ model ChatMessage {
   editedAt  DateTime?
   deletedAt DateTime?
 
+  // Реакции на сообщение (JSON: { "emoji": ["userId1", "userId2"], ... })
+  reactions Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

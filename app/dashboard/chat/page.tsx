@@ -7,7 +7,6 @@ import AlertDialog from "@/components/ui/AlertDialog";
 import { useToast } from "@/components/ui/Toast";
 import ImageModal from "@/components/chat/ImageModal";
 import EmojiPicker from "@/components/chat/EmojiPicker";
-import heic2any from "heic2any";
 
 interface Chat {
   id: string;
@@ -434,6 +433,8 @@ function ChatPageContent() {
     if (isHeic) {
       setIsConvertingHeic(true);
       try {
+        // Динамический импорт heic2any только на клиенте
+        const heic2any = (await import("heic2any")).default;
         // Конвертируем HEIC в JPEG для превью
         const convertedBlob = await heic2any({
           blob: file,

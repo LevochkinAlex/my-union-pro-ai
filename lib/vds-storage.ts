@@ -40,7 +40,10 @@ export function initVDSStorage(config: VDSStorageConfig) {
  * Получает конфигурацию из переменных окружения
  */
 export function getVDSConfigFromEnv(): VDSStorageConfig | null {
-  const host = process.env.VDS_STORAGE_HOST || process.env.VDS_HOST || "194.87.49.210";
+  const host = process.env.VDS_STORAGE_HOST || process.env.VDS_HOST;
+  if (!host) {
+    throw new Error("VDS_STORAGE_HOST or VDS_HOST environment variable is required");
+  }
   const user = process.env.VDS_STORAGE_USER || process.env.VDS_USER || "root";
   const password = process.env.VDS_STORAGE_PASSWORD || process.env.VDS_PASSWORD;
   const privateKey = process.env.VDS_STORAGE_PRIVATE_KEY_PATH || process.env.VDS_PRIVATE_KEY;

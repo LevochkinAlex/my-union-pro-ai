@@ -73,7 +73,7 @@ npm run dev
 ### 4. Запустить тесты API напрямую
 ```bash
 # Тест напрямую через BestBenefits API
-BB_LOGIN="p-crusader@yandex.ru" BB_PASSWORD="123" node scripts/test-search.mjs
+BB_LOGIN="YOUR_BESTBENEFITS_EMAIL" BB_PASSWORD="YOUR_BESTBENEFITS_PASSWORD" node scripts/test-search.mjs
 
 # Тест через наш API (нужна авторизация)
 node scripts/test-frontend-search.mjs

@@ -5,7 +5,7 @@
 **ВСЕ пользователи** использовали **ОДИН аккаунт BestBenefits**:
 
 ```env
-BB_LOGIN="p-crusader@yandex.ru"  # ← ОДИН аккаунт для ВСЕХ!
+BB_LOGIN="YOUR_BESTBENEFITS_EMAIL"  # ← ОДИН аккаунт для ВСЕХ!
 BB_PASSWORD="123"
 ```
 
@@ -140,7 +140,7 @@ pnpm dotenv -e .env.local -- tsx scripts/cleanup-unactivated-discounts.ts ceo@ya
 
 ### ДО:
 ```
-p-crusader@yandex.ru (организация)
+YOUR_BESTBENEFITS_EMAIL (организация)
   ├── скидка 3764
   ├── скидка 1400
   └── скидка 5071
@@ -182,8 +182,8 @@ ceo@yappix.ru
 BB_PROFSOYUZY_TOKEN="..."
 
 # Токен организации для получения списка скидок
-BB_LOGIN="p-crusader@yandex.ru"
-BB_PASSWORD="123"
+BB_LOGIN="YOUR_BESTBENEFITS_EMAIL"
+BB_PASSWORD="YOUR_BESTBENEFITS_PASSWORD"
 
 # Ключ шифрования для паролей пользователей
 BB_PASSWORD_ENCRYPTION_KEY="32-char-hex-key"

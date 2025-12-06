@@ -2,8 +2,10 @@
 
 ## 📋 Данные подключения
 
-- **Host:** `root@194.87.49.210`
-- **Password:** `sAt,8?Bh+Ny_BW`
+⚠️ **ВАЖНО:** Эти данные должны храниться в переменных окружения или `.deploy/vds-config.sh` (не коммитится в git).
+
+- **Host:** `root@YOUR_SERVER_IP` (настройте в `.deploy/vds-config.sh`)
+- **Password:** Используйте SSH ключи или переменную окружения `VDS_PASSWORD`
 - **Путь на сервере:** `/opt/my-union-pro`
 - **PM2 процесс:** `my-union-pro`
 - **Домен:** `myunion.pro`
@@ -40,7 +42,8 @@ SSH данные сохранены в `.deploy/vds-config.sh` (не комми�
 ## 🚀 Быстрый деплой
 
 ```bash
-export VDS_PASSWORD='sAt,8?Bh+Ny_BW'
+# Используйте переменную окружения или SSH ключи
+export VDS_PASSWORD='YOUR_SSH_PASSWORD'
 ./scripts/deploy-to-vds.sh
 ```
 
@@ -60,7 +63,7 @@ export VDS_PASSWORD='sAt,8?Bh+Ny_BW'
 
 ```bash
 # Подключитесь к серверу
-ssh root@194.87.49.210
+ssh root@YOUR_SERVER_IP
 
 # Добавьте или обновите client_max_body_size в nginx конфигурации
 sed -i '/server {/a\    client_max_body_size 50M;' /etc/nginx/sites-enabled/myunion.pro
@@ -74,47 +77,47 @@ systemctl reload nginx
 
 Или одной командой:
 ```bash
-ssh root@194.87.49.210 'sed -i "/server {/a\    client_max_body_size 50M;" /etc/nginx/sites-enabled/myunion.pro && nginx -t && systemctl reload nginx'
+ssh root@YOUR_SERVER_IP 'sed -i "/server {/a\    client_max_body_size 50M;" /etc/nginx/sites-enabled/myunion.pro && nginx -t && systemctl reload nginx'
 ```
 
 ## 📝 Ручной деплой (если нужен другой путь или ветка)
 
 ```bash
-./scripts/deploy-to-vds.sh root@194.87.49.210 /path/to/project main
+./scripts/deploy-to-vds.sh root@YOUR_SERVER_IP /path/to/project main
 ```
 
 ## 🔍 Проверка после деплоя
 
 ### Проверить логи PM2:
 ```bash
-ssh root@194.87.49.210 'pm2 logs my-union-pro'
+ssh root@YOUR_SERVER_IP 'pm2 logs my-union-pro'
 ```
 
 ### Проверить статус PM2:
 ```bash
-ssh root@194.87.49.210 'pm2 status'
+ssh root@YOUR_SERVER_IP 'pm2 status'
 ```
 
 ### Проверить информацию о процессе:
 ```bash
-ssh root@194.87.49.210 'pm2 info my-union-pro'
+ssh root@YOUR_SERVER_IP 'pm2 info my-union-pro'
 ```
 
 ### Проверить systemd:
 ```bash
-ssh root@194.87.49.210 'sudo systemctl status my-union-pro'
+ssh root@YOUR_SERVER_IP 'sudo systemctl status my-union-pro'
 ```
 
 ### Проверить логи systemd:
 ```bash
-ssh root@194.87.49.210 'sudo journalctl -u my-union-pro -f'
+ssh root@YOUR_SERVER_IP 'sudo journalctl -u my-union-pro -f'
 ```
 
 ## 🛠️ Первоначальная настройка на сервере (если еще не сделано)
 
 ### 1. Подключитесь к серверу:
 ```bash
-ssh root@194.87.49.210
+ssh root@YOUR_SERVER_IP
 ```
 
 ### 2. Установите необходимые инструменты:
@@ -176,7 +179,7 @@ pm2 startup  # Следуйте инструкциям для автозапус
 
 ```bash
 # На локальной машине
-ssh-copy-id root@194.87.49.210
+ssh-copy-id root@YOUR_SERVER_IP
 
 # Затем удалите VDS_PASSWORD из .deploy/vds-config.sh
 ```

@@ -41,9 +41,9 @@
 
 ## Шаг 2: Добавление переменных окружения
 
-✅ **УЖЕ ДОБАВЛЕНО!** Переменные окружения уже добавлены в `.env.local`:
-- `YANDEX_CLIENT_ID=2be097f16ec9405fa3f5bfa386082b4f`
-- `YANDEX_CLIENT_SECRET=f375578c3daa4c148698defc794fe9d4`
+Добавьте переменные окружения в `.env.local`:
+- `YANDEX_CLIENT_ID=YOUR_YANDEX_CLIENT_ID`
+- `YANDEX_CLIENT_SECRET=YOUR_YANDEX_CLIENT_SECRET`
 
 **ВАЖНО:** Добавьте эти же переменные на сервере в `.env` файл!
 
