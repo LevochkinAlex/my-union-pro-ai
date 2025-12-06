@@ -34,6 +34,7 @@ interface Message {
   replyTo?: Message | null;
   forwardedFromId?: string | null;
   forwardedFrom?: Message | null;
+  reactions?: Record<string, string[]> | null;
   sender: {
     id: string;
     firstName: string | null;
@@ -346,6 +347,83 @@ function ChatPageContent() {
           // При первой загрузке чата всегда скроллим вниз
           shouldScrollToBottom.current = true;
         }
+
+        // Загружаем реакции для всех сообщений
+        const reactionsMap: Record<string, { emoji: string; count: number; isLiked: boolean; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }> = {};
+        const currentUserId = session?.user?.id || "";
+        
+        // Собираем все уникальные ID пользователей из реакций и из отправителей сообщений
+        const allUserIds = new Set<string>();
+        filteredMessages.forEach((msg: Message) => {
+          // Добавляем отправителя сообщения
+          if (msg.senderId) {
+            allUserIds.add(msg.senderId);
+          }
+          // Добавляем пользователей из реакций
+          if (msg.reactions && typeof msg.reactions === 'object') {
+            Object.values(msg.reactions).forEach((userIds: any) => {
+              if (Array.isArray(userIds)) {
+                userIds.forEach((id: string) => allUserIds.add(id));
+              }
+            });
+          }
+        });
+        
+        // Создаем карту пользователей из отправителей сообщений (быстрый способ)
+        const usersMap: Record<string, { id: string; firstName: string | null; lastName: string | null; middleName: string | null; avatarUrl: string | null }> = {};
+        filteredMessages.forEach((msg: Message) => {
+          if (msg.sender && !usersMap[msg.sender.id]) {
+            usersMap[msg.sender.id] = {
+              id: msg.sender.id,
+              firstName: msg.sender.firstName,
+              lastName: msg.sender.lastName,
+              middleName: msg.sender.middleName,
+              avatarUrl: msg.sender.avatarUrl,
+            };
+          }
+        });
+        
+        // Для пользователей, которых нет в отправителях, используем информацию из чата
+        const missingUserIds = Array.from(allUserIds).filter(id => !usersMap[id]);
+        if (missingUserIds.length > 0 && selectedChat) {
+          // Пробуем получить информацию из участников чата
+          const otherUser = selectedChat.otherUser;
+          if (otherUser && missingUserIds.includes(otherUser.id)) {
+            usersMap[otherUser.id] = {
+              id: otherUser.id,
+              firstName: otherUser.firstName,
+              lastName: otherUser.lastName,
+              middleName: otherUser.middleName,
+              avatarUrl: otherUser.avatarUrl,
+            };
+          }
+        }
+        
+        // Формируем карту реакций
+        filteredMessages.forEach((msg: Message) => {
+          if (msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
+            // Берем первую реакцию (можно расширить для поддержки нескольких)
+            const emoji = Object.keys(msg.reactions)[0];
+            const userIds = (msg.reactions[emoji] as string[]) || [];
+            const isLiked = userIds.includes(currentUserId);
+            
+            reactionsMap[msg.id] = {
+              emoji,
+              count: userIds.length,
+              isLiked,
+              users: userIds.map(id => {
+                const user = usersMap[id];
+                return {
+                  id,
+                  avatarUrl: user?.avatarUrl || null,
+                  name: user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Пользователь" : "Пользователь",
+                };
+              }),
+            };
+          }
+        });
+        
+        setMessageLikes(reactionsMap);
       }
     } catch (error) {
       console.error("Error loading messages:", error);
@@ -434,7 +512,10 @@ function ChatPageContent() {
       setIsConvertingHeic(true);
       try {
         // Динамический импорт heic2any только на клиенте
-        const heic2any = (await import("heic2any")).default;
+        // heic2any - CommonJS модуль, поэтому обращаемся напрямую или через .default
+        const heic2anyModule = await import("heic2any");
+        // Для CommonJS модулей default может быть функцией или модуль сам по себе
+        const heic2any = (heic2anyModule.default || heic2anyModule) as (params: { blob: Blob; toType: string; quality?: number }) => Promise<Blob | Blob[]>;
         // Конвертируем HEIC в JPEG для превью
         const convertedBlob = await heic2any({
           blob: file,
@@ -1317,53 +1398,57 @@ function ChatPageContent() {
                                         setEmojiPickerMessageId(null);
                                       }
                                     }}
-                                    onEmojiSelect={(emoji) => {
-                                      // TODO: Отправить реакцию на сервер
-                                      const currentUserId = session?.user?.id || "";
-                                      const currentUserName = session?.user?.name || "Вы";
-                                      const currentUserAvatar = session?.user?.avatarUrl || null;
+                                    onEmojiSelect={async (emoji) => {
+                                      if (!selectedChat) return;
                                       
-                                      setMessageLikes(prev => {
-                                        const existing = prev[message.id];
-                                        const isAlreadyLiked = existing?.isLiked;
-                                        
-                                        if (isAlreadyLiked && existing?.emoji === emoji) {
-                                          // Удаляем реакцию, если тот же эмодзи
-                                          const newLikes = { ...prev };
-                                          if (existing.count > 1) {
-                                            newLikes[message.id] = {
-                                              ...existing,
-                                              count: existing.count - 1,
-                                              isLiked: false,
-                                              users: existing.users?.filter(u => u.id !== currentUserId),
+                                      try {
+                                        // Отправляем реакцию на сервер
+                                        const response = await fetch(`/api/chat/${selectedChat.id}/messages/${message.id}/reactions`, {
+                                          method: "POST",
+                                          headers: {
+                                            "Content-Type": "application/json",
+                                          },
+                                          body: JSON.stringify({ emoji }),
+                                        });
+
+                                        if (response.ok) {
+                                          const data = await response.json();
+                                          const reactions = data.reactions || {};
+                                          
+                                          // Обновляем локальное состояние на основе ответа сервера
+                                          const currentUserId = session?.user?.id || "";
+                                          const updatedLikes: typeof messageLikes = {};
+                                          
+                                          Object.entries(reactions).forEach(([emojiKey, reactionData]: [string, any]) => {
+                                            const userIds = reactionData.userIds || [];
+                                            const users = reactionData.users || [];
+                                            const isLiked = userIds.includes(currentUserId);
+                                            
+                                            updatedLikes[message.id] = {
+                                              emoji: emojiKey,
+                                              count: userIds.length,
+                                              isLiked,
+                                              users: users.map((u: any) => ({
+                                                id: u.id,
+                                                avatarUrl: u.avatarUrl,
+                                                name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Пользователь",
+                                              })),
                                             };
-                                          } else {
-                                            delete newLikes[message.id];
-                                          }
-                                          return newLikes;
-                                        } else {
-                                          // Добавляем новую реакцию
-                                          return {
+                                          });
+                                          
+                                          setMessageLikes(prev => ({
                                             ...prev,
-                                            [message.id]: {
-                                              emoji,
-                                              count: (existing?.count || 0) + (isAlreadyLiked ? 0 : 1),
-                                              isLiked: true,
-                                              users: existing?.users 
-                                                ? [...existing.users.filter(u => u.id !== currentUserId), {
-                                                    id: currentUserId,
-                                                    avatarUrl: currentUserAvatar,
-                                                    name: currentUserName,
-                                                  }]
-                                                : [{
-                                                    id: currentUserId,
-                                                    avatarUrl: currentUserAvatar,
-                                                    name: currentUserName,
-                                                  }],
-                                            },
-                                          };
+                                            ...updatedLikes,
+                                          }));
+                                        } else {
+                                          const errorData = await response.json();
+                                          showToast(errorData.error || "Ошибка при отправке реакции", "error");
                                         }
-                                      });
+                                      } catch (error) {
+                                        console.error("Error sending reaction:", error);
+                                        showToast("Ошибка при отправке реакции", "error");
+                                      }
+                                      
                                       setEmojiPickerMessageId(null);
                                       setHoveredMessageId(null);
                                     }}

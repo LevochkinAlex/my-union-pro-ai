@@ -1,8 +1,9 @@
 "use client";
 
+"use client";
+
 import { useState } from "react";
 import { useToast } from "@/components/ui/Toast";
-import heic2any from "heic2any";
 
 interface ImageInsertModalProps {
   isOpen: boolean;
@@ -48,6 +49,11 @@ export default function ImageInsertModal({
     if (isHeic) {
       setIsConverting(true);
       try {
+        // Динамический импорт heic2any только на клиенте
+        // heic2any - CommonJS модуль, поэтому обращаемся напрямую или через .default
+        const heic2anyModule = await import("heic2any");
+        // Для CommonJS модулей default может быть функцией или модуль сам по себе
+        const heic2any = (heic2anyModule.default || heic2anyModule) as (params: { blob: Blob; toType: string; quality?: number }) => Promise<Blob | Blob[]>;
         // Конвертируем HEIC в JPEG для превью
         const convertedBlob = await heic2any({
           blob: file,
