@@ -1417,31 +1417,38 @@ function ChatPageContent() {
                                           
                                           // Обновляем локальное состояние на основе ответа сервера
                                           const currentUserId = session?.user?.id || "";
-                                          const updatedLikes: typeof messageLikes = {};
                                           
-                                          Object.entries(reactions).forEach(([emojiKey, reactionData]: [string, any]) => {
-                                            const userIds = reactionData.userIds || [];
-                                            const users = reactionData.users || [];
-                                            const isLiked = userIds.includes(currentUserId);
+                                          setMessageLikes(prev => {
+                                            const newLikes = { ...prev };
                                             
-                                            updatedLikes[message.id] = {
-                                              emoji: emojiKey,
-                                              count: userIds.length,
-                                              isLiked,
-                                              users: users.map((u: any) => ({
-                                                id: u.id,
-                                                avatarUrl: u.avatarUrl,
-                                                name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Пользователь",
-                                              })),
-                                            };
+                                            // Если реакций нет, удаляем из состояния
+                                            if (Object.keys(reactions).length === 0) {
+                                              delete newLikes[message.id];
+                                            } else {
+                                              // Берем первую реакцию (можно расширить для поддержки нескольких)
+                                              const firstEmoji = Object.keys(reactions)[0];
+                                              const reactionData = reactions[firstEmoji] as any;
+                                              const userIds = reactionData?.userIds || [];
+                                              const users = reactionData?.users || [];
+                                              const isLiked = userIds.includes(currentUserId);
+                                              
+                                              newLikes[message.id] = {
+                                                emoji: firstEmoji,
+                                                count: userIds.length,
+                                                isLiked,
+                                                users: users.map((u: any) => ({
+                                                  id: u.id,
+                                                  avatarUrl: u.avatarUrl,
+                                                  name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Пользователь",
+                                                })),
+                                              };
+                                            }
+                                            
+                                            return newLikes;
                                           });
-                                          
-                                          setMessageLikes(prev => ({
-                                            ...prev,
-                                            ...updatedLikes,
-                                          }));
                                         } else {
-                                          const errorData = await response.json();
+                                          const errorData = await response.json().catch(() => ({ error: "Неизвестная ошибка" }));
+                                          console.error("Reaction API error:", errorData);
                                           showToast(errorData.error || "Ошибка при отправке реакции", "error");
                                         }
                                       } catch (error) {
