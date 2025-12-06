@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFile } from "fs/promises";
 import path from "path";
-import { existsSync } from "fs";
 import { initVDSStorageFromEnv, getFileFromVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 
 // Инициализируем VDS хранилище при загрузке модуля
@@ -48,44 +46,31 @@ export async function GET(
 
     const contentType = mimeTypes[ext] || "application/octet-stream";
 
-    // Сначала пробуем локальный файл
-    const localFilePath = path.join(process.cwd(), "public", "uploads", "posts", filename);
-    
-    if (existsSync(localFilePath)) {
-      const fileBuffer = await readFile(localFilePath);
-      return new NextResponse(fileBuffer as any, {
-        status: 200,
-        headers: {
-          "Content-Type": contentType,
-          "Cache-Control": "public, max-age=31536000, immutable",
-          "Content-Disposition": `inline; filename="${filename}"`,
-        },
-      });
+    // Загружаем файл только с VDS
+    if (!isVDSStorageConfigured()) {
+      console.error("[uploads/posts] VDS storage is not configured");
+      return NextResponse.json({ error: "Storage not configured" }, { status: 500 });
     }
 
-    // Если локального файла нет, пробуем VDS
-    if (isVDSStorageConfigured()) {
-      try {
-        const fileKey = `posts/${filename}`;
-        const fileBuffer = await getFileFromVDS(fileKey);
-        
-        if (fileBuffer && fileBuffer.length > 0) {
-          return new NextResponse(fileBuffer as any, {
-            status: 200,
-            headers: {
-              "Content-Type": contentType,
-              "Cache-Control": "public, max-age=31536000, immutable",
-              "Content-Disposition": `inline; filename="${filename}"`,
-            },
-          });
-        }
-      } catch (vdsError) {
-        console.error("[uploads/posts] VDS error:", vdsError);
-        // Продолжаем и возвращаем 404
+    try {
+      const fileKey = `posts/${filename}`;
+      const fileBuffer = await getFileFromVDS(fileKey);
+      
+      if (fileBuffer && fileBuffer.length > 0) {
+        return new NextResponse(fileBuffer as any, {
+          status: 200,
+          headers: {
+            "Content-Type": contentType,
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "Content-Disposition": `inline; filename="${filename}"`,
+          },
+        });
       }
+    } catch (vdsError) {
+      console.error("[uploads/posts] VDS error:", vdsError);
     }
 
-    // Файл не найден ни локально, ни на VDS
+    // Файл не найден на VDS
     return NextResponse.json({ error: "File not found" }, { status: 404 });
   } catch (error: any) {
     console.error("[uploads/posts] Error serving file:", error);

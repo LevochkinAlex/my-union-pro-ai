@@ -74,12 +74,7 @@ export async function POST(request: NextRequest) {
         throw new Error(`Не удалось загрузить аватар на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
       }
     } else {
-      // Локальное хранилище (только для разработки)
-      await ensureUploadDir();
-      const filePath = path.join(UPLOAD_DIR, filename);
-      await writeFile(filePath, buffer);
-      avatarUrl = `/uploads/avatars/${filename}`;
-      console.log(`[profile/avatar] Avatar saved locally (VDS not configured): ${avatarUrl}`);
+      throw new Error("VDS storage не настроен. Настройте переменные окружения VDS_STORAGE_HOST, VDS_STORAGE_PASSWORD или VDS_STORAGE_PRIVATE_KEY_PATH");
     }
     
     await prisma.user.update({

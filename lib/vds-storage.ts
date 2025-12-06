@@ -42,7 +42,12 @@ export function initVDSStorage(config: VDSStorageConfig) {
 export function getVDSConfigFromEnv(): VDSStorageConfig | null {
   const host = process.env.VDS_STORAGE_HOST || process.env.VDS_HOST;
   if (!host) {
-    throw new Error("VDS_STORAGE_HOST or VDS_HOST environment variable is required");
+    // В production выбрасываем ошибку, в development возвращаем null для более мягкой обработки
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("VDS_STORAGE_HOST or VDS_HOST environment variable is required for production");
+    }
+    console.error("[vds-storage] VDS_STORAGE_HOST or VDS_HOST environment variable is required");
+    return null;
   }
   const user = process.env.VDS_STORAGE_USER || process.env.VDS_USER || "root";
   const password = process.env.VDS_STORAGE_PASSWORD || process.env.VDS_PASSWORD;
@@ -52,15 +57,14 @@ export function getVDSConfigFromEnv(): VDSStorageConfig | null {
   const projectPath = process.env.VDS_PROJECT_PATH || "/root/my-union-pro-ai";
   const remotePath = process.env.VDS_STORAGE_REMOTE_PATH || `${projectPath}/public/uploads`;
   const publicUrl = process.env.VDS_STORAGE_PUBLIC_URL || process.env.VDS_PUBLIC_URL || "https://myunion.pro/uploads";
-  const useLocalFallback = process.env.VDS_STORAGE_USE_LOCAL_FALLBACK === "true";
-
-  if (!host) {
-    console.warn("[vds-storage] VDS storage host not configured, using local storage");
-    return null;
-  }
+  const useLocalFallback = false; // Отключаем локальный fallback - все должно быть на сервере
 
   if (!password && !privateKey) {
-    console.warn("[vds-storage] VDS storage credentials not provided, using local storage");
+    // В production выбрасываем ошибку, в development возвращаем null для более мягкой обработки
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("VDS storage credentials not provided (VDS_STORAGE_PASSWORD or VDS_STORAGE_PRIVATE_KEY_PATH required)");
+    }
+    console.error("[vds-storage] VDS storage credentials not provided (VDS_STORAGE_PASSWORD or VDS_STORAGE_PRIVATE_KEY_PATH required)");
     return null;
   }
 

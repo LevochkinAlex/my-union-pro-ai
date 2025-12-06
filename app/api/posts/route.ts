@@ -386,17 +386,11 @@ export async function POST(request: NextRequest) {
               throw new Error("VDS upload returned no URL");
             }
           } catch (vdsError) {
-            console.error(`[posts] VDS upload error, falling back to local:`, vdsError);
-            // Fallback на локальное сохранение, если VDS не работает
-            await writeFile(localFilePath, buffer);
-            finalFilePath = `/uploads/posts/${fileName}`;
-            console.log(`[posts] File saved locally (VDS fallback): ${localFilePath}`);
+            console.error(`[posts] VDS upload error:`, vdsError);
+            throw new Error(`Не удалось загрузить файл на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
           }
         } else {
-          // Если VDS не настроен, сохраняем локально (для разработки)
-          await writeFile(localFilePath, buffer);
-          finalFilePath = `/uploads/posts/${fileName}`;
-          console.log(`[posts] File saved locally (VDS not configured): ${localFilePath}`);
+          throw new Error("VDS storage не настроен. Настройте переменные окружения VDS_STORAGE_HOST, VDS_STORAGE_PASSWORD или VDS_STORAGE_PRIVATE_KEY_PATH");
         }
 
         const attachment = await prisma.postAttachment.create({
@@ -434,21 +428,18 @@ export async function POST(request: NextRequest) {
       });
 
       if (subscribers.length > 0) {
-        const { sendNotification } = await import("@/lib/notifications");
+        const { sendUserNotification } = await import("@/lib/notifications");
         const authorName = `${post.author.firstName || ""} ${post.author.middleName || ""} ${post.author.lastName || ""}`.trim() || "Пользователь";
 
         for (const subscription of subscribers) {
           const messageText = content.trim() || (attachments.length > 0 ? "Новое изображение" : "Новый пост");
-          await sendNotification({
+          await sendUserNotification({
             userId: subscription.subscriberId,
+            type: "user_post",
             title: `📝 Новый пост от ${authorName}`,
-            message: messageText.substring(0, 100),
-            link: `/dashboard/profile/${session.user.id}`,
-            data: {
-              type: "user_post",
-              postId: post.id,
-              authorId: session.user.id,
-            },
+            body: messageText.substring(0, 100),
+            url: `/dashboard/profile/${session.user.id}`,
+            senderName: authorName,
           });
         }
       }

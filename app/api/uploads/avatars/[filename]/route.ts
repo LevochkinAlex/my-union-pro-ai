@@ -1,7 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFile } from "fs/promises";
-import path from "path";
-import { existsSync } from "fs";
 import { initVDSStorageFromEnv, getFileFromVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 
 // Инициализируем VDS хранилище при загрузке модуля
@@ -21,27 +18,22 @@ export async function GET(
       return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
     }
 
-    // Сначала пробуем локальный файл
-    const localFilePath = path.join(process.cwd(), "public", "uploads", "avatars", filename);
-    
+    // Загружаем файл только с VDS
     let fileBuffer: Buffer | null = null;
     
-    if (existsSync(localFilePath)) {
-      fileBuffer = await readFile(localFilePath);
-    } else if (isVDSStorageConfigured()) {
-      // Если локального файла нет, пробуем VDS
+    if (isVDSStorageConfigured()) {
       try {
         const fileKey = `avatars/${filename}`;
         fileBuffer = await getFileFromVDS(fileKey);
       } catch (vdsError) {
         console.error("[uploads/avatars] VDS error:", vdsError);
       }
+    } else {
+      console.error("[uploads/avatars] VDS storage is not configured");
     }
     
     if (!fileBuffer) {
-      // Возвращаем 204 No Content вместо 404, чтобы браузер не показывал это как ошибку
-      // Это нормальное поведение - файл может не существовать
-      return new NextResponse(null, { status: 204 });
+      return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
     // Determine content type based on extension

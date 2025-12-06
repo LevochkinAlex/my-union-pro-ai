@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { sendUserNotification } from "@/lib/notifications";
 
 // GET - получение комментариев к посту
 export async function GET(
@@ -125,6 +126,51 @@ export async function POST(
         },
       },
     });
+
+    // Отправляем уведомление
+    try {
+      if (parentId) {
+        // Это ответ на комментарий - уведомляем автора комментария
+        const parentComment = await prisma.postComment.findUnique({
+          where: { id: parentId },
+          select: { userId: true },
+        });
+
+        if (parentComment && parentComment.userId !== session.user.id) {
+          const senderName = [comment.user.firstName, comment.user.lastName]
+            .filter(Boolean)
+            .join(" ") || "Пользователь";
+
+          await sendUserNotification({
+            userId: parentComment.userId,
+            type: "comment_reply",
+            title: "Новый ответ на комментарий",
+            body: content.trim(),
+            url: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/posts/${postId}`,
+            senderName,
+          });
+        }
+      } else {
+        // Это комментарий к посту - уведомляем автора поста
+        if (post.authorId !== session.user.id) {
+          const senderName = [comment.user.firstName, comment.user.lastName]
+            .filter(Boolean)
+            .join(" ") || "Пользователь";
+
+          await sendUserNotification({
+            userId: post.authorId,
+            type: "post_comment",
+            title: "Новый комментарий к посту",
+            body: content.trim(),
+            url: `${process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro"}/posts/${postId}`,
+            senderName,
+          });
+        }
+      }
+    } catch (notifError) {
+      // Не критично, логируем и продолжаем
+      console.error("[posts/comments] Error sending notification:", notifError);
+    }
 
     return NextResponse.json({ comment });
   } catch (error: any) {

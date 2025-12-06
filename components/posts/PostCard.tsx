@@ -25,6 +25,10 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   const [loadingComments, setLoadingComments] = useState(false);
   const [sendingComment, setSendingComment] = useState(false);
   const [isCommentAreaHovered, setIsCommentAreaHovered] = useState(false);
+  const [replyToComment, setReplyToComment] = useState<any>(null);
+  const [editingComment, setEditingComment] = useState<any>(null);
+  const [editCommentText, setEditCommentText] = useState("");
+  const [commentMenuOpen, setCommentMenuOpen] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -212,6 +216,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       const response = await fetch(`/api/posts/${post.id}/comments`);
       if (response.ok) {
         const data = await response.json();
+        console.log("Comments loaded:", data.comments);
         setComments(data.comments || []);
         setShowComments(true);
       }
@@ -231,7 +236,10 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       const response = await fetch(`/api/posts/${post.id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: commentToSend }),
+        body: JSON.stringify({ 
+          content: commentToSend,
+          parentId: replyToComment?.id || null,
+        }),
       });
 
       const data = await response.json();
@@ -239,11 +247,13 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       if (response.ok) {
         // Очищаем поле ввода, но оставляем форму открытой
         setCommentText("");
+        setReplyToComment(null);
         // Обновляем комментарии, добавляя новый в начало списка оптимистично
         const newComment = {
           id: data.comment?.id || `temp-${Date.now()}`,
           content: commentToSend,
           createdAt: new Date().toISOString(),
+          parentId: replyToComment?.id || null,
           user: {
             id: session?.user?.id,
             firstName: session?.user?.name?.split(' ')[0] || '',
@@ -251,6 +261,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
             middleName: '',
             avatarUrl: null,
           },
+          replies: [],
         };
         setComments(prev => [newComment, ...prev]);
         // Обновляем счетчик комментариев локально
@@ -266,6 +277,63 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       console.error("Error sending comment:", error);
     } finally {
       setSendingComment(false);
+    }
+  };
+
+  // Функция для редактирования комментария
+  const handleEditComment = async (commentId: string) => {
+    if (!editCommentText.trim()) return;
+
+    try {
+      const response = await fetch(`/api/posts/${post.id}/comments/${commentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editCommentText.trim() }),
+      });
+
+      if (response.ok) {
+        setEditingComment(null);
+        setEditCommentText("");
+        // Перезагружаем комментарии
+        const refreshResponse = await fetch(`/api/posts/${post.id}/comments`);
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json();
+          setComments(refreshData.comments || []);
+        }
+      } else {
+        const data = await response.json();
+        showToast(data.error || "Ошибка при редактировании комментария", "error");
+      }
+    } catch (error) {
+      console.error("Error editing comment:", error);
+      showToast("Ошибка при редактировании комментария", "error");
+    }
+  };
+
+  // Функция для удаления комментария
+  const handleDeleteComment = async (commentId: string) => {
+    if (!confirm("Удалить комментарий?")) return;
+
+    try {
+      const response = await fetch(`/api/posts/${post.id}/comments/${commentId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        // Перезагружаем комментарии
+        const refreshResponse = await fetch(`/api/posts/${post.id}/comments`);
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json();
+          setComments(refreshData.comments || []);
+        }
+        showToast("Комментарий удален", "success");
+      } else {
+        const data = await response.json();
+        showToast(data.error || "Ошибка при удалении комментария", "error");
+      }
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+      showToast("Ошибка при удалении комментария", "error");
     }
   };
 
@@ -672,56 +740,208 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
               }
             }}
           >
-            {comments.map((comment) => (
-              <div key={comment.id} className="flex gap-3">
-                {comment.user.avatarUrl ? (
-                  <img
-                    src={comment.user.avatarUrl}
-                    alt={getUserName(comment.user)}
-                    className="w-8 h-8 rounded-full"
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold">
+            {comments.filter(c => !c.parentId).map((comment) => (
+              <div key={comment.id} className="space-y-2">
+                <div className="flex gap-3">
+                  {comment.user.avatarUrl ? (
+                    <img
+                      src={getFileUrl(comment.user.avatarUrl)}
+                      alt={getUserName(comment.user)}
+                      className="w-8 h-8 rounded-full object-cover"
+                      onError={(e) => {
+                        console.log("Avatar load error for comment:", comment.user.avatarUrl);
+                        e.currentTarget.style.display = 'none';
+                        const placeholder = e.currentTarget.nextElementSibling;
+                        if (placeholder) {
+                          (placeholder as HTMLElement).style.display = 'flex';
+                        }
+                      }}
+                    />
+                  ) : null}
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold" style={{ display: comment.user.avatarUrl ? 'none' : 'flex' }}>
                     {getInitials(comment.user)}
                   </div>
-                )}
-                <div className="flex-1">
-                  <p className="font-semibold text-sm text-gray-900 dark:text-white">
-                    {getUserName(comment.user)}
-                  </p>
-                  <p className="text-sm text-gray-700 dark:text-gray-300">
-                    {comment.content}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {formatTime(comment.createdAt)}
-                  </p>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-sm text-gray-900 dark:text-white">
+                        {getUserName(comment.user)}
+                      </p>
+                      {session?.user?.id === comment.user.id && (
+                        <div className="relative">
+                          <button
+                            onClick={() => setCommentMenuOpen(commentMenuOpen === comment.id ? null : comment.id)}
+                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                          >
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                              <path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/>
+                            </svg>
+                          </button>
+                          {commentMenuOpen === comment.id && (
+                            <div className="absolute right-0 mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-10 min-w-[120px]">
+                              <button
+                                onClick={() => {
+                                  setEditingComment(comment);
+                                  setEditCommentText(comment.content);
+                                  setCommentMenuOpen(null);
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                              >
+                                Редактировать
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setCommentMenuOpen(null);
+                                  handleDeleteComment(comment.id);
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 dark:text-red-400"
+                              >
+                                Удалить
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {editingComment?.id === comment.id ? (
+                      <div className="mt-2 space-y-2">
+                        <input
+                          type="text"
+                          value={editCommentText}
+                          onChange={(e) => setEditCommentText(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleEditComment(comment.id)}
+                            className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                          >
+                            Сохранить
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingComment(null);
+                              setEditCommentText("");
+                            }}
+                            className="px-3 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded text-sm hover:bg-gray-400 dark:hover:bg-gray-500"
+                          >
+                            Отмена
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                          {comment.content}
+                        </p>
+                        <div className="flex items-center gap-3 mt-1">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {formatTime(comment.createdAt)}
+                          </p>
+                          <button
+                            onClick={() => setReplyToComment(comment)}
+                            className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                          >
+                            Ответить
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
+                {/* Вложенные ответы */}
+                {comment.replies && comment.replies.length > 0 && (
+                  <div className="ml-11 space-y-2">
+                    {comment.replies.map((reply: any) => (
+                      <div key={reply.id} className="flex gap-3">
+                        {reply.user.avatarUrl ? (
+                          <img
+                            src={getFileUrl(reply.user.avatarUrl)}
+                            alt={getUserName(reply.user)}
+                            className="w-6 h-6 rounded-full object-cover"
+                            onError={(e) => {
+                              console.log("Avatar load error for reply:", reply.user.avatarUrl);
+                              e.currentTarget.style.display = 'none';
+                              const placeholder = e.currentTarget.nextElementSibling;
+                              if (placeholder) {
+                                (placeholder as HTMLElement).style.display = 'flex';
+                              }
+                            }}
+                          />
+                        ) : null}
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-white text-xs font-semibold" style={{ display: reply.user.avatarUrl ? 'none' : 'flex' }}>
+                          {getInitials(reply.user)}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-xs text-gray-900 dark:text-white">
+                              {getUserName(reply.user)}
+                            </p>
+                            {session?.user?.id === reply.user.id && (
+                              <button
+                                onClick={() => handleDeleteComment(reply.id)}
+                                className="text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+                                title="Удалить"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                            {reply.content}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {formatTime(reply.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
 
             {/* Форма комментария */}
             {session && (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendComment();
-                    }
-                  }}
-                  placeholder="Написать комментарий..."
-                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                />
-                <button
-                  onClick={sendComment}
-                  disabled={!commentText.trim() || sendingComment}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Отправить
-                </button>
+              <div className="space-y-2">
+                {replyToComment && (
+                  <div className="flex items-center justify-between px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      Ответ для <strong>{getUserName(replyToComment.user)}</strong>
+                    </span>
+                    <button
+                      onClick={() => setReplyToComment(null)}
+                      className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendComment();
+                      }
+                    }}
+                    placeholder={replyToComment ? "Написать ответ..." : "Написать комментарий..."}
+                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <button
+                    onClick={sendComment}
+                    disabled={!commentText.trim() || sendingComment}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Отправить
+                  </button>
+                </div>
               </div>
             )}
           </div>

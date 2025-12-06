@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { sendNotification } from "@/lib/notifications";
+import { sendUserNotification } from "@/lib/notifications";
 
 // POST - пересылка сообщения
 export async function POST(request: NextRequest) {
@@ -181,16 +181,13 @@ export async function POST(request: NextRequest) {
       const baseUrl =
         process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://myunion.pro";
 
-      await sendNotification({
+      await sendUserNotification({
         userId: targetUserId,
+        type: "chat_message",
         title: `📨 Пересланное сообщение от ${senderName}`,
-        message: originalMessage.content.substring(0, 100),
-        link: `${baseUrl}/dashboard/chat?userId=${userId}`,
-        data: {
-          type: "chat_message",
-          chatId: chat.id,
-          senderId: userId,
-        },
+        body: originalMessage.content.substring(0, 100),
+        url: `${baseUrl}/dashboard/chat?userId=${userId}`,
+        senderName,
       });
     } catch (notificationError) {
       console.error("[chat/forward] Error sending notification:", notificationError);

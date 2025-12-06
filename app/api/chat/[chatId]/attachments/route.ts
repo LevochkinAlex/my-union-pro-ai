@@ -106,36 +106,19 @@ export async function POST(
     let filePath: string;
     let dbFilePath: string; // Путь для сохранения в БД
     
-    // Всегда загружаем на VDS, если он настроен
-    if (isVDSStorageConfigured()) {
-      try {
-        filePath = await uploadFileToVDS(fileKey, buffer, mimeType);
-        // Для VDS используем путь через API endpoint
-        dbFilePath = `/api/uploads/chat/${fileName}`;
-        console.log(`[chat/attachments] File uploaded to VDS: ${filePath}, DB path: ${dbFilePath}`);
-      } catch (vdsError) {
-        console.error("[chat/attachments] VDS upload failed:", vdsError);
-        // Пробуем сохранить локально как fallback
-        try {
-          await mkdir(UPLOAD_DIR, { recursive: true });
-          const localFilePath = path.join(UPLOAD_DIR, fileName);
-          await writeFile(localFilePath, buffer);
-          dbFilePath = `/uploads/chat/${fileName}`;
-          filePath = dbFilePath;
-          console.log(`[chat/attachments] VDS failed, saved locally as fallback: ${dbFilePath}`);
-        } catch (localError) {
-          console.error("[chat/attachments] Local fallback also failed:", localError);
-          throw new Error(`Не удалось загрузить файл: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
-        }
-      }
-    } else {
-      // Локальное хранилище (только для разработки)
-      await mkdir(UPLOAD_DIR, { recursive: true });
-      const localFilePath = path.join(UPLOAD_DIR, fileName);
-      await writeFile(localFilePath, buffer);
-      dbFilePath = `/uploads/chat/${fileName}`;
-      filePath = dbFilePath;
-      console.log(`[chat/attachments] File saved locally (VDS not configured): ${dbFilePath}`);
+    // Всегда загружаем на VDS - локальное хранилище отключено
+    if (!isVDSStorageConfigured()) {
+      throw new Error("VDS storage не настроен. Настройте переменные окружения VDS_STORAGE_HOST, VDS_STORAGE_PASSWORD или VDS_STORAGE_PRIVATE_KEY_PATH");
+    }
+
+    try {
+      filePath = await uploadFileToVDS(fileKey, buffer, mimeType);
+      // Для VDS используем путь через API endpoint
+      dbFilePath = `/api/uploads/chat/${fileName}`;
+      console.log(`[chat/attachments] File uploaded to VDS: ${filePath}, DB path: ${dbFilePath}`);
+    } catch (vdsError) {
+      console.error("[chat/attachments] VDS upload failed:", vdsError);
+      throw new Error(`Не удалось загрузить файл на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
     }
 
     // Определяем тип файла
@@ -216,17 +199,14 @@ export async function POST(
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://myunion.pro";
       const messagePreview = (content.trim() || attachmentText).substring(0, 100);
 
-      const { sendNotification } = await import("@/lib/notifications");
-      await sendNotification({
+      const { sendUserNotification } = await import("@/lib/notifications");
+      await sendUserNotification({
         userId: recipientId,
+        type: "chat_message",
         title: `💬 ${attachmentText} от ${senderName}`,
-        message: content.trim() || attachmentText,
-        link: `${baseUrl}/dashboard/chat?userId=${userId}`,
-        data: {
-          type: "chat_message",
-          chatId: chatId,
-          senderId: userId,
-        },
+        body: content.trim() || attachmentText,
+        url: `${baseUrl}/dashboard/chat?userId=${userId}`,
+        senderName,
       });
     } catch (notificationError) {
       console.error("[chat/attachments] Error sending notification:", notificationError);

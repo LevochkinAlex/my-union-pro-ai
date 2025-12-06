@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { sendNotification } from "@/lib/notifications";
+import { sendUserNotification } from "@/lib/notifications";
 import { UserRole } from "@prisma/client";
 
 /**
@@ -99,16 +99,13 @@ export async function POST(
     if (isAdmin && !isInternal && ticket.userId !== session.user.id) {
       try {
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
-        await sendNotification({
+        await sendUserNotification({
           userId: ticket.userId,
+          type: "ticket_response",
           title: "📩 Получен ответ на ваше обращение",
-          message: `По вашему обращению "${ticket.title}" получен ответ.`,
-          link: `${baseUrl}/dashboard/tickets/${ticket.id}`,
-          data: {
-            type: "ticket_response",
-            ticketId: ticket.id,
-            commentId: comment.id,
-          },
+          body: `По вашему обращению "${ticket.title}" получен ответ.`,
+          url: `${baseUrl}/dashboard/tickets/${ticket.id}`,
+          senderName: "Администратор",
         });
         console.log("[tickets/comments] ✅ Уведомление отправлено владельцу тикета");
       } catch (notificationError) {

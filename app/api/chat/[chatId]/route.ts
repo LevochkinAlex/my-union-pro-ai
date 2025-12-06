@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
 import { saveChatConversationToKnowledgeBase } from "@/lib/chat-knowledge-learning";
-import { sendNotification } from "@/lib/notifications";
+import { sendUserNotification } from "@/lib/notifications";
 
 // GET - получение сообщений чата
 export async function GET(
@@ -106,7 +106,87 @@ export async function GET(
         : { participant2ReadAt: new Date() },
     });
 
-    return NextResponse.json({ messages });
+    // Получаем информацию о пользователях для реакций
+    const allUserIds = new Set<string>();
+    messages.forEach((msg: any) => {
+      if (msg.reactions && typeof msg.reactions === 'object') {
+        try {
+          Object.values(msg.reactions).forEach((reactionData: any) => {
+            // Поддерживаем два формата:
+            // 1. Старый: { emoji: string[] } - массив userIds напрямую
+            // 2. Новый: { emoji: { userIds: string[], users: ... } } - объект с userIds
+            let userIds: string[] = [];
+            if (Array.isArray(reactionData)) {
+              // Старый формат - массив напрямую
+              userIds = reactionData;
+            } else if (reactionData && typeof reactionData === 'object' && Array.isArray(reactionData.userIds)) {
+              // Новый формат - объект с userIds
+              userIds = reactionData.userIds;
+            }
+            
+            userIds.forEach((id: string) => {
+              if (id && typeof id === 'string') {
+                allUserIds.add(id);
+              }
+            });
+          });
+        } catch (e) {
+          console.error("[chat] Error processing reactions:", e);
+        }
+      }
+    });
+
+    const reactionUsers = allUserIds.size > 0 ? await prisma.user.findMany({
+      where: {
+        id: { in: Array.from(allUserIds) },
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        avatarUrl: true,
+      },
+    }) : [];
+
+    // Формируем реакции с информацией о пользователях
+    const messagesWithReactions = messages.map((msg: any) => {
+      if (msg.reactions && typeof msg.reactions === 'object' && !Array.isArray(msg.reactions)) {
+        try {
+          const reactionsWithUsers: Record<string, { userIds: string[]; users: any[] }> = {};
+          Object.entries(msg.reactions).forEach(([emoji, reactionData]: [string, any]) => {
+            // Поддерживаем два формата:
+            // 1. Старый: { emoji: string[] } - массив userIds напрямую
+            // 2. Новый: { emoji: { userIds: string[], users: ... } } - объект с userIds
+            let userIds: string[] = [];
+            if (Array.isArray(reactionData)) {
+              // Старый формат - массив напрямую
+              userIds = reactionData;
+            } else if (reactionData && typeof reactionData === 'object' && Array.isArray(reactionData.userIds)) {
+              // Новый формат - объект с userIds
+              userIds = reactionData.userIds;
+            }
+            
+            if (userIds.length > 0) {
+              reactionsWithUsers[emoji] = {
+                userIds,
+                users: reactionUsers.filter((u) => userIds.includes(u.id)),
+              };
+            }
+          });
+          return {
+            ...msg,
+            reactions: reactionsWithUsers,
+          };
+        } catch (e) {
+          console.error("[chat] Error formatting reactions:", e);
+          return msg;
+        }
+      }
+      return msg;
+    });
+
+    return NextResponse.json({ messages: messagesWithReactions });
   } catch (error: any) {
     console.error("[chat] GET Error:", {
       message: error?.message,
@@ -402,23 +482,18 @@ ${chunks.length > 0 ? chunks.map((chunk, i) => `\n[Документ ${i + 1}]\n$
         messagePreview: messagePreview.substring(0, 50),
       });
 
-      const notificationResult = await sendNotification({
+      const notificationResult = await sendUserNotification({
         userId: recipientId,
+        type: "chat_message",
         title: `💬 Новое сообщение от ${senderName}`,
-        message: messagePreview,
-        link: `${baseUrl}/dashboard/chat?userId=${userId}`,
-        data: {
-          type: "chat_message",
-          chatId: chatId,
-          senderId: userId,
-        },
+        body: messagePreview,
+        url: `${baseUrl}/dashboard/chat?userId=${userId}`,
+        senderName,
       });
 
-      console.log("[chat] ✅ Пуш-уведомление отправлено получателю:", {
-        pushSuccess: notificationResult.push.successCount,
-        pushFailed: notificationResult.push.failureCount,
-        emailSent: notificationResult.email.sent,
-        emailFailed: notificationResult.email.failed,
+      console.log("[chat] ✅ Уведомление отправлено получателю:", {
+        pushSent: notificationResult?.push || false,
+        emailSent: notificationResult?.email || false,
         isChatOpen,
       });
     } catch (notificationError: any) {

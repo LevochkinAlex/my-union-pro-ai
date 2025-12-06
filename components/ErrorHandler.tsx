@@ -57,8 +57,10 @@ export default function ErrorHandler() {
         return false;
       }
 
-      // Log other errors normally
-      console.error("Global error:", event.error);
+      // Log other errors normally (only if error exists)
+      if (event.error !== undefined && event.error !== null) {
+        console.error("Global error:", event.error);
+      }
     };
 
     // Handle message events from browser extensions
@@ -82,18 +84,52 @@ export default function ErrorHandler() {
 
     // Override console.error to filter out extension-related errors
     const originalConsoleError = console.error;
-    console.error = (...args: any[]) => {
-      const errorString = args.map(arg => String(arg)).join(" ");
-      if (
-        errorString.includes("message channel closed") ||
-        errorString.includes("listener indicated an asynchronous response") ||
-        errorString.includes("Extension context invalidated") ||
-        errorString.includes("message port closed")
-      ) {
-        // Suppress these errors in console
-        return;
+    console.error = function(...args: any[]) {
+      try {
+        // Quick check: if no arguments or all empty, skip
+        if (!args || args.length === 0) return;
+        
+        // Try to convert to string for filtering
+        let errorString = '';
+        try {
+          errorString = args.map(arg => {
+            if (arg === undefined || arg === null) return '';
+            try {
+              return String(arg);
+            } catch {
+              return '';
+            }
+          }).join(" ");
+        } catch {
+          // If mapping fails, just skip this error
+          return;
+        }
+        
+        // Check if this is an extension-related error we want to suppress
+        // Only suppress specific extension errors, not general "undefined" errors or empty messages
+        if (
+          errorString &&
+          (
+            errorString.includes("message channel closed") ||
+            errorString.includes("listener indicated an asynchronous response") ||
+            errorString.includes("Extension context invalidated") ||
+            errorString.includes("message port closed") ||
+            (errorString.includes("extension") && errorString.includes("undefined")) // Only suppress if both keywords present
+          )
+        ) {
+          // Suppress these extension-related errors in console
+          return;
+        }
+        
+        // Call original console.error safely
+        try {
+          originalConsoleError.apply(console, args);
+        } catch {
+          // If that fails, nothing we can do
+        }
+      } catch {
+        // Catch all - prevent any error in error handler
       }
-      originalConsoleError.apply(console, args);
     };
 
     window.addEventListener("unhandledrejection", handleUnhandledRejection, true);

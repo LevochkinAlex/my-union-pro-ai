@@ -508,15 +508,11 @@ export async function PATCH(
               throw new Error("VDS upload returned no URL");
             }
           } catch (vdsError) {
-            console.error(`[posts/PATCH] VDS upload error, falling back to local:`, vdsError);
-            // Fallback на локальное сохранение, если VDS не работает
-            await writeFile(localFilePath, buffer);
-            console.log(`[posts/PATCH] File saved locally (VDS fallback): ${localFilePath}`);
+            console.error(`[posts/PATCH] VDS upload error:`, vdsError);
+            throw new Error(`Не удалось загрузить файл на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
           }
         } else {
-          // Если VDS не настроен, сохраняем локально (для разработки)
-          await writeFile(localFilePath, buffer);
-          console.log(`[posts/PATCH] File saved locally (VDS not configured): ${localFilePath}`);
+          throw new Error("VDS storage не настроен. Настройте переменные окружения VDS_STORAGE_HOST, VDS_STORAGE_PASSWORD или VDS_STORAGE_PRIVATE_KEY_PATH");
         }
 
         let attachmentType = "file";

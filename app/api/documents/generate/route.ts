@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateDocumentFromTemplate } from "@/lib/document-templates/renderer";
 import { DocumentType } from "@prisma/client";
-import { sendNotification } from "@/lib/notifications";
+import { sendUserNotification } from "@/lib/notifications";
 
 export async function POST(request: NextRequest) {
   try {
@@ -292,15 +292,13 @@ export async function POST(request: NextRequest) {
     // Отправляем уведомление пользователю о готовности документов
     try {
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
-      await sendNotification({
+      await sendUserNotification({
         userId: user.id,
+        type: "documents_ready",
         title: "Документы готовы для подписания",
-        message: `Ваши заявления о вступлении в профсоюз и перечислении членских взносов сгенерированы и готовы для скачивания и подписания.`,
-        link: `${baseUrl}/dashboard/documents`,
-        data: {
-          type: "documents_ready",
-          documentIds: [membershipDoc.id, duesDoc.id],
-        },
+        body: `Ваши заявления о вступлении в профсоюз и перечислении членских взносов сгенерированы и готовы для скачивания и подписания.`,
+        url: `${baseUrl}/dashboard/documents`,
+        senderName: "Система",
       });
       console.log("[documents/generate] ✅ Уведомление отправлено пользователю");
     } catch (notificationError) {

@@ -6,7 +6,7 @@ import { capitalizeName } from "@/lib/utils/nameFormatting";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { normalizePhone, getPhoneDigits, isSamePhone } from "@/lib/utils/phone";
 import { saveUserProfileToKnowledgeBase } from "@/lib/user-knowledge-base";
-import { sendNotification } from "@/lib/notifications";
+import { sendMassNotification } from "@/lib/notifications";
 // Удалено: SystemMessages - больше не используется
 
 function normalizeString(value: unknown): string | null {
@@ -552,16 +552,12 @@ async function notifySuperAdminsAboutDocumentRegeneration(userId: string, change
     const adminUserIds = superAdmins.map(admin => admin.id);
 
     // Отправляем уведомления
-    await sendNotification({
-      title: "⚠️ Требуется перегенерация документов",
-      message: `Пользователь ${userName} изменил данные профиля после генерации документов. Требуется перегенерация документов.`,
+    await sendMassNotification({
       userIds: adminUserIds,
-      data: {
-        type: "document_regeneration_required",
-        userId: userId,
-        changedByUserId: changedByUserId,
-      },
-      link: `/admin/users/${userId}`,
+      title: "⚠️ Требуется перегенерация документов",
+      body: `Пользователь ${userName} изменил данные профиля после генерации документов. Требуется перегенерация документов.`,
+      url: `/admin/users/${userId}`,
+      type: "document_regeneration_required",
     });
 
     console.log(`[profile] Уведомление о перегенерации документов отправлено ${superAdmins.length} супер админам для пользователя ${userId}`);

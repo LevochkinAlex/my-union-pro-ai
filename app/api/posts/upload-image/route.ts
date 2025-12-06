@@ -54,31 +54,24 @@ export async function POST(request: NextRequest) {
     // Всегда создаём директорию
     await mkdir(UPLOAD_DIR, { recursive: true });
 
-    if (isVDSStorageConfigured()) {
-      try {
-        const fileKey = `posts/${fileName}`;
-        const vdsUrl = await uploadFileToVDS(fileKey, buffer, mimeType);
-        if (vdsUrl) {
-          finalFilePath = vdsUrl;
-          returnUrl = vdsUrl; // Используем VDS URL напрямую
-          console.log(`[posts/upload-image] File uploaded to VDS: ${vdsUrl}`);
-        } else {
-          throw new Error("VDS upload returned no URL");
-        }
-      } catch (vdsError) {
-        console.error(`[posts/upload-image] VDS upload error, falling back to local:`, vdsError);
-        // Fallback на локальное сохранение
-        await writeFile(localFilePath, buffer);
-        finalFilePath = localFilePath;
-        returnUrl = `/api/uploads/posts/${fileName}`; // Используем API endpoint для локальных файлов
-        console.log(`[posts/upload-image] File saved locally (VDS fallback): ${localFilePath}`);
+    // Всегда загружаем на VDS - локальное хранилище отключено
+    if (!isVDSStorageConfigured()) {
+      throw new Error("VDS storage не настроен. Настройте переменные окружения VDS_STORAGE_HOST, VDS_STORAGE_PASSWORD или VDS_STORAGE_PRIVATE_KEY_PATH");
+    }
+
+    try {
+      const fileKey = `posts/${fileName}`;
+      const vdsUrl = await uploadFileToVDS(fileKey, buffer, mimeType);
+      if (vdsUrl) {
+        finalFilePath = vdsUrl;
+        returnUrl = vdsUrl; // Используем VDS URL напрямую
+        console.log(`[posts/upload-image] File uploaded to VDS: ${vdsUrl}`);
+      } else {
+        throw new Error("VDS upload returned no URL");
       }
-    } else {
-      // Локальное сохранение (для разработки)
-      await writeFile(localFilePath, buffer);
-      finalFilePath = localFilePath;
-      returnUrl = `/api/uploads/posts/${fileName}`; // Используем API endpoint
-      console.log(`[posts/upload-image] File saved locally (VDS not configured): ${localFilePath}`);
+    } catch (vdsError) {
+      console.error(`[posts/upload-image] VDS upload error:`, vdsError);
+      throw new Error(`Не удалось загрузить файл на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
     }
 
     return NextResponse.json({

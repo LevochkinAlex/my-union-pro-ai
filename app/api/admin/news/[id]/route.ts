@@ -148,17 +148,14 @@ export async function PUT(
     // Если новость была опубликована впервые, отправляем уведомления
     if (isPublished && !existingPost.isPublished) {
       try {
-        const { sendNotification } = await import("@/lib/notifications");
+        const { sendMassNotification } = await import("@/lib/notifications");
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
-        const result = await sendNotification({
+        const result = await sendMassNotification({
           sendToAll: true,
           title: "📰 Новая новость",
-          message: newsPost.title,
-          link: `${baseUrl}/dashboard/news/${newsPost.id}`,
-          data: {
-            type: "news_published",
-            newsId: newsPost.id,
-          },
+          body: newsPost.title,
+          url: `${baseUrl}/dashboard/news/${newsPost.id}`,
+          type: "news_published",
         });
         console.log("[api/admin/news] Уведомления отправлены:", {
           push: result.push,

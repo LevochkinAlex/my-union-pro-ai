@@ -134,7 +134,7 @@ export default function UsersPage() {
             </div>
             <div className="text-left">
               <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                Коллеги профсоюза
+                Профсеть
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 {total > 0 ? `Найдено: ${total} ${total === 1 ? "участник" : total < 5 ? "участника" : "участников"}` : "Найти коллег"}
@@ -153,7 +153,7 @@ export default function UsersPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
-        {/* Левая колонка: Коллеги (50% ширины) - скрыта на мобильных, показывается в модальном окне */}
+        {/* Левая колонка: Профсеть (50% ширины) - скрыта на мобильных, показывается в модальном окне */}
         <div className={`space-y-4 lg:space-y-6 ${showUsersPanel ? "block" : "hidden lg:block"}`}>
         {/* Заголовок */}
         <div>
@@ -292,7 +292,7 @@ export default function UsersPage() {
                 </svg>
               </div>
               <p className="text-gray-500 dark:text-gray-400 font-medium">
-                Коллеги не найдены
+                Пользователи не найдены
               </p>
               <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
                 Попробуйте изменить параметры поиска
@@ -340,7 +340,7 @@ export default function UsersPage() {
             {/* Заголовок с кнопкой закрытия */}
             <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4 flex items-center justify-between shadow-sm">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Коллеги профсоюза
+                Профсеть
               </h2>
               <button
                 onClick={() => setShowUsersPanel(false)}
@@ -479,7 +479,7 @@ export default function UsersPage() {
                       </svg>
                     </div>
                     <p className="text-gray-500 dark:text-gray-400 font-medium">
-                      Коллеги не найдены
+                      Пользователи не найдены
                     </p>
                     <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
                       Попробуйте изменить параметры поиска

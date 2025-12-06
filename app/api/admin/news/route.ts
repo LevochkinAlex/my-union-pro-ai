@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { UserRole } from "@prisma/client";
-import { sendNotification } from "@/lib/notifications";
+// import { sendNotification } from "@/lib/notifications"; // TODO: Implement mass notification system
 
 // GET /api/admin/news - получить все новости (включая неопубликованные)
 export async function GET(request: NextRequest) {
@@ -125,28 +125,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Если новость опубликована, отправляем уведомления всем пользователям
+    // TODO: Если новость опубликована, отправляем уведомления всем пользователям
+    // Требуется реализация функции массовых уведомлений
     if (isPublished) {
-      try {
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
-        const result = await sendNotification({
-          sendToAll: true,
-          title: "📰 Новая новость",
-          message: title,
-          link: `${baseUrl}/dashboard/news/${newsPost.id}`,
-          data: {
-            type: "news_published",
-            newsId: newsPost.id,
-          },
-        });
-        console.log("[api/admin/news] Уведомления отправлены:", {
-          push: result.push,
-          email: result.email,
-        });
-      } catch (notificationError) {
-        console.error("[api/admin/news] Ошибка отправки уведомлений:", notificationError);
-        // Не прерываем создание новости из-за ошибки уведомлений
-      }
+      console.log("[api/admin/news] Новость опубликована, массовые уведомления пока отключены");
     }
 
     // Получаем полную новость с опросами

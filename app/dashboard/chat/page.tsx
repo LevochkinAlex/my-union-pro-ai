@@ -102,12 +102,13 @@ function ChatPageContent() {
   const [forwardLoading, setForwardLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<{ url: string; name?: string } | null>(null);
   const [isConvertingHeic, setIsConvertingHeic] = useState(false);
-  const [messageLikes, setMessageLikes] = useState<Record<string, { 
+  // Изменено: теперь messageLikes хранит массив реакций для каждого сообщения
+  const [messageLikes, setMessageLikes] = useState<Record<string, Array<{ 
     emoji: string; 
     count: number; 
     isLiked: boolean;
     users?: Array<{ id: string; avatarUrl: string | null; name: string }>;
-  }>>({});
+  }>>>({});
   const [avatarLoadErrors, setAvatarLoadErrors] = useState<Set<string>>(new Set());
   const [emojiPickerMessageId, setEmojiPickerMessageId] = useState<string | null>(null);
   const lastDoubleClickRef = useRef<{ messageId: string; timestamp: number } | null>(null);
@@ -348,78 +349,47 @@ function ChatPageContent() {
           shouldScrollToBottom.current = true;
         }
 
-        // Загружаем реакции для всех сообщений
-        const reactionsMap: Record<string, { emoji: string; count: number; isLiked: boolean; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }> = {};
+        // Загружаем реакции для всех сообщений (множественные реакции)
+        const reactionsMap: Record<string, Array<{ emoji: string; count: number; isLiked: boolean; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }>> = {};
         const currentUserId = session?.user?.id || "";
         
-        // Собираем все уникальные ID пользователей из реакций и из отправителей сообщений
-        const allUserIds = new Set<string>();
-        filteredMessages.forEach((msg: Message) => {
-          // Добавляем отправителя сообщения
-          if (msg.senderId) {
-            allUserIds.add(msg.senderId);
-          }
-          // Добавляем пользователей из реакций
-          if (msg.reactions && typeof msg.reactions === 'object') {
-            Object.values(msg.reactions).forEach((userIds: any) => {
-              if (Array.isArray(userIds)) {
-                userIds.forEach((id: string) => allUserIds.add(id));
-              }
-            });
-          }
-        });
-        
-        // Создаем карту пользователей из отправителей сообщений (быстрый способ)
-        const usersMap: Record<string, { id: string; firstName: string | null; lastName: string | null; middleName: string | null; avatarUrl: string | null }> = {};
-        filteredMessages.forEach((msg: Message) => {
-          if (msg.sender && !usersMap[msg.sender.id]) {
-            usersMap[msg.sender.id] = {
-              id: msg.sender.id,
-              firstName: msg.sender.firstName,
-              lastName: msg.sender.lastName,
-              middleName: msg.sender.middleName,
-              avatarUrl: msg.sender.avatarUrl,
-            };
-          }
-        });
-        
-        // Для пользователей, которых нет в отправителях, используем информацию из чата
-        const missingUserIds = Array.from(allUserIds).filter(id => !usersMap[id]);
-        if (missingUserIds.length > 0 && selectedChat) {
-          // Пробуем получить информацию из участников чата
-          const otherUser = selectedChat.otherUser;
-          if (otherUser && missingUserIds.includes(otherUser.id)) {
-            usersMap[otherUser.id] = {
-              id: otherUser.id,
-              firstName: otherUser.firstName,
-              lastName: otherUser.lastName,
-              middleName: otherUser.middleName,
-              avatarUrl: otherUser.avatarUrl,
-            };
-          }
-        }
-        
-        // Формируем карту реакций
+        // Формируем карту реакций (теперь поддерживаем множественные реакции)
         filteredMessages.forEach((msg: Message) => {
           if (msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
-            // Берем первую реакцию (можно расширить для поддержки нескольких)
-            const emoji = Object.keys(msg.reactions)[0];
-            const userIds = (msg.reactions[emoji] as string[]) || [];
-            const isLiked = userIds.includes(currentUserId);
+            // API возвращает реакции в формате: { emoji: { userIds: [...], users: [...] }, ... }
+            const messageReactions: Array<{ emoji: string; count: number; isLiked: boolean; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }> = [];
             
-            reactionsMap[msg.id] = {
-              emoji,
-              count: userIds.length,
-              isLiked,
-              users: userIds.map(id => {
-                const user = usersMap[id];
-                return {
-                  id,
-                  avatarUrl: user?.avatarUrl || null,
-                  name: user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Пользователь" : "Пользователь",
-                };
-              }),
-            };
+            Object.entries(msg.reactions).forEach(([emoji, reactionData]: [string, any]) => {
+              if (reactionData && typeof reactionData === 'object') {
+                const userIds = reactionData.userIds || [];
+                const users = reactionData.users || [];
+                const isLiked = userIds.includes(currentUserId);
+                
+                messageReactions.push({
+                  emoji,
+                  count: userIds.length,
+                  isLiked,
+                  users: users.map((u: any) => ({
+                    id: u.id,
+                    avatarUrl: u.avatarUrl || null,
+                    name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Пользователь",
+                  })),
+                });
+              } else if (Array.isArray(reactionData)) {
+                // Fallback для старого формата
+                const isLiked = reactionData.includes(currentUserId);
+                messageReactions.push({
+                  emoji,
+                  count: reactionData.length,
+                  isLiked,
+                  users: [],
+                });
+              }
+            });
+            
+            if (messageReactions.length > 0) {
+              reactionsMap[msg.id] = messageReactions;
+            }
           }
         });
         
@@ -983,17 +953,40 @@ function ChatPageContent() {
   }, [selectedChat]);
 
   // Helper function to get file URL (for production compatibility)
+  // Универсальная функция для получения URL файлов с VDS
   const getFileUrl = (filePath: string) => {
     if (!filePath) return "";
     // If it's already a full URL, return as is
     if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
       return filePath;
     }
-    // Extract filename from path
-    const filename = filePath.split("/").pop();
-    if (!filename) return filePath;
-    // Use API endpoint for serving files
-    return `/api/uploads/chat/${filename}`;
+    // If it starts with /api/, it's already an API path
+    if (filePath.startsWith("/api/")) {
+      return filePath;
+    }
+    
+    // Определяем тип файла по пути
+    if (filePath.includes("/avatars/") || filePath.includes("avatars-")) {
+      // Аватар пользователя
+      const filename = filePath.split("/").pop();
+      return `/api/uploads/avatars/${filename}`;
+    } else if (filePath.includes("/chat/") || filePath.includes("chat-")) {
+      // Файл из чата
+      const filename = filePath.split("/").pop();
+      return `/api/uploads/chat/${filename}`;
+    } else if (filePath.includes("/posts/") || filePath.includes("posts-")) {
+      // Файл из постов
+      const filename = filePath.split("/").pop();
+      return `/api/uploads/posts/${filename}`;
+    } else {
+      // Общий случай - извлекаем имя файла и пробуем через API
+      const filename = filePath.split("/").pop();
+      // Пробуем определить по структуре пути
+      if (filePath.startsWith("/uploads/")) {
+        return `/api${filePath}`;
+      }
+      return filePath;
+    }
   };
 
   // Защита от hydration mismatch
@@ -1072,7 +1065,7 @@ function ChatPageContent() {
                     >
                       {user.avatarUrl ? (
                         <img
-                          src={user.avatarUrl}
+                          src={getFileUrl(user.avatarUrl)}
                           alt={getUserName(user)}
                           className="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover flex-shrink-0"
                           onError={(e) => {
@@ -1145,7 +1138,7 @@ function ChatPageContent() {
                   {chat.otherUser.avatarUrl ? (
                     <div className="relative flex-shrink-0">
                       <img
-                        src={chat.otherUser.avatarUrl}
+                        src={getFileUrl(chat.otherUser.avatarUrl)}
                         alt={getUserName(chat.otherUser)}
                         className="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover"
                       />
@@ -1216,7 +1209,7 @@ function ChatPageContent() {
               >
               {selectedChat.otherUser.avatarUrl ? (
                 <img
-                  src={selectedChat.otherUser.avatarUrl}
+                  src={getFileUrl(selectedChat.otherUser.avatarUrl)}
                   alt={getUserName(selectedChat.otherUser)}
                     className="w-10 h-10 rounded-full flex-shrink-0"
                 />
@@ -1425,23 +1418,27 @@ function ChatPageContent() {
                                             if (Object.keys(reactions).length === 0) {
                                               delete newLikes[message.id];
                                             } else {
-                                              // Берем первую реакцию (можно расширить для поддержки нескольких)
-                                              const firstEmoji = Object.keys(reactions)[0];
-                                              const reactionData = reactions[firstEmoji] as any;
-                                              const userIds = reactionData?.userIds || [];
-                                              const users = reactionData?.users || [];
-                                              const isLiked = userIds.includes(currentUserId);
+                                              // Преобразуем объект реакций в массив
+                                              const newReactions: Array<{ emoji: string; count: number; isLiked: boolean; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }> = [];
                                               
-                                              newLikes[message.id] = {
-                                                emoji: firstEmoji,
-                                                count: userIds.length,
-                                                isLiked,
-                                                users: users.map((u: any) => ({
-                                                  id: u.id,
-                                                  avatarUrl: u.avatarUrl,
-                                                  name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Пользователь",
-                                                })),
-                                              };
+                                              Object.entries(reactions).forEach(([emoji, reactionData]: [string, any]) => {
+                                                const userIds = reactionData?.userIds || [];
+                                                const users = reactionData?.users || [];
+                                                const isLiked = userIds.includes(currentUserId);
+                                                
+                                                newReactions.push({
+                                                  emoji,
+                                                  count: userIds.length,
+                                                  isLiked,
+                                                  users: users.map((u: any) => ({
+                                                    id: u.id,
+                                                    avatarUrl: u.avatarUrl,
+                                                    name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Пользователь",
+                                                  })),
+                                                });
+                                              });
+                                              
+                                              newLikes[message.id] = newReactions;
                                             }
                                             
                                             return newLikes;
@@ -1799,108 +1796,112 @@ function ChatPageContent() {
                               })}
                             </p>
                           ) : null}
-                          {/* Реакции на сообщение */}
-                          {messageLikes[message.id] && (
+                          {/* Реакции на сообщение (множественные) */}
+                          {messageLikes[message.id] && messageLikes[message.id].length > 0 && (
                             <div className="flex items-center gap-1 mt-1 flex-wrap">
-                              <button
-                                onClick={async () => {
-                                  if (!selectedChat) return;
-                                  
-                                  const currentEmoji = messageLikes[message.id].emoji;
-                                  
-                                  try {
-                                    // Отправляем запрос на удаление реакции
-                                    const response = await fetch(`/api/chat/${selectedChat.id}/messages/${message.id}/reactions`, {
-                                      method: "POST",
-                                      headers: {
-                                        "Content-Type": "application/json",
-                                      },
-                                      body: JSON.stringify({ emoji: currentEmoji }),
-                                    });
-
-                                    if (response.ok) {
-                                      const data = await response.json();
-                                      const reactions = data.reactions || {};
-                                      
-                                      // Обновляем локальное состояние
-                                      const currentUserId = session?.user?.id || "";
-                                      
-                                      setMessageLikes(prev => {
-                                        const newLikes = { ...prev };
-                                        
-                                        // Если реакций нет, удаляем из состояния
-                                        if (Object.keys(reactions).length === 0) {
-                                          delete newLikes[message.id];
-                                        } else {
-                                          // Обновляем реакцию
-                                          const firstEmoji = Object.keys(reactions)[0];
-                                          const reactionData = reactions[firstEmoji] as any;
-                                          const userIds = reactionData?.userIds || [];
-                                          const users = reactionData?.users || [];
-                                          const isLiked = userIds.includes(currentUserId);
-                                          
-                                          newLikes[message.id] = {
-                                            emoji: firstEmoji,
-                                            count: userIds.length,
-                                            isLiked,
-                                            users: users.map((u: any) => ({
-                                              id: u.id,
-                                              avatarUrl: u.avatarUrl,
-                                              name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Пользователь",
-                                            })),
-                                          };
-                                        }
-                                        
-                                        return newLikes;
+                              {messageLikes[message.id].map((reaction, reactionIdx) => (
+                                <button
+                                  key={`${message.id}-${reaction.emoji}-${reactionIdx}`}
+                                  onClick={async () => {
+                                    if (!selectedChat) return;
+                                    
+                                    try {
+                                      // Отправляем запрос на переключение реакции
+                                      const response = await fetch(`/api/chat/${selectedChat.id}/messages/${message.id}/reactions`, {
+                                        method: "POST",
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                        },
+                                        body: JSON.stringify({ emoji: reaction.emoji }),
                                       });
-                                    } else {
-                                      const errorData = await response.json().catch(() => ({ error: "Неизвестная ошибка" }));
-                                      console.error("Reaction removal API error:", errorData);
-                                      showToast(errorData.error || "Ошибка при удалении реакции", "error");
+
+                                      if (response.ok) {
+                                        const data = await response.json();
+                                        const reactions = data.reactions || {};
+                                        
+                                        // Обновляем локальное состояние
+                                        const currentUserId = session?.user?.id || "";
+                                        
+                                        setMessageLikes(prev => {
+                                          const newLikes = { ...prev };
+                                          
+                                          // Если реакций нет, удаляем из состояния
+                                          if (Object.keys(reactions).length === 0) {
+                                            delete newLikes[message.id];
+                                          } else {
+                                            // Преобразуем объект реакций в массив
+                                            const newReactions: Array<{ emoji: string; count: number; isLiked: boolean; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }> = [];
+                                            
+                                            Object.entries(reactions).forEach(([emoji, reactionData]: [string, any]) => {
+                                              const userIds = reactionData?.userIds || [];
+                                              const users = reactionData?.users || [];
+                                              const isLiked = userIds.includes(currentUserId);
+                                              
+                                              newReactions.push({
+                                                emoji,
+                                                count: userIds.length,
+                                                isLiked,
+                                                users: users.map((u: any) => ({
+                                                  id: u.id,
+                                                  avatarUrl: u.avatarUrl,
+                                                  name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Пользователь",
+                                                })),
+                                              });
+                                            });
+                                            
+                                            newLikes[message.id] = newReactions;
+                                          }
+                                          
+                                          return newLikes;
+                                        });
+                                      } else {
+                                        const errorData = await response.json().catch(() => ({ error: "Неизвестная ошибка" }));
+                                        console.error("Reaction API error:", errorData);
+                                        showToast(errorData.error || "Ошибка при изменении реакции", "error");
+                                      }
+                                    } catch (error) {
+                                      console.error("Error toggling reaction:", error);
+                                      showToast("Ошибка при изменении реакции", "error");
                                     }
-                                  } catch (error) {
-                                    console.error("Error removing reaction:", error);
-                                    showToast("Ошибка при удалении реакции", "error");
-                                  }
-                                }}
-                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full transition-colors ${
-                                  messageLikes[message.id].isLiked
-                                    ? "bg-blue-500/20 dark:bg-blue-500/30 border border-blue-500/50"
-                                    : "bg-white/10 dark:bg-gray-700/50 hover:bg-white/20 dark:hover:bg-gray-700/70"
-                                }`}
-                              >
-                                <span className="text-sm">{messageLikes[message.id].emoji}</span>
-                                {messageLikes[message.id].count > 1 && (
-                                  <span className="text-xs">{messageLikes[message.id].count}</span>
-                                )}
-                                {messageLikes[message.id].isLiked && messageLikes[message.id].users && messageLikes[message.id].users![0] && (
-                                  <div className="flex items-center -ml-1">
-                                    {messageLikes[message.id].users!.slice(0, 3).map((user, idx) => (
-                                      <div
-                                        key={user.id}
-                                        className="w-4 h-4 rounded-full border-2 border-white dark:border-gray-800 overflow-hidden"
-                                        style={{ marginLeft: idx > 0 ? '-4px' : '0' }}
-                                      >
-                                        {user.avatarUrl && !avatarLoadErrors.has(`${message.id}-${user.id}`) ? (
-                                          <img
-                                            src={getFileUrl(user.avatarUrl)}
-                                            alt={user.name}
-                                            className="w-full h-full object-cover"
-                                            onError={() => {
-                                              // Если изображение не загрузилось, добавляем в список ошибок
-                                              setAvatarLoadErrors(prev => new Set(prev).add(`${message.id}-${user.id}`));
-                                            }}
-                                          />
-                                        ) : (
-                                          <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-[8px] font-semibold">
-                                            {user.name.charAt(0).toUpperCase()}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </button>
+                                  }}
+                                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full transition-colors ${
+                                    reaction.isLiked
+                                      ? "bg-blue-500/20 dark:bg-blue-500/30 border border-blue-500/50"
+                                      : "bg-white/10 dark:bg-gray-700/50 hover:bg-white/20 dark:hover:bg-gray-700/70"
+                                  }`}
+                                >
+                                  <span className="text-sm">{reaction.emoji}</span>
+                                  {reaction.count > 1 && (
+                                    <span className="text-xs">{reaction.count}</span>
+                                  )}
+                                  {reaction.isLiked && reaction.users && reaction.users[0] && (
+                                    <div className="flex items-center -ml-1">
+                                      {reaction.users.slice(0, 3).map((user, idx) => (
+                                        <div
+                                          key={user.id}
+                                          className="w-4 h-4 rounded-full border-2 border-white dark:border-gray-800 overflow-hidden"
+                                          style={{ marginLeft: idx > 0 ? '-4px' : '0' }}
+                                        >
+                                          {user.avatarUrl && !avatarLoadErrors.has(`${message.id}-${user.id}`) ? (
+                                            <img
+                                              src={getFileUrl(user.avatarUrl)}
+                                              alt={user.name}
+                                              className="w-full h-full object-cover"
+                                              onError={() => {
+                                                setAvatarLoadErrors(prev => new Set(prev).add(`${message.id}-${user.id}`));
+                                              }}
+                                            />
+                                          ) : (
+                                            <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-[8px] font-semibold">
+                                              {user.name.charAt(0).toUpperCase()}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </button>
+                              ))}
                             </div>
                           )}
                           <div className="flex items-center gap-2 mt-1">
@@ -2015,7 +2016,7 @@ function ChatPageContent() {
                   )}
                 </div>
               )}
-              <div className="flex gap-2 items-end">
+              <div className="flex gap-2 items-center">
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -2027,6 +2028,7 @@ function ChatPageContent() {
                   onClick={() => fileInputRef.current?.click()}
                   className="p-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0"
                   title="Прикрепить файл"
+                  style={{ height: "44px", width: "44px" }}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -2048,7 +2050,7 @@ function ChatPageContent() {
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base resize-none overflow-hidden leading-normal"
                     style={{ minHeight: "44px", maxHeight: "150px" }}
                   />
-                  <div className="absolute left-2 flex items-center" style={{ top: "10px", height: "24px" }}>
+                  <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center">
                     <EmojiPicker
                       onEmojiSelect={(emoji) => {
                         setMessageText((prev) => prev + emoji);
@@ -2069,7 +2071,8 @@ function ChatPageContent() {
                     }
                   }}
                   disabled={(!messageText.trim() && !selectedFile) || sending}
-                  className="px-4 md:px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm md:text-base flex-shrink-0"
+                  className="bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm md:text-base flex-shrink-0 flex items-center justify-center"
+                  style={{ height: "44px", minWidth: "44px", padding: "0 16px" }}
                 >
                   <span className="hidden md:inline">Отправить</span>
                   <svg className="md:hidden w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2172,7 +2175,7 @@ function ChatPageContent() {
                         >
                           {user.avatarUrl ? (
                             <img
-                              src={user.avatarUrl}
+                              src={getFileUrl(user.avatarUrl)}
                               alt={userName}
                               className="w-10 h-10 rounded-full object-cover"
                             />

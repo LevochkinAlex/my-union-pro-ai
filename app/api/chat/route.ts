@@ -68,12 +68,6 @@ export async function GET(request: NextRequest) {
             email: true,
           },
         },
-        messages: {
-          take: 1,
-          orderBy: {
-            createdAt: "desc",
-          },
-        },
       },
       orderBy: {
         updatedAt: "desc",

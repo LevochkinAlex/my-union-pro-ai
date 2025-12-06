@@ -274,13 +274,7 @@ export async function POST(request: NextRequest) {
           throw new Error(`Не удалось загрузить файл на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
         }
       } else {
-        // Локальное хранилище (только для разработки)
-        const uploadDir = path.join(process.cwd(), "public", "uploads", "documents");
-        await mkdir(uploadDir, { recursive: true });
-        const filePath = path.join(uploadDir, uniqueFileName);
-        await writeFile(filePath, buffer);
-        relativePath = `/uploads/documents/${uniqueFileName}`;
-        console.log(`[upload] File saved locally (VDS not configured): ${relativePath}`);
+        throw new Error("VDS storage не настроен. Настройте переменные окружения VDS_STORAGE_HOST, VDS_STORAGE_PASSWORD или VDS_STORAGE_PRIVATE_KEY_PATH");
       }
     
       let document;
