@@ -5,6 +5,9 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import AlertDialog from "@/components/ui/AlertDialog";
 import { useToast } from "@/components/ui/Toast";
+import ImageModal from "@/components/chat/ImageModal";
+import EmojiPicker from "@/components/chat/EmojiPicker";
+import heic2any from "heic2any";
 
 interface Chat {
   id: string;
@@ -97,6 +100,16 @@ function ChatPageContent() {
   const [forwardSearchQuery, setForwardSearchQuery] = useState("");
   const [forwardUsers, setForwardUsers] = useState<any[]>([]);
   const [forwardLoading, setForwardLoading] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<{ url: string; name?: string } | null>(null);
+  const [isConvertingHeic, setIsConvertingHeic] = useState(false);
+  const [messageLikes, setMessageLikes] = useState<Record<string, { 
+    emoji: string; 
+    count: number; 
+    isLiked: boolean;
+    users?: Array<{ id: string; avatarUrl: string | null; name: string }>;
+  }>>({});
+  const [emojiPickerMessageId, setEmojiPickerMessageId] = useState<string | null>(null);
+  const lastDoubleClickRef = useRef<{ messageId: string; timestamp: number } | null>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const longPressMessageIdRef = useRef<string | null>(null);
   const [alertDialog, setAlertDialog] = useState<{
@@ -409,23 +422,50 @@ function ChatPageContent() {
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      
-      // Создаем превью для изображений (кроме HEIC - браузер не может их отобразить)
-      const isHeic = file.name.toLowerCase().endsWith('.heic') || 
-                     file.name.toLowerCase().endsWith('.heif') ||
-                     file.type === 'image/heic' ||
-                     file.type === 'image/heif';
-      
-      if (file.type.startsWith("image/") && !isHeic) {
-        setFilePreview(URL.createObjectURL(file));
-      } else if (isHeic) {
-        // Для HEIC показываем только имя файла, превью не создаем
-        setFilePreview(null);
-      } else {
+    if (!file) return;
+
+    // Проверяем, является ли файл HEIC/HEIF
+    const isHeic = file.name.toLowerCase().endsWith('.heic') || 
+                   file.name.toLowerCase().endsWith('.heif') ||
+                   file.type === 'image/heic' ||
+                   file.type === 'image/heif';
+
+    if (isHeic) {
+      setIsConvertingHeic(true);
+      try {
+        // Конвертируем HEIC в JPEG для превью
+        const convertedBlob = await heic2any({
+          blob: file,
+          toType: "image/jpeg",
+          quality: 0.8,
+        });
+        
+        // heic2any может вернуть массив или один blob
+        const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+        
+        // Создаем File объект из blob для дальнейшей работы
+        const jpegFile = new File([blob as Blob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), {
+          type: "image/jpeg",
+          lastModified: file.lastModified,
+        });
+        
+        setSelectedFile(jpegFile);
+        const url = URL.createObjectURL(blob as Blob);
+        setFilePreview(url);
+        setIsConvertingHeic(false);
+      } catch (error) {
+        console.error("Error converting HEIC:", error);
+        showToast("Ошибка при конвертации HEIC изображения", "error");
+        setIsConvertingHeic(false);
+        setSelectedFile(file);
         setFilePreview(null);
       }
+    } else if (file.type.startsWith("image/")) {
+      setSelectedFile(file);
+      setFilePreview(URL.createObjectURL(file));
+    } else {
+      setSelectedFile(file);
+      setFilePreview(null);
     }
   };
 
@@ -1249,6 +1289,87 @@ function ChatPageContent() {
                                 </button>
                               </>
                             )}
+                            <div className="relative">
+                              <button
+                                onClick={() => {
+                                  setEmojiPickerMessageId(emojiPickerMessageId === message.id ? null : message.id);
+                                }}
+                                onTouchEnd={(e) => {
+                                  e.preventDefault();
+                                  setEmojiPickerMessageId(emojiPickerMessageId === message.id ? null : message.id);
+                                }}
+                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 active:bg-gray-200 dark:active:bg-gray-600 rounded transition-colors touch-manipulation"
+                                title="Добавить реакцию"
+                              >
+                                <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </button>
+                              {emojiPickerMessageId === message.id && (
+                                <div className={`absolute bottom-full mb-2 z-50 ${isOwn ? "right-0" : "left-0"}`}>
+                                  <EmojiPicker
+                                    showButton={false}
+                                    isOpen={true}
+                                    onOpenChange={(open) => {
+                                      if (!open) {
+                                        setEmojiPickerMessageId(null);
+                                      }
+                                    }}
+                                    onEmojiSelect={(emoji) => {
+                                      // TODO: Отправить реакцию на сервер
+                                      const currentUserId = session?.user?.id || "";
+                                      const currentUserName = session?.user?.name || "Вы";
+                                      const currentUserAvatar = session?.user?.avatarUrl || null;
+                                      
+                                      setMessageLikes(prev => {
+                                        const existing = prev[message.id];
+                                        const isAlreadyLiked = existing?.isLiked;
+                                        
+                                        if (isAlreadyLiked && existing?.emoji === emoji) {
+                                          // Удаляем реакцию, если тот же эмодзи
+                                          const newLikes = { ...prev };
+                                          if (existing.count > 1) {
+                                            newLikes[message.id] = {
+                                              ...existing,
+                                              count: existing.count - 1,
+                                              isLiked: false,
+                                              users: existing.users?.filter(u => u.id !== currentUserId),
+                                            };
+                                          } else {
+                                            delete newLikes[message.id];
+                                          }
+                                          return newLikes;
+                                        } else {
+                                          // Добавляем новую реакцию
+                                          return {
+                                            ...prev,
+                                            [message.id]: {
+                                              emoji,
+                                              count: (existing?.count || 0) + (isAlreadyLiked ? 0 : 1),
+                                              isLiked: true,
+                                              users: existing?.users 
+                                                ? [...existing.users.filter(u => u.id !== currentUserId), {
+                                                    id: currentUserId,
+                                                    avatarUrl: currentUserAvatar,
+                                                    name: currentUserName,
+                                                  }]
+                                                : [{
+                                                    id: currentUserId,
+                                                    avatarUrl: currentUserAvatar,
+                                                    name: currentUserName,
+                                                  }],
+                                            },
+                                          };
+                                        }
+                                      });
+                                      setEmojiPickerMessageId(null);
+                                      setHoveredMessageId(null);
+                                    }}
+                                    defaultEmoji={typeof window !== "undefined" ? localStorage.getItem("lastSelectedEmoji") || "❤️" : "❤️"}
+                                  />
+                                </div>
+                              )}
+                            </div>
                             <button
                               onClick={() => {
                                 setForwardingMessage(message);
@@ -1517,8 +1638,8 @@ function ChatPageContent() {
                                         <img
                                           src={getFileUrl(attachment.filePath)}
                                           alt={attachment.originalName}
-                                          className="max-w-full max-h-64 rounded-lg cursor-pointer object-contain border border-gray-200 dark:border-gray-600"
-                                          onClick={() => window.open(getFileUrl(attachment.filePath), "_blank")}
+                                          className="max-w-full max-h-64 rounded-lg cursor-pointer object-contain border border-gray-200 dark:border-gray-600 hover:opacity-90 transition-opacity"
+                                          onClick={() => setSelectedImage({ url: getFileUrl(attachment.filePath), name: attachment.originalName })}
                                           onError={(e) => {
                                             const target = e.target as HTMLImageElement;
                                             target.style.display = "none";
@@ -1584,6 +1705,62 @@ function ChatPageContent() {
                               })}
                             </p>
                           ) : null}
+                          {/* Реакции на сообщение */}
+                          {messageLikes[message.id] && (
+                            <div className="flex items-center gap-1 mt-1 flex-wrap">
+                              <button
+                                onClick={() => {
+                                  // TODO: Удалить реакцию
+                                  setMessageLikes(prev => {
+                                    const newLikes = { ...prev };
+                                    if (newLikes[message.id].count > 1) {
+                                      newLikes[message.id] = {
+                                        ...newLikes[message.id],
+                                        count: newLikes[message.id].count - 1,
+                                        isLiked: false,
+                                      };
+                                    } else {
+                                      delete newLikes[message.id];
+                                    }
+                                    return newLikes;
+                                  });
+                                }}
+                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full transition-colors ${
+                                  messageLikes[message.id].isLiked
+                                    ? "bg-blue-500/20 dark:bg-blue-500/30 border border-blue-500/50"
+                                    : "bg-white/10 dark:bg-gray-700/50 hover:bg-white/20 dark:hover:bg-gray-700/70"
+                                }`}
+                              >
+                                <span className="text-sm">{messageLikes[message.id].emoji}</span>
+                                {messageLikes[message.id].count > 1 && (
+                                  <span className="text-xs">{messageLikes[message.id].count}</span>
+                                )}
+                                {messageLikes[message.id].isLiked && messageLikes[message.id].users && messageLikes[message.id].users![0] && (
+                                  <div className="flex items-center -ml-1">
+                                    {messageLikes[message.id].users!.slice(0, 3).map((user, idx) => (
+                                      <div
+                                        key={user.id}
+                                        className="w-4 h-4 rounded-full border-2 border-white dark:border-gray-800 overflow-hidden"
+                                        style={{ marginLeft: idx > 0 ? '-4px' : '0' }}
+                                      >
+                                        {user.avatarUrl ? (
+                                          <img
+                                            src={user.avatarUrl}
+                                            alt={user.name}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        ) : (
+                                          <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-[8px] font-semibold">
+                                            {user.name.charAt(0).toUpperCase()}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </button>
+                            </div>
+                          )}
                           <div className="flex items-center gap-2 mt-1">
                             <p
                               className={`text-xs ${
@@ -1631,8 +1808,16 @@ function ChatPageContent() {
                   </button>
                 </div>
               )}
+              {/* Индикатор конвертации HEIC */}
+              {isConvertingHeic && (
+                <div className="mb-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <p className="text-sm text-blue-700 dark:text-blue-300 text-center">
+                    Конвертация HEIC изображения...
+                  </p>
+                </div>
+              )}
               {/* Выбранный файл */}
-              {selectedFile && (
+              {selectedFile && !isConvertingHeic && (
                 <div className="mb-2">
                   {filePreview ? (
                     <div className="relative">
@@ -1705,21 +1890,34 @@ function ChatPageContent() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                   </svg>
                 </button>
-                <textarea
-                  ref={textareaRef}
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendMessage();
-                    }
-                  }}
-                  placeholder="Введите сообщение..."
-                  rows={1}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base resize-none overflow-hidden"
-                  style={{ minHeight: "44px", maxHeight: "150px" }}
-                />
+                <div className="flex-1 relative">
+                  <textarea
+                    ref={textareaRef}
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage();
+                      }
+                    }}
+                    placeholder="Введите сообщение..."
+                    rows={1}
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base resize-none overflow-hidden"
+                    style={{ minHeight: "44px", maxHeight: "150px" }}
+                  />
+                  <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center">
+                    <EmojiPicker
+                      onEmojiSelect={(emoji) => {
+                        setMessageText((prev) => prev + emoji);
+                        if (textareaRef.current) {
+                          textareaRef.current.focus();
+                        }
+                      }}
+                      defaultEmoji={typeof window !== "undefined" ? localStorage.getItem("lastSelectedEmoji") || "❤️" : "❤️"}
+                    />
+                  </div>
+                </div>
                 <button
                   onClick={() => {
                     sendMessage();
@@ -1871,6 +2069,16 @@ function ChatPageContent() {
           </div>
         )}
       </div>
+
+      {/* Модальное окно для просмотра изображений */}
+      {selectedImage && (
+        <ImageModal
+          isOpen={!!selectedImage}
+          imageUrl={selectedImage.url}
+          imageName={selectedImage.name}
+          onClose={() => setSelectedImage(null)}
+        />
+      )}
 
       {/* AlertDialog для подтверждения удаления и других сообщений */}
       <AlertDialog
