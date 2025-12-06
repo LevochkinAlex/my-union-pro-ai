@@ -1803,21 +1803,65 @@ function ChatPageContent() {
                           {messageLikes[message.id] && (
                             <div className="flex items-center gap-1 mt-1 flex-wrap">
                               <button
-                                onClick={() => {
-                                  // TODO: Удалить реакцию
-                                  setMessageLikes(prev => {
-                                    const newLikes = { ...prev };
-                                    if (newLikes[message.id].count > 1) {
-                                      newLikes[message.id] = {
-                                        ...newLikes[message.id],
-                                        count: newLikes[message.id].count - 1,
-                                        isLiked: false,
-                                      };
+                                onClick={async () => {
+                                  if (!selectedChat) return;
+                                  
+                                  const currentEmoji = messageLikes[message.id].emoji;
+                                  
+                                  try {
+                                    // Отправляем запрос на удаление реакции
+                                    const response = await fetch(`/api/chat/${selectedChat.id}/messages/${message.id}/reactions`, {
+                                      method: "POST",
+                                      headers: {
+                                        "Content-Type": "application/json",
+                                      },
+                                      body: JSON.stringify({ emoji: currentEmoji }),
+                                    });
+
+                                    if (response.ok) {
+                                      const data = await response.json();
+                                      const reactions = data.reactions || {};
+                                      
+                                      // Обновляем локальное состояние
+                                      const currentUserId = session?.user?.id || "";
+                                      
+                                      setMessageLikes(prev => {
+                                        const newLikes = { ...prev };
+                                        
+                                        // Если реакций нет, удаляем из состояния
+                                        if (Object.keys(reactions).length === 0) {
+                                          delete newLikes[message.id];
+                                        } else {
+                                          // Обновляем реакцию
+                                          const firstEmoji = Object.keys(reactions)[0];
+                                          const reactionData = reactions[firstEmoji] as any;
+                                          const userIds = reactionData?.userIds || [];
+                                          const users = reactionData?.users || [];
+                                          const isLiked = userIds.includes(currentUserId);
+                                          
+                                          newLikes[message.id] = {
+                                            emoji: firstEmoji,
+                                            count: userIds.length,
+                                            isLiked,
+                                            users: users.map((u: any) => ({
+                                              id: u.id,
+                                              avatarUrl: u.avatarUrl,
+                                              name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Пользователь",
+                                            })),
+                                          };
+                                        }
+                                        
+                                        return newLikes;
+                                      });
                                     } else {
-                                      delete newLikes[message.id];
+                                      const errorData = await response.json().catch(() => ({ error: "Неизвестная ошибка" }));
+                                      console.error("Reaction removal API error:", errorData);
+                                      showToast(errorData.error || "Ошибка при удалении реакции", "error");
                                     }
-                                    return newLikes;
-                                  });
+                                  } catch (error) {
+                                    console.error("Error removing reaction:", error);
+                                    showToast("Ошибка при удалении реакции", "error");
+                                  }
                                 }}
                                 className={`flex items-center gap-1 px-2 py-0.5 rounded-full transition-colors ${
                                   messageLikes[message.id].isLiked
