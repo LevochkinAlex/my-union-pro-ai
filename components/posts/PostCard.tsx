@@ -149,11 +149,16 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     const trimmedPath = filePath.trim();
     
     // Validate: reject obviously invalid paths (single characters like "Z" that aren't URLs)
-    // Reject paths shorter than 3 characters unless they start with / or http
+    // Reject paths shorter than 3 characters unless they start with / or http or data:
     if (trimmedPath.length < 3) {
-      if (!trimmedPath.startsWith("/") && !trimmedPath.startsWith("http")) {
+      if (!trimmedPath.startsWith("/") && !trimmedPath.startsWith("http") && !trimmedPath.startsWith("data:")) {
         return "";
       }
+    }
+    
+    // If it's a data URL (base64), return as is
+    if (trimmedPath.startsWith("data:")) {
+      return trimmedPath;
     }
     
     // If it's already a full URL, return as is (use trimmedPath for consistency)
@@ -193,8 +198,8 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     if (trimmedPath.length < 3) {
       return "";
     }
-    // Also reject paths that don't contain a dot (likely not a file) unless they're URLs
-    if (!trimmedPath.includes(".") && !trimmedPath.startsWith("/") && !trimmedPath.startsWith("http")) {
+    // Also reject paths that don't contain a dot (likely not a file) unless they're URLs or data URLs
+    if (!trimmedPath.includes(".") && !trimmedPath.startsWith("/") && !trimmedPath.startsWith("http") && !trimmedPath.startsWith("data:")) {
       return "";
     }
     // Extract filename from path (use trimmedPath for consistency)
