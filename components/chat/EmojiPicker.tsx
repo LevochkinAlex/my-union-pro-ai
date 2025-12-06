@@ -35,15 +35,39 @@ export default function EmojiPicker({
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<keyof typeof EMOJI_CATEGORIES>("recent");
   const pickerRef = useRef<HTMLDivElement>(null);
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isHoveringRef = useRef(false);
   
   // Используем контролируемое или внутреннее состояние
   const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
   
   const setIsOpen = (value: boolean) => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
     if (controlledIsOpen === undefined) {
       setInternalIsOpen(value);
     }
     onOpenChange?.(value);
+  };
+
+  const handleMouseEnter = () => {
+    isHoveringRef.current = true;
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  };
+
+  const handleMouseLeave = () => {
+    isHoveringRef.current = false;
+    // Задержка перед закрытием, чтобы пользователь мог переместить курсор к модалке
+    closeTimeoutRef.current = setTimeout(() => {
+      if (!isHoveringRef.current) {
+        setIsOpen(false);
+      }
+    }, 300);
   };
 
   useEffect(() => {
@@ -59,6 +83,9 @@ export default function EmojiPicker({
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+      }
     };
   }, [isOpen]);
 
@@ -80,11 +107,17 @@ export default function EmojiPicker({
   }, []);
 
   return (
-    <div className="relative" ref={pickerRef}>
+    <div 
+      className="relative" 
+      ref={pickerRef}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       {showButton && (
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
+          onMouseEnter={handleMouseEnter}
           className="p-1.5 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex items-center justify-center"
           title="Выбрать эмодзи"
         >
@@ -95,7 +128,11 @@ export default function EmojiPicker({
       )}
 
       {isOpen && (
-        <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-3 w-80 max-h-96 overflow-hidden flex flex-col z-50">
+        <div 
+          className="absolute bottom-full left-0 mb-1 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-3 w-80 max-h-96 overflow-hidden flex flex-col z-50"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
           {/* Категории */}
           <div className="flex gap-1 mb-2 border-b border-gray-200 dark:border-gray-700 pb-2">
             {Object.keys(EMOJI_CATEGORIES).map((category) => (

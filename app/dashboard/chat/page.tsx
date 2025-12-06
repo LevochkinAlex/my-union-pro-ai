@@ -108,6 +108,7 @@ function ChatPageContent() {
     isLiked: boolean;
     users?: Array<{ id: string; avatarUrl: string | null; name: string }>;
   }>>({});
+  const [avatarLoadErrors, setAvatarLoadErrors] = useState<Set<string>>(new Set());
   const [emojiPickerMessageId, setEmojiPickerMessageId] = useState<string | null>(null);
   const lastDoubleClickRef = useRef<{ messageId: string; timestamp: number } | null>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -1743,11 +1744,15 @@ function ChatPageContent() {
                                         className="w-4 h-4 rounded-full border-2 border-white dark:border-gray-800 overflow-hidden"
                                         style={{ marginLeft: idx > 0 ? '-4px' : '0' }}
                                       >
-                                        {user.avatarUrl ? (
+                                        {user.avatarUrl && !avatarLoadErrors.has(`${message.id}-${user.id}`) ? (
                                           <img
-                                            src={user.avatarUrl}
+                                            src={getFileUrl(user.avatarUrl)}
                                             alt={user.name}
                                             className="w-full h-full object-cover"
+                                            onError={() => {
+                                              // Если изображение не загрузилось, добавляем в список ошибок
+                                              setAvatarLoadErrors(prev => new Set(prev).add(`${message.id}-${user.id}`));
+                                            }}
                                           />
                                         ) : (
                                           <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-[8px] font-semibold">
@@ -1903,10 +1908,10 @@ function ChatPageContent() {
                     }}
                     placeholder="Введите сообщение..."
                     rows={1}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base resize-none overflow-hidden"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base resize-none overflow-hidden leading-normal"
                     style={{ minHeight: "44px", maxHeight: "150px" }}
                   />
-                  <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center">
+                  <div className="absolute left-2 flex items-center" style={{ top: "10px", height: "24px" }}>
                     <EmojiPicker
                       onEmojiSelect={(emoji) => {
                         setMessageText((prev) => prev + emoji);
