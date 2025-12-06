@@ -54,19 +54,7 @@ export async function GET(
         chatId,
         deletedAt: null, // Не показываем удаленные сообщения
       },
-      select: {
-        id: true,
-        content: true,
-        senderId: true,
-        chatId: true,
-        replyToId: true,
-        forwardedFromId: true,
-        readAt: true,
-        editedAt: true,
-        deletedAt: true,
-        reactions: true,
-        createdAt: true,
-        updatedAt: true,
+      include: {
         sender: {
           select: {
             id: true,
@@ -78,10 +66,7 @@ export async function GET(
         },
         attachments: true,
         replyTo: {
-          select: {
-            id: true,
-            content: true,
-            senderId: true,
+          include: {
             sender: {
               select: {
                 id: true,
@@ -94,10 +79,7 @@ export async function GET(
           },
         },
         forwardedFrom: {
-          select: {
-            id: true,
-            content: true,
-            senderId: true,
+          include: {
             sender: {
               select: {
                 id: true,
