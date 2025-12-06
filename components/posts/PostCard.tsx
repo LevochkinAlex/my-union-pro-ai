@@ -156,18 +156,18 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       }
     }
     
-    // If it's already a full URL, return as is
-    if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
-      return filePath;
+    // If it's already a full URL, return as is (use trimmedPath for consistency)
+    if (trimmedPath.startsWith("http://") || trimmedPath.startsWith("https://")) {
+      return trimmedPath;
     }
-    // If it's already an API route, return as is
-    if (filePath.startsWith("/api/uploads/")) {
-      return filePath;
+    // If it's already an API route, return as is (use trimmedPath for consistency)
+    if (trimmedPath.startsWith("/api/uploads/")) {
+      return trimmedPath;
     }
-    // If it starts with /uploads/, convert to API route
-    if (filePath.startsWith("/uploads/")) {
+    // If it starts with /uploads/, convert to API route (use trimmedPath for consistency)
+    if (trimmedPath.startsWith("/uploads/")) {
       // Extract the path after /uploads/
-      const pathAfterUploads = filePath.replace(/^\/uploads\//, "");
+      const pathAfterUploads = trimmedPath.replace(/^\/uploads\//, "");
       // Determine category from path (posts, chat, avatars, etc.)
       const parts = pathAfterUploads.split("/").filter(p => p.length > 0);
       if (parts.length >= 2) {
@@ -197,8 +197,8 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     if (!trimmedPath.includes(".") && !trimmedPath.startsWith("/") && !trimmedPath.startsWith("http")) {
       return "";
     }
-    // Extract filename from path
-    const filename = filePath.split("/").pop();
+    // Extract filename from path (use trimmedPath for consistency)
+    const filename = trimmedPath.split("/").pop();
     // Validate filename - must exist and be reasonable (at least 3 chars or have extension)
     if (!filename || (filename.length < 3 && !filename.includes("."))) return "";
     // Use API endpoint for serving files with default category
