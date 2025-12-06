@@ -216,13 +216,19 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         const imageUrl = data.url;
         const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
         
-        if (isImageModalForCover || postType === "text") {
-          // Для обычного поста или cover изображения - добавляем как превью
-          setFilePreviews([fullImageUrl]);
-          setSelectedFiles([]); // Очищаем файлы, т.к. используем URL
+        if (isImageModalForCover) {
+          // Для cover изображения - устанавливаем только coverImage
           setCoverImage(fullImageUrl);
+          setFilePreviews([]);
+          setSelectedFiles([]);
           setIsImageModalOpen(false);
           setIsImageModalForCover(false);
+        } else if (postType === "text") {
+          // Для обычного поста - устанавливаем coverImage (будет отображаться как cover)
+          setCoverImage(fullImageUrl);
+          setFilePreviews([]);
+          setSelectedFiles([]);
+          setIsImageModalOpen(false);
         } else {
           // Если это вставка в HTML (через WYSIWYG) для статьи
           if (articleEditorRef.current) {
@@ -268,14 +274,19 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
   const handleImageGenerate = async (imageUrl: string) => {
     const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
     
-    if (isImageModalForCover || postType === "text") {
-      // Для обычного поста или cover изображения - добавляем как превью
-      // Для обычного поста заменяем существующее изображение
-      setFilePreviews([fullImageUrl]);
-      setSelectedFiles([]); // Очищаем файлы, т.к. используем URL
-      setCoverImage(fullImageUrl); // Также сохраняем как cover
+    if (isImageModalForCover) {
+      // Для cover изображения - устанавливаем только coverImage
+      setCoverImage(fullImageUrl);
+      setFilePreviews([]);
+      setSelectedFiles([]);
       setIsImageModalOpen(false);
       setIsImageModalForCover(false);
+    } else if (postType === "text") {
+      // Для обычного поста - устанавливаем coverImage (будет отображаться как cover)
+      setCoverImage(fullImageUrl);
+      setFilePreviews([]);
+      setSelectedFiles([]);
+      setIsImageModalOpen(false);
     } else {
       // Если это вставка в HTML (через WYSIWYG) для статьи
       if (articleEditorRef.current) {

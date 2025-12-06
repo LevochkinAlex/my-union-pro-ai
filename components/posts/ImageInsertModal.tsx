@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useToast } from "@/components/ui/Toast";
+import heic2any from "heic2any";
 
 interface ImageInsertModalProps {
   isOpen: boolean;
@@ -25,12 +26,62 @@ export default function ImageInsertModal({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [isConverting, setIsConverting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && file.type.startsWith("image/")) {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      showToast("Выберите файл изображения", "warning");
+      return;
+    }
+
+    // Проверяем, является ли файл HEIC/HEIF
+    const isHeic = file.type === "image/heic" || 
+                   file.type === "image/heif" || 
+                   file.name.toLowerCase().endsWith(".heic") ||
+                   file.name.toLowerCase().endsWith(".heif");
+
+    if (isHeic) {
+      setIsConverting(true);
+      try {
+        // Конвертируем HEIC в JPEG для превью
+        const convertedBlob = await heic2any({
+          blob: file,
+          toType: "image/jpeg",
+          quality: 0.8,
+        });
+        
+        // heic2any может вернуть массив или один blob
+        const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+        
+        // Создаем File объект из blob для дальнейшей работы
+        const jpegFile = new File([blob as Blob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), {
+          type: "image/jpeg",
+          lastModified: file.lastModified,
+        });
+        
+        setSelectedFile(jpegFile);
+        const url = URL.createObjectURL(blob as Blob);
+        setPreviewUrl(url);
+        setIsConverting(false);
+      } catch (error) {
+        console.error("Error converting HEIC:", error);
+        showToast("Ошибка при конвертации HEIC изображения", "error");
+        setIsConverting(false);
+        // Пробуем показать оригинальный файл (может не работать в некоторых браузерах)
+        setSelectedFile(file);
+        try {
+          const url = URL.createObjectURL(file);
+          setPreviewUrl(url);
+        } catch (e) {
+          showToast("Браузер не поддерживает просмотр HEIC изображений", "error");
+        }
+      }
+    } else {
       setSelectedFile(file);
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
@@ -180,11 +231,19 @@ export default function ImageInsertModal({
               </label>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,.heic,.heif"
                 onChange={handleFileSelect}
                 className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/20 dark:file:text-blue-400"
+                disabled={isConverting}
               />
-              {previewUrl && (
+              {isConverting && (
+                <div className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <p className="text-sm text-blue-700 dark:text-blue-300 text-center">
+                    Конвертация HEIC изображения...
+                  </p>
+                </div>
+              )}
+              {previewUrl && !isConverting && (
                 <div className="mt-3 relative">
                   <img
                     src={previewUrl}

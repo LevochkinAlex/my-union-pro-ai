@@ -228,9 +228,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Обрабатываем cover image для статей
+    // Обрабатываем cover image для статей и обычных постов
     let coverImage: string | null = null;
-    if (postType === "article" && coverImageRaw) {
+    if (coverImageRaw) {
       const coverImageValue = coverImageRaw as string;
       if (coverImageValue.trim() === "") {
         coverImage = null;
