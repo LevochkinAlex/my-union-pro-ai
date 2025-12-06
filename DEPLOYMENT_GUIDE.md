@@ -68,14 +68,14 @@ git push origin main
 После того как сайт задеплоен на `https://myunion.pro`:
 
 ```bash
-curl -X POST "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/setWebhook" \
+curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
   -d "url=https://myunion.pro/api/telegram/webhook"
 ```
 
 **Проверка webhook:**
 
 ```bash
-curl "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/getWebhookInfo"
+curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo"
 ```
 
 **Ожидаемый ответ:**
@@ -176,10 +176,10 @@ docker logs -f myunion-app | grep "2FA Auth"
 **Решение:**
 ```bash
 # Проверьте webhook
-curl "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/getWebhookInfo"
+curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo"
 
 # Если URL неправильный, настройте заново
-curl -X POST "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/setWebhook" \
+curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
   -d "url=https://myunion.pro/api/telegram/webhook"
 ```
 
@@ -340,11 +340,11 @@ git commit -m "feat: 2FA via Telegram + WhatsApp (v1.5.0)"
 git push origin main
 
 # 2. После деплоя настроить webhook
-curl -X POST "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/setWebhook" \
+curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
   -d "url=https://myunion.pro/api/telegram/webhook"
 
 # 3. Проверить
-curl "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/getWebhookInfo"
+curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo"
 ```
 
 **Вопросы?** Смотрите troubleshooting выше или пишите в поддержку.

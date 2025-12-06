@@ -206,7 +206,7 @@ docker logs -f myunion-app | grep "2FA Auth"
 
 ```bash
 # 1. Webhook настроен?
-curl "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/getWebhookInfo"
+curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo"
 
 # 2. Логи сервера
 docker logs -f myunion-app | grep "2FA Auth"

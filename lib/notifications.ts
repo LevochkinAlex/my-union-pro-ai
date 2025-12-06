@@ -136,7 +136,18 @@ function getShouldSendEmail(
     case "chat_message":
       // Используем настройку emailBotNotifications для чата
       return user.emailBotNotifications;
+    case "documents_ready":
+    case "ticket_response":
+    case "document_regeneration_required":
+    case "news_published":
+    case "mass_notification":
+      // Важные уведомления используют настройку emailAppealNotifications
+      return user.emailAppealNotifications;
+    case "user_post":
+      // Уведомления о новых постах также используют emailAppealNotifications
+      return user.emailAppealNotifications;
     default:
+      // Для неизвестных типов не отправляем email
       return false;
   }
 }
@@ -152,6 +163,18 @@ function getEmailSubject(type: NotificationType, senderName?: string): string {
       return `${senderName || "Пользователь"} ответил на ваш комментарий`;
     case "chat_message":
       return `Новое сообщение от ${senderName || "пользователя"}`;
+    case "user_post":
+      return `Новый пост от ${senderName || "пользователя"}`;
+    case "documents_ready":
+      return "Документы готовы для подписания";
+    case "ticket_response":
+      return "Получен ответ на ваше обращение";
+    case "document_regeneration_required":
+      return "Требуется перегенерация документов";
+    case "news_published":
+      return "Опубликована новая новость";
+    case "mass_notification":
+      return "Важное уведомление";
     default:
       return "Новое уведомление";
   }
@@ -180,6 +203,26 @@ function getEmailBody(
     case "chat_message":
       message = `${senderName || "Пользователь"} отправил вам сообщение:\n\n"${body}"\n\n`;
       break;
+    case "user_post":
+      message = `${senderName || "Пользователь"} опубликовал новый пост:\n\n"${body}"\n\n`;
+      break;
+    case "documents_ready":
+      message = `${body}\n\n`;
+      break;
+    case "ticket_response":
+      message = `${body}\n\n`;
+      break;
+    case "document_regeneration_required":
+      message = `${body}\n\n`;
+      break;
+    case "news_published":
+      message = `${body}\n\n`;
+      break;
+    case "mass_notification":
+      message = `${body}\n\n`;
+      break;
+    default:
+      message = `${body}\n\n`;
   }
 
   return `${greeting}\n\n${message}Чтобы прочитать и ответить, перейдите по ссылке:\n${url}\n\n--\nС уважением,\nКоманда MyUnion`;
@@ -213,6 +256,33 @@ function getEmailHtml(
       message = `<strong>${senderName || "Пользователь"}</strong> отправил вам сообщение:`;
       actionText = "Открыть чат";
       break;
+    case "user_post":
+      message = `<strong>${senderName || "Пользователь"}</strong> опубликовал новый пост:`;
+      actionText = "Посмотреть пост";
+      break;
+    case "documents_ready":
+      message = body;
+      actionText = "Открыть документы";
+      break;
+    case "ticket_response":
+      message = body;
+      actionText = "Открыть обращение";
+      break;
+    case "document_regeneration_required":
+      message = body;
+      actionText = "Открыть профиль пользователя";
+      break;
+    case "news_published":
+      message = body;
+      actionText = "Читать новость";
+      break;
+    case "mass_notification":
+      message = body;
+      actionText = "Открыть уведомление";
+      break;
+    default:
+      message = body;
+      actionText = "Перейти";
   }
 
   return `

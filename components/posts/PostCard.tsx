@@ -143,8 +143,19 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   };
 
   // Helper function to get file URL (for production compatibility)
-  const getFileUrl = (filePath: string) => {
+  const getFileUrl = (filePath: string, defaultCategory: string = "posts") => {
     if (!filePath) return "";
+    
+    const trimmedPath = filePath.trim();
+    
+    // Validate: reject obviously invalid paths (single characters like "Z" that aren't URLs)
+    // Reject paths shorter than 3 characters unless they start with / or http
+    if (trimmedPath.length < 3) {
+      if (!trimmedPath.startsWith("/") && !trimmedPath.startsWith("http")) {
+        return "";
+      }
+    }
+    
     // If it's already a full URL, return as is
     if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
       return filePath;
@@ -158,18 +169,40 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       // Extract the path after /uploads/
       const pathAfterUploads = filePath.replace(/^\/uploads\//, "");
       // Determine category from path (posts, chat, avatars, etc.)
-      const parts = pathAfterUploads.split("/");
+      const parts = pathAfterUploads.split("/").filter(p => p.length > 0);
       if (parts.length >= 2) {
+        // Path has category and filename: /uploads/category/filename.jpg
         const category = parts[0]; // posts, chat, avatars, etc.
         const filename = parts[parts.length - 1];
+        // Validate filename - must exist and be reasonable (at least 3 chars or have extension)
+        if (!filename || (filename.length < 3 && !filename.includes("."))) return "";
         return `/api/uploads/${category}/${filename}`;
+      } else if (parts.length === 1) {
+        // Path has only filename: /uploads/filename.jpg - use default category
+        const filename = parts[0];
+        // Validate filename - must exist and be reasonable (at least 3 chars or have extension)
+        if (!filename || (filename.length < 3 && !filename.includes("."))) return "";
+        return `/api/uploads/${defaultCategory}/${filename}`;
       }
+      // Empty path after /uploads/ - invalid
+      return "";
+    }
+    // For other paths (not starting with /uploads/ or /api/uploads/), reject if too short
+    // This catches cases like "Z" that would otherwise become "/api/uploads/avatars/Z"
+    // Reject single character paths or very short paths that don't look like filenames
+    if (trimmedPath.length < 3) {
+      return "";
+    }
+    // Also reject paths that don't contain a dot (likely not a file) unless they're URLs
+    if (!trimmedPath.includes(".") && !trimmedPath.startsWith("/") && !trimmedPath.startsWith("http")) {
+      return "";
     }
     // Extract filename from path
     const filename = filePath.split("/").pop();
-    if (!filename) return filePath;
-    // Use API endpoint for serving files (default to posts)
-    return `/api/uploads/posts/${filename}`;
+    // Validate filename - must exist and be reasonable (at least 3 chars or have extension)
+    if (!filename || (filename.length < 3 && !filename.includes("."))) return "";
+    // Use API endpoint for serving files with default category
+    return `/api/uploads/${defaultCategory}/${filename}`;
   };
 
   const formatTime = (dateString: string) => {
@@ -440,17 +473,35 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       {/* Автор */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          {post.author.avatarUrl ? (
-            <img
-              src={post.author.avatarUrl}
-              alt={getUserName(post.author)}
-              className="w-10 h-10 rounded-full object-cover"
-            />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
+          <div className="relative w-10 h-10">
+            {(() => {
+              const avatarUrl = post.author.avatarUrl;
+              const fileUrl = avatarUrl ? getFileUrl(avatarUrl, "avatars") : "";
+              return fileUrl ? (
+                <img
+                  src={fileUrl}
+                  alt={getUserName(post.author)}
+                  className="w-10 h-10 rounded-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const placeholder = e.currentTarget.nextElementSibling;
+                    if (placeholder) {
+                      (placeholder as HTMLElement).style.display = 'flex';
+                    }
+                  }}
+                />
+              ) : null;
+            })()}
+            <div 
+              className={`w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold ${(() => {
+                const avatarUrl = post.author.avatarUrl;
+                const fileUrl = avatarUrl ? getFileUrl(avatarUrl, "avatars") : "";
+                return fileUrl ? 'hidden' : '';
+              })()}`}
+            >
               {getInitials(post.author)}
             </div>
-          )}
+          </div>
           <div>
             <p className="font-semibold text-gray-900 dark:text-white">
               {getUserName(post.author)}
@@ -743,23 +794,27 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
             {comments.filter(c => !c.parentId).map((comment) => (
               <div key={comment.id} className="space-y-2">
                 <div className="flex gap-3">
-                  {comment.user.avatarUrl ? (
-                    <img
-                      src={getFileUrl(comment.user.avatarUrl)}
-                      alt={getUserName(comment.user)}
-                      className="w-8 h-8 rounded-full object-cover"
-                      onError={(e) => {
-                        console.log("Avatar load error for comment:", comment.user.avatarUrl);
-                        e.currentTarget.style.display = 'none';
-                        const placeholder = e.currentTarget.nextElementSibling;
-                        if (placeholder) {
-                          (placeholder as HTMLElement).style.display = 'flex';
-                        }
-                      }}
-                    />
-                  ) : null}
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold" style={{ display: comment.user.avatarUrl ? 'none' : 'flex' }}>
-                    {getInitials(comment.user)}
+                  <div className="relative w-8 h-8">
+                    {comment.user.avatarUrl && getFileUrl(comment.user.avatarUrl, "avatars") ? (
+                      <img
+                        src={getFileUrl(comment.user.avatarUrl, "avatars")}
+                        alt={getUserName(comment.user)}
+                        className="w-8 h-8 rounded-full object-cover"
+                        onError={(e) => {
+                          console.log("Avatar load error for comment:", comment.user.avatarUrl);
+                          e.currentTarget.style.display = 'none';
+                          const placeholder = e.currentTarget.nextElementSibling;
+                          if (placeholder) {
+                            (placeholder as HTMLElement).style.display = 'flex';
+                          }
+                        }}
+                      />
+                    ) : null}
+                    <div 
+                      className={`w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold ${comment.user.avatarUrl && getFileUrl(comment.user.avatarUrl, "avatars") ? 'hidden' : ''}`}
+                    >
+                      {getInitials(comment.user)}
+                    </div>
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
@@ -853,23 +908,35 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                   <div className="ml-11 space-y-2">
                     {comment.replies.map((reply: any) => (
                       <div key={reply.id} className="flex gap-3">
-                        {reply.user.avatarUrl ? (
-                          <img
-                            src={getFileUrl(reply.user.avatarUrl)}
-                            alt={getUserName(reply.user)}
-                            className="w-6 h-6 rounded-full object-cover"
-                            onError={(e) => {
-                              console.log("Avatar load error for reply:", reply.user.avatarUrl);
-                              e.currentTarget.style.display = 'none';
-                              const placeholder = e.currentTarget.nextElementSibling;
-                              if (placeholder) {
-                                (placeholder as HTMLElement).style.display = 'flex';
-                              }
-                            }}
-                          />
-                        ) : null}
-                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-white text-xs font-semibold" style={{ display: reply.user.avatarUrl ? 'none' : 'flex' }}>
-                          {getInitials(reply.user)}
+                        <div className="relative w-6 h-6">
+                          {(() => {
+                            const avatarUrl = reply.user.avatarUrl;
+                            const fileUrl = avatarUrl ? getFileUrl(avatarUrl, "avatars") : "";
+                            return fileUrl ? (
+                              <img
+                                src={fileUrl}
+                                alt={getUserName(reply.user)}
+                                className="w-6 h-6 rounded-full object-cover"
+                                onError={(e) => {
+                                  console.log("Avatar load error for reply:", reply.user.avatarUrl);
+                                  e.currentTarget.style.display = 'none';
+                                  const placeholder = e.currentTarget.nextElementSibling;
+                                  if (placeholder) {
+                                    (placeholder as HTMLElement).style.display = 'flex';
+                                  }
+                                }}
+                              />
+                            ) : null;
+                          })()}
+                          <div 
+                            className={`w-6 h-6 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-white text-xs font-semibold ${(() => {
+                              const avatarUrl = reply.user.avatarUrl;
+                              const fileUrl = avatarUrl ? getFileUrl(avatarUrl, "avatars") : "";
+                              return fileUrl ? 'hidden' : '';
+                            })()}`}
+                          >
+                            {getInitials(reply.user)}
+                          </div>
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2">

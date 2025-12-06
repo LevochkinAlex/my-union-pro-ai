@@ -46,7 +46,7 @@ curl -X POST "https://api.telegram.org/botYOUR_TOKEN/setWebhook" \
 
 **Пример:**
 ```bash
-curl -X POST "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/setWebhook" \
+curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
   -d "url=https://myunion.pro/api/telegram/webhook"
 ```
 
@@ -119,7 +119,7 @@ https://t.me/myunionpro_bot?start=AUTH_phone_+79991234567
 ### 1. Проверка токена бота
 
 ```bash
-curl "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/getMe"
+curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe"
 ```
 
 Должен вернуть информацию о боте.
@@ -127,7 +127,7 @@ curl "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo
 ### 2. Тестовая отправка сообщения
 
 ```bash
-curl -X POST "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/sendMessage" \
+curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
   -d "chat_id=YOUR_CHAT_ID" \
   -d "text=Тест"
 ```
@@ -137,7 +137,7 @@ curl -X POST "https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8
 1. Напишите боту любое сообщение
 2. Откройте в браузере:
    ```
-   https://api.telegram.org/bot8321416024:AAGKjoe4tL_OCe1xysXx0sMfMf8RTMsGnlo/getUpdates
+   https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates
    ```
 3. Найдите `chat.id` в ответе
 

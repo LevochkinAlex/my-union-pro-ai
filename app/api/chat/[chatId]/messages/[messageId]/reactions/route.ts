@@ -43,7 +43,12 @@ export async function POST(
     // Получаем сообщение с текущими реакциями
     const message = await prisma.chatMessage.findUnique({
       where: { id: messageId },
-    }) as any;
+      select: {
+        id: true,
+        chatId: true,
+        reactions: true,
+      },
+    });
 
     if (!message) {
       return NextResponse.json({ error: "Сообщение не найдено" }, { status: 404 });
@@ -108,7 +113,10 @@ export async function POST(
     // Получаем обновленное сообщение с информацией о пользователях
     const updatedMessage = await prisma.chatMessage.findUnique({
       where: { id: messageId },
-    }) as any;
+      select: {
+        reactions: true,
+      },
+    });
 
     // Получаем информацию о пользователях для реакций
     const allUserIds = new Set<string>();
