@@ -50,7 +50,6 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
   const [userName, setUserName] = useState<string>("");
   const articleEditorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -111,27 +110,13 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    setSelectedFiles(files);
-    const previews = files.map((file) => {
-      if (file.type.startsWith("image/")) {
-        return URL.createObjectURL(file);
-      }
-      return "";
-    });
-    setFilePreviews(previews);
-    if (!isModalOpen) {
+    // Фильтруем только документы (не изображения)
+    const documentFiles = files.filter((file) => !file.type.startsWith("image/"));
+    setSelectedFiles(documentFiles);
+    // Для документов превью не создаём
+    setFilePreviews(documentFiles.map(() => ""));
+    if (!isModalOpen && documentFiles.length > 0) {
       openModal();
-    }
-  };
-
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && file.type.startsWith("image/")) {
-      setSelectedFiles([file]);
-      setFilePreviews([URL.createObjectURL(file)]);
-      if (!isModalOpen) {
-        openModal();
-      }
     }
   };
 
@@ -281,6 +266,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
 
       if (response.ok && data.url) {
         const imageUrl = data.url;
+        console.log('[CreatePost] Image uploaded, API returned URL:', imageUrl);
         // API возвращает полный URL (https://myunion.pro/uploads/...) или относительный (/api/uploads/...)
         // Для превью используем полный URL, для отправки - нормализуем
         
@@ -295,6 +281,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
             : imageUrl.startsWith('/') 
               ? `${window.location.origin}${imageUrl}`
               : `${window.location.origin}/${imageUrl}`;
+          console.log('[CreatePost] Set coverImage to:', fullUrl);
           setCoverImage(fullUrl);
           setFilePreviews([]);
           setSelectedFiles([]);
@@ -705,6 +692,10 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         const coverImagePath = coverImage.startsWith('http') 
           ? coverImage.replace(window.location.origin, '')
           : coverImage;
+        console.log('[CreatePost] Sending coverImage:', { 
+          original: coverImage, 
+          normalized: coverImagePath 
+        });
         formData.append("coverImage", coverImagePath);
       }
 
@@ -738,9 +729,6 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         setIsArticleModalOpen(false);
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
-        }
-        if (imageInputRef.current) {
-          imageInputRef.current.value = "";
         }
         if (onPostCreated) {
           onPostCreated();
@@ -787,10 +775,8 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
     setPostType("text");
   };
 
-  const handlePostTypeClick = (type: "image" | "video" | "file" | "article") => {
-    if (type === "image") {
-      imageInputRef.current?.click();
-    } else if (type === "file") {
+  const handlePostTypeClick = (type: "video" | "file" | "article") => {
+    if (type === "file") {
       fileInputRef.current?.click();
     } else if (type === "video") {
       setPostType("text");
@@ -1167,15 +1153,8 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         ref={fileInputRef}
         onChange={handleFileSelect}
         className="hidden"
-        accept="image/*,video/*,.pdf,.doc,.docx,.txt,.heic,.heif"
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.rtf,.odt,.ods,.zip,.rar,.7z"
         multiple
-      />
-      <input
-        type="file"
-        ref={imageInputRef}
-        onChange={handleImageSelect}
-        className="hidden"
-        accept="image/*,.heic,.heif"
       />
     </>
   );

@@ -394,6 +394,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
 
       if (response.ok && data.url) {
         const imageUrl = data.url;
+        console.log('[PostCard] Image uploaded, API returned URL:', imageUrl);
         // API возвращает полный URL (https://myunion.pro/uploads/...) или относительный (/api/uploads/...)
         // Для превью используем полный URL
         const fullImageUrl = imageUrl.startsWith('http') 
@@ -401,12 +402,14 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           : imageUrl.startsWith('/') 
             ? `${window.location.origin}${imageUrl}`
             : `${window.location.origin}/${imageUrl}`;
+        console.log('[PostCard] Full image URL for preview:', fullImageUrl);
         
         if (imageInsertMode === "cover") {
           // Используем как обложку - очищаем видео, если было
           setEditVideoMetadata(null);
           setEditVideoUrl("");
           setEditCoverImage(fullImageUrl);
+          console.log('[PostCard] Set editCoverImage to:', fullImageUrl);
           setIsEditImageModalOpen(false);
           setImageInsertMode("content");
           showToast("✓ Обложка загружена", "success");
@@ -809,8 +812,8 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           </div>
         )}
 
-        {/* Превью видео */}
-        {post.videoMetadata && post.videoMetadata.videoType && post.videoMetadata.videoId && (
+        {/* Превью видео - показываем только если это НЕ статья (для статей видео уже показано как обложка) */}
+        {!isArticle && post.videoMetadata && post.videoMetadata.videoType && post.videoMetadata.videoId && (
           <div className="mb-4">
             <VideoEmbed
               videoType={post.videoMetadata.videoType}
@@ -1234,9 +1237,19 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                 
                 // Сохраняем cover image для всех типов постов
                 if (editCoverImage) {
-                  formData.append("coverImage", editCoverImage);
+                  // Нормализуем путь перед отправкой
+                  // Если это полный URL, извлекаем относительный путь
+                  const coverImagePath = editCoverImage.startsWith('http') 
+                    ? editCoverImage.replace(window.location.origin, '')
+                    : editCoverImage;
+                  console.log('[PostCard] Sending coverImage:', { 
+                    original: editCoverImage, 
+                    normalized: coverImagePath 
+                  });
+                  formData.append("coverImage", coverImagePath);
                 } else {
                   // Если cover image удален, отправляем пустую строку
+                  console.log('[PostCard] Removing coverImage (sending empty string)');
                   formData.append("coverImage", "");
                 }
                 
@@ -1263,8 +1276,10 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
 
                 if (response.ok) {
                   const data = await response.json();
+                  console.log('[PostCard] Post saved successfully, API response:', data.post);
                   // Обновляем coverImage из ответа
                   if (data.post?.coverImage !== undefined) {
+                    console.log('[PostCard] Updating coverImage from API response:', data.post.coverImage);
                     setCoverImage(data.post.coverImage);
                     setEditCoverImage(data.post.coverImage);
                   }
