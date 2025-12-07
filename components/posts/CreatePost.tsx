@@ -846,13 +846,46 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
             {/* Контент модалки */}
             <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-800">
               <form onSubmit={handleSubmit} className="p-4 lg:p-6 space-y-4">
-                {/* WYSIWYG редактор */}
-                {/* Превью обложки статьи */}
+                {/* Обложка (картинка ИЛИ видео) */}
+                {!coverImage && !videoMetadata ? (
+                  <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 text-center">
+                      Добавьте обложку (одну картинку или видео)
+                    </p>
+                    <div className="flex gap-3 justify-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsImageModalForCover(true);
+                          setIsImageModalOpen(true);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Картинка
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsVideoModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Видео
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                
+                {/* Превью обложки-картинки */}
                 {coverImage && (
-                  <div className="relative mb-4 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                  <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
                     <img
                       src={coverImage}
-                      alt="Обложка статьи"
+                      alt="Обложка"
                       className="w-full h-64 object-cover"
                       style={{ aspectRatio: '16/9' }}
                       onError={(e) => {
@@ -864,7 +897,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                     <button
                       type="button"
                       onClick={() => setCoverImage(null)}
-                      className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg"
+                      className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg z-10"
                       title="Удалить обложку"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -872,7 +905,34 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                       </svg>
                     </button>
                     <div className="absolute bottom-2 left-2 px-3 py-1 bg-black/50 backdrop-blur-sm text-white text-xs rounded-full">
-                      ✓ Обложка загружена
+                      ✓ Обложка-картинка
+                    </div>
+                  </div>
+                )}
+
+                {/* Превью обложки-видео */}
+                {videoMetadata && videoMetadata.embedUrl && (
+                  <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                    <VideoEmbed
+                      videoType={videoMetadata.videoType}
+                      videoId={videoMetadata.videoId}
+                      title="Обложка-видео"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVideoMetadata(null);
+                        setVideoUrl("");
+                      }}
+                      className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg z-10"
+                      title="Удалить обложку"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                    <div className="absolute bottom-2 left-2 px-3 py-1 bg-black/50 backdrop-blur-sm text-white text-xs rounded-full">
+                      ✓ Обложка-видео
                     </div>
                   </div>
                 )}
@@ -930,43 +990,18 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
 
             {/* Футер модалки */}
             <div className="flex items-center justify-between p-4 lg:p-6 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-800 rounded-b-xl">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsImageModalForCover(true);
-                    setIsImageModalOpen(true);
-                  }}
-                  className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                  title="Добавить обложку"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleInsertVideo}
-                  className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                  title="Вставить видео"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAiWrite}
-                  disabled={aiLoading}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Написать с ИИ"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                  </svg>
-                  {aiLoading ? "Генерация..." : "Написать с ИИ"}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleAiWrite}
+                disabled={aiLoading}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Написать с ИИ"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+                {aiLoading ? "Генерация..." : "Написать с ИИ"}
+              </button>
               <button
                 type="button"
                 onClick={handleSubmit}
