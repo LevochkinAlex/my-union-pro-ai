@@ -231,68 +231,159 @@ export async function POST(request: NextRequest) {
     // Обрабатываем cover image для статей и обычных постов
     let coverImage: string | null = null;
     if (coverImageRaw) {
-      const coverImageValue = coverImageRaw as string;
-      if (coverImageValue.trim() === "") {
-        coverImage = null;
-      } else if (coverImageValue.startsWith("http://") || coverImageValue.startsWith("https://")) {
-        // Если это внешний URL, загружаем на сервер
-        try {
-          console.log(`[posts] Downloading cover image from: ${coverImageValue}`);
-          const imageResponse = await fetch(coverImageValue);
-          if (imageResponse.ok) {
-            const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
-            const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
-            
-            // Конвертируем HEIC если нужно
-            let finalBuffer = imageBuffer;
-            if (contentType.includes("heic") || contentType.includes("heif") || 
-                coverImageValue.toLowerCase().endsWith('.heic') || coverImageValue.toLowerCase().endsWith('.heif')) {
-              try {
-                const converted = await convertHeicToJpegServer(imageBuffer, coverImageValue, contentType);
-                finalBuffer = Buffer.from(converted.buffer);
-              } catch (convertError) {
-                console.error(`[posts] Error converting cover HEIC:`, convertError);
-              }
-            }
-            
-            let extension = ".jpg";
-            if (contentType.includes("png")) extension = ".png";
-            else if (contentType.includes("webp")) extension = ".webp";
-            else if (contentType.includes("gif")) extension = ".gif";
-            
-            const fileName = `cover-${Date.now()}-${Math.random().toString(36).substring(7)}${extension}`;
-            const fileKey = `posts/${fileName}`;
-            
-            if (isVDSStorageConfigured()) {
-              try {
-                coverImage = await uploadFileToVDS(fileKey, finalBuffer, contentType);
-                console.log(`[posts] Cover image uploaded to VDS: ${coverImage}`);
-              } catch (vdsError) {
-                console.error(`[posts] VDS upload error for cover, using local:`, vdsError);
-                await mkdir(UPLOAD_DIR, { recursive: true });
-                const localFilePath = path.join(UPLOAD_DIR, fileName);
-                await writeFile(localFilePath, finalBuffer);
-                coverImage = `/api/uploads/posts/${fileName}`;
+      // Если это строка
+      if (typeof coverImageRaw === "string") {
+        const coverImageStr = coverImageRaw.trim();
+        
+        // Пустая строка = удалить обложку
+        if (coverImageStr === "") {
+          coverImage = null;
+        }
+        // Если это уже загруженный файл (URL или API путь), используем как есть
+        else if (coverImageStr.startsWith("http://") || 
+                 coverImageStr.startsWith("https://") || 
+                 coverImageStr.startsWith("/api/uploads/")) {
+          coverImage = coverImageStr;
+          console.log(`[posts] Using existing cover image URL: ${coverImage}`);
+        }
+        // Если это путь /uploads/, конвертируем в /api/uploads/
+        else if (coverImageStr.startsWith("/uploads/")) {
+          coverImage = coverImageStr.replace("/uploads/", "/api/uploads/");
+          console.log(`[posts] Normalized cover image path: ${coverImage}`);
+        }
+        // Если это data URL, загружаем на сервер
+        else if (coverImageStr.startsWith("data:")) {
+          try {
+            const matches = coverImageStr.match(/^data:([^;]+);base64,(.+)$/);
+            if (matches) {
+              const mimeType = matches[1];
+              const base64Data = matches[2];
+              const buffer = Buffer.from(base64Data, "base64");
+              
+              let extension = ".jpg";
+              if (mimeType.includes("png")) extension = ".png";
+              else if (mimeType.includes("webp")) extension = ".webp";
+              else if (mimeType.includes("gif")) extension = ".gif";
+              
+              const fileName = `cover-${Date.now()}-${Math.random().toString(36).substring(7)}${extension}`;
+              const fileKey = `posts/${fileName}`;
+              
+              if (isVDSStorageConfigured()) {
+                try {
+                  coverImage = await uploadFileToVDS(fileKey, buffer, mimeType);
+                  console.log(`[posts] Cover image (data URL) uploaded to VDS: ${coverImage}`);
+                } catch (vdsError) {
+                  console.error(`[posts] VDS upload error for cover (data URL):`, vdsError);
+                  throw new Error(`Не удалось загрузить обложку на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
+                }
+              } else {
+                throw new Error("VDS storage не настроен");
               }
             } else {
-              await mkdir(UPLOAD_DIR, { recursive: true });
-              const localFilePath = path.join(UPLOAD_DIR, fileName);
-              await writeFile(localFilePath, finalBuffer);
-              coverImage = `/api/uploads/posts/${fileName}`;
+              console.error(`[posts] Invalid data URL format for cover image`);
+              coverImage = null;
+            }
+          } catch (error) {
+            console.error(`[posts] Error processing cover image data URL:`, error);
+            throw error;
+          }
+        }
+        // Если это внешний HTTP/HTTPS URL, загружаем на сервер
+        else if (coverImageStr.startsWith("http://") || coverImageStr.startsWith("https://")) {
+          try {
+            console.log(`[posts] Downloading cover image from: ${coverImageStr}`);
+            const imageResponse = await fetch(coverImageStr);
+            if (imageResponse.ok) {
+              const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+              const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+              
+              // Конвертируем HEIC если нужно
+              let finalBuffer = imageBuffer;
+              if (contentType.includes("heic") || contentType.includes("heif") || 
+                  coverImageStr.toLowerCase().endsWith('.heic') || coverImageStr.toLowerCase().endsWith('.heif')) {
+                try {
+                  const converted = await convertHeicToJpegServer(imageBuffer, coverImageStr, contentType);
+                  finalBuffer = Buffer.from(converted.buffer);
+                } catch (convertError) {
+                  console.error(`[posts] Error converting cover HEIC:`, convertError);
+                }
+              }
+              
+              let extension = ".jpg";
+              if (contentType.includes("png")) extension = ".png";
+              else if (contentType.includes("webp")) extension = ".webp";
+              else if (contentType.includes("gif")) extension = ".gif";
+              
+              const fileName = `cover-${Date.now()}-${Math.random().toString(36).substring(7)}${extension}`;
+              const fileKey = `posts/${fileName}`;
+              
+              if (isVDSStorageConfigured()) {
+                try {
+                  coverImage = await uploadFileToVDS(fileKey, finalBuffer, contentType);
+                  console.log(`[posts] Cover image uploaded to VDS: ${coverImage}`);
+                } catch (vdsError) {
+                  console.error(`[posts] VDS upload error for cover:`, vdsError);
+                  throw new Error(`Не удалось загрузить обложку на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
+                }
+              } else {
+                throw new Error("VDS storage не настроен");
+              }
+            } else {
+              console.error(`[posts] Failed to download cover image: ${imageResponse.status}`);
+              throw new Error(`Не удалось загрузить изображение: ${imageResponse.status}`);
+            }
+          } catch (error) {
+            console.error(`[posts] Error processing cover image URL:`, error);
+            throw error;
+          }
+        }
+        // Иначе игнорируем (некорректный формат)
+        else {
+          console.warn(`[posts] Invalid cover image format: ${coverImageStr.substring(0, 50)}`);
+          coverImage = null;
+        }
+      }
+      // Если это File объект, загружаем его
+      else if (coverImageRaw instanceof File) {
+        // Если это File, загружаем его на сервер
+        try {
+          const bytes = await coverImageRaw.arrayBuffer();
+          let buffer: Buffer = Buffer.from(bytes);
+          let mimeType = coverImageRaw.type || "image/jpeg";
+          let originalName = coverImageRaw.name || "cover.jpg";
+
+          // Конвертируем HEIC если нужно
+          if (mimeType.startsWith("image/") && mimeType !== "image/gif") {
+            try {
+              const converted = await convertHeicToJpegServer(buffer, originalName, mimeType);
+              buffer = converted.buffer as Buffer;
+              originalName = converted.fileName;
+              mimeType = converted.mimeType;
+            } catch (convertError) {
+              console.error(`[posts] Error converting cover HEIC:`, convertError);
+            }
+          }
+
+          const fileExtension = path.extname(originalName) || ".jpg";
+          const fileName = `cover-${Date.now()}-${Math.random().toString(36).substring(7)}${fileExtension}`;
+          const fileKey = `posts/${fileName}`;
+
+          if (isVDSStorageConfigured()) {
+            try {
+              coverImage = await uploadFileToVDS(fileKey, buffer, mimeType);
+              console.log(`[posts] Cover image uploaded to VDS: ${coverImage}`);
+            } catch (vdsError) {
+              console.error(`[posts] VDS upload error for cover:`, vdsError);
+              throw new Error(`Не удалось загрузить обложку на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
             }
           } else {
-            console.error(`[posts] Failed to download cover image: ${imageResponse.status}`);
-            coverImage = coverImageValue; // Используем оригинальный URL
+            throw new Error("VDS storage не настроен");
           }
         } catch (error) {
-          console.error(`[posts] Error processing cover image:`, error);
-          coverImage = coverImageValue; // Используем оригинальный URL
+          console.error(`[posts] Error processing cover image file:`, error);
+          throw error;
         }
-      } else {
-        // Локальный путь или data URL
-        coverImage = coverImageValue;
       }
-    }
 
     // Создаем пост
     const post = await prisma.userPost.create({
@@ -302,7 +393,7 @@ export async function POST(request: NextRequest) {
         postType,
         linkMetadata: parsedLinkMetadata,
         videoMetadata: parsedVideoMetadata,
-        ...(coverImage !== null ? { coverImage } : {}),
+        ...(coverImage !== null && coverImage !== "" ? { coverImage } : {}),
       },
       include: {
         author: {

@@ -214,11 +214,15 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
 
       if (response.ok && data.url) {
         const imageUrl = data.url;
-        const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
+        // Используем относительный путь для coverImage, чтобы API мог его правильно обработать
+        const coverImagePath = imageUrl.startsWith('http') 
+          ? imageUrl.replace(window.location.origin, '') 
+          : imageUrl;
         
         if (isImageModalForCover) {
           // Для cover изображения - устанавливаем только coverImage
-          setCoverImage(fullImageUrl);
+          // Используем полный URL для превью, но при отправке будем использовать путь
+          setCoverImage(imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`);
           setFilePreviews([]);
           setSelectedFiles([]);
           setIsImageModalOpen(false);
@@ -272,10 +276,12 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
   };
 
   const handleImageGenerate = async (imageUrl: string) => {
+    // Используем полный URL для превью
     const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
     
     if (isImageModalForCover) {
       // Для cover изображения - устанавливаем только coverImage
+      // Используем полный URL для превью, но при отправке будем использовать путь
       setCoverImage(fullImageUrl);
       setFilePreviews([]);
       setSelectedFiles([]);
@@ -559,7 +565,18 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
       }
 
       if (coverImage) {
-        formData.append("coverImage", coverImage);
+        // Если coverImage - это URL строка, нормализуем путь перед отправкой
+        if (coverImage instanceof File) {
+          formData.append("coverImage", coverImage);
+        } else if (typeof coverImage === "string") {
+          // Если это полный URL, извлекаем относительный путь
+          const coverImagePath = coverImage.startsWith('http') 
+            ? coverImage.replace(window.location.origin, '')
+            : coverImage;
+          formData.append("coverImage", coverImagePath);
+        } else {
+          formData.append("coverImage", String(coverImage));
+        }
       }
 
       const filesToUpload = await compressImages(selectedFiles);

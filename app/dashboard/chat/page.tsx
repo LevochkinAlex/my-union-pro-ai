@@ -102,6 +102,7 @@ function ChatPageContent() {
   const [forwardLoading, setForwardLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<{ url: string; name?: string } | null>(null);
   const [isConvertingHeic, setIsConvertingHeic] = useState(false);
+  const [isBotTyping, setIsBotTyping] = useState(false);
   // Изменено: теперь messageLikes хранит массив реакций для каждого сообщения
   const [messageLikes, setMessageLikes] = useState<Record<string, Array<{ 
     emoji: string; 
@@ -158,11 +159,10 @@ function ChatPageContent() {
 
   // Открываем чат с ботом, если передан botChatId
   useEffect(() => {
-    if (botChatId && chats.length > 0) {
+    if (botChatId && chats.length > 0 && (!selectedChat || selectedChat.id !== botChatId)) {
       const botChat = chats.find((chat) => chat.id === botChatId);
       if (botChat) {
         setSelectedChat(botChat);
-        loadMessages(botChat.id, false);
       }
     }
   }, [botChatId, chats]);
@@ -182,12 +182,17 @@ function ChatPageContent() {
 
   useEffect(() => {
     if (selectedChat) {
+      // Очищаем сообщения перед загрузкой новых
+      setMessages([]);
+      setIsBotTyping(false);
       shouldScrollToBottom.current = true; // При открытии нового чата всегда скроллим вниз
-      loadMessages(selectedChat.id);
-      // Обновляем список чатов после выбора
-      loadChats();
+      loadMessages(selectedChat.id, false);
+    } else {
+      // Очищаем сообщения, если чат не выбран
+      setMessages([]);
+      setIsBotTyping(false);
     }
-  }, [selectedChat]);
+  }, [selectedChat?.id]); // Используем только ID, чтобы избежать лишних перезагрузок
 
   useEffect(() => {
     // Прокручиваем к последнему сообщению только если нужно
@@ -315,11 +320,23 @@ function ChatPageContent() {
   };
 
   const loadMessages = async (chatId: string, silent = false) => {
+    // Проверяем, что загружаем сообщения для текущего выбранного чата
+    if (selectedChat && selectedChat.id !== chatId) {
+      console.log("[chat] Ignoring loadMessages for different chat:", chatId, "current:", selectedChat.id);
+      return;
+    }
+    
     try {
       const response = await fetch(`/api/chat/${chatId}?t=${Date.now()}`);
       if (response.ok) {
         const data = await response.json();
         const newMessages = data.messages || [];
+        
+        // Дополнительная проверка - убеждаемся, что это все еще тот же чат
+        if (selectedChat && selectedChat.id !== chatId) {
+          console.log("[chat] Chat changed during load, ignoring messages");
+          return;
+        }
         
         // Фильтруем удаленные сообщения
         // API уже фильтрует по deletedAt: null, но для безопасности проверяем и на фронтенде
@@ -336,6 +353,10 @@ function ChatPageContent() {
             );
           
           if (hasNewMessages) {
+            // Финальная проверка перед обновлением
+            if (!selectedChat || selectedChat.id !== chatId) {
+              return;
+            }
             setMessages(filteredMessages);
             // Автоскролл только если пользователь внизу
             if (isNearBottom() && !isUserScrolling.current) {
@@ -343,12 +364,30 @@ function ChatPageContent() {
             }
         }
       } else {
-          // При полной загрузке всегда обновляем
+          // При полной загрузке всегда обновляем, но проверяем, что чат не изменился
+          if (!selectedChat || selectedChat.id !== chatId) {
+            return;
+          }
           setMessages(filteredMessages);
           // При первой загрузке чата всегда скроллим вниз
           shouldScrollToBottom.current = true;
         }
 
+        // Проверяем, является ли это чат с ботом
+        const isBotChat = selectedChat?.otherUser?.firstName === "AI" && 
+                         selectedChat?.otherUser?.lastName === "Помощник";
+        
+        // Если это чат с ботом и есть новые сообщения от бота, скрываем индикатор
+        if (isBotChat && isBotTyping) {
+          const hasNewBotMessage = filteredMessages.some((msg: Message) => 
+            msg.senderId === selectedChat?.otherUser?.id && 
+            !messages.some(m => m.id === msg.id)
+          );
+          if (hasNewBotMessage) {
+            setIsBotTyping(false);
+          }
+        }
+        
         // Загружаем реакции для всех сообщений (множественные реакции)
         const reactionsMap: Record<string, Array<{ emoji: string; count: number; isLiked: boolean; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }>> = {};
         const currentUserId = session?.user?.id || "";
@@ -632,6 +671,16 @@ function ChatPageContent() {
           }
           return filtered;
         });
+        
+        // Проверяем, является ли это чат с ботом
+        const isBotChat = selectedChat?.otherUser?.firstName === "AI" && 
+                         selectedChat?.otherUser?.lastName === "Помощник";
+        
+        // Если это чат с ботом, показываем индикатор "бот печатает"
+        if (isBotChat) {
+          setIsBotTyping(true);
+          // Индикатор будет скрыт, когда придет ответ от бота
+        }
         
         // Обновляем список чатов в фоне (не блокируем UI)
         loadChats();
@@ -1128,6 +1177,13 @@ function ChatPageContent() {
                 <button
                   key={chat.id}
                   onClick={() => {
+                    // Если это уже выбранный чат, не делаем ничего
+                    if (selectedChat?.id === chat.id) {
+                      return;
+                    }
+                    // Очищаем состояние перед переключением
+                    setMessages([]);
+                    setIsBotTyping(false);
                     setSelectedChat(chat);
                     setShowChatView(true);
                   }}
@@ -1924,6 +1980,36 @@ function ChatPageContent() {
                   </div>
                 );
               })}
+              
+              {/* Индикатор "Бот печатает" */}
+              {isBotTyping && selectedChat && (
+                <div className="flex justify-start gap-2">
+                  <div className="flex-shrink-0">
+                    {selectedChat.otherUser.avatarUrl ? (
+                      <img
+                        src={getFileUrl(selectedChat.otherUser.avatarUrl)}
+                        alt={getUserName(selectedChat.otherUser)}
+                        className="w-8 h-8 rounded-full"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold">
+                        {getInitials(selectedChat.otherUser)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl rounded-bl-md px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-gray-500 dark:text-gray-400 mr-2">Печатает</span>
+                      <div className="flex gap-1">
+                        <div className="h-2 w-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                        <div className="h-2 w-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                        <div className="h-2 w-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div ref={messagesEndRef} />
             </div>
 

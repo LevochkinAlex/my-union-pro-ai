@@ -53,8 +53,8 @@ export function getVDSConfigFromEnv(): VDSStorageConfig | null {
   const password = process.env.VDS_STORAGE_PASSWORD || process.env.VDS_PASSWORD;
   const privateKey = process.env.VDS_STORAGE_PRIVATE_KEY_PATH || process.env.VDS_PRIVATE_KEY;
   const port = process.env.VDS_STORAGE_PORT || process.env.VDS_PORT ? parseInt(process.env.VDS_STORAGE_PORT || process.env.VDS_PORT || "22") : 22;
-  // Путь на VDS, где находится проект (обычно /root/my-union-pro-ai или /var/www/my-union-pro-ai)
-  const projectPath = process.env.VDS_PROJECT_PATH || "/root/my-union-pro-ai";
+  // Путь на VDS, где находится проект (обычно /opt/my-union-pro или /root/my-union-pro-ai)
+  const projectPath = process.env.VDS_PROJECT_PATH || process.env.PROJECT_PATH || "/opt/my-union-pro";
   const remotePath = process.env.VDS_STORAGE_REMOTE_PATH || `${projectPath}/public/uploads`;
   const publicUrl = process.env.VDS_STORAGE_PUBLIC_URL || process.env.VDS_PUBLIC_URL || "https://myunion.pro/uploads";
   const useLocalFallback = false; // Отключаем локальный fallback - все должно быть на сервере
@@ -188,12 +188,37 @@ export async function uploadFileToVDS(
     throw new Error("VDS storage not initialized. Call initVDSStorage() or initVDSStorageFromEnv() first.");
   }
 
-  // Если мы уже НА VDS сервере, сохраняем файл напрямую без SCP
-  if (isRunningOnVDS()) {
-    console.log("[vds-storage] Running on VDS, saving file directly");
-    return saveFileDirectlyOnVDS(fileKey, buffer);
+  // ВСЕГДА сначала пытаемся сохранить напрямую (если мы на VDS)
+  // Это быстрее и надежнее, чем SCP
+  const directPath = path.join(vdsConfig.remotePath, fileKey).replace(/\\/g, "/");
+  const directDir = path.dirname(directPath);
+  
+  try {
+    // Пытаемся создать директорию и сохранить файл напрямую
+    await mkdir(directDir, { recursive: true });
+    await writeFile(directPath, buffer);
+    
+    // Проверяем, что файл действительно записался
+    if (existsSync(directPath)) {
+      const stats = await require("fs/promises").stat(directPath);
+      if (stats.size === buffer.length) {
+        const relativePath = `/uploads/${fileKey}`;
+        console.log("[vds-storage] ✅ File saved directly and verified:", directPath, `(${stats.size} bytes)`);
+        return relativePath;
+      } else {
+        throw new Error(`File size mismatch: expected ${buffer.length}, got ${stats.size}`);
+      }
+    } else {
+      throw new Error("File was not created");
+    }
+  } catch (directError: any) {
+    // Если прямой путь не работает (ENOENT, EACCES и т.д.), используем SCP
+    // Это означает, что мы не на VDS или нет доступа к remotePath
+    const errorCode = directError?.code;
+    console.log(`[vds-storage] Direct save failed (${errorCode}), using SCP fallback:`, directError.message);
   }
 
+  // Fallback: используем SCP для загрузки на удаленный сервер
   try {
     // Создаем временный локальный файл для SCP передачи
     const tempDir = path.join(process.cwd(), "tmp", "uploads");
@@ -211,9 +236,29 @@ export async function uploadFileToVDS(
     // Создаем директорию на VDS
     await ensureRemoteDirectory(remoteDir);
 
-    // Копируем файл на VDS
+    // Копируем файл на VDS с retry логикой
     const scpCommand = buildSCPCommand(tempFilePath, remoteFilePath);
-    await execAsync(scpCommand);
+    let lastError: Error | null = null;
+    const maxRetries = 3;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await execAsync(scpCommand);
+        console.log(`[vds-storage] ✅ File uploaded via SCP (attempt ${attempt})`);
+        break; // Успешно загружено
+      } catch (scpError) {
+        lastError = scpError instanceof Error ? scpError : new Error(String(scpError));
+        console.warn(`[vds-storage] SCP upload attempt ${attempt} failed:`, lastError.message);
+        
+        if (attempt < maxRetries) {
+          // Ждем перед следующей попыткой (экспоненциальная задержка)
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          throw lastError;
+        }
+      }
+    }
 
     // Удаляем временный файл
     try {

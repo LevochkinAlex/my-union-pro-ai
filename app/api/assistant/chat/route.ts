@@ -294,9 +294,11 @@ async function searchOrganizationInDatabase(message: string): Promise<any> {
   
   // Ищем организации по ключевым словам
   if (keywords.length > 0) {
-    const organizations = await prisma.organization.findMany({
+    // Сначала ищем федеральные организации (FEDERAL) - они имеют приоритет
+    const federalOrgs = await prisma.organization.findMany({
       where: {
-        AND: keywords.map(keyword => ({
+        type: "FEDERAL",
+        OR: keywords.map(keyword => ({
           name: { contains: keyword, mode: "insensitive" as const },
         })),
         isActive: true,
@@ -315,18 +317,71 @@ async function searchOrganizationInDatabase(message: string): Promise<any> {
       take: 10,
     });
 
+    if (federalOrgs.length > 0) {
+      // Ищем наиболее подходящую федеральную организацию
+      const bestMatch = federalOrgs.find(org => {
+        const orgNameLower = org.name.toLowerCase();
+        return (
+          messageLower.includes(orgNameLower) ||
+          (orgNameLower.includes("мооп") && messageLower.includes("мооп")) ||
+          (orgNameLower.includes("рз") && messageLower.includes("рз")) ||
+          (orgNameLower.includes("рф") && messageLower.includes("рф"))
+        );
+      }) || federalOrgs[0];
+      
+      console.log("[assistant/chat] Found federal organization:", bestMatch.name, "chairman:", bestMatch.chairmanName);
+      return bestMatch;
+    }
+
+    // Если не нашли федеральные, ищем все организации
+    const organizations = await prisma.organization.findMany({
+      where: {
+        OR: keywords.map(keyword => ({
+          name: { contains: keyword, mode: "insensitive" as const },
+        })),
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        chairmanName: true,
+        chairmanJobTitle: true,
+        fullPath: true,
+        address: true,
+        phone: true,
+        email: true,
+      },
+      orderBy: [
+        { type: "asc" }, // Приоритет федеральным организациям
+        { name: "asc" },
+      ],
+      take: 10,
+    });
+
     if (organizations.length > 0) {
       // Ищем наиболее подходящую (содержит больше ключевых слов или полное совпадение)
-      const bestMatch = organizations.find(org => 
-        messageLower.includes(org.name.toLowerCase()) || 
-        org.name.toLowerCase().includes("мооп") && messageLower.includes("мооп")
-      ) || organizations[0];
+      const bestMatch = organizations.find(org => {
+        const orgNameLower = org.name.toLowerCase();
+        return (
+          messageLower.includes(orgNameLower) ||
+          (orgNameLower.includes("мооп") && messageLower.includes("мооп")) ||
+          (orgNameLower.includes("рз") && messageLower.includes("рз"))
+        );
+      }) || organizations[0];
       
+      console.log("[assistant/chat] Found organization:", bestMatch.name, "chairman:", bestMatch.chairmanName);
       return bestMatch;
     }
     
-    // Если точного совпадения нет, ищем по одному ключевому слову
-    for (const keyword of keywords) {
+    // Если точного совпадения нет, ищем по одному ключевому слову (начиная с "МООП")
+    const priorityKeywords = keywords.sort((a, b) => {
+      if (a === "МООП") return -1;
+      if (b === "МООП") return 1;
+      return 0;
+    });
+    
+    for (const keyword of priorityKeywords) {
       const orgs = await prisma.organization.findMany({
         where: {
           name: { contains: keyword, mode: "insensitive" as const },
@@ -343,11 +398,15 @@ async function searchOrganizationInDatabase(message: string): Promise<any> {
           phone: true,
           email: true,
         },
+        orderBy: [
+          { type: "asc" }, // Приоритет федеральным организациям
+          { name: "asc" },
+        ],
         take: 5,
-        orderBy: { type: "asc" }, // Приоритет федеральным организациям
       });
       
       if (orgs.length > 0) {
+        console.log("[assistant/chat] Found organization by keyword:", keyword, orgs[0].name, "chairman:", orgs[0].chairmanName);
         return orgs[0];
       }
     }
