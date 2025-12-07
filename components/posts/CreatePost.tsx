@@ -380,21 +380,33 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
 
   const handleVideoInsert = (url: string) => {
     let embedUrl = "";
+    let videoType = "";
+    let videoId = "";
+    
     if (url.includes("youtube.com/watch") || url.includes("youtu.be/")) {
-      const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1] || "";
+      videoType = "youtube";
+      videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1] || "";
       embedUrl = `https://www.youtube.com/embed/${videoId}`;
     } else if (url.includes("rutube.ru/video/")) {
-      const videoId = url.match(/rutube\.ru\/video\/([^\/\n?#]+)/)?.[1] || "";
+      videoType = "rutube";
+      videoId = url.match(/rutube\.ru\/video\/([^\/\n?#]+)/)?.[1] || "";
       embedUrl = `https://rutube.ru/play/embed/${videoId}`;
     } else if (url.includes("vk.com/video")) {
+      videoType = "vk";
       const match = url.match(/vk\.com\/video(-?\d+_\d+)/);
       if (match) {
-        const videoId = match[1];
+        videoId = match[1];
         embedUrl = `https://vk.com/video_ext.php?oid=${videoId.split("_")[0]}&id=${videoId.split("_")[1]}`;
       }
     }
 
-    if (embedUrl && articleEditorRef.current) {
+    if (!embedUrl) {
+      showToast("Неподдерживаемый формат видео. Используйте YouTube, Rutube или VK", "error");
+      return;
+    }
+
+    // Для статей вставляем iframe в редактор
+    if (postType === "article" && articleEditorRef.current) {
       const editor = articleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
       if (editor) {
         const wrapper = document.createElement('div');
@@ -432,8 +444,20 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         const event = new Event('input', { bubbles: true });
         editor.dispatchEvent(event);
       }
+      setIsVideoModalOpen(false);
+      showToast("✓ Видео вставлено в статью", "success");
+    } else {
+      // Для обычных постов устанавливаем videoMetadata
+      setVideoUrl(url);
+      setVideoMetadata({
+        videoType,
+        videoId,
+        embedUrl,
+        url,
+      });
+      setIsVideoModalOpen(false);
+      showToast("✓ Видео добавлено", "success");
     }
-    setIsVideoModalOpen(false);
   };
 
   const handleAiRewrite = async () => {
@@ -906,6 +930,57 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                     <div className="absolute bottom-2 left-2 px-3 py-1 bg-black/50 backdrop-blur-sm text-white text-xs rounded-full">
                       ✓ Обложка загружена
                     </div>
+                  </div>
+                )}
+
+                {/* Превью видео для обычного поста */}
+                {videoMetadata && videoMetadata.embedUrl && (
+                  <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                    <VideoEmbed
+                      videoType={videoMetadata.videoType}
+                      videoId={videoMetadata.videoId}
+                      title="Превью видео"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVideoMetadata(null);
+                        setVideoUrl("");
+                      }}
+                      className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg z-10"
+                      title="Удалить видео"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+
+                {/* Превью ссылки для обычного поста */}
+                {linkMetadata && !videoMetadata && (
+                  <div className="relative">
+                    <LinkPreviewCard
+                      url={linkMetadata.url}
+                      title={linkMetadata.title}
+                      description={linkMetadata.description}
+                      image={linkMetadata.image}
+                      siteName={linkMetadata.siteName}
+                      favicon={linkMetadata.favicon}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLinkMetadata(null);
+                        setLinkUrl("");
+                      }}
+                      className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg z-10"
+                      title="Удалить превью"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
                 )}
 
