@@ -66,8 +66,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("[Email Verify] Ошибка:", error);
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                    process.env.NEXTAUTH_URL || 
-                    "https://myunion.pro";
+                    (process.env.NEXTAUTH_URL || "https://myunion.pro").replace(/^http:/, "https:");
     return NextResponse.redirect(
       new URL("/login?error=server_error", baseUrl)
     );

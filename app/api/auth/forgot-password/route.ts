@@ -61,8 +61,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Отправляем email с ссылкой
-    const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${resetToken}`;
+    // Отправляем email с ссылкой (всегда HTTPS в продакшене)
+    const baseUrl = process.env.NEXTAUTH_URL || "https://myunion.pro";
+    const resetUrl = `${baseUrl.replace(/^http:/, "https:")}/reset-password?token=${resetToken}`;
 
     const mailOptions = {
       from: emailConfig.from,
