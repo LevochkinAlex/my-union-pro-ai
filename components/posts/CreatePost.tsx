@@ -20,6 +20,34 @@ interface CreatePostProps {
   compact?: boolean;
 }
 
+// Хелпер для формирования URL превью изображения
+const getPreviewUrl = (imageUrl: string): string => {
+  if (!imageUrl) return "";
+  // Если это уже полный URL
+  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+    // Если это URL с /uploads/, конвертируем в /api/uploads/
+    if (imageUrl.includes("/uploads/") && !imageUrl.includes("/api/uploads/")) {
+      return imageUrl.replace("/uploads/", "/api/uploads/");
+    }
+    return imageUrl;
+  }
+  // Если это data URL, возвращаем как есть
+  if (imageUrl.startsWith("data:")) {
+    return imageUrl;
+  }
+  // Если это путь /uploads/, конвертируем в /api/uploads/
+  if (imageUrl.startsWith("/uploads/")) {
+    return imageUrl.replace("/uploads/", "/api/uploads/");
+  }
+  // Если это уже /api/uploads/, возвращаем как есть
+  if (imageUrl.startsWith("/api/uploads/")) {
+    return imageUrl;
+  }
+  // Для других путей, пробуем добавить /api/uploads/posts/
+  const filename = imageUrl.split("/").pop();
+  return `/api/uploads/posts/${filename}`;
+};
+
 export default function CreatePost({ onPostCreated, compact = false }: CreatePostProps = {} as CreatePostProps) {
   const { data: session } = useSession();
   const router = useRouter();
@@ -267,22 +295,17 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
       if (response.ok && data.url) {
         const imageUrl = data.url;
         console.log('[CreatePost] Image uploaded, API returned URL:', imageUrl);
-        // API возвращает полный URL (https://myunion.pro/uploads/...) или относительный (/api/uploads/...)
-        // Для превью используем полный URL, для отправки - нормализуем
+        // API возвращает относительный путь (/uploads/posts/...), конвертируем в /api/uploads/ для превью
+        const previewUrl = getPreviewUrl(imageUrl);
+        console.log('[CreatePost] Preview URL:', previewUrl);
         
         if (isImageModalForCover) {
           // Для cover изображения - устанавливаем только coverImage
           // Очищаем videoMetadata, если был установлен
           setVideoMetadata(null);
           setVideoUrl("");
-          // Для превью используем полный URL
-          const fullUrl = imageUrl.startsWith('http') 
-            ? imageUrl 
-            : imageUrl.startsWith('/') 
-              ? `${window.location.origin}${imageUrl}`
-              : `${window.location.origin}/${imageUrl}`;
-          console.log('[CreatePost] Set coverImage to:', fullUrl);
-          setCoverImage(fullUrl);
+          console.log('[CreatePost] Set coverImage to:', previewUrl);
+          setCoverImage(previewUrl);
           setFilePreviews([]);
           setSelectedFiles([]);
           setIsImageModalOpen(false);
@@ -290,23 +313,14 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
           showToast("✓ Обложка загружена", "success");
         } else if (postType === "text") {
           // Для обычного поста - устанавливаем coverImage (будет отображаться как cover)
-          const fullUrl = imageUrl.startsWith('http') 
-            ? imageUrl 
-            : imageUrl.startsWith('/') 
-              ? `${window.location.origin}${imageUrl}`
-              : `${window.location.origin}/${imageUrl}`;
-          setCoverImage(fullUrl);
+          setCoverImage(previewUrl);
           setFilePreviews([]);
           setSelectedFiles([]);
           setIsImageModalOpen(false);
           showToast("✓ Обложка загружена", "success");
         } else {
           // Если это вставка в HTML (через WYSIWYG) для статьи
-          const fullImageUrl = imageUrl.startsWith('http') 
-            ? imageUrl 
-            : imageUrl.startsWith('/') 
-              ? `${window.location.origin}${imageUrl}`
-              : `${window.location.origin}/${imageUrl}`;
+          const fullImageUrl = previewUrl;
           if (articleEditorRef.current) {
             const editor = articleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
             if (editor) {
@@ -348,12 +362,9 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
   };
 
   const handleImageGenerate = async (imageUrl: string) => {
-    // Используем полный URL для превью
-    const fullImageUrl = imageUrl.startsWith('http') 
-      ? imageUrl 
-      : imageUrl.startsWith('/') 
-        ? `${window.location.origin}${imageUrl}`
-        : `${window.location.origin}/${imageUrl}`;
+    // Конвертируем URL для превью через хелпер
+    const fullImageUrl = getPreviewUrl(imageUrl);
+    console.log('[CreatePost] Generated image URL:', imageUrl, '-> preview:', fullImageUrl);
     
     if (isImageModalForCover) {
       // Для cover изображения - устанавливаем только coverImage
@@ -594,36 +605,36 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
     
     setAiLoading(true);
     try {
-      const response = await fetch("/api/ai/rewrite-article", {
+      // Используем специальный endpoint для генерации статей
+      const response = await fetch("/api/ai/generate-article", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          content: `Напиши пост на тему: ${userPrompt}. Пост должен быть интересным, информативным и хорошо структурированным.` 
-        }),
+        body: JSON.stringify({ topic: userPrompt.trim() }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        if (data.rewritten) {
+        if (data.article) {
           if (postType === "article") {
-            setHtmlContent(data.rewritten);
+            setHtmlContent(data.article);
           } else {
             const tempDiv = document.createElement("div");
-            tempDiv.innerHTML = data.rewritten;
-            const plainText = tempDiv.textContent || tempDiv.innerText || data.rewritten;
+            tempDiv.innerHTML = data.article;
+            const plainText = tempDiv.textContent || tempDiv.innerText || data.article;
             setContent(plainText);
           }
           if (!isModalOpen && !isArticleModalOpen) {
             openModal();
           }
+          showToast("✓ Статья сгенерирована", "success");
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
-        showToast(errorData.error || "Ошибка при генерации текста с помощью AI", "error");
+        showToast(errorData.error || "Ошибка при генерации статьи с помощью AI", "error");
       }
     } catch (error) {
-      console.error("Error writing with AI:", error);
-      showToast("Ошибка при генерации текста с помощью AI", "error");
+      console.error("Error generating article with AI:", error);
+      showToast("Ошибка при генерации статьи с помощью AI", "error");
     } finally {
       setAiLoading(false);
     }

@@ -15,6 +15,34 @@ interface PostCardProps {
   onUpdate: () => void;
 }
 
+// Хелпер для формирования URL превью изображения
+const getPreviewUrl = (imageUrl: string): string => {
+  if (!imageUrl) return "";
+  // Если это уже полный URL
+  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+    // Если это URL с /uploads/, конвертируем в /api/uploads/
+    if (imageUrl.includes("/uploads/") && !imageUrl.includes("/api/uploads/")) {
+      return imageUrl.replace("/uploads/", "/api/uploads/");
+    }
+    return imageUrl;
+  }
+  // Если это data URL, возвращаем как есть
+  if (imageUrl.startsWith("data:")) {
+    return imageUrl;
+  }
+  // Если это путь /uploads/, конвертируем в /api/uploads/
+  if (imageUrl.startsWith("/uploads/")) {
+    return imageUrl.replace("/uploads/", "/api/uploads/");
+  }
+  // Если это уже /api/uploads/, возвращаем как есть
+  if (imageUrl.startsWith("/api/uploads/")) {
+    return imageUrl;
+  }
+  // Для других путей, пробуем добавить /api/uploads/posts/
+  const filename = imageUrl.split("/").pop();
+  return `/api/uploads/posts/${filename}`;
+};
+
 export default function PostCard({ post, onUpdate }: PostCardProps) {
   const { data: session } = useSession();
   const router = useRouter();
@@ -395,21 +423,16 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       if (response.ok && data.url) {
         const imageUrl = data.url;
         console.log('[PostCard] Image uploaded, API returned URL:', imageUrl);
-        // API возвращает полный URL (https://myunion.pro/uploads/...) или относительный (/api/uploads/...)
-        // Для превью используем полный URL
-        const fullImageUrl = imageUrl.startsWith('http') 
-          ? imageUrl 
-          : imageUrl.startsWith('/') 
-            ? `${window.location.origin}${imageUrl}`
-            : `${window.location.origin}/${imageUrl}`;
-        console.log('[PostCard] Full image URL for preview:', fullImageUrl);
+        // Конвертируем URL для превью через хелпер
+        const previewUrl = getPreviewUrl(imageUrl);
+        console.log('[PostCard] Preview URL:', previewUrl);
         
         if (imageInsertMode === "cover") {
           // Используем как обложку - очищаем видео, если было
           setEditVideoMetadata(null);
           setEditVideoUrl("");
-          setEditCoverImage(fullImageUrl);
-          console.log('[PostCard] Set editCoverImage to:', fullImageUrl);
+          setEditCoverImage(previewUrl);
+          console.log('[PostCard] Set editCoverImage to:', previewUrl);
           setIsEditImageModalOpen(false);
           setImageInsertMode("content");
           showToast("✓ Обложка загружена", "success");
@@ -418,7 +441,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           if (editArticleEditorRef.current) {
             const editor = editArticleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
             if (editor && (editor as any).insertImage) {
-              (editor as any).insertImage(fullImageUrl, file.name);
+              (editor as any).insertImage(previewUrl, file.name);
             }
           }
         }
@@ -438,12 +461,9 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
 
   const handleEditImageGenerate = async (imageUrl: string) => {
     console.log("[PostCard] handleEditImageGenerate called with:", imageUrl);
-    // API возвращает полный URL или относительный
-    const fullImageUrl = imageUrl.startsWith('http') 
-      ? imageUrl 
-      : imageUrl.startsWith('/') 
-        ? `${window.location.origin}${imageUrl}`
-        : `${window.location.origin}/${imageUrl}`;
+    // Конвертируем URL для превью через хелпер
+    const fullImageUrl = getPreviewUrl(imageUrl);
+    console.log("[PostCard] Preview URL:", fullImageUrl);
     
     if (imageInsertMode === "cover") {
       // Используем как обложку - очищаем видео, если было
