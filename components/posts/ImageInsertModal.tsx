@@ -197,6 +197,7 @@ export default function ImageInsertModal({
       setPreviewUrl(null);
     }
     onClose();
+    onClose();
   };
 
   return (

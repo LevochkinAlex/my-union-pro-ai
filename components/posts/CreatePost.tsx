@@ -1177,7 +1177,10 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
       {/* Модалка для вставки изображения */}
       <ImageInsertModal
         isOpen={isImageModalOpen}
-        onClose={() => setIsImageModalOpen(false)}
+        onClose={() => {
+          setIsImageModalOpen(false);
+          setIsImageModalForCover(false);
+        }}
         onUpload={handleImageUpload}
         onGenerate={handleImageGenerate}
         generating={generatingImage}
