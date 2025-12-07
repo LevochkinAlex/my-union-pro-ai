@@ -441,27 +441,32 @@ export function formatSearchResultsForPrompt(
 
   // Информация об организациях
   if (results.organizationInfo.length > 0) {
+    const orgSections = results.organizationInfo.map((org) => {
+      const parts = [`Организация: ${org.name}`];
+      if (org.chairmanName && org.chairmanName.trim()) {
+        parts.push(`⭐ ПРЕДСЕДАТЕЛЬ: ${org.chairmanName}`);
+      }
+      if (org.chairmanJobTitle && org.chairmanJobTitle.trim()) {
+        parts.push(`Должность: ${org.chairmanJobTitle}`);
+      }
+      if (org.phone && org.phone.trim()) {
+        parts.push(`Телефон: ${org.phone}`);
+      }
+      if (org.email && org.email.trim()) {
+        parts.push(`Email: ${org.email}`);
+      }
+      if (org.address && org.address.trim()) {
+        parts.push(`Адрес: ${org.address}`);
+      }
+      return parts.join("\n");
+    });
+    
+    // Логируем что передаём в промпт
+    console.log("[enhanced-search] 📋 Organization info for prompt:", orgSections.join(" | "));
+    
     sections.push(
-      "### ИНФОРМАЦИЯ ОБ ОРГАНИЗАЦИЯХ ИЗ БАЗЫ ДАННЫХ:",
-      ...results.organizationInfo.map((org) => {
-        const parts = [`Организация: ${org.name}`];
-        if (org.chairmanName) {
-          parts.push(`Председатель: ${org.chairmanName}`);
-        }
-        if (org.chairmanJobTitle) {
-          parts.push(`Должность: ${org.chairmanJobTitle}`);
-        }
-        if (org.phone) {
-          parts.push(`Телефон: ${org.phone}`);
-        }
-        if (org.email) {
-          parts.push(`Email: ${org.email}`);
-        }
-        if (org.address) {
-          parts.push(`Адрес: ${org.address}`);
-        }
-        return parts.join("\n");
-      })
+      "### ⚠️ НАЙДЕННАЯ ИНФОРМАЦИЯ ОБ ОРГАНИЗАЦИЯХ (ИСПОЛЬЗУЙ ЭТО В ОТВЕТЕ!):",
+      ...orgSections
     );
   }
 

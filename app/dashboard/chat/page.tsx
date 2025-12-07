@@ -686,6 +686,14 @@ function ChatPageContent() {
     setMessages(prev => [...prev, optimisticMessage]);
     setSending(true);
     
+    // Проверяем, является ли это чат с ботом - показываем индикатор СРАЗУ
+    const isBotChat = selectedChat?.otherUser?.firstName === "AI" && 
+                     selectedChat?.otherUser?.lastName === "Помощник";
+    if (isBotChat) {
+      setIsBotTyping(true);
+      console.log("[chat] Bot chat detected, showing typing indicator immediately");
+    }
+    
     // Очищаем поля сразу для быстрой отправки следующего сообщения
     if (filePreview) {
       URL.revokeObjectURL(filePreview);
@@ -771,37 +779,34 @@ function ChatPageContent() {
           return updatedMessages;
         });
         
-        // ВАЖНО: Обработка индикатора "печатает" - выполняем ПОСЛЕ setMessages
+        // Обработка индикатора "печатает" для бота
         if (isBotChat) {
           if (data.botMessage) {
-            // Ответ уже пришел - сразу выключаем индикатор
-            console.log("[chat] Bot message received, turning off typing indicator");
+            // Ответ уже пришел в том же запросе - выключаем индикатор
+            console.log("[chat] Bot message received immediately, turning off typing indicator");
             setIsBotTyping(false);
-            // Очищаем интервал если он был
             if (botTypingCheckIntervalRef.current) {
               clearInterval(botTypingCheckIntervalRef.current);
               botTypingCheckIntervalRef.current = null;
             }
           } else {
-            // Ответ еще не пришел - показываем индикатор и запускаем проверку
-            console.log("[chat] No bot message yet, showing typing indicator");
-            setIsBotTyping(true);
+            // Ответ ещё не пришел - индикатор уже показан выше, запускаем проверку
+            console.log("[chat] Bot message not in response, starting polling for bot response");
             
-            // Очищаем предыдущий интервал, если он есть
+            // Очищаем предыдущий интервал
             if (botTypingCheckIntervalRef.current) {
               clearInterval(botTypingCheckIntervalRef.current);
             }
             
-            // Запускаем периодическую проверку новых сообщений от бота
+            // Проверяем новые сообщения каждую секунду (макс 60 секунд)
             let checkCount = 0;
-            const maxChecks = 30; // Максимум 30 проверок (30 секунд)
+            const maxChecks = 60;
             
             botTypingCheckIntervalRef.current = setInterval(async () => {
               checkCount++;
               
-              // Если превысили максимум проверок, выключаем индикатор
               if (checkCount > maxChecks) {
-                console.log("[chat] Max checks reached, turning off typing indicator");
+                console.log("[chat] Max polling reached, turning off typing indicator");
                 if (botTypingCheckIntervalRef.current) {
                   clearInterval(botTypingCheckIntervalRef.current);
                   botTypingCheckIntervalRef.current = null;
@@ -810,7 +815,6 @@ function ChatPageContent() {
                 return;
               }
               
-              // Проверяем, есть ли новые сообщения от бота
               if (selectedChat?.id) {
                 try {
                   const messagesResponse = await fetch(`/api/chat/${selectedChat.id}?limit=5`);
@@ -819,29 +823,26 @@ function ChatPageContent() {
                     const newMessages = messagesData.messages || [];
                     const botId = selectedChat?.otherUser?.id;
                     
-                    // Ищем новые сообщения от бота, которых нет в текущем списке
                     const hasNewBotMessage = newMessages.some((msg: Message) => 
                       msg.senderId === botId && 
                       !messagesRef.current.some(m => m.id === msg.id)
                     );
                     
                     if (hasNewBotMessage) {
-                      // Найдено новое сообщение от бота - выключаем индикатор и перезагружаем сообщения
-                      console.log("[chat] New bot message found, turning off typing indicator");
+                      console.log("[chat] New bot message found via polling");
                       if (botTypingCheckIntervalRef.current) {
                         clearInterval(botTypingCheckIntervalRef.current);
                         botTypingCheckIntervalRef.current = null;
                       }
                       setIsBotTyping(false);
-                      // Перезагружаем сообщения, чтобы показать ответ бота
                       loadMessages(selectedChat.id, false);
                     }
                   }
                 } catch (error) {
-                  console.error("[chat] Error checking for bot message:", error);
+                  console.error("[chat] Polling error:", error);
                 }
               }
-            }, 1000); // Проверяем каждую секунду
+            }, 1000);
           }
         }
         
