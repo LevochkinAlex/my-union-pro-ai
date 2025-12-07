@@ -42,12 +42,20 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState(searchParams.get("search") || "");
-  const [selectedOrg, setSelectedOrg] = useState(searchParams.get("organizationId") || "");
+  const [search, setSearch] = useState("");
+  const [selectedOrg, setSelectedOrg] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  
+  // Initialize from URL params on client side only
+  useEffect(() => {
+    const searchParam = searchParams.get("search");
+    const orgParam = searchParams.get("organizationId");
+    if (searchParam) setSearch(searchParam);
+    if (orgParam) setSelectedOrg(orgParam);
+  }, []); // Run once on mount
   const [showUsersPanel, setShowUsersPanel] = useState(false); // Для мобильной версии
 
   // Блокируем скролл body при открытом drawer
