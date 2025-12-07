@@ -566,18 +566,12 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
       }
 
       if (coverImage) {
-        // Если coverImage - это URL строка, нормализуем путь перед отправкой
-        if (coverImage instanceof File) {
-          formData.append("coverImage", coverImage);
-        } else if (typeof coverImage === "string") {
-          // Если это полный URL, извлекаем относительный путь
-          const coverImagePath = coverImage.startsWith('http') 
-            ? coverImage.replace(window.location.origin, '')
-            : coverImage;
-          formData.append("coverImage", coverImagePath);
-        } else {
-          formData.append("coverImage", String(coverImage));
-        }
+        // Нормализуем путь перед отправкой
+        // Если это полный URL, извлекаем относительный путь
+        const coverImagePath = coverImage.startsWith('http') 
+          ? coverImage.replace(window.location.origin, '')
+          : coverImage;
+        formData.append("coverImage", coverImagePath);
       }
 
       const filesToUpload = await compressImages(selectedFiles);
