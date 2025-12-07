@@ -384,6 +384,7 @@ export async function POST(request: NextRequest) {
           throw error;
         }
       }
+    }
 
     // Создаем пост
     const post = await prisma.userPost.create({
