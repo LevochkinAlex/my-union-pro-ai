@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import RichTextEditor from "@/components/admin/RichTextEditor";
 import ImageInsertModal from "@/components/posts/ImageInsertModal";
 import { useToast } from "@/components/ui/Toast";
@@ -477,7 +478,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     <div ref={postCardRef} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
       {/* Автор */}
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
+        <Link href={`/dashboard/profile/${post.author.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           <div className="relative w-10 h-10">
             {(() => {
               const avatarUrl = post.author.avatarUrl;
@@ -486,7 +487,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                 <img
                   src={fileUrl}
               alt={getUserName(post.author)}
-              className="w-10 h-10 rounded-full object-cover"
+              className="w-10 h-10 rounded-full object-cover cursor-pointer"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
                     const placeholder = e.currentTarget.nextElementSibling;
@@ -498,7 +499,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
               ) : null;
             })()}
             <div 
-              className={`w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold ${(() => {
+              className={`w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold cursor-pointer ${(() => {
                 const avatarUrl = post.author.avatarUrl;
                 const fileUrl = avatarUrl ? getFileUrl(avatarUrl, "avatars") : "";
                 return fileUrl ? 'hidden' : '';
@@ -508,14 +509,14 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
             </div>
           </div>
           <div>
-            <p className="font-semibold text-gray-900 dark:text-white">
+            <p className="font-semibold text-gray-900 dark:text-white cursor-pointer">
               {getUserName(post.author)}
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {formatTime(post.createdAt)}
             </p>
           </div>
-        </div>
+        </Link>
         
         {/* Меню действий (только для своих постов) */}
         {isOwnPost && (
@@ -805,12 +806,12 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
             {comments.filter(c => !c.parentId).map((comment) => (
               <div key={comment.id} className="space-y-2">
                 <div className="flex gap-3">
-                  <div className="relative w-8 h-8">
+                  <Link href={`/dashboard/profile/${comment.user.id}`} className="relative w-8 h-8 hover:opacity-80 transition-opacity">
                     {comment.user.avatarUrl && getFileUrl(comment.user.avatarUrl, "avatars") ? (
                       <img
                         src={getFileUrl(comment.user.avatarUrl, "avatars")}
                     alt={getUserName(comment.user)}
-                        className="w-8 h-8 rounded-full object-cover"
+                        className="w-8 h-8 rounded-full object-cover cursor-pointer"
                         onError={(e) => {
                           console.log("Avatar load error for comment:", comment.user.avatarUrl);
                           e.currentTarget.style.display = 'none';
@@ -822,16 +823,16 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                       />
                     ) : null}
                     <div 
-                      className={`w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold ${comment.user.avatarUrl && getFileUrl(comment.user.avatarUrl, "avatars") ? 'hidden' : ''}`}
+                      className={`w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold cursor-pointer ${comment.user.avatarUrl && getFileUrl(comment.user.avatarUrl, "avatars") ? 'hidden' : ''}`}
                     >
                     {getInitials(comment.user)}
                   </div>
-                  </div>
+                  </Link>
                 <div className="flex-1">
                     <div className="flex items-center gap-2">
-                  <p className="font-semibold text-sm text-gray-900 dark:text-white">
+                  <Link href={`/dashboard/profile/${comment.user.id}`} className="font-semibold text-sm text-gray-900 dark:text-white hover:underline cursor-pointer">
                     {getUserName(comment.user)}
-                  </p>
+                  </Link>
                       {session?.user?.id === comment.user.id && (
                         <div className="relative">
                           <button
@@ -919,7 +920,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                   <div className="ml-11 space-y-2">
                     {comment.replies.map((reply: any) => (
                       <div key={reply.id} className="flex gap-3">
-                        <div className="relative w-6 h-6">
+                        <Link href={`/dashboard/profile/${reply.user.id}`} className="relative w-6 h-6 hover:opacity-80 transition-opacity">
                           {(() => {
                             const avatarUrl = reply.user.avatarUrl;
                             const fileUrl = avatarUrl ? getFileUrl(avatarUrl, "avatars") : "";
@@ -927,7 +928,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                               <img
                                 src={fileUrl}
                                 alt={getUserName(reply.user)}
-                                className="w-6 h-6 rounded-full object-cover"
+                                className="w-6 h-6 rounded-full object-cover cursor-pointer"
                                 onError={(e) => {
                                   console.log("Avatar load error for reply:", reply.user.avatarUrl);
                                   e.currentTarget.style.display = 'none';
@@ -940,7 +941,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                             ) : null;
                           })()}
                           <div 
-                            className={`w-6 h-6 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-white text-xs font-semibold ${(() => {
+                            className={`w-6 h-6 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-white text-xs font-semibold cursor-pointer ${(() => {
                               const avatarUrl = reply.user.avatarUrl;
                               const fileUrl = avatarUrl ? getFileUrl(avatarUrl, "avatars") : "";
                               return fileUrl ? 'hidden' : '';
@@ -948,12 +949,12 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                           >
                             {getInitials(reply.user)}
                           </div>
-                        </div>
+                        </Link>
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="font-semibold text-xs text-gray-900 dark:text-white">
+                            <Link href={`/dashboard/profile/${reply.user.id}`} className="font-semibold text-xs text-gray-900 dark:text-white hover:underline cursor-pointer">
                               {getUserName(reply.user)}
-                            </p>
+                            </Link>
                             {session?.user?.id === reply.user.id && (
                               <button
                                 onClick={() => handleDeleteComment(reply.id)}

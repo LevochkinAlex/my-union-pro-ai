@@ -73,12 +73,15 @@ export default function FloatingChatBot() {
 
   // Автоскролл к последнему сообщению
   useEffect(() => {
-    if (isOpen && messages.length > 0) {
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
+    if (isOpen && (messages.length > 0 || isLoading)) {
+      // Используем requestAnimationFrame для более надежного скролла
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 150);
+      });
     }
-  }, [messages, isOpen]);
+  }, [messages, isOpen, isLoading]);
 
   // Очистка таймаута при размонтировании
   useEffect(() => {
@@ -189,7 +192,12 @@ export default function FloatingChatBot() {
       if (exists) {
         return prev; // Не добавляем дубликат
       }
-      return [...prev, userMsg];
+      const newMessages = [...prev, userMsg];
+      // Принудительный скролл после добавления сообщения
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+      return newMessages;
     });
     conversationHistoryRef.current.push(userMsg);
 
@@ -228,7 +236,12 @@ export default function FloatingChatBot() {
         if (exists) {
           return prev; // Не добавляем дубликат
         }
-        return [...prev, aiMsg];
+        const newMessages = [...prev, aiMsg];
+        // Принудительный скролл после добавления ответа AI
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+        return newMessages;
       });
       conversationHistoryRef.current.push(aiMsg);
 
@@ -248,6 +261,10 @@ export default function FloatingChatBot() {
       // Разрешаем загрузку истории через небольшую задержку
       setTimeout(() => {
         isSendingMessageRef.current = false;
+        // Принудительный скролл после завершения загрузки
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 200);
       }, 1000);
     }
   };
