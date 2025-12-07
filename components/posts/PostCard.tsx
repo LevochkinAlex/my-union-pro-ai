@@ -7,6 +7,8 @@ import Link from "next/link";
 import RichTextEditor from "@/components/admin/RichTextEditor";
 import ImageInsertModal from "@/components/posts/ImageInsertModal";
 import { useToast } from "@/components/ui/Toast";
+import LinkPreviewCard from "./LinkPreviewCard";
+import VideoEmbed from "./VideoEmbed";
 
 interface PostCardProps {
   post: any;
@@ -696,6 +698,31 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Превью видео */}
+        {post.videoMetadata && post.videoMetadata.videoType && post.videoMetadata.videoId && (
+          <div className="mb-4">
+            <VideoEmbed
+              videoType={post.videoMetadata.videoType}
+              videoId={post.videoMetadata.videoId}
+              title={post.videoMetadata.title}
+            />
+          </div>
+        )}
+
+        {/* Превью ссылки */}
+        {post.linkMetadata && !post.videoMetadata && (
+          <div className="mb-4">
+            <LinkPreviewCard
+              url={post.linkMetadata.url}
+              title={post.linkMetadata.title}
+              description={post.linkMetadata.description}
+              image={post.linkMetadata.image}
+              siteName={post.linkMetadata.siteName}
+              favicon={post.linkMetadata.favicon}
+            />
           </div>
         )}
 

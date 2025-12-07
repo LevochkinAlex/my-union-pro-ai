@@ -8,6 +8,8 @@ import RichTextEditor from "@/components/admin/RichTextEditor";
 import { compressImages } from "@/lib/compress-image";
 import { useToast } from "@/components/ui/Toast";
 import PromptModal from "@/components/ui/PromptModal";
+import LinkPreviewCard from "./LinkPreviewCard";
+import VideoEmbed from "./VideoEmbed";
 
 const ImageInsertModal = dynamic(() => import("./ImageInsertModal"), {
   ssr: false,
@@ -32,6 +34,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
   const [linkMetadata, setLinkMetadata] = useState<any>(null);
   const [videoMetadata, setVideoMetadata] = useState<any>(null);
   const [coverImage, setCoverImage] = useState<string | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isArticleModalOpen, setIsArticleModalOpen] = useState(false);
@@ -134,14 +137,29 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
   const handleLinkUrlChange = async (url: string) => {
     setLinkUrl(url);
     if (url && url.startsWith("http")) {
+      setIsLoadingPreview(true);
       try {
-        const response = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
+        const response = await fetch("/api/link-preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
         if (response.ok) {
           const data = await response.json();
           setLinkMetadata(data);
+          
+          // If it's a video, set it as video instead of link
+          if (data.type === "video" && data.videoType) {
+            setVideoMetadata(data);
+            setLinkMetadata(null);
+            setVideoUrl(url);
+            setLinkUrl("");
+          }
         }
       } catch (error) {
         console.error("Error fetching link metadata:", error);
+      } finally {
+        setIsLoadingPreview(false);
       }
     } else {
       setLinkMetadata(null);
@@ -150,30 +168,57 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
 
   const handleVideoUrlChange = async (url: string) => {
     setVideoUrl(url);
-    if (url) {
-      let provider = "";
-      let videoId = "";
-      let embedUrl = "";
+    if (url && url.startsWith("http")) {
+      setIsLoadingPreview(true);
+      try {
+        const response = await fetch("/api/link-preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          
+          // If it's a video, set video metadata
+          if (data.type === "video" && data.videoType && data.videoId) {
+            setVideoMetadata(data);
+            setIsVideoModalOpen(false);
+            showToast("✓ Видео добавлено", "success");
+          } else {
+            // Fallback to old logic for unsupported providers
+            let provider = "";
+            let videoId = "";
+            
+            if (url.includes("rutube.ru/video/")) {
+              provider = "rutube";
+              videoId = url.match(/rutube\.ru\/video\/([^\/\n?#]+)/)?.[1] || "";
+            } else if (url.includes("vk.com/video")) {
+              provider = "vk";
+              const match = url.match(/vk\.com\/video(-?\d+_\d+)/);
+              if (match) {
+                videoId = match[1];
+              }
+            }
 
-      if (url.includes("youtube.com/watch") || url.includes("youtu.be/")) {
-        provider = "youtube";
-        videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1] || "";
-        embedUrl = `https://www.youtube.com/embed/${videoId}`;
-      } else if (url.includes("rutube.ru/video/")) {
-        provider = "rutube";
-        videoId = url.match(/rutube\.ru\/video\/([^\/\n?#]+)/)?.[1] || "";
-        embedUrl = `https://rutube.ru/play/embed/${videoId}`;
-      } else if (url.includes("vk.com/video")) {
-        provider = "vk";
-        const match = url.match(/vk\.com\/video(-?\d+_\d+)/);
-        if (match) {
-          videoId = match[1];
-          embedUrl = `https://vk.com/video_ext.php?oid=${videoId.split("_")[0]}&id=${videoId.split("_")[1]}`;
+            if (videoId) {
+              setVideoMetadata({ 
+                videoType: provider, 
+                videoId, 
+                url,
+                title: `${provider.toUpperCase()} Video`,
+              });
+              setIsVideoModalOpen(false);
+              showToast("✓ Видео добавлено", "success");
+            } else {
+              showToast("Неподдерживаемый формат видео", "error");
+            }
+          }
         }
-      }
-
-      if (embedUrl) {
-        setVideoMetadata({ provider, videoId, embedUrl });
+      } catch (error) {
+        console.error("Error fetching video metadata:", error);
+        showToast("Ошибка при загрузке видео", "error");
+      } finally {
+        setIsLoadingPreview(false);
       }
     } else {
       setVideoMetadata(null);
@@ -918,15 +963,51 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                   </div>
                 )}
 
-                {/* Поле для ссылки */}
-                {linkUrl && (
-                  <input
-                    type="url"
-                    value={linkUrl}
-                    onChange={(e) => handleLinkUrlChange(e.target.value)}
-                    placeholder="Вставьте ссылку"
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                {/* Preview для ссылки */}
+                {linkMetadata && !videoMetadata && (
+                  <LinkPreviewCard
+                    url={linkMetadata.url}
+                    title={linkMetadata.title}
+                    description={linkMetadata.description}
+                    image={linkMetadata.image}
+                    siteName={linkMetadata.siteName}
+                    favicon={linkMetadata.favicon}
+                    onRemove={() => {
+                      setLinkUrl("");
+                      setLinkMetadata(null);
+                    }}
                   />
+                )}
+
+                {/* Preview для видео */}
+                {videoMetadata && videoMetadata.videoType && videoMetadata.videoId && (
+                  <VideoEmbed
+                    videoType={videoMetadata.videoType}
+                    videoId={videoMetadata.videoId}
+                    title={videoMetadata.title}
+                    onRemove={() => {
+                      setVideoUrl("");
+                      setVideoMetadata(null);
+                    }}
+                  />
+                )}
+
+                {/* Input для ссылки (показывается только если нет preview) */}
+                {linkUrl && !linkMetadata && !videoMetadata && (
+                  <div className="space-y-2">
+                    <input
+                      type="url"
+                      value={linkUrl}
+                      onChange={(e) => handleLinkUrlChange(e.target.value)}
+                      placeholder="Вставьте ссылку"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    {isLoadingPreview && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Загрузка превью...
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 {/* Поле для видео */}
