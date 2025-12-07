@@ -288,7 +288,26 @@ export async function enhancedSearch(
     webSearchResults: [],
   };
 
+  console.log(`[enhanced-search] 🚀 Starting enhanced search for query: "${query}"`);
+
   try {
+    // Получаем организацию пользователя для контекста
+    let userOrgName: string | null = null;
+    if (userId) {
+      try {
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          include: { organization: true },
+        });
+        if (user?.organization?.name) {
+          userOrgName = user.organization.name;
+          console.log(`[enhanced-search] 👤 User organization: ${userOrgName}`);
+        }
+      } catch (e) {
+        console.error("[enhanced-search] Error getting user org:", e);
+      }
+    }
+
     // 1. Поиск в базе знаний
     const chunks = await retrieveRelevantChunks(query, botId, 5);
     result.knowledgeBaseChunks = chunks.map((chunk) => ({
@@ -296,6 +315,7 @@ export async function enhancedSearch(
       similarity: chunk.similarity,
       metadata: chunk.metadata || {},
     }));
+    console.log(`[enhanced-search] 📚 Found ${result.knowledgeBaseChunks.length} knowledge base chunks`);
 
     // 1.5. Поиск в персональной базе знаний пользователя (если userId передан)
     if (userId) {
@@ -318,6 +338,7 @@ export async function enhancedSearch(
 
         // Сортируем все chunks по релевантности
         result.knowledgeBaseChunks.sort((a, b) => b.similarity - a.similarity);
+        console.log(`[enhanced-search] 👤 Added ${userChunks.length} user knowledge chunks`);
       } catch (userKbError) {
         console.error("[enhanced-search] Error searching user knowledge base:", userKbError);
         // Продолжаем выполнение, даже если поиск в пользовательской базе знаний не удался
@@ -325,22 +346,49 @@ export async function enhancedSearch(
     }
 
     // 2. Если запрос об организации - ищем в БД организаций
-    if (isOrganizationQuery(query)) {
-      const orgName = extractOrganizationName(query);
+    const isOrgQuery = isOrganizationQuery(query);
+    console.log(`[enhanced-search] 🏢 Is organization query: ${isOrgQuery}`);
+    
+    if (isOrgQuery) {
+      let orgName = extractOrganizationName(query);
+      console.log(`[enhanced-search] 📝 Extracted org name from query: ${orgName || "null"}`);
+      
+      // Если пользователь спрашивает "наш председатель" без указания организации,
+      // используем его организацию из профиля
+      const isAboutOurOrg = /\b(наш|нашей|нашего|моей|моего)\b/i.test(query);
+      if (!orgName && isAboutOurOrg && userOrgName) {
+        orgName = userOrgName;
+        console.log(`[enhanced-search] 🎯 Using user's organization: ${orgName}`);
+      }
+      
       if (orgName) {
         const orgInfo = await searchOrganizationWithChairman(orgName);
         result.organizationInfo = orgInfo;
+        console.log(`[enhanced-search] 🏛️ Found ${orgInfo.length} organizations, chairman info: ${orgInfo.some(o => o.chairmanName)}`);
       } else {
         // Если не удалось извлечь название, ищем по ключевым словам
         const orgInfo = await searchOrganizationWithChairman(query);
         result.organizationInfo = orgInfo;
+        console.log(`[enhanced-search] 🔍 Fallback search found ${orgInfo.length} organizations`);
       }
     }
 
     // 3. Если запрос об организации - всегда пробуем поиск в интернете для свежей информации
     // (особенно если в БД нет председателя или информации недостаточно)
-    if (isOrganizationQuery(query)) {
-      const orgName = extractOrganizationName(query) || query;
+    if (isOrgQuery) {
+      let orgName = extractOrganizationName(query);
+      
+      // Если спрашивают про "нашу" организацию - используем организацию пользователя
+      const isAboutOurOrg = /\b(наш|нашей|нашего|моей|моего)\b/i.test(query);
+      if (!orgName && isAboutOurOrg && userOrgName) {
+        orgName = userOrgName;
+      }
+      
+      // Если всё ещё нет названия - используем запрос целиком
+      if (!orgName) {
+        orgName = query;
+      }
+      
       const hasChairmanInfo = result.organizationInfo.some(
         (org) => org.chairmanName
       );
@@ -348,20 +396,26 @@ export async function enhancedSearch(
         result.knowledgeBaseChunks.length > 0 ||
         (result.organizationInfo.length > 0 && hasChairmanInfo);
 
+      console.log(`[enhanced-search] 📊 Has chairman info: ${hasChairmanInfo}, Has enough info: ${hasEnoughInfo}`);
+
       // Ищем в интернете если:
       // - информации нет вообще
       // - или есть организация, но нет информации о председателе
       if (!hasEnoughInfo || !hasChairmanInfo) {
         // Формируем запрос для веб-поиска
         const webQuery = `председатель ${orgName} профсоюз`;
-        console.log("[enhanced-search] 🔍 Triggering web search for organization query");
+        console.log(`[enhanced-search] 🌐 Triggering web search with query: "${webQuery}"`);
         result.webSearchResults = await searchWeb(webQuery, 3);
+        console.log(`[enhanced-search] 🌐 Web search returned ${result.webSearchResults.length} results`);
+      } else {
+        console.log(`[enhanced-search] ⏭️ Skipping web search - enough info found`);
       }
     }
 
+    console.log(`[enhanced-search] ✅ Search complete. KB: ${result.knowledgeBaseChunks.length}, Orgs: ${result.organizationInfo.length}, Web: ${result.webSearchResults.length}`);
     return result;
   } catch (error) {
-    console.error("[enhanced-search] Error in enhanced search:", error);
+    console.error("[enhanced-search] ❌ Error in enhanced search:", error);
     return result;
   }
 }
