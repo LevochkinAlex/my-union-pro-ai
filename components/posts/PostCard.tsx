@@ -243,8 +243,8 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     if (showComments) {
       // Если комментарии уже открыты и мышь не в области комментариев, закрываем
       if (!isCommentAreaHovered) {
-        setShowComments(false);
-        return;
+      setShowComments(false);
+      return;
       }
       // Если мышь в области, просто обновляем комментарии
     }
@@ -485,8 +485,8 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
               return fileUrl ? (
                 <img
                   src={fileUrl}
-                  alt={getUserName(post.author)}
-                  className="w-10 h-10 rounded-full object-cover"
+              alt={getUserName(post.author)}
+              className="w-10 h-10 rounded-full object-cover"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
                     const placeholder = e.currentTarget.nextElementSibling;
@@ -596,19 +596,19 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
 
       {/* Контент */}
       <div className="mb-4">
-        {/* Cover Image для статей */}
-        {isArticle && (coverImage || (post as any).coverImage) && (
+        {/* Cover Image для всех постов */}
+        {(coverImage || (post as any).coverImage) && (
           <div className="mb-4">
             <img
               src={coverImage || (post as any).coverImage}
-              alt="Обложка статьи"
+              alt="Обложка"
               className="w-full h-64 object-cover rounded-lg"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';
               }}
             />
-          </div>
+            </div>
         )}
         
         <div className="mb-4">
@@ -626,8 +626,8 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           ) : (
             <p className="text-gray-900 dark:text-white whitespace-pre-wrap break-words">
               {displayContent}
-            </p>
-          )}
+          </p>
+        )}
           {shouldTruncate && (
             <button
               onClick={() => setIsExpanded(!isExpanded)}
@@ -803,7 +803,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                     {comment.user.avatarUrl && getFileUrl(comment.user.avatarUrl, "avatars") ? (
                       <img
                         src={getFileUrl(comment.user.avatarUrl, "avatars")}
-                        alt={getUserName(comment.user)}
+                    alt={getUserName(comment.user)}
                         className="w-8 h-8 rounded-full object-cover"
                         onError={(e) => {
                           console.log("Avatar load error for comment:", comment.user.avatarUrl);
@@ -818,14 +818,14 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                     <div 
                       className={`w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold ${comment.user.avatarUrl && getFileUrl(comment.user.avatarUrl, "avatars") ? 'hidden' : ''}`}
                     >
-                      {getInitials(comment.user)}
-                    </div>
+                    {getInitials(comment.user)}
                   </div>
-                  <div className="flex-1">
+                  </div>
+                <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-sm text-gray-900 dark:text-white">
-                        {getUserName(comment.user)}
-                      </p>
+                  <p className="font-semibold text-sm text-gray-900 dark:text-white">
+                    {getUserName(comment.user)}
+                  </p>
                       {session?.user?.id === comment.user.id && (
                         <div className="relative">
                           <button
@@ -891,19 +891,19 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                     ) : (
                       <>
                         <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                          {comment.content}
-                        </p>
+                    {comment.content}
+                  </p>
                         <div className="flex items-center gap-3 mt-1">
                           <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {formatTime(comment.createdAt)}
-                          </p>
+                    {formatTime(comment.createdAt)}
+                  </p>
                           <button
                             onClick={() => setReplyToComment(comment)}
                             className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
                           >
                             Ответить
                           </button>
-                        </div>
+                </div>
                       </>
                     )}
                   </div>
@@ -994,25 +994,25 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                 )}
                 <div className="flex flex-col sm:flex-row gap-2">
                   <textarea
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        sendComment();
-                      }
-                    }}
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendComment();
+                    }
+                  }}
                     placeholder={replyToComment ? "Написать ответ..." : "Написать комментарий..."}
                     rows={2}
                     className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-                  />
-                  <button
-                    onClick={sendComment}
-                    disabled={!commentText.trim() || sendingComment}
+                />
+                <button
+                  onClick={sendComment}
+                  disabled={!commentText.trim() || sendingComment}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap sm:self-end"
-                  >
-                    Отправить
-                  </button>
+                >
+                  Отправить
+                </button>
                 </div>
               </div>
             )}
@@ -1343,8 +1343,8 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                                   {isBroken && (
                                     <p className="text-xs text-red-500 mt-1">⚠️ Сломанный путь - удалите это изображение</p>
                                   )}
-                                </div>
-                              );
+    </div>
+  );
                             })}
                           </div>
                         </div>

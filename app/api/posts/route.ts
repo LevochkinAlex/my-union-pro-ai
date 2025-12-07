@@ -302,7 +302,7 @@ export async function POST(request: NextRequest) {
         postType,
         linkMetadata: parsedLinkMetadata,
         videoMetadata: parsedVideoMetadata,
-        ...(postType === "article" && coverImage !== null ? { coverImage } : {}),
+        ...(coverImage !== null ? { coverImage } : {}),
       },
       include: {
         author: {
