@@ -3,11 +3,15 @@
 import { useState, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import RichTextEditor from "@/components/admin/RichTextEditor";
-import ImageInsertModal from "./ImageInsertModal";
 import { compressImages } from "@/lib/compress-image";
 import { useToast } from "@/components/ui/Toast";
 import PromptModal from "@/components/ui/PromptModal";
+
+const ImageInsertModal = dynamic(() => import("./ImageInsertModal"), {
+  ssr: false,
+});
 
 interface CreatePostProps {
   onPostCreated?: () => void;
