@@ -9,6 +9,7 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: number;
+  id?: string; // Уникальный ID для предотвращения дубликатов
 }
 
 export default function FloatingChatBot() {
@@ -65,7 +66,7 @@ export default function FloatingChatBot() {
 
   // Загружаем историю чата с ботом при открытии
   useEffect(() => {
-    if (isOpen && session?.user?.id && !isSendingMessageRef.current) {
+    if (isOpen && session?.user?.id && !isSendingMessageRef.current && messages.length === 0) {
       loadChatHistory();
     }
   }, [isOpen, session?.user?.id]);
@@ -90,7 +91,7 @@ export default function FloatingChatBot() {
 
   // Загрузка истории чата с ботом
   const loadChatHistory = async () => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id || isSendingMessageRef.current) return;
 
     try {
       // Получаем список чатов и ищем чат с ботом
@@ -103,18 +104,46 @@ export default function FloatingChatBot() {
         );
 
         if (botChat) {
-          setChatId(botChat.id);
+          const newChatId = botChat.id;
+          // Обновляем chatId только если он изменился
+          if (newChatId !== chatId) {
+            setChatId(newChatId);
+          }
+          
           // Загружаем сообщения из чата
-          const messagesResponse = await fetch(`/api/chat/${botChat.id}`);
+          const messagesResponse = await fetch(`/api/chat/${newChatId}`);
           if (messagesResponse.ok) {
             const messagesData = await messagesResponse.json();
             const chatMessages = (messagesData.messages || []).map((msg: any) => ({
               role: msg.senderId === session.user.id ? "user" : "assistant",
               content: msg.content,
               timestamp: new Date(msg.createdAt).getTime(),
+              id: msg.id || `${msg.senderId === session.user.id ? "user" : "assistant"}-${msg.id || Date.now()}-${Math.random()}`,
             }));
-            setMessages(chatMessages);
-            conversationHistoryRef.current = chatMessages;
+            
+            // Заменяем сообщения только если мы не отправляем сообщение сейчас
+            if (!isSendingMessageRef.current) {
+              setMessages(chatMessages);
+              conversationHistoryRef.current = chatMessages;
+            } else {
+              // Если отправляем, объединяем с существующими, избегая дубликатов
+              setMessages((prev) => {
+                // Создаем Set для быстрой проверки дубликатов по ID и содержимому
+                const existingIds = new Set(prev.map(m => m.id).filter(Boolean));
+                const existingContent = new Set(
+                  prev.map(m => `${m.role}:${m.content}:${Math.floor(m.timestamp / 1000)}`)
+                );
+                
+                // Добавляем только новые сообщения
+                const newMessages = chatMessages.filter(m => {
+                  if (m.id && existingIds.has(m.id)) return false;
+                  const contentKey = `${m.role}:${m.content}:${Math.floor(m.timestamp / 1000)}`;
+                  return !existingContent.has(contentKey);
+                });
+                
+                return newMessages.length > 0 ? [...prev, ...newMessages] : prev;
+              });
+            }
           }
         }
       }
@@ -145,14 +174,23 @@ export default function FloatingChatBot() {
     }
     isSendingMessageRef.current = true;
 
-    // Добавляем сообщение пользователя
+    // Добавляем сообщение пользователя с уникальным ID
+    const userMsgId = `user-${Date.now()}-${Math.random()}`;
     const userMsg: ChatMessage = {
       role: "user",
       content: userMessage,
       timestamp: Date.now(),
+      id: userMsgId,
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => {
+      // Проверяем, нет ли уже такого сообщения
+      const exists = prev.some(m => m.id === userMsgId || (m.role === "user" && m.content === userMessage && Math.abs(m.timestamp - userMsg.timestamp) < 1000));
+      if (exists) {
+        return prev; // Не добавляем дубликат
+      }
+      return [...prev, userMsg];
+    });
     conversationHistoryRef.current.push(userMsg);
 
     try {
@@ -175,14 +213,23 @@ export default function FloatingChatBot() {
         setChatId(data.chatId);
       }
 
-      // Добавляем ответ AI
+      // Добавляем ответ AI с уникальным ID
+      const aiMsgId = `ai-${Date.now()}-${Math.random()}`;
       const aiMsg: ChatMessage = {
         role: "assistant",
         content: data.message,
         timestamp: Date.now(),
+        id: aiMsgId,
       };
 
-      setMessages((prev) => [...prev, aiMsg]);
+      setMessages((prev) => {
+        // Проверяем, нет ли уже такого сообщения
+        const exists = prev.some(m => m.id === aiMsgId || (m.role === "assistant" && m.content === data.message && Math.abs(m.timestamp - aiMsg.timestamp) < 2000));
+        if (exists) {
+          return prev; // Не добавляем дубликат
+        }
+        return [...prev, aiMsg];
+      });
       conversationHistoryRef.current.push(aiMsg);
 
       // Сохраняем chatId если его еще нет
@@ -287,7 +334,7 @@ export default function FloatingChatBot() {
             ) : (
               messages.map((message, index) => (
                 <div
-                  key={index}
+                  key={message.id || `${message.role}-${message.timestamp}-${index}`}
                   className={`flex gap-2 ${
                     message.role === "user" ? "justify-end" : "justify-start"
                   }`}
@@ -347,34 +394,6 @@ export default function FloatingChatBot() {
                       <div className="h-2 w-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
-            {/* Индикатор "Пользователь печатает" */}
-            {isUserTyping && !isLoading && input.trim().length > 0 && (
-              <div className="flex justify-end gap-2">
-                <div className="bg-blue-600 rounded-2xl rounded-br-md px-4 py-3">
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-blue-100 mr-2">Печатаете</span>
-                    <div className="flex gap-1">
-                      <div className="h-2 w-2 bg-blue-200 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
-                      <div className="h-2 w-2 bg-blue-200 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
-                      <div className="h-2 w-2 bg-blue-200 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex-shrink-0">
-                  {userAvatar ? (
-                    <img
-                      src={userAvatar}
-                      alt="User Avatar"
-                      className="h-8 w-8 rounded-full object-cover shadow-sm"
-                    />
-                  ) : (
-                    <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold shadow-sm">
-                      {session?.user?.name?.charAt(0).toUpperCase() || "U"}
-                    </div>
-                  )}
                 </div>
               </div>
             )}
