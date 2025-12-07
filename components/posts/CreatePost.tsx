@@ -229,7 +229,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
           setIsImageModalForCover(false);
         } else if (postType === "text") {
           // Для обычного поста - устанавливаем coverImage (будет отображаться как cover)
-          setCoverImage(fullImageUrl);
+          setCoverImage(imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`);
           setFilePreviews([]);
           setSelectedFiles([]);
           setIsImageModalOpen(false);
