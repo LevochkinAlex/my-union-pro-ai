@@ -374,7 +374,7 @@ export async function POST(
     if (isBotChat) {
       try {
         // Импортируем функции для работы с ботом
-        const { retrieveRelevantChunks } = await import("@/lib/vector-search");
+        const { enhancedSearch, formatSearchResultsForPrompt } = await import("@/lib/chat-enhanced-search");
         const bot = await prisma.chatBot.findFirst({
           where: { isActive: true },
           include: { apiProvider: true },
@@ -398,8 +398,9 @@ export async function POST(
           });
 
           if (user) {
-            // Поиск релевантных chunks
-            const chunks = await retrieveRelevantChunks(content.trim(), bot.id, 5);
+            // Расширенный поиск информации из всех источников
+            const searchResults = await enhancedSearch(content.trim(), bot.id);
+            const formattedSearchInfo = formatSearchResultsForPrompt(searchResults);
 
             // Строим системный промпт
             const userName = user.firstName || user.email?.split("@")[0] || "друг";
@@ -418,9 +419,20 @@ export async function POST(
 - Объясняет, как использовать функции платформы
 - Помогает с навигацией по сайту
 - Отвечает на вопросы о профсоюзе, скидках, документах
+- Отвечает на вопросы о руководителях организаций, используя информацию из базы данных
 
-### БАЗА ЗНАНИЙ:
-${chunks.length > 0 ? chunks.map((chunk, i) => `\n[Документ ${i + 1}]\n${chunk.content}`).join("\n\n") : "База знаний пуста"}
+### ВАЖНО:
+Перед тем как сказать "не знаю" или "нет информации", используй данные ниже из разных источников:
+- База знаний (загруженные документы)
+- База данных организаций (информация о председателях и контактах)
+- Результаты поиска в интернете
+
+${formattedSearchInfo || "Дополнительная информация не найдена"}
+
+### ИНСТРУКЦИИ:
+- Если нашел информацию об организации или председателе - обязательно используй её в ответе
+- Если информации нет ни в одном источнике - только тогда можно сказать, что информации нет
+- Будь конкретным и точным, используй найденные факты
 
 Отвечай кратко и по делу. Будь дружелюбным и тёплым.`;
 

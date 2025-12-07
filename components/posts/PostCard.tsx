@@ -608,17 +608,25 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
         {isArticle && (() => {
           // Проверяем видео-обложку
           const videoMeta = post.videoMetadata;
-          if (videoMeta && (typeof videoMeta === 'object' ? videoMeta.videoType : JSON.parse(videoMeta || '{}').videoType)) {
-            const vm = typeof videoMeta === 'string' ? JSON.parse(videoMeta) : videoMeta;
-            return (
-              <div className="mb-4">
-                <VideoEmbed
-                  videoType={vm.videoType}
-                  videoId={vm.videoId}
-                  title={vm.title || "Обложка"}
-                />
-              </div>
-            );
+          if (videoMeta) {
+            let vm: any = null;
+            try {
+              vm = typeof videoMeta === 'string' ? JSON.parse(videoMeta) : videoMeta;
+            } catch (e) {
+              console.error("Error parsing videoMetadata:", e);
+            }
+            
+            if (vm && vm.videoType && vm.videoId) {
+              return (
+                <div className="mb-4">
+                  <VideoEmbed
+                    videoType={vm.videoType}
+                    videoId={vm.videoId}
+                    title={vm.title || "Обложка"}
+                  />
+                </div>
+              );
+            }
           }
           
           // Проверяем картинку-обложку
@@ -675,8 +683,8 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           ) : (
             <p className="text-gray-900 dark:text-white whitespace-pre-wrap break-words">
               {displayContent}
-            </p>
-          )}
+          </p>
+        )}
           {!isArticle && shouldTruncate && (
             <button
               onClick={() => setIsExpanded(!isExpanded)}

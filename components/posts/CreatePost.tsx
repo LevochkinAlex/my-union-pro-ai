@@ -288,6 +288,9 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         
         if (isImageModalForCover) {
           // Для cover изображения - устанавливаем только coverImage
+          // Очищаем videoMetadata, если был установлен
+          setVideoMetadata(null);
+          setVideoUrl("");
           setCoverImage(imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`);
           setFilePreviews([]);
           setSelectedFiles([]);
@@ -350,6 +353,9 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
     
     if (isImageModalForCover) {
       // Для cover изображения - устанавливаем только coverImage
+      // Очищаем videoMetadata, если был установлен
+      setVideoMetadata(null);
+      setVideoUrl("");
       setCoverImage(fullImageUrl);
       setFilePreviews([]);
       setSelectedFiles([]);

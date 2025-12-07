@@ -152,6 +152,8 @@ function isOrganizationQuery(query: string): boolean {
     "кто директор",
     "председатель профсоюза",
     "руководитель профсоюза",
+    "как зовут",
+    "кто такой",
   ];
 
   const queryLower = query.toLowerCase();
@@ -164,27 +166,42 @@ function isOrganizationQuery(query: string): boolean {
 function extractOrganizationName(query: string): string | null {
   // Ищем паттерны типа "председатель МООП РЗ РФ" или "руководитель организации X"
   const patterns = [
-    /председатель\s+([А-ЯЁа-яё\s]+?)(?:\s+\?|$|\.|,)/i,
-    /руководитель\s+([А-ЯЁа-яё\s]+?)(?:\s+\?|$|\.|,)/i,
-    /глава\s+([А-ЯЁа-яё\s]+?)(?:\s+\?|$|\.|,)/i,
-    /кто\s+(?:возглавляет|руководит|директор)\s+([А-ЯЁа-яё\s]+?)(?:\s+\?|$|\.|,)/i,
-    /([МООП][А-ЯЁа-яё\s]+РЗ\s*РФ?)/i,
+    /председатель\s+(?:профсоюза\s+)?([А-ЯЁа-яё\s]+?)(?:\s+\?|$|\.|,)/i,
+    /руководитель\s+(?:профсоюза\s+)?([А-ЯЁа-яё\s]+?)(?:\s+\?|$|\.|,)/i,
+    /глава\s+(?:профсоюза\s+)?([А-ЯЁа-яё\s]+?)(?:\s+\?|$|\.|,)/i,
+    /кто\s+(?:возглавляет|руководит|директор)\s+(?:профсоюз\s+)?([А-ЯЁа-яё\s]+?)(?:\s+\?|$|\.|,)/i,
+    /как\s+зовут\s+председателя\s+(?:профсоюза\s+)?([А-ЯЁа-яё\s]+?)(?:\s+\?|$|\.|,)/i,
+    /([МООП][А-ЯЁа-яё\s]*РЗ\s*РФ?)/i,
     /([МООП][А-ЯЁа-яё\s]*)/i,
   ];
 
   for (const pattern of patterns) {
     const match = query.match(pattern);
     if (match && match[1]) {
-      return match[1].trim();
+      const extracted = match[1].trim();
+      // Убираем лишние знаки препинания
+      const cleaned = extracted.replace(/[?.,!]+$/, "").trim();
+      if (cleaned.length > 2) {
+        return cleaned;
+      }
     }
   }
 
   // Если не найдено точное совпадение, но есть ключевые слова - возвращаем часть запроса
   if (isOrganizationQuery(query)) {
     // Извлекаем слова после ключевых слов
-    const afterKeywords = query.match(/(?:председатель|руководитель|глава|кто\s+(?:возглавляет|руководит))\s+(.+)/i);
+    const afterKeywords = query.match(/(?:председатель|руководитель|глава|кто\s+(?:возглавляет|руководит|директор)|как\s+зовут\s+председателя)\s+(?:профсоюза\s+)?(?:профсоюз\s+)?(.+)/i);
     if (afterKeywords && afterKeywords[1]) {
-      return afterKeywords[1].trim().replace(/[?.,!]+$/, "");
+      const extracted = afterKeywords[1].trim().replace(/[?.,!]+$/, "");
+      if (extracted.length > 2) {
+        return extracted;
+      }
+    }
+    
+    // Если в запросе есть упоминание МООП или других ключевых слов - ищем их
+    const moopMatch = query.match(/МООП[А-ЯЁа-яё\s]*РЗ\s*РФ?/i);
+    if (moopMatch) {
+      return moopMatch[0].trim();
     }
   }
 
