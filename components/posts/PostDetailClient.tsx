@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Session } from "next-auth";
 
@@ -11,13 +11,16 @@ interface PostDetailClientProps {
 
 // Компонент для отображения обложки (картинка или видео)
 function CoverMedia({ post, getFileUrl }: { post: any; getFileUrl: (path: string) => string }) {
-  // Debug log
-  console.log("[CoverMedia] Post data:", {
-    id: post.id,
-    postType: post.postType,
-    coverImage: post.coverImage,
-    videoMetadata: post.videoMetadata,
-  });
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Не рендерим на сервере чтобы избежать hydration mismatch
+  if (!mounted) {
+    return null;
+  }
 
   // Проверяем видео-обложку
   const videoMeta = post.videoMetadata;
@@ -26,7 +29,7 @@ function CoverMedia({ post, getFileUrl }: { post: any; getFileUrl: (path: string
     try {
       vm = typeof videoMeta === 'string' ? JSON.parse(videoMeta) : videoMeta;
     } catch (e) {
-      console.error("Error parsing videoMetadata:", e);
+      // Ignore parsing errors
     }
     
     if (vm && vm.videoType && vm.videoId) {
