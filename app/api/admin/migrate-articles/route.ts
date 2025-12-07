@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       select: { role: true },
     });
 
-    if (user?.role !== "admin" && user?.role !== "superadmin") {
+    if (user?.role !== "SUPER_ADMIN") {
       return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
     }
 
