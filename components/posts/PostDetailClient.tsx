@@ -11,6 +11,14 @@ interface PostDetailClientProps {
 
 // Компонент для отображения обложки (картинка или видео)
 function CoverMedia({ post, getFileUrl }: { post: any; getFileUrl: (path: string) => string }) {
+  // Debug log
+  console.log("[CoverMedia] Post data:", {
+    id: post.id,
+    postType: post.postType,
+    coverImage: post.coverImage,
+    videoMetadata: post.videoMetadata,
+  });
+
   // Проверяем видео-обложку
   const videoMeta = post.videoMetadata;
   if (videoMeta) {

@@ -69,11 +69,21 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
 
   const postData = {
     ...post,
+    coverImage: (post as any).coverImage || null,
+    videoMetadata: post.videoMetadata || null,
     isLiked: post.likes && Array.isArray(post.likes) && post.likes.length > 0,
     likesCount: post._count.likes,
     commentsCount: post._count.comments,
     viewCount: currentViewCount,
   };
+
+  // Debug log
+  console.log("[posts/[id]] Post data:", {
+    id: post.id,
+    postType: post.postType,
+    coverImage: (post as any).coverImage,
+    videoMetadata: post.videoMetadata,
+  });
 
   return <PostDetailClient post={postData} session={session} />;
 }
