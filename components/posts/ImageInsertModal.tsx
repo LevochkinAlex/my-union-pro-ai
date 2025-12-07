@@ -52,10 +52,29 @@ export default function ImageInsertModal({
   );
 
   const createImage = (url: string): Promise<HTMLImageElement> =>
-    new Promise((resolve, reject) => {
+    new Promise(async (resolve, reject) => {
       const image = new Image();
       image.addEventListener("load", () => resolve(image));
       image.addEventListener("error", (error) => reject(error));
+      
+      // Для внешних URL загружаем через fetch чтобы избежать CORS
+      if (url.startsWith("http") && !url.startsWith(window.location.origin)) {
+        try {
+          // Пробуем загрузить через прокси
+          const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`;
+          const response = await fetch(proxyUrl);
+          if (response.ok) {
+            const blob = await response.blob();
+            image.src = URL.createObjectURL(blob);
+            return;
+          }
+        } catch (e) {
+          console.warn("Proxy fetch failed, trying direct with CORS");
+        }
+        // Fallback: попробуем с crossOrigin
+        image.crossOrigin = "anonymous";
+      }
+      
       image.src = url;
     });
 
