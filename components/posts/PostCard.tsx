@@ -550,8 +550,13 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                       setEditVideoUrl(post.videoMetadata?.embedUrl || "");
                       setEditLinkMetadata(post.linkMetadata || null);
                       setEditVideoMetadata(post.videoMetadata || null);
-                      setEditCoverImage((post as any).coverImage || null);
+                      // Берём картинку из coverImage или из первого image attachment
+                      const existingImage = (post as any).coverImage || 
+                        post.attachments?.find((a: any) => a.type === "image")?.filePath || null;
+                      setEditCoverImage(existingImage);
                       setEditFiles([]);
+                      setEditFilePreviews([]);
+                      setDeletedAttachmentIds([]);
                     }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                   >
@@ -1397,7 +1402,40 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                 {/* Для статей не показываем кнопки добавления файлов - изображения вставляются через редактор */}
                 {post.postType !== "article" && (
                   <>
-                    {/* Выбор типа поста */}
+                    {/* Существующая картинка (если нет нового файла) */}
+                    {editCoverImage && editFiles.length === 0 && (
+                      <div className="relative">
+                        <img
+                          src={editCoverImage.startsWith('http') ? editCoverImage : 
+                               editCoverImage.startsWith('/') ? editCoverImage :
+                               `/uploads/posts/${editCoverImage.split('/').pop()}`}
+                          alt="Текущее фото"
+                          className="w-full max-h-64 object-contain rounded-lg border border-gray-200 dark:border-gray-700"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditCoverImage(null);
+                            // Помечаем ВСЕ существующие вложения на удаление
+                            if (post.attachments && post.attachments.length > 0) {
+                              setDeletedAttachmentIds(post.attachments.map((a: any) => a.id));
+                            }
+                          }}
+                          className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                          title="Удалить фото"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Кнопка добавления/замены фото */}
                     <div className="flex gap-2 flex-wrap">
                       <button
                         type="button"
@@ -1407,7 +1445,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        Заменить фото
+                        {editCoverImage || editFiles.length > 0 ? "Заменить фото" : "Добавить фото"}
                       </button>
                     </div>
 
@@ -1425,6 +1463,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                         
                         // Новый файл заменяет старый (только 1 файл разрешён)
                         setEditFiles([file]);
+                        setEditCoverImage(null); // Убираем старую картинку
                         
                         // Помечаем ВСЕ существующие вложения на удаление
                         if (post.attachments && post.attachments.length > 0) {
@@ -1443,7 +1482,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                       accept="image/*,.heic,.heif"
                     />
 
-                    {/* Выбранные файлы */}
+                    {/* Новый выбранный файл */}
                     {editFiles.length > 0 && (
                       <div className="space-y-2">
                         {editFiles.map((file, index) => (
