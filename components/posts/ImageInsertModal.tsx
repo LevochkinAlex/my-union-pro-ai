@@ -47,14 +47,14 @@ export default function ImageInsertModal({
     { label: "4:3", value: 4 / 3 },
   ];
 
-  if (!isOpen || !mounted) return null;
-
   const onCropComplete = useCallback(
     (croppedArea: Area, croppedAreaPixels: Area) => {
       setCroppedAreaPixels(croppedAreaPixels);
     },
     []
   );
+
+  if (!isOpen || !mounted) return null;
 
   const createImage = (url: string): Promise<HTMLImageElement> =>
     new Promise(async (resolve, reject) => {
