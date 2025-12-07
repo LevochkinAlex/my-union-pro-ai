@@ -597,19 +597,25 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       {/* Контент */}
       <div className="mb-4">
         {/* Cover Image для всех постов */}
-        {(coverImage || (post as any).coverImage) && (
-          <div className="mb-4">
-            <img
-              src={coverImage || (post as any).coverImage}
-              alt="Обложка"
-              className="w-full h-64 object-cover rounded-lg"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-              }}
-            />
+        {(() => {
+          const coverImagePath = coverImage || (post as any).coverImage;
+          if (!coverImagePath) return null;
+          const coverImageUrl = getFileUrl(coverImagePath, "posts");
+          if (!coverImageUrl) return null;
+          return (
+            <div className="mb-4">
+              <img
+                src={coverImageUrl}
+                alt="Обложка"
+                className="w-full h-64 object-cover rounded-lg"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                }}
+              />
             </div>
-        )}
+          );
+        })()}
         
         <div className="mb-4">
           {isArticle ? (

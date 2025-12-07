@@ -22,6 +22,9 @@ export default function FloatingChatBot() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationHistoryRef = useRef<ChatMessage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isSendingMessageRef = useRef(false);
+  const [isUserTyping, setIsUserTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Вычисляем, можно ли отправить сообщение
   const canSend = input.trim().length > 0 && !isLoading;
@@ -62,7 +65,7 @@ export default function FloatingChatBot() {
 
   // Загружаем историю чата с ботом при открытии
   useEffect(() => {
-    if (isOpen && session?.user?.id) {
+    if (isOpen && session?.user?.id && !isSendingMessageRef.current) {
       loadChatHistory();
     }
   }, [isOpen, session?.user?.id]);
@@ -75,6 +78,15 @@ export default function FloatingChatBot() {
       }, 100);
     }
   }, [messages, isOpen]);
+
+  // Очистка таймаута при размонтировании
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Загрузка истории чата с ботом
   const loadChatHistory = async () => {
@@ -127,6 +139,11 @@ export default function FloatingChatBot() {
     const userMessage = input.trim();
     setInput("");
     setIsLoading(true);
+    setIsUserTyping(false);
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    isSendingMessageRef.current = true;
 
     // Добавляем сообщение пользователя
     const userMsg: ChatMessage = {
@@ -181,6 +198,10 @@ export default function FloatingChatBot() {
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
+      // Разрешаем загрузку истории через небольшую задержку
+      setTimeout(() => {
+        isSendingMessageRef.current = false;
+      }, 1000);
     }
   };
 
@@ -309,6 +330,7 @@ export default function FloatingChatBot() {
                 </div>
               ))
             )}
+            {/* Индикатор "Бот печатает" */}
             {isLoading && (
               <div className="flex justify-start gap-2">
                 <div className="flex-shrink-0">
@@ -316,12 +338,43 @@ export default function FloatingChatBot() {
                     AI
                   </div>
                 </div>
-                <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl rounded-bl-md px-4 py-2">
-                  <div className="flex gap-1">
-                    <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
-                    <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
-                    <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl rounded-bl-md px-4 py-3">
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 mr-2">Печатает</span>
+                    <div className="flex gap-1">
+                      <div className="h-2 w-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                      <div className="h-2 w-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                      <div className="h-2 w-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                    </div>
                   </div>
+                </div>
+              </div>
+            )}
+            {/* Индикатор "Пользователь печатает" */}
+            {isUserTyping && !isLoading && input.trim().length > 0 && (
+              <div className="flex justify-end gap-2">
+                <div className="bg-blue-600 rounded-2xl rounded-br-md px-4 py-3">
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-blue-100 mr-2">Печатаете</span>
+                    <div className="flex gap-1">
+                      <div className="h-2 w-2 bg-blue-200 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                      <div className="h-2 w-2 bg-blue-200 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                      <div className="h-2 w-2 bg-blue-200 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-shrink-0">
+                  {userAvatar ? (
+                    <img
+                      src={userAvatar}
+                      alt="User Avatar"
+                      className="h-8 w-8 rounded-full object-cover shadow-sm"
+                    />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold shadow-sm">
+                      {session?.user?.name?.charAt(0).toUpperCase() || "U"}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -339,11 +392,27 @@ export default function FloatingChatBot() {
               <textarea
                 ref={textareaRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  // Показываем индикатор печати пользователя
+                  setIsUserTyping(true);
+                  // Очищаем предыдущий таймаут
+                  if (typingTimeoutRef.current) {
+                    clearTimeout(typingTimeoutRef.current);
+                  }
+                  // Скрываем индикатор через 2 секунды после остановки печати
+                  typingTimeoutRef.current = setTimeout(() => {
+                    setIsUserTyping(false);
+                  }, 2000);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     if (canSend) {
+                      setIsUserTyping(false);
+                      if (typingTimeoutRef.current) {
+                        clearTimeout(typingTimeoutRef.current);
+                      }
                       handleSubmit(e);
                     }
                   }
