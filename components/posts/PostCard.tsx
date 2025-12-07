@@ -652,55 +652,30 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           )}
         </div>
 
-        {/* Вложения - для статей показываем только не-изображения, т.к. картинки встроены в HTML */}
-        {post.attachments && post.attachments.length > 0 && (
+        {/* Документы (не изображения) - картинка показывается через coverImage */}
+        {post.attachments && post.attachments.filter((a: any) => a.type !== "image").length > 0 && (
           <div className="space-y-2 mb-4">
             {post.attachments
-              .filter((attachment: any) => {
-                // Для статей не показываем изображения отдельно - они в HTML
-                if (isArticle && attachment.type === "image") return false;
-                return true;
-              })
+              .filter((attachment: any) => attachment.type !== "image")
               .map((attachment: any) => (
               <div key={attachment.id}>
-                {attachment.type === "image" ? (
-                  <img
-                    src={getFileUrl(attachment.filePath)}
-                    alt={attachment.fileName || "Изображение"}
-                    className="max-w-full rounded-lg object-contain"
-                    style={{ maxHeight: '500px' }}
-                    onError={(e) => {
-                      // Fallback на прямой путь, если API не работает
-                      const target = e.target as HTMLImageElement;
-                      const fallbackUrl = attachment.filePath.startsWith('http') 
-                        ? attachment.filePath 
-                        : attachment.filePath.startsWith('/') 
-                          ? attachment.filePath 
-                          : `/uploads/posts/${attachment.fileName || attachment.filePath.split('/').pop()}`;
-                      if (target.src !== fallbackUrl) {
-                        target.src = fallbackUrl;
-                      }
-                    }}
-                  />
-                ) : (
-                  <a
-                    href={getFileUrl(attachment.filePath)}
-                    download={attachment.originalName}
-                    className="flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                        {attachment.originalName}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {(attachment.fileSize / 1024).toFixed(1)} KB
-                      </p>
-                    </div>
-                  </a>
-                )}
+                <a
+                  href={getFileUrl(attachment.filePath)}
+                  download={attachment.originalName}
+                  className="flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                      {attachment.originalName}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {(attachment.fileSize / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                </a>
               </div>
             ))}
           </div>
@@ -727,40 +702,6 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
               image={post.linkMetadata.image}
               siteName={post.linkMetadata.siteName}
               favicon={post.linkMetadata.favicon}
-            />
-          </div>
-        )}
-
-        {/* Ссылка с превью */}
-        {post.linkMetadata && (
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4">
-            <a href={post.linkMetadata.url} target="_blank" rel="noopener noreferrer" className="block">
-              {post.linkMetadata.image && (
-                <img
-                  src={post.linkMetadata.image}
-                  alt={post.linkMetadata.title}
-                  className="w-full h-48 object-cover rounded-lg mb-2"
-                />
-              )}
-              <h4 className="font-semibold text-gray-900 dark:text-white">
-                {post.linkMetadata.title}
-              </h4>
-              {post.linkMetadata.description && (
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {post.linkMetadata.description}
-                </p>
-              )}
-            </a>
-          </div>
-        )}
-
-        {/* Видео */}
-        {post.videoMetadata && (
-          <div className="mb-4">
-            <iframe
-              src={post.videoMetadata.embedUrl}
-              className="w-full h-64 rounded-lg"
-              allowFullScreen
             />
           </div>
         )}
