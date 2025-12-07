@@ -107,6 +107,7 @@ function ChatPageContent() {
   const [isConvertingHeic, setIsConvertingHeic] = useState(false);
   const [isBotTyping, setIsBotTyping] = useState(false);
   const botTypingCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const messagesRef = useRef<Message[]>([]);
   // Изменено: теперь messageLikes хранит массив реакций для каждого сообщения
   const [messageLikes, setMessageLikes] = useState<Record<string, Array<{ 
     emoji: string; 
@@ -156,6 +157,11 @@ function ChatPageContent() {
       }
     };
   }, [searchParams, filePreview]);
+
+  // Keep messagesRef in sync with messages state to avoid stale closures
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     loadChats();
@@ -816,7 +822,7 @@ function ChatPageContent() {
                     // Ищем новые сообщения от бота, которых нет в текущем списке
                     const hasNewBotMessage = newMessages.some((msg: Message) => 
                       msg.senderId === botId && 
-                      !messages.some(m => m.id === msg.id)
+                      !messagesRef.current.some(m => m.id === msg.id)
                     );
                     
                     if (hasNewBotMessage) {
