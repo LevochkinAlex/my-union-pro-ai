@@ -102,14 +102,13 @@ interface ChildrenState {
   children: Child[];
 }
 
-type TabKey = "profile" | "additional" | "membership" | "awards" | "security";
+type TabKey = "profile" | "additional" | "membership" | "education" | "awards";
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
   const [isLoading, setIsLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [emailVerified, setEmailVerified] = useState<Date | null>(null);
   const [lastSavedField, setLastSavedField] = useState<string | null>(null);
@@ -136,12 +135,6 @@ export default function ProfilePage() {
     avatarUrl: null,
     organizationId: null,
     organization: null,
-  });
-
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
   });
 
   const [additionalInfo, setAdditionalInfo] = useState<AdditionalInfo>({
@@ -761,41 +754,6 @@ export default function ProfilePage() {
     }
   };
 
-  const handlePasswordSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setMessage({ type: "error", text: "Новый пароль и подтверждение не совпадают" });
-      return;
-    }
-
-    setChangingPassword(true);
-    try {
-      const response = await fetch("/api/profile/change-password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          currentPassword: passwordForm.currentPassword,
-          newPassword: passwordForm.newPassword,
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Не удалось изменить пароль");
-      }
-
-      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
-      setMessage({ type: "success", text: "Пароль успешно изменен" });
-    } catch (error) {
-      console.error(error);
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка изменения пароля" });
-    } finally {
-      setChangingPassword(false);
-    }
-  };
 
   const handleAdditionalInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -993,6 +951,16 @@ export default function ProfilePage() {
             Членство
           </button>
           <button
+            onClick={() => setActiveTab("education")}
+            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
+              activeTab === "education"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Образование
+          </button>
+          <button
             onClick={() => setActiveTab("awards")}
             className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
               activeTab === "awards"
@@ -1001,16 +969,6 @@ export default function ProfilePage() {
             }`}
           >
             Награды
-          </button>
-          <button
-            onClick={() => setActiveTab("security")}
-            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
-              activeTab === "security"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            Безопасность
           </button>
         </nav>
       </div>
@@ -1253,9 +1211,6 @@ export default function ProfilePage() {
           Заполните дополнительные сведения о себе для более персонализированного общения с AI-ботом
         </p>
         <form onSubmit={handleAdditionalInfoSubmit} className="mt-6 space-y-6">
-          {/* Секция: Образование и профессиональные навыки */}
-          <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-900/50">
-            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">Образование и профессиональные навыки</h4>
             
             {/* Профессии */}
             <div className="mb-6">
@@ -2075,59 +2030,6 @@ export default function ProfilePage() {
               className="inline-flex items-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {savingAdditionalInfo ? "Сохранение..." : "Сохранить награды"}
-            </button>
-          </div>
-        </form>
-      </div>
-      )}
-
-      {activeTab === "security" && (
-      <div className="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 md:p-6">
-        <h3 className="text-base font-semibold text-gray-900 dark:text-white md:text-lg">Изменение пароля</h3>
-        <form onSubmit={handlePasswordSubmit} className="mt-4 space-y-6">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Текущий пароль</label>
-            <input
-              type="password"
-              name="currentPassword"
-              value={passwordForm.currentPassword}
-              onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
-              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Новый пароль</label>
-            <input
-              type="password"
-              name="newPassword"
-              value={passwordForm.newPassword}
-              onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
-              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              minLength={8}
-              required
-            />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Минимум 8 символов</p>
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Подтверждение пароля</label>
-            <input
-              type="password"
-              name="confirmPassword"
-              value={passwordForm.confirmPassword}
-              onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              minLength={8}
-              required
-            />
-          </div>
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={changingPassword}
-              className="inline-flex items-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {changingPassword ? "Изменение..." : "Изменить пароль"}
             </button>
           </div>
         </form>
