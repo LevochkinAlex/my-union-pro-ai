@@ -208,7 +208,8 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
             }
 
             if (videoId) {
-              if (isVideoModalForCover) {
+              const isForCover = isVideoModalForCover;
+              if (isForCover) {
                 // Если это обложка, очищаем coverImage
                 setCoverImage(null);
               }
@@ -225,7 +226,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
               });
               setIsVideoModalOpen(false);
               setIsVideoModalForCover(false);
-              showToast(isVideoModalForCover ? "✓ Видео-обложка добавлена" : "✓ Видео добавлено", "success");
+              showToast(isForCover ? "✓ Видео-обложка добавлена" : "✓ Видео добавлено", "success");
             } else {
               showToast("Неподдерживаемый формат видео", "error");
             }
