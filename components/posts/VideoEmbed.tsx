@@ -1,7 +1,7 @@
 "use client";
 
 interface VideoEmbedProps {
-  videoType: "youtube" | "vimeo";
+  videoType: "youtube" | "vimeo" | "rutube" | "vk";
   videoId: string;
   title?: string;
   onRemove?: () => void;
@@ -13,10 +13,26 @@ export default function VideoEmbed({
   title = "Video",
   onRemove,
 }: VideoEmbedProps) {
-  const embedUrl =
-    videoType === "youtube"
-      ? `https://www.youtube.com/embed/${videoId}`
-      : `https://player.vimeo.com/video/${videoId}`;
+  let embedUrl = "";
+  
+  switch (videoType) {
+    case "youtube":
+      embedUrl = `https://www.youtube.com/embed/${videoId}`;
+      break;
+    case "vimeo":
+      embedUrl = `https://player.vimeo.com/video/${videoId}`;
+      break;
+    case "rutube":
+      embedUrl = `https://rutube.ru/play/embed/${videoId}`;
+      break;
+    case "vk":
+      // videoId для VK имеет формат "-12345_67890"
+      const [oid, id] = videoId.split("_");
+      embedUrl = `https://vk.com/video_ext.php?oid=${oid}&id=${id}`;
+      break;
+    default:
+      embedUrl = "";
+  }
 
   return (
     <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">

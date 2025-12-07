@@ -50,6 +50,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   const [isEditImageModalOpen, setIsEditImageModalOpen] = useState(false);
   const [isEditVideoModalOpen, setIsEditVideoModalOpen] = useState(false);
   const [imageInsertMode, setImageInsertMode] = useState<"content" | "cover">("content");
+  const [isVideoModalForCover, setIsVideoModalForCover] = useState(false);
   const [deletedAttachmentIds, setDeletedAttachmentIds] = useState<string[]>([]);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const editArticleEditorRef = useRef<HTMLDivElement>(null);
@@ -393,11 +394,22 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
 
       if (response.ok && data.url) {
         const imageUrl = data.url;
-        const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
+        // API возвращает полный URL (https://myunion.pro/uploads/...) или относительный (/api/uploads/...)
+        // Для превью используем полный URL
+        const fullImageUrl = imageUrl.startsWith('http') 
+          ? imageUrl 
+          : imageUrl.startsWith('/') 
+            ? `${window.location.origin}${imageUrl}`
+            : `${window.location.origin}/${imageUrl}`;
         
         if (imageInsertMode === "cover") {
-          // Используем как обложку
+          // Используем как обложку - очищаем видео, если было
+          setEditVideoMetadata(null);
+          setEditVideoUrl("");
           setEditCoverImage(fullImageUrl);
+          setIsEditImageModalOpen(false);
+          setImageInsertMode("content");
+          showToast("✓ Обложка загружена", "success");
         } else {
           // Вставляем в контент
           if (editArticleEditorRef.current) {
@@ -423,11 +435,21 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
 
   const handleEditImageGenerate = async (imageUrl: string) => {
     console.log("[PostCard] handleEditImageGenerate called with:", imageUrl);
-    const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
+    // API возвращает полный URL или относительный
+    const fullImageUrl = imageUrl.startsWith('http') 
+      ? imageUrl 
+      : imageUrl.startsWith('/') 
+        ? `${window.location.origin}${imageUrl}`
+        : `${window.location.origin}/${imageUrl}`;
     
     if (imageInsertMode === "cover") {
-      // Используем как обложку
+      // Используем как обложку - очищаем видео, если было
+      setEditVideoMetadata(null);
+      setEditVideoUrl("");
       setEditCoverImage(fullImageUrl);
+      setIsEditImageModalOpen(false);
+      setImageInsertMode("content");
+      showToast("✓ Обложка сгенерирована", "success");
     } else {
       // Вставляем в контент - только img тег без wrapper и кнопки
       if (editArticleEditorRef.current) {
@@ -453,27 +475,90 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
 
   const handleEditVideoInsert = (url: string) => {
     let embedUrl = "";
+    let videoType = "";
+    let videoId = "";
+    
     if (url.includes("youtube.com/watch") || url.includes("youtu.be/")) {
-      const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1] || "";
+      videoType = "youtube";
+      videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1] || "";
       embedUrl = `https://www.youtube.com/embed/${videoId}`;
     } else if (url.includes("rutube.ru/video/")) {
-      const videoId = url.match(/rutube\.ru\/video\/([^\/\n?#]+)/)?.[1] || "";
+      videoType = "rutube";
+      videoId = url.match(/rutube\.ru\/video\/([^\/\n?#]+)/)?.[1] || "";
       embedUrl = `https://rutube.ru/play/embed/${videoId}`;
     } else if (url.includes("vk.com/video")) {
+      videoType = "vk";
       const match = url.match(/vk\.com\/video(-?\d+_\d+)/);
       if (match) {
-        const videoId = match[1];
+        videoId = match[1];
         embedUrl = `https://vk.com/video_ext.php?oid=${videoId.split("_")[0]}&id=${videoId.split("_")[1]}`;
       }
     }
 
-    if (embedUrl && editArticleEditorRef.current) {
-      const editor = editArticleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
-      if (editor && (editor as any).insertVideo) {
-        (editor as any).insertVideo(embedUrl);
-      }
+    if (!embedUrl) {
+      showToast("Неподдерживаемый формат видео. Используйте YouTube, Rutube или VK", "error");
+      return;
     }
-    setIsEditVideoModalOpen(false);
+
+    // Если видео вставляется как обложка
+    if (isVideoModalForCover) {
+      // Очищаем coverImage, если был установлен
+      setEditCoverImage(null);
+      // Устанавливаем videoMetadata как обложку
+      setEditVideoMetadata({
+        videoType,
+        videoId,
+        embedUrl,
+        url,
+      });
+      setIsEditVideoModalOpen(false);
+      setIsVideoModalForCover(false);
+      showToast("✓ Видео-обложка добавлена", "success");
+      return;
+    }
+
+    // Для статей вставляем iframe в редактор
+    if (editArticleEditorRef.current) {
+      const editor = editArticleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+      if (editor) {
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'relative';
+        wrapper.style.paddingBottom = '56.25%';
+        wrapper.style.height = '0';
+        wrapper.style.overflow = 'hidden';
+        wrapper.style.maxWidth = '100%';
+        wrapper.style.margin = '16px 0';
+        wrapper.style.borderRadius = '8px';
+        
+        const iframe = document.createElement('iframe');
+        iframe.src = embedUrl;
+        iframe.style.position = 'absolute';
+        iframe.style.top = '0';
+        iframe.style.left = '0';
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.frameBorder = '0';
+        iframe.allowFullscreen = true;
+        
+        wrapper.appendChild(iframe);
+        
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.insertNode(wrapper);
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } else {
+          editor.appendChild(wrapper);
+        }
+        
+        const event = new Event('input', { bubbles: true });
+        editor.dispatchEvent(event);
+      }
+      setIsEditVideoModalOpen(false);
+      showToast("✓ Видео вставлено в статью", "success");
+    }
   };
 
   return (
@@ -1207,45 +1292,103 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                 {/* WYSIWYG редактор для статей */}
                 {post.postType === "article" ? (
                   <>
-                    {/* Cover Image */}
+                    {/* Обложка (картинка ИЛИ видео) */}
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         Обложка статьи:
                       </label>
-                      {editCoverImage ? (
-                        <div className="relative">
+                      {!editCoverImage && !editVideoMetadata ? (
+                        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6">
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 text-center">
+                            Добавьте обложку (одну картинку или видео)
+                          </p>
+                          <div className="flex gap-3 justify-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setImageInsertMode("cover");
+                                setIsEditImageModalOpen(true);
+                              }}
+                              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              Картинка
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsVideoModalForCover(true);
+                                setIsEditVideoModalOpen(true);
+                              }}
+                              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                              Видео
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                      
+                      {/* Превью обложки-картинки */}
+                      {editCoverImage && (
+                        <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
                           <img
                             src={editCoverImage}
                             alt="Обложка"
-                            className="w-full h-48 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
+                            className="w-full h-48 object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                            }}
                           />
                           <button
                             type="button"
-                            onClick={() => setEditCoverImage(null)}
-                            className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-2"
+                            onClick={() => {
+                              setEditCoverImage(null);
+                              setEditVideoMetadata(null);
+                            }}
+                            className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg z-10"
                             title="Удалить обложку"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
                           </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setImageInsertMode("cover");
-                            setIsEditImageModalOpen(true);
-                          }}
-                          className="w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 hover:border-blue-500 hover:text-blue-500 transition"
-                        >
-                          <div className="text-center">
-                            <svg className="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            <p className="text-sm">Добавить обложку</p>
+                          <div className="absolute bottom-2 left-2 px-3 py-1 bg-black/50 backdrop-blur-sm text-white text-xs rounded-full">
+                            ✓ Обложка-картинка
                           </div>
-                        </button>
+                        </div>
+                      )}
+
+                      {/* Превью обложки-видео */}
+                      {editVideoMetadata && editVideoMetadata.videoType && editVideoMetadata.videoId && (
+                        <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                          <VideoEmbed
+                            videoType={editVideoMetadata.videoType}
+                            videoId={editVideoMetadata.videoId}
+                            title="Обложка-видео"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditCoverImage(null);
+                              setEditVideoMetadata(null);
+                            }}
+                            className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg z-10"
+                            title="Удалить обложку"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                          <div className="absolute bottom-2 left-2 px-3 py-1 bg-black/50 backdrop-blur-sm text-white text-xs rounded-full">
+                            ✓ Обложка-видео
+                          </div>
+                        </div>
                       )}
                     </div>
                     
@@ -1755,7 +1898,10 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       {isEditImageModalOpen && (
         <ImageInsertModal
           isOpen={isEditImageModalOpen}
-          onClose={() => setIsEditImageModalOpen(false)}
+          onClose={() => {
+            setIsEditImageModalOpen(false);
+            setImageInsertMode("content");
+          }}
           onUpload={handleEditImageUpload}
           onGenerate={(imageUrl: string) => {
             // ImageInsertModal уже сгенерировал изображение и передает готовый URL
@@ -1769,7 +1915,10 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       {isEditVideoModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 backdrop-blur-md"
-          onClick={() => setIsEditVideoModalOpen(false)}
+          onClick={() => {
+            setIsEditVideoModalOpen(false);
+            setIsVideoModalForCover(false);
+          }}
         >
           <div
             className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6"
@@ -1777,11 +1926,14 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Вставить видео
+                {isVideoModalForCover ? "Добавить видео-обложку" : "Вставить видео"}
               </h3>
               <button
                 type="button"
-                onClick={() => setIsEditVideoModalOpen(false)}
+                onClick={() => {
+                  setIsEditVideoModalOpen(false);
+                  setIsVideoModalForCover(false);
+                }}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

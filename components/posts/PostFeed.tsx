@@ -114,20 +114,30 @@ export default function PostFeed({ userId, limit, refreshKey }: PostFeedProps) {
     // Не используем infinite scroll если указан limit
     if (limit) return;
 
+    // Очищаем предыдущий observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         const first = entries[0];
+        // Защита от множественных запросов
         if (first.isIntersecting && hasMore && !loading && !loadingMore) {
           setPage(prev => prev + 1);
         }
       },
-      { threshold: 0.1, rootMargin: "100px" }
+      { 
+        threshold: 0.1, 
+        rootMargin: "200px" // Увеличиваем margin для более ранней загрузки
+      }
     );
 
     observerRef.current = observer;
 
-    if (loadMoreRef.current) {
-      observer.observe(loadMoreRef.current);
+    const currentRef = loadMoreRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
     }
 
     return () => {

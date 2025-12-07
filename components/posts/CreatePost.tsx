@@ -281,17 +281,21 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
 
       if (response.ok && data.url) {
         const imageUrl = data.url;
-        // Используем относительный путь для coverImage, чтобы API мог его правильно обработать
-        const coverImagePath = imageUrl.startsWith('http') 
-          ? imageUrl.replace(window.location.origin, '') 
-          : imageUrl;
+        // API возвращает полный URL (https://myunion.pro/uploads/...) или относительный (/api/uploads/...)
+        // Для превью используем полный URL, для отправки - нормализуем
         
         if (isImageModalForCover) {
           // Для cover изображения - устанавливаем только coverImage
           // Очищаем videoMetadata, если был установлен
           setVideoMetadata(null);
           setVideoUrl("");
-          setCoverImage(imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`);
+          // Для превью используем полный URL
+          const fullUrl = imageUrl.startsWith('http') 
+            ? imageUrl 
+            : imageUrl.startsWith('/') 
+              ? `${window.location.origin}${imageUrl}`
+              : `${window.location.origin}/${imageUrl}`;
+          setCoverImage(fullUrl);
           setFilePreviews([]);
           setSelectedFiles([]);
           setIsImageModalOpen(false);
@@ -299,14 +303,23 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
           showToast("✓ Обложка загружена", "success");
         } else if (postType === "text") {
           // Для обычного поста - устанавливаем coverImage (будет отображаться как cover)
-          setCoverImage(imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`);
+          const fullUrl = imageUrl.startsWith('http') 
+            ? imageUrl 
+            : imageUrl.startsWith('/') 
+              ? `${window.location.origin}${imageUrl}`
+              : `${window.location.origin}/${imageUrl}`;
+          setCoverImage(fullUrl);
           setFilePreviews([]);
           setSelectedFiles([]);
           setIsImageModalOpen(false);
           showToast("✓ Обложка загружена", "success");
         } else {
           // Если это вставка в HTML (через WYSIWYG) для статьи
-          const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
+          const fullImageUrl = imageUrl.startsWith('http') 
+            ? imageUrl 
+            : imageUrl.startsWith('/') 
+              ? `${window.location.origin}${imageUrl}`
+              : `${window.location.origin}/${imageUrl}`;
           if (articleEditorRef.current) {
             const editor = articleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
             if (editor) {
@@ -349,7 +362,11 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
 
   const handleImageGenerate = async (imageUrl: string) => {
     // Используем полный URL для превью
-    const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
+    const fullImageUrl = imageUrl.startsWith('http') 
+      ? imageUrl 
+      : imageUrl.startsWith('/') 
+        ? `${window.location.origin}${imageUrl}`
+        : `${window.location.origin}/${imageUrl}`;
     
     if (isImageModalForCover) {
       // Для cover изображения - устанавливаем только coverImage

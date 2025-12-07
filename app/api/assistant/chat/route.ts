@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { retrieveRelevantChunks } from "@/lib/vector-search";
 import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
 import { saveChatConversationToKnowledgeBase } from "@/lib/chat-knowledge-learning";
+import { saveUserInteractionToKnowledgeBase } from "@/lib/user-knowledge-base";
+import { enhancedSearch, formatSearchResultsForPrompt } from "@/lib/chat-enhanced-search";
 import type { ChatBot, ApiProvider } from "@prisma/client";
 
 /**
@@ -71,55 +72,30 @@ export async function POST(request: NextRequest) {
     }
     console.log("[assistant/chat] Bot found:", bot.name, "model:", bot.model);
 
-    // Поиск релевантных чанков из базы знаний (не блокируем если ошибка)
-    console.log("[assistant/chat] Retrieving chunks...");
-    let chunks: any[] = [];
+    // Расширенный поиск информации из всех источников (включая персональную базу знаний пользователя)
+    console.log("[assistant/chat] Performing enhanced search...");
+    let searchResults;
     try {
-      chunks = await retrieveRelevantChunks(message, bot.id, 5);
-      console.log("[assistant/chat] Chunks retrieved:", chunks.length);
-    } catch (chunkError) {
-      console.error("[assistant/chat] Error retrieving chunks (continuing without):", chunkError);
+      searchResults = await enhancedSearch(message.trim(), bot.id, session.user.id);
+      console.log("[assistant/chat] Enhanced search completed:", {
+        knowledgeChunks: searchResults.knowledgeBaseChunks.length,
+        organizations: searchResults.organizationInfo.length,
+        webResults: searchResults.webSearchResults.length,
+      });
+    } catch (searchError) {
+      console.error("[assistant/chat] Error in enhanced search (continuing without):", searchError);
+      searchResults = {
+        knowledgeBaseChunks: [],
+        organizationInfo: [],
+        webSearchResults: [],
+      };
     }
 
-    // Поиск информации об организациях и председателях
-    let organizationInfo: any = null;
-    let webSearchResults: string = "";
-    
-    // Определяем, является ли запрос вопросом об организации или председателе
-    const isOrganizationQuery = /(председатель|руководитель|глава|директор|организац|МООП|РЗ|РФ|кто возглавляет|кто руководит|кто директор)/i.test(message);
-    
-    if (isOrganizationQuery) {
-      // Поиск в базе данных организаций
-      console.log("[assistant/chat] Searching organizations in database...");
-      try {
-        organizationInfo = await searchOrganizationInDatabase(message);
-        if (organizationInfo) {
-          console.log("[assistant/chat] Organization found:", organizationInfo.name);
-        }
-      } catch (orgError) {
-        console.error("[assistant/chat] Error searching organizations:", orgError);
-      }
+    // Форматируем результаты поиска для промпта
+    const formattedSearchInfo = formatSearchResultsForPrompt(searchResults);
 
-      // Если не нашли в базе или нужна актуальная информация, ищем в интернете
-      if (!organizationInfo?.chairmanName) {
-        console.log("[assistant/chat] Searching web for organization info...");
-        try {
-          const searchQuery = extractOrganizationSearchQuery(message);
-          if (searchQuery) {
-            // Используем веб-поиск через доступный инструмент
-            // Для продакшена нужно будет использовать реальный API веб-поиска
-            // Пока используем заглушку, которая будет заменена на реальный поиск
-            webSearchResults = await performWebSearch(searchQuery);
-            console.log("[assistant/chat] Web search completed, results length:", webSearchResults.length);
-          }
-        } catch (webError) {
-          console.error("[assistant/chat] Error performing web search:", webError);
-        }
-      }
-    }
-
-    // Строим системный промпт
-    const systemPrompt = buildSystemPrompt(user, chunks, organizationInfo, webSearchResults);
+    // Строим системный промпт с использованием расширенного поиска
+    const systemPrompt = buildSystemPromptWithEnhancedSearch(user, formattedSearchInfo);
 
     // Получаем или создаем пользователя-бота
     console.log("[assistant/chat] Getting or creating bot user...");
@@ -207,6 +183,21 @@ export async function POST(request: NextRequest) {
         senderId: botUser.id,
         content: aiResponse,
       },
+    });
+
+    // Сохраняем взаимодействие в персональную базу знаний пользователя (асинхронно)
+    saveUserInteractionToKnowledgeBase(
+      userId,
+      message.trim(),
+      aiResponse,
+      {
+        chatId: chat.id,
+        messageId: userMessage.id,
+        botMessageId: botMessage.id,
+        botId: bot.id,
+      }
+    ).catch((error) => {
+      console.error("[assistant/chat] Error saving interaction to user knowledge base:", error);
     });
 
     // Обновляем последнее сообщение в чате
@@ -520,7 +511,7 @@ async function performWebSearch(query: string): Promise<string> {
   }
 }
 
-function buildSystemPrompt(user: any, chunks: any[], organizationInfo?: any, webSearchResults?: string): string {
+function buildSystemPromptWithEnhancedSearch(user: any, formattedSearchInfo: string): string {
   const userName = user.firstName || user.email?.split("@")[0] || "друг";
   const userOrg = user.organization?.name || "не указана";
 
@@ -538,6 +529,7 @@ function buildSystemPrompt(user: any, chunks: any[], organizationInfo?: any, web
 - Объясняет, как использовать функции платформы
 - Помогает с навигацией по сайту
 - Отвечает на вопросы о профсоюзе, скидках, документах
+- Отвечает на вопросы о руководителях организаций, используя информацию из базы данных
 
 ### СТРОГО ЗАПРЕЩЕНО:
 - НЕ генерируй документы
@@ -588,35 +580,27 @@ function buildSystemPrompt(user: any, chunks: any[], organizationInfo?: any, web
 - Не используй эмодзи в ответах
 - Давай конкретные и полезные ответы
 - Предлагай конкретные ссылки и разделы, когда это уместно
-- Если не знаешь ответ - честно скажи
-- Если пользователь спрашивает о председателе или руководителе организации, сначала проверь информацию в базе данных выше. Если информации нет в базе, можешь предложить поискать актуальную информацию в интернете или обратиться к официальным источникам
 
-### БАЗА ЗНАНИЙ:
-${chunks.length > 0 ? chunks.map((chunk, i) => `\n[Документ ${i + 1}]\n${chunk.content}`).join("\n\n") : "База знаний пуста"}
+### ВАЖНО - ИСПОЛЬЗОВАНИЕ ИНФОРМАЦИИ:
+Перед тем как сказать "не знаю" или "нет информации", используй данные ниже из разных источников:
+- База знаний (загруженные документы)
+- Персональная информация о пользователе
+- База данных организаций (информация о председателях и контактах)
+- Результаты поиска в интернете
 
-### ИНФОРМАЦИЯ ОБ ОРГАНИЗАЦИЯХ:
-${organizationInfo ? `
-В базе данных найдена следующая информация об организации:
-- Название: ${organizationInfo.name}
-${organizationInfo.fullPath ? `- Полный путь: ${organizationInfo.fullPath}` : ""}
-${organizationInfo.chairmanName ? `- Председатель: ${organizationInfo.chairmanName}` : "- Председатель: информация не указана в базе данных"}
-${organizationInfo.chairmanJobTitle ? `- Должность председателя: ${organizationInfo.chairmanJobTitle}` : ""}
-${organizationInfo.address ? `- Адрес: ${organizationInfo.address}` : ""}
-${organizationInfo.phone ? `- Телефон: ${organizationInfo.phone}` : ""}
-${organizationInfo.email ? `- Email: ${organizationInfo.email}` : ""}
+КРИТИЧЕСКИ ВАЖНО:
+- Если пользователь спрашивает о председателе организации, и эта информация ЕСТЬ в данных ниже, ОБЯЗАТЕЛЬНО используй её для ответа
+- НИКОГДА не говори "не знаю" или "не располагаю информацией", если данные есть в источниках ниже
+- Отвечай прямо и уверенно, используя найденную информацию
+- Если информации нет ни в одном источнике - только тогда можно сказать, что информации нет
 
-КРИТИЧЕСКИ ВАЖНО: 
-- Если пользователь спрашивает о председателе организации, и эта информация ЕСТЬ в базе данных выше (поле "Председатель"), ОБЯЗАТЕЛЬНО используй её для ответа. 
-- НИКОГДА не говори "не знаю" или "не располагаю информацией", если данные о председателе есть в базе выше.
-- Отвечай прямо и уверенно, используя информацию из базы данных.
-- Если информации о председателе нет в базе, но есть результаты веб-поиска ниже, используй их.
-` : ""}
-${webSearchResults ? `
-Актуальная информация из интернета (используй, если информации нет в базе данных выше):
-${webSearchResults}
+### ИСТОЧНИКИ ИНФОРМАЦИИ:
+${formattedSearchInfo || "Дополнительная информация не найдена"}
 
-ВАЖНО: Используй эту информацию для ответа, если она актуальна и релевантна запросу пользователя. Приоритет - информации из базы данных выше.
-` : ""}
+### ИНСТРУКЦИИ:
+- Если нашел информацию об организации или председателе - обязательно используй её в ответе
+- Если информации нет ни в одном источнике - только тогда можно сказать, что информации нет
+- Будь конкретным и точным, используй найденные факты
 
 ### ВАЖНО:
 - Отвечай кратко и по делу
