@@ -365,6 +365,156 @@ export async function searchUserKnowledge(
 }
 
 /**
+ * Сохраняет обращение/тикет пользователя в базу знаний
+ */
+export async function saveTicketToKnowledgeBase(
+  userId: string,
+  ticketId: string,
+  title: string,
+  content: string,
+  ticketType: string,
+  status: string,
+  metadata?: Record<string, unknown>
+) {
+  try {
+    const userKB = await getOrCreateUserKnowledgeBase(userId);
+
+    // Формируем содержимое для сохранения
+    const ticketContent = `Обращение/Тикет: ${title}
+
+Тип: ${ticketType}
+Статус: ${status}
+
+Содержание:
+${content}`;
+
+    const embedding = await generateEmbedding(ticketContent);
+
+    if (!embedding || embedding.length === 0) {
+      console.warn("[user-knowledge-base] Не удалось сгенерировать embedding для обращения");
+      return;
+    }
+
+    await prisma.userKnowledgeChunk.create({
+      data: {
+        userKnowledgeBaseId: userKB.id,
+        type: "HISTORY",
+        content: ticketContent,
+        embedding,
+        source: "ticket_creation",
+        relatedEntityId: ticketId,
+        relatedEntityType: "ticket",
+        metadata: {
+          ...metadata,
+          ticketType,
+          status,
+          title,
+          createdAt: new Date().toISOString(),
+        },
+        tokens: Math.ceil(ticketContent.length / 4),
+      },
+    });
+
+    console.log("[user-knowledge-base] Обращение сохранено в базу знаний");
+  } catch (error) {
+    console.error("[user-knowledge-base] Ошибка при сохранении обращения:", error);
+  }
+}
+
+/**
+ * Сохраняет обновление статуса обращения
+ */
+export async function saveTicketStatusUpdateToKnowledgeBase(
+  userId: string,
+  ticketId: string,
+  oldStatus: string,
+  newStatus: string,
+  comment?: string
+) {
+  try {
+    const userKB = await getOrCreateUserKnowledgeBase(userId);
+
+    const updateContent = `Обновление статуса обращения:
+Старый статус: ${oldStatus}
+Новый статус: ${newStatus}
+${comment ? `Комментарий: ${comment}` : ""}`;
+
+    const embedding = await generateEmbedding(updateContent);
+
+    if (!embedding || embedding.length === 0) {
+      return;
+    }
+
+    await prisma.userKnowledgeChunk.create({
+      data: {
+        userKnowledgeBaseId: userKB.id,
+        type: "HISTORY",
+        content: updateContent,
+        embedding,
+        source: "ticket_status_update",
+        relatedEntityId: ticketId,
+        relatedEntityType: "ticket",
+        metadata: {
+          oldStatus,
+          newStatus,
+          updatedAt: new Date().toISOString(),
+        },
+        tokens: Math.ceil(updateContent.length / 4),
+      },
+    });
+  } catch (error) {
+    console.error("[user-knowledge-base] Ошибка при сохранении обновления статуса:", error);
+  }
+}
+
+/**
+ * Сохраняет документ пользователя в базу знаний
+ */
+export async function saveDocumentToKnowledgeBase(
+  userId: string,
+  documentId: string,
+  documentType: string,
+  title: string,
+  content?: string
+) {
+  try {
+    const userKB = await getOrCreateUserKnowledgeBase(userId);
+
+    const documentContent = `Документ: ${title}
+Тип: ${documentType}
+${content ? `Содержание:\n${content}` : ""}`;
+
+    const embedding = await generateEmbedding(documentContent);
+
+    if (!embedding || embedding.length === 0) {
+      return;
+    }
+
+    await prisma.userKnowledgeChunk.create({
+      data: {
+        userKnowledgeBaseId: userKB.id,
+        type: "DOCUMENT_CONTENT",
+        content: documentContent,
+        embedding,
+        source: "document_generation",
+        relatedEntityId: documentId,
+        relatedEntityType: "document",
+        metadata: {
+          documentType,
+          title,
+          createdAt: new Date().toISOString(),
+        },
+        tokens: Math.ceil(documentContent.length / 4),
+      },
+    });
+
+    console.log("[user-knowledge-base] Документ сохранен в базу знаний");
+  } catch (error) {
+    console.error("[user-knowledge-base] Ошибка при сохранении документа:", error);
+  }
+}
+
+/**
  * Вычисляет косинусное сходство между двумя векторами
  */
 function cosineSimilarity(a: number[], b: number[]): number {

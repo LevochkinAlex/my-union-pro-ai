@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
 import { saveChatConversationToKnowledgeBase } from "@/lib/chat-knowledge-learning";
+import { saveUserInteractionToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { sendUserNotification } from "@/lib/notifications";
 
 // GET - получение сообщений чата
@@ -398,8 +399,8 @@ export async function POST(
           });
 
           if (user) {
-            // Расширенный поиск информации из всех источников
-            const searchResults = await enhancedSearch(content.trim(), bot.id);
+            // Расширенный поиск информации из всех источников (включая персональную базу знаний пользователя)
+            const searchResults = await enhancedSearch(content.trim(), bot.id, userId);
             const formattedSearchInfo = formatSearchResultsForPrompt(searchResults);
 
             // Строим системный промпт
@@ -482,6 +483,21 @@ ${formattedSearchInfo || "Дополнительная информация не
               botMessage.id
             ).catch((error) => {
               console.error("[chat] Error saving conversation to knowledge base:", error);
+            });
+
+            // Сохраняем взаимодействие в персональную базу знаний пользователя
+            saveUserInteractionToKnowledgeBase(
+              userId,
+              content.trim(),
+              aiResponse,
+              {
+                chatId: chat.id,
+                messageId: message.id,
+                botMessageId: botMessage.id,
+                botId: bot.id,
+              }
+            ).catch((error) => {
+              console.error("[chat] Error saving interaction to user knowledge base:", error);
             });
 
             // Обновляем последнее сообщение в чате

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateAppealPublicId, formatAppealId } from "@/lib/appeal-id";
+import { saveTicketToKnowledgeBase } from "@/lib/user-knowledge-base";
 
 /**
  * GET /api/tickets - Получить тикеты пользователя
@@ -199,6 +200,23 @@ export async function POST(request: NextRequest) {
         });
       }
     }
+
+    // Сохраняем тикет в базу знаний пользователя (асинхронно, не блокируем ответ)
+    saveTicketToKnowledgeBase(
+      session.user.id,
+      ticket.id,
+      title,
+      content,
+      type,
+      ticket.status,
+      {
+        publicId: ticket.publicId,
+        priority: ticket.priority,
+        attachmentsCount: files?.length || 0,
+      }
+    ).catch((error) => {
+      console.error("[tickets] Error saving ticket to knowledge base:", error);
+    });
 
     return NextResponse.json({
       success: true,

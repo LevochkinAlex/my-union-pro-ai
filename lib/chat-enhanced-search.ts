@@ -41,31 +41,91 @@ async function searchOrganizationWithChairman(
       .filter((w) => w.length > 2)
       .map((w) => w.toLowerCase());
 
-    // Поиск по названию организации
-    const organizations = await prisma.organization.findMany({
-      where: {
-        AND: [
-          {
-            OR: keywords.map((keyword) => ({
+    // Если название короткое или содержит ключевые слова типа "МООП РЗ РФ"
+    // используем более гибкий поиск
+    let organizations;
+
+    if (keywords.length === 0 || keywords.every((k) => k.length < 3)) {
+      // Если ключевые слова слишком короткие, ищем по частичному совпадению
+      organizations = await prisma.organization.findMany({
+        where: {
+          AND: [
+            {
               name: {
-                contains: keyword,
+                contains: organizationName.trim(),
                 mode: "insensitive" as const,
               },
-            })),
-          },
-          { isActive: true },
-        ],
-      },
-      select: {
-        name: true,
-        chairmanName: true,
-        chairmanJobTitle: true,
-        phone: true,
-        email: true,
-        address: true,
-      },
-      take: 5,
-    });
+            },
+            { isActive: true },
+          ],
+        },
+        select: {
+          name: true,
+          chairmanName: true,
+          chairmanJobTitle: true,
+          phone: true,
+          email: true,
+          address: true,
+        },
+        take: 5,
+      });
+    } else {
+      // Поиск по названию организации с несколькими ключевыми словами
+      organizations = await prisma.organization.findMany({
+        where: {
+          AND: [
+            {
+              OR: keywords.map((keyword) => ({
+                name: {
+                  contains: keyword,
+                  mode: "insensitive" as const,
+                },
+              })),
+            },
+            { isActive: true },
+          ],
+        },
+        select: {
+          name: true,
+          chairmanName: true,
+          chairmanJobTitle: true,
+          phone: true,
+          email: true,
+          address: true,
+        },
+        take: 5,
+      });
+    }
+
+    // Если не нашли точного совпадения, пробуем поиск по любому из слов
+    if (organizations.length === 0 && keywords.length > 0) {
+      organizations = await prisma.organization.findMany({
+        where: {
+          AND: [
+            {
+              OR: keywords
+                .filter((k) => k.length >= 3)
+                .map((keyword) => ({
+                  name: {
+                    contains: keyword,
+                    mode: "insensitive" as const,
+                  },
+                })),
+            },
+            { isActive: true },
+          ],
+        },
+        select: {
+          name: true,
+          chairmanName: true,
+          chairmanJobTitle: true,
+          phone: true,
+          email: true,
+          address: true,
+        },
+        take: 5,
+      });
+    }
 
     return organizations.map((org) => ({
       name: org.name,
@@ -92,44 +152,50 @@ async function searchWeb(
     // Проверяем наличие Tavily API ключа
     const tavilyApiKey = process.env.TAVILY_API_KEY;
     
-    if (tavilyApiKey) {
-      // Используем Tavily API для поиска
-      const response = await fetch("https://api.tavily.com/search", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          api_key: tavilyApiKey,
-          query: query,
-          search_depth: "basic",
-          include_domains: [],
-          exclude_domains: [],
-          max_results: maxResults,
-          include_answer: false,
-          include_raw_content: false,
-          include_images: false,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const results = data.results || [];
-        
-        return results.map((result: any) => ({
-          title: result.title || "",
-          url: result.url || "",
-          snippet: result.content || "",
-        }));
-      }
+    if (!tavilyApiKey) {
+      console.log("[enhanced-search] TAVILY_API_KEY not configured, skipping web search");
+      return [];
     }
 
-    // Если Tavily недоступен, можно использовать DuckDuckGo через сервис
-    // Или просто вернуть пустой массив - бот будет использовать другие источники
-    console.log("[enhanced-search] Web search not configured, skipping");
-    return [];
+    console.log("[enhanced-search] 🔍 Performing web search with Tavily API:", query);
+    
+    // Используем Tavily API для поиска
+    const response = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        api_key: tavilyApiKey,
+        query: query,
+        search_depth: "basic",
+        include_domains: [],
+        exclude_domains: [],
+        max_results: maxResults,
+        include_answer: false,
+        include_raw_content: false,
+        include_images: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[enhanced-search] Tavily API error (${response.status}):`, errorText);
+      return [];
+    }
+
+    const data = await response.json();
+    const results = data.results || [];
+    
+    console.log(`[enhanced-search] ✅ Found ${results.length} web search results`);
+    
+    return results.map((result: any) => ({
+      title: result.title || "",
+      url: result.url || "",
+      snippet: result.content || result.snippet || "",
+    }));
   } catch (error) {
-    console.error("[enhanced-search] Error in web search:", error);
+    console.error("[enhanced-search] ❌ Error in web search:", error);
     return [];
   }
 }
@@ -213,7 +279,8 @@ function extractOrganizationName(query: string): string | null {
  */
 export async function enhancedSearch(
   query: string,
-  botId: string
+  botId: string,
+  userId?: string
 ): Promise<EnhancedSearchResult> {
   const result: EnhancedSearchResult = {
     knowledgeBaseChunks: [],
@@ -230,6 +297,33 @@ export async function enhancedSearch(
       metadata: chunk.metadata || {},
     }));
 
+    // 1.5. Поиск в персональной базе знаний пользователя (если userId передан)
+    if (userId) {
+      try {
+        const { searchUserKnowledge } = await import("@/lib/user-knowledge-base");
+        const userChunks = await searchUserKnowledge(userId, query, 3);
+        
+        // Добавляем результаты пользователя к общим результатам с пометкой
+        result.knowledgeBaseChunks.push(
+          ...userChunks.map((chunk) => ({
+            content: `[Персональная информация о пользователе]\n${chunk.content}`,
+            similarity: chunk.similarity,
+            metadata: {
+              ...chunk,
+              source: "user_knowledge_base",
+              type: chunk.type,
+            },
+          }))
+        );
+
+        // Сортируем все chunks по релевантности
+        result.knowledgeBaseChunks.sort((a, b) => b.similarity - a.similarity);
+      } catch (userKbError) {
+        console.error("[enhanced-search] Error searching user knowledge base:", userKbError);
+        // Продолжаем выполнение, даже если поиск в пользовательской базе знаний не удался
+      }
+    }
+
     // 2. Если запрос об организации - ищем в БД организаций
     if (isOrganizationQuery(query)) {
       const orgName = extractOrganizationName(query);
@@ -243,16 +337,26 @@ export async function enhancedSearch(
       }
     }
 
-    // 3. Если информации мало - ищем в интернете
-    const hasEnoughInfo =
-      result.knowledgeBaseChunks.length > 0 ||
-      result.organizationInfo.length > 0;
-
-    if (!hasEnoughInfo && isOrganizationQuery(query)) {
-      // Формируем запрос для веб-поиска
+    // 3. Если запрос об организации - всегда пробуем поиск в интернете для свежей информации
+    // (особенно если в БД нет председателя или информации недостаточно)
+    if (isOrganizationQuery(query)) {
       const orgName = extractOrganizationName(query) || query;
-      const webQuery = `председатель ${orgName} профсоюз`;
-      result.webSearchResults = await searchWeb(webQuery, 3);
+      const hasChairmanInfo = result.organizationInfo.some(
+        (org) => org.chairmanName
+      );
+      const hasEnoughInfo =
+        result.knowledgeBaseChunks.length > 0 ||
+        (result.organizationInfo.length > 0 && hasChairmanInfo);
+
+      // Ищем в интернете если:
+      // - информации нет вообще
+      // - или есть организация, но нет информации о председателе
+      if (!hasEnoughInfo || !hasChairmanInfo) {
+        // Формируем запрос для веб-поиска
+        const webQuery = `председатель ${orgName} профсоюз`;
+        console.log("[enhanced-search] 🔍 Triggering web search for organization query");
+        result.webSearchResults = await searchWeb(webQuery, 3);
+      }
     }
 
     return result;
