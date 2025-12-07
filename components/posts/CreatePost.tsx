@@ -221,18 +221,19 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         
         if (isImageModalForCover) {
           // Для cover изображения - устанавливаем только coverImage
-          // Используем полный URL для превью, но при отправке будем использовать путь
           setCoverImage(imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`);
           setFilePreviews([]);
           setSelectedFiles([]);
           setIsImageModalOpen(false);
           setIsImageModalForCover(false);
+          showToast("✓ Обложка загружена", "success");
         } else if (postType === "text") {
           // Для обычного поста - устанавливаем coverImage (будет отображаться как cover)
           setCoverImage(imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`);
           setFilePreviews([]);
           setSelectedFiles([]);
           setIsImageModalOpen(false);
+          showToast("✓ Обложка загружена", "success");
         } else {
           // Если это вставка в HTML (через WYSIWYG) для статьи
           const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
@@ -282,18 +283,19 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
     
     if (isImageModalForCover) {
       // Для cover изображения - устанавливаем только coverImage
-      // Используем полный URL для превью, но при отправке будем использовать путь
       setCoverImage(fullImageUrl);
       setFilePreviews([]);
       setSelectedFiles([]);
       setIsImageModalOpen(false);
       setIsImageModalForCover(false);
+      showToast("✓ Обложка сгенерирована", "success");
     } else if (postType === "text") {
       // Для обычного поста - устанавливаем coverImage (будет отображаться как cover)
       setCoverImage(fullImageUrl);
       setFilePreviews([]);
       setSelectedFiles([]);
       setIsImageModalOpen(false);
+      showToast("✓ Обложка сгенерирована", "success");
     } else {
       // Если это вставка в HTML (через WYSIWYG) для статьи
       if (articleEditorRef.current) {
@@ -323,6 +325,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         }
       }
       setIsImageModalOpen(false);
+      showToast("✓ Изображение вставлено в статью", "success");
     }
   };
 
@@ -828,22 +831,32 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
 
                 {/* Превью обложки для обычного поста */}
                 {coverImage && (
-                  <div className="relative">
+                  <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
                     <img
                       src={coverImage}
                       alt="Обложка поста"
-                      className="w-full max-h-64 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
+                      className="w-full h-64 object-cover"
+                      style={{ aspectRatio: '16/9' }}
+                      onError={(e) => {
+                        console.error('Cover image load error:', coverImage);
+                        // Показываем placeholder при ошибке загрузки
+                        const target = e.target as HTMLImageElement;
+                        target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="800" height="450"%3E%3Crect fill="%23ddd" width="800" height="450"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle"%3EОшибка загрузки%3C/text%3E%3C/svg%3E';
+                      }}
                     />
                     <button
                       type="button"
                       onClick={() => setCoverImage(null)}
-                      className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                      className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg"
                       title="Удалить обложку"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
+                    <div className="absolute bottom-2 left-2 px-3 py-1 bg-black/50 backdrop-blur-sm text-white text-xs rounded-full">
+                      ✓ Обложка загружена
+                    </div>
                   </div>
                 )}
 
@@ -1064,22 +1077,31 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                 {/* WYSIWYG редактор */}
                 {/* Превью обложки статьи */}
                 {coverImage && (
-                  <div className="relative mb-4">
+                  <div className="relative mb-4 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
                     <img
                       src={coverImage}
                       alt="Обложка статьи"
-                      className="w-full h-64 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
+                      className="w-full h-64 object-cover"
+                      style={{ aspectRatio: '16/9' }}
+                      onError={(e) => {
+                        console.error('Cover image load error:', coverImage);
+                        const target = e.target as HTMLImageElement;
+                        target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="800" height="450"%3E%3Crect fill="%23ddd" width="800" height="450"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle"%3EОшибка загрузки%3C/text%3E%3C/svg%3E';
+                      }}
                     />
                     <button
                       type="button"
                       onClick={() => setCoverImage(null)}
-                      className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                      className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg"
                       title="Удалить обложку"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
+                    <div className="absolute bottom-2 left-2 px-3 py-1 bg-black/50 backdrop-blur-sm text-white text-xs rounded-full">
+                      ✓ Обложка загружена
+                    </div>
                   </div>
                 )}
 
