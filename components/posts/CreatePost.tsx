@@ -41,6 +41,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isImageModalForCover, setIsImageModalForCover] = useState(false);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+  const [isVideoModalForCover, setIsVideoModalForCover] = useState(false);
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
@@ -181,9 +182,15 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
           
           // If it's a video, set video metadata
           if (data.type === "video" && data.videoType && data.videoId) {
+            const isForCover = isVideoModalForCover;
+            if (isForCover) {
+              // Если это обложка, очищаем coverImage
+              setCoverImage(null);
+            }
             setVideoMetadata(data);
             setIsVideoModalOpen(false);
-            showToast("✓ Видео добавлено", "success");
+            setIsVideoModalForCover(false);
+            showToast(isForCover ? "✓ Видео-обложка добавлена" : "✓ Видео добавлено", "success");
           } else {
             // Fallback to old logic for unsupported providers
             let provider = "";
@@ -201,14 +208,24 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
             }
 
             if (videoId) {
+              if (isVideoModalForCover) {
+                // Если это обложка, очищаем coverImage
+                setCoverImage(null);
+              }
               setVideoMetadata({ 
                 videoType: provider, 
                 videoId, 
+                embedUrl: provider === "rutube" 
+                  ? `https://rutube.ru/play/embed/${videoId}`
+                  : provider === "vk"
+                  ? `https://vk.com/video_ext.php?oid=${videoId.split("_")[0]}&id=${videoId.split("_")[1]}`
+                  : "",
                 url,
                 title: `${provider.toUpperCase()} Video`,
               });
               setIsVideoModalOpen(false);
-              showToast("✓ Видео добавлено", "success");
+              setIsVideoModalForCover(false);
+              showToast(isVideoModalForCover ? "✓ Видео-обложка добавлена" : "✓ Видео добавлено", "success");
             } else {
               showToast("Неподдерживаемый формат видео", "error");
             }
@@ -405,7 +422,24 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
       return;
     }
 
-    // Для статей вставляем iframe в редактор
+    // Если видео вставляется как обложка
+    if (isVideoModalForCover) {
+      // Очищаем coverImage, если был установлен
+      setCoverImage(null);
+      // Устанавливаем videoMetadata как обложку
+      setVideoMetadata({
+        videoType,
+        videoId,
+        embedUrl,
+        url,
+      });
+      setIsVideoModalOpen(false);
+      setIsVideoModalForCover(false);
+      showToast("✓ Видео-обложка добавлена", "success");
+      return;
+    }
+
+    // Для статей вставляем iframe в редактор (если не обложка)
     if (postType === "article" && articleEditorRef.current) {
       const editor = articleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
       if (editor) {
@@ -868,7 +902,10 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                       </button>
                       <button
                         type="button"
-                        onClick={() => setIsVideoModalOpen(true)}
+                        onClick={() => {
+                          setIsVideoModalForCover(true);
+                          setIsVideoModalOpen(true);
+                        }}
                         className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1016,22 +1053,27 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
       )}
 
       {/* Модалка для вставки изображения */}
-      <ImageInsertModal
-        isOpen={isImageModalOpen}
-        onClose={() => {
-          setIsImageModalOpen(false);
-          setIsImageModalForCover(false);
-        }}
-        onUpload={handleImageUpload}
-        onGenerate={handleImageGenerate}
-        generating={generatingImage}
-      />
+      {mounted && (
+        <ImageInsertModal
+          isOpen={isImageModalOpen}
+          onClose={() => {
+            setIsImageModalOpen(false);
+            setIsImageModalForCover(false);
+          }}
+          onUpload={handleImageUpload}
+          onGenerate={handleImageGenerate}
+          generating={generatingImage}
+        />
+      )}
 
       {/* Модалка для вставки видео */}
       {isVideoModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 backdrop-blur-md"
-          onClick={() => setIsVideoModalOpen(false)}
+          onClick={() => {
+            setIsVideoModalOpen(false);
+            setIsVideoModalForCover(false);
+          }}
         >
           <div
             className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6"
@@ -1039,11 +1081,14 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Вставить видео
+                {isVideoModalForCover ? "Добавить видео-обложку" : "Вставить видео"}
               </h3>
               <button
                 type="button"
-                onClick={() => setIsVideoModalOpen(false)}
+                onClick={() => {
+                  setIsVideoModalOpen(false);
+                  setIsVideoModalForCover(false);
+                }}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

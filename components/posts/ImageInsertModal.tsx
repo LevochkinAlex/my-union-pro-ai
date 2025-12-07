@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useToast } from "@/components/ui/Toast";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
@@ -21,6 +21,11 @@ export default function ImageInsertModal({
   generating = false,
 }: ImageInsertModalProps) {
   const { showToast } = useToast();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [imagePrompt, setImagePrompt] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -42,7 +47,7 @@ export default function ImageInsertModal({
     { label: "4:3", value: 4 / 3 },
   ];
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
   const onCropComplete = useCallback(
     (croppedArea: Area, croppedAreaPixels: Area) => {
@@ -53,6 +58,11 @@ export default function ImageInsertModal({
 
   const createImage = (url: string): Promise<HTMLImageElement> =>
     new Promise(async (resolve, reject) => {
+      if (typeof window === "undefined") {
+        reject(new Error("Window is not available"));
+        return;
+      }
+      
       const image = new Image();
       image.addEventListener("load", () => resolve(image));
       image.addEventListener("error", (error) => reject(error));

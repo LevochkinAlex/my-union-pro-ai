@@ -1274,6 +1274,7 @@ model ChatMessage {
   @@index([createdAt])
   @@index([replyToId])
   @@index([deletedAt])
+  @@index([chatId, deletedAt, createdAt]) // Составной индекс для оптимизации пагинации
 }
 
 // Вложения к сообщениям в чате

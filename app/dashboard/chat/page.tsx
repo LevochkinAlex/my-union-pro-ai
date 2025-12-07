@@ -79,6 +79,9 @@ function ChatPageContent() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageText, setMessageText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [oldestMessageId, setOldestMessageId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -186,11 +189,19 @@ function ChatPageContent() {
       setMessages([]);
       setIsBotTyping(false);
       shouldScrollToBottom.current = true; // При открытии нового чата всегда скроллим вниз
+      // Сбрасываем состояние пагинации
+      setHasMoreMessages(false);
+      setOldestMessageId(null);
+      setLoadingOlderMessages(false);
       loadMessages(selectedChat.id, false);
     } else {
       // Очищаем сообщения, если чат не выбран
       setMessages([]);
       setIsBotTyping(false);
+      // Сбрасываем состояние пагинации
+      setHasMoreMessages(false);
+      setOldestMessageId(null);
+      setLoadingOlderMessages(false);
     }
   }, [selectedChat?.id]); // Используем только ID, чтобы избежать лишних перезагрузок
 
@@ -276,6 +287,14 @@ function ChatPageContent() {
     // Если пользователь скроллит вверх, помечаем это
     if (scrollingUp) {
       isUserScrolling.current = true;
+      
+      // Автоматически загружаем старые сообщения, если пользователь близко к началу
+      const scrollTop = container.scrollTop;
+      const threshold = 500; // Загружаем, когда осталось 500px до верха
+      
+      if (scrollTop < threshold && hasMoreMessages && !loadingOlderMessages) {
+        loadOlderMessages();
+      }
     }
     
     // Если пользователь дошел до низа, сбрасываем флаг
@@ -327,10 +346,12 @@ function ChatPageContent() {
     }
     
     try {
-      const response = await fetch(`/api/chat/${chatId}?t=${Date.now()}`);
+      // Загружаем только последние 50 сообщений для оптимизации
+      const response = await fetch(`/api/chat/${chatId}?limit=50&t=${Date.now()}`);
       if (response.ok) {
         const data = await response.json();
         const newMessages = data.messages || [];
+        const pagination = data.pagination || {};
         
         // Дополнительная проверка - убеждаемся, что это все еще тот же чат
         if (selectedChat && selectedChat.id !== chatId) {
@@ -344,6 +365,10 @@ function ChatPageContent() {
           // Сообщение не удалено, если deletedAt отсутствует, равен null, undefined или пустой строке
           return !m.deletedAt;
         });
+        
+        // Обновляем информацию о пагинации
+        setHasMoreMessages(pagination.hasMore || false);
+        setOldestMessageId(pagination.oldestMessageId || null);
         
         // При тихом обновлении проверяем, есть ли изменения
         if (silent) {
@@ -436,6 +461,53 @@ function ChatPageContent() {
       }
     } catch (error) {
       console.error("Error loading messages:", error);
+    }
+  };
+
+  // Загрузка старых сообщений при скролле вверх
+  const loadOlderMessages = async () => {
+    if (!selectedChat || !hasMoreMessages || loadingOlderMessages || !oldestMessageId) {
+      return;
+    }
+
+    setLoadingOlderMessages(true);
+    try {
+      const response = await fetch(
+        `/api/chat/${selectedChat.id}?limit=50&cursor=${oldestMessageId}&direction=older&t=${Date.now()}`
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        const olderMessages = data.messages || [];
+        const pagination = data.pagination || {};
+
+        if (olderMessages.length > 0) {
+          // Сохраняем текущую позицию скролла
+          const container = messagesContainerRef.current;
+          const scrollHeightBefore = container?.scrollHeight || 0;
+          const scrollTopBefore = container?.scrollTop || 0;
+
+          // Добавляем старые сообщения в начало списка
+          setMessages((prev) => [...olderMessages, ...prev]);
+          setHasMoreMessages(pagination.hasMore || false);
+          setOldestMessageId(pagination.oldestMessageId || null);
+
+          // Восстанавливаем позицию скролла после обновления DOM
+          setTimeout(() => {
+            if (container) {
+              const scrollHeightAfter = container.scrollHeight;
+              const scrollDiff = scrollHeightAfter - scrollHeightBefore;
+              container.scrollTop = scrollTopBefore + scrollDiff;
+            }
+          }, 0);
+        } else {
+          setHasMoreMessages(false);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading older messages:", error);
+    } finally {
+      setLoadingOlderMessages(false);
     }
   };
 
@@ -1293,6 +1365,15 @@ function ChatPageContent() {
               onScroll={handleScroll}
               className="flex-1 overflow-y-auto p-4 space-y-4"
             >
+              {/* Индикатор загрузки старых сообщений */}
+              {loadingOlderMessages && (
+                <div className="flex justify-center py-2">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    Загрузка старых сообщений...
+                  </div>
+                </div>
+              )}
+              
               {messages.map((message) => {
                 const isOwn = message.senderId !== selectedChat.otherUser.id;
                 const isDeleted = !!message.deletedAt;

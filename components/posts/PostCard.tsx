@@ -604,8 +604,48 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
 
       {/* Контент */}
       <div className="mb-4">
-        {/* Cover Image для всех постов */}
-        {(() => {
+        {/* Обложка для статей (картинка или видео) */}
+        {isArticle && (() => {
+          // Проверяем видео-обложку
+          const videoMeta = post.videoMetadata;
+          if (videoMeta && (typeof videoMeta === 'object' ? videoMeta.videoType : JSON.parse(videoMeta || '{}').videoType)) {
+            const vm = typeof videoMeta === 'string' ? JSON.parse(videoMeta) : videoMeta;
+            return (
+              <div className="mb-4">
+                <VideoEmbed
+                  videoType={vm.videoType}
+                  videoId={vm.videoId}
+                  title={vm.title || "Обложка"}
+                />
+              </div>
+            );
+          }
+          
+          // Проверяем картинку-обложку
+          const coverImagePath = coverImage || (post as any).coverImage;
+          if (coverImagePath) {
+            const coverImageUrl = getFileUrl(coverImagePath, "posts");
+            if (coverImageUrl) {
+              return (
+                <div className="mb-4">
+                  <img
+                    src={coverImageUrl}
+                    alt="Обложка"
+                    className="w-full h-64 object-cover rounded-lg"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                    }}
+                  />
+                </div>
+              );
+            }
+          }
+          return null;
+        })()}
+        
+        {/* Cover Image для обычных постов (не статей) */}
+        {!isArticle && (() => {
           const coverImagePath = coverImage || (post as any).coverImage;
           if (!coverImagePath) return null;
           const coverImageUrl = getFileUrl(coverImagePath, "posts");
@@ -625,24 +665,19 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           );
         })()}
         
+        {/* Текст поста */}
         <div className="mb-4">
           {isArticle ? (
-            isExpanded ? (
-              <div 
-                className="text-gray-900 dark:text-white prose prose-sm max-w-none dark:prose-invert"
-                dangerouslySetInnerHTML={{ __html: post.content || "" }}
-              />
-            ) : (
-              <p className="text-gray-900 dark:text-white whitespace-pre-wrap break-words">
-                {displayContent}
-              </p>
-            )
+            // Для статей всегда показываем plain текст (без HTML)
+            <p className="text-gray-900 dark:text-white whitespace-pre-wrap break-words">
+              {displayContent}
+            </p>
           ) : (
             <p className="text-gray-900 dark:text-white whitespace-pre-wrap break-words">
               {displayContent}
-          </p>
-        )}
-          {shouldTruncate && (
+            </p>
+          )}
+          {!isArticle && shouldTruncate && (
             <button
               onClick={() => setIsExpanded(!isExpanded)}
               className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"

@@ -47,13 +47,40 @@ export async function GET(
       return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
     }
 
-    // Получаем сообщения (исключаем удаленные)
-    // Используем явную фильтрацию для deletedAt
+    // Получаем параметры пагинации из query string
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get("limit") || "50", 10); // По умолчанию 50 сообщений
+    const cursor = searchParams.get("cursor"); // ID сообщения для курсорной пагинации
+    const direction = searchParams.get("direction") || "newest"; // "newest" или "older"
+
+    // Оптимизация: загружаем только последние N сообщений
+    // Если указан cursor, загружаем сообщения до/после него
+    const whereClause: any = {
+      chatId,
+      deletedAt: null,
+    };
+
+    if (cursor) {
+      // Находим сообщение-курсор для определения позиции
+      const cursorMessage = await prisma.chatMessage.findUnique({
+        where: { id: cursor },
+        select: { createdAt: true },
+      });
+
+      if (cursorMessage) {
+        if (direction === "older") {
+          // Загружаем сообщения старше курсора
+          whereClause.createdAt = { lt: cursorMessage.createdAt };
+        } else {
+          // Загружаем сообщения новее курсора
+          whereClause.createdAt = { gt: cursorMessage.createdAt };
+        }
+      }
+    }
+
+    // Загружаем сообщения с пагинацией
     const messages = await prisma.chatMessage.findMany({
-      where: { 
-        chatId,
-        deletedAt: null, // Не показываем удаленные сообщения
-      },
+      where: whereClause,
       include: {
         sender: {
           select: {
@@ -64,7 +91,17 @@ export async function GET(
             avatarUrl: true,
           },
         },
-        attachments: true,
+        attachments: {
+          select: {
+            id: true,
+            type: true,
+            fileName: true,
+            originalName: true,
+            filePath: true,
+            fileSize: true,
+            mimeType: true,
+          },
+        },
         replyTo: {
           include: {
             sender: {
@@ -93,9 +130,18 @@ export async function GET(
         },
       },
       orderBy: {
-        createdAt: "asc",
+        createdAt: direction === "older" ? "desc" : "asc",
       },
+      take: limit,
     });
+
+    // Если загружаем старые сообщения, переворачиваем порядок
+    const orderedMessages = direction === "older" ? messages.reverse() : messages;
+
+    // Проверяем, есть ли еще сообщения для загрузки
+    const hasMore = messages.length === limit;
+    const oldestMessageId = orderedMessages.length > 0 ? orderedMessages[0].id : null;
+    const newestMessageId = orderedMessages.length > 0 ? orderedMessages[orderedMessages.length - 1].id : null;
 
     // Отмечаем сообщения как прочитанные и обновляем время активности
     // Это используется для определения, открыт ли чат (для пуш-уведомлений)
@@ -186,7 +232,15 @@ export async function GET(
       return msg;
     });
 
-    return NextResponse.json({ messages: messagesWithReactions });
+    return NextResponse.json({ 
+      messages: messagesWithReactions,
+      pagination: {
+        hasMore,
+        oldestMessageId,
+        newestMessageId,
+        count: messagesWithReactions.length,
+      },
+    });
   } catch (error: any) {
     console.error("[chat] GET Error:", {
       message: error?.message,
