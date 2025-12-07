@@ -81,8 +81,45 @@ export async function POST(request: NextRequest) {
       console.error("[assistant/chat] Error retrieving chunks (continuing without):", chunkError);
     }
 
+    // Поиск информации об организациях и председателях
+    let organizationInfo: any = null;
+    let webSearchResults: string = "";
+    
+    // Определяем, является ли запрос вопросом об организации или председателе
+    const isOrganizationQuery = /(председатель|руководитель|глава|директор|организац|МООП|РЗ|РФ|кто возглавляет|кто руководит|кто директор)/i.test(message);
+    
+    if (isOrganizationQuery) {
+      // Поиск в базе данных организаций
+      console.log("[assistant/chat] Searching organizations in database...");
+      try {
+        organizationInfo = await searchOrganizationInDatabase(message);
+        if (organizationInfo) {
+          console.log("[assistant/chat] Organization found:", organizationInfo.name);
+        }
+      } catch (orgError) {
+        console.error("[assistant/chat] Error searching organizations:", orgError);
+      }
+
+      // Если не нашли в базе или нужна актуальная информация, ищем в интернете
+      if (!organizationInfo?.chairmanName) {
+        console.log("[assistant/chat] Searching web for organization info...");
+        try {
+          const searchQuery = extractOrganizationSearchQuery(message);
+          if (searchQuery) {
+            // Используем веб-поиск через доступный инструмент
+            // Для продакшена нужно будет использовать реальный API веб-поиска
+            // Пока используем заглушку, которая будет заменена на реальный поиск
+            webSearchResults = await performWebSearch(searchQuery);
+            console.log("[assistant/chat] Web search completed, results length:", webSearchResults.length);
+          }
+        } catch (webError) {
+          console.error("[assistant/chat] Error performing web search:", webError);
+        }
+      }
+    }
+
     // Строим системный промпт
-    const systemPrompt = buildSystemPrompt(user, chunks);
+    const systemPrompt = buildSystemPrompt(user, chunks, organizationInfo, webSearchResults);
 
     // Получаем или создаем пользователя-бота
     console.log("[assistant/chat] Getting or creating bot user...");
@@ -210,7 +247,221 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function buildSystemPrompt(user: any, chunks: any[]): string {
+/**
+ * Поиск организации в базе данных по названию из запроса
+ */
+async function searchOrganizationInDatabase(message: string): Promise<any> {
+  const messageLower = message.toLowerCase();
+  
+  // Извлекаем ключевые слова из сообщения
+  const keywords: string[] = [];
+  if (messageLower.includes("мооп")) keywords.push("МООП");
+  if (messageLower.includes("рз")) keywords.push("РЗ");
+  if (messageLower.includes("рф")) keywords.push("РФ");
+  if (messageLower.includes("профсоюз")) keywords.push("профсоюз");
+  
+  // Если нет ключевых слов, пытаемся найти любую организацию, упомянутую в сообщении
+  if (keywords.length === 0) {
+    // Ищем организации, которые могут быть упомянуты в тексте
+    const allOrgs = await prisma.organization.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        chairmanName: true,
+        chairmanJobTitle: true,
+        fullPath: true,
+        address: true,
+        phone: true,
+        email: true,
+      },
+      take: 20,
+    });
+    
+    // Ищем организацию, название которой упоминается в сообщении
+    const matchingOrg = allOrgs.find(org => 
+      messageLower.includes(org.name.toLowerCase()) ||
+      org.name.toLowerCase().split(" ").some(word => 
+        word.length > 3 && messageLower.includes(word.toLowerCase())
+      )
+    );
+    
+    if (matchingOrg) {
+      return matchingOrg;
+    }
+  }
+  
+  // Ищем организации по ключевым словам
+  if (keywords.length > 0) {
+    const organizations = await prisma.organization.findMany({
+      where: {
+        AND: keywords.map(keyword => ({
+          name: { contains: keyword, mode: "insensitive" as const },
+        })),
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        chairmanName: true,
+        chairmanJobTitle: true,
+        fullPath: true,
+        address: true,
+        phone: true,
+        email: true,
+      },
+      take: 10,
+    });
+
+    if (organizations.length > 0) {
+      // Ищем наиболее подходящую (содержит больше ключевых слов или полное совпадение)
+      const bestMatch = organizations.find(org => 
+        messageLower.includes(org.name.toLowerCase()) || 
+        org.name.toLowerCase().includes("мооп") && messageLower.includes("мооп")
+      ) || organizations[0];
+      
+      return bestMatch;
+    }
+    
+    // Если точного совпадения нет, ищем по одному ключевому слову
+    for (const keyword of keywords) {
+      const orgs = await prisma.organization.findMany({
+        where: {
+          name: { contains: keyword, mode: "insensitive" as const },
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          chairmanName: true,
+          chairmanJobTitle: true,
+          fullPath: true,
+          address: true,
+          phone: true,
+          email: true,
+        },
+        take: 5,
+        orderBy: { type: "asc" }, // Приоритет федеральным организациям
+      });
+      
+      if (orgs.length > 0) {
+        return orgs[0];
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Извлекает поисковый запрос для веб-поиска из сообщения
+ */
+function extractOrganizationSearchQuery(message: string): string | null {
+  // Ищем упоминания организаций
+  const orgMatch = message.match(/(МООП[^?]*|председатель[^?]*|руководитель[^?]*)/i);
+  if (orgMatch) {
+    return orgMatch[0].trim();
+  }
+  
+  // Если есть вопрос о председателе, формируем запрос
+  if (/председатель|руководитель|глава/i.test(message)) {
+    const orgName = message.match(/(МООП[^?]*|РЗ[^?]*|РФ[^?]*)/i)?.[0] || "МООП РЗ РФ";
+    return `${orgName} председатель`;
+  }
+  
+  return null;
+}
+
+/**
+ * Выполняет веб-поиск через внешний API
+ * Поддерживает Google Custom Search API, Bing Search API, или Tavily API
+ */
+async function performWebSearch(query: string): Promise<string> {
+  console.log("[assistant/chat] Web search query:", query);
+  
+  // Проверяем наличие API ключей для веб-поиска
+  const googleApiKey = process.env.GOOGLE_SEARCH_API_KEY;
+  const googleCx = process.env.GOOGLE_SEARCH_ENGINE_ID;
+  const bingApiKey = process.env.BING_SEARCH_API_KEY;
+  const tavilyApiKey = process.env.TAVILY_API_KEY;
+  
+  try {
+    // Приоритет 1: Google Custom Search API
+    if (googleApiKey && googleCx) {
+      const url = `https://www.googleapis.com/customsearch/v1?key=${googleApiKey}&cx=${googleCx}&q=${encodeURIComponent(query)}&num=3`;
+      const response = await fetch(url);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const items = data.items || [];
+        if (items.length > 0) {
+          const results = items.map((item: any, index: number) => 
+            `[Результат ${index + 1}]\nЗаголовок: ${item.title}\nСсылка: ${item.link}\nОписание: ${item.snippet || "Нет описания"}`
+          ).join("\n\n");
+          return results;
+        }
+      }
+    }
+    
+    // Приоритет 2: Tavily API (специально для AI)
+    if (tavilyApiKey) {
+      const response = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          api_key: tavilyApiKey,
+          query: query,
+          search_depth: "basic",
+          max_results: 3,
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const results = data.results || [];
+        if (results.length > 0) {
+          return results.map((item: any, index: number) => 
+            `[Результат ${index + 1}]\nЗаголовок: ${item.title}\nСсылка: ${item.url}\nОписание: ${item.content || item.snippet || "Нет описания"}`
+          ).join("\n\n");
+        }
+      }
+    }
+    
+    // Приоритет 3: Bing Search API
+    if (bingApiKey) {
+      const url = `https://api.bing.microsoft.com/v7.0/search?q=${encodeURIComponent(query)}&count=3`;
+      const response = await fetch(url, {
+        headers: {
+          "Ocp-Apim-Subscription-Key": bingApiKey,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const webPages = data.webPages?.value || [];
+        if (webPages.length > 0) {
+          return webPages.map((item: any, index: number) => 
+            `[Результат ${index + 1}]\nЗаголовок: ${item.name}\nСсылка: ${item.url}\nОписание: ${item.snippet || "Нет описания"}`
+          ).join("\n\n");
+        }
+      }
+    }
+    
+    // Если нет настроенных API, возвращаем пустую строку
+    console.log("[assistant/chat] No web search API configured");
+    return "";
+  } catch (error) {
+    console.error("[assistant/chat] Web search error:", error);
+    return "";
+  }
+}
+
+function buildSystemPrompt(user: any, chunks: any[], organizationInfo?: any, webSearchResults?: string): string {
   const userName = user.firstName || user.email?.split("@")[0] || "друг";
   const userOrg = user.organization?.name || "не указана";
 
@@ -279,9 +530,34 @@ function buildSystemPrompt(user: any, chunks: any[]): string {
 - Давай конкретные и полезные ответы
 - Предлагай конкретные ссылки и разделы, когда это уместно
 - Если не знаешь ответ - честно скажи
+- Если пользователь спрашивает о председателе или руководителе организации, сначала проверь информацию в базе данных выше. Если информации нет в базе, можешь предложить поискать актуальную информацию в интернете или обратиться к официальным источникам
 
 ### БАЗА ЗНАНИЙ:
 ${chunks.length > 0 ? chunks.map((chunk, i) => `\n[Документ ${i + 1}]\n${chunk.content}`).join("\n\n") : "База знаний пуста"}
+
+### ИНФОРМАЦИЯ ОБ ОРГАНИЗАЦИЯХ:
+${organizationInfo ? `
+В базе данных найдена следующая информация об организации:
+- Название: ${organizationInfo.name}
+${organizationInfo.fullPath ? `- Полный путь: ${organizationInfo.fullPath}` : ""}
+${organizationInfo.chairmanName ? `- Председатель: ${organizationInfo.chairmanName}` : "- Председатель: информация не указана в базе данных"}
+${organizationInfo.chairmanJobTitle ? `- Должность председателя: ${organizationInfo.chairmanJobTitle}` : ""}
+${organizationInfo.address ? `- Адрес: ${organizationInfo.address}` : ""}
+${organizationInfo.phone ? `- Телефон: ${organizationInfo.phone}` : ""}
+${organizationInfo.email ? `- Email: ${organizationInfo.email}` : ""}
+
+КРИТИЧЕСКИ ВАЖНО: 
+- Если пользователь спрашивает о председателе организации, и эта информация ЕСТЬ в базе данных выше (поле "Председатель"), ОБЯЗАТЕЛЬНО используй её для ответа. 
+- НИКОГДА не говори "не знаю" или "не располагаю информацией", если данные о председателе есть в базе выше.
+- Отвечай прямо и уверенно, используя информацию из базы данных.
+- Если информации о председателе нет в базе, но есть результаты веб-поиска ниже, используй их.
+` : ""}
+${webSearchResults ? `
+Актуальная информация из интернета (используй, если информации нет в базе данных выше):
+${webSearchResults}
+
+ВАЖНО: Используй эту информацию для ответа, если она актуальна и релевантна запросу пользователя. Приоритет - информации из базы данных выше.
+` : ""}
 
 ### ВАЖНО:
 - Отвечай кратко и по делу
