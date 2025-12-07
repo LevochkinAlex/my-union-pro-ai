@@ -204,6 +204,61 @@ export default function PostDetailClient({ post, session }: PostDetailClientProp
             </div>
           </div>
 
+          {/* Cover Image or Video */}
+          {(() => {
+            // Проверяем видео-обложку
+            const videoMeta = post.videoMetadata;
+            if (videoMeta) {
+              let vm: any = null;
+              try {
+                vm = typeof videoMeta === 'string' ? JSON.parse(videoMeta) : videoMeta;
+              } catch (e) {
+                console.error("Error parsing videoMetadata:", e);
+              }
+              
+              if (vm && vm.videoType && vm.videoId) {
+                return (
+                  <div className="w-full">
+                    <div className="relative w-full" style={{ paddingBottom: "56.25%", height: 0, overflow: "hidden" }}>
+                      <iframe
+                        src={vm.embedUrl || (
+                          vm.videoType === "youtube" ? `https://www.youtube.com/embed/${vm.videoId}` :
+                          vm.videoType === "rutube" ? `https://rutube.ru/play/embed/${vm.videoId}` :
+                          vm.videoType === "vk" ? `https://vk.com/video_ext.php?oid=${vm.videoId.split("_")[0]}&id=${vm.videoId.split("_")[1]}` : ""
+                        )}
+                        className="absolute top-0 left-0 w-full h-full"
+                        allowFullScreen
+                        title="Обложка-видео"
+                      />
+                    </div>
+                  </div>
+                );
+              }
+            }
+            
+            // Проверяем картинку-обложку
+            const coverImagePath = post.coverImage;
+            if (coverImagePath) {
+              const coverImageUrl = getFileUrl(coverImagePath);
+              if (coverImageUrl) {
+                return (
+                  <div className="w-full">
+                    <img
+                      src={coverImageUrl}
+                      alt="Обложка статьи"
+                      className="w-full max-h-[500px] object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                );
+              }
+            }
+            return null;
+          })()}
+
           {/* Content */}
           <div className="p-4 sm:p-6 md:p-8">
             {post.postType === "article" ? (
@@ -279,8 +334,8 @@ export default function PostDetailClient({ post, session }: PostDetailClientProp
               </div>
             )}
 
-            {/* Video */}
-            {post.videoMetadata && (
+            {/* Video - показываем только если это НЕ обложка (для обычных постов, не статей) */}
+            {post.postType !== "article" && post.videoMetadata && post.videoMetadata.embedUrl && (
               <div className="mt-6">
                 <div className="relative" style={{ paddingBottom: "56.25%", height: 0, overflow: "hidden" }}>
                   <iframe
