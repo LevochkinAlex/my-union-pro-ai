@@ -661,21 +661,21 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
               <div key={attachment.id}>
                 <a
                   href={getFileUrl(attachment.filePath)}
-                  download={attachment.originalName}
-                  className="flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
+                    download={attachment.originalName}
+                    className="flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                      {attachment.originalName}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {(attachment.fileSize / 1024).toFixed(1)} KB
-                    </p>
-                  </div>
-                </a>
+                        {attachment.originalName}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {(attachment.fileSize / 1024).toFixed(1)} KB
+                      </p>
+                    </div>
+                  </a>
               </div>
             ))}
           </div>
@@ -1104,10 +1104,10 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                 formData.append("content", cleanedContent);
                 formData.append("postType", editPostType);
                 
-                // Сохраняем cover image для статей
-                if (editPostType === "article" && editCoverImage) {
+                // Сохраняем cover image для всех типов постов
+                if (editCoverImage) {
                   formData.append("coverImage", editCoverImage);
-                } else if (editPostType === "article" && !editCoverImage) {
+                } else {
                   // Если cover image удален, отправляем пустую строку
                   formData.append("coverImage", "");
                 }

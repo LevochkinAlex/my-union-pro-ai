@@ -503,7 +503,7 @@ export async function PATCH(
       postType,
       linkMetadata: parsedLinkMetadata,
       videoMetadata: parsedVideoMetadata,
-      ...(coverImage !== null && coverImage !== undefined ? { coverImage } : {}),
+      coverImage: coverImage, // Всегда обновляем coverImage (может быть null для удаления)
     };
     
     const post = await prisma.userPost.update({
