@@ -235,6 +235,7 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
           setIsImageModalOpen(false);
         } else {
           // Если это вставка в HTML (через WYSIWYG) для статьи
+          const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
           if (articleEditorRef.current) {
             const editor = articleEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
             if (editor) {
