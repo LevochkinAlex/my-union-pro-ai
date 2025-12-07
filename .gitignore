@@ -70,3 +70,4 @@ SERVER_ACCESS.md
 # Export files
 document-templates-export.json
 exports/
+backups/
