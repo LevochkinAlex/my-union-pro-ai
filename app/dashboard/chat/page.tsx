@@ -341,8 +341,8 @@ function ChatPageContent() {
             if (isNearBottom() && !isUserScrolling.current) {
               setTimeout(() => scrollToBottom(true), 50);
             }
-          }
-        } else {
+        }
+      } else {
           // При полной загрузке всегда обновляем
           setMessages(filteredMessages);
           // При первой загрузке чата всегда скроллим вниз
@@ -609,10 +609,10 @@ function ChatPageContent() {
       } else {
         // Отправляем текстовое сообщение
         response = await fetch(`/api/chat/${selectedChat.id}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
           body: JSON.stringify(messageData),
-        });
+      });
       }
 
       const data = await response.json();
@@ -2037,15 +2037,15 @@ function ChatPageContent() {
                 <div className="flex-1 relative">
                   <textarea
                     ref={textareaRef}
-                    value={messageText}
-                    onChange={(e) => setMessageText(e.target.value)}
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        sendMessage();
-                      }
-                    }}
-                    placeholder="Введите сообщение..."
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  placeholder="Введите сообщение..."
                     rows={1}
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base resize-none overflow-hidden leading-normal"
                     style={{ minHeight: "44px", maxHeight: "150px" }}
@@ -2126,7 +2126,7 @@ function ChatPageContent() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
-                </div>
+      </div>
               </div>
 
               {/* Превью пересылаемого сообщения */}

@@ -168,12 +168,9 @@ export default function FloatingChatBot() {
       setMessages((prev) => [...prev, aiMsg]);
       conversationHistoryRef.current.push(aiMsg);
 
-      // Если есть chatId, обновляем историю из чата
-      if (data.chatId) {
-        setTimeout(() => {
-          loadChatHistory();
-        }, 500);
-      }
+      // Сохраняем chatId если его еще нет
+      // Не перезагружаем историю, так как уже добавили сообщения оптимистично
+      // loadChatHistory вызовется только при следующем открытии чата
     } catch (error) {
       console.error("[FloatingChatBot] Error sending message:", error);
       const errorMsg: ChatMessage = {
