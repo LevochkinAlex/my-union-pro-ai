@@ -32,102 +32,122 @@ export interface EnhancedSearchResult {
  * Поиск информации об организации в базе данных с председателем
  */
 async function searchOrganizationWithChairman(
-  organizationName: string
+  organizationName: string,
+  userOrganizationName?: string | null
 ): Promise<EnhancedSearchResult["organizationInfo"]> {
   try {
-    // Извлекаем ключевые слова из названия организации
-    const keywords = organizationName
-      .split(/\s+/)
-      .filter((w) => w.length > 2)
-      .map((w) => w.toLowerCase());
+    // Если у нас есть организация пользователя и запрос про "нашу" организацию,
+    // добавляем её к вариантам поиска
+    const searchNames = [organizationName];
+    if (userOrganizationName && userOrganizationName !== organizationName) {
+      searchNames.push(userOrganizationName);
+    }
+    
+    let organizations: any[] = [];
+    
+    // Ищем по каждому варианту названия
+    for (const searchName of searchNames) {
+      // Извлекаем ключевые слова из названия организации
+      const keywords = searchName
+        .split(/\s+/)
+        .filter((w) => w.length > 2)
+        .map((w) => w.toLowerCase());
 
-    // Если название короткое или содержит ключевые слова типа "МООП РЗ РФ"
-    // используем более гибкий поиск
-    let organizations;
+      // Если название короткое или содержит ключевые слова типа "МООП РЗ РФ"
+      // используем более гибкий поиск
+      let currentOrgs;
 
-    if (keywords.length === 0 || keywords.every((k) => k.length < 3)) {
-      // Если ключевые слова слишком короткие, ищем по частичному совпадению
-      organizations = await prisma.organization.findMany({
-        where: {
-          AND: [
-            {
-              name: {
-                contains: organizationName.trim(),
-                mode: "insensitive" as const,
-              },
-            },
-            { isActive: true },
-          ],
-        },
-        select: {
-          name: true,
-          chairmanName: true,
-          chairmanJobTitle: true,
-          phone: true,
-          email: true,
-          address: true,
-        },
-        take: 5,
-      });
-    } else {
-      // Поиск по названию организации с несколькими ключевыми словами
-      organizations = await prisma.organization.findMany({
-        where: {
-          AND: [
-            {
-              OR: keywords.map((keyword) => ({
+      if (keywords.length === 0 || keywords.every((k) => k.length < 3)) {
+        // Если ключевые слова слишком короткие, ищем по частичному совпадению
+        currentOrgs = await prisma.organization.findMany({
+          where: {
+            AND: [
+              {
                 name: {
-                  contains: keyword,
+                  contains: searchName.trim(),
                   mode: "insensitive" as const,
                 },
-              })),
-            },
-            { isActive: true },
-          ],
-        },
-        select: {
-          name: true,
-          chairmanName: true,
-          chairmanJobTitle: true,
-          phone: true,
-          email: true,
-          address: true,
-        },
-        take: 5,
-      });
-    }
-
-    // Если не нашли точного совпадения, пробуем поиск по любому из слов
-    if (organizations.length === 0 && keywords.length > 0) {
-      organizations = await prisma.organization.findMany({
-        where: {
-          AND: [
-            {
-              OR: keywords
-                .filter((k) => k.length >= 3)
-                .map((keyword) => ({
+              },
+              { isActive: true },
+            ],
+          },
+          select: {
+            name: true,
+            chairmanName: true,
+            chairmanJobTitle: true,
+            phone: true,
+            email: true,
+            address: true,
+          },
+          take: 5,
+        });
+      } else {
+        // Поиск по названию организации с несколькими ключевыми словами
+        currentOrgs = await prisma.organization.findMany({
+          where: {
+            AND: [
+              {
+                OR: keywords.map((keyword) => ({
                   name: {
                     contains: keyword,
                     mode: "insensitive" as const,
                   },
                 })),
-            },
-            { isActive: true },
-          ],
-        },
-        select: {
-          name: true,
-          chairmanName: true,
-          chairmanJobTitle: true,
-          phone: true,
-          email: true,
-          address: true,
-        },
-        take: 5,
-      });
-    }
+              },
+              { isActive: true },
+            ],
+          },
+          select: {
+            name: true,
+            chairmanName: true,
+            chairmanJobTitle: true,
+            phone: true,
+            email: true,
+            address: true,
+          },
+          take: 5,
+        });
+      }
 
-    return organizations.map((org) => ({
+      // Если не нашли точного совпадения, пробуем поиск по любому из слов
+      if (currentOrgs.length === 0 && keywords.length > 0) {
+        currentOrgs = await prisma.organization.findMany({
+          where: {
+            AND: [
+              {
+                OR: keywords
+                  .filter((k) => k.length >= 3)
+                  .map((keyword) => ({
+                    name: {
+                      contains: keyword,
+                      mode: "insensitive" as const,
+                    },
+                  })),
+              },
+              { isActive: true },
+            ],
+          },
+          select: {
+            name: true,
+            chairmanName: true,
+            chairmanJobTitle: true,
+            phone: true,
+            email: true,
+            address: true,
+          },
+          take: 5,
+        });
+      }
+      
+      organizations.push(...currentOrgs);
+    }
+    
+    // Удаляем дубликаты по имени организации
+    const uniqueOrganizations = Array.from(
+      new Map(organizations.map(org => [org.name, org])).values()
+    );
+
+    return uniqueOrganizations.map((org) => ({
       name: org.name,
       chairmanName: org.chairmanName || undefined,
       chairmanJobTitle: org.chairmanJobTitle || undefined,
@@ -353,21 +373,27 @@ export async function enhancedSearch(
       let orgName = extractOrganizationName(query);
       console.log(`[enhanced-search] 📝 Extracted org name from query: ${orgName || "null"}`);
       
-      // Если пользователь спрашивает "наш председатель" без указания организации,
+      // Если пользователь спрашивает про "наш/у нас/нашу" организацию без указания названия,
       // используем его организацию из профиля
-      const isAboutOurOrg = /\b(наш|нашей|нашего|моей|моего)\b/i.test(query);
+      const isAboutOurOrg = /\b(наш|нашей|нашего|моей|моего|у\s+нас|у\s+меня|наша|нашу)\b/i.test(query);
       if (!orgName && isAboutOurOrg && userOrgName) {
         orgName = userOrgName;
         console.log(`[enhanced-search] 🎯 Using user's organization: ${orgName}`);
       }
       
+      // Если всё ещё нет названия, но есть ключевое слово "председатель" и организация пользователя - используем её
+      if (!orgName && /председатель/i.test(query) && userOrgName) {
+        orgName = userOrgName;
+        console.log(`[enhanced-search] 🎯 Using user's organization for chairman query: ${orgName}`);
+      }
+      
       if (orgName) {
-        const orgInfo = await searchOrganizationWithChairman(orgName);
+        const orgInfo = await searchOrganizationWithChairman(orgName, userOrgName);
         result.organizationInfo = orgInfo;
         console.log(`[enhanced-search] 🏛️ Found ${orgInfo.length} organizations, chairman info: ${orgInfo.some(o => o.chairmanName)}`);
       } else {
-        // Если не удалось извлечь название, ищем по ключевым словам
-        const orgInfo = await searchOrganizationWithChairman(query);
+        // Если не удалось извлечь название, ищем по ключевым словам, но используем организацию пользователя
+        const orgInfo = await searchOrganizationWithChairman(query, userOrgName);
         result.organizationInfo = orgInfo;
         console.log(`[enhanced-search] 🔍 Fallback search found ${orgInfo.length} organizations`);
       }
@@ -378,9 +404,14 @@ export async function enhancedSearch(
     if (isOrgQuery) {
       let orgName = extractOrganizationName(query);
       
-      // Если спрашивают про "нашу" организацию - используем организацию пользователя
-      const isAboutOurOrg = /\b(наш|нашей|нашего|моей|моего)\b/i.test(query);
+      // Если спрашивают про "нашу/у нас" организацию - используем организацию пользователя
+      const isAboutOurOrg = /\b(наш|нашей|нашего|моей|моего|у\s+нас|у\s+меня|наша|нашу)\b/i.test(query);
       if (!orgName && isAboutOurOrg && userOrgName) {
+        orgName = userOrgName;
+      }
+      
+      // Если всё ещё нет названия, но есть ключевое слово "председатель" и организация пользователя - используем её
+      if (!orgName && /председатель/i.test(query) && userOrgName) {
         orgName = userOrgName;
       }
       

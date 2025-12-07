@@ -19,6 +19,82 @@ export default function RootLayout({
   return (
     <html lang="ru" suppressHydrationWarning>
       <head>
+        {/* Global ChunkLoadError Handler */}
+        <Script
+          id="chunk-error-handler"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                var reloadAttempted = false;
+                
+                window.addEventListener('error', function(e) {
+                  if (reloadAttempted) return;
+                  
+                  var isChunkError = (
+                    (e.message && (
+                      e.message.includes('Loading chunk') ||
+                      e.message.includes('ChunkLoadError') ||
+                      e.message.includes('Failed to fetch dynamically imported module') ||
+                      e.message.includes('Unexpected token')
+                    )) ||
+                    (e.filename && e.filename.includes('/_next/static/'))
+                  );
+                  
+                  if (isChunkError) {
+                    console.log('[ChunkError] Detected chunk loading error, reloading...');
+                    reloadAttempted = true;
+                    
+                    // Clear service worker cache
+                    if ('caches' in window) {
+                      caches.keys().then(function(names) {
+                        names.forEach(function(name) {
+                          caches.delete(name);
+                        });
+                      });
+                    }
+                    
+                    // Force reload
+                    setTimeout(function() {
+                      window.location.reload();
+                    }, 100);
+                  }
+                });
+                
+                // Also catch unhandled promise rejections
+                window.addEventListener('unhandledrejection', function(e) {
+                  if (reloadAttempted) return;
+                  
+                  var reason = e.reason;
+                  var isChunkError = reason && (
+                    (reason.name === 'ChunkLoadError') ||
+                    (reason.message && (
+                      reason.message.includes('Loading chunk') ||
+                      reason.message.includes('Failed to fetch dynamically imported module')
+                    ))
+                  );
+                  
+                  if (isChunkError) {
+                    console.log('[ChunkError] Detected chunk loading rejection, reloading...');
+                    reloadAttempted = true;
+                    
+                    if ('caches' in window) {
+                      caches.keys().then(function(names) {
+                        names.forEach(function(name) {
+                          caches.delete(name);
+                        });
+                      });
+                    }
+                    
+                    setTimeout(function() {
+                      window.location.reload();
+                    }, 100);
+                  }
+                });
+              })();
+            `,
+          }}
+        />
         {/* Firebase Cloud Messaging Service Worker Registration */}
         <Script
           id="firebase-sw-register"
