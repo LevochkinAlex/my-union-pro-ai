@@ -1,9 +1,9 @@
 "use client";
 
-"use client";
-
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useToast } from "@/components/ui/Toast";
+import Cropper from "react-easy-crop";
+import type { Area } from "react-easy-crop";
 
 interface ImageInsertModalProps {
   isOpen: boolean;
@@ -29,7 +29,71 @@ export default function ImageInsertModal({
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [isConverting, setIsConverting] = useState(false);
 
+  // Cropper state
+  const [showCropper, setShowCropper] = useState(false);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
+  const [uploading, setUploading] = useState(false);
+
+  const aspectRatioPresets = [
+    { label: "16:9", value: 16 / 9 },
+    { label: "4:3", value: 4 / 3 },
+  ];
+
   if (!isOpen) return null;
+
+  const onCropComplete = useCallback(
+    (croppedArea: Area, croppedAreaPixels: Area) => {
+      setCroppedAreaPixels(croppedAreaPixels);
+    },
+    []
+  );
+
+  const createImage = (url: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+      const image = new Image();
+      image.addEventListener("load", () => resolve(image));
+      image.addEventListener("error", (error) => reject(error));
+      image.src = url;
+    });
+
+  const getCroppedImg = async (
+    imageSrc: string,
+    pixelCrop: Area
+  ): Promise<Blob> => {
+    const image = await createImage(imageSrc);
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      throw new Error("No 2d context");
+    }
+
+    canvas.width = pixelCrop.width;
+    canvas.height = pixelCrop.height;
+
+    ctx.drawImage(
+      image,
+      pixelCrop.x,
+      pixelCrop.y,
+      pixelCrop.width,
+      pixelCrop.height,
+      0,
+      0,
+      pixelCrop.width,
+      pixelCrop.height
+    );
+
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+        }
+      }, "image/jpeg", 0.95);
+    });
+  };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -49,22 +113,15 @@ export default function ImageInsertModal({
     if (isHeic) {
       setIsConverting(true);
       try {
-        // Динамический импорт heic2any только на клиенте
-        // heic2any - CommonJS модуль, поэтому обращаемся напрямую или через .default
         const heic2anyModule = await import("heic2any");
-        // Для CommonJS модулей default может быть функцией или модуль сам по себе
         const heic2any = (heic2anyModule.default || heic2anyModule) as (params: { blob: Blob; toType: string; quality?: number }) => Promise<Blob | Blob[]>;
-        // Конвертируем HEIC в JPEG для превью
         const convertedBlob = await heic2any({
           blob: file,
           toType: "image/jpeg",
           quality: 0.8,
         });
         
-        // heic2any может вернуть массив или один blob
         const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
-        
-        // Создаем File объект из blob для дальнейшей работы
         const jpegFile = new File([blob as Blob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), {
           type: "image/jpeg",
           lastModified: file.lastModified,
@@ -73,37 +130,45 @@ export default function ImageInsertModal({
         setSelectedFile(jpegFile);
         const url = URL.createObjectURL(blob as Blob);
         setPreviewUrl(url);
+        setShowCropper(true);
         setIsConverting(false);
       } catch (error) {
         console.error("Error converting HEIC:", error);
         showToast("Ошибка при конвертации HEIC изображения", "error");
         setIsConverting(false);
-        // Пробуем показать оригинальный файл (может не работать в некоторых браузерах)
-        setSelectedFile(file);
-        try {
-          const url = URL.createObjectURL(file);
-          setPreviewUrl(url);
-        } catch (e) {
-          showToast("Браузер не поддерживает просмотр HEIC изображений", "error");
-        }
       }
     } else {
       setSelectedFile(file);
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
+      setShowCropper(true);
     }
   };
 
   const handleUpload = async () => {
-    if (selectedFile) {
-      try {
-        await onUpload(selectedFile);
-        // Не закрываем модалку здесь - пусть родительский компонент решает
-        // handleClose() будет вызван в родительском компоненте после успешной загрузки
-      } catch (error) {
-        console.error("Error in handleUpload:", error);
-        // Ошибка уже обработана в родительском компоненте
-      }
+    if (!previewUrl || !croppedAreaPixels) return;
+
+    try {
+      setUploading(true);
+      const croppedImageBlob = await getCroppedImg(previewUrl, croppedAreaPixels);
+      
+      // Создаем File из обрезанного Blob
+      const croppedFile = new File(
+        [croppedImageBlob],
+        selectedFile?.name || "cover.jpg",
+        {
+          type: "image/jpeg",
+          lastModified: Date.now(),
+        }
+      );
+
+      await onUpload(croppedFile);
+      handleClose();
+    } catch (error) {
+      console.error("Error in handleUpload:", error);
+      showToast("Ошибка при обработке изображения", "error");
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -170,7 +235,10 @@ export default function ImageInsertModal({
 
       const imageUrl = await checkStatus();
       setIsGenerating(false);
-      // Не закрываем модалку сразу, показываем превью
+      // Показываем сгенерированное изображение в кропере
+      setPreviewUrl(imageUrl);
+      setShowCropper(true);
+      setGeneratedImageUrl(null);
     } catch (error: any) {
       console.error("Error generating image:", error);
       showToast(error.message || "Ошибка при генерации изображения", "error");
@@ -179,11 +247,16 @@ export default function ImageInsertModal({
     }
   };
 
-  const handleInsertGenerated = () => {
-    if (generatedImageUrl) {
-      onGenerate(generatedImageUrl);
-      handleClose();
+  const handleCancelCrop = () => {
+    setShowCropper(false);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
     }
+    setPreviewUrl(null);
+    setSelectedFile(null);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedAreaPixels(null);
   };
 
   const handleClose = () => {
@@ -192,11 +265,14 @@ export default function ImageInsertModal({
     setIsGenerating(false);
     setGenerationProgress(0);
     setGeneratedImageUrl(null);
+    setShowCropper(false);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedAreaPixels(null);
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
     }
-    onClose();
     onClose();
   };
 
@@ -206,13 +282,13 @@ export default function ImageInsertModal({
       onClick={handleClose}
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md"
+        className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Добавить изображение
+              {showCropper ? "Обрезать изображение" : "Добавить изображение"}
             </h3>
             <button
               type="button"
@@ -230,7 +306,8 @@ export default function ImageInsertModal({
             </button>
           </div>
 
-          <div className="space-y-4">
+          {!showCropper ? (
+            <div className="space-y-4">
             {/* Загрузка файла */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -248,22 +325,6 @@ export default function ImageInsertModal({
                   <p className="text-sm text-blue-700 dark:text-blue-300 text-center">
                     Конвертация HEIC изображения...
                   </p>
-                </div>
-              )}
-              {previewUrl && !isConverting && (
-                <div className="mt-3 relative">
-                  <img
-                    src={previewUrl}
-                    alt="Preview"
-                    className="w-full max-h-48 object-contain rounded-lg border border-gray-200 dark:border-gray-700"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleUpload}
-                    className="mt-2 w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Вставить изображение
-                  </button>
                 </div>
               )}
             </div>
@@ -324,43 +385,84 @@ export default function ImageInsertModal({
                 </div>
               )}
 
-              {/* Превью сгенерированного изображения */}
-              {generatedImageUrl && (
-                <div className="mt-3 space-y-2">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Изображение готово:
-                  </p>
-                  <div className="relative">
-                    <img
-                      src={generatedImageUrl}
-                      alt="Сгенерированное изображение"
-                      className="w-full max-h-64 object-contain rounded-lg border border-gray-200 dark:border-gray-700"
-                    />
-                    <div className="mt-2 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={handleInsertGenerated}
-                        className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                      >
-                        Вставить изображение
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setGeneratedImageUrl(null);
-                          setIsGenerating(false);
-                          setGenerationProgress(0);
-                        }}
-                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                      >
-                        Отмена
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
+          ) : (
+            /* Cropper Interface */
+            <div className="space-y-4">
+              <div className="relative w-full h-96 bg-gray-900 rounded-lg overflow-hidden">
+                <Cropper
+                  image={previewUrl || ""}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={aspectRatio}
+                  onCropChange={setCrop}
+                  onCropComplete={onCropComplete}
+                  onZoomChange={setZoom}
+                />
+              </div>
+
+              <div className="space-y-4">
+                {/* Zoom control */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Масштаб
+                  </label>
+                  <input
+                    type="range"
+                    value={zoom}
+                    min={1}
+                    max={3}
+                    step={0.1}
+                    onChange={(e) => setZoom(Number(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                  />
+                </div>
+
+                {/* Aspect ratio presets */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Соотношение сторон
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {aspectRatioPresets.map((preset) => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        onClick={() => setAspectRatio(preset.value)}
+                        className={`px-4 py-2 text-sm font-medium rounded-lg border transition ${
+                          aspectRatio === preset.value
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCancelCrop}
+                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600"
+                  >
+                    Назад
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleUpload}
+                    disabled={uploading}
+                    className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {uploading ? "Загрузка..." : "Вставить"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
