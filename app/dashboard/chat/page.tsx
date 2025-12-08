@@ -165,7 +165,7 @@ function ChatPageContent() {
     messagesRef.current = messages;
   }, [messages]);
 
-  // ИСПРАВЛЕНО: useCallback для loadChats (объявлен здесь, до использования в useEffect)
+  // ИСПРАВЛЕНО: loadChats БЕЗ selectedChat в зависимостях (избегаем бесконечного цикла!)
   const loadChats = useCallback(async () => {
     try {
       console.log("[chat] Loading chats list");
@@ -176,26 +176,30 @@ function ChatPageContent() {
         console.log("[chat] Loaded", fetchedChats.length, "chats");
         setChats(fetchedChats);
         
-        // Если есть userId и чат еще не выбран, выбираем его
-        if (userId && !selectedChat) {
-          const chat = fetchedChats.find((c: Chat) => c.otherUser.id === userId);
-          if (chat) {
-            console.log("[chat] Auto-selecting chat for userId:", userId);
-            setSelectedChat(chat);
-          }
-        }
+        // Auto-select будет обработан в отдельном useEffect
       }
     } catch (error) {
       console.error("[chat] Error loading chats:", error);
     } finally {
       setLoading(false);
     }
-  }, [userId, selectedChat]); // Зависимости явно указаны
+  }, []); // Пустые зависимости - функция создаётся один раз!
 
-  // ИСПРАВЛЕНО: loadChats теперь в зависимостях (это безопасно, т.к. он useCallback)
+  // Загрузка чатов при монтировании
   useEffect(() => {
     loadChats();
   }, [loadChats]);
+  
+  // Отдельный useEffect для auto-select чата по userId
+  useEffect(() => {
+    if (userId && chats.length > 0 && !selectedChat) {
+      const chat = chats.find((c: Chat) => c.otherUser.id === userId);
+      if (chat) {
+        console.log("[chat] Auto-selecting chat for userId:", userId);
+        setSelectedChat(chat);
+      }
+    }
+  }, [userId, chats, selectedChat]);
 
   // ИСПРАВЛЕНО: Открываем чат с ботом только если изменился botChatId (не chats!)
   useEffect(() => {
