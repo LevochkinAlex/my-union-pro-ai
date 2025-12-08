@@ -161,7 +161,8 @@ export async function GET(
     }));
 
     // Если загружаем старые сообщения, переворачиваем порядок
-    const orderedMessages = direction === "older" ? messagesWithReplies.reverse() : messagesWithReplies;
+    // ИСПРАВЛЕНО: используем slice() чтобы не мутировать оригинальный массив
+    const orderedMessages = direction === "older" ? [...messagesWithReplies].reverse() : messagesWithReplies;
 
     // Проверяем, есть ли еще сообщения для загрузки
     const hasMore = messagesWithReplies.length === limit;
@@ -220,8 +221,8 @@ export async function GET(
       },
     }) : [];
 
-    // Формируем реакции с информацией о пользователях
-    const messagesWithReactions = messagesWithReplies.map((msg: any) => {
+    // ИСПРАВЛЕНО: Формируем реакции для уже отсортированных сообщений
+    const messagesWithReactions = orderedMessages.map((msg: any) => {
       if (msg.reactions && typeof msg.reactions === 'object' && !Array.isArray(msg.reactions)) {
         try {
           const reactionsWithUsers: Record<string, { userIds: string[]; users: any[] }> = {};
