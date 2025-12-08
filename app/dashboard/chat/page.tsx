@@ -1297,9 +1297,9 @@ function ChatPageContent() {
                 <div className="p-4 text-center text-gray-500 dark:text-gray-400">Поиск...</div>
               ) : searchResults.length > 0 ? (
                 <div>
-                  {searchResults.map((user) => (
+                  {searchResults.map((user, userIdx) => (
                     <button
-                      key={user.id}
+                      key={`search-user-${user.id}-${userIdx}`}
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -1816,7 +1816,7 @@ function ChatPageContent() {
                                   attachment.fileName.toLowerCase().endsWith(".webp");
                                 
                                 return (
-                                  <div key={attachment.id} className="relative">
+                                  <div key={`edit-msg-${editingMessageId}-attachment-${attachment.id}`} className="relative">
                                     {isImage ? (
                                       <div className="relative">
                                         <img
@@ -2028,7 +2028,7 @@ function ChatPageContent() {
                                   attachment.fileName.toLowerCase().endsWith(".webp");
                                 
                                 return (
-                                  <div key={attachment.id} className="relative">
+                                  <div key={`msg-${message.id}-attachment-${attachment.id}`} className="relative">
                                     {isImage ? (
                                       <div className="relative group">
                                         <img
@@ -2183,7 +2183,7 @@ function ChatPageContent() {
                                     <div className="flex items-center -ml-1">
                                       {reaction.users.slice(0, 3).map((user, idx) => (
                                         <div
-                                          key={user.id}
+                                          key={`${message.id}-${reaction.emoji}-user-${user.id}-${idx}`}
                                           className="w-4 h-4 rounded-full border-2 border-white dark:border-gray-800 overflow-hidden"
                                           style={{ marginLeft: idx > 0 ? '-4px' : '0' }}
                                         >
@@ -2497,14 +2497,14 @@ function ChatPageContent() {
                   </div>
                 ) : forwardUsers.length > 0 ? (
                   <div className="space-y-2">
-                    {forwardUsers.map((user) => {
+                    {forwardUsers.map((user, forwardIdx) => {
                       const userName = [user.firstName, user.middleName, user.lastName]
                         .filter(Boolean)
                         .join(" ") || "Пользователь";
                       
                       return (
                         <button
-                          key={user.id}
+                          key={`forward-user-${user.id}-${forwardIdx}`}
                           onClick={() => handleForwardMessage(user.id)}
                           className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left"
                         >
