@@ -160,6 +160,15 @@ export default function ProfilePage() {
   const [educationsData, setEducationsData] = useState<Education[]>([]);
   const [childErrors, setChildErrors] = useState<Record<number, string>>({});
   
+  // Состояния для управления формами добавления/редактирования
+  const [isAddingAward, setIsAddingAward] = useState(false);
+  const [editingAwardIndex, setEditingAwardIndex] = useState<number | null>(null);
+  const [newAward, setNewAward] = useState<Award>({ type: "ведомственная", year: "", description: "" });
+  
+  const [isAddingEducation, setIsAddingEducation] = useState(false);
+  const [editingEducationIndex, setEditingEducationIndex] = useState<number | null>(null);
+  const [newEducation, setNewEducation] = useState<Education>({ level: "", institution: "", year: "", specialty: "" });
+  
   // Данные о членстве
   const [membershipData, setMembershipData] = useState<{
     unionCardNumber: string | null;
@@ -252,24 +261,62 @@ export default function ProfilePage() {
     setChildErrors(updatedErrors);
   };
 
-  // Добавить награду
-  const addAward = () => {
-    setAwards([...awards, { type: "ведомственная", year: "", description: "" }]);
+  // Открыть форму добавления награды
+  const openAddAwardForm = () => {
+    setNewAward({ type: "ведомственная", year: "", description: "" });
+    setIsAddingAward(true);
+    setEditingAwardIndex(null);
+  };
+
+  // Отменить добавление награды
+  const cancelAddAward = () => {
+    setIsAddingAward(false);
+    setNewAward({ type: "ведомственная", year: "", description: "" });
+  };
+
+  // Сохранить новую награду
+  const saveAward = () => {
+    if (!newAward.type || !newAward.year || !newAward.description.trim()) {
+      setMessage({ type: "error", text: "Заполните все поля награды" });
+      return;
+    }
+    
+    if (editingAwardIndex !== null) {
+      // Редактирование существующей награды
+      const updatedAwards = [...awards];
+      updatedAwards[editingAwardIndex] = { ...newAward };
+      setAwards(updatedAwards);
+      setEditingAwardIndex(null);
+    } else {
+      // Добавление новой награды
+      setAwards([...awards, { ...newAward }]);
+      setIsAddingAward(false);
+    }
+    
+    setNewAward({ type: "ведомственная", year: "", description: "" });
+    setMessage({ type: "success", text: "Награда сохранена. Не забудьте сохранить изменения внизу страницы." });
+  };
+
+  // Начать редактирование награды
+  const startEditAward = (index: number) => {
+    setNewAward({ ...awards[index] });
+    setEditingAwardIndex(index);
+    setIsAddingAward(true);
+  };
+
+  // Отменить редактирование награды
+  const cancelEditAward = () => {
+    setEditingAwardIndex(null);
+    setIsAddingAward(false);
+    setNewAward({ type: "ведомственная", year: "", description: "" });
   };
 
   // Удалить награду
   const removeAward = (index: number) => {
-    setAwards(awards.filter((_, i) => i !== index));
-  };
-
-  // Обновить данные награды
-  const updateAward = (index: number, field: keyof Award, value: string) => {
-    const updatedAwards = [...awards];
-    updatedAwards[index] = {
-      ...updatedAwards[index],
-      [field]: value,
-    };
-    setAwards(updatedAwards);
+    if (confirm("Вы уверены, что хотите удалить эту награду?")) {
+      setAwards(awards.filter((_, i) => i !== index));
+      setMessage({ type: "success", text: "Награда удалена. Не забудьте сохранить изменения внизу страницы." });
+    }
   };
 
   // Добавить обучение
@@ -312,24 +359,62 @@ export default function ProfilePage() {
     setProfessionsData(updatedProfessions);
   };
 
-  // Добавить образование
-  const addEducation = () => {
-    setEducationsData([...educationsData, { level: "", institution: "", year: "", specialty: "" }]);
+  // Открыть форму добавления образования
+  const openAddEducationForm = () => {
+    setNewEducation({ level: "", institution: "", year: "", specialty: "" });
+    setIsAddingEducation(true);
+    setEditingEducationIndex(null);
+  };
+
+  // Отменить добавление образования
+  const cancelAddEducation = () => {
+    setIsAddingEducation(false);
+    setNewEducation({ level: "", institution: "", year: "", specialty: "" });
+  };
+
+  // Сохранить новое образование
+  const saveEducation = () => {
+    if (!newEducation.level || !newEducation.institution.trim() || !newEducation.year || !newEducation.specialty.trim()) {
+      setMessage({ type: "error", text: "Заполните все поля образования" });
+      return;
+    }
+    
+    if (editingEducationIndex !== null) {
+      // Редактирование существующего образования
+      const updatedEducations = [...educationsData];
+      updatedEducations[editingEducationIndex] = { ...newEducation };
+      setEducationsData(updatedEducations);
+      setEditingEducationIndex(null);
+    } else {
+      // Добавление нового образования
+      setEducationsData([...educationsData, { ...newEducation }]);
+      setIsAddingEducation(false);
+    }
+    
+    setNewEducation({ level: "", institution: "", year: "", specialty: "" });
+    setMessage({ type: "success", text: "Образование сохранено. Не забудьте сохранить изменения внизу страницы." });
+  };
+
+  // Начать редактирование образования
+  const startEditEducation = (index: number) => {
+    setNewEducation({ ...educationsData[index] });
+    setEditingEducationIndex(index);
+    setIsAddingEducation(true);
+  };
+
+  // Отменить редактирование образования
+  const cancelEditEducation = () => {
+    setEditingEducationIndex(null);
+    setIsAddingEducation(false);
+    setNewEducation({ level: "", institution: "", year: "", specialty: "" });
   };
 
   // Удалить образование
   const removeEducation = (index: number) => {
-    setEducationsData(educationsData.filter((_, i) => i !== index));
-  };
-
-  // Обновить образование
-  const updateEducation = (index: number, field: keyof Education, value: string) => {
-    const updatedEducations = [...educationsData];
-    updatedEducations[index] = {
-      ...updatedEducations[index],
-      [field]: value,
-    };
-    setEducationsData(updatedEducations);
+    if (confirm("Вы уверены, что хотите удалить это образование?")) {
+      setEducationsData(educationsData.filter((_, i) => i !== index));
+      setMessage({ type: "success", text: "Образование удалено. Не забудьте сохранить изменения внизу страницы." });
+    }
   };
 
   const [savingAdditionalInfo, setSavingAdditionalInfo] = useState(false);
@@ -1559,110 +1644,169 @@ export default function ProfilePage() {
 
             {/* Образование */}
             <div>
-              <div className="mb-3 flex items-center justify-between">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
-                  Образование
-                </label>
-                <button
-                  type="button"
-                  onClick={addEducation}
-                  className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              {/* Кнопка добавления образования */}
+              {!isAddingEducation && (
+                <div className="mb-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={openAddEducationForm}
+                    className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Добавить образование
+                  </button>
+                </div>
+              )}
+
+              {/* Форма добавления/редактирования образования */}
+              {isAddingEducation && (
+                <div className="mb-6 rounded-lg border-2 border-blue-300 bg-blue-50 p-4 dark:border-blue-600 dark:bg-blue-900/20">
+                  <h4 className="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
+                    {editingEducationIndex !== null ? "Редактирование образования" : "Добавление образования"}
+                  </h4>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                          Уровень образования <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={newEducation.level}
+                          onChange={(e) => setNewEducation({ ...newEducation, level: e.target.value })}
+                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                        >
+                          <option value="">Выберите уровень</option>
+                          {EDUCATION_LEVELS.map((level) => (
+                            <option key={level} value={level}>
+                              {level}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                          Год окончания <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={newEducation.year}
+                          onChange={(e) => setNewEducation({ ...newEducation, year: e.target.value })}
+                          placeholder="2020"
+                          maxLength={4}
+                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                          Учебное заведение <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={newEducation.institution}
+                          onChange={(e) => setNewEducation({ ...newEducation, institution: e.target.value })}
+                          placeholder="Название университета/колледжа..."
+                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                          Специальность <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={newEducation.specialty}
+                          onChange={(e) => setNewEducation({ ...newEducation, specialty: e.target.value })}
+                          placeholder="Например: Медицина, Информатика..."
+                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={editingEducationIndex !== null ? cancelEditEducation : cancelAddEducation}
+                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                      >
+                        Отмена
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveEducation}
+                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {editingEducationIndex !== null ? "Сохранить изменения" : "Добавить образование"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Список образований */}
+              {educationsData.length === 0 && !isAddingEducation ? (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center dark:border-gray-700 dark:bg-gray-900">
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                   </svg>
-                  Добавить образование
-                </button>
-              </div>
-              
-              {educationsData.length === 0 ? (
-                <div className="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Нажмите "Добавить образование" чтобы указать ваше образование
+                  <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+                    У вас пока нет добавленного образования
+                  </p>
+                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                    Нажмите "Добавить образование" чтобы начать
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {educationsData.map((edu, index) => (
-                    <div
-                      key={index}
-                      className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
-                    >
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                            Уровень образования
-                          </label>
-                          <select
-                            value={edu.level}
-                            onChange={(e) => updateEducation(index, "level", e.target.value)}
-                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                educationsData.length > 0 && (
+                  <div className="space-y-3">
+                    {educationsData.map((edu, index) => (
+                      <div
+                        key={index}
+                        className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:flex-row sm:items-center"
+                      >
+                        <div className="flex-1">
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold text-gray-900 dark:text-white">{edu.level}</span>
+                            {edu.year && (
+                              <span className="text-sm text-gray-600 dark:text-gray-400">({edu.year})</span>
+                            )}
+                          </div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">{edu.institution}</p>
+                          {edu.specialty && (
+                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{edu.specialty}</p>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => startEditEducation(index)}
+                            className="inline-flex items-center justify-center rounded-lg bg-blue-600 p-2 text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            title="Редактировать"
                           >
-                            <option value="">Выберите уровень</option>
-                            {EDUCATION_LEVELS.map((level) => (
-                              <option key={level} value={level}>
-                                {level}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                            Год окончания
-                          </label>
-                          <input
-                            type="text"
-                            value={edu.year}
-                            onChange={(e) => updateEducation(index, "year", e.target.value)}
-                            placeholder="YYYY"
-                            maxLength={4}
-                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                            Учебное заведение
-                          </label>
-                          <input
-                            type="text"
-                            value={edu.institution}
-                            onChange={(e) => updateEducation(index, "institution", e.target.value)}
-                            placeholder="Название университета/колледжа..."
-                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                            Специальность
-                          </label>
-                          <input
-                            type="text"
-                            value={edu.specialty}
-                            onChange={(e) => updateEducation(index, "specialty", e.target.value)}
-                            placeholder="Например: Медицина, Информатика..."
-                            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                          />
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeEducation(index)}
+                            className="inline-flex items-center justify-center rounded-lg bg-red-600 p-2 text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                            title="Удалить"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
-                      
-                      <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => removeEducation(index)}
-                          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-                        >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                          Удалить
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )
               )}
             </div>
 
@@ -1932,20 +2076,21 @@ export default function ProfilePage() {
 
       {activeTab === "awards" && (
       <div className="w-full max-w-5xl rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 md:p-6">
-        <h3 className="text-base font-semibold text-gray-900 dark:text-white md:text-lg">Награды и достижения</h3>
-        <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 md:text-sm">
-          Укажите ваши награды (ведомственные, государственные, профсоюзные)
-        </p>
-        <form onSubmit={handleAdditionalInfoSubmit} className="mt-6 space-y-6">
-          <div>
-            <div className="mb-4 flex items-center justify-between">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
-                Награды (ведомственные, государственные, профсоюзные)
-              </label>
+        <div className="mb-6">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white md:text-lg">Награды и достижения</h3>
+          <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 md:text-sm">
+            Укажите ваши награды (ведомственные, государственные, профсоюзные)
+          </p>
+        </div>
+
+        <form onSubmit={handleAdditionalInfoSubmit} className="space-y-6">
+          {/* Кнопка добавления награды */}
+          {!isAddingAward && (
+            <div className="flex justify-end">
               <button
                 type="button"
-                onClick={addAward}
-                className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                onClick={openAddAwardForm}
+                className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1953,89 +2098,146 @@ export default function ProfilePage() {
                 Добавить награду
               </button>
             </div>
-            
-            {awards.length === 0 ? (
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center dark:border-gray-700 dark:bg-gray-900">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Нажмите "Добавить награду" чтобы указать информацию о награде
-                </p>
+          )}
+
+          {/* Форма добавления/редактирования награды */}
+          {isAddingAward && (
+            <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-4 dark:border-blue-600 dark:bg-blue-900/20">
+              <h4 className="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
+                {editingAwardIndex !== null ? "Редактирование награды" : "Добавление награды"}
+              </h4>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Тип награды <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={newAward.type}
+                      onChange={(e) => setNewAward({ ...newAward, type: e.target.value as Award["type"] })}
+                      className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                    >
+                      <option value="ведомственная">Ведомственная</option>
+                      <option value="государственная">Государственная</option>
+                      <option value="профсоюзная">Профсоюзная</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Год <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newAward.year}
+                      onChange={(e) => setNewAward({ ...newAward, year: e.target.value })}
+                      placeholder="2020"
+                      maxLength={4}
+                      className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                    />
+                  </div>
+                  
+                  <div className="sm:col-span-1">
+                    <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Описание <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newAward.description}
+                      onChange={(e) => setNewAward({ ...newAward, description: e.target.value })}
+                      placeholder="Описание награды"
+                      className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={editingAwardIndex !== null ? cancelEditAward : cancelAddAward}
+                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveAward}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {editingAwardIndex !== null ? "Сохранить изменения" : "Добавить награду"}
+                  </button>
+                </div>
               </div>
-            ) : (
+            </div>
+          )}
+
+          {/* Список наград */}
+          {awards.length === 0 && !isAddingAward ? (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center dark:border-gray-700 dark:bg-gray-900">
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+              </svg>
+              <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+                У вас пока нет добавленных наград
+              </p>
+              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                Нажмите "Добавить награду" чтобы начать
+              </p>
+            </div>
+          ) : (
+            awards.length > 0 && (
               <div className="space-y-3">
                 {awards.map((award, index) => (
                   <div
                     key={index}
-                    className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900"
+                    className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:flex-row sm:items-center"
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                      <div className="w-full sm:w-48">
-                        <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                          Тип награды
-                        </label>
-                        <select
-                          value={award.type}
-                          onChange={(e) => updateAward(index, "type", e.target.value as Award["type"])}
-                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                        >
-                          <option value="ведомственная">Ведомственная</option>
-                          <option value="государственная">Государственная</option>
-                          <option value="профсоюзная">Профсоюзная</option>
-                        </select>
+                    <div className="flex-1">
+                      <div className="mb-1 flex items-center gap-2">
+                        <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-200">
+                          {award.type === "ведомственная" ? "Ведомственная" : award.type === "государственная" ? "Государственная" : "Профсоюзная"}
+                        </span>
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{award.year}</span>
                       </div>
-                      
-                      <div className="w-full sm:w-32">
-                        <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                          Год
-                        </label>
-                        <input
-                          type="text"
-                          value={award.year}
-                          onChange={(e) => updateAward(index, "year", e.target.value)}
-                          placeholder="YYYY"
-                          maxLength={4}
-                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                        />
-                      </div>
-                      
-                      <div className="flex-1">
-                        <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                          Описание
-                        </label>
-                        <input
-                          type="text"
-                          value={award.description}
-                          onChange={(e) => updateAward(index, "description", e.target.value)}
-                          placeholder="Описание награды"
-                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                        />
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => removeAward(index)}
-                          className="inline-flex items-center justify-center rounded-lg bg-red-600 p-2 text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 h-[38px] w-[38px]"
-                          title="Удалить"
-                        >
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
+                      <p className="text-sm text-gray-900 dark:text-white">{award.description}</p>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => startEditAward(index)}
+                        className="inline-flex items-center justify-center rounded-lg bg-blue-600 p-2 text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        title="Редактировать"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeAward(index)}
+                        className="inline-flex items-center justify-center rounded-lg bg-red-600 p-2 text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        title="Удалить"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            )
+          )}
 
-          <div className="flex justify-end gap-3">
+          {/* Кнопка сохранения всех изменений */}
+          <div className="flex justify-end gap-3 border-t border-gray-200 pt-4 dark:border-gray-700">
             <button
               type="submit"
               disabled={savingAdditionalInfo}
               className="inline-flex items-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {savingAdditionalInfo ? "Сохранение..." : "Сохранить награды"}
+              {savingAdditionalInfo ? "Сохранение..." : "Сохранить изменения"}
             </button>
           </div>
         </form>
