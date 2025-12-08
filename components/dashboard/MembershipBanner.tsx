@@ -43,42 +43,48 @@ export default function MembershipBanner({
     setHasAwards(initialHasAwards);
   }, [initialProfileProgress, initialHasDocuments, initialMembershipStatus, initialHasAdditionalInfo, initialHasAwards]);
 
-  // Периодически обновляем данные (каждые 3 секунды, если документы еще не отправлены)
+  // Периодически обновляем данные (каждые 30 секунд, если документы еще не отправлены)
+  // ИСПРАВЛЕНО: Увеличен интервал и убран router.refresh() для предотвращения бесконечного цикла
   useEffect(() => {
     if (membershipStatus === "APPROVED") return; // Не обновляем для APPROVED
     
     let mounted = true;
+    let isChecking = false; // Защита от race condition
     
     const checkStatus = async () => {
+      if (!mounted || isChecking) return;
+      isChecking = true;
+      
       try {
         // Загружаем актуальные данные профиля
         const response = await fetch("/api/profile");
-        if (!response.ok || !mounted) return;
+        if (!response.ok || !mounted) {
+          isChecking = false;
+          return;
+        }
         
         const data = await response.json();
         const user = data.user;
         
         // Проверяем документы
         const docsResponse = await fetch("/api/documents");
-        if (!docsResponse.ok || !mounted) return;
+        if (!docsResponse.ok || !mounted) {
+          isChecking = false;
+          return;
+        }
         
         const docsData = await docsResponse.json();
         const documents = docsData.documents || [];
         
         // Проверяем наличие отправленных документов
-        // Документ считается отправленным, если:
-        // 1. Статус PENDING или APPROVED (уже отправлен на проверку)
-        // 2. Статус SIGNED и есть signedFilePath (подписан и загружен)
         const sentDocuments = documents.filter((doc: any) => {
           const isCorrectType = doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION";
           if (!isCorrectType) return false;
           
-          // Если статус PENDING или APPROVED - документ точно отправлен
           if (doc.status === "PENDING" || doc.status === "APPROVED") {
             return true;
           }
           
-          // Если статус SIGNED и есть signedFilePath - документ подписан и загружен
           if (doc.status === "SIGNED" && doc.signedFilePath) {
             return true;
           }
@@ -87,63 +93,44 @@ export default function MembershipBanner({
         });
         
         const newHasDocuments = sentDocuments.length > 0;
-        console.log("[MembershipBanner] Checking documents:", {
-          totalDocuments: documents.length,
-          sentDocuments: sentDocuments.length,
-          sentDocsDetails: sentDocuments.map((d: any) => ({ type: d.type, status: d.status, hasSignedPath: !!d.signedFilePath })),
-          newHasDocuments,
-          currentHasDocuments: hasDocuments,
-        });
         const newMembershipStatus = user?.membershipStatus || membershipStatus;
-        
-        // Вычисляем прогресс профиля на клиенте
         const newProfileProgress = user ? calculateProfileProgress(user).total : profileProgress;
         
-        if (!mounted) return;
+        if (!mounted) {
+          isChecking = false;
+          return;
+        }
         
-        // Обновляем состояние
-        let shouldRefresh = false;
-        
+        // Обновляем состояние БЕЗ router.refresh()
         if (newHasDocuments !== hasDocuments) {
-          console.log("[MembershipBanner] hasDocuments changed:", hasDocuments, "->", newHasDocuments);
           setHasDocuments(newHasDocuments);
-          shouldRefresh = true;
         }
         
         if (newMembershipStatus !== membershipStatus) {
-          console.log("[MembershipBanner] membershipStatus changed:", membershipStatus, "->", newMembershipStatus);
           setMembershipStatus(newMembershipStatus);
-          shouldRefresh = true;
         }
         
         if (newProfileProgress !== profileProgress) {
           setProfileProgress(newProfileProgress);
         }
-        
-        // Обновляем страницу если статус изменился
-        if (shouldRefresh) {
-          setTimeout(() => {
-            if (mounted) {
-              router.refresh();
-            }
-          }, 500);
-        }
       } catch (error) {
         console.error("[MembershipBanner] Ошибка обновления данных:", error);
+      } finally {
+        isChecking = false;
       }
     };
     
     // Проверяем сразу при монтировании
     checkStatus();
     
-    // Затем проверяем каждые 3 секунды
-    const interval = setInterval(checkStatus, 3000);
+    // Затем проверяем каждые 30 секунд (было 3 секунды - слишком часто!)
+    const interval = setInterval(checkStatus, 30000);
 
     return () => {
       mounted = false;
       clearInterval(interval);
     };
-  }, [membershipStatus, hasDocuments, router, profileProgress]);
+  }, [membershipStatus]); // Упрощены зависимости для предотвращения лишних перезапусков
 
   // Если пользователь APPROVED и заполнил все доп. информацию и награды - скрываем баннер
   if (membershipStatus === "APPROVED" && hasAdditionalInfo && hasAwards) {
