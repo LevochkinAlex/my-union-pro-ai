@@ -79,8 +79,8 @@ export async function GET(
       }
     }
 
-    // ОПТИМИЗАЦИЯ: Загружаем сообщения с минимальными include для ускорения
-    // replyTo и forwardedFrom загружаются отдельно только для тех сообщений, где они есть
+    // ИСПРАВЛЕНО: Всегда загружаем сначала НОВЕЙШИЕ сообщения
+    // Потом переворачиваем для правильного отображения (старые вверху, новые внизу)
     const messages = await prisma.chatMessage.findMany({
       where: whereClause,
       include: {
@@ -104,11 +104,10 @@ export async function GET(
             mimeType: true,
           },
         },
-        // ОПТИМИЗАЦИЯ: Убрали вложенные include для replyTo и forwardedFrom
-        // Они загружаются ниже только если нужны
+        // replyTo и forwardedFrom загружаются ниже только если нужны
       },
       orderBy: {
-        createdAt: direction === "older" ? "desc" : "asc",
+        createdAt: "desc", // ВСЕГДА desc - сначала новейшие
       },
       take: limit,
     });
@@ -160,9 +159,9 @@ export async function GET(
       forwardedFrom: msg.forwardedFromId ? forwardedFromMap.get(msg.forwardedFromId) : null,
     }));
 
-    // Если загружаем старые сообщения, переворачиваем порядок
-    // ИСПРАВЛЕНО: используем slice() чтобы не мутировать оригинальный массив
-    const orderedMessages = direction === "older" ? [...messagesWithReplies].reverse() : messagesWithReplies;
+    // ИСПРАВЛЕНО: ВСЕГДА переворачиваем, т.к. загружали в порядке DESC (новейшие первыми)
+    // После переворота: старые сообщения вверху, новые внизу (как в мессенджере)
+    const orderedMessages = [...messagesWithReplies].reverse();
 
     // Проверяем, есть ли еще сообщения для загрузки
     const hasMore = messagesWithReplies.length === limit;
