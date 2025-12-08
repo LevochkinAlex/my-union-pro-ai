@@ -146,11 +146,16 @@ export default async function DashboardLayout({
 
   // Get user avatar
   let user: { avatarUrl: string | null } | null = null;
-  if (session.user?.email) {
-    user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { avatarUrl: true },
-    });
+  if (session.user?.id) {
+    try {
+      user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { avatarUrl: true },
+      });
+    } catch (error) {
+      console.error("[dashboard/layout] Error fetching user avatar:", error);
+      // Продолжаем работу без аватара
+    }
   }
 
   // Безопасное получение инициала пользователя

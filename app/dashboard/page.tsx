@@ -39,57 +39,58 @@ export default async function DashboardPage() {
   const subscribedUserIds = subscriptions.map((sub) => sub.targetUserId);
 
   // Получаем посты от подписок (последние 10)
-  const postsFromSubscriptions = subscribedUserIds.length > 0
-    ? await prisma.userPost.findMany({
-        where: {
-          authorId: {
-            in: subscribedUserIds,
-          },
+  let postsFromSubscriptions: any[] = [];
+  if (subscribedUserIds.length > 0) {
+    postsFromSubscriptions = await prisma.userPost.findMany({
+      where: {
+        authorId: {
+          in: subscribedUserIds,
         },
-        include: {
-          author: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              middleName: true,
-              avatarUrl: true,
-              jobTitle: true,
-              profession: true,
-              organization: {
-                select: {
-                  id: true,
-                  name: true,
-                },
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            avatarUrl: true,
+            jobTitle: true,
+            profession: true,
+            organization: {
+              select: {
+                id: true,
+                name: true,
               },
             },
           },
-          attachments: {
-            orderBy: {
-              createdAt: "asc",
-            },
-          },
-          likes: {
-            where: {
-              userId: userId,
-            },
-            select: {
-              id: true,
-            },
-          },
-          _count: {
-            select: {
-              likes: true,
-              comments: true,
-            },
+        },
+        attachments: {
+          orderBy: {
+            createdAt: "asc",
           },
         },
-        orderBy: {
-          createdAt: "desc",
+        likes: {
+          where: {
+            userId: userId,
+          },
+          select: {
+            id: true,
+          },
         },
-        take: 10,
-      })
-    : [];
+        _count: {
+          select: {
+            likes: true,
+            comments: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 10,
+    });
+  }
 
   // Получаем свежие новости (последние 5)
   const recentNews = await prisma.newsPost.findMany({
