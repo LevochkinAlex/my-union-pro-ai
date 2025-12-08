@@ -75,6 +75,12 @@ export default function PostMiniCard({ post }: PostMiniCardProps) {
   // Показываем дату только после монтирования чтобы избежать hydration mismatch
   const formattedDate = mounted ? formatDate(post.createdAt) : "";
 
+  const handleAuthorClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    window.location.href = `/dashboard/profile/${post.author.id}`;
+  };
+
   return (
     <Link 
       href={`/posts/${post.id}`}
@@ -82,10 +88,9 @@ export default function PostMiniCard({ post }: PostMiniCardProps) {
     >
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 h-full hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-200 cursor-pointer flex flex-col">
         {/* Автор и дата */}
-        <Link 
-          href={`/dashboard/profile/${post.author.id}`}
-          className="flex items-center gap-3 mb-3 hover:opacity-80 transition-opacity"
-          onClick={(e) => e.stopPropagation()}
+        <div 
+          onClick={handleAuthorClick}
+          className="flex items-center gap-3 mb-3 hover:opacity-80 transition-opacity cursor-pointer"
         >
           {post.author.avatarUrl ? (
             <Image
@@ -108,7 +113,7 @@ export default function PostMiniCard({ post }: PostMiniCardProps) {
               {formattedDate}
             </p>
           </div>
-        </Link>
+        </div>
 
         {/* Контент */}
         <div className="flex-1 min-h-0">
