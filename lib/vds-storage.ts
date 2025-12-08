@@ -11,6 +11,42 @@ import { existsSync } from "fs";
 
 const execAsync = promisify(exec);
 
+/**
+ * SECURITY: Санитизация пути файла для предотвращения command injection
+ * Удаляет опасные символы и блокирует path traversal
+ */
+function sanitizeFileKey(fileKey: string): string {
+  // Удаляем null bytes
+  let sanitized = fileKey.replace(/\0/g, '');
+  
+  // Блокируем path traversal
+  sanitized = sanitized.replace(/\.\.\//g, '').replace(/\.\./g, '');
+  
+  // Удаляем опасные shell символы
+  sanitized = sanitized.replace(/[;|&$`\\!#*?<>{}()\[\]'"]/g, '');
+  
+  // Удаляем newlines и control characters
+  sanitized = sanitized.replace(/[\r\n\t]/g, '');
+  
+  // Нормализуем множественные слеши
+  sanitized = sanitized.replace(/\/+/g, '/');
+  
+  // Удаляем начальный слеш если есть
+  sanitized = sanitized.replace(/^\/+/, '');
+  
+  // Ограничиваем длину
+  if (sanitized.length > 500) {
+    sanitized = sanitized.substring(0, 500);
+  }
+  
+  // Проверяем что путь не пустой после санитизации
+  if (!sanitized || sanitized === '/') {
+    throw new Error('Invalid file key after sanitization');
+  }
+  
+  return sanitized;
+}
+
 export interface VDSStorageConfig {
   host: string; // IP или домен VDS сервера
   user: string; // SSH пользователь (обычно root)
@@ -180,6 +216,9 @@ export async function uploadFileToVDS(
   buffer: Buffer,
   contentType?: string
 ): Promise<string> {
+  // SECURITY: Санитизация пути
+  fileKey = sanitizeFileKey(fileKey);
+  
   if (!vdsConfig) {
     // Если VDS не настроен, используем локальное хранилище
     if (vdsConfig?.useLocalFallback) {
@@ -329,6 +368,9 @@ async function uploadFileLocally(fileKey: string, buffer: Buffer): Promise<strin
  * Получает файл с VDS (через HTTP или скачивание через SCP)
  */
 export async function getFileFromVDS(fileKey: string): Promise<Buffer> {
+  // SECURITY: Санитизация пути
+  fileKey = sanitizeFileKey(fileKey);
+  
   if (!vdsConfig) {
     throw new Error("VDS storage not initialized");
   }
@@ -407,6 +449,9 @@ export async function getFileFromVDS(fileKey: string): Promise<Buffer> {
  * Удаляет файл с VDS
  */
 export async function deleteFileFromVDS(fileKey: string): Promise<void> {
+  // SECURITY: Санитизация пути
+  fileKey = sanitizeFileKey(fileKey);
+  
   if (!vdsConfig) {
     throw new Error("VDS storage not initialized");
   }
@@ -439,6 +484,13 @@ export async function deleteFileFromVDS(fileKey: string): Promise<void> {
  * Проверяет существование файла на VDS
  */
 export async function fileExistsOnVDS(fileKey: string): Promise<boolean> {
+  // SECURITY: Санитизация пути
+  try {
+    fileKey = sanitizeFileKey(fileKey);
+  } catch {
+    return false;
+  }
+  
   if (!vdsConfig) {
     return false;
   }
