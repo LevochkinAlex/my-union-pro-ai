@@ -198,7 +198,8 @@ export async function GET(
     }) : [];
 
     // Формируем реакции с информацией о пользователях
-    const messagesWithReactions = messages.map((msg: any) => {
+    // ИСПРАВЛЕНО: используем orderedMessages (перевернутый массив) для правильного порядка
+    const messagesWithReactions = orderedMessages.map((msg: any) => {
       if (msg.reactions && typeof msg.reactions === 'object' && !Array.isArray(msg.reactions)) {
         try {
           const reactionsWithUsers: Record<string, { userIds: string[]; users: any[] }> = {};
