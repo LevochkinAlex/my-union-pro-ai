@@ -79,8 +79,8 @@ export async function GET(
       }
     }
 
-    // ИСПРАВЛЕНО: Всегда загружаем сначала НОВЕЙШИЕ сообщения
-    // Потом переворачиваем для правильного отображения (старые вверху, новые внизу)
+    // ИСПРАВЛЕНО: Всегда загружаем в порядке DESC (новейшие сначала)
+    // Это гарантирует что при первой загрузке мы получим ПОСЛЕДНИЕ сообщения
     const messages = await prisma.chatMessage.findMany({
       where: whereClause,
       include: {
@@ -104,67 +104,44 @@ export async function GET(
             mimeType: true,
           },
         },
-        // replyTo и forwardedFrom загружаются ниже только если нужны
+        replyTo: {
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+        forwardedFrom: {
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
       },
       orderBy: {
-        createdAt: "desc", // ВСЕГДА desc - сначала новейшие
+        createdAt: "desc", // Всегда DESC - сначала новейшие
       },
       take: limit,
     });
-    
-    // ОПТИМИЗАЦИЯ: Загружаем replyTo и forwardedFrom отдельно, только для сообщений где они есть
-    const messageIds = messages.map(m => m.id);
-    const replyToIds = messages.filter(m => m.replyToId).map(m => m.replyToId).filter(Boolean) as string[];
-    const forwardedFromIds = messages.filter(m => m.forwardedFromId).map(m => m.forwardedFromId).filter(Boolean) as string[];
-    
-    const [replyToMessages, forwardedFromMessages] = await Promise.all([
-      replyToIds.length > 0 ? prisma.chatMessage.findMany({
-        where: { id: { in: replyToIds } },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              middleName: true,
-              avatarUrl: true,
-            },
-          },
-        },
-      }) : [],
-      forwardedFromIds.length > 0 ? prisma.chatMessage.findMany({
-        where: { id: { in: forwardedFromIds } },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              middleName: true,
-              avatarUrl: true,
-            },
-          },
-        },
-      }) : [],
-    ]);
-    
-    // Создаем мапы для быстрого доступа
-    const replyToMap = new Map(replyToMessages.map(m => [m.id, m] as [string, any]));
-    const forwardedFromMap = new Map(forwardedFromMessages.map(m => [m.id, m] as [string, any]));
-    
-    // Добавляем replyTo и forwardedFrom к сообщениям
-    const messagesWithReplies = messages.map(msg => ({
-      ...msg,
-      replyTo: msg.replyToId ? replyToMap.get(msg.replyToId) : null,
-      forwardedFrom: msg.forwardedFromId ? forwardedFromMap.get(msg.forwardedFromId) : null,
-    }));
 
-    // ИСПРАВЛЕНО: ВСЕГДА переворачиваем, т.к. загружали в порядке DESC (новейшие первыми)
-    // После переворота: старые сообщения вверху, новые внизу (как в мессенджере)
-    const orderedMessages = [...messagesWithReplies].reverse();
+    // ВСЕГДА переворачиваем для правильного отображения (старые вверху, новые внизу)
+    const orderedMessages = [...messages].reverse();
 
     // Проверяем, есть ли еще сообщения для загрузки
-    const hasMore = messagesWithReplies.length === limit;
+    const hasMore = messages.length === limit;
     const oldestMessageId = orderedMessages.length > 0 ? orderedMessages[0].id : null;
     const newestMessageId = orderedMessages.length > 0 ? orderedMessages[orderedMessages.length - 1].id : null;
 
@@ -179,7 +156,7 @@ export async function GET(
 
     // Получаем информацию о пользователях для реакций
     const allUserIds = new Set<string>();
-    messagesWithReplies.forEach((msg: any) => {
+    messages.forEach((msg: any) => {
       if (msg.reactions && typeof msg.reactions === 'object') {
         try {
           Object.values(msg.reactions).forEach((reactionData: any) => {
@@ -220,8 +197,8 @@ export async function GET(
       },
     }) : [];
 
-    // ИСПРАВЛЕНО: Формируем реакции для уже отсортированных сообщений
-    const messagesWithReactions = orderedMessages.map((msg: any) => {
+    // Формируем реакции с информацией о пользователях
+    const messagesWithReactions = messages.map((msg: any) => {
       if (msg.reactions && typeof msg.reactions === 'object' && !Array.isArray(msg.reactions)) {
         try {
           const reactionsWithUsers: Record<string, { userIds: string[]; users: any[] }> = {};

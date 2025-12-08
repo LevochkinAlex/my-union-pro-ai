@@ -165,7 +165,7 @@ function ChatPageContent() {
     messagesRef.current = messages;
   }, [messages]);
 
-  // ИСПРАВЛЕНО: loadChats БЕЗ selectedChat в зависимостях (избегаем бесконечного цикла!)
+  // ИСПРАВЛЕНО: useCallback для loadChats (объявлен здесь, до использования в useEffect)
   const loadChats = useCallback(async () => {
     try {
       console.log("[chat] Loading chats list");
@@ -176,30 +176,26 @@ function ChatPageContent() {
         console.log("[chat] Loaded", fetchedChats.length, "chats");
         setChats(fetchedChats);
         
-        // Auto-select будет обработан в отдельном useEffect
+        // Если есть userId и чат еще не выбран, выбираем его
+        if (userId && !selectedChat) {
+          const chat = fetchedChats.find((c: Chat) => c.otherUser.id === userId);
+          if (chat) {
+            console.log("[chat] Auto-selecting chat for userId:", userId);
+            setSelectedChat(chat);
+          }
+        }
       }
     } catch (error) {
       console.error("[chat] Error loading chats:", error);
     } finally {
       setLoading(false);
     }
-  }, []); // Пустые зависимости - функция создаётся один раз!
+  }, [userId, selectedChat]); // Зависимости явно указаны
 
-  // Загрузка чатов при монтировании
+  // ИСПРАВЛЕНО: loadChats теперь в зависимостях (это безопасно, т.к. он useCallback)
   useEffect(() => {
     loadChats();
   }, [loadChats]);
-  
-  // Отдельный useEffect для auto-select чата по userId
-  useEffect(() => {
-    if (userId && chats.length > 0 && !selectedChat) {
-      const chat = chats.find((c: Chat) => c.otherUser.id === userId);
-      if (chat) {
-        console.log("[chat] Auto-selecting chat for userId:", userId);
-        setSelectedChat(chat);
-      }
-    }
-  }, [userId, chats, selectedChat]);
 
   // ИСПРАВЛЕНО: Открываем чат с ботом только если изменился botChatId (не chats!)
   useEffect(() => {
@@ -388,8 +384,8 @@ function ChatPageContent() {
     }
     
     try {
-      // ОПТИМИЗАЦИЯ: Загружаем только 30 сообщений для быстрой первой загрузки
-      const response = await fetch(`/api/chat/${chatId}?limit=30&t=${Date.now()}`);
+      // Загружаем только последние 50 сообщений для оптимизации
+      const response = await fetch(`/api/chat/${chatId}?limit=50&t=${Date.now()}`);
       if (response.ok) {
         const data = await response.json();
         const newMessages = data.messages || [];
@@ -455,53 +451,51 @@ function ChatPageContent() {
           }
         }
         
-        // ОПТИМИЗАЦИЯ: Загружаем реакции асинхронно чтобы не блокировать отображение сообщений
-        setTimeout(() => {
-          const reactionsMap: Record<string, Array<{ emoji: string; count: number; isLiked: boolean; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }>> = {};
-          const currentUserId = session?.user?.id || "";
-          
-          // Формируем карту реакций (теперь поддерживаем множественные реакции)
-          filteredMessages.forEach((msg: Message) => {
-            if (msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
-              // API возвращает реакции в формате: { emoji: { userIds: [...], users: [...] }, ... }
-              const messageReactions: Array<{ emoji: string; count: number; isLiked: boolean; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }> = [];
-              
-              Object.entries(msg.reactions).forEach(([emoji, reactionData]: [string, any]) => {
-                if (reactionData && typeof reactionData === 'object') {
-                  const userIds = reactionData.userIds || [];
-                  const users = reactionData.users || [];
-                  const isLiked = userIds.includes(currentUserId);
-                  
-                  messageReactions.push({
-                    emoji,
-                    count: userIds.length,
-                    isLiked,
-                    users: users.map((u: any) => ({
-                      id: u.id,
-                      avatarUrl: u.avatarUrl || null,
-                      name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Пользователь",
-                    })),
-                  });
-                } else if (Array.isArray(reactionData)) {
-                  // Fallback для старого формата
-                  const isLiked = reactionData.includes(currentUserId);
-                  messageReactions.push({
-                    emoji,
-                    count: reactionData.length,
-                    isLiked,
-                    users: [],
-                  });
-                }
-              });
-              
-              if (messageReactions.length > 0) {
-                reactionsMap[msg.id] = messageReactions;
+        // Загружаем реакции для всех сообщений (множественные реакции)
+        const reactionsMap: Record<string, Array<{ emoji: string; count: number; isLiked: boolean; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }>> = {};
+        const currentUserId = session?.user?.id || "";
+        
+        // Формируем карту реакций (теперь поддерживаем множественные реакции)
+        filteredMessages.forEach((msg: Message) => {
+          if (msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
+            // API возвращает реакции в формате: { emoji: { userIds: [...], users: [...] }, ... }
+            const messageReactions: Array<{ emoji: string; count: number; isLiked: boolean; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }> = [];
+            
+            Object.entries(msg.reactions).forEach(([emoji, reactionData]: [string, any]) => {
+              if (reactionData && typeof reactionData === 'object') {
+                const userIds = reactionData.userIds || [];
+                const users = reactionData.users || [];
+                const isLiked = userIds.includes(currentUserId);
+                
+                messageReactions.push({
+                  emoji,
+                  count: userIds.length,
+                  isLiked,
+                  users: users.map((u: any) => ({
+                    id: u.id,
+                    avatarUrl: u.avatarUrl || null,
+                    name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Пользователь",
+                  })),
+                });
+              } else if (Array.isArray(reactionData)) {
+                // Fallback для старого формата
+                const isLiked = reactionData.includes(currentUserId);
+                messageReactions.push({
+                  emoji,
+                  count: reactionData.length,
+                  isLiked,
+                  users: [],
+                });
               }
+            });
+            
+            if (messageReactions.length > 0) {
+              reactionsMap[msg.id] = messageReactions;
             }
-          });
-          
-          setMessageLikes(reactionsMap);
-        }, 0); // setTimeout с 0 откладывает выполнение до следующего тика event loop
+          }
+        });
+        
+        setMessageLikes(reactionsMap);
       }
     } catch (error) {
       console.error("Error loading messages:", error);
@@ -1500,7 +1494,7 @@ function ChatPageContent() {
               onScroll={handleScroll}
               className="flex-1 overflow-y-auto p-4 space-y-4"
             >
-              {/* ОПТИМИЗАЦИЯ: Скелетон-лоадер пока загружаются сообщения */}
+              {/* Скелетон-лоадер пока загружаются сообщения */}
               {messages.length === 0 && !loading && (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <svg className="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1512,35 +1506,26 @@ function ChatPageContent() {
               
               {messages.length === 0 && loading && (
                 <div className="space-y-4 animate-pulse">
-                  {/* Скелетон входящего сообщения */}
                   <div className="flex gap-2">
-                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0"></div>
+                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700"></div>
                     <div className="flex-1 max-w-[70%]">
-                      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24 mb-2"></div>
                       <div className="bg-gray-200 dark:bg-gray-700 rounded-2xl p-3 space-y-2">
                         <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-full"></div>
                         <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-3/4"></div>
                       </div>
                     </div>
                   </div>
-                  
-                  {/* Скелетон исходящего сообщения */}
                   <div className="flex gap-2 justify-end">
                     <div className="flex-1 max-w-[70%]">
                       <div className="bg-gray-200 dark:bg-gray-700 rounded-2xl p-3 space-y-2">
                         <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-full"></div>
-                        <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-2/3"></div>
                       </div>
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0"></div>
                   </div>
-                  
-                  {/* Ещё один входящий */}
                   <div className="flex gap-2">
-                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0"></div>
+                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700"></div>
                     <div className="flex-1 max-w-[70%]">
-                      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24 mb-2"></div>
-                      <div className="bg-gray-200 dark:bg-gray-700 rounded-2xl p-3 space-y-2">
+                      <div className="bg-gray-200 dark:bg-gray-700 rounded-2xl p-3">
                         <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-4/5"></div>
                       </div>
                     </div>
