@@ -79,7 +79,8 @@ export async function GET(
       }
     }
 
-    // Загружаем сообщения с пагинацией
+    // ОПТИМИЗАЦИЯ: Загружаем сообщения с минимальными include для ускорения
+    // replyTo и forwardedFrom загружаются отдельно только для тех сообщений, где они есть
     const messages = await prisma.chatMessage.findMany({
       where: whereClause,
       include: {
@@ -103,44 +104,67 @@ export async function GET(
             mimeType: true,
           },
         },
-        replyTo: {
-          include: {
-            sender: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
-        forwardedFrom: {
-          include: {
-            sender: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
+        // ОПТИМИЗАЦИЯ: Убрали вложенные include для replyTo и forwardedFrom
+        // Они загружаются ниже только если нужны
       },
       orderBy: {
         createdAt: direction === "older" ? "desc" : "asc",
       },
       take: limit,
     });
+    
+    // ОПТИМИЗАЦИЯ: Загружаем replyTo и forwardedFrom отдельно, только для сообщений где они есть
+    const messageIds = messages.map(m => m.id);
+    const replyToIds = messages.filter(m => m.replyToId).map(m => m.replyToId).filter(Boolean) as string[];
+    const forwardedFromIds = messages.filter(m => m.forwardedFromId).map(m => m.forwardedFromId).filter(Boolean) as string[];
+    
+    const [replyToMessages, forwardedFromMessages] = await Promise.all([
+      replyToIds.length > 0 ? prisma.chatMessage.findMany({
+        where: { id: { in: replyToIds } },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      }) : [],
+      forwardedFromIds.length > 0 ? prisma.chatMessage.findMany({
+        where: { id: { in: forwardedFromIds } },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      }) : [],
+    ]);
+    
+    // Создаем мапы для быстрого доступа
+    const replyToMap = new Map(replyToMessages.map(m => [m.id, m]));
+    const forwardedFromMap = new Map(forwardedFromMessages.map(m => [m.id, m]));
+    
+    // Добавляем replyTo и forwardedFrom к сообщениям
+    const messagesWithReplies = messages.map(msg => ({
+      ...msg,
+      replyTo: msg.replyToId ? replyToMap.get(msg.replyToId) : null,
+      forwardedFrom: msg.forwardedFromId ? forwardedFromMap.get(msg.forwardedFromId) : null,
+    }));
 
     // Если загружаем старые сообщения, переворачиваем порядок
-    const orderedMessages = direction === "older" ? messages.reverse() : messages;
+    const orderedMessages = direction === "older" ? messagesWithReplies.reverse() : messagesWithReplies;
 
     // Проверяем, есть ли еще сообщения для загрузки
-    const hasMore = messages.length === limit;
+    const hasMore = messagesWithReplies.length === limit;
     const oldestMessageId = orderedMessages.length > 0 ? orderedMessages[0].id : null;
     const newestMessageId = orderedMessages.length > 0 ? orderedMessages[orderedMessages.length - 1].id : null;
 
@@ -155,7 +179,7 @@ export async function GET(
 
     // Получаем информацию о пользователях для реакций
     const allUserIds = new Set<string>();
-    messages.forEach((msg: any) => {
+    messagesWithReplies.forEach((msg: any) => {
       if (msg.reactions && typeof msg.reactions === 'object') {
         try {
           Object.values(msg.reactions).forEach((reactionData: any) => {
@@ -197,7 +221,7 @@ export async function GET(
     }) : [];
 
     // Формируем реакции с информацией о пользователях
-    const messagesWithReactions = messages.map((msg: any) => {
+    const messagesWithReactions = messagesWithReplies.map((msg: any) => {
       if (msg.reactions && typeof msg.reactions === 'object' && !Array.isArray(msg.reactions)) {
         try {
           const reactionsWithUsers: Record<string, { userIds: string[]; users: any[] }> = {};

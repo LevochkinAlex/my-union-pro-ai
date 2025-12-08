@@ -384,8 +384,8 @@ function ChatPageContent() {
     }
     
     try {
-      // Загружаем только последние 50 сообщений для оптимизации
-      const response = await fetch(`/api/chat/${chatId}?limit=50&t=${Date.now()}`);
+      // ОПТИМИЗАЦИЯ: Загружаем только 30 сообщений для быстрой первой загрузки
+      const response = await fetch(`/api/chat/${chatId}?limit=30&t=${Date.now()}`);
       if (response.ok) {
         const data = await response.json();
         const newMessages = data.messages || [];
@@ -451,51 +451,53 @@ function ChatPageContent() {
           }
         }
         
-        // Загружаем реакции для всех сообщений (множественные реакции)
-        const reactionsMap: Record<string, Array<{ emoji: string; count: number; isLiked: boolean; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }>> = {};
-        const currentUserId = session?.user?.id || "";
-        
-        // Формируем карту реакций (теперь поддерживаем множественные реакции)
-        filteredMessages.forEach((msg: Message) => {
-          if (msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
-            // API возвращает реакции в формате: { emoji: { userIds: [...], users: [...] }, ... }
-            const messageReactions: Array<{ emoji: string; count: number; isLiked: boolean; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }> = [];
-            
-            Object.entries(msg.reactions).forEach(([emoji, reactionData]: [string, any]) => {
-              if (reactionData && typeof reactionData === 'object') {
-                const userIds = reactionData.userIds || [];
-                const users = reactionData.users || [];
-                const isLiked = userIds.includes(currentUserId);
-                
-                messageReactions.push({
-                  emoji,
-                  count: userIds.length,
-                  isLiked,
-                  users: users.map((u: any) => ({
-                    id: u.id,
-                    avatarUrl: u.avatarUrl || null,
-                    name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Пользователь",
-                  })),
-                });
-              } else if (Array.isArray(reactionData)) {
-                // Fallback для старого формата
-                const isLiked = reactionData.includes(currentUserId);
-                messageReactions.push({
-                  emoji,
-                  count: reactionData.length,
-                  isLiked,
-                  users: [],
-                });
+        // ОПТИМИЗАЦИЯ: Загружаем реакции асинхронно чтобы не блокировать отображение сообщений
+        setTimeout(() => {
+          const reactionsMap: Record<string, Array<{ emoji: string; count: number; isLiked: boolean; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }>> = {};
+          const currentUserId = session?.user?.id || "";
+          
+          // Формируем карту реакций (теперь поддерживаем множественные реакции)
+          filteredMessages.forEach((msg: Message) => {
+            if (msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
+              // API возвращает реакции в формате: { emoji: { userIds: [...], users: [...] }, ... }
+              const messageReactions: Array<{ emoji: string; count: number; isLiked: boolean; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }> = [];
+              
+              Object.entries(msg.reactions).forEach(([emoji, reactionData]: [string, any]) => {
+                if (reactionData && typeof reactionData === 'object') {
+                  const userIds = reactionData.userIds || [];
+                  const users = reactionData.users || [];
+                  const isLiked = userIds.includes(currentUserId);
+                  
+                  messageReactions.push({
+                    emoji,
+                    count: userIds.length,
+                    isLiked,
+                    users: users.map((u: any) => ({
+                      id: u.id,
+                      avatarUrl: u.avatarUrl || null,
+                      name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Пользователь",
+                    })),
+                  });
+                } else if (Array.isArray(reactionData)) {
+                  // Fallback для старого формата
+                  const isLiked = reactionData.includes(currentUserId);
+                  messageReactions.push({
+                    emoji,
+                    count: reactionData.length,
+                    isLiked,
+                    users: [],
+                  });
+                }
+              });
+              
+              if (messageReactions.length > 0) {
+                reactionsMap[msg.id] = messageReactions;
               }
-            });
-            
-            if (messageReactions.length > 0) {
-              reactionsMap[msg.id] = messageReactions;
             }
-          }
-        });
-        
-        setMessageLikes(reactionsMap);
+          });
+          
+          setMessageLikes(reactionsMap);
+        }, 0); // setTimeout с 0 откладывает выполнение до следующего тика event loop
       }
     } catch (error) {
       console.error("Error loading messages:", error);
@@ -1494,6 +1496,54 @@ function ChatPageContent() {
               onScroll={handleScroll}
               className="flex-1 overflow-y-auto p-4 space-y-4"
             >
+              {/* ОПТИМИЗАЦИЯ: Скелетон-лоадер пока загружаются сообщения */}
+              {messages.length === 0 && !loading && (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <svg className="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                  </svg>
+                  <p className="text-gray-500 dark:text-gray-400">Начните переписку</p>
+                </div>
+              )}
+              
+              {messages.length === 0 && loading && (
+                <div className="space-y-4 animate-pulse">
+                  {/* Скелетон входящего сообщения */}
+                  <div className="flex gap-2">
+                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0"></div>
+                    <div className="flex-1 max-w-[70%]">
+                      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24 mb-2"></div>
+                      <div className="bg-gray-200 dark:bg-gray-700 rounded-2xl p-3 space-y-2">
+                        <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-full"></div>
+                        <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-3/4"></div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Скелетон исходящего сообщения */}
+                  <div className="flex gap-2 justify-end">
+                    <div className="flex-1 max-w-[70%]">
+                      <div className="bg-gray-200 dark:bg-gray-700 rounded-2xl p-3 space-y-2">
+                        <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-full"></div>
+                        <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-2/3"></div>
+                      </div>
+                    </div>
+                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0"></div>
+                  </div>
+                  
+                  {/* Ещё один входящий */}
+                  <div className="flex gap-2">
+                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0"></div>
+                    <div className="flex-1 max-w-[70%]">
+                      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24 mb-2"></div>
+                      <div className="bg-gray-200 dark:bg-gray-700 rounded-2xl p-3 space-y-2">
+                        <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-4/5"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {/* Индикатор загрузки старых сообщений */}
               {loadingOlderMessages && (
                 <div className="flex justify-center py-2">
@@ -1503,7 +1553,7 @@ function ChatPageContent() {
                 </div>
               )}
               
-              {messages.map((message) => {
+              {messages.length > 0 && messages.map((message) => {
                 const isOwn = message.senderId !== selectedChat.otherUser.id;
                 const isDeleted = !!message.deletedAt;
                 const isEditing = editingMessageId === message.id;
