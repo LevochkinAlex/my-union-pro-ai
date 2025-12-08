@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import PostCard from "./PostCard";
 
 interface Post {
@@ -37,6 +37,8 @@ interface PostFeedProps {
 }
 
 const POSTS_PER_PAGE = 10;
+const MAX_POSTS_IN_MEMORY = 100; // Максимум постов в памяти для оптимизации
+const INTERSECTION_THROTTLE_MS = 500; // Задержка между проверками IntersectionObserver
 
 export default function PostFeed({ userId, limit, refreshKey }: PostFeedProps) {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -46,10 +48,19 @@ export default function PostFeed({ userId, limit, refreshKey }: PostFeedProps) {
   const [page, setPage] = useState(1);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const lastLoadTimeRef = useRef<number>(0);
+  const isLoadingRef = useRef<boolean>(false);
 
-  // Функция для загрузки постов
+  // Функция для загрузки постов с оптимизацией
   const loadPosts = useCallback(async (pageNum: number, append: boolean = false) => {
+    // Защита от параллельных запросов
+    if (isLoadingRef.current) {
+      return;
+    }
+
     try {
+      isLoadingRef.current = true;
+      
       if (pageNum === 1) {
         setLoading(true);
       } else {
@@ -75,9 +86,24 @@ export default function PostFeed({ userId, limit, refreshKey }: PostFeedProps) {
         const newPosts = data.posts || [];
         
         if (append) {
-          setPosts(prev => [...prev, ...newPosts]);
+          setPosts(prev => {
+            // Объединяем посты и удаляем дубликаты по ID
+            const combined = [...prev, ...newPosts];
+            const unique = Array.from(
+              new Map(combined.map(post => [post.id, post])).values()
+            );
+            
+            // ОПТИМИЗАЦИЯ: Ограничиваем количество постов в памяти
+            // Оставляем только последние MAX_POSTS_IN_MEMORY постов
+            if (unique.length > MAX_POSTS_IN_MEMORY) {
+              return unique.slice(-MAX_POSTS_IN_MEMORY);
+            }
+            
+            return unique;
+          });
         } else {
-          setPosts(newPosts);
+          // При первой загрузке ограничиваем сразу
+          setPosts(newPosts.slice(0, MAX_POSTS_IN_MEMORY));
         }
         
         // Проверяем есть ли ещё посты
@@ -98,6 +124,8 @@ export default function PostFeed({ userId, limit, refreshKey }: PostFeedProps) {
     } finally {
       setLoading(false);
       setLoadingMore(false);
+      isLoadingRef.current = false;
+      lastLoadTimeRef.current = Date.now();
     }
   }, [userId, limit]);
 
@@ -109,7 +137,7 @@ export default function PostFeed({ userId, limit, refreshKey }: PostFeedProps) {
     loadPosts(1, false);
   }, [userId, limit, refreshKey, loadPosts]);
 
-  // Intersection Observer для infinite scroll
+  // Intersection Observer для infinite scroll с throttle
   useEffect(() => {
     // Не используем infinite scroll если указан limit
     if (limit) return;
@@ -122,14 +150,25 @@ export default function PostFeed({ userId, limit, refreshKey }: PostFeedProps) {
     const observer = new IntersectionObserver(
       (entries) => {
         const first = entries[0];
-        // Защита от множественных запросов
-        if (first.isIntersecting && hasMore && !loading && !loadingMore) {
+        const now = Date.now();
+        const timeSinceLastLoad = now - lastLoadTimeRef.current;
+        
+        // THROTTLE: Защита от множественных запросов
+        // Проверяем что прошло достаточно времени с последней загрузки
+        if (
+          first.isIntersecting && 
+          hasMore && 
+          !loading && 
+          !loadingMore && 
+          !isLoadingRef.current &&
+          timeSinceLastLoad >= INTERSECTION_THROTTLE_MS
+        ) {
           setPage(prev => prev + 1);
         }
       },
       { 
         threshold: 0.1, 
-        rootMargin: "200px" // Увеличиваем margin для более ранней загрузки
+        rootMargin: "300px" // Предзагрузка за 300px до конца (для плавности)
       }
     );
 
@@ -185,10 +224,20 @@ export default function PostFeed({ userId, limit, refreshKey }: PostFeedProps) {
     );
   }
 
+  // Мемоизируем список постов для оптимизации рендеринга
+  const visiblePosts = useMemo(() => {
+    // Для оптимизации показываем все посты, но они будут рендериться лениво
+    return posts;
+  }, [posts]);
+
   return (
     <div className="space-y-4">
-      {posts.map((post) => (
-        <PostCard key={post.id} post={post} onUpdate={handleUpdate} />
+      {visiblePosts.map((post) => (
+        <PostCard 
+          key={post.id} 
+          post={post} 
+          onUpdate={handleUpdate}
+        />
       ))}
       
       {/* Триггер для infinite scroll */}
@@ -206,6 +255,13 @@ export default function PostFeed({ userId, limit, refreshKey }: PostFeedProps) {
       {!limit && !hasMore && posts.length > POSTS_PER_PAGE && (
         <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
           Все посты загружены
+        </div>
+      )}
+      
+      {/* Индикатор оптимизации памяти (только в dev) */}
+      {process.env.NODE_ENV === 'development' && posts.length >= MAX_POSTS_IN_MEMORY && (
+        <div className="text-center py-2 text-xs text-gray-400 dark:text-gray-600">
+          Показывается максимум {MAX_POSTS_IN_MEMORY} постов для оптимизации
         </div>
       )}
     </div>

@@ -331,7 +331,7 @@ function UsersPageContent() {
             <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Свежие посты
             </h2>
-            <PostFeed key={refreshKey} limit={5} />
+            <PostFeed key={refreshKey} />
           </div>
         </div>
       </div>
