@@ -122,7 +122,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="font-sans">
+      <body className="font-sans" suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>
     </html>

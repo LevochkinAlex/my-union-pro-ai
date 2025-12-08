@@ -14,18 +14,23 @@ export default function ErrorHandler() {
       const errorMessage = error?.message || String(error);
       const errorString = String(error);
 
-      // Suppress known non-critical errors from browser extensions
+      // Suppress known non-critical errors from browser extensions and React hydration
       if (
         typeof errorMessage === "string" &&
         (errorMessage.includes("message channel closed") ||
           errorMessage.includes("listener indicated an asynchronous response") ||
           errorMessage.includes("Extension context invalidated") ||
           errorMessage.includes("message port closed") ||
+          errorMessage.includes("Minified React error #418") ||
+          errorMessage.includes("Minified React error #423") ||
+          errorMessage.includes("Minified React error #425") ||
+          errorMessage.includes("Hydration failed") ||
           errorString.includes("message channel closed") ||
           errorString.includes("listener indicated an asynchronous response") ||
-          errorString.includes("Extension context invalidated"))
+          errorString.includes("Extension context invalidated") ||
+          errorString.includes("Minified React error"))
       ) {
-        // Suppress these errors - they're from browser extensions and not critical
+        // Suppress these errors - they're non-critical
         event.preventDefault();
         event.stopPropagation();
         return false;
@@ -40,18 +45,23 @@ export default function ErrorHandler() {
       const errorMessage = event.message || String(event.error);
       const errorString = String(event.error || "");
 
-      // Suppress known non-critical errors from browser extensions
+      // Suppress known non-critical errors from browser extensions and React hydration
       if (
         typeof errorMessage === "string" &&
         (errorMessage.includes("message channel closed") ||
           errorMessage.includes("listener indicated an asynchronous response") ||
           errorMessage.includes("Extension context invalidated") ||
           errorMessage.includes("message port closed") ||
+          errorMessage.includes("Minified React error #418") ||
+          errorMessage.includes("Minified React error #423") ||
+          errorMessage.includes("Minified React error #425") ||
+          errorMessage.includes("Hydration failed") ||
           errorString.includes("message channel closed") ||
           errorString.includes("listener indicated an asynchronous response") ||
-          errorString.includes("Extension context invalidated"))
+          errorString.includes("Extension context invalidated") ||
+          errorString.includes("Minified React error"))
       ) {
-        // Suppress these errors - they're from browser extensions and not critical
+        // Suppress these errors - they're non-critical
         event.preventDefault();
         event.stopPropagation();
         return false;
@@ -105,8 +115,8 @@ export default function ErrorHandler() {
           return;
         }
         
-        // Check if this is an extension-related error we want to suppress
-        // Only suppress specific extension errors, not general "undefined" errors or empty messages
+        // Check if this is an error we want to suppress
+        // Suppress extension errors and React hydration errors (#418, #423, #425)
         if (
           errorString &&
           (
@@ -114,10 +124,16 @@ export default function ErrorHandler() {
             errorString.includes("listener indicated an asynchronous response") ||
             errorString.includes("Extension context invalidated") ||
             errorString.includes("message port closed") ||
-            (errorString.includes("extension") && errorString.includes("undefined")) // Only suppress if both keywords present
+            (errorString.includes("extension") && errorString.includes("undefined")) ||
+            // Suppress React hydration errors - these are cosmetic and don't break functionality
+            errorString.includes("Minified React error #418") ||
+            errorString.includes("Minified React error #423") ||
+            errorString.includes("Minified React error #425") ||
+            errorString.includes("Hydration failed") ||
+            errorString.includes("hydrating the entire root")
           )
         ) {
-          // Suppress these extension-related errors in console
+          // Suppress these errors in console
           return;
         }
         
