@@ -145,12 +145,13 @@ export default async function DashboardLayout({
   );
 
   // Get user avatar
-  const user = session.user?.email
-    ? await prisma.user.findUnique({
-        where: { email: session.user.email },
-        select: { avatarUrl: true },
-      })
-    : null;
+  let user: { avatarUrl: string | null } | null = null;
+  if (session.user?.email) {
+    user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { avatarUrl: true },
+    });
+  }
 
   // Безопасное получение инициала пользователя
   const getUserInitial = () => {
