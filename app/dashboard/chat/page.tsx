@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, Suspense } from "react";
+import { useEffect, useState, useRef, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import AlertDialog from "@/components/ui/AlertDialog";
@@ -149,40 +149,77 @@ function ChatPageContent() {
     setMounted(true);
     setUserId(searchParams.get("userId"));
     setBotChatId(searchParams.get("botChatId"));
-    
-    // Очистка превью при размонтировании
+  }, [searchParams]);
+  
+  // ИСПРАВЛЕНО: Отдельный useEffect для очистки filePreview (без него в зависимостях!)
+  useEffect(() => {
     return () => {
       if (filePreview) {
         URL.revokeObjectURL(filePreview);
       }
     };
-  }, [searchParams, filePreview]);
+  }, []); // Пустые зависимости - cleanup только при unmount
 
   // Keep messagesRef in sync with messages state to avoid stale closures
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
 
+  // ИСПРАВЛЕНО: useCallback для loadChats (объявлен здесь, до использования в useEffect)
+  const loadChats = useCallback(async () => {
+    try {
+      console.log("[chat] Loading chats list");
+      const response = await fetch("/api/chat");
+      if (response.ok) {
+        const data = await response.json();
+        const fetchedChats = data.chats || [];
+        console.log("[chat] Loaded", fetchedChats.length, "chats");
+        setChats(fetchedChats);
+        
+        // Если есть userId и чат еще не выбран, выбираем его
+        if (userId && !selectedChat) {
+          const chat = fetchedChats.find((c: Chat) => c.otherUser.id === userId);
+          if (chat) {
+            console.log("[chat] Auto-selecting chat for userId:", userId);
+            setSelectedChat(chat);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[chat] Error loading chats:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, selectedChat]); // Зависимости явно указаны
+
+  // ИСПРАВЛЕНО: loadChats теперь в зависимостях (это безопасно, т.к. он useCallback)
   useEffect(() => {
     loadChats();
-  }, []);
+  }, [loadChats]);
 
-  // Открываем чат с ботом, если передан botChatId
+  // ИСПРАВЛЕНО: Открываем чат с ботом только если изменился botChatId (не chats!)
   useEffect(() => {
     if (botChatId && chats.length > 0 && (!selectedChat || selectedChat.id !== botChatId)) {
       const botChat = chats.find((chat) => chat.id === botChatId);
       if (botChat) {
+        console.log("[chat] Opening bot chat from URL param:", botChatId);
         setSelectedChat(botChat);
       }
     }
-  }, [botChatId, chats]);
+  }, [botChatId, chats.length]); // Только длина массива, не весь массив!
 
   useEffect(() => {
     if (userId && currentUserId) {
       // Проверяем, что это не попытка создать чат с самим собой
       if (userId === currentUserId) {
-        console.warn("Попытка создать чат с самим собой, игнорируем");
-        router.replace("/dashboard/chat", { scroll: false });
+        console.warn("[chat] Попытка создать чат с самим собой, игнорируем");
+        // ИСПРАВЛЕНО: используем replaceState вместо router.replace чтобы избежать перезагрузки
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('userId');
+          window.history.replaceState({}, '', url.toString());
+          setUserId(null);
+        }
         return;
       }
       // Если передан userId, создаем или открываем чат с этим пользователем
@@ -229,26 +266,33 @@ function ChatPageContent() {
     }
   }, [messages]);
 
+  // ИСПРАВЛЕНО: Используем selectedChat.id вместо всего объекта для избежания лишних ререндеров
   useEffect(() => {
     // Автообновление сообщений каждые 5 секунд
-    if (selectedChat) {
+    const chatId = selectedChat?.id;
+    if (chatId) {
+      console.log("[chat] Starting auto-refresh for chat:", chatId);
       const interval = setInterval(() => {
-        loadMessages(selectedChat.id, true);
+        loadMessages(chatId, true);
       }, 5000);
-      return () => clearInterval(interval);
+      return () => {
+        console.log("[chat] Stopping auto-refresh for chat:", chatId);
+        clearInterval(interval);
+      };
     }
-  }, [selectedChat]);
+  }, [selectedChat?.id]); // Только ID!
 
-  // Heartbeat - отмечаем чат как активный каждые 20 секунд, когда он открыт
+  // ИСПРАВЛЕНО: Heartbeat с использованием только ID чата
   useEffect(() => {
-    if (selectedChat) {
+    const chatId = selectedChat?.id;
+    if (chatId) {
       const sendHeartbeat = async () => {
         try {
-          await fetch(`/api/chat/${selectedChat.id}/activity`, {
+          await fetch(`/api/chat/${chatId}/activity`, {
             method: "POST",
           });
         } catch (error) {
-          console.error("Error sending heartbeat:", error);
+          console.error("[chat] Error sending heartbeat:", error);
         }
       };
 
@@ -260,9 +304,12 @@ function ChatPageContent() {
         sendHeartbeat();
       }, 20000);
 
-      return () => clearInterval(heartbeatInterval);
+      return () => {
+        console.log("[chat] Stopping heartbeat for chat:", chatId);
+        clearInterval(heartbeatInterval);
+      };
     }
-  }, [selectedChat]);
+  }, [selectedChat?.id]); // Только ID!
 
   const scrollToBottom = (force = false) => {
     requestAnimationFrame(() => {
@@ -328,28 +375,6 @@ function ChatPageContent() {
   useEffect(() => {
     adjustTextareaHeight();
   }, [messageText]);
-
-  const loadChats = async () => {
-    try {
-      const response = await fetch("/api/chat");
-      if (response.ok) {
-        const data = await response.json();
-        setChats(data.chats || []);
-        
-        // Если есть userId и чат еще не выбран, выбираем его
-        if (userId && !selectedChat) {
-          const chat = data.chats?.find((c: Chat) => c.otherUser.id === userId);
-          if (chat) {
-            setSelectedChat(chat);
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error loading chats:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const loadMessages = async (chatId: string, silent = false) => {
     // Проверяем, что загружаем сообщения для текущего выбранного чата

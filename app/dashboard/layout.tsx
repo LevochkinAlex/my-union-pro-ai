@@ -15,16 +15,25 @@ export default async function DashboardLayout({
 }) {
   const session = await getServerSession(authOptions);
 
+  // ИСПРАВЛЕНО: Добавлено логирование причин redirect
   if (!session) {
+    console.log("[dashboard/layout] ⚠️ No session found, redirecting to /login");
     redirect("/login");
   }
 
   const userRole = session.user.role;
   const membershipStatus = session.user.membershipStatus;
   const isImpersonating = session.user.isImpersonating || false;
+  
+  console.log("[dashboard/layout] ✅ User authenticated:", {
+    userId: session.user.id,
+    role: userRole,
+    isImpersonating
+  });
 
   // Редирект супер-админов в админ-панель (только если не в режиме impersonation)
   if (userRole === "SUPER_ADMIN" && !isImpersonating) {
+    console.log("[dashboard/layout] ℹ️ Super admin detected, redirecting to /admin/dashboard");
     redirect("/admin/dashboard");
   }
 

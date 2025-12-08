@@ -8,15 +8,21 @@ import type { DiscountPreferenceResponse } from "@/types/discounts";
 
 export default async function DiscountsPage() {
   const session = await getServerSession(authOptions);
+  
+  // ИСПРАВЛЕНО: Добавлено логирование
   if (!session?.user?.id) {
+    console.log("[discounts/page] ⚠️ No session or user ID, redirecting to /login");
     redirect("/login");
   }
 
   const userId = session.user.id;
 
   if (!userId || typeof userId !== 'string') {
+    console.log("[discounts/page] ⚠️ Invalid userId type:", typeof userId, "- redirecting to /login");
     redirect("/login");
   }
+  
+  console.log("[discounts/page] ✅ Loading discounts for user:", userId);
 
   const [initialData, preference, user] = await Promise.all([
     fetchBestBenefitsDiscounts({ limit: 20, page: 1 }), // Загружаем первую страницу, остальное через пагинацию

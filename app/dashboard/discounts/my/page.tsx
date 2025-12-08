@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import type { DiscountItem } from "@/types/discounts";
@@ -18,8 +18,15 @@ export default function MyDiscountsPage() {
   const [copiedPromoId, setCopiedPromoId] = useState<number | null>(null);
   const [showPromoCardModal, setShowPromoCardModal] = useState(false);
   const [promoCardData, setPromoCardData] = useState<{ dataUrl: string; blob: Blob; discount: DiscountItem } | null>(null);
+  const hasSyncedRef = useRef(false); // ИСПРАВЛЕНО: флаг для предотвращения повторной синхронизации
 
   useEffect(() => {
+    // ИСПРАВЛЕНО: Предотвращаем повторную инициализацию
+    if (hasSyncedRef.current) {
+      console.log("[MyDiscounts] Already initialized, skipping");
+      return;
+    }
+    
     // Пытаемся восстановить состояние из sessionStorage при возврате на страницу
     if (typeof window !== 'undefined') {
       const savedState = sessionStorage.getItem('myDiscountsState');
@@ -31,9 +38,9 @@ export default function MyDiscountsPage() {
             setDiscounts(parsed.discounts);
             setActiveTab(parsed.activeTab || "claimed");
             setLoading(false);
-            // Очищаем сохраненное состояние после восстановления
             sessionStorage.removeItem('myDiscountsState');
-            return; // Не выполняем полную загрузку, если восстановили состояние
+            hasSyncedRef.current = true;
+            return;
           }
         } catch (error) {
           console.warn("[MyDiscounts] Failed to restore state:", error);
@@ -42,53 +49,60 @@ export default function MyDiscountsPage() {
       }
     }
     
-    // Синхронизация с BestBenefits при загрузке страницы, затем загрузка скидок
-    // Это гарантирует, что промокоды всегда актуальны
+    // ИСПРАВЛЕНО: syncWithBestBenefits сам вызовет loadMyDiscounts
+    // Не нужно вызывать его дважды!
     const initPage = async () => {
       try {
-        // Синхронизируемся с BestBenefits для получения актуальных промокодов
         await syncWithBestBenefits(false);
-        // Загружаем скидки после синхронизации
-        await loadMyDiscounts();
+        hasSyncedRef.current = true;
       } catch (error) {
         console.error("[MyDiscounts] Error during initialization:", error);
-        // В случае ошибки все равно загружаем скидки (с локальными данными)
+        // В случае ошибки загружаем скидки с локальными данными
         await loadMyDiscounts();
+        hasSyncedRef.current = true;
       }
     };
     
     initPage();
   }, []);
 
+  // ИСПРАВЛЕНО: перезагрузка при смене вкладки БЕЗ синхронизации
   useEffect(() => {
-    // При смене вкладки просто перезагружаем без синхронизации
-    if (activeTab) {
-      loadMyDiscounts();
-    }
+    // Пропускаем первый рендер (он обрабатывается в первом useEffect)
+    if (!hasSyncedRef.current) return;
+    
+    console.log("[MyDiscounts] Tab changed to:", activeTab, "- reloading");
+    loadMyDiscounts();
   }, [activeTab]);
 
-  const syncWithBestBenefits = async (force: boolean = false) => {
-    if (isSyncing) return;
+  // ИСПРАВЛЕНО: добавлен флаг skipLoad для предотвращения рекурсии
+  const syncWithBestBenefits = async (force: boolean = false, skipLoad: boolean = false) => {
+    if (isSyncing) {
+      console.log("[MyDiscounts] Sync already in progress, skipping");
+      return { success: false, cached: false };
+    }
     
     setIsSyncing(true);
     try {
-      console.log("[MyDiscounts] Starting sync with BestBenefits...", { force });
+      console.log("[MyDiscounts] Starting sync with BestBenefits...", { force, skipLoad });
       
-      // Используем менеджер синхронизации с кэшированием
       const { syncManager } = await import("@/lib/sync-manager");
       const result = await syncManager.sync(force);
       
-      if (result.success && !result.cached) {
-        console.log("[MyDiscounts] ✅ Sync completed, reloading discounts...", result);
-        // Перезагружаем скидки после успешной синхронизации (не кэшированной)
+      // ИСПРАВЛЕНО: загружаем скидки только если не skipLoad (избегаем рекурсии)
+      if (result.success && !skipLoad) {
+        console.log("[MyDiscounts] ✅ Sync result:", result.cached ? "cached" : "fresh");
         await loadMyDiscounts();
-      } else if (result.cached) {
-        console.log("[MyDiscounts] ⏭️ Using cached result:", result.message);
+      } else if (skipLoad) {
+        console.log("[MyDiscounts] Sync completed, skipping load (internal call)");
       } else {
         console.error("[MyDiscounts] ❌ Sync failed:", result.message);
       }
+      
+      return result;
     } catch (error) {
       console.error("[MyDiscounts] ❌ Sync error:", error);
+      return { success: false, cached: false, message: String(error) };
     } finally {
       setIsSyncing(false);
     }
@@ -123,7 +137,8 @@ export default function MyDiscountsPage() {
       if (hasOldFormat) {
         console.log("[MyDiscounts] ⚠️ Old format detected in claimed data, forcing sync with BestBenefits...");
         try {
-          await syncWithBestBenefits(true); // Принудительная синхронизация
+          // ИСПРАВЛЕНО: skipLoad=true чтобы избежать рекурсии (мы уже в loadMyDiscounts!)
+          await syncWithBestBenefits(true, true); // Принудительная синхронизация без повторного load
           // Перезагружаем preferences после синхронизации
           const prefsResponseAfterSync = await fetch("/api/discounts/preferences");
           if (prefsResponseAfterSync.ok) {

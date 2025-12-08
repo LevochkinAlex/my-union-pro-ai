@@ -12,14 +12,19 @@ import { calculateProfileProgress } from "@/lib/profile-progress";
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
 
+  // ИСПРАВЛЕНО: Добавлено детальное логирование
   if (!session?.user?.id) {
+    console.log("[dashboard/page] ⚠️ No session or user ID, redirecting to /login");
     redirect("/login");
   }
 
   const userId = session.user.id;
   if (!userId || typeof userId !== "string") {
+    console.log("[dashboard/page] ⚠️ Invalid userId type:", typeof userId, "- redirecting to /login");
     redirect("/login");
   }
+  
+  console.log("[dashboard/page] ✅ Rendering dashboard for user:", userId);
 
   // Получаем список пользователей, на которых подписан текущий пользователь
   const subscriptions = await prisma.userSubscription.findMany({
