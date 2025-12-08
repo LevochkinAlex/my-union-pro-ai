@@ -201,6 +201,11 @@ export default function PostFeed({ userId, limit, refreshKey }: PostFeedProps) {
     loadPosts(1, false);
   }, [loadPosts]);
 
+  // Мемоизируем список постов ДО условных возвратов (правило хуков!)
+  const visiblePosts = useMemo(() => {
+    return posts;
+  }, [posts]);
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -223,12 +228,6 @@ export default function PostFeed({ userId, limit, refreshKey }: PostFeedProps) {
       </div>
     );
   }
-
-  // Мемоизируем список постов для оптимизации рендеринга
-  const visiblePosts = useMemo(() => {
-    // Для оптимизации показываем все посты, но они будут рендериться лениво
-    return posts;
-  }, [posts]);
 
   return (
     <div className="space-y-4">
