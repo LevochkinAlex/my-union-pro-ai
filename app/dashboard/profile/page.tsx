@@ -169,6 +169,10 @@ export default function ProfilePage() {
   const [editingEducationIndex, setEditingEducationIndex] = useState<number | null>(null);
   const [newEducation, setNewEducation] = useState<Education>({ level: "", institution: "", year: "", specialty: "" });
   
+  const [isAddingProfession, setIsAddingProfession] = useState(false);
+  const [editingProfessionIndex, setEditingProfessionIndex] = useState<number | null>(null);
+  const [newProfession, setNewProfession] = useState<Profession>({ name: "", experience: "" });
+  
   // Данные о членстве
   const [membershipData, setMembershipData] = useState<{
     unionCardNumber: string | null;
@@ -339,24 +343,62 @@ export default function ProfilePage() {
     setTraining(updatedTraining);
   };
 
-  // Добавить профессию
-  const addProfession = () => {
-    setProfessionsData([...professionsData, { name: "", experience: "" }]);
+  // Открыть форму добавления профессии
+  const openAddProfessionForm = () => {
+    setNewProfession({ name: "", experience: "" });
+    setIsAddingProfession(true);
+    setEditingProfessionIndex(null);
+  };
+
+  // Отменить добавление профессии
+  const cancelAddProfession = () => {
+    setIsAddingProfession(false);
+    setNewProfession({ name: "", experience: "" });
+  };
+
+  // Сохранить новую профессию
+  const saveProfession = () => {
+    if (!newProfession.name.trim() || !newProfession.experience.trim()) {
+      setMessage({ type: "error", text: "Заполните все поля профессии" });
+      return;
+    }
+    
+    if (editingProfessionIndex !== null) {
+      // Редактирование существующей профессии
+      const updatedProfessions = [...professionsData];
+      updatedProfessions[editingProfessionIndex] = { ...newProfession };
+      setProfessionsData(updatedProfessions);
+      setEditingProfessionIndex(null);
+    } else {
+      // Добавление новой профессии
+      setProfessionsData([...professionsData, { ...newProfession }]);
+      setIsAddingProfession(false);
+    }
+    
+    setNewProfession({ name: "", experience: "" });
+    setMessage({ type: "success", text: "Профессия сохранена. Не забудьте сохранить изменения внизу страницы." });
+  };
+
+  // Начать редактирование профессии
+  const startEditProfession = (index: number) => {
+    setNewProfession({ ...professionsData[index] });
+    setEditingProfessionIndex(index);
+    setIsAddingProfession(true);
+  };
+
+  // Отменить редактирование профессии
+  const cancelEditProfession = () => {
+    setEditingProfessionIndex(null);
+    setIsAddingProfession(false);
+    setNewProfession({ name: "", experience: "" });
   };
 
   // Удалить профессию
   const removeProfession = (index: number) => {
-    setProfessionsData(professionsData.filter((_, i) => i !== index));
-  };
-
-  // Обновить профессию
-  const updateProfession = (index: number, field: keyof Profession, value: string) => {
-    const updatedProfessions = [...professionsData];
-    updatedProfessions[index] = {
-      ...updatedProfessions[index],
-      [field]: value,
-    };
-    setProfessionsData(updatedProfessions);
+    if (confirm("Вы уверены, что хотите удалить эту профессию?")) {
+      setProfessionsData(professionsData.filter((_, i) => i !== index));
+      setMessage({ type: "success", text: "Профессия удалена. Не забудьте сохранить изменения внизу страницы." });
+    }
   };
 
   // Открыть форму добавления образования
@@ -1568,77 +1610,132 @@ export default function ProfilePage() {
             
             {/* Профессии */}
             <div className="mb-6">
-              <div className="mb-3 flex items-center justify-between">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
-                  Профессии
-                </label>
-                <button
-                  type="button"
-                  onClick={addProfession}
-                  className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Добавить профессию
-                </button>
-              </div>
-              
-              {professionsData.length === 0 ? (
-                <div className="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Нажмите "Добавить профессию" чтобы указать вашу профессию и опыт
-                  </p>
+              {/* Кнопка добавления профессии */}
+              {!isAddingProfession && (
+                <div className="mb-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={openAddProfessionForm}
+                    className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Добавить профессию
+                  </button>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {professionsData.map((prof, index) => (
-                    <div
-                      key={index}
-                      className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 sm:flex-row sm:items-end"
-                    >
-                      <div className="flex-1">
-                        <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                          Название профессии
+              )}
+
+              {/* Форма добавления/редактирования профессии */}
+              {isAddingProfession && (
+                <div className="mb-6 rounded-lg border-2 border-blue-300 bg-blue-50 p-4 dark:border-blue-600 dark:bg-blue-900/20">
+                  <h4 className="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
+                    {editingProfessionIndex !== null ? "Редактирование профессии" : "Добавление профессии"}
+                  </h4>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                          Название профессии <span className="text-red-500">*</span>
                         </label>
                         <Autocomplete
-                          name={`profession-${index}`}
-                          value={prof.name}
-                          onChange={(value) => updateProfession(index, "name", value)}
+                          name="new-profession-name"
+                          value={newProfession.name}
+                          onChange={(value) => setNewProfession({ ...newProfession, name: value })}
                           options={professions}
                           placeholder="Например: Медсестра, Врач..."
-                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
                       
-                      <div className="w-full sm:w-40">
-                        <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                          Опыт работы
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                          Опыт работы <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
-                          value={prof.experience}
-                          onChange={(e) => updateProfession(index, "experience", e.target.value)}
+                          value={newProfession.experience}
+                          onChange={(e) => setNewProfession({ ...newProfession, experience: e.target.value })}
                           placeholder="5 лет"
-                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
-                      
-                      <div className="flex items-center">
-                        <button
-                          type="button"
-                          onClick={() => removeProfession(index)}
-                          className="inline-flex items-center justify-center rounded-lg bg-red-600 p-2 text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 h-[38px] w-[38px]"
-                          title="Удалить"
-                        >
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
                     </div>
-                  ))}
+                    
+                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={editingProfessionIndex !== null ? cancelEditProfession : cancelAddProfession}
+                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                      >
+                        Отмена
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveProfession}
+                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {editingProfessionIndex !== null ? "Сохранить изменения" : "Добавить профессию"}
+                      </button>
+                    </div>
+                  </div>
                 </div>
+              )}
+
+              {/* Список профессий */}
+              {professionsData.length === 0 && !isAddingProfession ? (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center dark:border-gray-700 dark:bg-gray-900">
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+                    У вас пока нет добавленных профессий
+                  </p>
+                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                    Нажмите "Добавить профессию" чтобы начать
+                  </p>
+                </div>
+              ) : (
+                professionsData.length > 0 && (
+                  <div className="space-y-3">
+                    {professionsData.map((prof, index) => (
+                      <div
+                        key={index}
+                        className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:flex-row sm:items-center"
+                      >
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white">{prof.name}</p>
+                          {prof.experience && (
+                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{prof.experience}</p>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => startEditProfession(index)}
+                            className="inline-flex items-center justify-center rounded-lg bg-blue-600 p-2 text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            title="Редактировать"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeProfession(index)}
+                            className="inline-flex items-center justify-center rounded-lg bg-red-600 p-2 text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                            title="Удалить"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
               )}
             </div>
 
