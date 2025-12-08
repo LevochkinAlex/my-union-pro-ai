@@ -1,7 +1,5 @@
 "use client";
 
-import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
 import Image from "next/image";
 
 interface LogoProps {
@@ -16,76 +14,57 @@ const sizeMap = {
 };
 
 export default function Logo({ className = "", size = "md" }: LogoProps) {
-  const { theme, resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   const { height, width } = sizeMap[size];
 
-  if (typeof window === 'undefined' || !mounted) {
-    return (
+  // Используем CSS для переключения логотипа - без "моргания"
+  return (
+    <div className={`relative ${className}`} style={{ width: width * 3, height }}>
+      {/* Светлый логотип - виден в светлой теме, скрыт в тёмной */}
       <Image
         src="/Logo_light_theme.svg"
         alt="MyUnion"
-        width={width * 3} // Assume logo is 3x wider than tall
+        width={width * 3}
         height={height}
-        className={`${className}`}
+        className="dark:hidden"
         priority
       />
-    );
-  }
-
-  const currentTheme = theme === "system" ? resolvedTheme : theme;
-  const logoSrc = currentTheme === "dark" ? "/Logo_dark_theme.svg" : "/Logo_light_theme.svg";
-
-  return (
-    <Image
-      src={logoSrc}
-      alt="MyUnion"
-      width={width * 3}
-      height={height}
-      className={`${className}`}
-    />
+      {/* Тёмный логотип - скрыт в светлой теме, виден в тёмной */}
+      <Image
+        src="/Logo_dark_theme.svg"
+        alt="MyUnion"
+        width={width * 3}
+        height={height}
+        className="hidden dark:block absolute top-0 left-0"
+        priority
+      />
+    </div>
   );
 }
 
 export function LogoIcon({ className = "", size = "md" }: LogoProps) {
-  const { theme, resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   const { height, width } = sizeMap[size];
 
-  if (typeof window === 'undefined' || !mounted) {
-    return (
+  // Используем CSS для переключения иконки - без "моргания"
+  return (
+    <div className={`relative ${className}`} style={{ width, height }}>
+      {/* Светлая иконка - видна в светлой теме, скрыта в тёмной */}
       <Image
         src="/icon_light.svg"
         alt="MyUnion Icon"
         width={width}
         height={height}
-        className={`${className}`}
+        className="dark:hidden"
         priority
       />
-    );
-  }
-
-  const currentTheme = theme === "system" ? resolvedTheme : theme;
-  const iconSrc = currentTheme === "dark" ? "/icon_dark.svg" : "/icon_light.svg";
-
-  return (
-    <Image
-      src={iconSrc}
-      alt="MyUnion Icon"
-      width={width}
-      height={height}
-      className={`${className}`}
-    />
+      {/* Тёмная иконка - скрыта в светлой теме, видна в тёмной */}
+      <Image
+        src="/icon_dark.svg"
+        alt="MyUnion Icon"
+        width={width}
+        height={height}
+        className="hidden dark:block absolute top-0 left-0"
+        priority
+      />
+    </div>
   );
 }
-
