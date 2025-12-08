@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -63,9 +64,16 @@ function getFullName(author: PostMiniCardProps["post"]["author"]): string {
 }
 
 export default function PostMiniCard({ post }: PostMiniCardProps) {
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  
   const authorName = getFullName(post.author);
   const plainText = getPlainText(post.content);
-  const formattedDate = formatDate(post.createdAt);
+  // Показываем дату только после монтирования чтобы избежать hydration mismatch
+  const formattedDate = mounted ? formatDate(post.createdAt) : "";
 
   return (
     <Link 
