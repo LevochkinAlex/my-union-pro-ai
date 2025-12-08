@@ -20,6 +20,7 @@ export default function RootLayout({
     <html lang="ru" suppressHydrationWarning>
       <head>
         {/* Global ChunkLoadError Handler */}
+        {/* ChunkLoadError Handler - ТОЛЬКО для ошибок загрузки чанков, НЕ для React errors */}
         <Script
           id="chunk-error-handler"
           strategy="beforeInteractive"
@@ -31,21 +32,22 @@ export default function RootLayout({
                 window.addEventListener('error', function(e) {
                   if (reloadAttempted) return;
                   
+                  // ИСПРАВЛЕНО: Проверяем ТОЛЬКО конкретные ошибки загрузки чанков
+                  // НЕ срабатываем на React hydration errors (#418, #423, #425)
+                  var msg = e.message || '';
                   var isChunkError = (
-                    (e.message && (
-                      e.message.includes('Loading chunk') ||
-                      e.message.includes('ChunkLoadError') ||
-                      e.message.includes('Failed to fetch dynamically imported module') ||
-                      e.message.includes('Unexpected token')
-                    )) ||
-                    (e.filename && e.filename.includes('/_next/static/'))
+                    msg.includes('Loading chunk') ||
+                    msg.includes('ChunkLoadError') ||
+                    msg.includes('Failed to fetch dynamically imported module')
                   );
                   
-                  if (isChunkError) {
+                  // Игнорируем React errors (hydration, minified и т.д.)
+                  var isReactError = msg.includes('Minified React error') || msg.includes('Hydration');
+                  
+                  if (isChunkError && !isReactError) {
                     console.log('[ChunkError] Detected chunk loading error, reloading...');
                     reloadAttempted = true;
                     
-                    // Clear service worker cache
                     if ('caches' in window) {
                       caches.keys().then(function(names) {
                         names.forEach(function(name) {
@@ -54,14 +56,12 @@ export default function RootLayout({
                       });
                     }
                     
-                    // Force reload
                     setTimeout(function() {
                       window.location.reload();
                     }, 100);
                   }
                 });
                 
-                // Also catch unhandled promise rejections
                 window.addEventListener('unhandledrejection', function(e) {
                   if (reloadAttempted) return;
                   
@@ -74,7 +74,13 @@ export default function RootLayout({
                     ))
                   );
                   
-                  if (isChunkError) {
+                  // Игнорируем React errors
+                  var isReactError = reason && reason.message && (
+                    reason.message.includes('Minified React error') || 
+                    reason.message.includes('Hydration')
+                  );
+                  
+                  if (isChunkError && !isReactError) {
                     console.log('[ChunkError] Detected chunk loading rejection, reloading...');
                     reloadAttempted = true;
                     
