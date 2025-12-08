@@ -19,30 +19,55 @@ export default function RootLayout({
   return (
     <html lang="ru" suppressHydrationWarning>
       <head>
-        {/* Global ChunkLoadError Handler */}
-        {/* ChunkLoadError Handler - ТОЛЬКО для ошибок загрузки чанков, НЕ для React errors */}
+        {/* Early Error Suppression - runs before React loads */}
         <Script
-          id="chunk-error-handler"
+          id="early-error-handler"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
+                // Suppress React hydration errors early (before React loads)
+                var origError = console.error;
+                console.error = function() {
+                  var args = Array.prototype.slice.call(arguments);
+                  var msg = args.join(' ');
+                  // Suppress React hydration errors #418, #423, #425
+                  if (msg.indexOf('Minified React error #418') !== -1 ||
+                      msg.indexOf('Minified React error #423') !== -1 ||
+                      msg.indexOf('Minified React error #425') !== -1 ||
+                      msg.indexOf('Hydration failed') !== -1 ||
+                      msg.indexOf('hydrating') !== -1) {
+                    return;
+                  }
+                  origError.apply(console, arguments);
+                };
+                
+                // Suppress uncaught React hydration errors
+                window.addEventListener('error', function(e) {
+                  var msg = e.message || '';
+                  if (msg.indexOf('Minified React error #418') !== -1 ||
+                      msg.indexOf('Minified React error #423') !== -1 ||
+                      msg.indexOf('Minified React error #425') !== -1) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                  }
+                }, true);
+                
                 var reloadAttempted = false;
                 
                 window.addEventListener('error', function(e) {
                   if (reloadAttempted) return;
                   
-                  // ИСПРАВЛЕНО: Проверяем ТОЛЬКО конкретные ошибки загрузки чанков
-                  // НЕ срабатываем на React hydration errors (#418, #423, #425)
                   var msg = e.message || '';
                   var isChunkError = (
-                    msg.includes('Loading chunk') ||
-                    msg.includes('ChunkLoadError') ||
-                    msg.includes('Failed to fetch dynamically imported module')
+                    msg.indexOf('Loading chunk') !== -1 ||
+                    msg.indexOf('ChunkLoadError') !== -1 ||
+                    msg.indexOf('Failed to fetch dynamically imported module') !== -1
                   );
                   
-                  // Игнорируем React errors (hydration, minified и т.д.)
-                  var isReactError = msg.includes('Minified React error') || msg.includes('Hydration');
+                  // Don't reload for React errors
+                  var isReactError = msg.indexOf('Minified React error') !== -1;
                   
                   if (isChunkError && !isReactError) {
                     console.log('[ChunkError] Detected chunk loading error, reloading...');
