@@ -19,6 +19,25 @@ export default function RootLayout({
   return (
     <html lang="ru" suppressHydrationWarning>
       <head>
+        {/* Theme Flash Prevention - must be first script */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var theme = localStorage.getItem('myunion-theme');
+                  if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.style.colorScheme = 'dark';
+                  } else {
+                    document.documentElement.classList.remove('dark');
+                    document.documentElement.style.colorScheme = 'light';
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
         {/* Early Error Suppression - runs before React loads */}
         <Script
           id="early-error-handler"
