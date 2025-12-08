@@ -150,8 +150,8 @@ export async function GET(
     ]);
     
     // Создаем мапы для быстрого доступа
-    const replyToMap = new Map(replyToMessages.map(m => [m.id, m]));
-    const forwardedFromMap = new Map(forwardedFromMessages.map(m => [m.id, m]));
+    const replyToMap = new Map(replyToMessages.map(m => [m.id, m] as [string, any]));
+    const forwardedFromMap = new Map(forwardedFromMessages.map(m => [m.id, m] as [string, any]));
     
     // Добавляем replyTo и forwardedFrom к сообщениям
     const messagesWithReplies = messages.map(msg => ({
