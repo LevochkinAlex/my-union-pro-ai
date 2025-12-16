@@ -56,7 +56,7 @@ export default function DiscountsClient({
     meta: {
       total: 0,
       page: 1,
-      limit: 20,
+      perPage: 20,
       hasMore: false,
     },
     source: "fallback",
