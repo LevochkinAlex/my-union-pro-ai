@@ -138,6 +138,38 @@ export async function POST(request: NextRequest) {
       return result;
     });
 
+    // ВАЖНО: Добавляем локальные claimed скидки, которых нет в BestBenefits API
+    // Это необходимо для сохранения промокодов, которые были получены локально
+    // но по какой-то причине не отображаются в BestBenefits API
+    const bbIdsSet = new Set(bbActivated.map(d => String(d.id)));
+    existingClaimed.forEach((item: any) => {
+      let discountId: string | null = null;
+      let promoCode: string | null = null;
+      
+      if (typeof item === 'object' && item !== null && item.id) {
+        discountId = String(item.id);
+        promoCode = item.promoCode 
+          ? (typeof item.promoCode === 'string' ? item.promoCode.trim() : String(item.promoCode).trim())
+          : null;
+      } else if (typeof item === 'number') {
+        discountId = String(item);
+      }
+      
+      // Если скидка есть локально с промокодом, но нет в BestBenefits API - сохраняем её
+      // Это важно для сохранения уже полученных промокодов
+      if (discountId && !bbIdsSet.has(discountId) && promoCode && promoCode.length > 0 && promoCode.toLowerCase() !== 'null' && promoCode.toLowerCase() !== 'undefined') {
+        const id = typeof item === 'object' ? item.id : parseInt(discountId);
+        updatedClaimed.push({
+          id: id,
+          promoCode: promoCode,
+        });
+        console.log(`[sync-discounts] ✅ Keeping local discount ${discountId} with promo code (not found in BestBenefits API):`, {
+          id,
+          promoCode,
+        });
+      }
+    });
+
     console.log("[sync-discounts] ✅ Prepared updated claimed discounts:", {
       count: updatedClaimed.length,
       discountsWithPromoCodes: updatedClaimed.filter(d => d.promoCode).length,
