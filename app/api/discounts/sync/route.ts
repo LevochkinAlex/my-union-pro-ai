@@ -69,7 +69,11 @@ export async function POST(request: NextRequest) {
     console.log("[sync-discounts] ✅ Fetched activated discounts from BestBenefits:", {
       count: bbActivated.length,
       discounts: bbActivated.map(d => ({ id: d.id, hasPromoCode: !!d.promoCode, promoCode: d.promoCode })),
+      discountsWithPromoCodes: bbActivated.filter(d => d.promoCode).length,
     });
+    
+    // ВАЖНО: Если BestBenefits API вернул скидки без промокодов, но у нас есть локальные промокоды - сохраняем их
+    // Это гарантирует, что уже полученные промокоды не теряются
 
     // Get existing preferences для сохранения favorites и уже полученных промокодов
     const existingPrefs = await prisma.discountPreference.findUnique({
