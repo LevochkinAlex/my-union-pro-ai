@@ -239,9 +239,9 @@ async function generateContributionsApplicationHTML(
 async function generatePDFFromHTML(html: string, outputPath: string): Promise<void> {
   await ensureDocumentsDir();
   
-  // Используем системный Chromium, если доступен
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || 
-    (process.platform === "linux" ? "/usr/bin/chromium-browser" : undefined);
+  // Используем системный Chromium только если указан явно в переменной окружения
+  // Иначе Puppeteer использует встроенный браузер
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
   
   const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
     headless: true,
@@ -251,15 +251,30 @@ async function generatePDFFromHTML(html: string, outputPath: string): Promise<vo
       "--disable-dev-shm-usage",
       "--disable-accelerated-2d-canvas",
       "--disable-gpu",
+      "--disable-software-rasterizer",
+      "--disable-extensions",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
     ],
   };
   
+  // Устанавливаем executablePath только если он указан явно и файл существует
   if (executablePath) {
-    launchOptions.executablePath = executablePath;
+    const fs = await import("fs/promises");
+    try {
+      await fs.access(executablePath);
+      launchOptions.executablePath = executablePath;
+      console.log("[documents] Using Puppeteer executable:", executablePath);
+    } catch (error) {
+      console.warn("[documents] ExecutablePath not found, using Puppeteer's bundled browser");
+    }
+  } else {
+    console.log("[documents] Using Puppeteer's bundled browser (no executablePath specified)");
   }
   
   console.log("[documents] Launching Puppeteer...", { 
-    executablePath: executablePath || "auto-detect",
+    executablePath: launchOptions.executablePath || "bundled browser",
     platform: process.platform 
   });
   

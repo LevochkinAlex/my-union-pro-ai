@@ -127,9 +127,9 @@ export function renderTemplate(htmlTemplate: string, variables: TemplateVariable
  * Генерирует PDF из HTML используя Puppeteer
  */
 export async function generatePDFFromHTML(html: string): Promise<Buffer> {
-  // Используем системный Chromium, если доступен
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || 
-    (process.platform === "linux" ? "/usr/bin/chromium-browser" : undefined);
+  // Используем системный Chromium, если доступен и указан в переменной окружения
+  // Иначе Puppeteer использует встроенный браузер
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
   
   const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
     headless: true,
@@ -139,12 +139,28 @@ export async function generatePDFFromHTML(html: string): Promise<Buffer> {
       "--disable-dev-shm-usage",
       "--disable-accelerated-2d-canvas",
       "--disable-gpu",
+      "--disable-software-rasterizer",
+      "--disable-extensions",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
     ],
   };
   
+  // Устанавливаем executablePath только если он указан явно
+  // Если не указан, Puppeteer будет использовать встроенный браузер
   if (executablePath) {
-    launchOptions.executablePath = executablePath;
-    console.log(`[document-templates] Using Puppeteer executable: ${executablePath}`);
+    // Проверяем, что файл действительно существует
+    const fs = await import("fs/promises");
+    try {
+      await fs.access(executablePath);
+      launchOptions.executablePath = executablePath;
+      console.log(`[document-templates] Using Puppeteer executable: ${executablePath}`);
+    } catch (error) {
+      console.warn(`[document-templates] ExecutablePath ${executablePath} not found, using Puppeteer's bundled browser`);
+    }
+  } else {
+    console.log(`[document-templates] Using Puppeteer's bundled browser (no executablePath specified)`);
   }
   
   const browser = await puppeteer.launch(launchOptions);
