@@ -57,6 +57,11 @@ export async function POST(request: NextRequest) {
     // Fetch activated discounts from BestBenefits using personal token
     const bbActivated = await getUserActivatedDiscounts(user.bestBenefitsUserId, userPassword);
 
+    console.log("[sync-discounts] ✅ Fetched activated discounts from BestBenefits:", {
+      count: bbActivated.length,
+      discounts: bbActivated.map(d => ({ id: d.id, hasPromoCode: !!d.promoCode, promoCode: d.promoCode })),
+    });
+
     if (bbActivated.length === 0) {
       console.log("[sync-discounts] No activated discounts found on BestBenefits");
       return NextResponse.json({
@@ -85,12 +90,28 @@ export async function POST(request: NextRequest) {
       // Нормализуем промокод: строки "null", "undefined" и пустые значения превращаем в null
       let promoCode = bbItem.promoCode;
       if (promoCode && (promoCode.toLowerCase() === 'null' || promoCode.toLowerCase() === 'undefined' || promoCode.trim() === '')) {
+        console.log(`[sync-discounts] ⚠️ Invalid promo code for discount ${bbItem.id}, normalizing to null:`, promoCode);
         promoCode = null;
       }
-      return {
+      
+      const result = {
         id: bbItem.id,
-        promoCode: promoCode,
+        promoCode: promoCode || null, // Явно null если нет промокода
       };
+      
+      console.log(`[sync-discounts] Processing discount ${bbItem.id}:`, {
+        id: result.id,
+        promoCode: result.promoCode,
+        hasPromoCode: !!result.promoCode,
+      });
+      
+      return result;
+    });
+
+    console.log("[sync-discounts] ✅ Prepared updated claimed discounts:", {
+      count: updatedClaimed.length,
+      discountsWithPromoCodes: updatedClaimed.filter(d => d.promoCode).length,
+      discounts: updatedClaimed.map(d => ({ id: d.id, promoCode: d.promoCode })),
     });
 
     // Save merged preferences
@@ -112,10 +133,24 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log("[sync-discounts] Synced discounts:", {
+    // Проверяем что промокоды действительно сохранились
+    const savedPrefs = await prisma.discountPreference.findUnique({
+      where: { userId: user.id },
+    });
+    const savedClaimed = (savedPrefs?.filters as any)?.claimed || [];
+    
+    console.log("[sync-discounts] ✅ Synced discounts and saved to database:", {
       userId: user.id,
       bbActivated: bbActivated.length,
       totalClaimed: updatedClaimed.length,
+      savedClaimed: savedClaimed.length,
+      discountsWithPromoCodes: updatedClaimed.filter(d => d.promoCode).length,
+      savedDiscountsWithPromoCodes: savedClaimed.filter((d: any) => d.promoCode).length,
+      savedDiscounts: savedClaimed.map((d: any) => ({ 
+        id: d.id, 
+        promoCode: d.promoCode,
+        type: typeof d,
+      })),
     });
 
     return NextResponse.json({
