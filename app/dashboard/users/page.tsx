@@ -250,18 +250,22 @@ function UsersPageContent() {
 
         {/* Список пользователей */}
         {loading ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 animate-pulse">
-                <div className="h-24 w-24 rounded-full bg-gray-200 dark:bg-gray-700 mx-auto mb-4"></div>
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mx-auto"></div>
+              <div key={i} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 animate-pulse">
+                <div className="flex items-center gap-4">
+                  <div className="h-14 w-14 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         ) : users.length > 0 ? (
           <>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {users.map((user) => (
                 <UserCard key={user.id} user={user} />
               ))}
@@ -437,18 +441,22 @@ function UsersPageContent() {
 
               {/* Список пользователей */}
               {loading ? (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {[...Array(4)].map((_, i) => (
-                    <div key={i} className="bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 animate-pulse">
-                      <div className="h-16 w-16 rounded-full bg-gray-200 dark:bg-gray-700 mx-auto mb-3"></div>
-                      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
-                      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mx-auto"></div>
+                    <div key={i} className="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4 animate-pulse">
+                      <div className="flex items-center gap-4">
+                        <div className="h-14 w-14 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0"></div>
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : users.length > 0 ? (
                 <>
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {users.map((user) => (
                       <UserCard key={user.id} user={user} />
                     ))}
