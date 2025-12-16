@@ -21,7 +21,9 @@ interface CreatePostProps {
 }
 
 // Хелпер для формирования URL превью изображения с поддержкой CDN
-const getPreviewUrl = (imageUrl: string): string => {
+// Для только что загруженных файлов используем API route (более надежно),
+// для старых файлов - CDN
+const getPreviewUrl = (imageUrl: string, useCDN: boolean = true): string => {
   if (!imageUrl) return "";
   
   // Если это data URL, возвращаем как есть
@@ -29,9 +31,28 @@ const getPreviewUrl = (imageUrl: string): string => {
     return imageUrl;
   }
   
+  // Если это уже полный URL (http/https), возвращаем как есть
+  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+    return imageUrl;
+  }
+  
+  // Для только что загруженных файлов (которые могут еще не быть на CDN)
+  // лучше использовать API route вместо CDN для надежности
+  // CDN используется для старых файлов, которые уже синхронизированы
+  if (imageUrl.startsWith("/uploads/")) {
+    // Можно использовать CDN, но если он не сработает, fallback будет через onError
+    if (useCDN) {
+      const { getFileUrlWithCDN } = require("@/lib/cdn");
+      return getFileUrlWithCDN(imageUrl, true);
+    } else {
+      // Используем API route напрямую (более надежно для новых файлов)
+      return imageUrl.replace("/uploads/", "/api/uploads/");
+    }
+  }
+  
   // Используем утилиту для работы с CDN
   const { getFileUrlWithCDN } = require("@/lib/cdn");
-  return getFileUrlWithCDN(imageUrl, true);
+  return getFileUrlWithCDN(imageUrl, useCDN);
 };
 
 export default function CreatePost({ onPostCreated, compact = false }: CreatePostProps = {} as CreatePostProps) {
@@ -281,9 +302,11 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
       if (response.ok && data.url) {
         const imageUrl = data.url;
         console.log('[CreatePost] Image uploaded, API returned URL:', imageUrl);
-        // API возвращает относительный путь (/uploads/posts/...), конвертируем в /api/uploads/ для превью
-        const previewUrl = getPreviewUrl(imageUrl);
-        console.log('[CreatePost] Preview URL:', previewUrl);
+        // Для только что загруженных файлов используем API route вместо CDN
+        // (файл может еще не быть синхронизирован с CDN)
+        // Используем CDN = false для новых загруженных файлов
+        const previewUrl = getPreviewUrl(imageUrl, false);
+        console.log('[CreatePost] Preview URL (using API route for reliability):', previewUrl);
         
         if (isImageModalForCover) {
           // Для cover изображения - устанавливаем только coverImage
