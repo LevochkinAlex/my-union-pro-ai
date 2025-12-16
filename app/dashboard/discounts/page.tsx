@@ -24,17 +24,61 @@ export default async function DiscountsPage() {
   
   console.log("[discounts/page] ✅ Loading discounts for user:", userId);
 
-  const [initialData, preference, user] = await Promise.all([
-    fetchBestBenefitsDiscounts({ limit: 20, page: 1 }), // Загружаем первую страницу, остальное через пагинацию
-    getDiscountPreferenceSafe(userId),
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: { address: true, preferredDiscountCity: true }
-    }).catch((error) => {
-      console.error("[discounts] Error fetching user:", error);
-      return null;
-    }),
-  ]);
+  let initialData;
+  let preference;
+  let user;
+
+  try {
+    // Пытаемся загрузить данные с таймаутом
+    const fetchPromise = fetchBestBenefitsDiscounts({ limit: 20, page: 1 });
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Timeout loading discounts")), 30000)
+    );
+    
+    [initialData, preference, user] = await Promise.all([
+      Promise.race([fetchPromise, timeoutPromise]).catch((error) => {
+        console.error("[discounts/page] ❌ Error loading discounts:", error);
+        // Возвращаем пустую структуру данных в случае ошибки
+        return {
+          discounts: [],
+          categories: [],
+          cities: [],
+          meta: {
+            total: 0,
+            page: 1,
+            limit: 20,
+            hasMore: false,
+          },
+          source: "error",
+        } as any;
+      }),
+      getDiscountPreferenceSafe(userId),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { address: true, preferredDiscountCity: true }
+      }).catch((error) => {
+        console.error("[discounts] Error fetching user:", error);
+        return null;
+      }),
+    ]);
+  } catch (error) {
+    console.error("[discounts/page] ❌ Critical error loading page:", error);
+    // Возвращаем минимальную структуру для отображения страницы
+    initialData = {
+      discounts: [],
+      categories: [],
+      cities: [],
+      meta: {
+        total: 0,
+        page: 1,
+        limit: 20,
+        hasMore: false,
+      },
+      source: "error",
+    } as any;
+    preference = null;
+    user = null;
+  }
 
   // Определяем город для фильтра из профиля пользователя
   let autoCityId: number | null = null;

@@ -48,34 +48,55 @@ export default function DiscountsClient({
   initialData,
   initialPreference,
 }: DiscountsClientProps) {
+  // Защита от некорректных данных
+  const safeInitialData = initialData || {
+    discounts: [],
+    categories: [],
+    cities: [],
+    meta: {
+      total: 0,
+      page: 1,
+      limit: 20,
+      hasMore: false,
+    },
+    source: "fallback",
+  };
+
+  const safeInitialPreference = initialPreference || {
+    pushEnabled: false,
+    filters: {},
+    geolocation: null,
+    updatedAt: null,
+  };
+
   const [filters, setFilters] = useState<FilterState>({
     ...DEFAULT_FILTERS,
-    ...(initialPreference.filters && {
-      cityId: initialPreference.filters.cityId ?? null,
-      categoryIds: initialPreference.filters.categoryIds ?? [],
-      premiumOnly: initialPreference.filters.premiumOnly ?? false,
-      radiusKm: initialPreference.filters.radiusKm ?? 25,
-      view: (initialPreference.filters.view as ViewMode | undefined) ?? "all",
+    ...(safeInitialPreference.filters && {
+      cityId: safeInitialPreference.filters.cityId ?? null,
+      categoryIds: safeInitialPreference.filters.categoryIds ?? [],
+      premiumOnly: safeInitialPreference.filters.premiumOnly ?? false,
+      radiusKm: safeInitialPreference.filters.radiusKm ?? 25,
+      view: (safeInitialPreference.filters.view as ViewMode | undefined) ?? "all",
     }),
   });
-  const [data, setData] = useState<DiscountSearchResult>(initialData);
-  const [allDiscounts, setAllDiscounts] = useState(initialData.discounts);
+  const [data, setData] = useState<DiscountSearchResult>(safeInitialData);
+  const [allDiscounts, setAllDiscounts] = useState(safeInitialData.discounts || []);
   const [hasMore, setHasMore] = useState(
-    initialData.meta.hasMore ?? 
-    (initialData.meta.total ? initialData.discounts.length < initialData.meta.total : initialData.discounts.length >= 20)
+    safeInitialData.meta?.hasMore ?? 
+    (safeInitialData.meta?.total ? (safeInitialData.discounts?.length || 0) < safeInitialData.meta.total : (safeInitialData.discounts?.length || 0) >= 20)
   );
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState<boolean>(
-    Boolean(initialPreference.pushEnabled)
+    Boolean(safeInitialPreference.pushEnabled)
   );
   const [geoSupport, setGeoSupport] = useState(false);
   const [favorites, setFavorites] = useState<number[]>(() => {
-    return ((initialPreference.filters as any)?.favorites as number[] | undefined) ?? [];
+    return ((safeInitialPreference.filters as any)?.favorites as number[] | undefined) ?? [];
   });
   const [claimed, setClaimed] = useState<number[]>(() => {
-    const claimedData = (initialPreference.filters as any)?.claimed;
+    const claimedData = (safeInitialPreference.filters as any)?.claimed;
     if (!Array.isArray(claimedData)) return [];
     
     // Extract IDs from objects or numbers
@@ -767,7 +788,7 @@ export default function DiscountsClient({
 
         {/* Row 2: City Filter (Country → Region → City) */}
         <CityFilter
-          cities={data.cities}
+          cities={data.cities || []}
           value={filters.cityId}
           onChange={(cityId) =>
             updateFilters({
@@ -779,9 +800,9 @@ export default function DiscountsClient({
         />
 
         {/* Row 2: Categories */}
-        {data.categories.length > 0 && (
+        {(data.categories || []).length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {data.categories.map((cat) => {
+            {(data.categories || []).map((cat) => {
               const isActive = filters.categoryIds.includes(cat.id);
               return (
                 <button
