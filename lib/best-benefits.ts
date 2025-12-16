@@ -61,15 +61,30 @@ async function fetchAllCitiesForFilter(): Promise<DiscountCity[]> {
 
       while (hasMore && currentPage <= maxPages) {
         const url = `${API_BASE_URL}?per_page=100&page=${currentPage}`;
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-          cache: "no-store",
-        });
+    // Добавляем таймаут для всех запросов к BestBenefits API
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 секунд таймаут
+    
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error(`Request timeout after 15s: ${url}`);
+      }
+      throw error;
+    }
 
         if (!response.ok) {
           console.warn(`[best-benefits] Failed to fetch page ${currentPage} for cities`);
@@ -312,15 +327,30 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
     const url = `${searchUrl}?${searchParams.toString()}`;
     console.log("[best-benefits] Using /search endpoint:", url);
 
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-      cache: "no-store",
-    });
+    // Добавляем таймаут для всех запросов к BestBenefits API
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 секунд таймаут
+    
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error(`Request timeout after 15s: ${url}`);
+      }
+      throw error;
+    }
 
     if (response.ok) {
       const data = (await response.json()) as BestBenefitsResponse;

@@ -142,10 +142,19 @@ export async function GET(request: NextRequest) {
         "Cache-Control": "private, max-age=30",
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[api/discounts] Failed to load discounts:", error);
+    
+    // Если это таймаут, возвращаем специфичную ошибку
+    if (error?.message?.includes("timeout") || error?.message?.includes("aborted")) {
+      return NextResponse.json(
+        { error: "Превышено время ожидания ответа от сервера скидок. Попробуйте позже." },
+        { status: 504 } // Gateway Timeout
+      );
+    }
+    
     return NextResponse.json(
-      { error: "Не удалось загрузить скидки" },
+      { error: "Не удалось загрузить скидки. Попробуйте позже." },
       { status: 500 }
     );
   }
