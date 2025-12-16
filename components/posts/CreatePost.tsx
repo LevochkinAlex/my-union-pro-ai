@@ -348,8 +348,9 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
   };
 
   const handleImageGenerate = async (imageUrl: string) => {
-    // Конвертируем URL для превью через хелпер
-    const fullImageUrl = getPreviewUrl(imageUrl);
+    // Для сгенерированных изображений (которые уже на внешнем сервисе)
+    // используем CDN, если это возможно
+    const fullImageUrl = getPreviewUrl(imageUrl, true);
     console.log('[CreatePost] Generated image URL:', imageUrl, '-> preview:', fullImageUrl);
     
     if (isImageModalForCover) {
@@ -936,21 +937,32 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                         console.error('Cover image load error:', coverImage);
                         const target = e.target as HTMLImageElement;
                         
+                        // Предотвращаем бесконечный цикл - проверяем, не пробовали ли мы уже fallback
+                        const dataTriedFallback = target.dataset.triedFallback === 'true';
+                        
                         // Если это CDN URL, пробуем fallback на API route
-                        if (coverImage && coverImage.includes('cdn.myunion.pro')) {
+                        if (coverImage && coverImage.includes('cdn.myunion.pro') && !dataTriedFallback) {
                           // Конвертируем CDN URL обратно в API route URL
+                          // Формат: https://cdn.myunion.pro/uploads/posts/filename.jpg -> /api/uploads/posts/filename.jpg
                           const apiUrl = coverImage.replace('https://cdn.myunion.pro/uploads/', '/api/uploads/');
-                          console.log('Trying fallback API URL:', apiUrl);
+                          console.log('[CreatePost] CDN failed, trying fallback API URL:', apiUrl);
+                          target.dataset.triedFallback = 'true';
                           target.src = apiUrl;
                           return; // Позволяем браузеру попробовать загрузить через API
                         }
                         
-                        // Если это относительный путь, пробуем через API
-                        if (coverImage && coverImage.startsWith('/uploads/')) {
+                        // Если это относительный путь /uploads/, пробуем через API
+                        if (coverImage && coverImage.startsWith('/uploads/') && !dataTriedFallback) {
                           const apiUrl = coverImage.replace('/uploads/', '/api/uploads/');
-                          console.log('Trying fallback API URL:', apiUrl);
+                          console.log('[CreatePost] Relative path failed, trying fallback API URL:', apiUrl);
+                          target.dataset.triedFallback = 'true';
                           target.src = apiUrl;
                           return;
+                        }
+                        
+                        // Если это уже API URL и он не сработал, или мы уже пробовали fallback
+                        if (coverImage && coverImage.includes('/api/uploads/')) {
+                          console.error('[CreatePost] API route also failed for:', coverImage);
                         }
                         
                         // Если все попытки не удались, показываем placeholder
