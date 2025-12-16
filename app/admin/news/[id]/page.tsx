@@ -773,8 +773,11 @@ export default function EditNewsPage() {
             if (editorRef.current) {
               const editor = editorRef.current.querySelector('[contenteditable="true"]') as any;
               if (editor?.insertImage) {
+                // Убеждаемся, что сгенерированное изображение тоже использует CDN URL
+                const { getFileUrlWithCDN } = require('@/lib/cdn');
+                const fullImageUrl = getFileUrlWithCDN(imageUrl, true);
                 // Используем метод редактора, который восстанавливает позицию курсора
-                editor.insertImage(imageUrl, "Сгенерированное изображение");
+                editor.insertImage(fullImageUrl, "Сгенерированное изображение");
               }
             }
             setShowImageInsertModal(false);
