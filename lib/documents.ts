@@ -241,7 +241,35 @@ async function generatePDFFromHTML(html: string, outputPath: string): Promise<vo
   
   // Используем системный Chromium только если указан явно в переменной окружения
   // Иначе Puppeteer использует встроенный браузер
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  
+  // Если не указан явно, используем встроенный браузер Puppeteer
+  if (!executablePath) {
+    try {
+      // Получаем путь к встроенному браузеру Puppeteer
+      executablePath = puppeteer.executablePath();
+      console.log("[documents] Using Puppeteer's bundled browser:", executablePath);
+    } catch (error) {
+      console.warn("[documents] Could not get Puppeteer executable path, will try to launch without it:", error);
+      executablePath = undefined;
+    }
+  } else {
+    // Проверяем, что файл действительно существует
+    const fs = await import("fs/promises");
+    try {
+      await fs.access(executablePath);
+      console.log("[documents] Using custom Puppeteer executable:", executablePath);
+    } catch (error) {
+      console.warn("[documents] Custom executablePath not found, falling back to bundled browser");
+      try {
+        executablePath = puppeteer.executablePath();
+        console.log("[documents] Using Puppeteer's bundled browser:", executablePath);
+      } catch (fallbackError) {
+        console.error("[documents] Could not get Puppeteer executable path:", fallbackError);
+        executablePath = undefined;
+      }
+    }
+  }
   
   const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
     headless: true,
@@ -259,22 +287,12 @@ async function generatePDFFromHTML(html: string, outputPath: string): Promise<vo
     ],
   };
   
-  // Устанавливаем executablePath только если он указан явно и файл существует
   if (executablePath) {
-    const fs = await import("fs/promises");
-    try {
-      await fs.access(executablePath);
-      launchOptions.executablePath = executablePath;
-      console.log("[documents] Using Puppeteer executable:", executablePath);
-    } catch (error) {
-      console.warn("[documents] ExecutablePath not found, using Puppeteer's bundled browser");
-    }
-  } else {
-    console.log("[documents] Using Puppeteer's bundled browser (no executablePath specified)");
+    launchOptions.executablePath = executablePath;
   }
   
   console.log("[documents] Launching Puppeteer...", { 
-    executablePath: launchOptions.executablePath || "bundled browser",
+    executablePath: launchOptions.executablePath || "auto-detect",
     platform: process.platform 
   });
   

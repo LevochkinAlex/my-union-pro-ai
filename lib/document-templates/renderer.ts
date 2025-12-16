@@ -129,7 +129,35 @@ export function renderTemplate(htmlTemplate: string, variables: TemplateVariable
 export async function generatePDFFromHTML(html: string): Promise<Buffer> {
   // Используем системный Chromium, если доступен и указан в переменной окружения
   // Иначе Puppeteer использует встроенный браузер
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  
+  // Если не указан явно, используем встроенный браузер Puppeteer
+  if (!executablePath) {
+    try {
+      // Получаем путь к встроенному браузеру Puppeteer
+      executablePath = puppeteer.executablePath();
+      console.log(`[document-templates] Using Puppeteer's bundled browser: ${executablePath}`);
+    } catch (error) {
+      console.warn(`[document-templates] Could not get Puppeteer executable path, will try to launch without it:`, error);
+      executablePath = undefined;
+    }
+  } else {
+    // Проверяем, что файл действительно существует
+    const fs = await import("fs/promises");
+    try {
+      await fs.access(executablePath);
+      console.log(`[document-templates] Using custom Puppeteer executable: ${executablePath}`);
+    } catch (error) {
+      console.warn(`[document-templates] Custom executablePath ${executablePath} not found, falling back to bundled browser`);
+      try {
+        executablePath = puppeteer.executablePath();
+        console.log(`[document-templates] Using Puppeteer's bundled browser: ${executablePath}`);
+      } catch (fallbackError) {
+        console.error(`[document-templates] Could not get Puppeteer executable path:`, fallbackError);
+        executablePath = undefined;
+      }
+    }
+  }
   
   const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
     headless: true,
@@ -147,20 +175,8 @@ export async function generatePDFFromHTML(html: string): Promise<Buffer> {
     ],
   };
   
-  // Устанавливаем executablePath только если он указан явно
-  // Если не указан, Puppeteer будет использовать встроенный браузер
   if (executablePath) {
-    // Проверяем, что файл действительно существует
-    const fs = await import("fs/promises");
-    try {
-      await fs.access(executablePath);
-      launchOptions.executablePath = executablePath;
-      console.log(`[document-templates] Using Puppeteer executable: ${executablePath}`);
-    } catch (error) {
-      console.warn(`[document-templates] ExecutablePath ${executablePath} not found, using Puppeteer's bundled browser`);
-    }
-  } else {
-    console.log(`[document-templates] Using Puppeteer's bundled browser (no executablePath specified)`);
+    launchOptions.executablePath = executablePath;
   }
   
   const browser = await puppeteer.launch(launchOptions);
