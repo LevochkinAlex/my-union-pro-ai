@@ -226,9 +226,10 @@ export async function checkDiscountActivation(
  */
 /**
  * Получает активированные скидки с отказоустойчивостью:
- * - Retry при временных ошибках
+ * - Retry при временных ошибках (5xx)
  * - Timeout для предотвращения зависания
- * - Fallback на локальные данные если API недоступен
+ * - ВАЖНО: НЕ использует fallback на локальные данные - только данные из BestBenefits API
+ *   Это гарантирует, что промокоды всегда актуальны и валидны
  */
 export async function getUserActivatedDiscounts(
   bestBenefitsUserId: string,
@@ -236,12 +237,10 @@ export async function getUserActivatedDiscounts(
   options?: {
     timeout?: number; // Timeout в миллисекундах (по умолчанию 15 секунд)
     retries?: number; // Количество попыток (по умолчанию 2)
-    fallbackData?: Array<{ id: number; promoCode?: string }>; // Fallback данные
   }
 ): Promise<Array<{ id: number; promoCode?: string }>> {
   const timeout = options?.timeout ?? 15000; // 15 секунд по умолчанию
   const retries = options?.retries ?? 2;
-  const fallbackData = options?.fallbackData ?? [];
 
   const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs: number): Promise<Response> => {
     const controller = new AbortController();
@@ -299,24 +298,29 @@ export async function getUserActivatedDiscounts(
         
         // Если это 5xx ошибка (серверная), пробуем еще раз
         if (response.status >= 500 && attempt < retries) {
+          console.log(`[BestBenefits Activation] Server error ${response.status}, retrying...`);
           await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1))); // Exponential backoff
           continue;
         }
         
-        // Если это клиентская ошибка (4xx) или последняя попытка, возвращаем fallback
+        // Если это клиентская ошибка (4xx) - не пробуем снова, но НЕ используем fallback
+        // Промокоды должны быть только из BestBenefits API, иначе они могут быть невалидными
         if (response.status >= 400 && response.status < 500) {
-          console.warn(`[BestBenefits Activation] Client error ${response.status}, using fallback data`);
-          return fallbackData;
+          console.error(`[BestBenefits Activation] Client error ${response.status}, returning empty array (no fallback to prevent invalid promo codes)`);
+          return [];
         }
         
-        // Для других ошибок пробуем еще раз или возвращаем fallback
+        // Для других ошибок пробуем еще раз
         if (attempt < retries) {
+          console.log(`[BestBenefits Activation] Retrying after error on attempt ${attempt + 1}...`);
           await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
           continue;
         }
         
-        console.warn("[BestBenefits Activation] All retries exhausted, using fallback data");
-        return fallbackData;
+        // Если все попытки провалились - возвращаем пустой массив
+        // НЕ используем fallback, чтобы не показывать невалидные промокоды
+        console.error("[BestBenefits Activation] All retries exhausted, returning empty array (no fallback to prevent invalid promo codes)");
+        return [];
       }
 
       const data = await response.json();
@@ -454,13 +458,13 @@ export async function getUserActivatedDiscounts(
       lastError = error instanceof Error ? error : new Error(String(error));
       console.error(`[BestBenefits Activation] Error on attempt ${attempt + 1}:`, error);
       
-      // Если это последняя попытка, возвращаем fallback
+      // Если это последняя попытка, возвращаем пустой массив
+      // НЕ используем fallback, чтобы не показывать невалидные промокоды
       if (attempt >= retries) {
-        console.warn("[BestBenefits Activation] All attempts failed, using fallback data", {
+        console.error("[BestBenefits Activation] All attempts failed, returning empty array (no fallback to prevent invalid promo codes)", {
           error: lastError.message,
-          fallbackCount: fallbackData.length,
         });
-        return fallbackData;
+        return [];
       }
       
       // Ждем перед следующей попыткой (exponential backoff)
@@ -468,12 +472,12 @@ export async function getUserActivatedDiscounts(
     }
   }
 
-  // Если все попытки провалились, возвращаем fallback
-  console.warn("[BestBenefits Activation] All retries exhausted, using fallback data", {
+  // Если все попытки провалились, возвращаем пустой массив
+  // НЕ используем fallback, чтобы не показывать невалидные промокоды
+  console.error("[BestBenefits Activation] All retries exhausted, returning empty array (no fallback to prevent invalid promo codes)", {
     error: lastError?.message,
-    fallbackCount: fallbackData.length,
   });
-  return fallbackData;
+  return [];
 }
 
 /**

@@ -54,32 +54,15 @@ export async function POST(request: NextRequest) {
       console.warn(`[sync-discounts] ⚠️ No password - using organization token (legacy)`);
     }
 
-    // Get existing preferences для использования как fallback
-    const existingPrefs = await prisma.discountPreference.findUnique({
-      where: { userId: user.id },
-    });
-
-    const existingFilters = (existingPrefs?.filters as any) || {};
-    const existingClaimed = Array.isArray(existingFilters.claimed) 
-      ? existingFilters.claimed 
-      : [];
-    
-    // Подготавливаем fallback данные из локальных preferences
-    const fallbackData = existingClaimed
-      .filter((item: any) => typeof item === 'object' && item !== null && item.id)
-      .map((item: any) => ({
-        id: typeof item.id === 'number' ? item.id : parseInt(String(item.id)),
-        promoCode: item.promoCode || undefined,
-      }));
-
-    // Fetch activated discounts from BestBenefits using personal token with fallback
+    // Fetch activated discounts from BestBenefits using personal token
+    // ВАЖНО: НЕ используем fallback на локальные данные - только данные из BestBenefits API
+    // Это гарантирует, что промокоды всегда актуальны и валидны
     const bbActivated = await getUserActivatedDiscounts(
       user.bestBenefitsUserId, 
       userPassword,
       {
         timeout: 15000, // 15 секунд
         retries: 2,
-        fallbackData: fallbackData, // Используем локальные данные если API недоступен
       }
     );
 
@@ -89,13 +72,53 @@ export async function POST(request: NextRequest) {
     });
 
     if (bbActivated.length === 0) {
-      console.log("[sync-discounts] No activated discounts found on BestBenefits");
+      // Получаем существующие preferences для сохранения favorites
+      const existingPrefs = await prisma.discountPreference.findUnique({
+        where: { userId: user.id },
+      });
+
+      const existingFilters = (existingPrefs?.filters as any) || {};
+      const existingFavorites = Array.isArray(existingFilters.favorites)
+        ? existingFilters.favorites
+        : [];
+
+      // Если нет активированных скидок в BestBenefits, очищаем claimed но сохраняем favorites
+      await prisma.discountPreference.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          pushEnabled: false,
+          filters: {
+            claimed: [],
+            favorites: existingFavorites,
+          },
+        },
+        update: {
+          filters: {
+            claimed: [],
+            favorites: existingFavorites,
+          },
+        },
+      });
+
+      console.log("[sync-discounts] No activated discounts found on BestBenefits - cleared local claimed discounts");
       return NextResponse.json({
         success: true,
-        message: "Нет активированных скидок на BestBenefits",
+        message: "Нет активированных скидок на BestBenefits. Локальные данные очищены.",
         synced: [],
+        cleared: true,
       });
     }
+
+    // Get existing preferences для сохранения favorites
+    const existingPrefs = await prisma.discountPreference.findUnique({
+      where: { userId: user.id },
+    });
+
+    const existingFilters = (existingPrefs?.filters as any) || {};
+    const existingFavorites = Array.isArray(existingFilters.favorites)
+      ? existingFilters.favorites
+      : [];
 
     const existingFavorites = Array.isArray(existingFilters.favorites)
       ? existingFilters.favorites
