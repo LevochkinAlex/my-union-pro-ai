@@ -1,8 +1,9 @@
 /**
  * Скрипт для синхронизации скидок конкретного пользователя с BestBenefits API
- * Использование: pnpm tsx scripts/sync-user-discounts.ts <email или phone>
+ * Использование: dotenv -e .env.local -- pnpm tsx scripts/sync-user-discounts.ts <email или phone>
  */
 
+import "dotenv/config";
 import { prisma } from "../lib/prisma";
 import { getUserActivatedDiscounts } from "../lib/best-benefits-activation";
 import { decryptPassword } from "../lib/best-benefits-password";
