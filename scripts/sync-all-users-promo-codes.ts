@@ -103,6 +103,13 @@ async function syncAllUsersPromoCodes() {
         const savedLocalPromoCode = localPromoCodesMap.get(String(bbItem.id));
         const finalPromoCode = promoCodeFromBB || savedLocalPromoCode || null;
 
+        console.log(`  [Sync Script] Discount ${bbItem.id}:`, {
+          promoCodeFromBB,
+          savedLocalPromoCode,
+          finalPromoCode,
+          source: promoCodeFromBB ? 'BestBenefits API' : (savedLocalPromoCode ? 'saved local' : 'none'),
+        });
+
         return {
           id: bbItem.id,
           promoCode: finalPromoCode,
