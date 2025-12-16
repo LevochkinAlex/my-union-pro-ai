@@ -324,28 +324,41 @@ export async function getUserActivatedDiscounts(
       }
 
       const data = await response.json();
-    console.log("[BestBenefits Activation] API Response:", JSON.stringify(data, null, 2));
-    
-    // Формат ответа согласно документации:
-    // {
-    //   "data": [
-    //     {
-    //       "id": 101,
-    //       "name": "Сеть ресторанов ТОКИО-CITY",
-    //       "codes": [
-    //         {
-    //           "id": 501,
-    //           "code": "ABCD1234",
-    //           "end_date": "2024-11-19T10:00:00Z"
-    //         }
-    //       ]
-    //     }
-    //   ]
-    // }
-    const activatedProducts = data.data || [];
-    
-    console.log("[BestBenefits Activation] Found activated discounts:", activatedProducts.length);
-    console.log("[BestBenefits Activation] Raw products data:", activatedProducts);
+      console.log("[BestBenefits Activation] API Response:", JSON.stringify(data, null, 2));
+      
+      // Проверяем структуру ответа - может быть data.data или просто data
+      let activatedProducts: any[] = [];
+      if (data.data && Array.isArray(data.data)) {
+        activatedProducts = data.data;
+      } else if (Array.isArray(data)) {
+        activatedProducts = data;
+      } else if (data.products && Array.isArray(data.products)) {
+        // Альтернативный формат: { products: [...] }
+        activatedProducts = data.products;
+      } else {
+        console.warn("[BestBenefits Activation] ⚠️ Unexpected API response structure:", Object.keys(data));
+        activatedProducts = [];
+      }
+      
+      // Формат ответа согласно документации:
+      // {
+      //   "data": [
+      //     {
+      //       "id": 101,
+      //       "name": "Сеть ресторанов ТОКИО-CITY",
+      //       "codes": [
+      //         {
+      //           "id": 501,
+      //           "code": "ABCD1234",
+      //           "end_date": "2024-11-19T10:00:00Z"
+      //         }
+      //       ]
+      //     }
+      //   ]
+      // }
+      
+      console.log("[BestBenefits Activation] Found activated discounts:", activatedProducts.length);
+      console.log("[BestBenefits Activation] Raw products data:", JSON.stringify(activatedProducts, null, 2));
     
     // Extract discount IDs and promo codes
     // Каждый продукт может иметь несколько кодов, берем первый активный
@@ -438,11 +451,13 @@ export async function getUserActivatedDiscounts(
       console.log("[BestBenefits Activation] Processing product:", { 
         id, 
         promoCode, 
-        codesCount: p.codes?.length, 
+        codesCount: p.codes?.length || 0,
+        hasCodesArray: !!p.codes && Array.isArray(p.codes),
         hasPromoCode: !!p.promo_code,
         hasPromoCodeField: !!p.promoCode,
         hasCodeField: !!p.code,
-        codes: p.codes,
+        codes: p.codes ? JSON.stringify(p.codes, null, 2) : 'none',
+        productKeys: Object.keys(p),
         raw: JSON.stringify(p, null, 2)
       });
       
