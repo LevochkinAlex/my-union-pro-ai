@@ -113,8 +113,9 @@ export async function POST(
 
     try {
       filePath = await uploadFileToVDS(fileKey, buffer, mimeType);
-      // Для VDS используем путь через API endpoint
-      dbFilePath = `/api/uploads/chat/${fileName}`;
+      // Сохраняем путь, который возвращает uploadFileToVDS (относительный путь /uploads/chat/...)
+      // getFileUrl в компоненте чата автоматически преобразует его в нужный URL (CDN или API route)
+      dbFilePath = filePath; // Это будет /uploads/chat/filename.jpg
       console.log(`[chat/attachments] File uploaded to VDS: ${filePath}, DB path: ${dbFilePath}`);
     } catch (vdsError) {
       console.error("[chat/attachments] VDS upload failed:", vdsError);
