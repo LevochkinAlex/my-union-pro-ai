@@ -701,14 +701,18 @@ export default function DiscountsClient({
   useEffect(() => {
     // Не создаем observer, если уже идет загрузка или нет больше данных
     if (isLoadingMore || isLoading || !hasMore) {
+      console.log("[DiscountsClient] Observer not created:", { isLoadingMore, isLoading, hasMore });
       return;
     }
 
     const observer = new IntersectionObserver(
       (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        
         // Дополнительная проверка перед вызовом loadMore
         if (
-          entries[0].isIntersecting && 
+          entry.isIntersecting && 
           hasMore && 
           !isLoadingMore && 
           !isLoading &&
@@ -716,22 +720,36 @@ export default function DiscountsClient({
         ) {
           console.log("[DiscountsClient] IntersectionObserver triggered, calling loadMore");
           loadMore();
-        } else if (entries[0].isIntersecting) {
-          console.log("[DiscountsClient] IntersectionObserver triggered but conditions not met:", { hasMore, isLoadingMore, isLoading, isLoadingMoreRef: isLoadingMoreRef.current });
+        } else if (entry.isIntersecting) {
+          console.log("[DiscountsClient] IntersectionObserver triggered but conditions not met:", { 
+            hasMore, 
+            isLoadingMore, 
+            isLoading, 
+            isLoadingMoreRef: isLoadingMoreRef.current,
+            intersectionRatio: entry.intersectionRatio
+          });
         }
       },
       { 
-        threshold: 0.1, // Увеличиваем threshold чтобы не срабатывать слишком рано
-        rootMargin: '200px' // Уменьшаем rootMargin чтобы избежать преждевременных срабатываний
+        threshold: 0.01, // Уменьшаем threshold для более раннего срабатывания
+        rootMargin: '100px' // Увеличиваем rootMargin для более раннего срабатывания
       }
     );
 
-    const sentinel = document.getElementById('scroll-sentinel');
-    if (sentinel) {
-      observer.observe(sentinel);
-    }
+    // Используем setTimeout чтобы убедиться что DOM обновлен
+    const timeoutId = setTimeout(() => {
+      const sentinel = document.getElementById('scroll-sentinel');
+      if (sentinel) {
+        console.log("[DiscountsClient] Observer attached to sentinel");
+        observer.observe(sentinel);
+      } else {
+        console.warn("[DiscountsClient] Sentinel element not found!");
+      }
+    }, 100);
 
     return () => {
+      clearTimeout(timeoutId);
+      const sentinel = document.getElementById('scroll-sentinel');
       if (sentinel) {
         observer.unobserve(sentinel);
       }
@@ -740,7 +758,7 @@ export default function DiscountsClient({
         clearTimeout(loadMoreTimeoutRef.current);
       }
     };
-  }, [hasMore, isLoadingMore, isLoading, loadMore]);
+  }, [hasMore, isLoadingMore, isLoading, loadMore, allDiscounts.length]);
 
   return (
     <div className="space-y-6">
@@ -918,17 +936,20 @@ export default function DiscountsClient({
               selectedCityId={filters.cityId}
             />
             
-            {/* Sentinel для бесконечного скролла */}
-            {hasMore && (
-              <div id="scroll-sentinel" className="flex justify-center py-8">
-                {isLoadingMore && (
-                  <div className="text-center text-gray-500 dark:text-gray-400">
-                    <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-solid border-blue-500 border-r-transparent"></div>
-                    <p className="mt-2 text-sm">Загрузка ещё...</p>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Sentinel для бесконечного скролла - ВСЕГДА создаем элемент, даже если hasMore=false, чтобы observer мог работать */}
+            <div id="scroll-sentinel" className="flex justify-center py-8 min-h-[100px]">
+              {isLoadingMore && (
+                <div className="text-center text-gray-500 dark:text-gray-400">
+                  <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-solid border-blue-500 border-r-transparent"></div>
+                  <p className="mt-2 text-sm">Загрузка ещё...</p>
+                </div>
+              )}
+              {!hasMore && allDiscounts.length > 0 && (
+                <div className="text-center text-gray-400 dark:text-gray-500 text-sm">
+                  Все скидки загружены
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>

@@ -17,11 +17,13 @@ export async function GET(request: NextRequest) {
     const payload = await fetchBestBenefitsDiscounts(params);
 
     // Обогащаем скидки промокодами из сохраненных preferences
+    // И также сохраняем промокоды из API, если их нет в preferences
     const preferences = await prisma.discountPreference.findUnique({
       where: { userId: session.user.id },
     });
 
-    if (preferences && payload.discounts) {
+    // Обогащаем промокодами даже если preferences нет
+    if (payload.discounts && payload.discounts.length > 0) {
       const filters = (preferences.filters as any) || {};
       const claimed = Array.isArray(filters.claimed) ? filters.claimed : [];
       
@@ -89,6 +91,9 @@ export async function GET(request: NextRequest) {
         const savedPromoCode = promoCodesMap.get(discountId);
         const isClaimed = claimedIdsSet.has(discountId);
         
+        // Промокод из API (если есть) - используется как fallback
+        const apiPromoCode = discount.promoCode || discount.promo_code || null;
+        
         if (savedPromoCode) {
           // Промокод из preferences всегда имеет приоритет
           console.log(`[api/discounts] ✅ Enriching discount ${discountId} (${discount.title}) with saved promo code:`, savedPromoCode);
@@ -96,11 +101,16 @@ export async function GET(request: NextRequest) {
             ...discount,
             promoCode: savedPromoCode,
           };
+        } else if (apiPromoCode && apiPromoCode.trim().length > 0) {
+          // Используем промокод из API, если он есть
+          console.log(`[api/discounts] ✅ Using promo code from API for discount ${discountId} (${discount.title}):`, apiPromoCode);
+          return {
+            ...discount,
+            promoCode: apiPromoCode.trim(),
+          };
         } else if (isClaimed) {
-          // Скидка получена, но промокода нет в preferences (старый формат или не синхронизировано)
-          // В этом случае промокод должен быть получен через синхронизацию с BestBenefits
-          console.log(`[api/discounts] ⚠️ Discount ${discountId} (${discount.title}) is claimed but has no promo code in preferences. User should sync with BestBenefits.`);
-          // Не добавляем промокод, так как его нет в preferences - пользователю нужно синхронизироваться
+          // Скидка получена, но промокода нет ни в preferences, ни в API
+          console.log(`[api/discounts] ⚠️ Discount ${discountId} (${discount.title}) is claimed but has no promo code. User should sync with BestBenefits.`);
         } else {
           console.log(`[api/discounts] ℹ️ Discount ${discountId} (${discount.title}) is not claimed`);
         }
@@ -112,6 +122,18 @@ export async function GET(request: NextRequest) {
         title: d.title,
         promoCode: d.promoCode,
       })));
+    } else if (payload.discounts && payload.discounts.length > 0) {
+      // Если preferences нет, но есть промокоды в API - используем их
+      payload.discounts = payload.discounts.map((discount: any) => {
+        const apiPromoCode = discount.promoCode || discount.promo_code || null;
+        if (apiPromoCode && apiPromoCode.trim().length > 0) {
+          return {
+            ...discount,
+            promoCode: apiPromoCode.trim(),
+          };
+        }
+        return discount;
+      });
     }
 
     return NextResponse.json(payload, {
