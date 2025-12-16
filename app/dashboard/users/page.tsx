@@ -250,7 +250,7 @@ function UsersPageContent() {
 
         {/* Список пользователей */}
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-3">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 animate-pulse">
                 <div className="h-24 w-24 rounded-full bg-gray-200 dark:bg-gray-700 mx-auto mb-4"></div>
@@ -261,7 +261,7 @@ function UsersPageContent() {
           </div>
         ) : users.length > 0 ? (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-3">
               {users.map((user) => (
                 <UserCard key={user.id} user={user} />
               ))}
@@ -437,7 +437,7 @@ function UsersPageContent() {
 
               {/* Список пользователей */}
               {loading ? (
-                <div className="grid grid-cols-1 gap-3">
+                <div className="space-y-3">
                   {[...Array(4)].map((_, i) => (
                     <div key={i} className="bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 animate-pulse">
                       <div className="h-16 w-16 rounded-full bg-gray-200 dark:bg-gray-700 mx-auto mb-3"></div>
@@ -448,7 +448,7 @@ function UsersPageContent() {
                 </div>
               ) : users.length > 0 ? (
                 <>
-                  <div className="grid grid-cols-1 gap-3">
+                  <div className="space-y-3">
                     {users.map((user) => (
                       <UserCard key={user.id} user={user} />
                     ))}

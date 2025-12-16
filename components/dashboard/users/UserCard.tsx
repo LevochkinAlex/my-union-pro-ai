@@ -89,16 +89,12 @@ export default function UserCard({ user }: UserCardProps) {
   
   return (
     <Link href={`/dashboard/profile/${user.id}`}>
-      <div className="group bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all overflow-hidden cursor-pointer">
-        {/* Card Header with Avatar */}
-        <div className="relative pt-8 pb-4 px-6 text-center">
-          {/* Background decoration */}
-          <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-700 dark:to-gray-800"></div>
-          
+      <div className="group bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all overflow-hidden cursor-pointer">
+        <div className="flex items-center gap-4 p-4">
           {/* Avatar */}
-          <div className="relative z-10 flex justify-center mb-3">
+          <div className="flex-shrink-0">
             {user.avatarUrl && !avatarError ? (
-              <div className="relative h-24 w-24 rounded-full overflow-hidden ring-4 ring-white dark:ring-gray-800 shadow-lg group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all">
+              <div className="relative h-14 w-14 rounded-full overflow-hidden ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all">
                 <img
                   src={user.avatarUrl}
                   alt={fullName}
@@ -109,62 +105,64 @@ export default function UserCard({ user }: UserCardProps) {
                 />
               </div>
             ) : (
-              <div className={`h-24 w-24 rounded-full bg-gradient-to-br ${avatarGradient} flex items-center justify-center text-white font-bold text-2xl ring-4 ring-white dark:ring-gray-800 shadow-lg`}>
+              <div className={`h-14 w-14 rounded-full bg-gradient-to-br ${avatarGradient} flex items-center justify-center text-white font-semibold text-lg ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all`}>
                 {initials}
               </div>
             )}
           </div>
           
-          {/* Name */}
-          <h3 className="relative z-10 font-semibold text-gray-900 dark:text-white text-lg mb-1">
-            {fullName}
-          </h3>
-          
-          {/* Job Title */}
-          {user.jobTitle && (
-            <p className="relative z-10 text-sm text-gray-600 dark:text-gray-400 mb-1">
-              {user.jobTitle}
-            </p>
-          )}
-          
-          {/* Profession */}
-          {user.profession && (
-            <p className="relative z-10 text-sm text-gray-500 dark:text-gray-500 mb-1">
-              {user.profession}
-            </p>
-          )}
-          
-          {/* Organization */}
-          {user.organization?.name && (
-            <p className="relative z-10 text-sm text-gray-500 dark:text-gray-500 mb-2">
-              {user.organization.name}
-            </p>
-          )}
-          
-          {/* Join Date */}
-          <div className="relative z-10">
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
-              Присоединился {new Date(user.createdAt).toLocaleDateString("ru-RU", {
-                day: "numeric",
-                month: "short",
-              })}
-            </span>
+          {/* User Info */}
+          <div className="flex-1 min-w-0">
+            {/* Name */}
+            <h3 className="font-semibold text-gray-900 dark:text-white text-base mb-1 truncate">
+              {fullName}
+            </h3>
+            
+            {/* Job Title */}
+            {user.jobTitle && (
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-0.5 truncate">
+                {user.jobTitle}
+              </p>
+            )}
+            
+            {/* Profession and Organization */}
+            <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500 flex-wrap">
+              {user.profession && (
+                <span className="truncate">{user.profession}</span>
+              )}
+              {user.profession && user.organization?.name && (
+                <span>•</span>
+              )}
+              {user.organization?.name && (
+                <span className="truncate">{user.organization.name}</span>
+              )}
+            </div>
+            
+            {/* Join Date */}
+            <div className="mt-1.5">
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                Присоединился {new Date(user.createdAt).toLocaleDateString("ru-RU", {
+                  day: "numeric",
+                  month: "short",
+                })}
+              </span>
+            </div>
           </div>
-        </div>
-        
-        {/* Card Footer with Action Button */}
-        <div className="px-6 pb-6 pt-2 border-t border-gray-100 dark:border-gray-700/50">
-          <button
-            onClick={handleSubscribe}
-            disabled={isLoading}
-            className={`w-full py-2 px-4 rounded-lg border font-medium text-sm transition-colors ${
-              isSubscribed
-                ? "border-green-600 text-green-600 dark:border-green-400 dark:text-green-400 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30"
-                : "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-            } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
-          >
-            {isLoading ? "..." : isSubscribed ? "✓ Подписан" : "Подписаться"}
-          </button>
+          
+          {/* Action Button */}
+          <div className="flex-shrink-0">
+            <button
+              onClick={handleSubscribe}
+              disabled={isLoading}
+              className={`py-2 px-4 rounded-lg border font-medium text-sm transition-colors whitespace-nowrap ${
+                isSubscribed
+                  ? "border-green-600 text-green-600 dark:border-green-400 dark:text-green-400 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30"
+                  : "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+              } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              {isLoading ? "..." : isSubscribed ? "✓ Подписан" : "Подписаться"}
+            </button>
+          </div>
         </div>
       </div>
     </Link>
