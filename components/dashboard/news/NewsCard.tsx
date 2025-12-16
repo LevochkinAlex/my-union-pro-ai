@@ -213,12 +213,6 @@ export default function NewsCard({
                   }}
                 />
               </div>
-            ) : (
-              <div className="h-10 w-10 rounded-full overflow-hidden flex-shrink-0 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                <span className="text-gray-500 dark:text-gray-400 text-sm">
-                  {authorName.charAt(0).toUpperCase()}
-                </span>
-              </div>
             )
           ) : (
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600 text-sm font-semibold dark:bg-blue-900/30 dark:text-blue-400 flex-shrink-0">
