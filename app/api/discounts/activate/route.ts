@@ -136,31 +136,90 @@ export async function POST(request: NextRequest) {
       // Update existing claim with promo code if available
       const existingItem = updatedClaimed[claimedIndex];
       const existingPromoCode = typeof existingItem === 'object' && existingItem.promoCode 
-        ? existingItem.promoCode 
+        ? (typeof existingItem.promoCode === 'string' ? existingItem.promoCode.trim() : String(existingItem.promoCode).trim())
         : null;
+      
+      // Валидируем новый промокод
+      const validNewPromoCode = promoCode && 
+        typeof promoCode === 'string' && 
+        promoCode.trim().length > 0 && 
+        promoCode.toLowerCase() !== 'null' && 
+        promoCode.toLowerCase() !== 'undefined'
+        ? promoCode.trim()
+        : null;
+      
+      // Валидируем существующий промокод
+      const validExistingPromoCode = existingPromoCode && 
+        existingPromoCode.length > 0 && 
+        existingPromoCode.toLowerCase() !== 'null' && 
+        existingPromoCode.toLowerCase() !== 'undefined'
+        ? existingPromoCode
+        : null;
+      
+      // Приоритет: новый валидный промокод > существующий валидный промокод > null
+      const finalPromoCode = validNewPromoCode || validExistingPromoCode || null;
       
       updatedClaimed[claimedIndex] = {
         id: discountId,
-        promoCode: promoCode || existingPromoCode || null,
+        promoCode: finalPromoCode,
       };
       
       console.log(`[activate-discount] Updated existing claim:`, {
         discountId,
-        promoCode: promoCode || existingPromoCode,
-        hadExistingPromoCode: !!existingPromoCode,
+        newPromoCode: validNewPromoCode,
+        existingPromoCode: validExistingPromoCode,
+        finalPromoCode,
+        preserved: !validNewPromoCode && !!validExistingPromoCode,
       });
     } else {
       // Add new claim
+      // Валидируем промокод перед сохранением
+      const validPromoCode = promoCode && 
+        typeof promoCode === 'string' && 
+        promoCode.trim().length > 0 && 
+        promoCode.toLowerCase() !== 'null' && 
+        promoCode.toLowerCase() !== 'undefined'
+        ? promoCode.trim()
+        : null;
+      
       updatedClaimed.push({
         id: discountId,
-        promoCode: promoCode || null,
+        promoCode: validPromoCode,
       });
       
       console.log(`[activate-discount] Added new claim:`, {
         discountId,
-        promoCode: promoCode,
+        promoCode: validPromoCode,
+        rawPromoCode: promoCode,
       });
     }
+
+    // ВАЖНО: Убеждаемся, что все промокоды валидны перед сохранением
+    const validatedClaimed = updatedClaimed.map(item => {
+      if (typeof item === 'object' && item.promoCode) {
+        const promoCode = typeof item.promoCode === 'string' 
+          ? item.promoCode.trim() 
+          : String(item.promoCode).trim();
+        
+        // Валидируем промокод
+        if (promoCode.length === 0 || 
+            promoCode.toLowerCase() === 'null' || 
+            promoCode.toLowerCase() === 'undefined') {
+          console.warn(`[activate-discount] ⚠️ Invalid promo code for discount ${item.id}, removing:`, promoCode);
+          return {
+            id: item.id,
+            promoCode: null,
+          };
+        }
+        
+        return {
+          id: item.id,
+          promoCode: promoCode,
+        };
+      }
+      
+      return item;
+    });
 
     // Save to local preferences (always do this)
     await prisma.discountPreference.upsert({
@@ -169,22 +228,36 @@ export async function POST(request: NextRequest) {
         userId: session.user.id,
         pushEnabled: false,
         filters: {
-          claimed: updatedClaimed,
+          claimed: validatedClaimed,
           favorites: favorites || existingFavorites,
         },
       },
       update: {
         filters: {
-          claimed: updatedClaimed,
+          claimed: validatedClaimed,
           favorites: favorites || existingFavorites,
         },
       },
     });
+    
+    // Проверяем, что промокоды действительно сохранились
+    const savedPrefs = await prisma.discountPreference.findUnique({
+      where: { userId: session.user.id },
+    });
+    const savedClaimed = (savedPrefs?.filters as any)?.claimed || [];
+    const savedPromoCodesCount = savedClaimed.filter((d: any) => 
+      typeof d === 'object' && d.promoCode && 
+      d.promoCode.trim().length > 0 && 
+      d.promoCode.toLowerCase() !== 'null' && 
+      d.promoCode.toLowerCase() !== 'undefined'
+    ).length;
 
-    console.log(`[activate-discount] Saved preferences with promo code:`, {
+    console.log(`[activate-discount] ✅ Saved preferences with promo code:`, {
       discountId,
       promoCode,
-      claimed: updatedClaimed,
+      totalClaimed: validatedClaimed.length,
+      withPromoCodes: savedPromoCodesCount,
+      verified: savedPromoCodesCount > 0,
     });
 
     return NextResponse.json({

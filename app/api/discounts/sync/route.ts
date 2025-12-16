@@ -180,6 +180,33 @@ export async function POST(request: NextRequest) {
       discounts: updatedClaimed.map(d => ({ id: d.id, promoCode: d.promoCode })),
     });
 
+    // ВАЖНО: Убеждаемся, что все промокоды валидны перед сохранением
+    const validatedClaimed = updatedClaimed.map(item => {
+      if (item.promoCode) {
+        const promoCode = typeof item.promoCode === 'string' 
+          ? item.promoCode.trim() 
+          : String(item.promoCode).trim();
+        
+        // Валидируем промокод
+        if (promoCode.length === 0 || 
+            promoCode.toLowerCase() === 'null' || 
+            promoCode.toLowerCase() === 'undefined') {
+          console.warn(`[sync-discounts] ⚠️ Invalid promo code for discount ${item.id}, removing:`, promoCode);
+          return {
+            id: item.id,
+            promoCode: null,
+          };
+        }
+        
+        return {
+          id: item.id,
+          promoCode: promoCode,
+        };
+      }
+      
+      return item;
+    });
+
     // Save merged preferences
     await prisma.discountPreference.upsert({
       where: { userId: user.id },
@@ -187,16 +214,33 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         pushEnabled: false,
         filters: {
-          claimed: updatedClaimed,
+          claimed: validatedClaimed,
           favorites: existingFavorites,
         },
       },
       update: {
         filters: {
-          claimed: updatedClaimed,
+          claimed: validatedClaimed,
           favorites: existingFavorites,
         },
       },
+    });
+    
+    // Проверяем, что промокоды действительно сохранились
+    const savedPrefs = await prisma.discountPreference.findUnique({
+      where: { userId: user.id },
+    });
+    const savedClaimed = (savedPrefs?.filters as any)?.claimed || [];
+    const savedPromoCodesCount = savedClaimed.filter((d: any) => 
+      typeof d === 'object' && d.promoCode && 
+      d.promoCode.trim().length > 0 && 
+      d.promoCode.toLowerCase() !== 'null' && 
+      d.promoCode.toLowerCase() !== 'undefined'
+    ).length;
+    
+    console.log("[sync-discounts] ✅ Verified saved promo codes in database:", {
+      totalClaimed: savedClaimed.length,
+      withPromoCodes: savedPromoCodesCount,
     });
 
     // Проверяем что промокоды действительно сохранились

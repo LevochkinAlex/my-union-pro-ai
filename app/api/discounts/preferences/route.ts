@@ -87,6 +87,7 @@ async function updatePreferences(request: NextRequest) {
     const existingFilters = (existingPreference?.filters as any) || {};
     
     // Мерджим filters из запроса с существующими, но сохраняем массивы favorites и claimed
+    // ВАЖНО: НЕ используем простой spread для claimed, чтобы не потерять промокоды!
     let updatedFilters = body.filters 
       ? { ...existingFilters, ...body.filters }
       : existingFilters;
@@ -105,6 +106,96 @@ async function updatePreferences(request: NextRequest) {
     } else if (!updatedFilters.favorites && existingFilters.favorites) {
       // Сохраняем существующие favorites, если они не были переданы
       updatedFilters = { ...updatedFilters, favorites: existingFilters.favorites };
+    }
+    
+    // ВАЖНО: Мерджим claimed с сохранением промокодов
+    // Если claimed переданы, мерджим их правильно с сохранением промокодов
+    if (body.filters?.claimed && Array.isArray(body.filters.claimed)) {
+      const existingClaimed = Array.isArray(existingFilters.claimed) 
+        ? existingFilters.claimed 
+        : [];
+      
+      // Создаем Map существующих промокодов для быстрого поиска
+      const existingPromoCodesMap = new Map<string, string>();
+      existingClaimed.forEach((item: any) => {
+        if (typeof item === 'object' && item !== null && item.id && item.promoCode) {
+          const discountId = String(item.id);
+          const promoCode = typeof item.promoCode === 'string' 
+            ? item.promoCode.trim() 
+            : String(item.promoCode).trim();
+          if (promoCode && promoCode.length > 0 && promoCode.toLowerCase() !== 'null' && promoCode.toLowerCase() !== 'undefined') {
+            existingPromoCodesMap.set(discountId, promoCode);
+          }
+        }
+      });
+      
+      // Мерджим claimed: приоритет у новых, но сохраняем промокоды из существующих
+      const mergedClaimed = [...body.filters.claimed];
+      
+      // Для каждого нового элемента проверяем, есть ли промокод в существующих
+      mergedClaimed.forEach((newItem: any, index: number) => {
+        if (typeof newItem === 'object' && newItem !== null && newItem.id) {
+          const discountId = String(newItem.id);
+          const newPromoCode = newItem.promoCode 
+            ? (typeof newItem.promoCode === 'string' ? newItem.promoCode.trim() : String(newItem.promoCode).trim())
+            : null;
+          
+          // Валидируем новый промокод
+          const validNewPromoCode = newPromoCode && 
+            newPromoCode.length > 0 && 
+            newPromoCode.toLowerCase() !== 'null' && 
+            newPromoCode.toLowerCase() !== 'undefined'
+            ? newPromoCode
+            : null;
+          
+          // Если нового промокода нет, но есть существующий - используем его
+          if (!validNewPromoCode) {
+            const existingPromoCode = existingPromoCodesMap.get(discountId);
+            if (existingPromoCode) {
+              mergedClaimed[index] = {
+                ...newItem,
+                promoCode: existingPromoCode,
+              };
+              console.log(`[preferences] Preserved existing promo code for discount ${discountId}:`, existingPromoCode);
+            }
+          }
+        }
+      });
+      
+      // Добавляем существующие claimed, которых нет в новых (с их промокодами)
+      const newIdsSet = new Set(mergedClaimed.map((item: any) => 
+        typeof item === 'object' && item !== null ? String(item.id) : String(item)
+      ));
+      
+      existingClaimed.forEach((existingItem: any) => {
+        const discountId = typeof existingItem === 'object' && existingItem !== null 
+          ? String(existingItem.id) 
+          : String(existingItem);
+        
+        if (!newIdsSet.has(discountId)) {
+          // Сохраняем существующий элемент с промокодом
+          if (typeof existingItem === 'object' && existingItem !== null && existingItem.promoCode) {
+            const promoCode = typeof existingItem.promoCode === 'string' 
+              ? existingItem.promoCode.trim() 
+              : String(existingItem.promoCode).trim();
+            if (promoCode && promoCode.length > 0 && promoCode.toLowerCase() !== 'null' && promoCode.toLowerCase() !== 'undefined') {
+              mergedClaimed.push(existingItem);
+              console.log(`[preferences] Kept existing claimed discount ${discountId} with promo code`);
+            }
+          } else {
+            mergedClaimed.push(existingItem);
+          }
+        }
+      });
+      
+      updatedFilters = { ...updatedFilters, claimed: mergedClaimed };
+      console.log(`[preferences] Merged claimed discounts: ${mergedClaimed.length} total, ${mergedClaimed.filter((item: any) => typeof item === 'object' && item.promoCode).length} with promo codes`);
+    } else if (body.filters && 'claimed' in body.filters && body.filters.claimed === null) {
+      // Если явно передано null, очищаем claimed
+      updatedFilters = { ...updatedFilters, claimed: [] };
+    } else if (!updatedFilters.claimed && existingFilters.claimed) {
+      // Сохраняем существующие claimed, если они не были переданы
+      updatedFilters = { ...updatedFilters, claimed: existingFilters.claimed };
     }
 
     // Валидируем только pushEnabled и geolocation через схему
