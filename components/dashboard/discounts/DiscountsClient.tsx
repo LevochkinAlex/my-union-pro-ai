@@ -49,7 +49,7 @@ export default function DiscountsClient({
   initialPreference,
 }: DiscountsClientProps) {
   // Защита от некорректных данных
-  const safeInitialData = initialData || {
+  const safeInitialData: DiscountSearchResult = initialData || {
     discounts: [],
     categories: [],
     cities: [],
@@ -60,6 +60,7 @@ export default function DiscountsClient({
       hasMore: false,
     },
     source: "fallback",
+    fetchedAt: new Date().toISOString(),
   };
 
   const safeInitialPreference = initialPreference || {
