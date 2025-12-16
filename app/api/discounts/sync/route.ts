@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       discounts: bbActivated.map(d => ({ id: d.id, hasPromoCode: !!d.promoCode, promoCode: d.promoCode })),
     });
 
-    // Get existing preferences для сохранения favorites
+    // Get existing preferences для сохранения favorites и уже полученных промокодов
     const existingPrefs = await prisma.discountPreference.findUnique({
       where: { userId: user.id },
     });
@@ -80,45 +80,6 @@ export async function POST(request: NextRequest) {
     const existingFavorites = Array.isArray(existingFilters.favorites)
       ? existingFilters.favorites
       : [];
-
-    if (bbActivated.length === 0) {
-      // Если нет активированных скидок в BestBenefits, очищаем claimed но сохраняем favorites
-      await prisma.discountPreference.upsert({
-        where: { userId: user.id },
-        create: {
-          userId: user.id,
-          pushEnabled: false,
-          filters: {
-            claimed: [],
-            favorites: existingFavorites,
-          },
-        },
-        update: {
-          filters: {
-            claimed: [],
-            favorites: existingFavorites,
-          },
-        },
-      });
-
-      console.log("[sync-discounts] No activated discounts found on BestBenefits - cleared local claimed discounts");
-      return NextResponse.json({
-        success: true,
-        message: "Нет активированных скидок на BestBenefits. Локальные данные очищены.",
-        synced: [],
-        cleared: true,
-      });
-    }
-
-    const existingFavorites = Array.isArray(existingFilters.favorites)
-      ? existingFilters.favorites
-      : [];
-
-    // МЕРДЖИМ данные из BestBenefits с локальными preferences
-    // Важно: промокоды не изменяются после получения, поэтому можем сохранять уже полученные локальные промокоды
-    // Приоритет: BestBenefits API > локальные (уже полученные) промокоды
-    // Создаем Map локальных промокодов для быстрого поиска (только для уже сохраненных промокодов)
-    const existingFilters = (existingPrefs?.filters as any) || {};
     const existingClaimed = Array.isArray(existingFilters.claimed) 
       ? existingFilters.claimed 
       : [];
