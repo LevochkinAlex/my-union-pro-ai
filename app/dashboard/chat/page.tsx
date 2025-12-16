@@ -1204,8 +1204,13 @@ function ChatPageContent() {
 
   // Helper function to get file URL (for production compatibility)
   // Универсальная функция для получения URL файлов с CDN или API
-  const getFileUrl = (filePath: string) => {
+  const getFileUrl = (filePath: string | null | undefined) => {
     if (!filePath) return "";
+    
+    // Если это base64 data URL, возвращаем как есть
+    if (filePath.startsWith("data:")) {
+      return filePath;
+    }
     
     // Используем утилиту для работы с CDN
     const { getFileUrlWithCDN } = require("@/lib/cdn");

@@ -31,6 +31,11 @@ export function isCDNConfigured(): boolean {
 export function getFileUrlWithCDN(filePath: string, useCDN: boolean = true): string {
   if (!filePath) return "";
 
+  // Если это base64 data URL, возвращаем как есть (не обрабатываем через CDN)
+  if (filePath.startsWith("data:")) {
+    return filePath;
+  }
+
   // Если это уже полный URL (http/https), возвращаем как есть
   if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
     return filePath;
