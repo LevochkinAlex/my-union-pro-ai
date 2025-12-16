@@ -332,8 +332,9 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 секунд таймаут
     
+    let response: Response;
     try {
-      const response = await fetch(url, {
+      response = await fetch(url, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -344,11 +345,12 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      return response;
     } catch (error: any) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
-        throw new Error(`Request timeout after 15s: ${url}`);
+        console.warn("[best-benefits] /search endpoint timeout after 15s");
+        // Fallback to /products endpoint
+        throw new Error("Search timeout");
       }
       throw error;
     }
@@ -368,6 +370,13 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
       return data;
     } else {
       console.warn("[best-benefits] /search endpoint failed, falling back to /products");
+    }
+  } catch (error: any) {
+    // Если ошибка поиска (включая таймаут), продолжаем к /products endpoint
+    if (error.message === "Search timeout" || error.message?.includes("timeout")) {
+      console.warn("[best-benefits] /search endpoint timeout, falling back to /products");
+    } else {
+      throw error;
     }
   }
 
@@ -397,16 +406,31 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
   const url = `${API_BASE_URL}?${searchParams.toString()}`;
   console.log("[best-benefits] Fetching from API:", url);
 
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-    },
-    // Disable caching to avoid "item over 2MB" errors
-    cache: "no-store",
-  });
+  // Добавляем таймаут для основного запроса к /products
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 секунд таймаут
+  
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      // Disable caching to avoid "item over 2MB" errors
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timeout after 15s: ${url}`);
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
