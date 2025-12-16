@@ -369,11 +369,20 @@ export async function getUserActivatedDiscounts(
       let promoCode: string | undefined = undefined;
       
       if (p.codes && Array.isArray(p.codes) && p.codes.length > 0) {
+        console.log(`[BestBenefits Activation] Product ${id} has ${p.codes.length} codes, searching for active one...`);
+        
         // Ищем первый активный код с неистекшей датой
         const now = new Date();
-        const activeCode = p.codes.find((c: any) => {
+        const activeCode = p.codes.find((c: any, index: number) => {
           const code = c?.code || c?.promo_code || c?.promoCode;
-          const endDate = c?.end_date;
+          const endDate = c?.end_date || c?.endDate || c?.end_date_time;
+          
+          console.log(`[BestBenefits Activation] Checking code ${index + 1}/${p.codes.length} for product ${id}:`, {
+            code,
+            endDate,
+            codeType: typeof code,
+            hasCode: !!code,
+          });
           
           // Проверяем валидность кода
           if (!code || 
@@ -381,6 +390,7 @@ export async function getUserActivatedDiscounts(
               code.trim().length === 0 || 
               code === 'Промокод деактивирован' ||
               code.toLowerCase() === 'deactivated') {
+            console.log(`[BestBenefits Activation] Code ${index + 1} is invalid:`, code);
             return false;
           }
           
@@ -394,13 +404,17 @@ export async function getUserActivatedDiscounts(
               
               // Промокод действителен, если дата окончания >= сегодня
               if (expirationDateOnly < nowDateOnly) {
-                console.log(`[BestBenefits Activation] Promo code ${code} expired on ${endDate}`);
+                console.log(`[BestBenefits Activation] Promo code ${code} expired on ${endDate} (today: ${nowDateOnly.toISOString()})`);
                 return false;
+              } else {
+                console.log(`[BestBenefits Activation] ✅ Promo code ${code} is valid until ${endDate}`);
               }
             } catch (error) {
               console.warn(`[BestBenefits Activation] Failed to parse end_date for code ${code}:`, endDate, error);
               // При ошибке парсинга считаем промокод валидным
             }
+          } else {
+            console.log(`[BestBenefits Activation] Code ${code} has no end_date, considering valid`);
           }
           
           return true;
@@ -411,7 +425,12 @@ export async function getUserActivatedDiscounts(
           // Нормализуем: строки "null" и "undefined" игнорируем
           if (code && code.toLowerCase() !== 'null' && code.toLowerCase() !== 'undefined') {
             promoCode = code;
+            console.log(`[BestBenefits Activation] ✅ Found active promo code for product ${id}:`, promoCode);
+          } else {
+            console.log(`[BestBenefits Activation] ⚠️ Active code found but invalid:`, code);
           }
+        } else {
+          console.log(`[BestBenefits Activation] ⚠️ No active code found for product ${id} (checked ${p.codes.length} codes)`);
         }
       } else if (p.promo_code) {
         // Прямое поле promo_code - применяем валидацию
