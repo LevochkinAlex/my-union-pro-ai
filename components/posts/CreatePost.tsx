@@ -935,6 +935,25 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
                       onError={(e) => {
                         console.error('Cover image load error:', coverImage);
                         const target = e.target as HTMLImageElement;
+                        
+                        // Если это CDN URL, пробуем fallback на API route
+                        if (coverImage && coverImage.includes('cdn.myunion.pro')) {
+                          // Конвертируем CDN URL обратно в API route URL
+                          const apiUrl = coverImage.replace('https://cdn.myunion.pro/uploads/', '/api/uploads/');
+                          console.log('Trying fallback API URL:', apiUrl);
+                          target.src = apiUrl;
+                          return; // Позволяем браузеру попробовать загрузить через API
+                        }
+                        
+                        // Если это относительный путь, пробуем через API
+                        if (coverImage && coverImage.startsWith('/uploads/')) {
+                          const apiUrl = coverImage.replace('/uploads/', '/api/uploads/');
+                          console.log('Trying fallback API URL:', apiUrl);
+                          target.src = apiUrl;
+                          return;
+                        }
+                        
+                        // Если все попытки не удались, показываем placeholder
                         target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="800" height="450"%3E%3Crect fill="%23ddd" width="800" height="450"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle"%3EОшибка загрузки%3C/text%3E%3C/svg%3E';
                       }}
                     />

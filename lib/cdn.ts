@@ -37,7 +37,23 @@ export function getFileUrlWithCDN(filePath: string, useCDN: boolean = true): str
   }
 
   // Если это уже полный URL (http/https), возвращаем как есть
+  // НО: если это CDN URL с base64 внутри - это ошибка, исправляем
   if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+    // Проверяем, не содержит ли URL base64 строку после /uploads/
+    if (filePath.includes("/uploads/data:") || filePath.includes("/uploads/data%3A")) {
+      // Извлекаем base64 часть
+      const base64Match = filePath.match(/\/uploads\/(data[^/]*)/);
+      if (base64Match) {
+        // Декодируем и возвращаем чистый base64
+        try {
+          const decoded = decodeURIComponent(base64Match[1]);
+          return decoded;
+        } catch {
+          // Если не удалось декодировать, возвращаем как есть
+          return filePath;
+        }
+      }
+    }
     return filePath;
   }
 
@@ -45,6 +61,13 @@ export function getFileUrlWithCDN(filePath: string, useCDN: boolean = true): str
 
   // Нормализуем путь к файлу
   let normalizedPath = filePath;
+
+  // ВАЖНО: Проверяем, что путь не содержит base64 строку
+  if (normalizedPath.includes("data:") || normalizedPath.includes("base64")) {
+    // Если в пути есть base64, это ошибка - возвращаем как есть или пустую строку
+    console.warn("[cdn] Warning: base64 string found in file path, skipping CDN conversion:", normalizedPath.substring(0, 100));
+    return normalizedPath;
+  }
 
   // Убираем префикс /api/uploads/, если есть
   if (normalizedPath.startsWith("/api/uploads/")) {
