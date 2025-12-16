@@ -311,72 +311,75 @@ async function fetchFromRemote(params: DiscountSearchParams): Promise<BestBenefi
 
   // Если есть поисковый запрос, используем /search endpoint
   if (params.search && params.search.trim().length > 0) {
-    const searchUrl = "https://bestbenefits.ru/api/search";
-    const searchParams = new URLSearchParams();
-    searchParams.set("query", params.search.trim());
-    
-    // ⚠️ НЕ применяем фильтр по городу при поиске
-    // API поиска вернет все релевантные скидки, включая глобальные
-    // Фильтрация по городу (если нужна) произойдет на клиенте
-    // if (params.cityName) {
-    //   searchParams.set("city", params.cityName);
-    // }
-    
-    if (params.page) searchParams.set("page", String(params.page));
-    if (params.limit) searchParams.set("per_page", String(params.limit));
-
-    const url = `${searchUrl}?${searchParams.toString()}`;
-    console.log("[best-benefits] Using /search endpoint:", url);
-
-    // Добавляем таймаут для всех запросов к BestBenefits API
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 секунд таймаут
-    
-    let response: Response;
     try {
-      response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        cache: "no-store",
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-    } catch (error: any) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        console.warn("[best-benefits] /search endpoint timeout after 15s");
-        // Fallback to /products endpoint
-        throw new Error("Search timeout");
-      }
-      throw error;
-    }
+      const searchUrl = "https://bestbenefits.ru/api/search";
+      const searchParams = new URLSearchParams();
+      searchParams.set("query", params.search.trim());
+      
+      // ⚠️ НЕ применяем фильтр по городу при поиске
+      // API поиска вернет все релевантные скидки, включая глобальные
+      // Фильтрация по городу (если нужна) произойдет на клиенте
+      // if (params.cityName) {
+      //   searchParams.set("city", params.cityName);
+      // }
+      
+      if (params.page) searchParams.set("page", String(params.page));
+      if (params.limit) searchParams.set("per_page", String(params.limit));
 
-    if (response.ok) {
-      const data = (await response.json()) as BestBenefitsResponse;
-      console.log("[best-benefits] Search результаты:", {
-        query: params.search,
-        found: data?.data?.length ?? 0,
-        total: data?.meta?.total,
-        page: data?.meta?.current_page,
-        lastPage: data?.meta?.last_page,
-        hasMore: data?.meta?.current_page && data?.meta?.last_page 
-          ? data?.meta?.current_page < data?.meta?.last_page 
-          : false,
-      });
-      return data;
-    } else {
-      console.warn("[best-benefits] /search endpoint failed, falling back to /products");
-    }
-  } catch (error: any) {
-    // Если ошибка поиска (включая таймаут), продолжаем к /products endpoint
-    if (error.message === "Search timeout" || error.message?.includes("timeout")) {
-      console.warn("[best-benefits] /search endpoint timeout, falling back to /products");
-    } else {
-      throw error;
+      const url = `${searchUrl}?${searchParams.toString()}`;
+      console.log("[best-benefits] Using /search endpoint:", url);
+
+      // Добавляем таймаут для всех запросов к BestBenefits API
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 секунд таймаут
+      
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+          console.warn("[best-benefits] /search endpoint timeout after 15s, falling back to /products");
+          // Fallback to /products endpoint
+          throw new Error("Search timeout");
+        }
+        throw error;
+      }
+
+      if (response.ok) {
+        const data = (await response.json()) as BestBenefitsResponse;
+        console.log("[best-benefits] Search результаты:", {
+          query: params.search,
+          found: data?.data?.length ?? 0,
+          total: data?.meta?.total,
+          page: data?.meta?.current_page,
+          lastPage: data?.meta?.last_page,
+          hasMore: data?.meta?.current_page && data?.meta?.last_page 
+            ? data?.meta?.current_page < data?.meta?.last_page 
+            : false,
+        });
+        return data;
+      } else {
+        console.warn("[best-benefits] /search endpoint failed, falling back to /products");
+      }
+    } catch (error: any) {
+      // Если ошибка поиска (включая таймаут), продолжаем к /products endpoint
+      if (error.message === "Search timeout" || error.message?.includes("timeout")) {
+        console.warn("[best-benefits] /search endpoint timeout, falling back to /products");
+      } else if (error.message !== "Search timeout") {
+        // Пробрасываем ошибку если это не таймаут
+        throw error;
+      }
     }
   }
 
