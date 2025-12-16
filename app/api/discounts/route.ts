@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     // Обогащаем промокодами даже если preferences нет
     if (payload.discounts && payload.discounts.length > 0) {
-      const filters = (preferences.filters as any) || {};
+      const filters = (preferences?.filters as any) || {};
       const claimed = Array.isArray(filters.claimed) ? filters.claimed : [];
       
       // Создаем Map для быстрого поиска промокодов
@@ -94,26 +94,63 @@ export async function GET(request: NextRequest) {
         // Промокод из API (если есть) - используется как fallback
         const apiPromoCode = discount.promoCode || discount.promo_code || null;
         
+        // Находим claimed item в исходном массиве для более точной проверки
+        const claimedItem = claimed.find((item: any) => {
+          if (typeof item === 'object' && item !== null && item.id) {
+            return String(item.id) === discountId;
+          } else if (typeof item === 'number') {
+            return String(item) === discountId;
+          }
+          return false;
+        });
+        
+        // Извлекаем промокод из claimedItem напрямую (на случай если он не попал в map)
+        let promoCodeFromItem: string | null = null;
+        if (claimedItem && typeof claimedItem === 'object' && claimedItem.promoCode) {
+          const code = typeof claimedItem.promoCode === 'string' 
+            ? claimedItem.promoCode.trim() 
+            : String(claimedItem.promoCode).trim();
+          if (code && code.length > 0 && code.toLowerCase() !== 'null' && code.toLowerCase() !== 'undefined') {
+            promoCodeFromItem = code;
+          }
+        }
+        
+        // Приоритет: preferences > claimedItem > API
+        let finalPromoCode: string | null | undefined = undefined;
+        
         if (savedPromoCode) {
           // Промокод из preferences всегда имеет приоритет
-          console.log(`[api/discounts] ✅ Enriching discount ${discountId} (${discount.title}) with saved promo code:`, savedPromoCode);
-          return {
-            ...discount,
-            promoCode: savedPromoCode,
-          };
-        } else if (apiPromoCode && apiPromoCode.trim().length > 0) {
+          finalPromoCode = savedPromoCode;
+          console.log(`[api/discounts] ✅ Enriching discount ${discountId} (${discount.title}) with saved promo code from map:`, savedPromoCode);
+        } else if (promoCodeFromItem) {
+          // Используем промокод из claimedItem напрямую
+          finalPromoCode = promoCodeFromItem;
+          console.log(`[api/discounts] ✅ Enriching discount ${discountId} (${discount.title}) with promo code from claimed item:`, promoCodeFromItem);
+        } else if (apiPromoCode && apiPromoCode.trim().length > 0 && apiPromoCode.toLowerCase() !== 'null' && apiPromoCode.toLowerCase() !== 'undefined') {
           // Используем промокод из API, если он есть
-          console.log(`[api/discounts] ✅ Using promo code from API for discount ${discountId} (${discount.title}):`, apiPromoCode);
-          return {
-            ...discount,
-            promoCode: apiPromoCode.trim(),
-          };
+          finalPromoCode = apiPromoCode.trim();
+          console.log(`[api/discounts] ✅ Using promo code from API for discount ${discountId} (${discount.title}):`, finalPromoCode);
         } else if (isClaimed) {
           // Скидка получена, но промокода нет ни в preferences, ни в API
-          console.log(`[api/discounts] ⚠️ Discount ${discountId} (${discount.title}) is claimed but has no promo code. User should sync with BestBenefits.`);
+          console.log(`[api/discounts] ⚠️ Discount ${discountId} (${discount.title}) is claimed but has no promo code. User should sync with BestBenefits.`, {
+            hasSavedPromoCode: !!savedPromoCode,
+            hasPromoCodeFromItem: !!promoCodeFromItem,
+            hasApiPromoCode: !!apiPromoCode,
+            claimedItem: claimedItem
+          });
+          finalPromoCode = undefined; // Явно undefined для claimed без промокода
         } else {
           console.log(`[api/discounts] ℹ️ Discount ${discountId} (${discount.title}) is not claimed`);
         }
+        
+        // Если нашли промокод - добавляем его
+        if (finalPromoCode !== undefined) {
+          return {
+            ...discount,
+            promoCode: finalPromoCode || undefined,
+          };
+        }
+        
         return discount;
       });
       
