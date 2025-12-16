@@ -709,7 +709,16 @@ export default function NewNewsPage() {
           onInsert={(imageUrl) => {
             if (editorRef.current) {
               const editor = editorRef.current.querySelector('[contenteditable="true"]') as any;
-              const fullUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
+              // Используем CDN URL если доступен, иначе относительный путь
+              let fullUrl = imageUrl;
+              if (!imageUrl.startsWith('http')) {
+                const { getFileUrlWithCDN } = require('@/lib/cdn');
+                fullUrl = getFileUrlWithCDN(imageUrl, true);
+                // Если CDN не настроен, fallback на origin
+                if (!fullUrl.startsWith('http')) {
+                  fullUrl = `${window.location.origin}${imageUrl}`;
+                }
+              }
               if (editor?.insertImage) {
                 // Используем метод редактора, который восстанавливает позицию курсора
                 editor.insertImage(fullUrl, "Изображение");

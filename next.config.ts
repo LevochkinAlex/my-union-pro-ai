@@ -30,6 +30,10 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'cdn.myunion.pro', // Selectel CDN
+      },
+      {
+        protocol: 'https',
         hostname: 'dnznrvs05pmza.cloudfront.net', // RunwayML CDN
       },
       {

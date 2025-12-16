@@ -20,32 +20,18 @@ interface CreatePostProps {
   compact?: boolean;
 }
 
-// Хелпер для формирования URL превью изображения
+// Хелпер для формирования URL превью изображения с поддержкой CDN
 const getPreviewUrl = (imageUrl: string): string => {
   if (!imageUrl) return "";
-  // Если это уже полный URL
-  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
-    // Если это URL с /uploads/, конвертируем в /api/uploads/
-    if (imageUrl.includes("/uploads/") && !imageUrl.includes("/api/uploads/")) {
-      return imageUrl.replace("/uploads/", "/api/uploads/");
-    }
-    return imageUrl;
-  }
+  
   // Если это data URL, возвращаем как есть
   if (imageUrl.startsWith("data:")) {
     return imageUrl;
   }
-  // Если это путь /uploads/, конвертируем в /api/uploads/
-  if (imageUrl.startsWith("/uploads/")) {
-    return imageUrl.replace("/uploads/", "/api/uploads/");
-  }
-  // Если это уже /api/uploads/, возвращаем как есть
-  if (imageUrl.startsWith("/api/uploads/")) {
-    return imageUrl;
-  }
-  // Для других путей, пробуем добавить /api/uploads/posts/
-  const filename = imageUrl.split("/").pop();
-  return `/api/uploads/posts/${filename}`;
+  
+  // Используем утилиту для работы с CDN
+  const { getFileUrlWithCDN } = require("@/lib/cdn");
+  return getFileUrlWithCDN(imageUrl, true);
 };
 
 export default function CreatePost({ onPostCreated, compact = false }: CreatePostProps = {} as CreatePostProps) {

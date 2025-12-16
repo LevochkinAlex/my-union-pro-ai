@@ -2,10 +2,36 @@ import { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
+import { IconsHead } from "@/components/IconsHead";
+import { getIconUrl } from "@/lib/cdn";
+
+// Получаем CDN URL для иконок
+const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL;
+const useCDN = !!cdnUrl;
 
 export const metadata: Metadata = {
   title: "MyUnion — единая панель управления профсоюзом",
   description: "Управляйте документами, участниками и уведомлениями в одном месте",
+  icons: {
+    icon: [
+      { url: getIconUrl("/favicon.ico", useCDN), sizes: "any" },
+      { url: getIconUrl("/icon.png", useCDN), sizes: "any" },
+      { url: getIconUrl("/favicon-16x16.png", useCDN), sizes: "16x16", type: "image/png" },
+      { url: getIconUrl("/favicon-32x32.png", useCDN), sizes: "32x32", type: "image/png" },
+      { url: getIconUrl("/icon-192x192.png", useCDN), sizes: "192x192", type: "image/png" },
+      { url: getIconUrl("/icon-512x512.png", useCDN), sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: getIconUrl("/apple-touch-icon.png", useCDN), sizes: "180x180", type: "image/png" },
+    ],
+    shortcut: getIconUrl("/favicon.ico", useCDN),
+  },
+  manifest: getIconUrl("/manifest.json", useCDN),
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "MyUnion Pro",
+  },
   other: {
     "referrer-policy": "strict-origin-when-cross-origin",
   },
@@ -19,6 +45,9 @@ export default function RootLayout({
   return (
     <html lang="ru" suppressHydrationWarning>
       <head>
+        {/* Favicon и иконки для всех браузеров (с поддержкой CDN) */}
+        <IconsHead />
+        
         {/* Theme Flash Prevention - must be first script */}
         <script
           dangerouslySetInnerHTML={{

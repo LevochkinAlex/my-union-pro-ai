@@ -174,7 +174,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     return user.firstName?.[0] || user.lastName?.[0] || "?";
   };
 
-  // Helper function to get file URL (for production compatibility)
+  // Helper function to get file URL with CDN support
   const getFileUrl = (filePath: string, defaultCategory: string = "posts") => {
     if (!filePath) return "";
     
@@ -193,53 +193,60 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       return trimmedPath;
     }
     
-    // If it's already a full URL, return as is (use trimmedPath for consistency)
+    // Используем утилиту для работы с CDN
+    const { getFileUrlByCategory, getFileUrlWithCDN } = require("@/lib/cdn");
+    
+    // If it's already a full URL, use CDN utility for normalization
     if (trimmedPath.startsWith("http://") || trimmedPath.startsWith("https://")) {
-      return trimmedPath;
+      return getFileUrlWithCDN(trimmedPath, true);
     }
-    // If it's already an API route, return as is (use trimmedPath for consistency)
-    if (trimmedPath.startsWith("/api/uploads/")) {
-      return trimmedPath;
+    
+    // Определяем категорию из пути
+    let category = defaultCategory;
+    if (trimmedPath.includes("/avatars/") || trimmedPath.includes("avatars-")) {
+      category = "avatars";
+    } else if (trimmedPath.includes("/chat/") || trimmedPath.includes("chat-")) {
+      category = "chat";
+    } else if (trimmedPath.includes("/posts/") || trimmedPath.includes("posts-")) {
+      category = "posts";
+    } else if (trimmedPath.includes("/documents/") || trimmedPath.includes("documents-")) {
+      category = "documents";
+    } else if (trimmedPath.includes("/knowledge/") || trimmedPath.includes("knowledge-")) {
+      category = "knowledge";
     }
-    // If it starts with /uploads/, convert to API route (use trimmedPath for consistency)
+    
+    // Если путь начинается с /uploads/, извлекаем имя файла
     if (trimmedPath.startsWith("/uploads/")) {
-      // Extract the path after /uploads/
       const pathAfterUploads = trimmedPath.replace(/^\/uploads\//, "");
-      // Determine category from path (posts, chat, avatars, etc.)
       const parts = pathAfterUploads.split("/").filter(p => p.length > 0);
+      
       if (parts.length >= 2) {
-        // Path has category and filename: /uploads/category/filename.jpg
-        const category = parts[0]; // posts, chat, avatars, etc.
+        // Path has category and filename
+        category = parts[0];
         const filename = parts[parts.length - 1];
-        // Validate filename - must exist and be reasonable (at least 3 chars or have extension)
         if (!filename || (filename.length < 3 && !filename.includes("."))) return "";
-        return `/api/uploads/${category}/${filename}`;
+        return getFileUrlByCategory(category as any, filename, true);
       } else if (parts.length === 1) {
-        // Path has only filename: /uploads/filename.jpg - use default category
+        // Path has only filename
         const filename = parts[0];
-        // Validate filename - must exist and be reasonable (at least 3 chars or have extension)
         if (!filename || (filename.length < 3 && !filename.includes("."))) return "";
-        return `/api/uploads/${defaultCategory}/${filename}`;
+        return getFileUrlByCategory(category as any, filename, true);
       }
-      // Empty path after /uploads/ - invalid
       return "";
     }
-    // For other paths (not starting with /uploads/ or /api/uploads/), reject if too short
-    // This catches cases like "Z" that would otherwise become "/api/uploads/avatars/Z"
-    // Reject single character paths or very short paths that don't look like filenames
+    
+    // For other paths, validate and extract filename
     if (trimmedPath.length < 3) {
       return "";
     }
-    // Also reject paths that don't contain a dot (likely not a file) unless they're URLs or data URLs
     if (!trimmedPath.includes(".") && !trimmedPath.startsWith("/") && !trimmedPath.startsWith("http") && !trimmedPath.startsWith("data:")) {
       return "";
     }
-    // Extract filename from path (use trimmedPath for consistency)
+    
     const filename = trimmedPath.split("/").pop();
-    // Validate filename - must exist and be reasonable (at least 3 chars or have extension)
     if (!filename || (filename.length < 3 && !filename.includes("."))) return "";
-    // Use API endpoint for serving files with default category
-    return `/api/uploads/${defaultCategory}/${filename}`;
+    
+    return getFileUrlByCategory(category as any, filename, true);
   };
 
   const formatTime = (dateString: string) => {

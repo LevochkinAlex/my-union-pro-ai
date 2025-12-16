@@ -99,31 +99,10 @@ export default function PostDetailClient({ post, session }: PostDetailClientProp
 
   const getFileUrl = (filePath: string) => {
     if (!filePath) return "";
-    // If it's already a full URL, return as is
-    if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
-      return filePath;
-    }
-    // If it's already an API route, return as is
-    if (filePath.startsWith("/api/uploads/")) {
-      return filePath;
-    }
-    // If it starts with /uploads/, convert to API route
-    if (filePath.startsWith("/uploads/")) {
-      // Extract the path after /uploads/
-      const pathAfterUploads = filePath.replace(/^\/uploads\//, "");
-      // Determine category from path (posts, chat, avatars, etc.)
-      const parts = pathAfterUploads.split("/");
-      if (parts.length >= 2) {
-        const category = parts[0]; // posts, chat, avatars, etc.
-        const filename = parts[parts.length - 1];
-        return `/api/uploads/${category}/${filename}`;
-      }
-    }
-    // Extract filename from path
-    const filename = filePath.split("/").pop();
-    if (!filename) return filePath;
-    // Use API endpoint for serving files (default to posts)
-    return `/api/uploads/posts/${filename}`;
+    
+    // Используем утилиту для работы с CDN
+    const { getFileUrlWithCDN } = require("@/lib/cdn");
+    return getFileUrlWithCDN(filePath, true);
   };
 
   const handleLike = async () => {

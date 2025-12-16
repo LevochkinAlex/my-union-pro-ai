@@ -1203,40 +1203,13 @@ function ChatPageContent() {
   }, [selectedChat]);
 
   // Helper function to get file URL (for production compatibility)
-  // Универсальная функция для получения URL файлов с VDS
+  // Универсальная функция для получения URL файлов с CDN или API
   const getFileUrl = (filePath: string) => {
     if (!filePath) return "";
-    // If it's already a full URL, return as is
-    if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
-      return filePath;
-    }
-    // If it starts with /api/, it's already an API path
-    if (filePath.startsWith("/api/")) {
-      return filePath;
-    }
     
-    // Определяем тип файла по пути
-    if (filePath.includes("/avatars/") || filePath.includes("avatars-")) {
-      // Аватар пользователя
-      const filename = filePath.split("/").pop();
-      return `/api/uploads/avatars/${filename}`;
-    } else if (filePath.includes("/chat/") || filePath.includes("chat-")) {
-      // Файл из чата
-      const filename = filePath.split("/").pop();
-      return `/api/uploads/chat/${filename}`;
-    } else if (filePath.includes("/posts/") || filePath.includes("posts-")) {
-      // Файл из постов
-      const filename = filePath.split("/").pop();
-      return `/api/uploads/posts/${filename}`;
-    } else {
-      // Общий случай - извлекаем имя файла и пробуем через API
-      const filename = filePath.split("/").pop();
-      // Пробуем определить по структуре пути
-      if (filePath.startsWith("/uploads/")) {
-        return `/api${filePath}`;
-      }
-      return filePath;
-    }
+    // Используем утилиту для работы с CDN
+    const { getFileUrlWithCDN } = require("@/lib/cdn");
+    return getFileUrlWithCDN(filePath, true);
   };
 
   // Защита от hydration mismatch
