@@ -71,17 +71,17 @@ export async function POST(request: NextRequest) {
       discounts: bbActivated.map(d => ({ id: d.id, hasPromoCode: !!d.promoCode, promoCode: d.promoCode })),
     });
 
+    // Get existing preferences для сохранения favorites
+    const existingPrefs = await prisma.discountPreference.findUnique({
+      where: { userId: user.id },
+    });
+
+    const existingFilters = (existingPrefs?.filters as any) || {};
+    const existingFavorites = Array.isArray(existingFilters.favorites)
+      ? existingFilters.favorites
+      : [];
+
     if (bbActivated.length === 0) {
-      // Получаем существующие preferences для сохранения favorites
-      const existingPrefs = await prisma.discountPreference.findUnique({
-        where: { userId: user.id },
-      });
-
-      const existingFilters = (existingPrefs?.filters as any) || {};
-      const existingFavorites = Array.isArray(existingFilters.favorites)
-        ? existingFilters.favorites
-        : [];
-
       // Если нет активированных скидок в BestBenefits, очищаем claimed но сохраняем favorites
       await prisma.discountPreference.upsert({
         where: { userId: user.id },
@@ -109,16 +109,6 @@ export async function POST(request: NextRequest) {
         cleared: true,
       });
     }
-
-    // Get existing preferences для сохранения favorites
-    const existingPrefs = await prisma.discountPreference.findUnique({
-      where: { userId: user.id },
-    });
-
-    const existingFilters = (existingPrefs?.filters as any) || {};
-    const existingFavorites = Array.isArray(existingFilters.favorites)
-      ? existingFilters.favorites
-      : [];
 
     const existingFavorites = Array.isArray(existingFilters.favorites)
       ? existingFilters.favorites
