@@ -54,8 +54,34 @@ export async function POST(request: NextRequest) {
       console.warn(`[sync-discounts] ⚠️ No password - using organization token (legacy)`);
     }
 
-    // Fetch activated discounts from BestBenefits using personal token
-    const bbActivated = await getUserActivatedDiscounts(user.bestBenefitsUserId, userPassword);
+    // Get existing preferences для использования как fallback
+    const existingPrefs = await prisma.discountPreference.findUnique({
+      where: { userId: user.id },
+    });
+
+    const existingFilters = (existingPrefs?.filters as any) || {};
+    const existingClaimed = Array.isArray(existingFilters.claimed) 
+      ? existingFilters.claimed 
+      : [];
+    
+    // Подготавливаем fallback данные из локальных preferences
+    const fallbackData = existingClaimed
+      .filter((item: any) => typeof item === 'object' && item !== null && item.id)
+      .map((item: any) => ({
+        id: typeof item.id === 'number' ? item.id : parseInt(String(item.id)),
+        promoCode: item.promoCode || undefined,
+      }));
+
+    // Fetch activated discounts from BestBenefits using personal token with fallback
+    const bbActivated = await getUserActivatedDiscounts(
+      user.bestBenefitsUserId, 
+      userPassword,
+      {
+        timeout: 15000, // 15 секунд
+        retries: 2,
+        fallbackData: fallbackData, // Используем локальные данные если API недоступен
+      }
+    );
 
     console.log("[sync-discounts] ✅ Fetched activated discounts from BestBenefits:", {
       count: bbActivated.length,
@@ -71,15 +97,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Get existing preferences
-    const existingPrefs = await prisma.discountPreference.findUnique({
-      where: { userId: user.id },
-    });
-
-    const existingFilters = (existingPrefs?.filters as any) || {};
-    const existingClaimed = Array.isArray(existingFilters.claimed) 
-      ? existingFilters.claimed 
-      : [];
     const existingFavorites = Array.isArray(existingFilters.favorites)
       ? existingFilters.favorites
       : [];

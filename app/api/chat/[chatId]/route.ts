@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { normalizeUserAvatar, normalizeUsersAvatars } from "@/lib/api-helpers";
 import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
 import { saveChatConversationToKnowledgeBase } from "@/lib/chat-knowledge-learning";
 import { saveUserInteractionToKnowledgeBase } from "@/lib/user-knowledge-base";
@@ -197,9 +198,21 @@ export async function GET(
       },
     }) : [];
 
+    // Нормализуем аватарки пользователей реакций
+    const normalizedReactionUsers = normalizeUsersAvatars(reactionUsers);
+
     // Формируем реакции с информацией о пользователях
     // ИСПРАВЛЕНО: используем orderedMessages (перевернутый массив) для правильного порядка
     const messagesWithReactions = orderedMessages.map((msg: any) => {
+      // Нормализуем аватарку отправителя
+      const normalizedSender = msg.sender ? normalizeUserAvatar(msg.sender) : msg.sender;
+      const normalizedReplySender = msg.replyTo?.sender ? normalizeUserAvatar(msg.replyTo.sender) : msg.replyTo?.sender;
+      
+      const normalizedMsg = {
+        ...msg,
+        sender: normalizedSender,
+        replyTo: msg.replyTo ? { ...msg.replyTo, sender: normalizedReplySender } : msg.replyTo,
+      };
       if (msg.reactions && typeof msg.reactions === 'object' && !Array.isArray(msg.reactions)) {
         try {
           const reactionsWithUsers: Record<string, { userIds: string[]; users: any[] }> = {};
@@ -219,12 +232,12 @@ export async function GET(
             if (userIds.length > 0) {
               reactionsWithUsers[emoji] = {
                 userIds,
-                users: reactionUsers.filter((u) => userIds.includes(u.id)),
+                users: normalizedReactionUsers.filter((u) => userIds.includes(u.id)),
               };
             }
           });
           return {
-            ...msg,
+            ...normalizedMsg,
             reactions: reactionsWithUsers,
           };
         } catch (e) {
@@ -232,7 +245,8 @@ export async function GET(
           return msg;
         }
       }
-      return msg;
+      // Возвращаем нормализованное сообщение даже если нет реакций
+      return normalizedMsg;
     });
 
     return NextResponse.json({ 
@@ -344,6 +358,12 @@ export async function POST(
         },
       },
     });
+
+    // Нормализуем аватарку отправителя
+    const normalizedMessage = {
+      ...message,
+      sender: normalizeUserAvatar(message.sender),
+    };
 
     // Определяем получателя сообщения
     const recipientId = chat.participant1Id === userId 
@@ -467,6 +487,12 @@ ${formattedSearchInfo ? `### ⚠️ КРИТИЧЕСКИ ВАЖНО - ИСПОЛ
               },
             });
 
+            // Нормализуем аватарку бота
+            const normalizedBotMessage = {
+              ...botMessage,
+              sender: normalizeUserAvatar(botMessage.sender),
+            };
+
             // Сохраняем переписку в базу знаний для обучения
             saveChatConversationToKnowledgeBase(
               bot.id,
@@ -507,7 +533,7 @@ ${formattedSearchInfo ? `### ⚠️ КРИТИЧЕСКИ ВАЖНО - ИСПОЛ
 
             return NextResponse.json({ 
               message,
-              botMessage, // Возвращаем также ответ бота
+              botMessage: normalizedBotMessage, // Возвращаем также ответ бота с нормализованным avatarUrl
             });
           }
         }
@@ -582,7 +608,7 @@ ${formattedSearchInfo ? `### ⚠️ КРИТИЧЕСКИ ВАЖНО - ИСПОЛ
       // Не прерываем отправку сообщения из-за ошибки уведомления
     }
 
-    return NextResponse.json({ message });
+    return NextResponse.json({ message: normalizedMessage });
   } catch (error: any) {
     console.error("[chat] POST Error:", {
       message: error?.message,

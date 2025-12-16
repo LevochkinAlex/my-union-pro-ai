@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
+import { normalizeUserAvatar } from "@/lib/api-helpers";
 
 // Проверка доступности prisma
 if (!prisma) {
@@ -102,16 +103,17 @@ export async function GET(request: NextRequest) {
     // Форматируем чаты для ответа
     const formattedChats = chats.map((chat, index) => {
       const otherUser = chat.participant1Id === userId ? chat.participant2 : chat.participant1;
+      const normalizedUser = normalizeUserAvatar(otherUser);
 
       return {
         id: chat.id,
         otherUser: {
-          id: otherUser.id,
-          firstName: otherUser.firstName,
-          lastName: otherUser.lastName,
-          middleName: otherUser.middleName,
-          avatarUrl: otherUser.avatarUrl,
-          phone: otherUser.phone,
+          id: normalizedUser.id,
+          firstName: normalizedUser.firstName,
+          lastName: normalizedUser.lastName,
+          middleName: normalizedUser.middleName,
+          avatarUrl: normalizedUser.avatarUrl,
+          phone: normalizedUser.phone,
         },
         lastMessage: chat.lastMessage,
         lastMessageAt: chat.lastMessageAt,
@@ -244,17 +246,18 @@ export async function POST(request: NextRequest) {
     }
 
     const otherUser = chat.participant1Id === userId ? chat.participant2 : chat.participant1;
+    const normalizedUser = normalizeUserAvatar(otherUser);
 
     return NextResponse.json({
       chat: {
         id: chat.id,
         otherUser: {
-          id: otherUser.id,
-          firstName: otherUser.firstName,
-          lastName: otherUser.lastName,
-          middleName: otherUser.middleName,
-          avatarUrl: otherUser.avatarUrl,
-          phone: otherUser.phone,
+          id: normalizedUser.id,
+          firstName: normalizedUser.firstName,
+          lastName: normalizedUser.lastName,
+          middleName: normalizedUser.middleName,
+          avatarUrl: normalizedUser.avatarUrl,
+          phone: normalizedUser.phone,
         },
       },
     });

@@ -224,42 +224,102 @@ export async function checkDiscountActivation(
  * - Endpoint: GET /api/received
  * - Returns: { data: [{ id: number, name: string, codes: [{ code: string, end_date: string }] }] }
  */
+/**
+ * Получает активированные скидки с отказоустойчивостью:
+ * - Retry при временных ошибках
+ * - Timeout для предотвращения зависания
+ * - Fallback на локальные данные если API недоступен
+ */
 export async function getUserActivatedDiscounts(
   bestBenefitsUserId: string,
-  password?: string
+  password?: string,
+  options?: {
+    timeout?: number; // Timeout в миллисекундах (по умолчанию 15 секунд)
+    retries?: number; // Количество попыток (по умолчанию 2)
+    fallbackData?: Array<{ id: number; promoCode?: string }>; // Fallback данные
+  }
 ): Promise<Array<{ id: number; promoCode?: string }>> {
-  try {
-    // Use personal token if password provided
-    let token: string;
-    
-    if (password) {
-      console.log("[BestBenefits Activation] Using PERSONAL token for user:", bestBenefitsUserId);
-      token = await getUserBestBenefitsToken(bestBenefitsUserId, password);
-    } else {
-      console.warn("[BestBenefits Activation] ⚠️ Using organization token - may not see user's personal discounts!");
-      token = await getBestBenefitsToken();
-    }
+  const timeout = options?.timeout ?? 15000; // 15 секунд по умолчанию
+  const retries = options?.retries ?? 2;
+  const fallbackData = options?.fallbackData ?? [];
 
-    console.log("[BestBenefits Activation] Fetching activated discounts for user:", bestBenefitsUserId);
+  const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs: number): Promise<Response> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    // ✅ Используем правильный endpoint согласно документации
-    const response = await fetch(
-      `${ACTIVATION_API_BASE}/received`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
+    try {
+      const response = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${timeoutMs}ms`);
       }
-    );
-
-    if (!response.ok) {
-      console.warn("[BestBenefits Activation] Failed to fetch activated discounts:", response.status);
-      return [];
+      throw error;
     }
+  };
 
-    const data = await response.json();
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      // Use personal token if password provided
+      let token: string;
+      
+      if (password) {
+        console.log("[BestBenefits Activation] Using PERSONAL token for user:", bestBenefitsUserId);
+        token = await getUserBestBenefitsToken(bestBenefitsUserId, password);
+      } else {
+        console.warn("[BestBenefits Activation] ⚠️ Using organization token - may not see user's personal discounts!");
+        token = await getBestBenefitsToken();
+      }
+
+      console.log(`[BestBenefits Activation] Fetching activated discounts for user: ${bestBenefitsUserId} (attempt ${attempt + 1}/${retries + 1})`);
+
+      // ✅ Используем правильный endpoint согласно документации с timeout
+      const response = await fetchWithTimeout(
+        `${ACTIVATION_API_BASE}/received`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        },
+        timeout
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        console.warn(`[BestBenefits Activation] HTTP ${response.status} on attempt ${attempt + 1}:`, errorText);
+        
+        // Если это 5xx ошибка (серверная), пробуем еще раз
+        if (response.status >= 500 && attempt < retries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1))); // Exponential backoff
+          continue;
+        }
+        
+        // Если это клиентская ошибка (4xx) или последняя попытка, возвращаем fallback
+        if (response.status >= 400 && response.status < 500) {
+          console.warn(`[BestBenefits Activation] Client error ${response.status}, using fallback data`);
+          return fallbackData;
+        }
+        
+        // Для других ошибок пробуем еще раз или возвращаем fallback
+        if (attempt < retries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+          continue;
+        }
+        
+        console.warn("[BestBenefits Activation] All retries exhausted, using fallback data");
+        return fallbackData;
+      }
+
+      const data = await response.json();
     console.log("[BestBenefits Activation] API Response:", JSON.stringify(data, null, 2));
     
     // Формат ответа согласно документации:
@@ -388,12 +448,32 @@ export async function getUserActivatedDiscounts(
       };
     }).filter((p: any) => p.id !== null);
     
-    console.log("[BestBenefits Activation] Processed discounts:", result);
-    return result;
-  } catch (error) {
-    console.error("[BestBenefits Activation] Error fetching activated discounts:", error);
-    return [];
+      console.log("[BestBenefits Activation] Processed discounts:", result);
+      return result;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`[BestBenefits Activation] Error on attempt ${attempt + 1}:`, error);
+      
+      // Если это последняя попытка, возвращаем fallback
+      if (attempt >= retries) {
+        console.warn("[BestBenefits Activation] All attempts failed, using fallback data", {
+          error: lastError.message,
+          fallbackCount: fallbackData.length,
+        });
+        return fallbackData;
+      }
+      
+      // Ждем перед следующей попыткой (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+    }
   }
+
+  // Если все попытки провалились, возвращаем fallback
+  console.warn("[BestBenefits Activation] All retries exhausted, using fallback data", {
+    error: lastError?.message,
+    fallbackCount: fallbackData.length,
+  });
+  return fallbackData;
 }
 
 /**
