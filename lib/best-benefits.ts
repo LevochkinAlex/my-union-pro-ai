@@ -61,30 +61,31 @@ async function fetchAllCitiesForFilter(): Promise<DiscountCity[]> {
 
       while (hasMore && currentPage <= maxPages) {
         const url = `${API_BASE_URL}?per_page=100&page=${currentPage}`;
-    // Добавляем таймаут для всех запросов к BestBenefits API
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 секунд таймаут
-    
-    try {
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        cache: "no-store",
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      return response;
-    } catch (error: any) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        throw new Error(`Request timeout after 15s: ${url}`);
-      }
-      throw error;
-    }
+        // Добавляем таймаут для всех запросов к BestBenefits API
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 секунд таймаут
+        
+        let response: Response;
+        try {
+          response = await fetch(url, {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+        } catch (error: any) {
+          clearTimeout(timeoutId);
+          if (error.name === 'AbortError') {
+            console.warn(`[best-benefits] Request timeout after 15s for page ${currentPage}`);
+            break;
+          }
+          throw error;
+        }
 
         if (!response.ok) {
           console.warn(`[best-benefits] Failed to fetch page ${currentPage} for cities`);
