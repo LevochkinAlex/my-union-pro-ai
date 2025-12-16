@@ -26,7 +26,8 @@ export const metadata: Metadata = {
     ],
     shortcut: getIconUrl("/favicon.ico", useCDN),
   },
-  manifest: getIconUrl("/manifest.json", useCDN),
+  // manifest.json должен быть локальным (не через CDN), так как браузер требует CORS заголовки
+  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

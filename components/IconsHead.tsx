@@ -48,7 +48,8 @@ export function IconsHead() {
       ))}
       
       {/* Manifest */}
-      <link rel="manifest" href={getIconUrl("/manifest.json", useCDN)} />
+        {/* manifest.json должен быть локальным (не через CDN) из-за CORS */}
+        <link rel="manifest" href="/manifest.json" />
       
       {/* Meta теги */}
       <meta name="theme-color" content="#3b82f6" />
