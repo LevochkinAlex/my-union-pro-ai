@@ -239,27 +239,15 @@ export async function POST(request: NextRequest) {
     ).length;
     
     console.log("[sync-discounts] ✅ Verified saved promo codes in database:", {
-      totalClaimed: savedClaimed.length,
-      withPromoCodes: savedPromoCodesCount,
-    });
-
-    // Проверяем что промокоды действительно сохранились
-    const savedPrefs = await prisma.discountPreference.findUnique({
-      where: { userId: user.id },
-    });
-    const savedClaimed = (savedPrefs?.filters as any)?.claimed || [];
-    
-    console.log("[sync-discounts] ✅ Synced discounts and saved to database:", {
       userId: user.id,
       bbActivated: bbActivated.length,
-      totalClaimed: updatedClaimed.length,
+      totalClaimed: validatedClaimed.length,
       savedClaimed: savedClaimed.length,
-      discountsWithPromoCodes: updatedClaimed.filter(d => d.promoCode).length,
-      savedDiscountsWithPromoCodes: savedClaimed.filter((d: any) => d.promoCode).length,
+      discountsWithPromoCodes: validatedClaimed.filter(d => d.promoCode).length,
+      savedDiscountsWithPromoCodes: savedPromoCodesCount,
       savedDiscounts: savedClaimed.map((d: any) => ({ 
-        id: d.id, 
-        promoCode: d.promoCode,
-        type: typeof d,
+        id: typeof d === 'object' ? d.id : d, 
+        promoCode: typeof d === 'object' ? d.promoCode : null,
       })),
     });
 
