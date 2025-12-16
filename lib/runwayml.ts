@@ -70,12 +70,37 @@ export async function generateImageWithRunwayML(
       } catch {
         errorData = { error: errorText || response.statusText };
       }
-      const errorMessage = errorData.error?.message || errorData.error || errorData.issues?.[0]?.message || `RunwayML API error: ${response.statusText}`;
+      
+      // Определяем тип ошибки для более понятного сообщения
+      let errorMessage = errorData.error?.message || errorData.error || errorData.issues?.[0]?.message || `RunwayML API error: ${response.statusText}`;
+      
+      // Проверяем на запрещенные промпты (content policy violations)
+      const errorTextLower = errorText.toLowerCase();
+      const errorMessageLower = errorMessage.toLowerCase();
+      
+      if (
+        response.status === 400 || 
+        response.status === 403 ||
+        errorTextLower.includes("policy") ||
+        errorTextLower.includes("content policy") ||
+        errorTextLower.includes("forbidden") ||
+        errorTextLower.includes("violation") ||
+        errorTextLower.includes("restricted") ||
+        errorMessageLower.includes("policy") ||
+        errorMessageLower.includes("forbidden") ||
+        errorMessageLower.includes("violation") ||
+        errorMessageLower.includes("restricted") ||
+        errorMessageLower.includes("inappropriate")
+      ) {
+        errorMessage = "Промпт нарушает правила использования сервиса. Пожалуйста, измените описание изображения, исключив запрещенный контент.";
+      }
+      
       console.error("[runwayml] API Error:", {
         status: response.status,
         statusText: response.statusText,
         error: errorData,
         body: JSON.stringify(body, null, 2),
+        originalError: errorText,
       });
       throw new Error(errorMessage);
     }
@@ -118,12 +143,37 @@ export async function getRunwayMLTaskStatus(
       } catch {
         errorData = { error: errorText || response.statusText };
       }
-      const errorMessage = errorData.error?.message || errorData.error || errorData.issues?.[0]?.message || `RunwayML API error: ${response.statusText}`;
+      
+      // Определяем тип ошибки для более понятного сообщения
+      let errorMessage = errorData.error?.message || errorData.error || errorData.issues?.[0]?.message || `RunwayML API error: ${response.statusText}`;
+      
+      // Проверяем на запрещенные промпты (content policy violations)
+      const errorTextLower = errorText.toLowerCase();
+      const errorMessageLower = errorMessage.toLowerCase();
+      
+      if (
+        response.status === 400 || 
+        response.status === 403 ||
+        errorTextLower.includes("policy") ||
+        errorTextLower.includes("content policy") ||
+        errorTextLower.includes("forbidden") ||
+        errorTextLower.includes("violation") ||
+        errorTextLower.includes("restricted") ||
+        errorMessageLower.includes("policy") ||
+        errorMessageLower.includes("forbidden") ||
+        errorMessageLower.includes("violation") ||
+        errorMessageLower.includes("restricted") ||
+        errorMessageLower.includes("inappropriate")
+      ) {
+        errorMessage = "Промпт нарушает правила использования сервиса. Пожалуйста, измените описание изображения, исключив запрещенный контент.";
+      }
+      
       console.error("[runwayml] Task Status API Error:", {
         status: response.status,
         statusText: response.statusText,
         error: errorData,
         taskId,
+        originalError: errorText,
       });
       throw new Error(errorMessage);
     }

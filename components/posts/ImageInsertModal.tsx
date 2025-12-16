@@ -221,7 +221,23 @@ export default function ImageInsertModal({
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Ошибка при генерации изображения");
+        const errorMessage = errorData.error || "Ошибка при генерации изображения";
+        
+        // Проверяем, является ли ошибка связанной с запрещенным контентом
+        const errorLower = errorMessage.toLowerCase();
+        if (
+          errorLower.includes("правила") ||
+          errorLower.includes("запрещено") ||
+          errorLower.includes("policy") ||
+          errorLower.includes("forbidden") ||
+          errorLower.includes("violation") ||
+          errorLower.includes("restricted") ||
+          errorLower.includes("inappropriate")
+        ) {
+          throw new Error("Промпт нарушает правила использования. Пожалуйста, измените описание изображения.");
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();

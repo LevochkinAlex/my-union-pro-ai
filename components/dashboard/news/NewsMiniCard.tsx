@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 
 interface NewsMiniCardProps {
   post: {
@@ -78,12 +77,21 @@ export default function NewsMiniCard({ post }: NewsMiniCardProps) {
         {/* Обложка */}
         {post.coverImage && (
           <div className="relative w-full h-32 overflow-hidden bg-gray-100 dark:bg-gray-700">
-            <Image
-              src={post.coverImage}
+            <img
+              src={(() => {
+                if (post.coverImage.startsWith("data:") || post.coverImage.startsWith("http")) {
+                  return post.coverImage;
+                }
+                const { getFileUrlWithCDN } = require("@/lib/cdn");
+                return getFileUrlWithCDN(post.coverImage, true);
+              })()}
               alt={post.title}
-              fill
-              className="object-cover"
-              sizes="280px"
+              className="w-full h-full object-cover"
+              loading="lazy"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+              }}
             />
           </div>
         )}
@@ -92,12 +100,20 @@ export default function NewsMiniCard({ post }: NewsMiniCardProps) {
           {/* Автор и дата */}
           <div className="flex items-center gap-2 mb-2">
             {post.author.avatarUrl ? (
-              <Image
-                src={post.author.avatarUrl}
+              <img
+                src={(() => {
+                  if (post.author.avatarUrl.startsWith("data:") || post.author.avatarUrl.startsWith("http")) {
+                    return post.author.avatarUrl;
+                  }
+                  const { getFileUrlWithCDN } = require("@/lib/cdn");
+                  return getFileUrlWithCDN(post.author.avatarUrl, true);
+                })()}
                 alt={authorName}
-                width={24}
-                height={24}
                 className="w-6 h-6 rounded-full object-cover flex-shrink-0"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                }}
               />
             ) : (
               <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-medium text-[10px] flex-shrink-0">
