@@ -229,6 +229,25 @@ async function updatePreferences(request: NextRequest) {
         geolocation: updateData.geolocation ?? null,
       },
     });
+    
+    // Проверяем, что промокоды действительно сохранились (если обновлялись claimed)
+    if (body.filters?.claimed && Array.isArray(body.filters.claimed)) {
+      const savedPrefs = await prisma.discountPreference.findUnique({
+        where: { userId: session.user.id },
+      });
+      const savedClaimed = (savedPrefs?.filters as any)?.claimed || [];
+      const savedPromoCodesCount = savedClaimed.filter((d: any) => 
+        typeof d === 'object' && d.promoCode && 
+        d.promoCode.trim().length > 0 && 
+        d.promoCode.toLowerCase() !== 'null' && 
+        d.promoCode.toLowerCase() !== 'undefined'
+      ).length;
+      
+      console.log("[preferences] ✅ Verified saved promo codes in database:", {
+        totalClaimed: savedClaimed.length,
+        withPromoCodes: savedPromoCodesCount,
+      });
+    }
 
     console.log("[api/discounts/preferences] Updated preferences:", {
       userId: session.user.id,
