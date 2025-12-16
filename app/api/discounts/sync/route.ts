@@ -84,28 +84,85 @@ export async function POST(request: NextRequest) {
       ? existingFilters.favorites
       : [];
 
-    // Replace local claimed with BestBenefits activated discounts (single source of truth)
-    // Синхронизация ЗАМЕНЯЕТ локальные данные на данные из BestBenefits
-    const updatedClaimed = bbActivated.map(bbItem => {
-      // Нормализуем промокод: строки "null", "undefined" и пустые значения превращаем в null
-      let promoCode = bbItem.promoCode;
-      if (promoCode && (promoCode.toLowerCase() === 'null' || promoCode.toLowerCase() === 'undefined' || promoCode.trim() === '')) {
-        console.log(`[sync-discounts] ⚠️ Invalid promo code for discount ${bbItem.id}, normalizing to null:`, promoCode);
-        promoCode = null;
+    // МЕРДЖИМ данные из BestBenefits с локальными preferences
+    // Важно: если в BestBenefits API нет промокода, но он есть локально - сохраняем локальный
+    // Создаем Map локальных промокодов для быстрого поиска
+    const localPromoCodesMap = new Map<string, string>();
+    existingClaimed.forEach((item: any) => {
+      let discountId: string | null = null;
+      let promoCode: string | null = null;
+      
+      if (typeof item === 'object' && item !== null && item.id) {
+        discountId = String(item.id);
+        promoCode = item.promoCode 
+          ? (typeof item.promoCode === 'string' ? item.promoCode.trim() : String(item.promoCode).trim())
+          : null;
+      } else if (typeof item === 'number') {
+        discountId = String(item);
       }
+      
+      if (discountId && promoCode && promoCode.length > 0 && promoCode.toLowerCase() !== 'null' && promoCode.toLowerCase() !== 'undefined') {
+        localPromoCodesMap.set(discountId, promoCode);
+        console.log(`[sync-discounts] Found local promo code for discount ${discountId}:`, promoCode);
+      }
+    });
+    
+    // Мерджим: приоритет у промокодов из BestBenefits API, но если их нет - используем локальные
+    const updatedClaimed = bbActivated.map(bbItem => {
+      // Нормализуем промокод из BestBenefits: строки "null", "undefined" и пустые значения превращаем в null
+      let promoCodeFromBB = bbItem.promoCode;
+      if (promoCodeFromBB && (promoCodeFromBB.toLowerCase() === 'null' || promoCodeFromBB.toLowerCase() === 'undefined' || promoCodeFromBB.trim() === '')) {
+        console.log(`[sync-discounts] ⚠️ Invalid promo code from BestBenefits for discount ${bbItem.id}, normalizing to null:`, promoCodeFromBB);
+        promoCodeFromBB = null;
+      }
+      
+      // Пробуем найти локальный промокод, если BestBenefits не вернул
+      const localPromoCode = localPromoCodesMap.get(String(bbItem.id));
+      
+      // Приоритет: BestBenefits > локальный
+      const finalPromoCode = promoCodeFromBB || localPromoCode || null;
       
       const result = {
         id: bbItem.id,
-        promoCode: promoCode || null, // Явно null если нет промокода
+        promoCode: finalPromoCode,
       };
       
       console.log(`[sync-discounts] Processing discount ${bbItem.id}:`, {
         id: result.id,
-        promoCode: result.promoCode,
+        promoCodeFromBB: promoCodeFromBB,
+        localPromoCode: localPromoCode,
+        finalPromoCode: result.promoCode,
         hasPromoCode: !!result.promoCode,
       });
       
       return result;
+    });
+    
+    // Добавляем локальные claimed скидки, которых нет в BestBenefits (если они были сохранены локально)
+    // Это важно, если пользователь активировал скидку до синхронизации с BestBenefits
+    const bbIdsSet = new Set(bbActivated.map(d => String(d.id)));
+    existingClaimed.forEach((item: any) => {
+      let discountId: string | null = null;
+      
+      if (typeof item === 'object' && item !== null && item.id) {
+        discountId = String(item.id);
+      } else if (typeof item === 'number') {
+        discountId = String(item);
+      }
+      
+      // Если скидка есть локально, но нет в BestBenefits - добавляем её (но только если она действительно claimed)
+      if (discountId && !bbIdsSet.has(discountId)) {
+        const localPromoCode = localPromoCodesMap.get(discountId);
+        const id = typeof item === 'object' ? item.id : item;
+        updatedClaimed.push({
+          id: id,
+          promoCode: localPromoCode || null,
+        });
+        console.log(`[sync-discounts] Keeping local discount ${discountId} (not found in BestBenefits):`, {
+          id,
+          promoCode: localPromoCode,
+        });
+      }
     });
 
     console.log("[sync-discounts] ✅ Prepared updated claimed discounts:", {
