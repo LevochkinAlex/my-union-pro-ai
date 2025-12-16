@@ -398,20 +398,39 @@ export async function getUserActivatedDiscounts(
           if (endDate) {
             try {
               const expirationDate = new Date(endDate);
-              // Сравниваем только даты (без времени)
-              const expirationDateOnly = new Date(expirationDate.getFullYear(), expirationDate.getMonth(), expirationDate.getDate());
-              const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const now = new Date();
               
-              // Промокод действителен, если дата окончания >= сегодня
-              if (expirationDateOnly < nowDateOnly) {
-                console.log(`[BestBenefits Activation] Promo code ${code} expired on ${endDate} (today: ${nowDateOnly.toISOString()})`);
+              // Проверяем, что дата валидна
+              if (isNaN(expirationDate.getTime())) {
+                console.warn(`[BestBenefits Activation] Invalid end_date format for code ${code}:`, endDate);
+                // При невалидной дате считаем промокод валидным (на всякий случай)
+                return true;
+              }
+              
+              // Сравниваем даты: промокод действителен, если дата окончания >= сегодня
+              // Используем UTC для избежания проблем с часовыми поясами
+              const expirationTime = expirationDate.getTime();
+              const nowTime = now.getTime();
+              
+              console.log(`[BestBenefits Activation] Date check for code ${code}:`, {
+                endDate,
+                expirationTime,
+                nowTime,
+                expirationDateISO: expirationDate.toISOString(),
+                nowISO: now.toISOString(),
+                isValid: expirationTime >= nowTime,
+              });
+              
+              if (expirationTime < nowTime) {
+                console.log(`[BestBenefits Activation] ⚠️ Promo code ${code} expired on ${endDate} (now: ${now.toISOString()})`);
                 return false;
               } else {
                 console.log(`[BestBenefits Activation] ✅ Promo code ${code} is valid until ${endDate}`);
               }
             } catch (error) {
               console.warn(`[BestBenefits Activation] Failed to parse end_date for code ${code}:`, endDate, error);
-              // При ошибке парсинга считаем промокод валидным
+              // При ошибке парсинга считаем промокод валидным (на всякий случай)
+              return true;
             }
           } else {
             console.log(`[BestBenefits Activation] Code ${code} has no end_date, considering valid`);
