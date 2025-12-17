@@ -52,9 +52,10 @@ export function useChat(options: UseChatOptions = {}) {
 
     try {
       // При silent-запросе (polling) запрашиваем только новые сообщения
+      // Для первой загрузки используем 15 сообщений для быстрого открытия
       const url = silent 
-        ? `/api/chat/${chatId}?limit=20&t=${Date.now()}`  // Меньше сообщений для polling
-        : `/api/chat/${chatId}?limit=50&t=${Date.now()}`;
+        ? `/api/chat/${chatId}?limit=10&t=${Date.now()}`  // Меньше сообщений для polling
+        : `/api/chat/${chatId}?limit=15&t=${Date.now()}`;
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();

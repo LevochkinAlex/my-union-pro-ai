@@ -778,9 +778,21 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
         <div className="mb-4">
           {isArticle ? (
             // Для статей всегда показываем plain текст (без HTML)
-            <p className="text-gray-900 dark:text-white whitespace-pre-wrap break-words">
-              {displayContent}
-            </p>
+            <>
+              <p className="text-gray-900 dark:text-white whitespace-pre-wrap break-words">
+                {displayContent}
+              </p>
+              {/* Ссылка на полную статью под текстом */}
+              <Link
+                href={`/posts/${post.id}`}
+                className="inline-flex items-center gap-1.5 mt-3 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                <span>Читать полностью</span>
+              </Link>
+            </>
           ) : (
             <p className="text-gray-900 dark:text-white whitespace-pre-wrap break-words">
               {displayContent}
@@ -883,17 +895,6 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
             </svg>
             <span>{viewCount}</span>
           </div>
-          {isArticle && (
-            <button
-              onClick={() => router.push(`/posts/${post.id}`)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors ml-auto"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-              </svg>
-              <span>Развернуть статью</span>
-            </button>
-          )}
         </div>
 
         {/* Комментарии */}

@@ -101,13 +101,13 @@ function ChatMessagesComponent({
   const prevChatId = useRef<string | null>(null);
   const currentVisibleIndex = useRef<number | null>(null);
   const [atBottom, setAtBottom] = useState(true);
-  const [initialIndex, setInitialIndex] = useState<number | undefined>(undefined);
-  const isFirstRender = useRef(true);
+  const isFirstLoad = useRef(true);
+  const hasScrolledToInitial = useRef(false);
 
   // Подготовка данных с разделителями дат
   const items = prepareMessagesWithDates(messages);
 
-  // При смене чата — сохраняем позицию старого и восстанавливаем для нового
+  // При смене чата — сохраняем позицию старого
   useEffect(() => {
     if (prevChatId.current && prevChatId.current !== chat.id) {
       // Сохраняем текущую позицию для предыдущего чата
@@ -115,36 +115,47 @@ function ChatMessagesComponent({
       if (savedIdx !== null && savedIdx >= 0) {
         saveScrollPosition(prevChatId.current, savedIdx);
       }
+      // Сбрасываем флаги для нового чата
+      isFirstLoad.current = true;
+      hasScrolledToInitial.current = false;
+      currentVisibleIndex.current = null;
     }
+    prevChatId.current = chat.id;
+  }, [chat.id]);
 
-    // Восстанавливаем позицию для нового чата
-    if (prevChatId.current !== chat.id) {
-      isFirstRender.current = true;
+  // При загрузке сообщений — скроллим к сохраненной позиции или к концу
+  useEffect(() => {
+    if (!isFirstLoad.current || items.length === 0 || !virtuosoRef.current || hasScrolledToInitial.current) {
+      return;
+    }
+    
+    // Даём время на рендер списка
+    const timeoutId = setTimeout(() => {
+      if (!virtuosoRef.current) return;
+      
       const savedIndex = getScrollPosition(chat.id);
-      if (savedIndex !== null && savedIndex >= 0) {
-        setInitialIndex(savedIndex);
+      
+      if (savedIndex !== null && savedIndex >= 0 && savedIndex < items.length) {
+        // Восстанавливаем сохранённую позицию
+        virtuosoRef.current.scrollToIndex({
+          index: savedIndex,
+          align: "start",
+          behavior: "auto",
+        });
       } else {
         // Нет сохранённой позиции — скроллим к концу (последние сообщения)
-        setInitialIndex(items.length > 0 ? items.length - 1 : 0);
-      }
-      prevChatId.current = chat.id;
-    }
-  }, [chat.id, items.length]);
-
-  // При первом рендере скроллим к начальной позиции
-  useEffect(() => {
-    if (isFirstRender.current && items.length > 0 && virtuosoRef.current) {
-      isFirstRender.current = false;
-      const savedIndex = getScrollPosition(chat.id);
-      if (savedIndex === null) {
-        // Нет сохранённой позиции — скроллим к концу
         virtuosoRef.current.scrollToIndex({
           index: items.length - 1,
           align: "end",
           behavior: "auto",
         });
       }
-    }
+      
+      isFirstLoad.current = false;
+      hasScrolledToInitial.current = true;
+    }, 100);
+    
+    return () => clearTimeout(timeoutId);
   }, [chat.id, items.length]);
 
   // Сохранение позиции при скролле (debounced)
@@ -233,12 +244,11 @@ function ChatMessagesComponent({
         ref={virtuosoRef}
         data={items}
         itemContent={itemContent}
-        initialTopMostItemIndex={initialIndex}
         followOutput={handleFollowOutput}
         atBottomStateChange={setAtBottom}
         startReached={handleStartReached}
         rangeChanged={handleRangeChanged}
-        increaseViewportBy={{ top: 500, bottom: 500 }}
+        increaseViewportBy={{ top: 200, bottom: 200 }}
         className="flex-1 overflow-y-auto"
         style={{ height: "100%" }}
         components={{
