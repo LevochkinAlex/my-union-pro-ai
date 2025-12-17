@@ -248,7 +248,7 @@ export default function NewsCard({
               decoding="async"
               fetchPriority={priority ? "high" : "auto"}
               onError={(e) => {
-                // Тихо скрываем изображение, если оно не найдено (не логируем ошибку в консоль)
+                // Тихо скрываем изображение, если оно не найдено
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';
                 // Скрываем родительский div, если изображение не загрузилось
