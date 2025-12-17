@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import NewsList from "@/components/dashboard/news/NewsList";
-import DiscountsScrollList from "@/components/dashboard/discounts/DiscountsScrollList";
+// import DiscountsScrollList from "@/components/dashboard/discounts/DiscountsScrollList"; // Не используется на главной
 import MembershipBanner from "@/components/dashboard/MembershipBanner";
 import UserCard from "@/components/dashboard/users/UserCard";
 import PostsListClient from "@/components/posts/PostsListClient";
@@ -150,20 +150,8 @@ export default async function DashboardPage() {
       },
     }),
     
-    // 5. Получаем свежие скидки из BestBenefits API
-    (async () => {
-      try {
-        const { fetchBestBenefitsDiscounts } = await import("@/lib/best-benefits");
-        const discountsResult = await fetchBestBenefitsDiscounts({
-          limit: 10,
-          page: 1,
-        });
-        return discountsResult.discounts || [];
-      } catch (error) {
-        console.error("[Dashboard] Failed to fetch discounts:", error);
-        return [];
-      }
-    })()
+    // 5. Скидки убраны с главной страницы для оптимизации производительности
+    Promise.resolve([])
   ]);
 
   const subscribedUserIds = subscriptions.map((sub) => sub.targetUserId);
@@ -310,25 +298,7 @@ export default async function DashboardPage() {
             </div>
           )}
 
-          {/* Скидки */}
-          {recentDiscounts.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
-              <div className="flex items-center justify-between mb-4 md:justify-start gap-4 w-full md:w-auto">
-                <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">
-                  Скидки
-                </h2>
-                <Link
-                  href="/dashboard/discounts"
-                  className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
-                >
-                  Все скидки
-                </Link>
-              </div>
-              <div className="max-h-[600px] overflow-y-auto">
-                <DiscountsScrollList discounts={recentDiscounts} />
-              </div>
-            </div>
-          )}
+          {/* Скидки убраны для оптимизации производительности - доступны в разделе /dashboard/discounts */}
         </div>
 
         {/* Правая колонка: Сайдбар (1/3 ширины на lg+) */}
