@@ -26,16 +26,20 @@ function getRedisClient(): Redis | null {
     redisClient = new Redis({
       ...options,
       retryStrategy: (times) => {
+        if (times > 10) {
+          // После 10 попыток прекращаем
+          return null;
+        }
         // Экспоненциальная задержка с максимумом 3 секунды
-        const delay = Math.min(times * 50, 3000);
+        const delay = Math.min(times * 100, 3000);
         return delay;
       },
-      maxRetriesPerRequest: 3,
+      maxRetriesPerRequest: null, // Не ограничиваем количество попыток
       lazyConnect: false, // Подключаемся сразу
       connectTimeout: 5000, // 5 секунд таймаут
       keepAlive: 30000, // Keep-alive каждые 30 секунд
       enableReadyCheck: true, // Проверка готовности перед выполнением команд
-      enableOfflineQueue: false, // Не ставить команды в очередь при отключении
+      enableOfflineQueue: true, // Включаем очередь для работы при временных отключениях
     });
     
     redisClient.on("error", (err) => {
@@ -71,7 +75,7 @@ function getRedisClient(): Redis | null {
  */
 export async function cacheGet<T>(key: string): Promise<T | null> {
   const client = getRedisClient();
-  if (!client) {
+  if (!client || client.status !== "ready") {
     return null; // Если Redis недоступен, возвращаем null
   }
 
@@ -81,8 +85,11 @@ export async function cacheGet<T>(key: string): Promise<T | null> {
       return null;
     }
     return JSON.parse(value) as T;
-  } catch (error) {
-    console.error(`[Cache] Error getting key ${key}:`, error);
+  } catch (error: any) {
+    // Не логируем ошибки подключения - это нормально при временных проблемах
+    if (error?.message && !error.message.includes("Stream isn't writeable")) {
+      console.error(`[Cache] Error getting key ${key}:`, error.message);
+    }
     return null;
   }
 }
@@ -96,7 +103,7 @@ export async function cacheSet(
   ttlSeconds: number = 300 // По умолчанию 5 минут
 ): Promise<boolean> {
   const client = getRedisClient();
-  if (!client) {
+  if (!client || client.status !== "ready") {
     return false;
   }
 
@@ -104,8 +111,11 @@ export async function cacheSet(
     const serialized = JSON.stringify(value);
     await client.setex(key, ttlSeconds, serialized);
     return true;
-  } catch (error) {
-    console.error(`[Cache] Error setting key ${key}:`, error);
+  } catch (error: any) {
+    // Не логируем ошибки подключения - это нормально при временных проблемах
+    if (error?.message && !error.message.includes("Stream isn't writeable")) {
+      console.error(`[Cache] Error setting key ${key}:`, error.message);
+    }
     return false;
   }
 }
@@ -162,23 +172,26 @@ export function getCacheKey(prefix: string, params: Record<string, any>): string
 
 /**
  * Обертка для кеширования результатов функции
+ * ВАЖНО: Всегда выполняет функцию, даже если Redis недоступен
  */
 export async function withCache<T>(
   key: string,
   fn: () => Promise<T>,
   ttlSeconds: number = 300
 ): Promise<T> {
-  // Пытаемся получить из кеша
+  // Пытаемся получить из кеша (если Redis доступен)
   const cached = await cacheGet<T>(key);
   if (cached !== null) {
     return cached;
   }
 
-  // Выполняем функцию
+  // Выполняем функцию (всегда, даже если Redis недоступен)
   const result = await fn();
 
-  // Сохраняем в кеш
-  await cacheSet(key, result, ttlSeconds);
+  // Сохраняем в кеш (если Redis доступен, иначе просто игнорируем)
+  await cacheSet(key, result, ttlSeconds).catch(() => {
+    // Игнорируем ошибки сохранения в кеш - это не критично
+  });
 
   return result;
 }
