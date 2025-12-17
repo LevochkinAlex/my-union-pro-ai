@@ -510,8 +510,9 @@ export async function PUT(request: NextRequest) {
       console.log("[profile] Profile completed, ready for document generation");
     }
 
-    // Инвалидируем кеш пользователей (профиль мог измениться)
+    // Инвалидируем кеш пользователей и профиля (профиль мог измениться)
     await invalidateUsersCache();
+    await cacheDeletePattern(`profile:userId:${session.user.id}:*`);
 
     return NextResponse.json({
       success: true,
