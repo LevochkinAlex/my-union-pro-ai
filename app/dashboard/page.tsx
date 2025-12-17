@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import NewsList from "@/components/dashboard/news/NewsList";
 import DiscountsScrollList from "@/components/dashboard/discounts/DiscountsScrollList";
 import MembershipBanner from "@/components/dashboard/MembershipBanner";
