@@ -41,7 +41,8 @@ export function useChat(options: UseChatOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [options.onError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Загрузка сообщений чата
   const loadMessages = useCallback(async (chatId: string, silent = false) => {
@@ -83,7 +84,8 @@ export function useChat(options: UseChatOptions = {}) {
         setLoadingMessages(false);
       }
     }
-  }, [options.onError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Загрузка старых сообщений
   const loadOlderMessages = useCallback(async () => {

@@ -39,6 +39,11 @@ function ChatPageContent() {
   const { showToast } = useToast();
   const currentUserId = session?.user?.id || null;
   
+  // Мемоизируем функцию onError чтобы избежать бесконечного цикла
+  const handleError = useCallback((error: string) => {
+    showToast(error, "error");
+  }, [showToast]);
+  
   const [mounted, setMounted] = useState(false);
   const [showChatView, setShowChatView] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -69,14 +74,15 @@ function ChatPageContent() {
     deleteMessage,
     toggleReaction,
   } = useChat({
-    onError: (error) => showToast(error, "error"),
+    onError: handleError,
   });
 
-  // Инициализация
+  // Инициализация - loadChats только один раз при монтировании
   useEffect(() => {
     setMounted(true);
     loadChats();
-  }, [loadChats]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Обработка URL параметров
   useEffect(() => {
