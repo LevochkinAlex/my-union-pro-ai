@@ -330,12 +330,14 @@ function UsersPageContent() {
             <CreatePost onPostCreated={handlePostCreated} compact={true} />
           )}
 
-          {/* Лента постов */}
+          {/* Лента постов - ленивая загрузка */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6">
             <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Свежие посты
             </h2>
-            <PostFeed key={refreshKey} />
+            <Suspense fallback={<div className="animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg h-32"></div>}>
+              <PostFeed key={refreshKey} limit={5} />
+            </Suspense>
           </div>
         </div>
       </div>
