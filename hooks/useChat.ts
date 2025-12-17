@@ -50,7 +50,11 @@ export function useChat(options: UseChatOptions = {}) {
     }
 
     try {
-      const response = await fetch(`/api/chat/${chatId}?limit=50&t=${Date.now()}`);
+      // При silent-запросе (polling) запрашиваем только новые сообщения
+      const url = silent 
+        ? `/api/chat/${chatId}?limit=20&t=${Date.now()}`  // Меньше сообщений для polling
+        : `/api/chat/${chatId}?limit=50&t=${Date.now()}`;
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         const newMessages = data.messages || [];
@@ -127,10 +131,10 @@ export function useChat(options: UseChatOptions = {}) {
     if (chat) {
       loadMessages(chat.id);
       
-      // Автообновление каждые 5 секунд
+      // Автообновление каждые 10 секунд (было 5)
       refreshIntervalRef.current = setInterval(() => {
         loadMessages(chat.id, true);
-      }, 5000);
+      }, 10000);
     }
   }, [loadMessages]);
 

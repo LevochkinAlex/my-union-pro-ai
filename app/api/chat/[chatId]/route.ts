@@ -261,55 +261,38 @@ export async function GET(
       console.error("[chat] Error updating readAt:", err);
     });
 
-    // Оптимизация: получаем информацию о пользователях для реакций одним запросом
+    // Оптимизация: получаем информацию о пользователях для реакций
+    // Только если есть реакции (избегаем лишних запросов)
     const allUserIds = new Set<string>();
-    messages.forEach((msg: any) => {
-      if (msg.reactions && typeof msg.reactions === 'object') {
-        try {
+    const hasReactions = messages.some((msg: any) => 
+      msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0
+    );
+    
+    if (hasReactions) {
+      messages.forEach((msg: any) => {
+        if (msg.reactions && typeof msg.reactions === 'object') {
           Object.values(msg.reactions).forEach((reactionData: any) => {
-            // Поддерживаем два формата:
-            // 1. Старый: { emoji: string[] } - массив userIds напрямую
-            // 2. Новый: { emoji: { userIds: string[], users: ... } } - объект с userIds
             let userIds: string[] = [];
             if (Array.isArray(reactionData)) {
-              // Старый формат - массив напрямую
               userIds = reactionData;
-            } else if (reactionData && typeof reactionData === 'object' && Array.isArray(reactionData.userIds)) {
-              // Новый формат - объект с userIds
+            } else if (reactionData?.userIds && Array.isArray(reactionData.userIds)) {
               userIds = reactionData.userIds;
             }
-            
-            userIds.forEach((id: string) => {
-              if (id && typeof id === 'string') {
-                allUserIds.add(id);
-              }
-            });
+            userIds.forEach((id: string) => id && allUserIds.add(id));
           });
-        } catch (e) {
-          console.error("[chat] Error processing reactions:", e);
         }
-      }
-    });
+      });
+    }
 
-    // Кешируем пользователей реакций на 5 минут (данные меняются редко)
+    // Кешируем пользователей реакций на 5 минут
     const reactionUsers = allUserIds.size > 0 
       ? await withCache(
           getCacheKey("users:reactions", { userIds: Array.from(allUserIds).sort().join(",") }),
-          async () => {
-            return await prisma.user.findMany({
-              where: {
-                id: { in: Array.from(allUserIds) },
-              },
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                avatarUrl: true,
-              },
-            });
-          },
-          300 // 5 минут
+          async () => prisma.user.findMany({
+            where: { id: { in: Array.from(allUserIds) } },
+            select: { id: true, firstName: true, lastName: true, middleName: true, avatarUrl: true },
+          }),
+          300
         )
       : [];
 
