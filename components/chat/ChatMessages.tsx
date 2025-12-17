@@ -51,15 +51,27 @@ function ChatMessagesComponent({
   const isFirstLoad = useRef(true);
   const isLoadingOlder = useRef(false);
   const prevChatId = useRef<string | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Сохранение позиции скролла при переключении чата
-  useEffect(() => {
+  // Функция сохранения позиции (debounced)
+  const saveCurrentPosition = useCallback(() => {
     const container = containerRef.current;
+    if (!container || !chat.id) return;
     
+    // Сохраняем расстояние от низа (более стабильно при изменении контента сверху)
+    const scrollFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    onSaveScrollPosition?.(chat.id, scrollFromBottom);
+  }, [chat.id, onSaveScrollPosition]);
+
+  // Сохранение позиции при размонтировании или переключении чата
+  useEffect(() => {
     // Сохраняем позицию предыдущего чата
-    if (prevChatId.current && prevChatId.current !== chat.id && container) {
-      const scrollFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-      onSaveScrollPosition?.(prevChatId.current, scrollFromBottom);
+    if (prevChatId.current && prevChatId.current !== chat.id) {
+      const container = containerRef.current;
+      if (container) {
+        const scrollFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        onSaveScrollPosition?.(prevChatId.current, scrollFromBottom);
+      }
     }
     
     // Сбрасываем флаги при смене чата
@@ -68,7 +80,15 @@ function ChatMessagesComponent({
       prevMessagesCount.current = 0;
       prevChatId.current = chat.id;
     }
-  }, [chat.id, onSaveScrollPosition]);
+    
+    // Cleanup: сохраняем позицию при размонтировании
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      saveCurrentPosition();
+    };
+  }, [chat.id, onSaveScrollPosition, saveCurrentPosition]);
 
   // Отслеживаем начало загрузки старых сообщений
   useEffect(() => {
@@ -81,7 +101,7 @@ function ChatMessagesComponent({
     }
   }, [loadingOlder]);
 
-  // Обработка скролла
+  // Обработка скролла с сохранением позиции
   const handleScroll = useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -95,7 +115,15 @@ function ChatMessagesComponent({
     if (scrollTop < 100 && hasMore && !loadingOlder) {
       onLoadMore();
     }
-  }, [hasMore, loadingOlder, onLoadMore]);
+    
+    // Сохраняем позицию с debounce (каждые 500ms)
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = setTimeout(() => {
+      saveCurrentPosition();
+    }, 500);
+  }, [hasMore, loadingOlder, onLoadMore, saveCurrentPosition]);
 
   // Управление скроллом при изменении сообщений
   useEffect(() => {
@@ -107,14 +135,28 @@ function ChatMessagesComponent({
       isFirstLoad.current = false;
       const savedPosition = getSavedScrollPosition?.(chat.id);
       
-      if (savedPosition !== null && savedPosition !== undefined) {
+      if (savedPosition !== null && savedPosition !== undefined && savedPosition > 0) {
         // Восстанавливаем сохраненную позицию (от низа)
-        requestAnimationFrame(() => {
-          container.scrollTop = container.scrollHeight - container.clientHeight - savedPosition;
-        });
+        // Используем несколько попыток для гарантии отрисовки контента
+        const restoreScroll = (attempts = 0) => {
+          if (attempts > 5) return; // Максимум 5 попыток
+          
+          requestAnimationFrame(() => {
+            const targetScrollTop = container.scrollHeight - container.clientHeight - savedPosition;
+            container.scrollTop = Math.max(0, targetScrollTop);
+            
+            // Если контент ещё не загрузился полностью, пробуем ещё раз
+            if (container.scrollHeight < 500 && attempts < 5) {
+              setTimeout(() => restoreScroll(attempts + 1), 100);
+            }
+          });
+        };
+        restoreScroll();
       } else {
         // Новый чат или нет сохраненной позиции — скролл к последнему сообщению
-        container.scrollTop = container.scrollHeight;
+        requestAnimationFrame(() => {
+          container.scrollTop = container.scrollHeight;
+        });
       }
       prevMessagesCount.current = messages.length;
       return;
@@ -122,9 +164,11 @@ function ChatMessagesComponent({
 
     // После загрузки старых сообщений — сохраняем позицию
     if (isLoadingOlder.current && messages.length > prevMessagesCount.current) {
-      const newScrollHeight = container.scrollHeight;
-      const scrollDiff = newScrollHeight - prevScrollHeight.current;
-      container.scrollTop = scrollDiff;
+      requestAnimationFrame(() => {
+        const newScrollHeight = container.scrollHeight;
+        const scrollDiff = newScrollHeight - prevScrollHeight.current;
+        container.scrollTop = scrollDiff;
+      });
       isLoadingOlder.current = false;
       prevMessagesCount.current = messages.length;
       return;
