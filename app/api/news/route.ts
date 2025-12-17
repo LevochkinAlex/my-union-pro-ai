@@ -64,10 +64,20 @@ export async function GET(request: NextRequest) {
         ]);
         
         // Обрезаем content для списка (первые 500 символов для превью)
-        const news = newsRaw.map(n => ({
-          ...n,
-          content: n.content ? n.content.substring(0, 500) + (n.content.length > 500 ? '...' : '') : '',
-        }));
+        // Для coverImage: если это Base64, обрезаем до thumbnail или возвращаем null
+        const news = newsRaw.map(n => {
+          let coverImage = n.coverImage;
+          // Если coverImage - это Base64 и слишком большой, возвращаем null (для производительности)
+          // Клиент загрузит полное изображение отдельным запросом
+          if (coverImage && coverImage.startsWith('data:') && coverImage.length > 50000) {
+            coverImage = null; // Изображение будет загружено отдельно через /api/news/[id]
+          }
+          return {
+            ...n,
+            content: n.content ? n.content.substring(0, 500) + (n.content.length > 500 ? '...' : '') : '',
+            coverImage,
+          };
+        });
         return { news, total };
       },
       120 // 2 минуты
