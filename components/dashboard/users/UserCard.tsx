@@ -45,13 +45,19 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
   ];
   const colorIndex = (user.firstName?.charCodeAt(0) || 0) % colors.length;
   const avatarGradient = colors[colorIndex];
+  
+  // Проверяем валидность avatarUrl
+  const hasValidAvatar = user.avatarUrl && 
+    user.avatarUrl.trim() !== "" && 
+    (user.avatarUrl.startsWith('http://') || 
+     user.avatarUrl.startsWith('https://') || 
+     user.avatarUrl.startsWith('data:') || 
+     user.avatarUrl.startsWith('/'));
 
-  // Проверяем статус подписки при загрузке
-  useEffect(() => {
-    checkSubscriptionStatus();
-  }, [user.id]);
-
+  // Проверяем статус подписки только при наведении или перед кликом на кнопку (ленивая загрузка)
   const checkSubscriptionStatus = async () => {
+    if (isSubscribed !== false) return; // Уже проверяли
+    
     try {
       const response = await fetch(`/api/subscriptions/${user.id}`);
       if (response.ok) {
@@ -94,10 +100,10 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
         <div className="flex items-center gap-4 p-[7px] w-full h-fit">
           {/* Avatar */}
           <div className="flex-shrink-0">
-            {user.avatarUrl && !avatarError ? (
+            {hasValidAvatar && !avatarError ? (
               <div className="relative h-[66px] w-[66px] rounded-full overflow-hidden ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all">
                 <img
-                  src={user.avatarUrl}
+                  src={user.avatarUrl!}
                   alt={fullName}
                   className="h-full w-full object-cover"
                   onError={() => {
@@ -152,7 +158,11 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
           {/* Action Button */}
           <div className="flex-shrink-0">
             <button
-              onClick={handleSubscribe}
+              onMouseEnter={checkSubscriptionStatus}
+              onClick={(e) => {
+                checkSubscriptionStatus();
+                handleSubscribe(e);
+              }}
               disabled={isLoading}
               className={`py-2 px-4 rounded-lg border font-medium text-sm transition-colors whitespace-nowrap ${
                 isSubscribed
