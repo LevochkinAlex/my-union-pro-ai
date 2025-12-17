@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { withCache, getCacheKey } from "@/lib/cache";
+import * as Sentry from "@sentry/nextjs";
 
 // GET - получение списка пользователей с поиском и фильтрацией
 export async function GET(request: NextRequest) {
@@ -48,9 +49,20 @@ export async function GET(request: NextRequest) {
     // Кешируем запрос пользователей на 2 минуты (данные меняются редко)
     const cacheKey = getCacheKey("users:list", { search, organizationId, page, limit });
     
-    const result = await withCache(
-      cacheKey,
-      async () => {
+    const result = await Sentry.startSpan(
+      {
+        op: "db.query",
+        name: "GET /api/users - fetch users",
+      },
+      async (span) => {
+        span.setAttribute("search", search);
+        span.setAttribute("organizationId", organizationId || "all");
+        span.setAttribute("page", page);
+        span.setAttribute("limit", limit);
+        
+        return await withCache(
+          cacheKey,
+          async () => {
         // Получаем пользователей
         const [users, total] = await Promise.all([
           prisma.user.findMany({

@@ -2,6 +2,17 @@ import { prisma } from "./prisma";
 import type { LogLevel } from "@prisma/client";
 import * as Sentry from "@sentry/nextjs";
 
+// Получаем logger из Sentry (только на сервере)
+let sentryLogger: typeof Sentry.logger | null = null;
+if (typeof window === "undefined" && process.env.NEXT_PUBLIC_SENTRY_DSN) {
+  try {
+    sentryLogger = Sentry.logger;
+  } catch (error) {
+    // Logger может быть недоступен до инициализации Sentry
+    sentryLogger = null;
+  }
+}
+
 export interface LogEntry {
   level: LogLevel;
   source: string;
@@ -58,6 +69,15 @@ export class Logger {
    * Log info level
    */
   static async info(source: string, message: string, details?: Record<string, any>, userId?: string): Promise<void> {
+    // Логируем в Sentry
+    if (sentryLogger) {
+      sentryLogger.info(message, {
+        source,
+        userId: userId || "unknown",
+        ...details,
+      });
+    }
+
     return this.log({
       level: "INFO",
       source,
@@ -71,6 +91,15 @@ export class Logger {
    * Log warning level
    */
   static async warning(source: string, message: string, details?: Record<string, any>, userId?: string): Promise<void> {
+    // Логируем в Sentry
+    if (sentryLogger) {
+      sentryLogger.warn(message, {
+        source,
+        userId: userId || "unknown",
+        ...details,
+      });
+    }
+
     return this.log({
       level: "WARNING",
       source,
@@ -97,6 +126,17 @@ export class Logger {
     if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
       try {
         const sentryError = error instanceof Error ? error : new Error(errorMessage);
+        
+        // Логируем через Sentry logger
+        if (sentryLogger) {
+          sentryLogger.error(sentryLogger.fmt`${message}: ${errorMessage}`, {
+            source,
+            userId: userId || "unknown",
+            ...details,
+          });
+        }
+        
+        // Отправляем exception
         Sentry.captureException(sentryError, {
           level: "error",
           tags: {

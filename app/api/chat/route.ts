@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
 import { normalizeUserAvatar } from "@/lib/api-helpers";
+import * as Sentry from "@sentry/nextjs";
 
 // Проверка доступности prisma
 if (!prisma) {
@@ -29,17 +30,27 @@ export async function GET(request: NextRequest) {
 
     const userId = session.user.id;
 
-    // Получаем пользователя-бота (не критично, если не получится)
-    let botUser = null;
-    try {
-      botUser = await getOrCreateAIBotUser();
-    } catch (error) {
-      console.error("[chat] Error getting bot user:", error);
-      // Продолжаем выполнение, даже если не удалось получить бота
-    }
+    // Используем Sentry span для отслеживания производительности
+    const result = await Sentry.startSpan(
+      {
+        op: "db.query",
+        name: "GET /api/chat - fetch user chats",
+      },
+      async (span) => {
+        span.setAttribute("userId", userId);
 
-    // Получаем все чаты, где пользователь является участником
-    const chats = await prisma.chat.findMany({
+        // Получаем пользователя-бота (не критично, если не получится)
+        let botUser = null;
+        try {
+          botUser = await getOrCreateAIBotUser();
+        } catch (error) {
+          Sentry.captureException(error);
+          console.error("[chat] Error getting bot user:", error);
+          // Продолжаем выполнение, даже если не удалось получить бота
+        }
+
+        // Получаем все чаты, где пользователь является участником
+        const chats = await prisma.chat.findMany({
       where: {
         OR: [
           { participant1Id: userId },
@@ -134,30 +145,36 @@ export async function GET(request: NextRequest) {
       return unreadCountsMap.get(chat.id) || 0;
     });
 
-    // Форматируем чаты для ответа
-    const formattedChats = chats.map((chat, index) => {
-      const otherUser = chat.participant1Id === userId ? chat.participant2 : chat.participant1;
-      const normalizedUser = normalizeUserAvatar(otherUser);
+        // Форматируем чаты для ответа
+        const formattedChats = chats.map((chat, index) => {
+          const otherUser = chat.participant1Id === userId ? chat.participant2 : chat.participant1;
+          const normalizedUser = normalizeUserAvatar(otherUser);
 
-      return {
-        id: chat.id,
-        otherUser: {
-          id: normalizedUser.id,
-          firstName: normalizedUser.firstName,
-          lastName: normalizedUser.lastName,
-          middleName: normalizedUser.middleName,
-          avatarUrl: normalizedUser.avatarUrl,
-          phone: normalizedUser.phone,
-        },
-        lastMessage: chat.lastMessage,
-        lastMessageAt: chat.lastMessageAt,
-        unreadCount: unreadCounts[index] || 0,
-        createdAt: chat.createdAt,
-      };
-    });
+          return {
+            id: chat.id,
+            otherUser: {
+              id: normalizedUser.id,
+              firstName: normalizedUser.firstName,
+              lastName: normalizedUser.lastName,
+              middleName: normalizedUser.middleName,
+              avatarUrl: normalizedUser.avatarUrl,
+              phone: normalizedUser.phone,
+            },
+            lastMessage: chat.lastMessage,
+            lastMessageAt: chat.lastMessageAt,
+            unreadCount: unreadCounts[index] || 0,
+            createdAt: chat.createdAt,
+          };
+        });
 
-    return NextResponse.json({ chats: formattedChats });
+        span.setAttribute("chatsCount", formattedChats.length);
+        return { chats: formattedChats };
+      }
+    );
+
+    return NextResponse.json(result);
   } catch (error: any) {
+    Sentry.captureException(error);
     console.error("[chat] GET Error:", {
       message: error?.message,
       code: error?.code,

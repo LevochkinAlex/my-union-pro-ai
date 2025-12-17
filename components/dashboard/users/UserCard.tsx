@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useToast } from "@/components/ui/Toast";
+import * as Sentry from "@sentry/nextjs";
 
 interface UserCardProps {
   user: {
@@ -76,25 +77,41 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
     e.preventDefault();
     e.stopPropagation();
     
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/subscriptions/${user.id}`, {
-        method: isSubscribed ? "DELETE" : "POST",
-      });
+    return Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "UserCard Subscribe Button",
+      },
+      async (span) => {
+        span.setAttribute("userId", user.id);
+        span.setAttribute("action", isSubscribed ? "unsubscribe" : "subscribe");
+        
+        setIsLoading(true);
+        try {
+          const response = await fetch(`/api/subscriptions/${user.id}`, {
+            method: isSubscribed ? "DELETE" : "POST",
+          });
 
-      if (response.ok) {
-        setIsSubscribed(!isSubscribed);
-        showToast(isSubscribed ? "Подписка отменена" : "Подписка оформлена", "success");
-      } else {
-        const error = await response.json();
-        showToast(error.error || "Ошибка при изменении подписки", "error");
+          if (response.ok) {
+            setIsSubscribed(!isSubscribed);
+            span.setAttribute("success", true);
+            showToast(isSubscribed ? "Подписка отменена" : "Подписка оформлена", "success");
+          } else {
+            const error = await response.json();
+            span.setAttribute("success", false);
+            span.setAttribute("error", error.error || "Unknown error");
+            showToast(error.error || "Ошибка при изменении подписки", "error");
+          }
+        } catch (error) {
+          Sentry.captureException(error);
+          span.setAttribute("success", false);
+          console.error("Error toggling subscription:", error);
+          showToast("Ошибка при изменении подписки", "error");
+        } finally {
+          setIsLoading(false);
+        }
       }
-    } catch (error) {
-      console.error("Error toggling subscription:", error);
-      showToast("Ошибка при изменении подписки", "error");
-    } finally {
-      setIsLoading(false);
-    }
+    );
   };
   
   return (

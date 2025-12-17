@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { withCache, getCacheKey } from "@/lib/cache";
 import { invalidatePostsCache } from "@/lib/cache-invalidation";
+import * as Sentry from "@sentry/nextjs";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
@@ -37,49 +38,61 @@ export async function GET(request: NextRequest) {
     // Кешируем посты на 1 минуту (данные обновляются часто, но кеш помогает при повторных запросах)
     const cacheKey = getCacheKey("posts:list", { userId, page, limit });
     
-    const posts = await withCache(
-      cacheKey,
-      async () => {
-        return await prisma.userPost.findMany({
-          where,
-          include: {
-            author: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                avatarUrl: true,
-                jobTitle: true,
-                profession: true,
-                organization: {
+    const posts = await Sentry.startSpan(
+      {
+        op: "db.query",
+        name: "GET /api/posts - fetch posts",
+      },
+      async (span) => {
+        span.setAttribute("userId", userId || "all");
+        span.setAttribute("page", page);
+        span.setAttribute("limit", limit);
+        
+        return await withCache(
+          cacheKey,
+          async () => {
+            return await prisma.userPost.findMany({
+              where,
+              include: {
+                author: {
                   select: {
                     id: true,
-                    name: true,
+                    firstName: true,
+                    lastName: true,
+                    middleName: true,
+                    avatarUrl: true,
+                    jobTitle: true,
+                    profession: true,
+                    organization: {
+                      select: {
+                        id: true,
+                        name: true,
+                      },
+                    },
+                  },
+                },
+                attachments: {
+                  orderBy: {
+                    createdAt: "asc",
+                  },
+                },
+                _count: {
+                  select: {
+                    likes: true,
+                    comments: true,
                   },
                 },
               },
-            },
-            attachments: {
               orderBy: {
-                createdAt: "asc",
+                createdAt: "desc",
               },
-            },
-            _count: {
-              select: {
-                likes: true,
-                comments: true,
-              },
-            },
+              skip: (page - 1) * limit,
+              take: limit,
+            });
           },
-          orderBy: {
-            createdAt: "desc",
-          },
-          skip: (page - 1) * limit,
-          take: limit,
-        });
-      },
-      60 // 1 минута
+          60 // 1 минута
+        );
+      }
     );
 
     // Получаем лайки пользователя отдельно (не кешируем, так как это персональные данные)
@@ -125,13 +138,21 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - создание поста
+    // POST - создание поста
 export async function POST(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
-    }
+  return Sentry.startSpan(
+    {
+      op: "http.server",
+      name: "POST /api/posts - create post",
+    },
+    async (span) => {
+      try {
+        const session = await getServerSession(authOptions);
+        if (!session?.user?.id) {
+          return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+        }
+
+        span.setAttribute("userId", session.user.id);
 
     const formData = await request.formData();
     let content = (formData.get("content") as string) || "";
@@ -558,32 +579,40 @@ export async function POST(request: NextRequest) {
       // Не прерываем создание поста из-за ошибки уведомлений
     }
 
-    // Инвалидируем кеш постов
-    await invalidatePostsCache(session.user.id);
+        // Инвалидируем кеш постов
+        await invalidatePostsCache(session.user.id);
 
-    return NextResponse.json({
-      post: {
-        ...post,
-        attachments,
-        isLiked: false,
-        likesCount: 0,
-        commentsCount: 0,
-      },
-    });
-  } catch (error: any) {
-    console.error("[posts] POST Error:", {
-      message: error?.message,
-      stack: error?.stack,
-      code: error?.code,
-      name: error?.name,
-    });
-    return NextResponse.json(
-      { 
-        error: "Внутренняя ошибка сервера",
-        details: process.env.NODE_ENV === "development" ? error?.message : undefined,
-      },
-      { status: 500 }
-    );
-  }
+        span.setAttribute("postId", post.id);
+        span.setAttribute("attachmentsCount", attachments.length);
+
+        return NextResponse.json({
+          post: {
+            ...post,
+            attachments,
+            isLiked: false,
+            likesCount: 0,
+            commentsCount: 0,
+          },
+        });
+      } catch (error: any) {
+        // Отправляем ошибку в Sentry
+        Sentry.captureException(error);
+        
+        console.error("[posts] POST Error:", {
+          message: error?.message,
+          stack: error?.stack,
+          code: error?.code,
+          name: error?.name,
+        });
+        return NextResponse.json(
+          { 
+            error: "Внутренняя ошибка сервера",
+            details: process.env.NODE_ENV === "development" ? error?.message : undefined,
+          },
+          { status: 500 }
+        );
+      }
+    }
+  );
 }
 
