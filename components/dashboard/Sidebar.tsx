@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "@/components/ThemeToggle";
 import { LogoIcon } from "@/components/Logo";
 import { signOut } from "next-auth/react";
@@ -90,9 +90,13 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                 {hasSubItems ? (
                   <button
                     onClick={() => {
+                      if (isNavigating) return; // Prevent double clicks
+                      
                       if (isCollapsed) {
-                        // If collapsed, navigate to main item
-                        window.location.href = item.href;
+                        // If collapsed, navigate to main item using Next.js router
+                        setIsNavigating(true);
+                        router.push(item.href);
+                        setTimeout(() => setIsNavigating(false), 500);
                       } else {
                         // If expanded, toggle submenu
                         setExpandedItems(prev =>
@@ -102,6 +106,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                         );
                       }
                     }}
+                    disabled={isNavigating}
                     className={`flex w-full items-center gap-3 rounded-lg text-sm font-medium transition-colors ${
                       isMainItemActive
                         ? "bg-blue-600 text-white shadow-sm"
@@ -131,6 +136,14 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                 ) : (
                   <Link
                     href={item.href}
+                    onClick={(e) => {
+                      if (isNavigating) {
+                        e.preventDefault();
+                        return;
+                      }
+                      setIsNavigating(true);
+                      setTimeout(() => setIsNavigating(false), 500);
+                    }}
                     className={`flex items-center gap-3 rounded-lg text-sm font-medium transition-colors ${
                       isActive
                         ? "bg-blue-600 text-white shadow-sm"
@@ -139,7 +152,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                       isCollapsed
                         ? "h-10 w-10 justify-center"
                         : "px-3 py-2.5"
-                    }`}
+                    } ${isNavigating ? "pointer-events-none opacity-70" : ""}`}
                     title={isCollapsed ? item.label : undefined}
                   >
                     <span className="flex-shrink-0">{item.icon}</span>
@@ -165,11 +178,19 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                         <Link
                           key={subItem.href}
                           href={subItem.href}
+                          onClick={(e) => {
+                            if (isNavigating) {
+                              e.preventDefault();
+                              return;
+                            }
+                            setIsNavigating(true);
+                            setTimeout(() => setIsNavigating(false), 500);
+                          }}
                           className={`block rounded-lg px-3 py-2 text-sm transition-colors ${
                             subIsActive
                               ? "bg-blue-50 font-medium text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
                               : "text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-700/50"
-                          }`}
+                          } ${isNavigating ? "pointer-events-none opacity-70" : ""}`}
                         >
                           {subItem.label}
                         </Link>
