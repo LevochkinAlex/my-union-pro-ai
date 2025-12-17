@@ -19,19 +19,28 @@ export async function GET(request: NextRequest) {
     const cachedData = await withCache(
       cacheKey,
       async () => {
-        // Получаем только опубликованные новости
+        // Получаем только опубликованные новости (без полного контента для списка)
         const [news, total] = await Promise.all([
           prisma.newsPost.findMany({
             where: {
               isPublished: true,
             },
-            include: {
+            select: {
+              id: true,
+              title: true,
+              slug: true,
+              excerpt: true,
+              coverImage: true,
+              publishedAt: true,
+              createdAt: true,
+              updatedAt: true,
+              viewCount: true,
+              isPublished: true,
               author: {
                 select: {
                   id: true,
                   firstName: true,
                   lastName: true,
-                  email: true,
                   avatarUrl: true,
                 },
               },
@@ -42,7 +51,10 @@ export async function GET(request: NextRequest) {
                 },
               },
               polls: {
-                include: {
+                select: {
+                  id: true,
+                  question: true,
+                  options: true,
                   _count: {
                     select: {
                       votes: true,
