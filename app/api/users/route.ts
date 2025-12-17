@@ -30,15 +30,34 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    // Поиск по имени, фамилии, отчеству, email или телефону
+    // Оптимизированный поиск: используем startsWith для более быстрого поиска
+    // и только если нужно - contains для более глубокого поиска
     if (search) {
-      where.OR = [
-        { firstName: { contains: search, mode: "insensitive" } },
-        { lastName: { contains: search, mode: "insensitive" } },
-        { middleName: { contains: search, mode: "insensitive" } },
-        { email: { contains: search, mode: "insensitive" } },
-        { phone: { contains: search, mode: "insensitive" } },
-      ];
+      const searchLower = search.toLowerCase().trim();
+      // Если поиск короткий (1-2 символа), используем startsWith для производительности
+      // Если длиннее - используем contains, но ограничиваем результаты
+      if (searchLower.length <= 2) {
+        where.OR = [
+          { firstName: { startsWith: search, mode: "insensitive" } },
+          { lastName: { startsWith: search, mode: "insensitive" } },
+          { middleName: { startsWith: search, mode: "insensitive" } },
+          { email: { startsWith: search, mode: "insensitive" } },
+          { phone: { startsWith: search, mode: "insensitive" } },
+        ];
+      } else {
+        // Для длинных запросов используем contains, но с ограничением результатов
+        where.OR = [
+          { firstName: { contains: search, mode: "insensitive" } },
+          { lastName: { contains: search, mode: "insensitive" } },
+          { middleName: { contains: search, mode: "insensitive" } },
+          { email: { contains: search, mode: "insensitive" } },
+          { phone: { contains: search, mode: "insensitive" } },
+        ];
+        // Ограничиваем результаты при поиске для производительности
+        if (limit > 50) {
+          limit = 50;
+        }
+      }
     }
 
     // Фильтр по организации

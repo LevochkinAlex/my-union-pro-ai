@@ -73,12 +73,12 @@ model User {
   jobTitle   String? // Занимаемая должность
   profession String? // Основная профессия (перемещена в дополнительную информацию)
   education  String? // Образование (перемещено в дополнительную информацию)
-  
+
   // Место работы (обязательное для заявлений)
-  workplace         String? // Название компании места работы
-  workplaceInn      String? // ИНН компании места работы
-  directorName      String? // ФИО руководителя компании (из ФНС через Dadata)
-  directorPosition  String? // Должность руководителя компании (из ФНС через Dadata)
+  workplace        String? // Название компании места работы
+  workplaceInn     String? // ИНН компании места работы
+  directorName     String? // ФИО руководителя компании (из ФНС через Dadata)
+  directorPosition String? // Должность руководителя компании (из ФНС через Dadata)
 
   // Дополнительная информация профиля
   employmentStatus   String? // Занятость: WORK (работа), STUDY (учеба), RETIREMENT (пенсия)
@@ -202,6 +202,11 @@ model User {
   @@index([resetToken])
   @@index([unionCardNumber])
   @@index([unionMembershipStatus])
+  @@index([createdAt]) // Для сортировки по дате создания
+  @@index([role]) // Для фильтрации по роли
+  // Составные индексы для оптимизации поиска
+  @@index([firstName, lastName, middleName]) // Для поиска по ФИО
+  @@index([organizationId, createdAt]) // Для фильтрации по организации с сортировкой
 }
 
 // SMS PIN-коды для авторизации
