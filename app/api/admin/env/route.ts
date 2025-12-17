@@ -29,6 +29,8 @@ const EDITABLE_ENV_VARS = [
   "BEST_BENEFITS_API_URL",
   "BEST_BENEFITS_API_KEY",
   "BEST_BENEFITS_TOKEN",
+  "NEXT_PUBLIC_SENTRY_DSN",
+  "GRAFANA_URL",
 ];
 
 export async function GET() {
@@ -62,13 +64,24 @@ export async function GET() {
       console.warn("[admin/env] .env.prod not found");
     }
 
-    // Возвращаем только редактируемые переменные
+    // Возвращаем только редактируемые переменные + все переменные для чтения (для мониторинга)
     const result: Record<string, { local?: string; prod?: string }> = {};
     EDITABLE_ENV_VARS.forEach((key) => {
       result[key] = {
         local: envLocal[key],
         prod: envProd[key],
       };
+    });
+
+    // Добавляем переменные для мониторинга (только для чтения)
+    const monitoringVars = ["NEXT_PUBLIC_SENTRY_DSN", "GRAFANA_URL"];
+    monitoringVars.forEach((key) => {
+      if (!result[key]) {
+        result[key] = {
+          local: envLocal[key] || process.env[key],
+          prod: envProd[key] || process.env[key],
+        };
+      }
     });
 
     return new Response(JSON.stringify(result), { status: 200 });

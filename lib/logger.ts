@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import type { LogLevel } from "@prisma/client";
+import * as Sentry from "@sentry/nextjs";
 
 export interface LogEntry {
   level: LogLevel;
@@ -91,6 +92,27 @@ export class Logger {
   ): Promise<void> {
     const stackTrace = error instanceof Error ? error.stack : undefined;
     const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // Отправляем в Sentry
+    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+      try {
+        const sentryError = error instanceof Error ? error : new Error(errorMessage);
+        Sentry.captureException(sentryError, {
+          level: "error",
+          tags: {
+            source,
+            userId: userId || "unknown",
+          },
+          extra: {
+            message,
+            ...details,
+          },
+        });
+      } catch (sentryError) {
+        // Игнорируем ошибки Sentry, чтобы не прерывать логирование
+        console.error("[Logger] Sentry error:", sentryError);
+      }
+    }
 
     return this.log({
       level: "ERROR",
