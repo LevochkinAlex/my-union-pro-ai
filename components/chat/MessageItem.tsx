@@ -1,8 +1,88 @@
 "use client";
 
-import { memo, useState, useCallback } from "react";
+import { memo, useState, useCallback, useRef, useEffect } from "react";
 import { Message, ChatUser } from "@/types/chat";
 import { getUserName, getInitials, formatTime, getFileUrl, formatFileSize } from "@/lib/chat-utils";
+
+// Компонент для lazy loading изображений с blur эффектом (как в Telegram/WhatsApp)
+const LazyImage = memo(function LazyImage({
+  src,
+  alt,
+  onClick,
+  className = "",
+}: {
+  src: string;
+  alt: string;
+  onClick?: () => void;
+  className?: string;
+}) {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isInView, setIsInView] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const imgRef = useRef<HTMLDivElement>(null);
+
+  // IntersectionObserver для определения видимости
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setIsInView(true);
+            observer.disconnect();
+          }
+        });
+      },
+      {
+        rootMargin: "200px", // Начинаем загрузку за 200px до появления
+        threshold: 0,
+      }
+    );
+
+    if (imgRef.current) {
+      observer.observe(imgRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={imgRef}
+      onClick={onClick}
+      className={`relative overflow-hidden bg-gray-200 dark:bg-gray-700 cursor-pointer ${className}`}
+      style={{ minHeight: "100px" }}
+    >
+      {/* Placeholder с blur эффектом */}
+      {!isLoaded && !hasError && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+      
+      {/* Ошибка загрузки */}
+      {hasError && (
+        <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        </div>
+      )}
+      
+      {/* Изображение */}
+      {isInView && !hasError && (
+        <img
+          src={src}
+          alt={alt}
+          className={`max-w-full h-auto transition-all duration-300 ${
+            isLoaded ? "opacity-100 blur-0" : "opacity-0 blur-md"
+          }`}
+          onLoad={() => setIsLoaded(true)}
+          onError={() => setHasError(true)}
+        />
+      )}
+    </div>
+  );
+});
 
 interface MessageItemProps {
   message: Message;
@@ -228,18 +308,13 @@ const Attachments = memo(function Attachments({
 
         if (isImage) {
           return (
-            <button
+            <LazyImage
               key={attachment.id}
+              src={getFileUrl(attachment.filePath)}
+              alt={attachment.originalName}
               onClick={() => onImageClick?.(getFileUrl(attachment.filePath), attachment.originalName)}
-              className="block rounded-lg overflow-hidden max-w-[300px] cursor-pointer hover:opacity-90 transition-opacity"
-            >
-              <img
-                src={getFileUrl(attachment.filePath)}
-                alt={attachment.originalName}
-                className="max-w-full h-auto"
-                loading="lazy"
-              />
-            </button>
+              className="rounded-lg max-w-[300px] hover:opacity-90 transition-opacity"
+            />
           );
         }
 

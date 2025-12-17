@@ -73,6 +73,8 @@ function ChatPageContent() {
     editMessage,
     deleteMessage,
     toggleReaction,
+    saveScrollPosition,
+    getScrollPosition,
   } = useChat({
     onError: handleError,
   });
@@ -221,6 +223,8 @@ function ChatPageContent() {
               onForward={handleForward}
               onReaction={toggleReaction}
               onImageClick={(url, name) => setSelectedImage({ url, name })}
+              onSaveScrollPosition={saveScrollPosition}
+              getSavedScrollPosition={getScrollPosition}
             />
 
             {/* Поле ввода */}

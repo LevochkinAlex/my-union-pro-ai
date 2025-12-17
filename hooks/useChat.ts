@@ -116,6 +116,19 @@ export function useChat(options: UseChatOptions = {}) {
     }
   }, [selectedChat, oldestMessageId, loadingOlder]);
 
+  // Хранение позиций скролла для каждого чата
+  const scrollPositionsRef = useRef<Map<string, number>>(new Map());
+
+  // Сохранение позиции скролла
+  const saveScrollPosition = useCallback((chatId: string, position: number) => {
+    scrollPositionsRef.current.set(chatId, position);
+  }, []);
+
+  // Получение сохраненной позиции скролла
+  const getScrollPosition = useCallback((chatId: string): number | null => {
+    return scrollPositionsRef.current.get(chatId) ?? null;
+  }, []);
+
   // Выбор чата
   const selectChat = useCallback((chat: Chat | null) => {
     // Очищаем интервал обновления предыдущего чата
@@ -362,6 +375,10 @@ export function useChat(options: UseChatOptions = {}) {
     deleteMessage,
     toggleReaction,
     forwardMessage,
+    
+    // Скролл
+    saveScrollPosition,
+    getScrollPosition,
   };
 }
 
