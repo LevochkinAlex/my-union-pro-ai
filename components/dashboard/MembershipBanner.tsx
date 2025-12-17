@@ -169,7 +169,7 @@ export default function MembershipBanner({
           <div className="mb-4 flex items-start justify-between">
             <div className="flex-1">
               <div className="mb-2 flex items-center gap-2">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-600 text-white dark:bg-green-500">
+                <div className="flex h-10 w-10 min-h-10 min-w-10 max-h-10 max-w-10 flex-shrink-0 items-center justify-center rounded-full bg-green-600 text-white dark:bg-green-500 p-[7px]" style={{ aspectRatio: '1' }}>
                   <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -278,7 +278,7 @@ export default function MembershipBanner({
         <div className="mb-4 flex items-start justify-between">
           <div className="flex-1">
             <div className="mb-2 flex items-center gap-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white dark:bg-blue-500">
+              <div className="flex h-10 w-10 min-h-10 min-w-10 max-h-10 max-w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-white dark:bg-blue-500 p-[7px]" style={{ aspectRatio: '1' }}>
                 <svg
                   className="h-6 w-6"
                   fill="none"

@@ -258,16 +258,21 @@ export default async function DashboardPage() {
 
       {/* Посты от коллег */}
       <section className="overflow-hidden">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 w-full gap-2 md:gap-0">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
             Посты от коллег
           </h2>
-          <a
-            href="/dashboard/users"
-            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
-          >
-            Все коллеги →
-          </a>
+          <div className="flex items-center justify-between md:justify-start gap-4 w-full md:w-auto">
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              За последние 7 дней
+            </span>
+            <a
+              href="/dashboard/users"
+              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
+            >
+              Все коллеги →
+            </a>
+          </div>
         </div>
         {subscribedUserIds.length === 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
@@ -329,16 +334,21 @@ export default async function DashboardPage() {
 
       {/* Свежие новости */}
       <section>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 w-full gap-2 md:gap-0">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
             Свежие новости
           </h2>
-          <a
-            href="/dashboard/news"
-            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
-          >
-            Все новости →
-          </a>
+          <div className="flex items-center justify-between md:justify-start gap-4 w-full md:w-auto">
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              За последние 7 дней
+            </span>
+            <a
+              href="/dashboard/news"
+              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
+            >
+              Все новости →
+            </a>
+          </div>
         </div>
         <NewsList
           news={recentNews.map((news: any) => ({
@@ -351,11 +361,11 @@ export default async function DashboardPage() {
 
       {/* Новые пользователи */}
       <section className="min-w-0 overflow-hidden">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col items-start justify-start mb-4 w-full gap-2">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
             Новые коллеги
           </h2>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between gap-4 w-full">
             <span className="text-sm text-gray-500 dark:text-gray-400">
               За последние 7 дней
             </span>
@@ -369,7 +379,7 @@ export default async function DashboardPage() {
         </div>
         {newUsers.length > 0 ? (
           <div 
-            className="flex gap-4 pb-4 overflow-x-auto"
+            className="flex gap-4 pb-4 overflow-x-auto w-fit h-fit"
             style={{ 
               scrollbarWidth: 'none', 
               msOverflowStyle: 'none',
@@ -378,7 +388,7 @@ export default async function DashboardPage() {
           >
             {newUsers.map((user) => (
               <div key={user.id} className="flex-none w-[280px] sm:w-[320px]">
-                <UserCard user={user} />
+                <UserCard user={user} hideOrganization={true} />
               </div>
             ))}
           </div>
@@ -410,16 +420,21 @@ export default async function DashboardPage() {
 
       {/* Свежие скидки */}
       <section className="overflow-hidden">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 w-full gap-2 md:gap-0">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
             Свежие скидки от партнеров
           </h2>
-          <a
-            href="/dashboard/discounts"
-            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
-          >
-            Все скидки →
-          </a>
+          <div className="flex items-center justify-between md:justify-start gap-4 w-full md:w-auto">
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              За последние 7 дней
+            </span>
+            <a
+              href="/dashboard/discounts"
+              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
+            >
+              Все скидки →
+            </a>
+          </div>
         </div>
         {recentDiscounts.length > 0 ? (
           <DiscountsScrollList discounts={recentDiscounts} />

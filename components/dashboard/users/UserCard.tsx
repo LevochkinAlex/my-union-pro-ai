@@ -19,9 +19,10 @@ interface UserCardProps {
     } | null;
     createdAt: Date;
   };
+  hideOrganization?: boolean;
 }
 
-export default function UserCard({ user }: UserCardProps) {
+export default function UserCard({ user, hideOrganization = false }: UserCardProps) {
   const [avatarError, setAvatarError] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -88,13 +89,13 @@ export default function UserCard({ user }: UserCardProps) {
   };
   
   return (
-    <Link href={`/dashboard/profile/${user.id}`}>
-      <div className="group bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all overflow-hidden cursor-pointer">
-        <div className="flex items-center gap-4 p-4">
+    <Link href={`/dashboard/profile/${user.id}`} className="flex w-full">
+      <div className="group bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all overflow-hidden cursor-pointer flex w-full h-fit">
+        <div className="flex items-center gap-4 p-[7px] w-full h-fit">
           {/* Avatar */}
           <div className="flex-shrink-0">
             {user.avatarUrl && !avatarError ? (
-              <div className="relative h-14 w-14 rounded-full overflow-hidden ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all">
+              <div className="relative h-[66px] w-[66px] rounded-full overflow-hidden ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all">
                 <img
                   src={user.avatarUrl}
                   alt={fullName}
@@ -105,38 +106,37 @@ export default function UserCard({ user }: UserCardProps) {
                 />
               </div>
             ) : (
-              <div className={`h-14 w-14 rounded-full bg-gradient-to-br ${avatarGradient} flex items-center justify-center text-white font-semibold text-lg ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all`}>
+              <div className={`h-[66px] w-[66px] rounded-full bg-gradient-to-br ${avatarGradient} flex items-center justify-center text-white font-semibold text-lg ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all`}>
                 {initials}
               </div>
             )}
           </div>
           
           {/* User Info */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 flex flex-col w-full h-fit">
             {/* Name */}
-            <h3 className="font-semibold text-gray-900 dark:text-white text-base mb-1 truncate">
+            <h3 className="font-semibold text-gray-900 dark:text-white text-base mb-1 truncate w-full">
               {fullName}
             </h3>
             
             {/* Job Title */}
             {user.jobTitle && (
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-0.5 truncate">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-0.5 truncate w-full h-fit">
                 {user.jobTitle}
               </p>
             )}
             
             {/* Profession and Organization */}
-            <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500 flex-wrap">
-              {user.profession && (
-                <span className="truncate">{user.profession}</span>
-              )}
-              {user.profession && user.organization?.name && (
-                <span>•</span>
-              )}
-              {user.organization?.name && (
-                <span className="truncate">{user.organization.name}</span>
-              )}
-            </div>
+            {(user.profession || (user.organization?.name && !hideOrganization)) && (
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500 flex-wrap">
+                {user.profession && (
+                  <span className="truncate">{user.profession}</span>
+                )}
+                {user.organization?.name && !hideOrganization && (
+                  <span className="truncate w-full h-fit">{user.organization.name}</span>
+                )}
+              </div>
+            )}
             
             {/* Join Date */}
             <div className="mt-1.5">
