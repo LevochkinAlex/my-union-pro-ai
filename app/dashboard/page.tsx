@@ -83,6 +83,9 @@ export default async function DashboardPage() {
     }).then((posts) =>
       posts.map((post) => ({
         ...post,
+        publishedAt: post.publishedAt?.toISOString() || null,
+        createdAt: post.createdAt.toISOString(),
+        updatedAt: post.updatedAt.toISOString(),
         isLiked: post.likes.length > 0,
         polls: [], // На главной странице опросы не показываем
       }))
