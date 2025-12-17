@@ -244,10 +244,10 @@ function UsersPageContent() {
               </div>
             </div>
 
-            <div className="flex flex-col items-center justify-between w-full h-fit gap-4">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between w-full h-fit gap-4">
               <button
                 type="submit"
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                className="w-full lg:w-auto px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
               >
                 Найти
               </button>
@@ -437,7 +437,7 @@ function UsersPageContent() {
                     </select>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     <button
                       type="submit"
                       className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-lg font-medium active:bg-blue-700 transition-colors touch-manipulation text-base"
@@ -445,7 +445,7 @@ function UsersPageContent() {
                       Найти
                     </button>
                     {total > 0 && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 text-center sm:text-right whitespace-nowrap">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 sm:text-right whitespace-nowrap">
                         Найдено: {total} {total === 1 ? "участник" : total < 5 ? "участника" : "участников"}
                       </p>
                     )}
