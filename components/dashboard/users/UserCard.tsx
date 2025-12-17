@@ -26,6 +26,7 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
   const [avatarError, setAvatarError] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [subscriptionChecked, setSubscriptionChecked] = useState(false);
   const router = useRouter();
   const { showToast } = useToast();
   
@@ -56,8 +57,9 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
 
   // Проверяем статус подписки только при наведении или перед кликом на кнопку (ленивая загрузка)
   const checkSubscriptionStatus = async () => {
-    if (isSubscribed !== false) return; // Уже проверяли
+    if (subscriptionChecked) return; // Уже проверяли
     
+    setSubscriptionChecked(true);
     try {
       const response = await fetch(`/api/subscriptions/${user.id}`);
       if (response.ok) {
@@ -66,6 +68,7 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
       }
     } catch (error) {
       console.error("Error checking subscription:", error);
+      setSubscriptionChecked(false); // Разрешаем повторную попытку при ошибке
     }
   };
 
