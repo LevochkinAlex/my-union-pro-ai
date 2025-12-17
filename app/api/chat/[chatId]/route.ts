@@ -16,6 +16,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { chatId: string } | Promise<{ chatId: string }> }
 ) {
+  const startTime = Date.now();
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -360,6 +361,9 @@ export async function GET(
       return normalizedMsg;
     });
 
+    const duration = Date.now() - startTime;
+    console.log(`[chat] GET /api/chat/${chatId} - ${messagesWithReactions.length} messages in ${duration}ms`);
+    
     return NextResponse.json({ 
       messages: messagesWithReactions,
       pagination: {
