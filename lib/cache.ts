@@ -7,21 +7,53 @@ let redisClient: Redis | null = null;
  * Получить или создать Redis клиент
  */
 function getRedisClient(): Redis | null {
-  if (redisClient) {
+  if (redisClient && redisClient.status === "ready") {
     return redisClient;
+  }
+
+  // Если клиент существует, но не готов, пересоздаем
+  if (redisClient) {
+    try {
+      redisClient.disconnect();
+    } catch (e) {
+      // Игнорируем ошибки при отключении
+    }
+    redisClient = null;
   }
 
   try {
     const options = getRedisOptions();
-    redisClient = new Redis(options);
+    redisClient = new Redis({
+      ...options,
+      retryStrategy: (times) => {
+        // Экспоненциальная задержка с максимумом 3 секунды
+        const delay = Math.min(times * 50, 3000);
+        return delay;
+      },
+      maxRetriesPerRequest: 3,
+      lazyConnect: false, // Подключаемся сразу
+      connectTimeout: 5000, // 5 секунд таймаут
+    });
     
     redisClient.on("error", (err) => {
-      console.error("[Redis] Connection error:", err);
-      redisClient = null; // Сбрасываем клиент при ошибке
+      // Не логируем каждую ошибку, только критичные
+      if (err.message && !err.message.includes("ECONNREFUSED")) {
+        console.error("[Redis] Connection error:", err.message);
+      }
+      // Не сбрасываем клиент сразу, даем возможность переподключиться
     });
 
     redisClient.on("connect", () => {
-      console.log("[Redis] Connected successfully");
+      console.log("[Redis] ✅ Connected successfully");
+    });
+
+    redisClient.on("ready", () => {
+      console.log("[Redis] ✅ Ready to accept commands");
+    });
+
+    redisClient.on("close", () => {
+      console.log("[Redis] Connection closed");
+      redisClient = null;
     });
 
     return redisClient;
