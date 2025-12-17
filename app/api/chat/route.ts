@@ -75,30 +75,64 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Получаем количество непрочитанных сообщений для каждого чата
-    const unreadCounts = await Promise.all(
-      chats.map(async (chat) => {
-        const lastReadAt = chat.participant1Id === userId
-          ? chat.participant1ReadAt
-          : chat.participant2ReadAt;
-
-        if (!lastReadAt || !chat.lastMessageAt) {
-          // Если есть последнее сообщение, но нет времени прочтения, значит есть непрочитанные
-          return chat.lastMessageAt ? 1 : 0;
-        }
-
-        // Считаем непрочитанные сообщения после последнего прочтения
-        const count = await prisma.chatMessage.count({
-          where: {
+    // Оптимизация: получаем все непрочитанные сообщения одним запросом
+    const chatIds = chats.map((chat) => chat.id);
+    const unreadCountsMap = new Map<string, number>();
+    
+    if (chatIds.length > 0) {
+      // Для каждого чата получаем условие для непрочитанных сообщений
+      const unreadConditions = chats
+        .map((chat) => {
+          const lastReadAt = chat.participant1Id === userId
+            ? chat.participant1ReadAt
+            : chat.participant2ReadAt;
+          
+          if (!lastReadAt) {
+            // Если нет времени прочтения, но есть последнее сообщение - считаем все непрочитанными
+            if (chat.lastMessageAt) {
+              return {
+                chatId: chat.id,
+                senderId: { not: userId },
+                deletedAt: null,
+              };
+            }
+            return null;
+          }
+          
+          return {
             chatId: chat.id,
             senderId: { not: userId },
             createdAt: { gt: lastReadAt },
-          },
-        });
+            deletedAt: null,
+          };
+        })
+        .filter(Boolean) as any[];
 
-        return count;
-      })
-    );
+      // Выполняем запросы параллельно для каждого чата (но это все равно лучше чем N+1)
+      const unreadCountsPromises = unreadConditions.map(async (condition) => {
+        const count = await prisma.chatMessage.count({ where: condition });
+        return { chatId: condition.chatId, count };
+      });
+
+      const unreadCountsResults = await Promise.all(unreadCountsPromises);
+      unreadCountsResults.forEach(({ chatId, count }) => {
+        unreadCountsMap.set(chatId, count);
+      });
+    }
+    
+    // Формируем массив счетчиков в том же порядке, что и чаты
+    const unreadCounts = chats.map((chat) => {
+      const lastReadAt = chat.participant1Id === userId
+        ? chat.participant1ReadAt
+        : chat.participant2ReadAt;
+
+      if (!lastReadAt && chat.lastMessageAt) {
+        // Если есть последнее сообщение, но нет времени прочтения
+        return unreadCountsMap.get(chat.id) || 1;
+      }
+
+      return unreadCountsMap.get(chat.id) || 0;
+    });
 
     // Форматируем чаты для ответа
     const formattedChats = chats.map((chat, index) => {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { withCache, getCacheKey } from "@/lib/cache";
 
 // GET - получение списка пользователей с поиском и фильтрацией
 export async function GET(request: NextRequest) {
@@ -44,50 +45,70 @@ export async function GET(request: NextRequest) {
       where.organizationId = organizationId;
     }
 
-    // Получаем пользователей
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: {
-          createdAt: "desc",
-        },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          middleName: true,
-          email: true,
-          avatarUrl: true,
-          phone: true,
-          jobTitle: true,
-          profession: true,
-          createdAt: true,
-          organization: {
+    // Кешируем запрос пользователей на 2 минуты (данные меняются редко)
+    const cacheKey = getCacheKey("users:list", { search, organizationId, page, limit });
+    
+    const result = await withCache(
+      cacheKey,
+      async () => {
+        // Получаем пользователей
+        const [users, total] = await Promise.all([
+          prisma.user.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: {
+              createdAt: "desc",
+            },
             select: {
               id: true,
-              name: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+              email: true,
+              avatarUrl: true,
+              phone: true,
+              jobTitle: true,
+              profession: true,
+              createdAt: true,
+              organization: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
             },
-          },
-        },
-      }),
-      prisma.user.count({ where }),
-    ]);
+          }),
+          prisma.user.count({ where }),
+        ]);
 
-    // Получаем список организаций для фильтра
-    const organizations = await prisma.organization.findMany({
-      where: {
-        isActive: true,
+        // Получаем список организаций для фильтра (кешируем отдельно на 10 минут)
+        const orgCacheKey = getCacheKey("organizations:list", {});
+        const organizations = await withCache(
+          orgCacheKey,
+          async () => {
+            return await prisma.organization.findMany({
+              where: {
+                isActive: true,
+              },
+              select: {
+                id: true,
+                name: true,
+              },
+              orderBy: {
+                name: "asc",
+              },
+            });
+          },
+          600 // 10 минут
+        );
+
+        return { users, total, organizations };
       },
-      select: {
-        id: true,
-        name: true,
-      },
-      orderBy: {
-        name: "asc",
-      },
-    });
+      120 // 2 минуты
+    );
+
+    const { users, total, organizations } = result;
 
     return NextResponse.json({
       users,

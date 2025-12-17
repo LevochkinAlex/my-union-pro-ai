@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { UserRole } from "@prisma/client";
+import { invalidateNewsCache } from "@/lib/cache-invalidation";
 
 // GET /api/admin/news/[id] - получить новость для редактирования
 export async function GET(
@@ -226,6 +227,9 @@ export async function PUT(
       }
     }
 
+    // Инвалидируем кеш новостей
+    await invalidateNewsCache();
+
     // Получаем обновленную новость
     const updatedPost = await prisma.newsPost.findUnique({
       where: { id },
@@ -288,6 +292,9 @@ export async function DELETE(
     await prisma.newsPost.delete({
       where: { id },
     });
+
+    // Инвалидируем кеш новостей
+    await invalidateNewsCache();
 
     return NextResponse.json({ success: true });
   } catch (error) {

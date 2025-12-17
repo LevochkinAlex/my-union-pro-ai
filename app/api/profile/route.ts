@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { invalidateUsersCache } from "@/lib/cache-invalidation";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { normalizePhone, getPhoneDigits, isSamePhone } from "@/lib/utils/phone";
@@ -497,6 +498,9 @@ export async function PUT(request: NextRequest) {
     if (isProfileComplete && !hasGeneratedDocs) {
       console.log("[profile] Profile completed, ready for document generation");
     }
+
+    // Инвалидируем кеш пользователей (профиль мог измениться)
+    await invalidateUsersCache();
 
     return NextResponse.json({
       success: true,

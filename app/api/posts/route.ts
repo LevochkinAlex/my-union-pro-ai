@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { withCache, getCacheKey } from "@/lib/cache";
+import { invalidatePostsCache } from "@/lib/cache-invalidation";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
@@ -32,52 +34,68 @@ export async function GET(request: NextRequest) {
       where.authorId = userId;
     }
 
-    const posts = await prisma.userPost.findMany({
-      where,
-      include: {
-        author: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            middleName: true,
-            avatarUrl: true,
-            jobTitle: true,
-            profession: true,
-            organization: {
+    // Кешируем посты на 1 минуту (данные обновляются часто, но кеш помогает при повторных запросах)
+    const cacheKey = getCacheKey("posts:list", { userId, page, limit });
+    
+    const posts = await withCache(
+      cacheKey,
+      async () => {
+        return await prisma.userPost.findMany({
+          where,
+          include: {
+            author: {
               select: {
                 id: true,
-                name: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                avatarUrl: true,
+                jobTitle: true,
+                profession: true,
+                organization: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+            attachments: {
+              orderBy: {
+                createdAt: "asc",
+              },
+            },
+            _count: {
+              select: {
+                likes: true,
+                comments: true,
               },
             },
           },
-        },
-        attachments: {
           orderBy: {
-            createdAt: "asc",
+            createdAt: "desc",
           },
-        },
-        likes: {
-          where: {
-            userId: session.user.id,
-          },
-          select: {
-            id: true,
-          },
-        },
-        _count: {
-          select: {
-            likes: true,
-            comments: true,
-          },
+          skip: (page - 1) * limit,
+          take: limit,
+        });
+      },
+      60 // 1 минута
+    );
+
+    // Получаем лайки пользователя отдельно (не кешируем, так как это персональные данные)
+    const userLikes = await prisma.postLike.findMany({
+      where: {
+        userId: session.user.id,
+        postId: {
+          in: posts.map((p) => p.id),
         },
       },
-      orderBy: {
-        createdAt: "desc",
+      select: {
+        postId: true,
       },
-      skip: (page - 1) * limit,
-      take: limit,
     });
+    
+    const likedPostIds = new Set(userLikes.map((l) => l.postId));
 
     // Форматируем ответ
     const formattedPosts = posts.map((post) => ({
@@ -89,7 +107,7 @@ export async function GET(request: NextRequest) {
       linkMetadata: post.linkMetadata,
       videoMetadata: post.videoMetadata,
       coverImage: (post as any).coverImage || null,
-      isLiked: post.likes.length > 0,
+      isLiked: likedPostIds.has(post.id),
       likesCount: post._count.likes,
       commentsCount: post._count.comments,
       viewCount: (post as any).viewCount || 0,
@@ -539,6 +557,9 @@ export async function POST(request: NextRequest) {
       console.error("[posts] Error sending notifications:", notificationError);
       // Не прерываем создание поста из-за ошибки уведомлений
     }
+
+    // Инвалидируем кеш постов
+    await invalidatePostsCache(session.user.id);
 
     return NextResponse.json({
       post: {

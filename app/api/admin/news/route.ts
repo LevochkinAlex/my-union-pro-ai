@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { UserRole } from "@prisma/client";
+import { invalidateNewsCache } from "@/lib/cache-invalidation";
 // import { sendNotification } from "@/lib/notifications"; // TODO: Implement mass notification system
 
 // GET /api/admin/news - получить все новости (включая неопубликованные)
@@ -130,6 +131,9 @@ export async function POST(request: NextRequest) {
     if (isPublished) {
       console.log("[api/admin/news] Новость опубликована, массовые уведомления пока отключены");
     }
+
+    // Инвалидируем кеш новостей
+    await invalidateNewsCache();
 
     // Получаем полную новость с опросами
     const fullNewsPost = await prisma.newsPost.findUnique({

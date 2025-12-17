@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { MembershipStatus, UserRole } from "@prisma/client";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
+import { invalidateUsersCache } from "@/lib/cache-invalidation";
 
 type UpdatePayload = {
   firstName?: string | null;
@@ -155,6 +156,9 @@ export async function PUT(
       where: { id: userId },
       data: updateData,
     });
+
+    // Инвалидируем кеш пользователей
+    await invalidateUsersCache();
 
     return NextResponse.json({
       success: true,
