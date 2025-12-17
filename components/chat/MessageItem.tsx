@@ -1,0 +1,402 @@
+"use client";
+
+import { memo, useState, useCallback } from "react";
+import { Message, ChatUser } from "@/types/chat";
+import { getUserName, getInitials, formatTime, getFileUrl, formatFileSize } from "@/lib/chat-utils";
+
+interface MessageItemProps {
+  message: Message;
+  currentUserId: string | null;
+  isOwn: boolean;
+  onReply?: (message: Message) => void;
+  onEdit?: (message: Message) => void;
+  onDelete?: (messageId: string) => void;
+  onForward?: (message: Message) => void;
+  onReaction?: (messageId: string, emoji: string) => void;
+  onImageClick?: (url: string, name?: string) => void;
+}
+
+function MessageItemComponent({
+  message,
+  currentUserId,
+  isOwn,
+  onReply,
+  onEdit,
+  onDelete,
+  onForward,
+  onReaction,
+  onImageClick,
+}: MessageItemProps) {
+  const [showActions, setShowActions] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  const handleDoubleClick = useCallback(() => {
+    onReaction?.(message.id, "❤️");
+  }, [message.id, onReaction]);
+
+  const isDeleted = !!message.deletedAt;
+  const hasAttachments = message.attachments && message.attachments.length > 0;
+  const hasReactions = message.reactions && Object.keys(message.reactions).length > 0;
+
+  if (isDeleted) {
+    return (
+      <div className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-2`}>
+        <div className="px-4 py-2 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 italic text-sm">
+          Сообщение удалено
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-2 group`}
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => {
+        setShowActions(false);
+        setShowEmojiPicker(false);
+      }}
+      onDoubleClick={handleDoubleClick}
+    >
+      <div className={`flex items-end gap-2 max-w-[85%] md:max-w-[70%] ${isOwn ? "flex-row-reverse" : ""}`}>
+        {/* Аватар для чужих сообщений */}
+        {!isOwn && (
+          <div className="flex-shrink-0 mb-1">
+            <Avatar user={message.sender} size="sm" />
+          </div>
+        )}
+
+        <div className="flex flex-col">
+          {/* Ответ на сообщение */}
+          {message.replyTo && (
+            <ReplyPreview message={message.replyTo} isOwn={isOwn} />
+          )}
+
+          {/* Пересланное сообщение */}
+          {message.forwardedFrom && (
+            <ForwardedPreview message={message.forwardedFrom} isOwn={isOwn} />
+          )}
+
+          {/* Основной контент */}
+          <div
+            className={`relative px-4 py-2 rounded-2xl ${
+              isOwn
+                ? "bg-blue-500 text-white rounded-br-md"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md"
+            }`}
+          >
+            {/* Вложения */}
+            {hasAttachments && (
+              <Attachments
+                attachments={message.attachments!}
+                isOwn={isOwn}
+                onImageClick={onImageClick}
+              />
+            )}
+
+            {/* Текст сообщения */}
+            {message.content && (
+              <p className="whitespace-pre-wrap break-words text-sm md:text-base">
+                {message.content}
+              </p>
+            )}
+
+            {/* Время и статус редактирования */}
+            <div
+              className={`flex items-center gap-1 mt-1 text-xs ${
+                isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"
+              }`}
+            >
+              <span>{formatTime(message.createdAt)}</span>
+              {message.editedAt && <span>(ред.)</span>}
+            </div>
+          </div>
+
+          {/* Реакции */}
+          {hasReactions && (
+            <Reactions
+              reactions={message.reactions!}
+              currentUserId={currentUserId}
+              isOwn={isOwn}
+              onReaction={(emoji) => onReaction?.(message.id, emoji)}
+            />
+          )}
+        </div>
+
+        {/* Действия */}
+        {showActions && (
+          <MessageActions
+            message={message}
+            isOwn={isOwn}
+            showEmojiPicker={showEmojiPicker}
+            onToggleEmojiPicker={() => setShowEmojiPicker(!showEmojiPicker)}
+            onReply={() => onReply?.(message)}
+            onEdit={() => onEdit?.(message)}
+            onDelete={() => onDelete?.(message.id)}
+            onForward={() => onForward?.(message)}
+            onReaction={(emoji) => {
+              onReaction?.(message.id, emoji);
+              setShowEmojiPicker(false);
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Подкомпоненты
+const Avatar = memo(function Avatar({ user, size }: { user: ChatUser; size: "sm" | "md" }) {
+  const sizeClass = size === "sm" ? "w-8 h-8 text-xs" : "w-10 h-10 text-sm";
+  
+  if (user.avatarUrl) {
+    return (
+      <img
+        src={getFileUrl(user.avatarUrl)}
+        alt={getUserName(user)}
+        className={`${sizeClass} rounded-full object-cover`}
+      />
+    );
+  }
+
+  return (
+    <div className={`${sizeClass} rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold`}>
+      {getInitials(user)}
+    </div>
+  );
+});
+
+const ReplyPreview = memo(function ReplyPreview({
+  message,
+  isOwn,
+}: {
+  message: Message;
+  isOwn: boolean;
+}) {
+  return (
+    <div
+      className={`mb-1 px-3 py-1.5 rounded-lg border-l-2 ${
+        isOwn
+          ? "bg-blue-400/30 border-blue-300"
+          : "bg-gray-200 dark:bg-gray-600 border-gray-400"
+      }`}
+    >
+      <p className={`text-xs font-medium ${isOwn ? "text-blue-100" : "text-gray-600 dark:text-gray-300"}`}>
+        {getUserName(message.sender)}
+      </p>
+      <p className={`text-xs truncate ${isOwn ? "text-blue-50" : "text-gray-500 dark:text-gray-400"}`}>
+        {message.content || "[Вложение]"}
+      </p>
+    </div>
+  );
+});
+
+const ForwardedPreview = memo(function ForwardedPreview({
+  message,
+  isOwn,
+}: {
+  message: Message;
+  isOwn: boolean;
+}) {
+  return (
+    <div className={`mb-1 text-xs ${isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"}`}>
+      <span className="flex items-center gap-1">
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+        </svg>
+        Переслано от {getUserName(message.sender)}
+      </span>
+    </div>
+  );
+});
+
+const Attachments = memo(function Attachments({
+  attachments,
+  isOwn,
+  onImageClick,
+}: {
+  attachments: NonNullable<Message["attachments"]>;
+  isOwn: boolean;
+  onImageClick?: (url: string, name?: string) => void;
+}) {
+  return (
+    <div className="mb-2 space-y-2">
+      {attachments.map((attachment) => {
+        const isImage = attachment.mimeType?.startsWith("image/") || 
+                       ["jpg", "jpeg", "png", "gif", "webp"].some(ext => 
+                         attachment.fileName.toLowerCase().endsWith(ext));
+
+        if (isImage) {
+          return (
+            <button
+              key={attachment.id}
+              onClick={() => onImageClick?.(getFileUrl(attachment.filePath), attachment.originalName)}
+              className="block rounded-lg overflow-hidden max-w-[300px] cursor-pointer hover:opacity-90 transition-opacity"
+            >
+              <img
+                src={getFileUrl(attachment.filePath)}
+                alt={attachment.originalName}
+                className="max-w-full h-auto"
+                loading="lazy"
+              />
+            </button>
+          );
+        }
+
+        return (
+          <a
+            key={attachment.id}
+            href={getFileUrl(attachment.filePath)}
+            download={attachment.originalName}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`flex items-center gap-2 p-2 rounded-lg ${
+              isOwn ? "bg-blue-400/30" : "bg-gray-200 dark:bg-gray-600"
+            }`}
+          >
+            <svg className="w-8 h-8 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+            <div className="min-w-0 flex-1">
+              <p className={`text-sm font-medium truncate ${isOwn ? "text-white" : "text-gray-900 dark:text-white"}`}>
+                {attachment.originalName}
+              </p>
+              <p className={`text-xs ${isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"}`}>
+                {formatFileSize(attachment.fileSize)}
+              </p>
+            </div>
+          </a>
+        );
+      })}
+    </div>
+  );
+});
+
+const Reactions = memo(function Reactions({
+  reactions,
+  currentUserId,
+  isOwn,
+  onReaction,
+}: {
+  reactions: NonNullable<Message["reactions"]>;
+  currentUserId: string | null;
+  isOwn: boolean;
+  onReaction: (emoji: string) => void;
+}) {
+  const reactionList = Object.entries(reactions).map(([emoji, data]) => {
+    const userIds = data.userIds || [];
+    const isLiked = currentUserId ? userIds.includes(currentUserId) : false;
+    return { emoji, count: userIds.length, isLiked };
+  }).filter(r => r.count > 0);
+
+  if (reactionList.length === 0) return null;
+
+  return (
+    <div className={`flex flex-wrap gap-1 mt-1 ${isOwn ? "justify-end" : "justify-start"}`}>
+      {reactionList.map(({ emoji, count, isLiked }) => (
+        <button
+          key={emoji}
+          onClick={() => onReaction(emoji)}
+          className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-colors ${
+            isLiked
+              ? "bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400"
+              : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
+          }`}
+        >
+          <span>{emoji}</span>
+          <span>{count}</span>
+        </button>
+      ))}
+    </div>
+  );
+});
+
+const MessageActions = memo(function MessageActions({
+  message,
+  isOwn,
+  showEmojiPicker,
+  onToggleEmojiPicker,
+  onReply,
+  onEdit,
+  onDelete,
+  onForward,
+  onReaction,
+}: {
+  message: Message;
+  isOwn: boolean;
+  showEmojiPicker: boolean;
+  onToggleEmojiPicker: () => void;
+  onReply: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onForward: () => void;
+  onReaction: (emoji: string) => void;
+}) {
+  const quickEmojis = ["❤️", "👍", "😂", "😮", "😢", "🔥"];
+
+  return (
+    <div className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${isOwn ? "mr-2" : "ml-2"}`}>
+      {/* Quick emoji picker */}
+      {showEmojiPicker && (
+        <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-full shadow-lg px-2 py-1 border border-gray-200 dark:border-gray-700">
+          {quickEmojis.map((emoji) => (
+            <button
+              key={emoji}
+              onClick={() => onReaction(emoji)}
+              className="hover:scale-125 transition-transform p-1"
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex items-center bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-200 dark:border-gray-700">
+        <ActionButton icon="emoji" onClick={onToggleEmojiPicker} title="Реакция" />
+        <ActionButton icon="reply" onClick={onReply} title="Ответить" />
+        <ActionButton icon="forward" onClick={onForward} title="Переслать" />
+        {isOwn && (
+          <>
+            <ActionButton icon="edit" onClick={onEdit} title="Редактировать" />
+            <ActionButton icon="delete" onClick={onDelete} title="Удалить" />
+          </>
+        )}
+      </div>
+    </div>
+  );
+});
+
+const ActionButton = memo(function ActionButton({
+  icon,
+  onClick,
+  title,
+}: {
+  icon: "emoji" | "reply" | "forward" | "edit" | "delete";
+  onClick: () => void;
+  title: string;
+}) {
+  const icons = {
+    emoji: "M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+    reply: "M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6",
+    forward: "M13 7l5 5m0 0l-5 5m5-5H6",
+    edit: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
+    delete: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16",
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors first:rounded-l-full last:rounded-r-full"
+    >
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icons[icon]} />
+      </svg>
+    </button>
+  );
+});
+
+export const MessageItem = memo(MessageItemComponent);
+export default MessageItem;
+
