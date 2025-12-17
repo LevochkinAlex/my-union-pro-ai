@@ -63,61 +63,63 @@ export async function GET(request: NextRequest) {
         return await withCache(
           cacheKey,
           async () => {
-        // Получаем пользователей
-        const [users, total] = await Promise.all([
-          prisma.user.findMany({
-            where,
-            skip,
-            take: limit,
-            orderBy: {
-              createdAt: "desc",
-            },
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              middleName: true,
-              email: true,
-              avatarUrl: true,
-              phone: true,
-              jobTitle: true,
-              profession: true,
-              createdAt: true,
-              organization: {
+            // Получаем пользователей
+            const [users, total] = await Promise.all([
+              prisma.user.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: {
+                  createdAt: "desc",
+                },
                 select: {
                   id: true,
-                  name: true,
+                  firstName: true,
+                  lastName: true,
+                  middleName: true,
+                  email: true,
+                  avatarUrl: true,
+                  phone: true,
+                  jobTitle: true,
+                  profession: true,
+                  createdAt: true,
+                  organization: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
                 },
-              },
-            },
-          }),
-          prisma.user.count({ where }),
-        ]);
+              }),
+              prisma.user.count({ where }),
+            ]);
 
-        // Получаем список организаций для фильтра (кешируем отдельно на 10 минут)
-        const orgCacheKey = getCacheKey("organizations:list", {});
-        const organizations = await withCache(
-          orgCacheKey,
-          async () => {
-            return await prisma.organization.findMany({
-              where: {
-                isActive: true,
+            // Получаем список организаций для фильтра (кешируем отдельно на 10 минут)
+            const orgCacheKey = getCacheKey("organizations:list", {});
+            const organizations = await withCache(
+              orgCacheKey,
+              async () => {
+                return await prisma.organization.findMany({
+                  where: {
+                    isActive: true,
+                  },
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                  orderBy: {
+                    name: "asc",
+                  },
+                });
               },
-              select: {
-                id: true,
-                name: true,
-              },
-              orderBy: {
-                name: "asc",
-              },
-            });
+              600 // 10 минут
+            );
+
+            return { users, total, organizations };
           },
-          600 // 10 минут
+          120 // 2 минуты
         );
-
-        return { users, total, organizations };
-      },
-      120 // 2 минуты
+      }
     );
 
     const { users, total, organizations } = result;
@@ -131,6 +133,7 @@ export async function GET(request: NextRequest) {
       organizations,
     });
   } catch (error) {
+    Sentry.captureException(error);
     console.error("[users] GET Error:", error);
     return NextResponse.json({ error: "Внутренняя ошибка сервера" }, { status: 500 });
   }
