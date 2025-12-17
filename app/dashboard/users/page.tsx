@@ -183,7 +183,7 @@ function UsersPageContent() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
         {/* Левая колонка: Профсеть (50% ширины) - скрыта на мобильных, показывается в модальном окне */}
-        <div className={`space-y-4 lg:space-y-6 ${showUsersPanel ? "block" : "hidden lg:block"}`}>
+        <div className={`space-y-4 lg:space-y-6 w-full ${showUsersPanel ? "block" : "hidden lg:block"}`}>
         {/* Заголовок */}
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white">
@@ -197,7 +197,7 @@ function UsersPageContent() {
         {/* Поиск и фильтры */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6">
           <form onSubmit={handleSearch} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-4">
               {/* Поиск */}
               <div className="sm:col-span-2">
                 <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -336,7 +336,7 @@ function UsersPageContent() {
         </div>
 
         {/* Правая колонка: Лента постов (50% ширины) - на мобильных показывается первой */}
-        <div className="space-y-4 lg:space-y-6 order-first lg:order-last">
+        <div className="space-y-4 lg:space-y-6 order-first lg:order-last h-fit">
           {/* Форма создания поста */}
           {session && (
             <CreatePost onPostCreated={handlePostCreated} compact={true} />

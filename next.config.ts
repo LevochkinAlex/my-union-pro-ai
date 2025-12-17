@@ -43,6 +43,10 @@ const nextConfig = {
         hostname: 'images.unsplash.com',
       },
       {
+        protocol: 'https',
+        hostname: 'avatars.yandex.net',
+      },
+      {
         protocol: 'http',
         hostname: 'localhost',
       },

@@ -134,8 +134,8 @@ export default async function AdminLayout({
       ),
     },
     {
-      href: "/admin/optimize-avatars",
-      label: "Оптимизация аватаров",
+      href: "/admin/optimize-images",
+      label: "Оптимизация изображений",
       icon: (
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
