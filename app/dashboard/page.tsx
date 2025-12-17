@@ -309,10 +309,7 @@ export default async function DashboardPage() {
               <NewsList news={recentNews} />
             </div>
           )}
-        </div>
 
-        {/* Правая колонка: Сайдбар (1/3 ширины на lg+) */}
-        <div className="space-y-6 min-w-0">
           {/* Скидки */}
           {recentDiscounts.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
@@ -327,9 +324,15 @@ export default async function DashboardPage() {
                   Все скидки
                 </Link>
               </div>
-              <DiscountsScrollList discounts={recentDiscounts} />
+              <div className="max-h-[600px] overflow-y-auto">
+                <DiscountsScrollList discounts={recentDiscounts} />
+              </div>
             </div>
           )}
+        </div>
+
+        {/* Правая колонка: Сайдбар (1/3 ширины на lg+) */}
+        <div className="space-y-6 min-w-0">
 
           {/* Новые участники */}
           {newUsers.length > 0 && (
