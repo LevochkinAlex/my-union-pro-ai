@@ -116,18 +116,19 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
   };
   
   return (
-    <Link href={`/dashboard/profile/${user.id}`} className="flex w-full">
-      <div className="group bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all overflow-hidden cursor-pointer flex w-full h-fit">
-        <div className="flex items-center gap-4 p-[7px] w-full h-fit">
-          {/* Avatar - оптимизирован с Next.js Image */}
+    <Link href={`/dashboard/profile/${user.id}`} className="block w-full">
+      <div className="group bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all overflow-hidden cursor-pointer w-full p-4">
+        {/* Вертикальная раскладка */}
+        <div className="flex flex-col items-center text-center gap-3">
+          {/* Avatar - по центру сверху */}
           <div className="flex-shrink-0">
             {hasValidAvatar && !avatarError ? (
-              <div className="relative h-[66px] w-[66px] rounded-full overflow-hidden ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all">
+              <div className="relative h-[72px] w-[72px] rounded-full overflow-hidden ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all">
                 <Image
                   src={user.avatarUrl!}
                   alt={fullName}
-                  width={66}
-                  height={66}
+                  width={72}
+                  height={72}
                   className="h-full w-full object-cover"
                   loading="lazy"
                   quality={75}
@@ -137,40 +138,37 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
                 />
               </div>
             ) : (
-              <div className={`h-[66px] w-[66px] rounded-full bg-gradient-to-br ${avatarGradient} flex items-center justify-center text-white font-semibold text-lg ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all`}>
+              <div className={`h-[72px] w-[72px] rounded-full bg-gradient-to-br ${avatarGradient} flex items-center justify-center text-white font-semibold text-xl ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all`}>
                 {initials}
               </div>
             )}
           </div>
           
-          {/* User Info */}
-          <div className="flex-1 min-w-0 flex flex-col w-full h-fit">
+          {/* User Info - по центру */}
+          <div className="w-full space-y-1">
             {/* Name */}
-            <h3 className="font-semibold text-gray-900 dark:text-white text-base mb-1 truncate w-full">
+            <h3 className="font-semibold text-gray-900 dark:text-white text-base truncate">
               {fullName}
             </h3>
             
             {/* Job Title */}
             {user.jobTitle && (
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-0.5 truncate w-full h-fit">
+              <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
                 {user.jobTitle}
               </p>
             )}
             
             {/* Profession and Organization */}
             {(user.profession || (user.organization?.name && !hideOrganization)) && (
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500 flex-wrap">
-                {user.profession && (
-                  <span className="truncate">{user.profession}</span>
-                )}
-                {user.organization?.name && !hideOrganization && (
-                  <span className="truncate w-full h-fit">{user.organization.name}</span>
-                )}
-              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-500 truncate">
+                {user.profession}
+                {user.profession && user.organization?.name && !hideOrganization && " • "}
+                {user.organization?.name && !hideOrganization && user.organization.name}
+              </p>
             )}
             
             {/* Join Date */}
-            <div className="mt-1.5">
+            <div className="pt-1">
               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
                 Присоединился {new Date(user.createdAt).toLocaleDateString("ru-RU", {
                   day: "numeric",
@@ -180,24 +178,22 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
             </div>
           </div>
           
-          {/* Action Button */}
-          <div className="flex-shrink-0">
-            <button
-              onMouseEnter={checkSubscriptionStatus}
-              onClick={(e) => {
-                checkSubscriptionStatus();
-                handleSubscribe(e);
-              }}
-              disabled={isLoading}
-              className={`py-2 px-4 rounded-lg border font-medium text-sm transition-colors whitespace-nowrap ${
-                isSubscribed
-                  ? "border-green-600 text-green-600 dark:border-green-400 dark:text-green-400 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30"
-                  : "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-              } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
-            >
-              {isLoading ? "..." : isSubscribed ? "✓ Подписан" : "Подписаться"}
-            </button>
-          </div>
+          {/* Action Button - снизу на всю ширину */}
+          <button
+            onMouseEnter={checkSubscriptionStatus}
+            onClick={(e) => {
+              checkSubscriptionStatus();
+              handleSubscribe(e);
+            }}
+            disabled={isLoading}
+            className={`w-full py-2 px-4 rounded-lg border font-medium text-sm transition-colors ${
+              isSubscribed
+                ? "border-green-600 text-green-600 dark:border-green-400 dark:text-green-400 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30"
+                : "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+            } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            {isLoading ? "..." : isSubscribed ? "✓ Подписан" : "Подписаться"}
+          </button>
         </div>
       </div>
     </Link>
