@@ -33,6 +33,9 @@ function getRedisClient(): Redis | null {
       maxRetriesPerRequest: 3,
       lazyConnect: false, // Подключаемся сразу
       connectTimeout: 5000, // 5 секунд таймаут
+      keepAlive: 30000, // Keep-alive каждые 30 секунд
+      enableReadyCheck: true, // Проверка готовности перед выполнением команд
+      enableOfflineQueue: false, // Не ставить команды в очередь при отключении
     });
     
     redisClient.on("error", (err) => {

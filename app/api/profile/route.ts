@@ -3,11 +3,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { invalidateUsersCache } from "@/lib/cache-invalidation";
+import { cacheDeletePattern } from "@/lib/cache";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { normalizePhone, getPhoneDigits, isSamePhone } from "@/lib/utils/phone";
 import { saveUserProfileToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { sendMassNotification } from "@/lib/notifications";
+import { withCache, getCacheKey } from "@/lib/cache";
 // Удалено: SystemMessages - больше не используется
 
 function normalizeString(value: unknown): string | null {
@@ -42,50 +44,59 @@ export async function GET() {
 
     console.log("[profile] GET: Fetching user data for ID:", session.user.id);
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        email: true,
-        emailVerified: true,
-        firstName: true,
-        lastName: true,
-        middleName: true,
-        phone: true,
-        dateOfBirth: true,
-        address: true,
-        preferredDiscountCity: true,
-        avatarUrl: true,
-        jobTitle: true,
-        workplace: true,
-        workplaceInn: true,
-        directorName: true,
-        directorPosition: true,
-        profession: true,
-        education: true,
-        employmentStatus: true,
-        hobbies: true,
-        aboutMe: true,
-        hasChildren: true,
-        childrenInfo: true,
-        maritalStatus: true,
-        spouseInfo: true,
-        additionalInfo: true,
-        membershipStatus: true,
-        organizationId: true,
-        profileChangedAfterDocuments: true,
-        profileLastModified: true,
-        createdAt: true,
-        updatedAt: true,
-        organization: {
+    // Кешируем профиль на 30 секунд для уменьшения нагрузки на БД
+    const cacheKey = getCacheKey("profile", { userId: session.user.id });
+    
+    const user = await withCache(
+      cacheKey,
+      async () => {
+        return await prisma.user.findUnique({
+          where: { id: session.user.id },
           select: {
             id: true,
-            name: true,
-            inn: true,
+            email: true,
+            emailVerified: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            phone: true,
+            dateOfBirth: true,
+            address: true,
+            preferredDiscountCity: true,
+            avatarUrl: true,
+            jobTitle: true,
+            workplace: true,
+            workplaceInn: true,
+            directorName: true,
+            directorPosition: true,
+            profession: true,
+            education: true,
+            employmentStatus: true,
+            hobbies: true,
+            aboutMe: true,
+            hasChildren: true,
+            childrenInfo: true,
+            maritalStatus: true,
+            spouseInfo: true,
+            additionalInfo: true,
+            membershipStatus: true,
+            organizationId: true,
+            profileChangedAfterDocuments: true,
+            profileLastModified: true,
+            createdAt: true,
+            updatedAt: true,
+            organization: {
+              select: {
+                id: true,
+                name: true,
+                inn: true,
+              },
+            },
           },
-        },
+        });
       },
-    });
+      30 // Кеш на 30 секунд
+    );
 
     if (!user) {
       console.error("[profile] GET: User not found for ID:", session.user.id);
