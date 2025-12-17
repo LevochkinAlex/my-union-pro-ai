@@ -99,6 +99,7 @@ function ChatMessagesComponent({
 }: ChatMessagesProps) {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const prevChatId = useRef<string | null>(null);
+  const currentVisibleIndex = useRef<number | null>(null);
   const [atBottom, setAtBottom] = useState(true);
   const [initialIndex, setInitialIndex] = useState<number | undefined>(undefined);
   const isFirstRender = useRef(true);
@@ -108,13 +109,12 @@ function ChatMessagesComponent({
 
   // При смене чата — сохраняем позицию старого и восстанавливаем для нового
   useEffect(() => {
-    if (prevChatId.current && prevChatId.current !== chat.id && virtuosoRef.current) {
+    if (prevChatId.current && prevChatId.current !== chat.id) {
       // Сохраняем текущую позицию для предыдущего чата
-      virtuosoRef.current.getState((state) => {
-        if (state.firstVisibleIndex !== undefined) {
-          saveScrollPosition(prevChatId.current!, state.firstVisibleIndex);
-        }
-      });
+      const savedIdx = currentVisibleIndex.current;
+      if (savedIdx !== null && savedIdx >= 0) {
+        saveScrollPosition(prevChatId.current, savedIdx);
+      }
     }
 
     // Восстанавливаем позицию для нового чата
@@ -151,6 +151,9 @@ function ChatMessagesComponent({
   const savePositionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const handleRangeChanged = useCallback((range: { startIndex: number; endIndex: number }) => {
+    // Запоминаем текущую позицию
+    currentVisibleIndex.current = range.startIndex;
+    
     // Сохраняем позицию с debounce
     if (savePositionTimeoutRef.current) {
       clearTimeout(savePositionTimeoutRef.current);
@@ -167,12 +170,8 @@ function ChatMessagesComponent({
         clearTimeout(savePositionTimeoutRef.current);
       }
       // Сохраняем позицию при уходе
-      if (virtuosoRef.current) {
-        virtuosoRef.current.getState((state) => {
-          if (state.firstVisibleIndex !== undefined) {
-            saveScrollPosition(chat.id, state.firstVisibleIndex);
-          }
-        });
+      if (currentVisibleIndex.current !== null) {
+        saveScrollPosition(chat.id, currentVisibleIndex.current);
       }
     };
   }, [chat.id]);
