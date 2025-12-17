@@ -251,11 +251,14 @@ export async function GET(
 
     // Отмечаем сообщения как прочитанные и обновляем время активности
     // Это используется для определения, открыт ли чат (для пуш-уведомлений)
-    await prisma.chat.update({
+    // Выполняем асинхронно, не блокируя ответ
+    prisma.chat.update({
       where: { id: chatId },
       data: chat.participant1Id === userId
         ? { participant1ReadAt: new Date() }
         : { participant2ReadAt: new Date() },
+    }).catch((err) => {
+      console.error("[chat] Error updating readAt:", err);
     });
 
     // Оптимизация: получаем информацию о пользователях для реакций одним запросом
