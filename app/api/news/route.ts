@@ -19,22 +19,13 @@ export async function GET(request: NextRequest) {
     const cachedData = await withCache(
       cacheKey,
       async () => {
-        // Получаем только опубликованные новости (без полного контента для списка)
-        const [news, total] = await Promise.all([
+        // Получаем только опубликованные новости
+        const [newsRaw, total] = await Promise.all([
           prisma.newsPost.findMany({
             where: {
               isPublished: true,
             },
-            select: {
-              id: true,
-              title: true,
-              excerpt: true,
-              coverImage: true,
-              publishedAt: true,
-              createdAt: true,
-              updatedAt: true,
-              viewCount: true,
-              isPublished: true,
+            include: {
               author: {
                 select: {
                   id: true,
@@ -50,10 +41,7 @@ export async function GET(request: NextRequest) {
                 },
               },
               polls: {
-                select: {
-                  id: true,
-                  question: true,
-                  options: true,
+                include: {
                   _count: {
                     select: {
                       votes: true,
@@ -75,6 +63,11 @@ export async function GET(request: NextRequest) {
           }),
         ]);
         
+        // Обрезаем content для списка (первые 500 символов для превью)
+        const news = newsRaw.map(n => ({
+          ...n,
+          content: n.content ? n.content.substring(0, 500) + (n.content.length > 500 ? '...' : '') : '',
+        }));
         return { news, total };
       },
       120 // 2 минуты
