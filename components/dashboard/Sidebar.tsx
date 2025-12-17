@@ -24,7 +24,9 @@ interface SidebarProps {
 export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const [isNavigating, setIsNavigating] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
 
   // Обновляем отступ контента при изменении состояния sidebar
   useEffect(() => {
