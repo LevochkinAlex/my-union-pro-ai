@@ -78,8 +78,10 @@ export default function PostFeed({ userId, limit, refreshKey }: PostFeedProps) {
         params.append("page", pageNum.toString());
       }
       
-      const url = `/api/posts?${params.toString()}`;
-      const response = await fetch(url);
+      const url = `/api/posts?${params.toString()}&_t=${Date.now()}`;
+      const response = await fetch(url, {
+        cache: "no-store", // Отключаем кеширование браузера для свежих данных
+      });
       
       if (response.ok) {
         const data = await response.json();

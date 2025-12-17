@@ -96,7 +96,19 @@ function UsersPageContent() {
       params.append("page", page.toString());
       params.append("limit", "20");
 
-      const response = await fetch(`/api/users?${params.toString()}`);
+      // Добавляем timestamp для предотвращения кеширования браузером
+      params.append("_t", Date.now().toString());
+
+      const startTime = performance.now();
+      const response = await fetch(`/api/users?${params.toString()}`, {
+        cache: "no-store", // Отключаем кеширование браузера
+      });
+      const loadTime = performance.now() - startTime;
+      
+      if (loadTime > 1000) {
+        console.warn(`[Users] Slow API call: ${loadTime.toFixed(0)}ms`);
+      }
+
       if (!response.ok) {
         throw new Error("Не удалось загрузить пользователей");
       }
