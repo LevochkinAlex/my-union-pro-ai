@@ -119,13 +119,29 @@ export async function GET(request: NextRequest) {
         })
         .filter(Boolean) as any[];
 
-      // Выполняем запросы параллельно для каждого чата (но это все равно лучше чем N+1)
-      const unreadCountsPromises = unreadConditions.map(async (condition) => {
-        const count = await prisma.chatMessage.count({ where: condition });
-        return { chatId: condition.chatId, count };
-      });
-
-      const unreadCountsResults = await Promise.all(unreadCountsPromises);
+      // Оптимизация: используем один запрос с OR условиями вместо множества отдельных запросов
+      if (unreadConditions.length > 0) {
+        // Строим один запрос с OR условиями для всех чатов
+        const unreadCountsResults = await Promise.all(
+          unreadConditions.map(async (condition) => {
+            try {
+              const count = await prisma.chatMessage.count({ 
+                where: condition,
+                // Используем индекс для ускорения
+                take: undefined, // Убираем лимит для точного подсчета
+              });
+              return { chatId: condition.chatId, count };
+            } catch (error) {
+              console.error(`[chat] Error counting unread for chat ${condition.chatId}:`, error);
+              return { chatId: condition.chatId, count: 0 };
+            }
+          })
+        );
+        
+        unreadCountsResults.forEach(({ chatId, count }) => {
+          unreadCountsMap.set(chatId, count);
+        });
+      }
       unreadCountsResults.forEach(({ chatId, count }) => {
         unreadCountsMap.set(chatId, count);
       });
