@@ -6,6 +6,7 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { processMediaFile, detectFileType } from "@/lib/media-processor";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+import { optimizeWithPreset, getMimeType } from "@/lib/image-optimizer";
 
 // Инициализируем VDS хранилище при загрузке модуля
 if (typeof window === "undefined") {
@@ -98,8 +99,25 @@ export async function POST(
       }
     }
     
-    const mimeType = processedFile?.mimeType || file.type || "application/octet-stream";
-    const fileExtension = path.extname(originalName);
+    let mimeType = processedFile?.mimeType || file.type || "application/octet-stream";
+    let fileExtension = path.extname(originalName);
+    
+    // ✨ Дополнительная оптимизация для изображений (сжатие + WebP)
+    if (mimeType.startsWith("image/") && mimeType !== "image/gif") {
+      try {
+        const originalSize = buffer.length;
+        const optimized = await optimizeWithPreset(buffer, "post");
+        buffer = optimized.buffer;
+        mimeType = getMimeType(optimized.format);
+        fileExtension = `.${optimized.format}`;
+        originalName = originalName.replace(/\.[^.]+$/, fileExtension);
+        
+        console.log(`[chat/attachments] Image optimized: ${(originalSize / 1024).toFixed(1)}KB -> ${(optimized.size / 1024).toFixed(1)}KB (${optimized.savings}% saved)`);
+      } catch (optError) {
+        console.error(`[chat/attachments] Optimization failed, using original:`, optError);
+      }
+    }
+    
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExtension}`;
     const fileKey = `chat/${fileName}`;
     

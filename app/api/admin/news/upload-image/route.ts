@@ -3,6 +3,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { UserRole } from "@prisma/client";
 import { convertHeicToJpegServer } from "@/lib/heic-convert-server";
+import { optimizeWithPreset, getMimeType } from "@/lib/image-optimizer";
+import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+
+// Инициализируем VDS хранилище
+if (typeof window === "undefined") {
+  initVDSStorageFromEnv();
+}
 
 // POST /api/admin/news/upload-image - загрузка изображения для новости
 export async function POST(request: NextRequest) {
@@ -47,7 +54,6 @@ export async function POST(request: NextRequest) {
         mimeType = converted.mimeType;
       } catch (error) {
         console.error(`[admin/news/upload-image] Error converting HEIC for ${originalName}:`, error);
-        // Продолжаем с оригинальным файлом при ошибке конвертации
       }
     }
 
@@ -60,19 +66,56 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Конвертируем изображение в base64
-    const base64 = buffer.toString("base64");
-    const dataUrl = `data:${mimeType};base64,${base64}`;
+    // ✨ Оптимизируем изображение для обложки (сжатие + конвертация в WebP)
+    let optimizedBuffer = buffer;
+    let optimizedMime = mimeType;
+    let fileExtension = originalName.split('.').pop() || 'jpg';
+    
+    try {
+      const originalSize = buffer.length;
+      const optimized = await optimizeWithPreset(buffer, "cover");
+      optimizedBuffer = optimized.buffer;
+      optimizedMime = getMimeType(optimized.format);
+      fileExtension = optimized.format;
+      
+      console.log(`[admin/news/upload-image] Image optimized: ${(originalSize / 1024).toFixed(1)}KB -> ${(optimized.size / 1024).toFixed(1)}KB (${optimized.savings}% saved)`);
+    } catch (optError) {
+      console.error(`[admin/news/upload-image] Optimization failed, using original:`, optError);
+    }
 
-    console.log("[upload-image] Successfully converted to base64, length:", dataUrl.length);
+    // Загружаем на VDS вместо base64
+    if (!isVDSStorageConfigured()) {
+      // Fallback на base64 если VDS не настроен
+      const base64 = optimizedBuffer.toString("base64");
+      const dataUrl = `data:${optimizedMime};base64,${base64}`;
+      console.log("[admin/news/upload-image] VDS not configured, using base64");
+      
+      return NextResponse.json({
+        success: true,
+        url: dataUrl,
+        fileName: originalName,
+      });
+    }
 
-    return NextResponse.json({
-      success: true,
-      url: dataUrl,
-      fileName: originalName,
-    });
+    // Загружаем на VDS
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`;
+    const fileKey = `news/${fileName}`;
+    
+    try {
+      const vdsUrl = await uploadFileToVDS(fileKey, optimizedBuffer, optimizedMime);
+      console.log(`[admin/news/upload-image] Image uploaded to VDS: ${vdsUrl}`);
+      
+      return NextResponse.json({
+        success: true,
+        url: vdsUrl,
+        fileName: originalName,
+      });
+    } catch (vdsError) {
+      console.error("[admin/news/upload-image] VDS upload failed:", vdsError);
+      throw new Error("Не удалось загрузить изображение");
+    }
   } catch (error) {
-    console.error("[upload-image] Error:", error);
+    console.error("[admin/news/upload-image] Error:", error);
     return NextResponse.json(
       { error: "Failed to upload image" },
       { status: 500 }

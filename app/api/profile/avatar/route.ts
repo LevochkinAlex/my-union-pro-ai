@@ -6,6 +6,7 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { existsSync } from "fs";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+import { optimizeWithPreset, getMimeType, getOptimizedFilename } from "@/lib/image-optimizer";
 
 // Инициализируем VDS хранилище при загрузке модуля
 if (typeof window === "undefined") {
@@ -53,13 +54,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Генерируем имя файла
-    const fileExtension = avatarFile.name.split(".").pop() || "jpg";
-    const filename = `${session.user.id}_${Date.now()}.${fileExtension}`;
-    
-    // Сохраняем файл
+    // Получаем буфер из файла
     const bytes = await avatarFile.arrayBuffer();
     const buffer = Buffer.from(bytes);
+    
+    // ✨ Оптимизируем изображение (сжатие + конвертация в WebP)
+    let optimizedBuffer: Buffer;
+    let mimeType: string;
+    let filename: string;
+    
+    try {
+      const optimized = await optimizeWithPreset(buffer, "avatar");
+      optimizedBuffer = optimized.buffer;
+      mimeType = getMimeType(optimized.format);
+      filename = `${session.user.id}_${Date.now()}.${optimized.format}`;
+      
+      console.log(`[profile/avatar] Image optimized: ${avatarFile.size} -> ${optimized.size} bytes (${optimized.savings}% saved)`);
+    } catch (optimizeError) {
+      console.error("[profile/avatar] Optimization failed, using original:", optimizeError);
+      // Если оптимизация не удалась, используем оригинал
+      optimizedBuffer = buffer;
+      mimeType = avatarFile.type;
+      const fileExtension = avatarFile.name.split(".").pop() || "jpg";
+      filename = `${session.user.id}_${Date.now()}.${fileExtension}`;
+    }
     
     let avatarUrl: string;
     
@@ -67,7 +85,7 @@ export async function POST(request: NextRequest) {
     if (isVDSStorageConfigured()) {
       try {
         const fileKey = `avatars/${filename}`;
-        avatarUrl = await uploadFileToVDS(fileKey, buffer, avatarFile.type);
+        avatarUrl = await uploadFileToVDS(fileKey, optimizedBuffer, mimeType);
         console.log(`[profile/avatar] Avatar uploaded to VDS: ${avatarUrl}`);
       } catch (vdsError) {
         console.error("[profile/avatar] VDS upload failed:", vdsError);
@@ -85,7 +103,8 @@ export async function POST(request: NextRequest) {
     console.log("[profile/avatar] Avatar uploaded successfully:", {
       userId: session.user.id,
       filename,
-      size: avatarFile.size,
+      originalSize: avatarFile.size,
+      optimizedSize: optimizedBuffer.length,
     });
 
     return NextResponse.json({

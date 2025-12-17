@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import { convertHeicToJpegServer } from "@/lib/heic-convert-server";
+import { optimizeWithPreset, getMimeType, isImageFile } from "@/lib/image-optimizer";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
@@ -44,7 +45,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const fileExtension = path.extname(originalName);
+    // ✨ Оптимизируем изображение (сжатие + конвертация в WebP)
+    let optimizedBuffer = buffer;
+    let optimizedMime = mimeType;
+    let fileExtension = path.extname(originalName);
+    
+    if (mimeType.startsWith("image/") && mimeType !== "image/gif") {
+      try {
+        const originalSize = buffer.length;
+        const optimized = await optimizeWithPreset(buffer, "post");
+        optimizedBuffer = optimized.buffer;
+        optimizedMime = getMimeType(optimized.format);
+        fileExtension = `.${optimized.format}`;
+        
+        console.log(`[posts/upload-image] Image optimized: ${(originalSize / 1024).toFixed(1)}KB -> ${(optimized.size / 1024).toFixed(1)}KB (${optimized.savings}% saved)`);
+      } catch (optError) {
+        console.error(`[posts/upload-image] Optimization failed, using original:`, optError);
+      }
+    }
+
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExtension}`;
     const localFilePath = path.join(UPLOAD_DIR, fileName);
 
@@ -61,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const fileKey = `posts/${fileName}`;
-      const vdsUrl = await uploadFileToVDS(fileKey, buffer, mimeType);
+      const vdsUrl = await uploadFileToVDS(fileKey, optimizedBuffer, optimizedMime);
       if (vdsUrl) {
         finalFilePath = vdsUrl;
         returnUrl = vdsUrl; // Используем VDS URL напрямую
