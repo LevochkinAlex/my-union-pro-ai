@@ -65,6 +65,35 @@ export default async function DashboardPage() {
             avatarUrl: true,
           },
         },
+        likes: {
+          where: {
+            userId: userId,
+          },
+          select: {
+            id: true,
+          },
+        },
+        polls: {
+          include: {
+            options: {
+              include: {
+                votes: {
+                  where: {
+                    userId: userId,
+                  },
+                  select: {
+                    id: true,
+                  },
+                },
+                _count: {
+                  select: {
+                    votes: true,
+                  },
+                },
+              },
+            },
+          },
+        },
         _count: {
           select: {
             likes: true,
@@ -72,7 +101,27 @@ export default async function DashboardPage() {
           },
         },
       },
-    }),
+    }).then((posts) =>
+      posts.map((post) => ({
+        ...post,
+        isLiked: post.likes.length > 0,
+        polls: post.polls.map((poll) => ({
+          id: poll.id,
+          question: poll.question,
+          options: poll.options.map((option) => ({
+            id: option.id,
+            text: option.text,
+            voteCount: option._count.votes,
+            percentage: poll.options.reduce((sum, opt) => sum + opt._count.votes, 0) > 0
+              ? Math.round((option._count.votes / poll.options.reduce((sum, opt) => sum + opt._count.votes, 0)) * 100)
+              : 0,
+          })),
+          totalVotes: poll.options.reduce((sum, opt) => sum + opt._count.votes, 0),
+          userVote: poll.options.find((opt) => opt.votes.length > 0)?.id || null,
+          isClosed: poll.isClosed,
+        })),
+      }))
+    ),
     
     // 3. Получаем данные текущего пользователя для баннера
     prisma.user.findUnique({
