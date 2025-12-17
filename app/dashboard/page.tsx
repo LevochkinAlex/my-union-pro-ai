@@ -271,7 +271,7 @@ export default async function DashboardPage() {
                   Все подписки
                 </Link>
               </div>
-              <PostsListClient initialPosts={postsFromSubscriptions} />
+              <PostsListClient posts={postsFromSubscriptions} />
             </div>
           )}
 
