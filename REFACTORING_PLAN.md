@@ -130,11 +130,29 @@
 
 ## ✅ Прогресс
 
+### Profile Page (2345 строк)
 - [x] Созданы хуки для профиля (useProfileData, useChildren, useAwards, useEducation, useProfessions, useTraining)
 - [x] Создан компонент ProfileTabs
-- [ ] Рефакторинг основного файла profile/page.tsx
-- [ ] Рефакторинг PostCard.tsx
-- [ ] Рефакторинг остальных файлов
+- [ ] Интеграция хуков в основной файл profile/page.tsx
+- [ ] Создание компонентов для каждой вкладки
+- [ ] Вынос валидации в отдельные утилиты
+
+### PostCard (2006 строк)
+- [x] Создан хук usePostComments
+- [x] Создан хук usePostLikes
+- [x] Созданы утилиты postUtils
+- [x] Создан компонент PostCardHeader
+- [x] Создан компонент PostCardActions
+- [ ] Создание PostCardContent, PostCardAttachments
+- [ ] Создание PostComments компонента
+- [ ] Создание PostEditModal
+- [ ] Интеграция в основной PostCard.tsx
+
+### Остальные файлы
+- [ ] Рефакторинг QuestionnaireModal.tsx
+- [ ] Рефакторинг CreatePost.tsx
+- [ ] Рефакторинг profile-extraction.ts
+- [ ] Рефакторинг telegram/webhook/route.ts
 
 ---
 
