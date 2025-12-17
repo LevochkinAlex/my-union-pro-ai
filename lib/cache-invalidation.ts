@@ -37,6 +37,14 @@ export async function invalidateNewsCache() {
 }
 
 /**
+ * Инвалидировать кеш сообщений конкретного чата
+ */
+export async function invalidateChatCache(chatId: string) {
+  await cacheDeletePattern(`chat:messages:${chatId}:*`);
+  console.log("[Cache] Invalidated chat cache for chat", chatId);
+}
+
+/**
  * Инвалидировать весь кеш (использовать осторожно!)
  */
 export async function invalidateAllCache() {
