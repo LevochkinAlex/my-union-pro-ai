@@ -162,6 +162,7 @@ model User {
   // Новости
   newsPosts     NewsPost[]     @relation("NewsPostAuthor")
   newsLikes     NewsLike[]     @relation("NewsLikeUser")
+  newsViews     NewsView[]     @relation("NewsViewUser")
   newsComments  NewsComment[]  @relation("NewsCommentUser")
   newsPollVotes NewsPollVote[] @relation("NewsPollVoteUser")
 
@@ -180,6 +181,7 @@ model User {
   // Посты пользователя
   posts        UserPost[]    @relation("UserPostAuthor")
   postLikes    PostLike[]    @relation("PostLikeUser")
+  postViews    PostView[]    @relation("PostViewUser")
   postComments PostComment[] @relation("PostCommentUser")
 
   // Timestamps
@@ -1029,6 +1031,7 @@ model NewsPost {
 
   // Связи
   likes    NewsLike[]
+  views    NewsView[]
   comments NewsComment[]
   polls    NewsPoll[]
 
@@ -1057,6 +1060,24 @@ model NewsLike {
   @@unique([newsPostId, userId])
   @@index([newsPostId])
   @@index([userId])
+}
+
+// Просмотры новостей (отслеживание уникальных просмотров)
+model NewsView {
+  id String @id @default(cuid())
+
+  newsPostId String
+  newsPost   NewsPost @relation(fields: [newsPostId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation("NewsViewUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  viewedAt DateTime @default(now())
+
+  @@unique([newsPostId, userId])
+  @@index([newsPostId])
+  @@index([userId])
+  @@index([viewedAt])
 }
 
 // История членства в профсоюзе
@@ -1338,6 +1359,7 @@ model UserPost {
 
   // Связи
   likes    PostLike[]
+  views    PostView[]
   comments PostComment[]
 
   createdAt DateTime @default(now())
@@ -1388,6 +1410,24 @@ model PostLike {
   @@unique([postId, userId])
   @@index([postId])
   @@index([userId])
+}
+
+// Просмотры постов (отслеживание уникальных просмотров)
+model PostView {
+  id String @id @default(cuid())
+
+  postId String
+  post   UserPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation("PostViewUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  viewedAt DateTime @default(now())
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+  @@index([viewedAt])
 }
 
 // Комментарии к постам
