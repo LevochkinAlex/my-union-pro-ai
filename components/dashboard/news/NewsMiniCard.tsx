@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 interface NewsMiniCardProps {
   post: {
@@ -74,24 +75,23 @@ export default function NewsMiniCard({ post }: NewsMiniCardProps) {
   return (
     <Link href={`/dashboard/news?id=${post.id}`} className="block h-full">
       <article className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden h-full hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-200 cursor-pointer flex flex-col">
-        {/* Обложка */}
-        {post.coverImage && (
+        {/* Обложка - оптимизирована с Next.js Image */}
+        {post.coverImage && !post.coverImage.startsWith("data:") && (
           <div className="relative w-full h-32 overflow-hidden bg-gray-100 dark:bg-gray-700">
-            <img
+            <Image
               src={(() => {
-                if (post.coverImage.startsWith("data:") || post.coverImage.startsWith("http")) {
+                if (post.coverImage.startsWith("http")) {
                   return post.coverImage;
                 }
                 const { getFileUrlWithCDN } = require("@/lib/cdn");
                 return getFileUrlWithCDN(post.coverImage, true);
               })()}
               alt={post.title}
-              className="w-full h-full object-cover"
+              fill
+              sizes="(max-width: 768px) 100vw, 300px"
+              className="object-cover"
               loading="lazy"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-              }}
+              quality={75}
             />
           </div>
         )}
@@ -99,22 +99,24 @@ export default function NewsMiniCard({ post }: NewsMiniCardProps) {
         <div className="p-4 flex flex-col flex-1">
           {/* Автор и дата */}
           <div className="flex items-center gap-2 mb-2">
-            {post.author.avatarUrl ? (
-              <img
-                src={(() => {
-                  if (post.author.avatarUrl.startsWith("data:") || post.author.avatarUrl.startsWith("http")) {
-                    return post.author.avatarUrl;
-                  }
-                  const { getFileUrlWithCDN } = require("@/lib/cdn");
-                  return getFileUrlWithCDN(post.author.avatarUrl, true);
-                })()}
-                alt={authorName}
-                className="w-6 h-6 rounded-full object-cover flex-shrink-0"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                }}
-              />
+            {post.author.avatarUrl && !post.author.avatarUrl.startsWith("data:") ? (
+              <div className="relative w-6 h-6 rounded-full overflow-hidden flex-shrink-0">
+                <Image
+                  src={(() => {
+                    if (post.author.avatarUrl!.startsWith("http")) {
+                      return post.author.avatarUrl!;
+                    }
+                    const { getFileUrlWithCDN } = require("@/lib/cdn");
+                    return getFileUrlWithCDN(post.author.avatarUrl!, true);
+                  })()}
+                  alt={authorName}
+                  width={24}
+                  height={24}
+                  className="object-cover"
+                  loading="lazy"
+                  quality={60}
+                />
+              </div>
             ) : (
               <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-medium text-[10px] flex-shrink-0">
                 {getInitials(post.author.firstName, post.author.lastName)}

@@ -4,108 +4,101 @@ import { useState } from "react";
 import Image from "next/image";
 
 interface OptimizedImageProps {
-  src: string;
+  src: string | null | undefined;
   alt: string;
   width?: number;
   height?: number;
-  className?: string;
   fill?: boolean;
-  priority?: boolean;
   sizes?: string;
-  objectFit?: "contain" | "cover" | "fill" | "none" | "scale-down";
+  className?: string;
+  containerClassName?: string;
+  priority?: boolean;
+  quality?: number;
+  onClick?: () => void;
+  fallback?: React.ReactNode;
 }
 
-/**
- * Компонент для оптимизированного отображения изображений
- * Использует next/image для автоматической оптимизации
- * Поддерживает fallback на обычный img для внешних изображений
- */
 export default function OptimizedImage({
   src,
   alt,
   width,
   height,
-  className = "",
   fill = false,
+  sizes = "(max-width: 768px) 100vw, 50vw",
+  className = "",
+  containerClassName = "",
   priority = false,
-  sizes,
-  objectFit = "cover",
+  quality = 75,
+  onClick,
+  fallback,
 }: OptimizedImageProps) {
-  const [useFallback, setUseFallback] = useState(false);
-  const [imageError, setImageError] = useState(false);
+  const [error, setError] = useState(false);
 
-  // Если изображение не загрузилось или нужно использовать fallback
-  if (useFallback || imageError) {
+  // Проверяем валидность URL
+  const isValidUrl = src && 
+    src.trim() !== "" && 
+    (src.startsWith("http://") || 
+     src.startsWith("https://") || 
+     src.startsWith("/"));
+
+  // Показываем fallback если нет URL или ошибка загрузки
+  if (!isValidUrl || error) {
+    if (fallback) {
+      return <>{fallback}</>;
+    }
+    return null;
+  }
+
+  // base64 data URLs - показываем как есть (они уже в памяти)
+  if (src.startsWith("data:")) {
     return (
-      <img
-        src={src}
-        alt={alt}
-        width={width}
-        height={height}
-        className={className}
-        style={fill ? { width: "100%", height: "100%", objectFit } : undefined}
-        onError={() => setImageError(true)}
-        loading={priority ? "eager" : "lazy"}
-      />
+      <div className={containerClassName}>
+        <img
+          src={src}
+          alt={alt}
+          onClick={onClick}
+          className={`${onClick ? "cursor-pointer" : ""} ${className}`}
+          style={width && height ? { width, height } : undefined}
+        />
+      </div>
     );
   }
 
-  // Используем next/image для оптимизации
-  try {
-    if (fill) {
-      return (
+  // Обычные URL - оптимизируем через Next.js Image
+  if (fill) {
+    return (
+      <div className={`relative ${containerClassName}`}>
         <Image
           src={src}
           alt={alt}
           fill
-          className={className}
-          priority={priority}
           sizes={sizes}
-          style={{ objectFit }}
-          onError={() => setUseFallback(true)}
-        />
-      );
-    }
-
-    if (width && height) {
-      return (
-        <Image
-          src={src}
-          alt={alt}
-          width={width}
-          height={height}
-          className={className}
+          className={`${onClick ? "cursor-pointer" : ""} ${className}`}
+          loading={priority ? "eager" : "lazy"}
           priority={priority}
-          sizes={sizes}
-          style={{ objectFit }}
-          onError={() => setUseFallback(true)}
+          quality={quality}
+          onClick={onClick}
+          onError={() => setError(true)}
         />
-      );
-    }
-
-    // Если нет width/height, используем обычный img
-    return (
-      <img
-        src={src}
-        alt={alt}
-        className={className}
-        onError={() => setImageError(true)}
-        loading={priority ? "eager" : "lazy"}
-      />
-    );
-  } catch (error) {
-    // Если next/image не может обработать изображение, используем fallback
-    return (
-      <img
-        src={src}
-        alt={alt}
-        width={width}
-        height={height}
-        className={className}
-        onError={() => setImageError(true)}
-        loading={priority ? "eager" : "lazy"}
-      />
+      </div>
     );
   }
-}
 
+  return (
+    <div className={containerClassName}>
+      <Image
+        src={src}
+        alt={alt}
+        width={width || 800}
+        height={height || 600}
+        sizes={sizes}
+        className={`${onClick ? "cursor-pointer" : ""} ${className}`}
+        loading={priority ? "eager" : "lazy"}
+        priority={priority}
+        quality={quality}
+        onClick={onClick}
+        onError={() => setError(true)}
+      />
+    </div>
+  );
+}

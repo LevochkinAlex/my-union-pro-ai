@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import clsx from "clsx";
 import type { DiscountItem } from "@/types/discounts";
 
@@ -72,16 +73,17 @@ export default function DiscountCard({
     <div 
       onClick={handleCardClick}
       className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer dark:border-gray-700 dark:bg-gray-800">
-      {/* Image/Header */}
+      {/* Image/Header - оптимизировано с Next.js Image */}
       <div className="relative w-full h-48 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800">
         {discount.imageUrl && !imageError ? (
-          <img
+          <Image
             src={discount.imageUrl}
             alt={discount.title}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 300px"
+            className="object-cover"
             loading="lazy"
-            className="w-full h-full object-cover"
-            decoding="async"
-            fetchPriority="low"
+            quality={75}
             onError={() => setImageError(true)}
           />
         ) : (

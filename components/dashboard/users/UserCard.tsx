@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useToast } from "@/components/ui/Toast";
 import * as Sentry from "@sentry/nextjs";
 
@@ -118,14 +119,18 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
     <Link href={`/dashboard/profile/${user.id}`} className="flex w-full">
       <div className="group bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all overflow-hidden cursor-pointer flex w-full h-fit">
         <div className="flex items-center gap-4 p-[7px] w-full h-fit">
-          {/* Avatar */}
+          {/* Avatar - оптимизирован с Next.js Image */}
           <div className="flex-shrink-0">
             {hasValidAvatar && !avatarError ? (
               <div className="relative h-[66px] w-[66px] rounded-full overflow-hidden ring-2 ring-gray-200 dark:ring-gray-700 group-hover:ring-blue-500 dark:group-hover:ring-blue-400 transition-all">
-                <img
+                <Image
                   src={user.avatarUrl!}
                   alt={fullName}
+                  width={66}
+                  height={66}
                   className="h-full w-full object-cover"
+                  loading="lazy"
+                  quality={75}
                   onError={() => {
                     setAvatarError(true);
                   }}
