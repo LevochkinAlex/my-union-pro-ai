@@ -7,6 +7,9 @@ import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
 import { saveChatConversationToKnowledgeBase } from "@/lib/chat-knowledge-learning";
 import { saveUserInteractionToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { sendUserNotification } from "@/lib/notifications";
+import { withCache, getCacheKey } from "@/lib/cache";
+import { invalidateChatCache } from "@/lib/cache-invalidation";
+import * as Sentry from "@sentry/nextjs";
 
 // GET - получение сообщений чата
 export async function GET(
@@ -80,32 +83,101 @@ export async function GET(
       }
     }
 
-    // ИСПРАВЛЕНО: Всегда загружаем в порядке DESC (новейшие сначала)
-    // Это гарантирует что при первой загрузке мы получим ПОСЛЕДНИЕ сообщения
-    const messages = await prisma.chatMessage.findMany({
-      where: whereClause,
-      include: {
-        sender: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            middleName: true,
-            avatarUrl: true,
-          },
-        },
-        attachments: {
-          select: {
-            id: true,
-            type: true,
-            fileName: true,
-            originalName: true,
-            filePath: true,
-            fileSize: true,
-            mimeType: true,
-          },
-        },
-        replyTo: {
+    // Оптимизация: используем Sentry span для отслеживания производительности
+    const messages = await Sentry.startSpan(
+      {
+        op: "db.query",
+        name: "GET /api/chat/[chatId] - fetch messages",
+      },
+      async (span) => {
+        span.setAttribute("chatId", chatId);
+        span.setAttribute("limit", limit);
+        span.setAttribute("hasCursor", !!cursor);
+        span.setAttribute("direction", direction);
+
+        // ИСПРАВЛЕНО: Всегда загружаем в порядке DESC (новейшие сначала)
+        // Это гарантирует что при первой загрузке мы получим ПОСЛЕДНИЕ сообщения
+        
+        // Кешируем только если нет курсора (первая загрузка) и limit <= 50
+        // Для старых сообщений не кешируем, так как они могут меняться
+        const shouldCache = !cursor && limit <= 50;
+        const cacheKey = shouldCache 
+          ? getCacheKey(`chat:messages:${chatId}`, { limit })
+          : null;
+
+        if (shouldCache && cacheKey) {
+          return await withCache(
+            cacheKey,
+            async () => {
+              return await prisma.chatMessage.findMany({
+                where: whereClause,
+                include: {
+                  sender: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      middleName: true,
+                      avatarUrl: true,
+                    },
+                  },
+                  attachments: {
+                    select: {
+                      id: true,
+                      type: true,
+                      fileName: true,
+                      originalName: true,
+                      filePath: true,
+                      fileSize: true,
+                      mimeType: true,
+                    },
+                  },
+                  replyTo: {
+                    select: {
+                      id: true,
+                      content: true,
+                      createdAt: true,
+                      sender: {
+                        select: {
+                          id: true,
+                          firstName: true,
+                          lastName: true,
+                          middleName: true,
+                          avatarUrl: true,
+                        },
+                      },
+                    },
+                  },
+                  forwardedFrom: {
+                    select: {
+                      id: true,
+                      content: true,
+                      createdAt: true,
+                      sender: {
+                        select: {
+                          id: true,
+                          firstName: true,
+                          lastName: true,
+                          middleName: true,
+                          avatarUrl: true,
+                        },
+                      },
+                    },
+                  },
+                },
+                orderBy: {
+                  createdAt: "desc",
+                },
+                take: limit,
+              });
+            },
+            30 // Кешируем на 30 секунд (сообщения могут обновляться часто)
+          );
+        }
+
+        // Если не кешируем, делаем прямой запрос
+        return await prisma.chatMessage.findMany({
+          where: whereClause,
           include: {
             sender: {
               select: {
@@ -116,27 +188,57 @@ export async function GET(
                 avatarUrl: true,
               },
             },
-          },
-        },
-        forwardedFrom: {
-          include: {
-            sender: {
+            attachments: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                avatarUrl: true,
+                type: true,
+                fileName: true,
+                originalName: true,
+                filePath: true,
+                fileSize: true,
+                mimeType: true,
+              },
+            },
+            replyTo: {
+              select: {
+                id: true,
+                content: true,
+                createdAt: true,
+                sender: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    middleName: true,
+                    avatarUrl: true,
+                  },
+                },
+              },
+            },
+            forwardedFrom: {
+              select: {
+                id: true,
+                content: true,
+                createdAt: true,
+                sender: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    middleName: true,
+                    avatarUrl: true,
+                  },
+                },
               },
             },
           },
-        },
-      },
-      orderBy: {
-        createdAt: "desc", // Всегда DESC - сначала новейшие
-      },
-      take: limit,
-    });
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: limit,
+        });
+      }
+    );
 
     // ВСЕГДА переворачиваем для правильного отображения (старые вверху, новые внизу)
     const orderedMessages = [...messages].reverse();
@@ -155,7 +257,7 @@ export async function GET(
         : { participant2ReadAt: new Date() },
     });
 
-    // Получаем информацию о пользователях для реакций
+    // Оптимизация: получаем информацию о пользователях для реакций одним запросом
     const allUserIds = new Set<string>();
     messages.forEach((msg: any) => {
       if (msg.reactions && typeof msg.reactions === 'object') {
@@ -185,18 +287,27 @@ export async function GET(
       }
     });
 
-    const reactionUsers = allUserIds.size > 0 ? await prisma.user.findMany({
-      where: {
-        id: { in: Array.from(allUserIds) },
-      },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        middleName: true,
-        avatarUrl: true,
-      },
-    }) : [];
+    // Кешируем пользователей реакций на 5 минут (данные меняются редко)
+    const reactionUsers = allUserIds.size > 0 
+      ? await withCache(
+          getCacheKey("users:reactions", { userIds: Array.from(allUserIds).sort().join(",") }),
+          async () => {
+            return await prisma.user.findMany({
+              where: {
+                id: { in: Array.from(allUserIds) },
+              },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                avatarUrl: true,
+              },
+            });
+          },
+          300 // 5 минут
+        )
+      : [];
 
     // Нормализуем аватарки пользователей реакций
     const normalizedReactionUsers = normalizeUsersAvatars(reactionUsers);
@@ -259,6 +370,7 @@ export async function GET(
       },
     });
   } catch (error: any) {
+    Sentry.captureException(error);
     console.error("[chat] GET Error:", {
       message: error?.message,
       code: error?.code,
@@ -555,6 +667,9 @@ ${formattedSearchInfo ? `### ⚠️ КРИТИЧЕСКИ ВАЖНО - ИСПОЛ
           : { participant1ReadAt: null }),
       },
     });
+
+    // Инвалидируем кеш сообщений чата
+    await invalidateChatCache(chatId);
 
     // Отправляем пуш-уведомление получателю (только если это не бот)
     // Отправляем всегда, но логируем статус открытости чата
