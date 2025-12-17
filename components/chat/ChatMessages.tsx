@@ -101,8 +101,6 @@ function ChatMessagesComponent({
   const prevChatId = useRef<string | null>(null);
   const currentVisibleIndex = useRef<number | null>(null);
   const [atBottom, setAtBottom] = useState(true);
-  const isFirstLoad = useRef(true);
-  const hasScrolledToInitial = useRef(false);
 
   // Подготовка данных с разделителями дат
   const items = prepareMessagesWithDates(messages);
@@ -115,48 +113,9 @@ function ChatMessagesComponent({
       if (savedIdx !== null && savedIdx >= 0) {
         saveScrollPosition(prevChatId.current, savedIdx);
       }
-      // Сбрасываем флаги для нового чата
-      isFirstLoad.current = true;
-      hasScrolledToInitial.current = false;
-      currentVisibleIndex.current = null;
     }
     prevChatId.current = chat.id;
   }, [chat.id]);
-
-  // При загрузке сообщений — скроллим к сохраненной позиции или к концу
-  useEffect(() => {
-    if (!isFirstLoad.current || items.length === 0 || !virtuosoRef.current || hasScrolledToInitial.current) {
-      return;
-    }
-    
-    // Даём время на рендер списка
-    const timeoutId = setTimeout(() => {
-      if (!virtuosoRef.current) return;
-      
-      const savedIndex = getScrollPosition(chat.id);
-      
-      if (savedIndex !== null && savedIndex >= 0 && savedIndex < items.length) {
-        // Восстанавливаем сохранённую позицию
-        virtuosoRef.current.scrollToIndex({
-          index: savedIndex,
-          align: "start",
-          behavior: "auto",
-        });
-      } else {
-        // Нет сохранённой позиции — скроллим к концу (последние сообщения)
-        virtuosoRef.current.scrollToIndex({
-          index: items.length - 1,
-          align: "end",
-          behavior: "auto",
-        });
-      }
-      
-      isFirstLoad.current = false;
-      hasScrolledToInitial.current = true;
-    }, 100);
-    
-    return () => clearTimeout(timeoutId);
-  }, [chat.id, items.length]);
 
   // Сохранение позиции при скролле (debounced)
   const savePositionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -241,9 +200,11 @@ function ChatMessagesComponent({
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <Virtuoso
+        key={chat.id}
         ref={virtuosoRef}
         data={items}
         itemContent={itemContent}
+        initialTopMostItemIndex={items.length > 0 ? items.length - 1 : 0}
         followOutput={handleFollowOutput}
         atBottomStateChange={setAtBottom}
         startReached={handleStartReached}
