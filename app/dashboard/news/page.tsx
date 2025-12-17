@@ -188,9 +188,9 @@ export default function NewsPage() {
   return (
     <div className="pb-8">
       {/* Макет с 2 колонками на широких экранах */}
-      <div className="flex gap-6 mx-auto max-w-[1400px]">
+      <div className="flex gap-6 max-w-full">
         {/* Основная лента новостей */}
-        <div className="flex-1 max-w-[680px]">
+        <div className="flex-1 w-full">
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
               Новости
