@@ -181,9 +181,9 @@ function UsersPageContent() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
-        {/* Левая колонка: Профсеть (50% ширины) - скрыта на мобильных, показывается в модальном окне */}
-        <div className={`space-y-4 lg:space-y-6 w-full ${showUsersPanel ? "block" : "hidden lg:block"}`}>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
+        {/* Левая колонка: Профсеть (20% ширины на десктопе) - скрыта на мобильных, показывается в модальном окне */}
+        <div className={`space-y-4 lg:space-y-6 w-full lg:col-span-1 ${showUsersPanel ? "block" : "hidden lg:block"}`}>
         {/* Заголовок */}
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white">
@@ -335,8 +335,8 @@ function UsersPageContent() {
         )}
         </div>
 
-        {/* Правая колонка: Лента постов (50% ширины) - на мобильных показывается первой */}
-        <div className="space-y-4 lg:space-y-6 order-first lg:order-last h-fit">
+        {/* Правая колонка: Лента постов (80% ширины на десктопе, fill) - на мобильных показывается первой */}
+        <div className="space-y-4 lg:space-y-6 order-first lg:order-last lg:col-span-4 h-fit">
           {/* Форма создания поста */}
           {session && (
             <CreatePost onPostCreated={handlePostCreated} compact={true} />
