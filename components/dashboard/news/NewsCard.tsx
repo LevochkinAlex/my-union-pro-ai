@@ -42,12 +42,14 @@ interface NewsCardProps {
   post: NewsPost;
   onLikeToggle: (newsId: string) => void;
   onPollVote: (pollId: string, optionId: string) => void;
+  priority?: boolean; // Для первых изображений - приоритетная загрузка
 }
 
 export default function NewsCard({
   post,
   onLikeToggle,
   onPollVote,
+  priority = false,
 }: NewsCardProps) {
   const router = useRouter();
   const [showComments, setShowComments] = useState(false);
@@ -242,8 +244,9 @@ export default function NewsCard({
               })()}
               alt={post.title}
               className="w-full h-auto max-h-96 object-cover"
-              loading="lazy"
+              loading={priority ? "eager" : "lazy"}
               decoding="async"
+              fetchPriority={priority ? "high" : "auto"}
               onError={(e) => {
                 // Тихо скрываем изображение, если оно не найдено (не логируем ошибку в консоль)
                 const target = e.target as HTMLImageElement;

@@ -22,6 +22,7 @@ interface NewsMiniCardProps {
       comments: number;
     };
   };
+  priority?: boolean; // Для первых изображений - приоритетная загрузка
 }
 
 // Форматирование даты
@@ -60,7 +61,7 @@ function getInitials(firstName: string | null, lastName: string | null): string 
   return f + l || "А";
 }
 
-export default function NewsMiniCard({ post }: NewsMiniCardProps) {
+export default function NewsMiniCard({ post, priority = false }: NewsMiniCardProps) {
   const [mounted, setMounted] = useState(false);
   
   useEffect(() => {
@@ -90,7 +91,8 @@ export default function NewsMiniCard({ post }: NewsMiniCardProps) {
               fill
               sizes="(max-width: 768px) 100vw, 300px"
               className="object-cover"
-              loading="lazy"
+              loading={priority ? "eager" : "lazy"}
+              priority={priority}
               quality={75}
             />
           </div>

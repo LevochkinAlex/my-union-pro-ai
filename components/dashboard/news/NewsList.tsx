@@ -97,9 +97,9 @@ export default function NewsList({ news }: NewsListProps) {
           WebkitOverflowScrolling: 'touch'
         }}
       >
-        {news.map((post) => (
+        {news.map((post, index) => (
           <div key={post.id} className="flex-none w-[260px] sm:w-[280px]">
-            <NewsMiniCard post={post} />
+            <NewsMiniCard post={post} priority={index < 3} />
           </div>
         ))}
         

@@ -257,12 +257,13 @@ export default function NewsPage() {
         ) : (
         <>
           <div className="space-y-6">
-            {news.map((post) => (
+            {news.map((post, index) => (
               <NewsCard
                 key={post.id}
                 post={post}
                 onLikeToggle={handleLikeToggle}
                 onPollVote={handlePollVote}
+                priority={index < 3} // Приоритетная загрузка для первых 3 карточек
               />
             ))}
           </div>
