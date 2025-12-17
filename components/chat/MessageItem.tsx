@@ -332,13 +332,19 @@ const MessageActions = memo(function MessageActions({
   onForward: () => void;
   onReaction: (emoji: string) => void;
 }) {
+  const [showDropdown, setShowDropdown] = useState(false);
   const quickEmojis = ["❤️", "👍", "😂", "😮", "😢", "🔥"];
 
+  const handleAction = (action: () => void) => {
+    action();
+    setShowDropdown(false);
+  };
+
   return (
-    <div className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${isOwn ? "mr-2" : "ml-2"}`}>
+    <div className={`relative flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${isOwn ? "mr-2" : "ml-2"}`}>
       {/* Quick emoji picker */}
       {showEmojiPicker && (
-        <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-full shadow-lg px-2 py-1 border border-gray-200 dark:border-gray-700">
+        <div className="absolute bottom-full mb-1 flex items-center gap-1 bg-white dark:bg-gray-800 rounded-full shadow-lg px-2 py-1 border border-gray-200 dark:border-gray-700 z-20">
           {quickEmojis.map((emoji) => (
             <button
               key={emoji}
@@ -351,30 +357,74 @@ const MessageActions = memo(function MessageActions({
         </div>
       )}
 
-      {/* Action buttons */}
-      <div className="flex items-center bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-200 dark:border-gray-700">
-        <ActionButton icon="emoji" onClick={onToggleEmojiPicker} title="Реакция" />
-        <ActionButton icon="reply" onClick={onReply} title="Ответить" />
-        <ActionButton icon="forward" onClick={onForward} title="Переслать" />
-        {isOwn && (
-          <>
-            <ActionButton icon="edit" onClick={onEdit} title="Редактировать" />
-            <ActionButton icon="delete" onClick={onDelete} title="Удалить" />
-          </>
-        )}
-      </div>
+      {/* Три точки - кнопка меню */}
+      <button
+        onClick={() => setShowDropdown(!showDropdown)}
+        className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        title="Действия"
+      >
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="5" r="2" />
+          <circle cx="12" cy="12" r="2" />
+          <circle cx="12" cy="19" r="2" />
+        </svg>
+      </button>
+
+      {/* Dropdown меню */}
+      {showDropdown && (
+        <div 
+          className={`absolute ${isOwn ? "right-0" : "left-0"} bottom-full mb-1 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[160px] z-30`}
+        >
+          <DropdownItem
+            icon="emoji"
+            label="Реакция"
+            onClick={() => {
+              onToggleEmojiPicker();
+              setShowDropdown(false);
+            }}
+          />
+          <DropdownItem
+            icon="reply"
+            label="Ответить"
+            onClick={() => handleAction(onReply)}
+          />
+          <DropdownItem
+            icon="forward"
+            label="Переслать"
+            onClick={() => handleAction(onForward)}
+          />
+          {isOwn && (
+            <>
+              <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+              <DropdownItem
+                icon="edit"
+                label="Редактировать"
+                onClick={() => handleAction(onEdit)}
+              />
+              <DropdownItem
+                icon="delete"
+                label="Удалить"
+                onClick={() => handleAction(onDelete)}
+                danger
+              />
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 });
 
-const ActionButton = memo(function ActionButton({
+const DropdownItem = memo(function DropdownItem({
   icon,
+  label,
   onClick,
-  title,
+  danger = false,
 }: {
   icon: "emoji" | "reply" | "forward" | "edit" | "delete";
+  label: string;
   onClick: () => void;
-  title: string;
+  danger?: boolean;
 }) {
   const icons = {
     emoji: "M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
@@ -387,12 +437,16 @@ const ActionButton = memo(function ActionButton({
   return (
     <button
       onClick={onClick}
-      title={title}
-      className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors first:rounded-l-full last:rounded-r-full"
+      className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors ${
+        danger 
+          ? "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20" 
+          : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+      }`}
     >
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icons[icon]} />
       </svg>
+      <span>{label}</span>
     </button>
   );
 });
