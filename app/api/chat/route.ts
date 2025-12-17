@@ -142,9 +142,6 @@ export async function GET(request: NextRequest) {
           unreadCountsMap.set(chatId, count);
         });
       }
-      unreadCountsResults.forEach(({ chatId, count }) => {
-        unreadCountsMap.set(chatId, count);
-      });
     }
     
     // Формируем массив счетчиков в том же порядке, что и чаты
