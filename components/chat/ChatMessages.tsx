@@ -40,19 +40,32 @@ function ChatMessagesComponent({
 }: ChatMessagesProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
-  const isUserScrolling = useRef(false);
-  const lastScrollTop = useRef(0);
+  const isAtBottom = useRef(true);
+  const prevMessagesCount = useRef(0);
+  const prevScrollHeight = useRef(0);
+  const isFirstLoad = useRef(true);
+  const isLoadingOlder = useRef(false);
 
-  // Обработка скролла для загрузки старых сообщений
+  // Отслеживаем начало загрузки старых сообщений
+  useEffect(() => {
+    if (loadingOlder && !isLoadingOlder.current) {
+      isLoadingOlder.current = true;
+      const container = containerRef.current;
+      if (container) {
+        prevScrollHeight.current = container.scrollHeight;
+      }
+    }
+  }, [loadingOlder]);
+
+  // Обработка скролла
   const handleScroll = useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const { scrollTop, scrollHeight, clientHeight } = container;
     
-    // Определяем направление скролла
-    isUserScrolling.current = scrollTop < lastScrollTop.current;
-    lastScrollTop.current = scrollTop;
+    // Проверяем, находится ли пользователь внизу (с допуском в 100px)
+    isAtBottom.current = scrollHeight - scrollTop - clientHeight < 100;
 
     // Загрузка старых сообщений при скролле вверх
     if (scrollTop < 100 && hasMore && !loadingOlder) {
@@ -60,11 +73,35 @@ function ChatMessagesComponent({
     }
   }, [hasMore, loadingOlder, onLoadMore]);
 
-  // Скролл к последнему сообщению при новых сообщениях
+  // Управление скроллом при изменении сообщений
   useEffect(() => {
-    if (!isUserScrolling.current && messages.length > 0) {
+    const container = containerRef.current;
+    if (!container || messages.length === 0) return;
+
+    // Первая загрузка — скролл к последнему сообщению
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      container.scrollTop = container.scrollHeight;
+      prevMessagesCount.current = messages.length;
+      return;
+    }
+
+    // После загрузки старых сообщений — сохраняем позицию
+    if (isLoadingOlder.current && messages.length > prevMessagesCount.current) {
+      const newScrollHeight = container.scrollHeight;
+      const scrollDiff = newScrollHeight - prevScrollHeight.current;
+      container.scrollTop = scrollDiff;
+      isLoadingOlder.current = false;
+      prevMessagesCount.current = messages.length;
+      return;
+    }
+
+    // Новое сообщение (отправлено или получено) — скролл к концу если были внизу
+    if (messages.length > prevMessagesCount.current && isAtBottom.current) {
       endRef.current?.scrollIntoView({ behavior: "smooth" });
     }
+    
+    prevMessagesCount.current = messages.length;
   }, [messages.length]);
 
   // Группировка сообщений по дням
