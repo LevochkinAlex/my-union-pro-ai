@@ -740,7 +740,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                   <img
                     src={coverImageUrl}
                     alt="Обложка"
-                    className="w-full h-64 object-cover rounded-lg"
+                    className="w-full h-fit object-cover rounded-lg"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
                       target.style.display = 'none';
@@ -764,7 +764,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
               <img
                 src={coverImageUrl}
                 alt="Обложка"
-                className="w-full h-64 object-cover rounded-lg"
+                className="w-full h-auto object-cover rounded-lg"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
                   target.style.display = 'none';

@@ -183,7 +183,7 @@ function UsersPageContent() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[32%_68%] gap-4 lg:gap-6">
         {/* Левая колонка: Профсеть (32% ширины на десктопе) - скрыта на мобильных, показывается в модальном окне */}
-        <div className={`space-y-4 lg:space-y-6 w-full ${showUsersPanel ? "block" : "hidden lg:block"}`}>
+        <div className={`flex flex-col gap-4 lg:gap-6 w-full h-fit ${showUsersPanel ? "flex" : "hidden lg:flex"}`}>
         {/* Заголовок */}
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white">
@@ -244,7 +244,7 @@ function UsersPageContent() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col items-center justify-between w-full h-fit gap-4">
               <button
                 type="submit"
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
