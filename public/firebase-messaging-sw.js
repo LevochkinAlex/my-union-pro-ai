@@ -1,6 +1,84 @@
-// Firebase Cloud Messaging Service Worker
+// Firebase Cloud Messaging Service Worker with Image Caching
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
+
+// ===========================================
+// IMAGE CACHING для чата
+// ===========================================
+const IMAGE_CACHE_NAME = 'chat-images-v1';
+const IMAGE_CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 дней
+const IMAGE_CACHE_MAX_SIZE = 100; // Максимум 100 изображений
+
+// Паттерны для кеширования изображений
+const IMAGE_PATTERNS = [
+  /\/uploads\/chat\//,
+  /\/uploads\/avatars\//,
+  /\/api\/uploads\/chat\//,
+  /\/api\/image-proxy/,
+];
+
+// Проверка, является ли URL изображением для кеширования
+function shouldCacheImage(url) {
+  return IMAGE_PATTERNS.some(pattern => pattern.test(url));
+}
+
+// Очистка старых записей из кеша
+async function cleanupImageCache() {
+  try {
+    const cache = await caches.open(IMAGE_CACHE_NAME);
+    const keys = await cache.keys();
+    
+    // Если превышен лимит - удаляем старые
+    if (keys.length > IMAGE_CACHE_MAX_SIZE) {
+      const toDelete = keys.slice(0, keys.length - IMAGE_CACHE_MAX_SIZE);
+      await Promise.all(toDelete.map(key => cache.delete(key)));
+    }
+  } catch (e) {
+    console.error('[SW] Cache cleanup error:', e);
+  }
+}
+
+// Обработка запросов на изображения
+self.addEventListener('fetch', (event) => {
+  const url = event.request.url;
+  
+  // Кешируем только изображения чата
+  if (shouldCacheImage(url) && event.request.method === 'GET') {
+    event.respondWith(
+      (async () => {
+        // Сначала проверяем кеш
+        const cache = await caches.open(IMAGE_CACHE_NAME);
+        const cachedResponse = await cache.match(event.request);
+        
+        if (cachedResponse) {
+          // Возвращаем из кеша, но обновляем в фоне
+          fetch(event.request).then(response => {
+            if (response.ok) {
+              cache.put(event.request, response.clone());
+            }
+          }).catch(() => {});
+          
+          return cachedResponse;
+        }
+        
+        // Если нет в кеше - загружаем и кешируем
+        try {
+          const networkResponse = await fetch(event.request);
+          
+          if (networkResponse.ok) {
+            cache.put(event.request, networkResponse.clone());
+            cleanupImageCache(); // Очистка в фоне
+          }
+          
+          return networkResponse;
+        } catch (error) {
+          // При ошибке сети возвращаем placeholder
+          return new Response('', { status: 503 });
+        }
+      })()
+    );
+  }
+});
 
 // Firebase configuration
 const firebaseConfig = {

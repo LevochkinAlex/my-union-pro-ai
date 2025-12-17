@@ -1,6 +1,7 @@
 "use client";
 
-import { memo, useRef, useEffect, useCallback } from "react";
+import { memo, useRef, useEffect, useCallback, useState } from "react";
+import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { Message, Chat } from "@/types/chat";
 import { MessageItem } from "./MessageItem";
 import { formatMessageDate } from "@/lib/chat-utils";
@@ -20,9 +21,64 @@ interface ChatMessagesProps {
   onForward: (message: Message) => void;
   onReaction: (messageId: string, emoji: string) => void;
   onImageClick: (url: string, name?: string) => void;
-  // Функции для сохранения позиции скролла
+  // Deprecated - не используется с Virtuoso
   onSaveScrollPosition?: (chatId: string, position: number) => void;
   getSavedScrollPosition?: (chatId: string) => number | null;
+}
+
+// Ключ для sessionStorage
+const SCROLL_POSITION_KEY = "chat_scroll_positions";
+
+// Функции для работы с sessionStorage
+function saveScrollPosition(chatId: string, index: number) {
+  try {
+    const stored = sessionStorage.getItem(SCROLL_POSITION_KEY);
+    const positions = stored ? JSON.parse(stored) : {};
+    positions[chatId] = { index, timestamp: Date.now() };
+    sessionStorage.setItem(SCROLL_POSITION_KEY, JSON.stringify(positions));
+  } catch {
+    // sessionStorage недоступен
+  }
+}
+
+function getScrollPosition(chatId: string): number | null {
+  try {
+    const stored = sessionStorage.getItem(SCROLL_POSITION_KEY);
+    if (!stored) return null;
+    const positions = JSON.parse(stored);
+    const data = positions[chatId];
+    // Позиция актуальна в течение 30 минут
+    if (data && Date.now() - data.timestamp < 30 * 60 * 1000) {
+      return data.index;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Подготовка данных с разделителями дат
+interface MessageOrDate {
+  type: "message" | "date";
+  message?: Message;
+  date?: string;
+}
+
+function prepareMessagesWithDates(messages: Message[]): MessageOrDate[] {
+  const result: MessageOrDate[] = [];
+  let currentDate = "";
+
+  messages.forEach((message) => {
+    const date = formatMessageDate(message.createdAt);
+    
+    if (date !== currentDate) {
+      result.push({ type: "date", date });
+      currentDate = date;
+    }
+    result.push({ type: "message", message });
+  });
+
+  return result;
 }
 
 function ChatMessagesComponent({
@@ -40,150 +96,129 @@ function ChatMessagesComponent({
   onForward,
   onReaction,
   onImageClick,
-  onSaveScrollPosition,
-  getSavedScrollPosition,
 }: ChatMessagesProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const endRef = useRef<HTMLDivElement>(null);
-  const isAtBottom = useRef(true);
-  const prevMessagesCount = useRef(0);
-  const prevScrollHeight = useRef(0);
-  const isFirstLoad = useRef(true);
-  const isLoadingOlder = useRef(false);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const prevChatId = useRef<string | null>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [atBottom, setAtBottom] = useState(true);
+  const [initialIndex, setInitialIndex] = useState<number | undefined>(undefined);
+  const isFirstRender = useRef(true);
 
-  // Функция сохранения позиции (debounced)
-  const saveCurrentPosition = useCallback(() => {
-    const container = containerRef.current;
-    if (!container || !chat.id) return;
-    
-    // Сохраняем расстояние от низа (более стабильно при изменении контента сверху)
-    const scrollFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    onSaveScrollPosition?.(chat.id, scrollFromBottom);
-  }, [chat.id, onSaveScrollPosition]);
+  // Подготовка данных с разделителями дат
+  const items = prepareMessagesWithDates(messages);
 
-  // Сохранение позиции при размонтировании или переключении чата
+  // При смене чата — сохраняем позицию старого и восстанавливаем для нового
   useEffect(() => {
-    // Сохраняем позицию предыдущего чата
-    if (prevChatId.current && prevChatId.current !== chat.id) {
-      const container = containerRef.current;
-      if (container) {
-        const scrollFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-        onSaveScrollPosition?.(prevChatId.current, scrollFromBottom);
-      }
+    if (prevChatId.current && prevChatId.current !== chat.id && virtuosoRef.current) {
+      // Сохраняем текущую позицию для предыдущего чата
+      virtuosoRef.current.getState((state) => {
+        if (state.firstVisibleIndex !== undefined) {
+          saveScrollPosition(prevChatId.current!, state.firstVisibleIndex);
+        }
+      });
     }
-    
-    // Сбрасываем флаги при смене чата
+
+    // Восстанавливаем позицию для нового чата
     if (prevChatId.current !== chat.id) {
-      isFirstLoad.current = true;
-      prevMessagesCount.current = 0;
+      isFirstRender.current = true;
+      const savedIndex = getScrollPosition(chat.id);
+      if (savedIndex !== null && savedIndex >= 0) {
+        setInitialIndex(savedIndex);
+      } else {
+        // Нет сохранённой позиции — скроллим к концу (последние сообщения)
+        setInitialIndex(items.length > 0 ? items.length - 1 : 0);
+      }
       prevChatId.current = chat.id;
     }
-    
-    // Cleanup: сохраняем позицию при размонтировании
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      saveCurrentPosition();
-    };
-  }, [chat.id, onSaveScrollPosition, saveCurrentPosition]);
+  }, [chat.id, items.length]);
 
-  // Отслеживаем начало загрузки старых сообщений
+  // При первом рендере скроллим к начальной позиции
   useEffect(() => {
-    if (loadingOlder && !isLoadingOlder.current) {
-      isLoadingOlder.current = true;
-      const container = containerRef.current;
-      if (container) {
-        prevScrollHeight.current = container.scrollHeight;
-      }
-    }
-  }, [loadingOlder]);
-
-  // Обработка скролла с сохранением позиции
-  const handleScroll = useCallback(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const { scrollTop, scrollHeight, clientHeight } = container;
-    
-    // Проверяем, находится ли пользователь внизу (с допуском в 100px)
-    isAtBottom.current = scrollHeight - scrollTop - clientHeight < 100;
-
-    // Загрузка старых сообщений при скролле вверх
-    if (scrollTop < 100 && hasMore && !loadingOlder) {
-      onLoadMore();
-    }
-    
-    // Сохраняем позицию с debounce (каждые 500ms)
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    saveTimeoutRef.current = setTimeout(() => {
-      saveCurrentPosition();
-    }, 500);
-  }, [hasMore, loadingOlder, onLoadMore, saveCurrentPosition]);
-
-  // Управление скроллом при изменении сообщений
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container || messages.length === 0) return;
-
-    // Первая загрузка — проверяем сохраненную позицию или скролл к последнему сообщению
-    if (isFirstLoad.current) {
-      isFirstLoad.current = false;
-      const savedPosition = getSavedScrollPosition?.(chat.id);
-      
-      if (savedPosition !== null && savedPosition !== undefined && savedPosition > 0) {
-        // Восстанавливаем сохраненную позицию (от низа)
-        // Используем несколько попыток для гарантии отрисовки контента
-        const restoreScroll = (attempts = 0) => {
-          if (attempts > 5) return; // Максимум 5 попыток
-          
-          requestAnimationFrame(() => {
-            const targetScrollTop = container.scrollHeight - container.clientHeight - savedPosition;
-            container.scrollTop = Math.max(0, targetScrollTop);
-            
-            // Если контент ещё не загрузился полностью, пробуем ещё раз
-            if (container.scrollHeight < 500 && attempts < 5) {
-              setTimeout(() => restoreScroll(attempts + 1), 100);
-            }
-          });
-        };
-        restoreScroll();
-      } else {
-        // Новый чат или нет сохраненной позиции — скролл к последнему сообщению
-        requestAnimationFrame(() => {
-          container.scrollTop = container.scrollHeight;
+    if (isFirstRender.current && items.length > 0 && virtuosoRef.current) {
+      isFirstRender.current = false;
+      const savedIndex = getScrollPosition(chat.id);
+      if (savedIndex === null) {
+        // Нет сохранённой позиции — скроллим к концу
+        virtuosoRef.current.scrollToIndex({
+          index: items.length - 1,
+          align: "end",
+          behavior: "auto",
         });
       }
-      prevMessagesCount.current = messages.length;
-      return;
+    }
+  }, [chat.id, items.length]);
+
+  // Сохранение позиции при скролле (debounced)
+  const savePositionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const handleRangeChanged = useCallback((range: { startIndex: number; endIndex: number }) => {
+    // Сохраняем позицию с debounce
+    if (savePositionTimeoutRef.current) {
+      clearTimeout(savePositionTimeoutRef.current);
+    }
+    savePositionTimeoutRef.current = setTimeout(() => {
+      saveScrollPosition(chat.id, range.startIndex);
+    }, 300);
+  }, [chat.id]);
+
+  // Cleanup при размонтировании
+  useEffect(() => {
+    return () => {
+      if (savePositionTimeoutRef.current) {
+        clearTimeout(savePositionTimeoutRef.current);
+      }
+      // Сохраняем позицию при уходе
+      if (virtuosoRef.current) {
+        virtuosoRef.current.getState((state) => {
+          if (state.firstVisibleIndex !== undefined) {
+            saveScrollPosition(chat.id, state.firstVisibleIndex);
+          }
+        });
+      }
+    };
+  }, [chat.id]);
+
+  // Автоскролл к низу при новых сообщениях (если пользователь был внизу)
+  const handleFollowOutput = useCallback(() => {
+    return atBottom ? "smooth" : false;
+  }, [atBottom]);
+
+  // Загрузка старых сообщений при скролле вверх
+  const handleStartReached = useCallback(() => {
+    if (hasMore && !loadingOlder) {
+      onLoadMore();
+    }
+  }, [hasMore, loadingOlder, onLoadMore]);
+
+  // Рендер элемента (сообщение или разделитель даты)
+  const itemContent = useCallback((index: number, item: MessageOrDate) => {
+    if (item.type === "date") {
+      return (
+        <div className="flex items-center justify-center my-4">
+          <div className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs px-3 py-1 rounded-full">
+            {item.date}
+          </div>
+        </div>
+      );
     }
 
-    // После загрузки старых сообщений — сохраняем позицию
-    if (isLoadingOlder.current && messages.length > prevMessagesCount.current) {
-      requestAnimationFrame(() => {
-        const newScrollHeight = container.scrollHeight;
-        const scrollDiff = newScrollHeight - prevScrollHeight.current;
-        container.scrollTop = scrollDiff;
-      });
-      isLoadingOlder.current = false;
-      prevMessagesCount.current = messages.length;
-      return;
+    if (item.type === "message" && item.message) {
+      return (
+        <MessageItem
+          message={item.message}
+          currentUserId={currentUserId}
+          isOwn={item.message.senderId === currentUserId}
+          onReply={onReply}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onForward={onForward}
+          onReaction={onReaction}
+          onImageClick={onImageClick}
+        />
+      );
     }
 
-    // Новое сообщение (отправлено или получено) — скролл к концу если были внизу
-    if (messages.length > prevMessagesCount.current && isAtBottom.current) {
-      endRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-    
-    prevMessagesCount.current = messages.length;
-  }, [messages.length, chat.id, getSavedScrollPosition]);
-
-  // Группировка сообщений по дням
-  const groupedMessages = groupMessagesByDate(messages);
+    return null;
+  }, [currentUserId, onReply, onEdit, onDelete, onForward, onReaction, onImageClick]);
 
   if (loading) {
     return <LoadingState />;
@@ -194,92 +229,48 @@ function ChatMessagesComponent({
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="flex-1 overflow-y-auto p-4 space-y-4"
-      onScroll={handleScroll}
-    >
-      {/* Индикатор загрузки старых сообщений */}
-      {loadingOlder && (
-        <div className="flex justify-center py-2">
-          <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-solid border-blue-500 border-r-transparent" />
-        </div>
-      )}
-
-      {/* Кнопка загрузки старых */}
-      {hasMore && !loadingOlder && (
-        <div className="flex justify-center">
-          <button
-            onClick={onLoadMore}
-            className="text-sm text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
-          >
-            Загрузить ранние сообщения
-          </button>
-        </div>
-      )}
-
-      {/* Сообщения сгруппированные по датам */}
-      {groupedMessages.map(({ date, messages: dayMessages }) => (
-        <div key={date}>
-          {/* Разделитель даты */}
-          <div className="flex items-center justify-center my-4">
-            <div className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs px-3 py-1 rounded-full">
-              {date}
-            </div>
-          </div>
-
-          {/* Сообщения за день */}
-          {dayMessages.map((message) => (
-            <MessageItem
-              key={message.id}
-              message={message}
-              currentUserId={currentUserId}
-              isOwn={message.senderId === currentUserId}
-              onReply={onReply}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onForward={onForward}
-              onReaction={onReaction}
-              onImageClick={onImageClick}
-            />
-          ))}
-        </div>
-      ))}
-
-      {/* Индикатор печатания бота */}
-      {isBotTyping && <TypingIndicator />}
-
-      {/* Якорь для скролла */}
-      <div ref={endRef} />
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <Virtuoso
+        ref={virtuosoRef}
+        data={items}
+        itemContent={itemContent}
+        initialTopMostItemIndex={initialIndex}
+        followOutput={handleFollowOutput}
+        atBottomStateChange={setAtBottom}
+        startReached={handleStartReached}
+        rangeChanged={handleRangeChanged}
+        increaseViewportBy={{ top: 500, bottom: 500 }}
+        className="flex-1 overflow-y-auto"
+        style={{ height: "100%" }}
+        components={{
+          Header: () => (
+            <>
+              {loadingOlder && (
+                <div className="flex justify-center py-2">
+                  <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-solid border-blue-500 border-r-transparent" />
+                </div>
+              )}
+              {hasMore && !loadingOlder && (
+                <div className="flex justify-center py-2">
+                  <button
+                    onClick={onLoadMore}
+                    className="text-sm text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    Загрузить ранние сообщения
+                  </button>
+                </div>
+              )}
+            </>
+          ),
+          Footer: () => (
+            <>
+              {isBotTyping && <TypingIndicator />}
+            </>
+          ),
+        }}
+      />
     </div>
   );
-}
-
-// Группировка сообщений по дате
-function groupMessagesByDate(messages: Message[]): { date: string; messages: Message[] }[] {
-  const groups: { date: string; messages: Message[] }[] = [];
-  let currentDate = "";
-  let currentGroup: Message[] = [];
-
-  messages.forEach((message) => {
-    const date = formatMessageDate(message.createdAt);
-    
-    if (date !== currentDate) {
-      if (currentGroup.length > 0) {
-        groups.push({ date: currentDate, messages: currentGroup });
-      }
-      currentDate = date;
-      currentGroup = [message];
-    } else {
-      currentGroup.push(message);
-    }
-  });
-
-  if (currentGroup.length > 0) {
-    groups.push({ date: currentDate, messages: currentGroup });
-  }
-
-  return groups;
 }
 
 const LoadingState = memo(function LoadingState() {
@@ -314,7 +305,7 @@ const EmptyState = memo(function EmptyState({ chat }: { chat: Chat }) {
 
 const TypingIndicator = memo(function TypingIndicator() {
   return (
-    <div className="flex justify-start mb-2">
+    <div className="flex justify-start mb-2 px-4">
       <div className="px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 rounded-bl-md">
         <div className="flex items-center gap-1">
           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
@@ -328,4 +319,3 @@ const TypingIndicator = memo(function TypingIndicator() {
 
 export const ChatMessages = memo(ChatMessagesComponent);
 export default ChatMessages;
-
