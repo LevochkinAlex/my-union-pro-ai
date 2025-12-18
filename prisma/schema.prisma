@@ -130,6 +130,7 @@ model User {
   // Тикеты (обращения)
   tickets        Ticket[]        @relation("UserTickets")
   ticketComments TicketComment[] @relation("UserTicketComments")
+  ticketActions  TicketActionLog[] @relation("UserTicketActions")
 
   // Push Notifications
   pushSubscriptions  PushSubscription[]
@@ -164,6 +165,7 @@ model User {
 
   // Новости
   newsPosts     NewsPost[]     @relation("NewsPostAuthor")
+  newsChannels  NewsChannel[]   @relation("NewsChannelCreator")
   newsLikes     NewsLike[]     @relation("NewsLikeUser")
   newsViews     NewsView[]     @relation("NewsViewUser")
   newsComments  NewsComment[]  @relation("NewsCommentUser")
@@ -178,6 +180,12 @@ model User {
   chatsAsParticipant1 Chat[]        @relation("ChatParticipant1")
   // Чаты (как участник 2)
   chatsAsParticipant2 Chat[]        @relation("ChatParticipant2")
+  // Созданные групповые чаты
+  createdChats        Chat[]        @relation("ChatCreator")
+  // Участник групповых чатов
+  chatParticipants    ChatParticipant[] @relation("ChatParticipants")
+  // Приглашенные в чаты
+  invitedToChats      ChatParticipant[] @relation("ChatInviter")
   // Сообщения в чатах
   chatMessages        ChatMessage[] @relation("ChatMessageSender")
 
@@ -368,6 +376,12 @@ model Organization {
 
   // Документы организации
   documents Document[]
+  
+  // Обращения (тикеты) организации
+  tickets Ticket[] @relation("OrganizationTickets")
+  
+  // Каналы публикации новостей
+  newsChannels NewsChannel[] @relation("OrganizationNewsChannels")
 
   // История членства
   membershipHistory MembershipHistory[]
@@ -390,6 +404,10 @@ enum DocumentType {
   MEMBERSHIP_REMOVAL_APPLICATION // Заявление о снятии с учета
   MEMBERSHIP_TRANSFER_APPLICATION // Заявление о переходе в другой профсоюз
   APPEAL // Обращение
+  AGENDA // Повестка дня заседания профкома
+  PROTOCOL // Протокол заседания профкома
+  RESOLUTION // Постановление профсоюзного комитета
+  PROTOCOL_EXTRACT // Выписка из протокола
   OTHER // Прочее
 }
 
@@ -440,6 +458,10 @@ model Document {
 
   // Комментарий при отклонении
   rejectionReason String? @db.Text
+
+  // Метаданные документа (JSON) - для документов профкома
+  // Может содержать: votingParticipants (массив ID пользователей), meetingDate, agendaItems и т.д.
+  metadata Json? // JSON поле для хранения дополнительных данных
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -852,11 +874,25 @@ model Ticket {
 
   // Ответы на тикет (комментарии)
   comments TicketComment[]
+  
+  // Журнал действий
+  actionLogs TicketActionLog[]
 
   // Метаданные
   tags       String? // JSON массив тегов для аналитики
   resolved   Boolean   @default(false)
   resolvedAt DateTime?
+  
+  // Связь с чатом
+  chatId String? @unique
+  chat   Chat?   @relation(fields: [chatId], references: [id], onDelete: SetNull)
+  
+  // Причина отклонения (для Председателя)
+  rejectionReason String? @db.Text
+  
+  // Организация (для фильтрации обращений Председателем)
+  organizationId String?
+  organization   Organization? @relation("OrganizationTickets", fields: [organizationId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -926,6 +962,38 @@ model TicketCommentAttachment {
   createdAt DateTime @default(now())
 
   @@index([commentId])
+}
+
+// Журнал действий по обращениям (для логирования всех действий Председателя)
+model TicketActionLog {
+  id String @id @default(cuid())
+
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  // Кто выполнил действие
+  userId String
+  user   User   @relation("UserTicketActions", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Тип действия
+  actionType String // "created", "updated", "replied", "rejected", "approved", "deleted", "message_edited", "status_changed"
+
+  // Описание действия
+  description String @db.Text
+
+  // Старое и новое значение (для отслеживания изменений)
+  oldValue String? @db.Text
+  newValue String? @db.Text
+
+  // Метаданные (JSON)
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([userId])
+  @@index([actionType])
+  @@index([createdAt])
 }
 
 // Push Notifications (Firebase Cloud Messaging)
@@ -1050,12 +1118,52 @@ model SystemLog {
 }
 
 // Новости
+// Каналы публикации новостей
+model NewsChannel {
+  id String @id @default(cuid())
+
+  // Название канала
+  name String
+
+  // Описание канала
+  description String? @db.Text
+
+  // Иконка канала (URL или base64)
+  iconUrl String? @db.Text
+
+  // Организация, которой принадлежит канал
+  organizationId String?
+  organization   Organization? @relation("OrganizationNewsChannels", fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Создатель канала
+  createdById String
+  createdBy   User   @relation("NewsChannelCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  // Является ли канал основным (по умолчанию для организации)
+  isMain Boolean @default(false)
+
+  // Новости в канале
+  newsPosts NewsPost[]
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([createdById])
+  @@index([isMain])
+}
+
 model NewsPost {
   id String @id @default(cuid())
 
-  // Автор (супер-админ)
+  // Автор (супер-админ или Председатель)
   authorId String
   author   User   @relation("NewsPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  // Канал публикации
+  channelId String?
+  channel   NewsChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
 
   // Основная информация
   title      String
@@ -1080,6 +1188,7 @@ model NewsPost {
   updatedAt DateTime @updatedAt
 
   @@index([authorId])
+  @@index([channelId])
   @@index([isPublished])
   @@index([publishedAt])
   @@index([createdAt])
@@ -1264,35 +1373,90 @@ model UserSubscription {
   @@index([createdAt])
 }
 
+// Тип чата
+enum ChatType {
+  PRIVATE // Личный чат между двумя пользователями
+  GROUP   // Групповой чат
+}
+
 // Чаты между пользователями
 model Chat {
   id String @id @default(cuid())
 
-  // Участники чата (два пользователя)
-  participant1Id String
-  participant1   User   @relation("ChatParticipant1", fields: [participant1Id], references: [id], onDelete: Cascade)
+  // Тип чата
+  type ChatType @default(PRIVATE)
 
-  participant2Id String
-  participant2   User   @relation("ChatParticipant2", fields: [participant2Id], references: [id], onDelete: Cascade)
+  // Участники чата (для личных чатов - два пользователя)
+  participant1Id String?
+  participant1   User?   @relation("ChatParticipant1", fields: [participant1Id], references: [id], onDelete: Cascade)
+
+  participant2Id String?
+  participant2   User?   @relation("ChatParticipant2", fields: [participant2Id], references: [id], onDelete: Cascade)
+
+  // Для групповых чатов
+  name        String? // Название группы
+  description String? @db.Text // Описание группы
+  iconUrl     String? @db.Text // Иконка группы
+  isPublic    Boolean  @default(true) // Публичный или закрытый (для групповых чатов)
+  createdById String? // Создатель группы
+  createdBy   User?   @relation("ChatCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  // Участники группового чата
+  participants ChatParticipant[]
 
   // Последнее сообщение (для сортировки)
   lastMessageAt DateTime?
   lastMessage   String?   @db.Text
 
-  // Кто прочитал последнее сообщение
+  // Кто прочитал последнее сообщение (для личных чатов)
   participant1ReadAt DateTime?
   participant2ReadAt DateTime?
 
   // Сообщения в чате
   messages ChatMessage[]
+  
+  // Связь с обращением (тикетом)
+  ticket Ticket?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([participant1Id, participant2Id])
+  @@unique([participant1Id, participant2Id], name: "unique_private_chat")
   @@index([participant1Id])
   @@index([participant2Id])
+  @@index([createdById])
+  @@index([type])
   @@index([lastMessageAt])
+}
+
+// Участники группового чата
+model ChatParticipant {
+  id String @id @default(cuid())
+
+  chatId String
+  chat   Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User @relation("ChatParticipants", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Роль в группе
+  role String @default("member") // "admin", "member"
+
+  // Приглашен кем
+  invitedById String?
+  invitedBy   User?   @relation("ChatInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  // Прочитано ли последнее сообщение
+  readAt DateTime?
+
+  // Timestamps
+  joinedAt DateTime @default(now())
+  leftAt   DateTime?
+
+  @@unique([chatId, userId])
+  @@index([chatId])
+  @@index([userId])
+  @@index([role])
 }
 
 // Сообщения в чатах

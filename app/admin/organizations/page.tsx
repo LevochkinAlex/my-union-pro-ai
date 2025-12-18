@@ -51,6 +51,11 @@ export default function OrganizationsPage() {
     email: string;
     chairmanName: string;
     chairmanJobTitle: string;
+    chairmanEmail: string;
+    chairmanPhone: string;
+    chairmanFirstName: string;
+    chairmanLastName: string;
+    chairmanMiddleName: string;
     isActive: boolean;
   }>({
     name: "",
@@ -62,6 +67,11 @@ export default function OrganizationsPage() {
     email: "",
     chairmanName: "",
     chairmanJobTitle: "",
+    chairmanEmail: "",
+    chairmanPhone: "",
+    chairmanFirstName: "",
+    chairmanLastName: "",
+    chairmanMiddleName: "",
     isActive: true,
   });
 
@@ -111,6 +121,11 @@ export default function OrganizationsPage() {
       email: "",
       chairmanName: "",
       chairmanJobTitle: "",
+      chairmanEmail: "",
+      chairmanPhone: "",
+      chairmanFirstName: "",
+      chairmanLastName: "",
+      chairmanMiddleName: "",
       isActive: true,
     });
   };
@@ -119,6 +134,8 @@ export default function OrganizationsPage() {
     setSelectedOrg(org);
     setIsEditing(true);
     setIsCreating(false);
+    // Парсим ФИО председателя из chairmanName
+    const nameParts = (org.chairmanName || "").split(" ");
     setFormData({
       name: org.name,
       type: org.type,
@@ -129,33 +146,86 @@ export default function OrganizationsPage() {
       email: org.email || "",
       chairmanName: org.chairmanName || "",
       chairmanJobTitle: org.chairmanJobTitle || "",
+      chairmanEmail: "",
+      chairmanPhone: "",
+      chairmanFirstName: nameParts[1] || "",
+      chairmanLastName: nameParts[0] || "",
+      chairmanMiddleName: nameParts[2] || "",
       isActive: org.isActive,
     });
   };
 
   const handleSave = async () => {
     try {
+      // Валидация данных председателя
+      if (formData.chairmanEmail || formData.chairmanPhone || formData.chairmanFirstName || formData.chairmanLastName) {
+        if (!formData.chairmanEmail || !formData.chairmanPhone || !formData.chairmanFirstName || !formData.chairmanLastName) {
+          alertError("Для назначения председателя необходимо заполнить все обязательные поля: Фамилия, Имя, Email, Телефон");
+          return;
+        }
+      }
+
       const url = isCreating
         ? "/api/admin/organizations"
         : `/api/admin/organizations/${selectedOrg?.id}`;
       
       const method = isCreating ? "POST" : "PUT";
       
+      // Формируем полное ФИО председателя
+      const chairmanFullName = [
+        formData.chairmanLastName,
+        formData.chairmanFirstName,
+        formData.chairmanMiddleName
+      ].filter(Boolean).join(" ");
+
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
+          chairmanName: chairmanFullName || formData.chairmanName,
           parentId: formData.parentId || null,
         }),
       });
 
       if (response.ok) {
+        const result = await response.json();
+        
+        // Если указаны данные председателя, отправляем инвайт
+        if (formData.chairmanEmail && formData.chairmanPhone && formData.chairmanFirstName && formData.chairmanLastName) {
+          try {
+            const inviteResponse = await fetch(`/api/admin/organizations/${result.organization.id}/invite-chairman`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email: formData.chairmanEmail,
+                phone: formData.chairmanPhone,
+                firstName: formData.chairmanFirstName,
+                lastName: formData.chairmanLastName,
+                middleName: formData.chairmanMiddleName,
+                jobTitle: formData.chairmanJobTitle,
+              }),
+            });
+
+            if (!inviteResponse.ok) {
+              const inviteError = await inviteResponse.json();
+              console.error("Ошибка отправки инвайта:", inviteError);
+              alertError(`Организация сохранена, но не удалось отправить инвайт: ${inviteError.error || "Неизвестная ошибка"}`);
+            } else {
+              alertSuccess("Организация успешно сохранена! Инвайт-ссылка отправлена председателю на email.");
+            }
+          } catch (inviteError) {
+            console.error("Ошибка отправки инвайта:", inviteError);
+            alertError("Организация сохранена, но произошла ошибка при отправке инвайта.");
+          }
+        } else {
+          alertSuccess("Организация успешно сохранена!");
+        }
+
         await loadOrganizations();
         setIsEditing(false);
         setIsCreating(false);
         setSelectedOrg(null);
-        alertSuccess("Организация успешно сохранена!");
       } else {
         const error = await response.json();
         const errorMessage = error.details 
@@ -429,20 +499,81 @@ export default function OrganizationsPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  ФИО председателя
-                </label>
-                <input
-                  type="text"
-                  value={formData.chairmanName}
-                  onChange={(e) => setFormData({ ...formData, chairmanName: e.target.value })}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
-                  placeholder="Например: Иванов Иван Иванович"
-                />
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+              <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
+                Председатель организации
+              </h3>
+              
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Фамилия *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.chairmanLastName}
+                    onChange={(e) => setFormData({ ...formData, chairmanLastName: e.target.value })}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                    placeholder="Иванов"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Имя *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.chairmanFirstName}
+                    onChange={(e) => setFormData({ ...formData, chairmanFirstName: e.target.value })}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                    placeholder="Иван"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Отчество
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.chairmanMiddleName}
+                    onChange={(e) => setFormData({ ...formData, chairmanMiddleName: e.target.value })}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                    placeholder="Иванович"
+                  />
+                </div>
               </div>
-              <div>
+
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Email председателя *
+                  </label>
+                  <input
+                    type="email"
+                    value={formData.chairmanEmail}
+                    onChange={(e) => setFormData({ ...formData, chairmanEmail: e.target.value })}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                    placeholder="chairman@example.com"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    На этот email будет отправлена инвайт-ссылка для авторизации
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Телефон председателя *
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.chairmanPhone}
+                    onChange={(e) => setFormData({ ...formData, chairmanPhone: e.target.value })}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                    placeholder="+7 (999) 123-45-67"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Должность председателя
                 </label>

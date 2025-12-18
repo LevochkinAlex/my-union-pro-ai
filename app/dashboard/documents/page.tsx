@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { alertError, alertSuccess, alertWarning, confirm } from "@/lib/alert";
+import PPOHeadDocumentsPage from "./ppo-head/page";
 
 interface Document {
   id: string;
@@ -23,6 +25,13 @@ interface Document {
 
 export default function DocumentsPage() {
   const { data: session } = useSession();
+  const router = useRouter();
+  
+  // Если пользователь - Председатель, показываем специальную страницу
+  if (session?.user?.role === "PPO_HEAD") {
+    return <PPOHeadDocumentsPage />;
+  }
+
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

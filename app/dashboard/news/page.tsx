@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import NewsCard from "@/components/dashboard/news/NewsCard";
 import NewsChannels from "@/components/dashboard/news/NewsChannels";
 import UnionMembers from "@/components/dashboard/news/UnionMembers";
+import PPOHeadNewsPage from "./ppo-head/page";
 
 interface NewsPost {
   id: string;
@@ -35,6 +37,13 @@ interface NewsPost {
 }
 
 export default function NewsPage() {
+  const { data: session } = useSession();
+  
+  // Если пользователь - Председатель, показываем специальную страницу
+  if (session?.user?.role === "PPO_HEAD") {
+    return <PPOHeadNewsPage />;
+  }
+
   const [news, setNews] = useState<NewsPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

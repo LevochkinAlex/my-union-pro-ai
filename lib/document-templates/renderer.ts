@@ -40,6 +40,19 @@ export interface TemplateVariables {
   dateOfBirth?: string; // Формат: ДД.ММ.ГГГГ
   currentDate?: string; // Текущая дата в формате: ДД.ММ.ГГГГ
   
+  // Переменные для документов профкома
+  meetingDate?: string; // Дата заседания (ДД.ММ.ГГГГ)
+  meetingTime?: string; // Время заседания (ЧЧ:ММ)
+  meetingPlace?: string; // Место проведения заседания
+  agendaItems?: string; // Пункты повестки дня (многострочный текст)
+  votingParticipants?: string; // Участники голосования (многострочный текст с ФИО и должностями)
+  presentMembers?: string; // Присутствующие члены профкома (многострочный текст)
+  absentMembers?: string; // Отсутствующие члены профкома (многострочный текст)
+  secretaryName?: string; // ФИО секретаря
+  secretaryJobTitle?: string; // Должность секретаря
+  resolutionNumber?: string; // Номер постановления
+  protocolNumber?: string; // Номер протокола
+  
   // Дополнительные переменные
   [key: string]: string | undefined;
 }

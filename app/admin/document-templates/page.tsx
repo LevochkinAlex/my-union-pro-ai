@@ -41,6 +41,18 @@ const AVAILABLE_VARIABLES = [
   { key: "directorPosition", label: "Должность руководителя с места работы" },
   { key: "dateOfBirth", label: "Дата рождения (ДД.ММ.ГГГГ)" },
   { key: "currentDate", label: "Текущая дата (ДД.ММ.ГГГГ)" },
+  // Переменные для документов профкома
+  { key: "meetingDate", label: "Дата заседания (ДД.ММ.ГГГГ)" },
+  { key: "meetingTime", label: "Время заседания (ЧЧ:ММ)" },
+  { key: "meetingPlace", label: "Место проведения заседания" },
+  { key: "agendaItems", label: "Пункты повестки дня (список)" },
+  { key: "votingParticipants", label: "Участники голосования (список ФИО и должностей)" },
+  { key: "presentMembers", label: "Присутствующие члены профкома (список)" },
+  { key: "absentMembers", label: "Отсутствующие члены профкома (список)" },
+  { key: "secretaryName", label: "ФИО секретаря" },
+  { key: "secretaryJobTitle", label: "Должность секретаря" },
+  { key: "resolutionNumber", label: "Номер постановления" },
+  { key: "protocolNumber", label: "Номер протокола" },
 ];
 
 export default function DocumentTemplatesPage() {
@@ -312,14 +324,38 @@ export default function DocumentTemplatesPage() {
                 onChange={(e) => setFormData({ ...formData, type: e.target.value as DocumentType })}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
               >
-                <option value={DocumentType.MEMBERSHIP_APPLICATION}>
-                  Заявление о вступлении
-                </option>
-                <option value={DocumentType.CONTRIBUTION_APPLICATION}>
-                  Заявление о взносах
-                </option>
-                <option value={DocumentType.APPEAL}>Обращение</option>
-                <option value={DocumentType.OTHER}>Прочее</option>
+                <optgroup label="Заявления">
+                  <option value={DocumentType.MEMBERSHIP_APPLICATION}>
+                    Заявление о вступлении
+                  </option>
+                  <option value={DocumentType.CONTRIBUTION_APPLICATION}>
+                    Заявление о взносах
+                  </option>
+                  <option value={DocumentType.MEMBERSHIP_REMOVAL_APPLICATION}>
+                    Заявление о снятии с учета
+                  </option>
+                  <option value={DocumentType.MEMBERSHIP_TRANSFER_APPLICATION}>
+                    Заявление о переходе в другой профсоюз
+                  </option>
+                </optgroup>
+                <optgroup label="Документы профкома">
+                  <option value={DocumentType.AGENDA}>
+                    Повестка дня заседания профкома
+                  </option>
+                  <option value={DocumentType.PROTOCOL}>
+                    Протокол заседания профкома
+                  </option>
+                  <option value={DocumentType.RESOLUTION}>
+                    Постановление профсоюзного комитета
+                  </option>
+                  <option value={DocumentType.PROTOCOL_EXTRACT}>
+                    Выписка из протокола
+                  </option>
+                </optgroup>
+                <optgroup label="Прочее">
+                  <option value={DocumentType.APPEAL}>Обращение</option>
+                  <option value={DocumentType.OTHER}>Прочее</option>
+                </optgroup>
               </select>
             </div>
 

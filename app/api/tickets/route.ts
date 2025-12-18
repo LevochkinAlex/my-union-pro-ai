@@ -78,6 +78,7 @@ export async function GET(request: NextRequest) {
         attachmentsCount: ticket._count.attachments,
         commentsCount: ticket._count.comments,
         lastCommentAt: ticket.comments[0]?.createdAt || null,
+        chatId: ticket.chatId,
       })),
     });
   } catch (error) {
@@ -141,6 +142,58 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Получаем пользователя с организацией
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: {
+        organization: {
+          include: {
+            members: {
+              where: {
+                role: "PPO_HEAD",
+              },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    // Находим Председателя организации
+    let chairmanId: string | null = null;
+    if (user?.organization?.members && user.organization.members.length > 0) {
+      chairmanId = user.organization.members[0].id;
+    }
+
+    // Создаем или находим чат с Председателем, если он есть
+    let chatId: string | null = null;
+    if (chairmanId) {
+      // Ищем существующий чат
+      const existingChat = await prisma.chat.findFirst({
+        where: {
+          OR: [
+            { participant1Id: session.user.id, participant2Id: chairmanId },
+            { participant1Id: chairmanId, participant2Id: session.user.id },
+          ],
+        },
+      });
+
+      if (existingChat) {
+        chatId = existingChat.id;
+      } else {
+        // Создаем новый чат
+        const newChat = await prisma.chat.create({
+          data: {
+            participant1Id: session.user.id,
+            participant2Id: chairmanId,
+            lastMessageAt: new Date(),
+            lastMessage: content.substring(0, 100) + (content.length > 100 ? "..." : ""),
+          },
+        });
+        chatId = newChat.id;
+      }
+    }
+
     // Создаем тикет
     const ticket = await prisma.ticket.create({
       data: {
@@ -151,6 +204,43 @@ export async function POST(request: NextRequest) {
         status: "PENDING",
         title,
         content,
+        organizationId: user?.organizationId || null,
+        chatId: chatId,
+      },
+    });
+
+    // Создаем первое сообщение в чате с текстом обращения
+    if (chatId) {
+      await prisma.chatMessage.create({
+        data: {
+          chatId,
+          senderId: session.user.id,
+          content: `Обращение: ${title}\n\n${content}`,
+        },
+      });
+
+      // Обновляем последнее сообщение в чате
+      await prisma.chat.update({
+        where: { id: chatId },
+        data: {
+          lastMessageAt: new Date(),
+          lastMessage: content.substring(0, 100) + (content.length > 100 ? "..." : ""),
+          participant2ReadAt: null, // Помечаем как непрочитанное для Председателя
+        },
+      });
+    }
+
+    // Логируем создание обращения
+    await prisma.ticketActionLog.create({
+      data: {
+        ticketId: ticket.id,
+        userId: session.user.id,
+        actionType: "created",
+        description: `Создано обращение: ${title}`,
+        metadata: {
+          type,
+          priority,
+        },
       },
     });
 
