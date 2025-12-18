@@ -55,9 +55,15 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: [
-        { isMain: "desc" },
         { createdAt: "asc" },
       ],
+    });
+    
+    // Сортируем: "Основной" канал всегда первый
+    channels.sort((a, b) => {
+      if (a.name === "Основной") return -1;
+      if (b.name === "Основной") return 1;
+      return 0;
     });
 
     return NextResponse.json({

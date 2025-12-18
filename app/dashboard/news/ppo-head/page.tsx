@@ -48,7 +48,7 @@ interface NewsChannel {
   name: string;
   description: string | null;
   iconUrl: string | null;
-  isMain: boolean;
+  isMain?: boolean; // Опционально, может отсутствовать
   _count: {
     newsPosts: number;
   };
@@ -119,8 +119,10 @@ export default function PPOHeadNewsPage() {
         const data = await response.json();
         setChannels(data.channels || []);
         
-        // Автоматически выбираем основной канал
-        const mainChannel = data.channels?.find((ch: NewsChannel) => ch.isMain);
+        // Автоматически выбираем основной канал (по имени "Основной" или isMain флагу)
+        const mainChannel = data.channels?.find((ch: NewsChannel) => 
+          ch.name === "Основной" || ch.isMain === true
+        );
         if (mainChannel) {
           setSelectedChannelId(mainChannel.id);
         } else if (data.channels?.length > 0) {
@@ -407,7 +409,7 @@ export default function PPOHeadNewsPage() {
                   <option value="">Выберите канал</option>
                   {channels.map((channel) => (
                     <option key={channel.id} value={channel.id}>
-                      {channel.name} {channel.isMain && "(Основной)"}
+                      {channel.name}
                     </option>
                   ))}
                 </select>
@@ -653,9 +655,9 @@ export default function PPOHeadNewsPage() {
                             <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
                               {channel.name}
                             </h3>
-                            {channel.isMain && (
+                            {(channel.name === "Основной" || channel.isMain) && (
                               <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                                Основной
+                                По умолчанию
                               </span>
                             )}
                           </div>

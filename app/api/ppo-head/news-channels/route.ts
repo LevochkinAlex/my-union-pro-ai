@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Получаем каналы организации
-    const channels = await prisma.newsChannel.findMany({
+    let channels = await prisma.newsChannel.findMany({
       where: {
         organizationId: chairman.organizationId,
       },
@@ -39,8 +39,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: [
-        { isMain: "desc" },
-        { createdAt: "desc" },
+        { createdAt: "asc" },
       ],
     });
 
@@ -57,7 +56,6 @@ export async function GET(request: NextRequest) {
           description: `Основной канал новостей ${organization?.name || "организации"}`,
           organizationId: chairman.organizationId,
           createdById: chairman.id,
-          isMain: true,
         },
         include: {
           _count: {
@@ -70,6 +68,13 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ channels: [defaultChannel] });
     }
+    
+    // Сортируем: "Основной" канал всегда первый
+    channels.sort((a, b) => {
+      if (a.name === "Основной") return -1;
+      if (b.name === "Основной") return 1;
+      return 0;
+    });
 
     return NextResponse.json({ channels });
   } catch (error: any) {
@@ -122,7 +127,6 @@ export async function POST(request: NextRequest) {
         iconUrl: iconUrl || null,
         organizationId: chairman.organizationId,
         createdById: chairman.id,
-        isMain: false,
       },
       include: {
         _count: {

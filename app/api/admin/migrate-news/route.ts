@@ -60,23 +60,41 @@ export async function POST(request: NextRequest) {
     const organizationId = chairman.ppoHeadOrganization.id;
 
     // 2. Проверяем/создаём основной канал для организации
+    // Сначала ищем канал с названием "Основной" для этой организации
     let mainChannel = await prisma.newsChannel.findFirst({
       where: {
         organizationId: organizationId,
-        isMain: true,
+        name: "Основной",
       },
     });
 
+    // Если не нашли по имени, ищем любой канал организации
     if (!mainChannel) {
-      mainChannel = await prisma.newsChannel.create({
-        data: {
-          name: "Основной",
-          description: `Основной канал новостей ${chairman.ppoHeadOrganization.name}`,
+      mainChannel = await prisma.newsChannel.findFirst({
+        where: {
           organizationId: organizationId,
-          createdById: chairman.id,
-          isMain: true,
         },
       });
+    }
+
+    // Если каналов нет, создаём основной
+    if (!mainChannel) {
+      try {
+        mainChannel = await prisma.newsChannel.create({
+          data: {
+            name: "Основной",
+            description: `Основной канал новостей ${chairman.ppoHeadOrganization.name}`,
+            organizationId: organizationId,
+            createdById: chairman.id,
+          },
+        });
+      } catch (createError: any) {
+        console.error("[migrate-news] Error creating channel:", createError);
+        return NextResponse.json(
+          { error: "Не удалось создать канал новостей", details: createError.message },
+          { status: 500 }
+        );
+      }
     }
 
     // 3. Находим все новости от супер-админов
