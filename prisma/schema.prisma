@@ -890,6 +890,11 @@ model Ticket {
   // Причина отклонения (для Председателя)
   rejectionReason String? @db.Text
   
+  // Рейтинг полезности ответа (1-5, заполняется членом профсоюза)
+  helpfulRating Int?
+  helpfulRatingComment String? @db.Text // Комментарий к оценке
+  helpfulRatingAt DateTime? // Когда была выставлена оценка
+  
   // Организация (для фильтрации обращений Председателем)
   organizationId String?
   organization   Organization? @relation("OrganizationTickets", fields: [organizationId], references: [id], onDelete: SetNull)

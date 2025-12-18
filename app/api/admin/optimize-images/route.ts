@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
         where: {
           type: "image",
           filePath: {
-            not: null,
+            not: "",
           },
         },
         select: {
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
         where: {
           type: "image",
           filePath: {
-            not: null,
+            not: "",
           },
         },
         select: {
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
       const newsPosts = await prisma.newsPost.findMany({
         where: {
           coverImage: {
-            not: null,
+            not: "",
           },
         },
         select: {
@@ -232,23 +232,23 @@ export async function GET() {
       prisma.postAttachment.count({
         where: {
           type: "image",
-          filePath: { not: null },
+          filePath: { not: "" },
         },
       }),
       prisma.chatMessageAttachment.count({
         where: {
           type: "image",
-          filePath: { not: null },
+          filePath: { not: "" },
         },
       }),
       prisma.newsPost.count({
         where: {
-          coverImage: { not: null },
+          coverImage: { not: "" },
         },
       }),
       prisma.user.count({
         where: {
-          avatarUrl: { not: null },
+          avatarUrl: { not: "" },
         },
       }),
     ]);
