@@ -18,6 +18,7 @@ type KnowledgeBase = {
 type ApiProvider = {
   id: string;
   name: string;
+  displayName?: string;
   type: string;
   isActive?: boolean;
   isDefault?: boolean;
@@ -286,7 +287,7 @@ export default function NewBotPage() {
               </option>
               {apiProviders.map((provider) => (
                 <option key={provider.id} value={provider.id}>
-                  {provider.displayName}
+                  {provider.displayName || provider.name}
                 </option>
               ))}
             </Select>
