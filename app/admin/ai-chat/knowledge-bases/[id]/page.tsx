@@ -39,7 +39,7 @@ type KnowledgeBaseData = {
     id: string;
     type: string;
     status: string;
-    metadata: Prisma.JsonValue | null;
+    metadata: JsonValue | null;
     lastFetchedAt: string | null;
     createdAt: string;
   }>;
