@@ -73,8 +73,11 @@ export function useChat(options: UseChatOptions = {}) {
           // Пометим сообщения как прочитанные при первой загрузке (не при polling)
           try {
             await fetch(`/api/chat/${chatId}/read`, { method: "POST" });
-            // Обновляем список чатов чтобы обновить счетчик непрочитанных
-            loadChats();
+            // Обновляем только счетчик непрочитанных в текущем чате БЕЗ перезагрузки всего списка
+            // Это предотвращает изменение порядка чатов
+            setChats(prev => prev.map(chat => 
+              chat.id === chatId ? { ...chat, unreadCount: 0 } : chat
+            ));
           } catch (error) {
             console.error("[useChat] Error marking as read:", error);
           }
@@ -102,6 +105,9 @@ export function useChat(options: UseChatOptions = {}) {
 
     setLoadingOlder(true);
     try {
+      // Сохраняем текущий первый индекс перед загрузкой
+      const currentFirstMessageId = messagesRef.current[0]?.id;
+      
       const response = await fetch(
         `/api/chat/${selectedChat.id}?limit=50&cursor=${oldestMessageId}&direction=older&t=${Date.now()}`
       );
@@ -111,9 +117,18 @@ export function useChat(options: UseChatOptions = {}) {
         const olderMessages = data.messages || [];
         
         if (olderMessages.length > 0) {
-          setMessages(prev => [...olderMessages, ...prev]);
+          // Добавляем старые сообщения в начало
+          setMessages(prev => {
+            const newMessages = [...olderMessages, ...prev];
+            // Сохраняем информацию о первом сообщении для восстановления позиции
+            return newMessages;
+          });
+          
           setHasMore(data.pagination?.hasMore || false);
           setOldestMessageId(data.pagination?.oldestMessageId || null);
+          
+          // Возвращаем информацию о количестве загруженных сообщений для восстановления позиции
+          return { loadedCount: olderMessages.length, firstMessageId: currentFirstMessageId };
         } else {
           setHasMore(false);
         }
@@ -238,7 +253,8 @@ export function useChat(options: UseChatOptions = {}) {
         // Добавляем сообщение в список
         setMessages(prev => [...prev, newMessage]);
         
-        // Обновляем последнее сообщение в чате
+        // Обновляем последнее сообщение в чате БЕЗ изменения порядка
+        // НЕ перемещаем чат наверх при отправке сообщения
         setChats(prev => prev.map(chat => 
           chat.id === selectedChat.id
             ? { ...chat, lastMessage: content || "[Файл]", lastMessageAt: new Date() }

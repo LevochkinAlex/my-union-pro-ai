@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: {
-        updatedAt: "desc",
+        lastMessageAt: "desc",
       },
     });
 

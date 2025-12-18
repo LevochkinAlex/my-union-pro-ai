@@ -103,6 +103,8 @@ function ChatMessagesComponent({
   const [atBottom, setAtBottom] = useState(true);
   const hasInitialized = useRef(false);
   const initialScrollDone = useRef(false);
+  const previousItemsLength = useRef<number>(0);
+  const scrollPositionBeforeLoad = useRef<number | null>(null);
 
   // Подготовка данных с разделителями дат
   const items = prepareMessagesWithDates(messages);
@@ -119,6 +121,8 @@ function ChatMessagesComponent({
       hasInitialized.current = false;
       initialScrollDone.current = false;
       setAtBottom(true);
+      previousItemsLength.current = 0;
+      scrollPositionBeforeLoad.current = null;
     }
     prevChatId.current = chat.id;
   }, [chat.id]);
@@ -128,6 +132,11 @@ function ChatMessagesComponent({
     // Если уже выполнили первоначальный скролл, не делаем повторно
     if (initialScrollDone.current || items.length === 0 || !virtuosoRef.current) {
       return;
+    }
+
+    // Инициализируем previousItemsLength при первой загрузке
+    if (previousItemsLength.current === 0) {
+      previousItemsLength.current = items.length;
     }
 
     // Даём время на рендер списка
@@ -224,9 +233,42 @@ function ChatMessagesComponent({
     return isAtBottom ? "smooth" : false;
   }, []);
 
+  // Восстановление позиции скролла после загрузки старых сообщений
+  useEffect(() => {
+    if (items.length > previousItemsLength.current && previousItemsLength.current > 0 && loadingOlder) {
+      // Старые сообщения были добавлены в начало
+      const addedCount = items.length - previousItemsLength.current;
+      
+      // Восстанавливаем позицию скролла, учитывая добавленные сообщения
+      if (scrollPositionBeforeLoad.current !== null && virtuosoRef.current) {
+        const newIndex = scrollPositionBeforeLoad.current + addedCount;
+        
+        // Используем двойной requestAnimationFrame для гарантированного восстановления после рендера
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (virtuosoRef.current && newIndex < items.length && newIndex >= 0) {
+              virtuosoRef.current.scrollToIndex({
+                index: newIndex,
+                align: "start",
+                behavior: "auto",
+              });
+              currentVisibleIndex.current = newIndex;
+              scrollPositionBeforeLoad.current = null;
+            }
+          });
+        });
+      }
+    }
+    previousItemsLength.current = items.length;
+  }, [items.length, loadingOlder]);
+
   // Загрузка старых сообщений при скролле вверх
   const handleStartReached = useCallback(() => {
     if (hasMore && !loadingOlder) {
+      // Сохраняем текущую позицию перед загрузкой
+      if (currentVisibleIndex.current !== null) {
+        scrollPositionBeforeLoad.current = currentVisibleIndex.current;
+      }
       onLoadMore();
     }
   }, [hasMore, loadingOlder, onLoadMore]);
