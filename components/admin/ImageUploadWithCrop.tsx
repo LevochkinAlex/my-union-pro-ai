@@ -101,17 +101,18 @@ export default function ImageUploadWithCrop({
       setUploading(true);
       const croppedImageBlob = await getCroppedImg(imageSrc, croppedAreaPixels);
 
-      // Загружаем на сервер
+      // Загружаем на сервер (используем универсальный API для постов)
       const formData = new FormData();
-      formData.append("file", croppedImageBlob, "cover.jpg");
+      formData.append("file", croppedImageBlob, "image.jpg");
 
-      const response = await fetch("/api/admin/news/upload-image", {
+      const response = await fetch("/api/posts/upload-image", {
         method: "POST",
         body: formData,
       });
 
       if (!response.ok) {
-        throw new Error("Failed to upload image");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to upload image");
       }
 
       const data = await response.json();
@@ -121,7 +122,7 @@ export default function ImageUploadWithCrop({
       setImageSrc(null);
     } catch (error) {
       console.error("Error uploading image:", error);
-      alert("Не удалось загрузить изображение");
+      alert(error instanceof Error ? error.message : "Не удалось загрузить изображение");
     } finally {
       setUploading(false);
     }
