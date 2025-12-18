@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead, isMemberOfOrganization } from "@/lib/ppo-head-utils";
+import { getPPOHead } from "@/lib/ppo-head-utils";
+import { sendUserNotification } from "@/lib/notifications";
 
 /**
  * POST /api/ppo-head/chats/[id]/invite
@@ -110,6 +111,12 @@ export async function POST(
       );
     }
 
+    // Получаем информацию о новых участниках для сообщения
+    const newMembers = await prisma.user.findMany({
+      where: { id: { in: newParticipantIds } },
+      select: { id: true, firstName: true, lastName: true },
+    });
+
     // Добавляем новых участников
     await prisma.chatParticipant.createMany({
       data: newParticipantIds.map((userId: string) => ({
@@ -120,9 +127,56 @@ export async function POST(
       })),
     });
 
+    // Формируем имена добавленных участников
+    const memberNames = newMembers
+      .map(m => `${m.firstName || ""} ${m.lastName || ""}`.trim() || "Участник")
+      .join(", ");
+
+    // Создаём системное сообщение в чате
+    const systemMessage = newMembers.length === 1
+      ? `👤 ${memberNames} добавлен(а) в группу`
+      : `👥 Добавлены участники: ${memberNames}`;
+
+    await prisma.chatMessage.create({
+      data: {
+        chatId,
+        senderId: chairman.id,
+        content: systemMessage,
+      },
+    });
+
+    // Обновляем lastMessage в чате
+    await prisma.chat.update({
+      where: { id: chatId },
+      data: {
+        lastMessageAt: new Date(),
+        lastMessage: systemMessage,
+      },
+    });
+
+    // Отправляем уведомления приглашённым участникам
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
+    const chatName = chat.name || "группу";
+    
+    for (const member of newMembers) {
+      try {
+        await sendUserNotification({
+          userId: member.id,
+          type: "chat_message",
+          title: "👥 Вас добавили в группу",
+          body: `Вы добавлены в "${chatName}"`,
+          url: `${baseUrl}/dashboard/chat`,
+          senderName: `${chairman.firstName || ""} ${chairman.lastName || ""}`.trim() || "Председатель",
+        });
+      } catch (notifyError) {
+        console.error(`[invite] Failed to notify user ${member.id}:`, notifyError);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       invitedCount: newParticipantIds.length,
+      invitedNames: memberNames,
     });
   } catch (error: any) {
     console.error("[ppo-head/chats] POST invite error:", error);

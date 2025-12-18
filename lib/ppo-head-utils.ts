@@ -11,6 +11,8 @@ export async function getPPOHead(userId: string) {
     where: { id: userId },
     select: {
       id: true,
+      firstName: true,
+      lastName: true,
       role: true,
       isPPOHead: true,
       organizationId: true,
@@ -46,6 +48,8 @@ export async function getPPOHead(userId: string) {
 
   return {
     id: user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
     role: user.role,
     isPPOHead: user.isPPOHead,
     organizationId: organizationId,
