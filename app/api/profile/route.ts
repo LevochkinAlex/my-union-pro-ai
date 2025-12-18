@@ -184,7 +184,13 @@ export async function PUT(request: NextRequest) {
     const directorPosition = normalizeString(body.directorPosition);
     const profession = normalizeString(body.profession);
     const education = normalizeEducation(body.education);
-    const organizationId = normalizeString(body.organizationId);
+    // ВАЖНО: organizationId обрабатываем отдельно, чтобы не затирать существующее значение
+    // normalizeString может вернуть null для пустой строки, что затрёт организацию
+    const organizationId = body.organizationId !== undefined 
+      ? (typeof body.organizationId === 'string' && body.organizationId.trim() !== '' 
+          ? body.organizationId.trim() 
+          : null)
+      : undefined; // Если не передан, оставляем undefined
 
     // Валидация организации, если указана
     if (organizationId) {
@@ -343,7 +349,7 @@ export async function PUT(request: NextRequest) {
     // ВАЖНО: organizationId сравниваем только если он явно передан в body
     // Это предотвращает ложное определение изменений при автосохранении других полей
     const actualOrganizationId = body.organizationId !== undefined 
-      ? (organizationId || null)
+      ? (organizationId !== undefined ? organizationId : (userBeforeUpdate?.organizationId || null))
       : (userBeforeUpdate?.organizationId || null);
     
     const documentsAffectingFields = [
@@ -442,8 +448,13 @@ export async function PUT(request: NextRequest) {
     // ВАЖНО: organizationId обновляем только если он явно передан в body
     // Это предотвращает случайное стирание организации при автосохранении других полей
     if (body.organizationId !== undefined) {
-      updateData.organizationId = organizationId || null;
-      updateData.organizationName = null; // Очищаем старое текстовое поле (теперь используем только ID)
+      // Если передан валидный ID (не пустая строка), устанавливаем его
+      // Если передан null или пустая строка, очищаем организацию
+      // Если не передан (undefined), не трогаем существующее значение
+      if (organizationId !== undefined) {
+        updateData.organizationId = organizationId;
+        updateData.organizationName = null; // Очищаем старое текстовое поле (теперь используем только ID)
+      }
     }
     
     // Устанавливаем флаг изменения профиля, если есть документы и данные изменились
@@ -512,7 +523,10 @@ export async function PUT(request: NextRequest) {
 
     // Инвалидируем кеш пользователей и профиля (профиль мог измениться)
     await invalidateUsersCache();
-    await cacheDeletePattern(`profile:userId:${session.user.id}:*`);
+    // Используем правильный паттерн для ключа кеша профиля (формат: profile:userId:"id")
+    await cacheDeletePattern(`profile:userId:*${session.user.id}*`);
+    // Также инвалидируем все ключи профиля для этого пользователя
+    await cacheDeletePattern(`profile:*`);
     
     // Если изменилась организация, инвалидируем кеш новостей
     // (чтобы пользователь видел новости своей новой организации)

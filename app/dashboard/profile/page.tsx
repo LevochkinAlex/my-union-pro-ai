@@ -832,7 +832,12 @@ export default function ProfilePage() {
       
       // Подготавливаем данные для отправки
       if (fieldName === 'organizationId') {
-        payload.organizationId = value || null;
+        // Отправляем organizationId только если это валидная строка (не пустая)
+        // Если value это пустая строка или null, отправляем null явно
+        // Это позволяет очистить организацию, если пользователь явно выбрал "Не выбрано"
+        payload.organizationId = (value && typeof value === 'string' && value.trim() !== '') 
+          ? value.trim() 
+          : null;
       } else {
         payload[fieldName] = value;
       }

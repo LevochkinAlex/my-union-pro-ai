@@ -6,8 +6,11 @@
 
 @variant dark (&:where(.dark, .dark *));
 
-/* Article content styles (same as news-content) */
-.article-content h1,
+.dark {
+  color-scheme: dark;
+}
+
+/* News content styles */
 .news-content h1 {
   font-size: 2rem;
   font-weight: bold;
@@ -16,7 +19,6 @@
   color: var(--tw-prose-headings);
 }
 
-.article-content h2,
 .news-content h2 {
   font-size: 1.5rem;
   font-weight: bold;
@@ -25,7 +27,6 @@
   color: var(--tw-prose-headings);
 }
 
-.article-content h3,
 .news-content h3 {
   font-size: 1.25rem;
   font-weight: 600;
@@ -34,9 +35,6 @@
   color: var(--tw-prose-headings);
 }
 
-.article-content h4,
-.article-content h5,
-.article-content h6,
 .news-content h4,
 .news-content h5,
 .news-content h6 {
@@ -47,14 +45,11 @@
   color: var(--tw-prose-headings);
 }
 
-.article-content p,
 .news-content p {
   margin-bottom: 1rem;
   line-height: 1.75;
 }
 
-.article-content ul,
-.article-content ol,
 .news-content ul,
 .news-content ol {
   margin-top: 0.5rem;
@@ -62,7 +57,6 @@
   padding-left: 1.5rem;
 }
 
-.article-content ul,
 .news-content ul {
   list-style-type: disc;
 }
@@ -71,29 +65,24 @@
   list-style-type: decimal;
 }
 
-.article-content li,
 .news-content li {
   margin-bottom: 0.5rem;
   line-height: 1.75;
 }
 
-.article-content a,
 .news-content a {
   color: #3b82f6;
   text-decoration: underline;
 }
 
-.article-content a:hover,
 .news-content a:hover {
   color: #2563eb;
 }
 
-.article-content strong,
 .news-content strong {
   font-weight: 600;
 }
 
-.article-content em,
 .news-content em {
   font-style: italic;
 }
@@ -106,7 +95,6 @@
   color: #6b7280;
 }
 
-.article-content pre,
 .news-content pre {
   background-color: #f3f4f6;
   padding: 1rem;
@@ -123,13 +111,11 @@
   font-size: 0.875rem;
 }
 
-.article-content pre code,
 .news-content pre code {
   background-color: transparent;
   padding: 0;
 }
 
-.article-content img,
 .news-content img {
   max-width: 100%;
   height: auto;
@@ -137,15 +123,12 @@
   margin: 1rem 0;
 }
 
-.article-content table,
 .news-content table {
   width: 100%;
   border-collapse: collapse;
   margin: 1rem 0;
 }
 
-.article-content th,
-.article-content td,
 .news-content th,
 .news-content td {
   border: 1px solid #e5e7eb;
@@ -159,84 +142,25 @@
 }
 
 /* Dark mode */
-.dark .article-content,
 .dark .news-content {
   --tw-prose-headings: #f3f4f6;
-  color: #e5e7eb;
 }
 
-.dark .article-content blockquote,
 .dark .news-content blockquote {
   border-left-color: #374151;
   color: #9ca3af;
 }
 
-.dark .article-content pre,
-.dark .article-content code,
 .dark .news-content pre,
 .dark .news-content code {
   background-color: #1f2937;
 }
 
-.dark .article-content th,
-.dark .article-content td,
 .dark .news-content th,
 .dark .news-content td {
   border-color: #374151;
 }
 
-.dark .article-content th,
 .dark .news-content th {
   background-color: #1f2937;
-}
-
-/* Article content specific styles */
-.article-content {
-  color: #1f2937;
-}
-
-.article-content p {
-  color: inherit;
-}
-
-.article-content h1,
-.article-content h2,
-.article-content h3,
-.article-content h4,
-.article-content h5,
-.article-content h6 {
-  color: #111827;
-}
-
-.dark .article-content {
-  color: #e5e7eb;
-}
-
-.dark .article-content h1,
-.dark .article-content h2,
-.dark .article-content h3,
-.dark .article-content h4,
-.dark .article-content h5,
-.dark .article-content h6 {
-  color: #f3f4f6;
-}
-
-/* Global select styles - fix chevron icon spacing */
-/* Apply to all select elements that don't already have custom styling */
-select:not([class*="appearance-none"]) {
-  padding-right: 2.5rem !important;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22%236b7280%22%3E%3Cpath d=%22M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z%22/%3E%3C/svg%3E");
-  background-size: 1.25rem 1.25rem;
-  background-position: right 0.75rem center;
-  background-repeat: no-repeat;
-  appearance: none;
-}
-
-.dark select:not([class*="appearance-none"]) {
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22%239ca3af%22%3E%3Cpath d=%22M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z%22/%3E%3C/svg%3E");
-}
-
-/* Override for Select component - it has its own custom icon */
-div.relative > select[class*="appearance-none"] {
-  padding-right: 3rem !important;
 }

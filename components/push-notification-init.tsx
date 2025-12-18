@@ -13,11 +13,8 @@ export default function PushNotificationInit() {
 
   useEffect(() => {
     if (!session?.user?.id) {
-      console.log("[OneSignal] No session, skipping sync");
       return;
     }
-
-    console.log("[OneSignal] Session ready, syncing subscription...");
 
     // Проверяем разрешение уведомлений
     const checkPermission = async () => {
@@ -26,15 +23,9 @@ export default function PushNotificationInit() {
           try {
             // v16 API для проверки разрешения
             const permissionStatus = Notification.permission;
-            console.log("[OneSignal] Browser notification permission:", permissionStatus);
             
             if (permissionStatus === "granted") {
-              console.log("[OneSignal] ✅ Notifications are allowed");
               syncPushSubscription();
-            } else if (permissionStatus === "default") {
-              console.log("[OneSignal] ⚠️ Notification permission not requested yet - need to click button");
-            } else {
-              console.log("[OneSignal] ❌ Notifications are blocked by browser");
             }
           } catch (error) {
             console.error("[OneSignal] Error checking permission:", error);
@@ -50,7 +41,6 @@ export default function PushNotificationInit() {
 
     // Periodic sync every 60 seconds
     const intervalId = setInterval(() => {
-      console.log("[OneSignal] Periodic sync...");
       syncPushSubscription();
     }, 60000);
 

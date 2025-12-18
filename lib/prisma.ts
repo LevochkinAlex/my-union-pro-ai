@@ -4,6 +4,7 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+<<<<<<< Current (Your changes)
 function createPrismaClient() {
   return new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
@@ -33,4 +34,13 @@ process.on('beforeExit', async () => {
 });
 
 export const prisma = prismaInstance;
+=======
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+  });
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+>>>>>>> Incoming (Background Agent changes)
 
