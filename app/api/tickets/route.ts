@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateAppealPublicId, formatAppealId } from "@/lib/appeal-id";
 import { saveTicketToKnowledgeBase } from "@/lib/user-knowledge-base";
-import { getOrCreatePrivateChat, sendChatMessage } from "@/lib/chat-server-utils";
+import { sendChatMessage } from "@/lib/chat-server-utils";
 
 /**
  * GET /api/tickets - Получить тикеты пользователя
@@ -192,21 +192,34 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Создаем или находим чат с Председателем, если он есть
+    // Создаем ОТДЕЛЬНЫЙ чат для обращения (не личный чат!)
+    // Чат обращения - это отдельная переписка от имени организации
     let chatId: string | null = null;
     if (chairmanId && chairmanId !== session.user.id) {
-      // Используем утилиту для создания/поиска чата с нормализацией ID
-      const chat = await getOrCreatePrivateChat(session.user.id, chairmanId);
+      // Нормализуем ID участников: меньший ID всегда participant1Id
+      const participant1Id = session.user.id < chairmanId ? session.user.id : chairmanId;
+      const participant2Id = session.user.id < chairmanId ? chairmanId : session.user.id;
+
+      // Создаем НОВЫЙ чат специально для этого обращения
+      const chat = await prisma.chat.create({
+        data: {
+          type: "PRIVATE",
+          participant1Id,
+          participant2Id,
+          name: `Обращение #${publicId}`, // Название для идентификации
+          description: title, // Тема обращения
+        },
+      });
       chatId = chat.id;
 
-      // Связываем тикет с чатом (связь идёт через Ticket.chatId)
+      // Связываем тикет с чатом
       await prisma.ticket.update({
         where: { id: ticket.id },
         data: { chatId: chat.id },
       });
 
       // Создаем первое сообщение в чате с текстом обращения
-      await sendChatMessage(chatId, session.user.id, `📋 Обращение #${publicId}\n\n**${title}**\n\n${content}`);
+      await sendChatMessage(chatId, session.user.id, `📋 **${title}**\n\n${content}`);
     }
 
     // Логируем создание обращения
