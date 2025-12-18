@@ -16,8 +16,36 @@ const nextConfig = {
       bodySizeLimit: '50mb',
     },
   },
-  // Исключаем Prisma из клиентского бандла
-  serverExternalPackages: ['@prisma/client', 'prisma'],
+  // Исключаем серверные пакеты из клиентского бандла
+  serverExternalPackages: [
+    '@prisma/client', 
+    'prisma',
+    'sharp',
+    'puppeteer',
+    'pdfkit',
+    'mammoth',
+    'pdf-parse',
+    'exceljs',
+    'nodemailer',
+    'firebase-admin',
+    'bullmq',
+    'ioredis',
+  ],
+  // Оптимизация webpack
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Исключаем серверные модули из клиентского бандла
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        child_process: false,
+        dns: false,
+      };
+    }
+    return config;
+  },
   images: {
     remotePatterns: [
       {
@@ -90,8 +118,8 @@ module.exports = withSentryConfig(
     // Upload a larger set of source maps for prettier stack traces (increases build time)
     widenClientFileUpload: true,
 
-    // Transpiles SDK to be compatible with IE11 (increases bundle size)
-    transpileClientSDK: true,
+    // НЕ транспилируем для IE11 - уменьшает размер бандла
+    transpileClientSDK: false,
 
     // Routes browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
     // This can increase your server load as well as your hosting bill.
