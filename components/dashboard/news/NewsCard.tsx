@@ -102,13 +102,14 @@ export default function NewsCard({
   // Вычисляем displayContent после монтирования на клиенте
   useEffect(() => {
     if (mounted) {
+      // Если контент развернут или не требует обрезки - показываем полностью
       const content = needsTruncation && !isExpanded
         ? getTruncatedHTML(post.content, 300)
         : post.content;
       
       setDisplayContent(content);
     } else {
-      // На сервере показываем полный контент или сокращенный без интерактивности
+      // На сервере показываем сокращенный контент для SEO и быстрой загрузки
       setDisplayContent(needsTruncation ? getTruncatedHTML(post.content, 300) : post.content);
     }
   }, [mounted, post.content, isExpanded, needsTruncation]);
@@ -276,7 +277,7 @@ export default function NewsCard({
         {needsTruncation && (
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 mb-4"
+            className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 mb-4 transition-colors"
           >
             {isExpanded ? "Скрыть" : "Показать полностью"}
           </button>

@@ -63,12 +63,12 @@ export async function GET(request: NextRequest) {
           }),
         ]);
         
-        // Обрезаем content для списка (первые 500 символов для превью)
-        // Возвращаем coverImage как есть - клиент обработает
+        // Возвращаем полный контент - клиент сам обрежет для превью
+        // Это позволяет показывать полный текст при нажатии "Показать полностью"
         const news = newsRaw.map(n => {
           return {
             ...n,
-            content: n.content ? n.content.substring(0, 500) + (n.content.length > 500 ? '...' : '') : '',
+            content: n.content || '', // Возвращаем полный контент
             coverImage: n.coverImage, // Возвращаем coverImage как есть
           };
         });
