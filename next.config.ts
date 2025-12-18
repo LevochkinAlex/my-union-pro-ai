@@ -97,9 +97,6 @@ const nextConfig = {
     // Увеличиваем лимит для base64 изображений
     unoptimized: false,
   },
-  experimental: {
-    serverComponentsExternalPackages: ['@prisma/client', 'prisma'],
-  },
 };
 
 // Обертываем конфигурацию в withSentryConfig для интеграции Sentry
