@@ -19,6 +19,7 @@ type KnowledgeBase = {
 type ApiProvider = {
   id: string;
   name: string;
+  displayName?: string;
   type: string;
   apiKey?: string | null;
   apiBaseUrl?: string | null;
@@ -392,7 +393,7 @@ export default function BotDetailsPage() {
               <option value="">Без провайдера</option>
               {apiProviders.map((provider) => (
                 <option key={provider.id} value={provider.id}>
-                  {provider.displayName}
+                  {provider.displayName || provider.name}
                 </option>
               ))}
             </Select>
