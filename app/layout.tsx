@@ -91,12 +91,28 @@ export default function RootLayout({
                   origError.apply(console, arguments);
                 };
                 
-                // Suppress uncaught React hydration errors
+                // Suppress uncaught React hydration errors and extension errors
                 window.addEventListener('error', function(e) {
                   var msg = e.message || '';
                   if (msg.indexOf('Minified React error #418') !== -1 ||
                       msg.indexOf('Minified React error #423') !== -1 ||
-                      msg.indexOf('Minified React error #425') !== -1) {
+                      msg.indexOf('Minified React error #425') !== -1 ||
+                      msg.indexOf('message channel closed') !== -1 ||
+                      msg.indexOf('listener indicated an asynchronous response') !== -1 ||
+                      msg.indexOf('Extension context invalidated') !== -1) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                  }
+                }, true);
+                
+                // Suppress extension-related unhandled rejections
+                window.addEventListener('unhandledrejection', function(e) {
+                  var reason = e.reason || {};
+                  var msg = reason.message || String(reason);
+                  if (msg.indexOf('message channel closed') !== -1 ||
+                      msg.indexOf('listener indicated an asynchronous response') !== -1 ||
+                      msg.indexOf('Extension context invalidated') !== -1) {
                     e.preventDefault();
                     e.stopPropagation();
                     return false;
