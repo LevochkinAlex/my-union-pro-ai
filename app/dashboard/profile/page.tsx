@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
 import PhoneInput from "@/components/form/PhoneInput";
 import AddressInput from "@/components/form/AddressInput";
 import DateInput from "@/components/form/DateInput";
@@ -105,6 +106,7 @@ interface ChildrenState {
 type TabKey = "profile" | "additional" | "membership" | "education" | "awards";
 
 export default function ProfilePage() {
+  const { update: updateSession } = useSession();
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
   const [isLoading, setIsLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -1037,10 +1039,16 @@ export default function ProfilePage() {
       
       // Обновляем avatarUrl - компонент AvatarUpload сам обработает его через getFileUrl
       setProfileData(prev => ({ ...prev, avatarUrl: data.avatarUrl }));
-      setMessage({ type: "success", text: "Фото профиля успешно обновлено" });
       
-      // Не перезагружаем весь профиль сразу, чтобы не потерять временное превью
-      // Обновление URL выше достаточно для обновления изображения
+      // Обновляем сессию NextAuth, чтобы аватар обновился во всех компонентах
+      try {
+        await updateSession();
+        console.log("[Profile] Session updated with new avatar");
+      } catch (sessionError) {
+        console.warn("[Profile] Failed to update session (non-critical):", sessionError);
+      }
+      
+      setMessage({ type: "success", text: "Фото профиля успешно обновлено" });
     } catch (error) {
       console.error("[Profile] Avatar save error:", error);
       const errorMessage = error instanceof Error ? error.message : "Ошибка загрузки фото";

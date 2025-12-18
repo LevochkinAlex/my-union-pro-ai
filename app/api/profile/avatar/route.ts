@@ -8,6 +8,7 @@ import { existsSync } from "fs";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import { optimizeWithPreset, getMimeType, getOptimizedFilename } from "@/lib/image-optimizer";
 import { cacheDeletePattern, getCacheKey } from "@/lib/cache";
+import { invalidateUsersCache } from "@/lib/cache-invalidation";
 
 // Инициализируем VDS хранилище при загрузке модуля
 if (typeof window === "undefined") {
@@ -101,10 +102,12 @@ export async function POST(request: NextRequest) {
       data: { avatarUrl },
     });
 
-    // Инвалидируем кеш профиля, чтобы при следующей загрузке получить актуальные данные
-    // Используем паттерн для удаления всех вариантов кеша профиля
+    // Инвалидируем кеш профиля и пользователей, чтобы обновить аватар везде
     try {
-      await cacheDeletePattern(`profile:userId:${session.user.id}:*`);
+      await Promise.all([
+        cacheDeletePattern(`profile:userId:${session.user.id}:*`),
+        invalidateUsersCache(), // Инвалидируем кэш списка пользователей
+      ]);
     } catch (cacheError) {
       // Не блокируем загрузку аватара, если инвалидация кеша не удалась
       console.warn("[profile/avatar] Cache invalidation failed (non-critical):", cacheError);
