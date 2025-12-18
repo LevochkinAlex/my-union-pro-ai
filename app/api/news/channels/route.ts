@@ -24,7 +24,6 @@ export async function GET(request: NextRequest) {
           select: {
             id: true,
             name: true,
-            logoUrl: true,
           },
         },
       },
@@ -41,7 +40,6 @@ export async function GET(request: NextRequest) {
     const channels = await prisma.newsChannel.findMany({
       where: {
         organizationId: user.organizationId,
-        isActive: true,
       },
       include: {
         _count: {
@@ -53,12 +51,11 @@ export async function GET(request: NextRequest) {
           select: {
             id: true,
             name: true,
-            logoUrl: true,
           },
         },
       },
       orderBy: [
-        { isDefault: "desc" },
+        { isMain: "desc" },
         { createdAt: "asc" },
       ],
     });
