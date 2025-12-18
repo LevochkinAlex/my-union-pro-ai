@@ -163,9 +163,11 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // Используем правильный порядок имени: Фамилия Имя Отчество
       const senderName = sender
-        ? `${sender.firstName || ""} ${sender.middleName || ""} ${sender.lastName || ""}`.trim() ||
-          "Пользователь"
+        ? [sender.lastName, sender.firstName, sender.middleName]
+            .filter(Boolean)
+            .join(" ") || "Пользователь"
         : "Пользователь";
 
       const baseUrl =
@@ -196,4 +198,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
