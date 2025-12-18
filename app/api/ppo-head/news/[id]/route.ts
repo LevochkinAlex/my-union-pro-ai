@@ -172,15 +172,7 @@ export async function DELETE(
           },
         },
       }),
-      // Удаляем варианты опросов
-      prisma.newsPollOption.deleteMany({
-        where: {
-          poll: {
-            newsPostId: id,
-          },
-        },
-      }),
-      // Удаляем опросы
+      // Удаляем опросы (варианты хранятся в JSON)
       prisma.newsPoll.deleteMany({
         where: { newsPostId: id },
       }),
