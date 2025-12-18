@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     let mainChannel = await prisma.newsChannel.findFirst({
       where: {
         organizationId: organizationId,
-        isDefault: true,
+        isMain: true,
       },
     });
 
@@ -74,8 +74,7 @@ export async function POST(request: NextRequest) {
           description: `Основной канал новостей ${chairman.ppoHeadOrganization.name}`,
           organizationId: organizationId,
           createdById: chairman.id,
-          isDefault: true,
-          isActive: true,
+          isMain: true,
         },
       });
     }

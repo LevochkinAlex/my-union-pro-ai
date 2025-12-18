@@ -43,7 +43,7 @@ async function migrateNews(targetEmail) {
     let mainChannel = await prisma.newsChannel.findFirst({
       where: {
         organizationId: organizationId,
-        isDefault: true,
+        isMain: true,
       },
     });
 
@@ -54,8 +54,7 @@ async function migrateNews(targetEmail) {
           description: `Основной канал новостей ${chairman.ppoHeadOrganization.name}`,
           organizationId: organizationId,
           createdById: chairman.id,
-          isDefault: true,
-          isActive: true,
+          isMain: true,
         },
       });
       console.log(`✅ Создан канал: ${mainChannel.name}\n`);
