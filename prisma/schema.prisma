@@ -44,7 +44,7 @@ model User {
 
   // Двойная роль: Член профсоюза + Председатель ППО
   isPPOHead              Boolean  @default(false) // Флаг что пользователь также является председателем ППО
-  ppoHeadOrganizationId  String?  // ID организации где пользователь является председателем
+  ppoHeadOrganizationId  String?  @unique // ID организации где пользователь является председателем
   ppoHeadOrganization    Organization? @relation("PPOHeadOrganization", fields: [ppoHeadOrganizationId], references: [id])
   viewMode               String   @default("MEMBER") // Текущий режим просмотра: MEMBER или PPO_HEAD
 
