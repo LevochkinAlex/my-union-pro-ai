@@ -10,15 +10,18 @@ const LazyImage = memo(function LazyImage({
   alt,
   onClick,
   className = "",
+  isOldImage = false, // Для старых изображений (не в начале списка) используем blur placeholder
 }: {
   src: string;
   alt: string;
   onClick?: () => void;
   className?: string;
+  isOldImage?: boolean;
 }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isInView, setIsInView] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [showImage, setShowImage] = useState(false);
   const imgRef = useRef<HTMLDivElement>(null);
 
   // IntersectionObserver для определения видимости
@@ -28,12 +31,15 @@ const LazyImage = memo(function LazyImage({
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             setIsInView(true);
-            observer.disconnect();
+            // Для старых изображений не загружаем сразу, только при явном действии
+            if (!isOldImage) {
+              observer.disconnect();
+            }
           }
         });
       },
       {
-        rootMargin: "200px", // Начинаем загрузку за 200px до появления
+        rootMargin: "300px", // Начинаем проверку за 300px до появления
         threshold: 0,
       }
     );
@@ -43,18 +49,45 @@ const LazyImage = memo(function LazyImage({
     }
 
     return () => observer.disconnect();
-  }, []);
+  }, [isOldImage]);
+
+  // Для старых изображений показываем blur placeholder до явного запроса
+  const shouldShowPlaceholder = isOldImage && !showImage;
+  const shouldLoadImage = isInView && (!isOldImage || showImage);
 
   return (
     <div
       ref={imgRef}
-      onClick={onClick}
-      className={`relative overflow-hidden bg-gray-200 dark:bg-gray-700 cursor-pointer ${className}`}
+      className={`relative overflow-hidden bg-gray-200 dark:bg-gray-700 ${onClick ? "cursor-pointer" : ""} ${className}`}
       style={{ minHeight: "100px" }}
     >
-      {/* Placeholder с blur эффектом */}
-      {!isLoaded && !hasError && (
-        <div className="absolute inset-0 flex items-center justify-center">
+      {/* Blur placeholder для старых изображений */}
+      {shouldShowPlaceholder && (
+        <div 
+          className="absolute inset-0 flex flex-col items-center justify-center bg-gray-300 dark:bg-gray-600"
+          style={{
+            filter: "blur(20px)",
+            backgroundImage: `url(${src})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        >
+          {/* Кнопка открыть */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowImage(true);
+            }}
+            className="relative z-10 px-4 py-2 bg-white/90 dark:bg-gray-800/90 rounded-lg shadow-lg hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium text-gray-900 dark:text-white"
+          >
+            Открыть изображение
+          </button>
+        </div>
+      )}
+
+      {/* Placeholder загрузки */}
+      {shouldLoadImage && !isLoaded && !hasError && !shouldShowPlaceholder && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-200 dark:bg-gray-700">
           <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
         </div>
       )}
@@ -69,15 +102,17 @@ const LazyImage = memo(function LazyImage({
       )}
       
       {/* Изображение */}
-      {isInView && !hasError && (
+      {shouldLoadImage && !hasError && (
         <img
           src={src}
           alt={alt}
-          className={`max-w-full h-auto transition-all duration-300 ${
-            isLoaded ? "opacity-100 blur-0" : "opacity-0 blur-md"
+          onClick={onClick}
+          className={`max-w-full h-auto transition-all duration-500 ${
+            isLoaded ? "opacity-100 blur-0" : "opacity-0 blur-sm"
           }`}
           onLoad={() => setIsLoaded(true)}
           onError={() => setHasError(true)}
+          loading="lazy"
         />
       )}
     </div>
@@ -88,6 +123,7 @@ interface MessageItemProps {
   message: Message;
   currentUserId: string | null;
   isOwn: boolean;
+  isOldMessage?: boolean; // Является ли сообщение старым (не в последних сообщениях)
   onReply?: (message: Message) => void;
   onEdit?: (message: Message) => void;
   onDelete?: (messageId: string) => void;
@@ -100,6 +136,7 @@ function MessageItemComponent({
   message,
   currentUserId,
   isOwn,
+  isOldMessage = false,
   onReply,
   onEdit,
   onDelete,
@@ -170,6 +207,7 @@ function MessageItemComponent({
               <Attachments
                 attachments={message.attachments!}
                 isOwn={isOwn}
+                isOldMessage={isOldMessage}
                 onImageClick={onImageClick}
               />
             )}
@@ -293,10 +331,12 @@ const ForwardedPreview = memo(function ForwardedPreview({
 const Attachments = memo(function Attachments({
   attachments,
   isOwn,
+  isOldMessage = false,
   onImageClick,
 }: {
   attachments: NonNullable<Message["attachments"]>;
   isOwn: boolean;
+  isOldMessage?: boolean;
   onImageClick?: (url: string, name?: string) => void;
 }) {
   return (
@@ -314,6 +354,7 @@ const Attachments = memo(function Attachments({
               alt={attachment.originalName}
               onClick={() => onImageClick?.(getFileUrl(attachment.filePath), attachment.originalName)}
               className="rounded-lg max-w-[300px] hover:opacity-90 transition-opacity"
+              isOldImage={isOldMessage}
             />
           );
         }

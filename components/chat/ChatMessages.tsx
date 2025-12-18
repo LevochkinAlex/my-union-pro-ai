@@ -102,6 +102,7 @@ function ChatMessagesComponent({
   const currentVisibleIndex = useRef<number | null>(null);
   const [atBottom, setAtBottom] = useState(true);
   const hasInitialized = useRef(false);
+  const initialScrollDone = useRef(false);
 
   // Подготовка данных с разделителями дат
   const items = prepareMessagesWithDates(messages);
@@ -114,15 +115,18 @@ function ChatMessagesComponent({
       if (savedIdx !== null && savedIdx >= 0) {
         saveScrollPosition(prevChatId.current, savedIdx);
       }
-      // Сбрасываем флаг при смене чата
+      // Сбрасываем флаги при смене чата
       hasInitialized.current = false;
+      initialScrollDone.current = false;
+      setAtBottom(true);
     }
     prevChatId.current = chat.id;
   }, [chat.id]);
 
-  // Восстановление позиции после загрузки сообщений
+  // Восстановление позиции после загрузки сообщений (только один раз при смене чата)
   useEffect(() => {
-    if (hasInitialized.current || items.length === 0 || !virtuosoRef.current) {
+    // Если уже выполнили первоначальный скролл, не делаем повторно
+    if (initialScrollDone.current || items.length === 0 || !virtuosoRef.current) {
       return;
     }
 
@@ -133,21 +137,20 @@ function ChatMessagesComponent({
       const savedIndex = getScrollPosition(chat.id);
       const lastIndex = items.length - 1;
       
-      // Если сохранённая позиция близка к концу (в пределах 10 сообщений), скроллим к концу
+      // Если сохранённая позиция близка к концу (в пределах 5 сообщений), скроллим к концу
       const distanceFromEnd = savedIndex !== null ? lastIndex - savedIndex : Infinity;
-      const shouldScrollToEnd = savedIndex === null || distanceFromEnd <= 10;
+      const shouldScrollToEnd = savedIndex === null || distanceFromEnd <= 5;
       
       if (shouldScrollToEnd) {
         // Скроллим к концу (последние сообщения)
         virtuosoRef.current.scrollToIndex({
-          index: lastIndex,
+          index: "LAST",
           align: "end",
           behavior: "auto",
         });
         currentVisibleIndex.current = lastIndex;
-        // Сохраняем позицию как конец
         saveScrollPosition(chat.id, lastIndex);
-      } else if (savedIndex >= 0 && savedIndex < items.length) {
+      } else if (savedIndex !== null && savedIndex >= 0 && savedIndex < items.length) {
         // Восстанавливаем сохранённую позицию
         virtuosoRef.current.scrollToIndex({
           index: savedIndex,
@@ -155,10 +158,19 @@ function ChatMessagesComponent({
           behavior: "auto",
         });
         currentVisibleIndex.current = savedIndex;
+      } else {
+        // Если позиция некорректна, скроллим к концу
+        virtuosoRef.current.scrollToIndex({
+          index: "LAST",
+          align: "end",
+          behavior: "auto",
+        });
+        currentVisibleIndex.current = lastIndex;
       }
       
+      initialScrollDone.current = true;
       hasInitialized.current = true;
-    }, 150);
+    }, 200);
     
     return () => clearTimeout(timeoutId);
   }, [chat.id, items.length]);
@@ -170,19 +182,27 @@ function ChatMessagesComponent({
     // Запоминаем текущую позицию
     currentVisibleIndex.current = range.startIndex;
     
-    // Сохраняем позицию с debounce
+    // Проверяем, близко ли к концу
+    const lastIndex = items.length - 1;
+    const distanceFromEnd = lastIndex - range.endIndex;
+    const isNearBottom = distanceFromEnd <= 3;
+    
+    // Обновляем состояние atBottom для автоскролла
+    setAtBottom(isNearBottom);
+    
+    // Сохраняем позицию с debounce (только если инициализация завершена)
+    if (!hasInitialized.current) return;
+    
     if (savePositionTimeoutRef.current) {
       clearTimeout(savePositionTimeoutRef.current);
     }
     savePositionTimeoutRef.current = setTimeout(() => {
-      // Если пользователь близко к концу (в пределах 5 сообщений), сохраняем как конец
-      const lastIndex = items.length - 1;
-      const distanceFromEnd = lastIndex - range.endIndex;
-      const indexToSave = distanceFromEnd <= 5 ? lastIndex : range.startIndex;
+      // Если пользователь близко к концу (в пределах 3 сообщений), сохраняем как конец
+      const indexToSave = isNearBottom ? lastIndex : range.startIndex;
       
       saveScrollPosition(chat.id, indexToSave);
       currentVisibleIndex.current = indexToSave;
-    }, 300);
+    }, 500);
   }, [chat.id, items.length]);
 
   // Cleanup при размонтировании
@@ -199,9 +219,10 @@ function ChatMessagesComponent({
   }, [chat.id]);
 
   // Автоскролл к низу при новых сообщениях (если пользователь был внизу)
-  const handleFollowOutput = useCallback(() => {
-    return atBottom ? "smooth" : false;
-  }, [atBottom]);
+  const handleFollowOutput = useCallback((isAtBottom: boolean) => {
+    // Если пользователь внизу или близко к низу, следим за новыми сообщениями
+    return isAtBottom ? "smooth" : false;
+  }, []);
 
   // Загрузка старых сообщений при скролле вверх
   const handleStartReached = useCallback(() => {
@@ -223,11 +244,17 @@ function ChatMessagesComponent({
     }
 
     if (item.type === "message" && item.message) {
+      // Определяем, является ли сообщение "старым" (не в последних 15 сообщениях)
+      const lastIndex = items.length - 1;
+      const distanceFromEnd = lastIndex - index;
+      const isOldMessage = distanceFromEnd > 15;
+      
       return (
         <MessageItem
           message={item.message}
           currentUserId={currentUserId}
           isOwn={item.message.senderId === currentUserId}
+          isOldMessage={isOldMessage}
           onReply={onReply}
           onEdit={onEdit}
           onDelete={onDelete}
@@ -257,7 +284,15 @@ function ChatMessagesComponent({
         data={items}
         itemContent={itemContent}
         followOutput={handleFollowOutput}
-        atBottomStateChange={setAtBottom}
+        atBottomStateChange={(isAtBottom) => {
+          setAtBottom(isAtBottom);
+          // Если пользователь достиг низа, сохраняем позицию
+          if (isAtBottom && hasInitialized.current && items.length > 0) {
+            const lastIndex = items.length - 1;
+            saveScrollPosition(chat.id, lastIndex);
+            currentVisibleIndex.current = lastIndex;
+          }
+        }}
         startReached={handleStartReached}
         rangeChanged={handleRangeChanged}
         increaseViewportBy={{ top: 200, bottom: 200 }}

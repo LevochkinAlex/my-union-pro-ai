@@ -49,6 +49,28 @@ export async function sendUserNotification(data: NotificationData) {
       email: false,
     };
 
+    // Сохраняем уведомление в БД
+    let notificationRecord = null;
+    try {
+      notificationRecord = await prisma.userNotification.create({
+        data: {
+          userId: data.userId,
+          type: data.type,
+          title: data.title,
+          body: data.body,
+          url: data.url,
+          metadata: {
+            senderName: data.senderName,
+          },
+          pushSent: false,
+          emailSent: false,
+        },
+      });
+    } catch (error) {
+      console.error("[notifications] Error saving notification to DB:", error);
+      // Продолжаем отправку даже если не удалось сохранить в БД
+    }
+
     // Отправляем Push уведомление
     if (user.pushNotificationsEnabled && user.pushSubscriptions.length > 0) {
       try {
@@ -65,6 +87,7 @@ export async function sendUserNotification(data: NotificationData) {
                 data: {
                   url: data.url,
                   type: data.type,
+                  notificationId: notificationRecord?.id || "",
                 },
                 webpush: {
                   notification: {
@@ -85,6 +108,14 @@ export async function sendUserNotification(data: NotificationData) {
             }
           })
         );
+        
+        // Обновляем статус отправки push
+        if (notificationRecord && results.push) {
+          await prisma.userNotification.update({
+            where: { id: notificationRecord.id },
+            data: { pushSent: true },
+          });
+        }
       } catch (error) {
         console.error("[notifications] Error sending push notifications:", error);
       }
@@ -105,6 +136,14 @@ export async function sendUserNotification(data: NotificationData) {
           html: getEmailHtml(data.type, data.senderName, data.body, data.url, user.firstName),
         });
         results.email = true;
+        
+        // Обновляем статус отправки email
+        if (notificationRecord) {
+          await prisma.userNotification.update({
+            where: { id: notificationRecord.id },
+            data: { emailSent: true },
+          });
+        }
       } catch (error) {
         console.error("[notifications] Error sending email:", error);
       }

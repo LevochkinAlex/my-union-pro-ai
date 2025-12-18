@@ -70,6 +70,14 @@ export function useChat(options: UseChatOptions = {}) {
           });
         } else {
           setMessages(newMessages);
+          // Пометим сообщения как прочитанные при первой загрузке (не при polling)
+          try {
+            await fetch(`/api/chat/${chatId}/read`, { method: "POST" });
+            // Обновляем список чатов чтобы обновить счетчик непрочитанных
+            loadChats();
+          } catch (error) {
+            console.error("[useChat] Error marking as read:", error);
+          }
         }
         
         setHasMore(data.pagination?.hasMore || false);
@@ -86,7 +94,7 @@ export function useChat(options: UseChatOptions = {}) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadChats]);
 
   // Загрузка старых сообщений
   const loadOlderMessages = useCallback(async () => {

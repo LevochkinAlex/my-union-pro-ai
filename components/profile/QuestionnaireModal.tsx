@@ -951,7 +951,7 @@ export default function QuestionnaireModal({
               ).length === 0 ? (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-900/40 dark:bg-blue-900/20">
                   <p className="mb-4 text-gray-700 dark:text-gray-300">
-                    Нажмите кнопку ниже, чтобы сгенерировать документы для вступления в профсоюз.
+                    Нажмите кнопку ниже, чтобы сформировать документы для вступления в профсоюз.
                   </p>
                   <button
                     onClick={handleGenerateDocuments}
@@ -961,12 +961,12 @@ export default function QuestionnaireModal({
                     {isGenerating ? (
                       <>
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                        Генерация...
+                        Формирование...
                       </>
                     ) : (
                       <>
                         <Check className="h-4 w-4" />
-                        Сгенерировать документы
+                        Сформировать документы
                       </>
                     )}
                   </button>
@@ -1076,7 +1076,7 @@ export default function QuestionnaireModal({
                   ).length === 0 && (
                     <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-900/40 dark:bg-blue-900/20">
                       <p className="text-gray-700 dark:text-gray-300">
-                        Заявления еще не сгенерированы. Нажмите кнопку ниже, чтобы создать их.
+                        Заявления еще не сформированы. Нажмите кнопку ниже, чтобы создать их.
                       </p>
                       <button
                         onClick={handleGenerateDocuments}
@@ -1086,12 +1086,12 @@ export default function QuestionnaireModal({
                         {isGenerating ? (
                           <>
                             <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                            Генерация...
+                            Формирование...
                           </>
                         ) : (
                           <>
                             <Check className="h-4 w-4" />
-                            Сгенерировать заявления
+                            Сформировать заявления
                           </>
                         )}
                       </button>

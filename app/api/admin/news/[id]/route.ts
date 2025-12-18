@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { UserRole } from "@prisma/client";
 import { invalidateNewsCache } from "@/lib/cache-invalidation";
+import { extractFilePathFromUrl } from "@/lib/cdn";
 
 // GET /api/admin/news/[id] - получить новость для редактирования
 export async function GET(
@@ -83,13 +84,28 @@ export async function PUT(
       return NextResponse.json({ error: "News not found" }, { status: 404 });
     }
 
-    console.log("[admin/news PUT] Updating news with coverImage length:", coverImage?.length || 0);
+    // Нормализуем coverImage - сохраняем только относительный путь или data URL
+    let normalizedCoverImage: string | null | undefined = coverImage;
+    if (coverImage !== undefined) {
+      if (coverImage === null || coverImage === "") {
+        normalizedCoverImage = null;
+      }
+      // Если это data URL - сохраняем как есть (для совместимости со старыми данными)
+      else if (coverImage.startsWith("data:")) {
+        normalizedCoverImage = coverImage;
+      } else {
+        // Используем готовую функцию для извлечения пути
+        normalizedCoverImage = extractFilePathFromUrl(coverImage);
+      }
+    }
+
+    console.log("[admin/news PUT] Updating news with coverImage:", normalizedCoverImage?.substring(0, 100) || "null");
 
     // Обновляем новость
     const updateData: any = {};
     if (title !== undefined) updateData.title = title;
     if (content !== undefined) updateData.content = content;
-    if (coverImage !== undefined) updateData.coverImage = coverImage;
+    if (coverImage !== undefined) updateData.coverImage = normalizedCoverImage;
     if (isPublished !== undefined) {
       updateData.isPublished = isPublished;
       // Если публикуем впервые, устанавливаем publishedAt

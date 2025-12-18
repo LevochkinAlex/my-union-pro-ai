@@ -88,7 +88,7 @@ export default function DocumentsPage() {
   };
 
   const handleRegenerateDocuments = async () => {
-    const confirmed = await confirm("Вы уверены, что хотите перегенерировать документы? Старые документы будут заменены.", "Подтвердите перегенерацию");
+    const confirmed = await confirm("Вы уверены, что хотите переформировать документы? Старые документы будут заменены.", "Подтвердите переформирование");
     if (!confirmed) {
       return;
     }
@@ -110,10 +110,10 @@ export default function DocumentsPage() {
       await loadDocuments();
       await loadProfileStatus();
 
-      alertSuccess("Документы успешно перегенерированы! Проверьте их и скачайте обновленные версии.");
+      alertSuccess("Документы успешно переформированы! Проверьте их и скачайте обновленные версии.");
     } catch (err) {
       console.error("Ошибка перегенерации:", err);
-      setError(err instanceof Error ? err.message : "Не удалось перегенерировать документы");
+      setError(err instanceof Error ? err.message : "Не удалось переформировать документы");
     } finally {
       setIsRegenerating(false);
     }
@@ -121,8 +121,8 @@ export default function DocumentsPage() {
 
   const handleRegenerateSingleDocument = async (docId: string, docType: string) => {
     const confirmed = await confirm(
-      "Вы уверены, что хотите перегенерировать документы? Оба заявления будут перегенерированы с актуальными данными.",
-      "Подтвердите перегенерацию"
+      "Вы уверены, что хотите переформировать документы? Оба заявления будут переформированы с актуальными данными.",
+      "Подтвердите переформирование"
     );
     if (!confirmed) {
       return;
@@ -146,10 +146,10 @@ export default function DocumentsPage() {
       await loadDocuments();
       await loadProfileStatus();
 
-      alertSuccess("Документы успешно перегенерированы!");
+      alertSuccess("Документы успешно переформированы!");
     } catch (err) {
-      console.error("Ошибка перегенерации:", err);
-      alertError(err instanceof Error ? err.message : "Не удалось перегенерировать документы");
+      console.error("Ошибка переформирования:", err);
+      alertError(err instanceof Error ? err.message : "Не удалось переформировать документы");
     } finally {
       setRegeneratingDocId(null);
     }
@@ -286,7 +286,7 @@ export default function DocumentsPage() {
 
     const labels = {
       DRAFT: "Черновик",
-      GENERATED: "Сгенерирован",
+      GENERATED: "Сформировано",
       SIGNED: "Подписан",
       PENDING: "На проверке",
       APPROVED: "Одобрен",
@@ -372,9 +372,9 @@ export default function DocumentsPage() {
                 <h3 className="text-base font-semibold text-orange-900 dark:text-orange-200 md:text-lg">
                   Вы изменили данные профиля
                 </h3>
-                <p className="mt-2 text-sm text-orange-800 dark:text-orange-300">
+                  <p className="mt-2 text-sm text-orange-800 dark:text-orange-300">
                   Обнаружены изменения в ваших личных данных (ФИО, дата рождения, адрес, должность и т.д.), которые влияют на содержимое документов. 
-                  Рекомендуем перегенерировать документы, чтобы они соответствовали актуальным данным.
+                  Рекомендуем переформировать документы, чтобы они соответствовали актуальным данным.
                 </p>
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
                   <button
@@ -385,14 +385,14 @@ export default function DocumentsPage() {
                     {isRegenerating ? (
                       <>
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                        Перегенерация...
+                        Переформирование...
                       </>
                     ) : (
                       <>
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
-                        Перегенерировать документы
+                        Переформировать документы
                       </>
                     )}
                   </button>
@@ -431,7 +431,7 @@ export default function DocumentsPage() {
             Документов пока нет
           </h3>
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 md:text-sm">
-            Заполните профиль через AI чат, чтобы система сгенерировала ваши заявления
+            Заполните профиль через AI чат, чтобы система сформировала ваши заявления
           </p>
         </div>
       ) : (
@@ -502,7 +502,7 @@ export default function DocumentsPage() {
                       {regeneratingDocId === doc.id ? (
                         <>
                           <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
-                          <span>Генерация...</span>
+                          <span>Формирование...</span>
                         </>
                       ) : (
                         <>
@@ -519,8 +519,8 @@ export default function DocumentsPage() {
                               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                             />
                           </svg>
-                          <span className="hidden sm:inline">Сгенерировать повторно</span>
-                          <span className="sm:hidden">Перегенерировать</span>
+                          <span className="hidden sm:inline">Сформировать повторно</span>
+                          <span className="sm:hidden">Переформировать</span>
                         </>
                       )}
                     </button>

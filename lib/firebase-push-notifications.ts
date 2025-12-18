@@ -349,17 +349,52 @@ export async function setupForegroundMessageHandler() {
 
         notification.onclick = () => {
           window.focus();
-          // Обработка ссылок из уведомлений
-          if (payload.data?.link) {
-            window.location.href = payload.data.link;
-          } else if (payload.data?.url) {
-            window.location.href = payload.data.url;
-          } else if (payload.data?.type === "chat_message" && payload.data?.senderId) {
-            // Для сообщений чата перенаправляем на чат с отправителем
-            window.location.href = `/dashboard/chat?userId=${payload.data.senderId}`;
-          } else if (payload.fcmOptions?.link) {
-            window.location.href = payload.fcmOptions.link;
+          
+          // Получаем URL из разных мест
+          let targetUrl = payload.data?.url || payload.data?.link;
+          
+          // Если URL нет, формируем его на основе типа
+          if (!targetUrl && payload.data?.type) {
+            const baseUrl = window.location.origin;
+            switch (payload.data.type) {
+              case "chat_message":
+                targetUrl = payload.data.senderId
+                  ? `${baseUrl}/dashboard/chat?userId=${payload.data.senderId}`
+                  : `${baseUrl}/dashboard/chat`;
+                break;
+              case "news_published":
+                targetUrl = payload.data.newsId
+                  ? `${baseUrl}/dashboard/news/${payload.data.newsId}`
+                  : `${baseUrl}/dashboard/news`;
+                break;
+              case "post_comment":
+              case "comment_reply":
+                targetUrl = payload.data.postId
+                  ? `${baseUrl}/posts/${payload.data.postId}`
+                  : `${baseUrl}/dashboard`;
+                break;
+              case "ticket_response":
+                targetUrl = payload.data.ticketId
+                  ? `${baseUrl}/dashboard/appeals/${payload.data.ticketId}`
+                  : `${baseUrl}/dashboard/appeals`;
+                break;
+              default:
+                targetUrl = `${baseUrl}/dashboard`;
+            }
           }
+          
+          // Fallback на fcmOptions.link
+          if (!targetUrl && payload.fcmOptions?.link) {
+            targetUrl = payload.fcmOptions.link;
+          }
+          
+          // Если URL все еще нет, используем главную страницу
+          if (!targetUrl) {
+            targetUrl = `${window.location.origin}/dashboard`;
+          }
+          
+          // Редирект
+          window.location.href = targetUrl;
           notification.close();
         };
 

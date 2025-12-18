@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { UserRole } from "@prisma/client";
 import { invalidateNewsCache } from "@/lib/cache-invalidation";
+import { extractFilePathFromUrl } from "@/lib/cdn";
 // import { sendNotification } from "@/lib/notifications"; // TODO: Implement mass notification system
 
 // GET /api/admin/news - получить все новости (включая неопубликованные)
@@ -85,14 +86,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("[admin/news POST] Creating news with coverImage length:", coverImage?.length || 0);
+    // Нормализуем coverImage - сохраняем только относительный путь или data URL
+    let normalizedCoverImage: string | null = null;
+    if (coverImage) {
+      // Если это data URL - сохраняем как есть (для совместимости со старыми данными)
+      if (coverImage.startsWith("data:")) {
+        normalizedCoverImage = coverImage;
+      } else {
+        // Используем готовую функцию для извлечения пути
+        normalizedCoverImage = extractFilePathFromUrl(coverImage);
+      }
+    }
+
+    console.log("[admin/news POST] Creating news with coverImage:", normalizedCoverImage?.substring(0, 100) || "null");
 
     // Создаем новость
     const newsPost = await prisma.newsPost.create({
       data: {
         title,
         content,
-        coverImage: coverImage || null,
+        coverImage: normalizedCoverImage,
         authorId: session.user.id!,
         isPublished: isPublished || false,
         publishedAt: isPublished ? new Date() : null,

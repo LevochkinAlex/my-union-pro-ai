@@ -249,17 +249,8 @@ export async function GET(
     const oldestMessageId = orderedMessages.length > 0 ? orderedMessages[0].id : null;
     const newestMessageId = orderedMessages.length > 0 ? orderedMessages[orderedMessages.length - 1].id : null;
 
-    // Отмечаем сообщения как прочитанные и обновляем время активности
-    // Это используется для определения, открыт ли чат (для пуш-уведомлений)
-    // Выполняем асинхронно, не блокируя ответ
-    prisma.chat.update({
-      where: { id: chatId },
-      data: chat.participant1Id === userId
-        ? { participant1ReadAt: new Date() }
-        : { participant2ReadAt: new Date() },
-    }).catch((err) => {
-      console.error("[chat] Error updating readAt:", err);
-    });
+    // НЕ обновляем readAt здесь - это делается через отдельный endpoint /read
+    // для более точного контроля и избежания проблем с непрочитанными
 
     // Оптимизация: получаем информацию о пользователях для реакций
     // Только если есть реакции (избегаем лишних запросов)

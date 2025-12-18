@@ -135,6 +135,9 @@ model User {
   pushSubscriptions  PushSubscription[]
   discountPreference DiscountPreference?
 
+  // Уведомления (история)
+  notifications UserNotification[]
+
   // BestBenefits Integration
   bestBenefitsUserId    String?   @unique // ID пользователя в системе BestBenefits
   bestBenefitsStatus    String? // Статус в BestBenefits (active, blocked и т.д.)
@@ -964,6 +967,43 @@ model DiscountPreference {
   updatedAt DateTime @updatedAt
 
   @@index([pushEnabled])
+}
+
+// Уведомления пользователя (история всех уведомлений)
+model UserNotification {
+  id String @id @default(cuid())
+
+  // Пользователь-получатель
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Тип уведомления
+  type String // "chat_message", "news_published", "post_comment", "ticket_response", etc.
+
+  // Содержимое уведомления
+  title String
+  body  String @db.Text
+
+  // URL для перехода при клике
+  url String?
+
+  // Метаданные (JSON) - может содержать дополнительные данные (senderId, newsId, ticketId, etc.)
+  metadata Json?
+
+  // Прочитано ли уведомление
+  readAt DateTime?
+
+  // Отправлено ли через push/email
+  pushSent  Boolean @default(false)
+  emailSent Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@index([type])
 }
 
 // Логирование системных ошибок и событий

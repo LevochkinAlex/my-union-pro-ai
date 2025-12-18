@@ -237,12 +237,27 @@ export default async function DashboardPage() {
     );
   }
 
+  // Формируем имя пользователя из ФИО
+  const getUserName = () => {
+    if (currentUser?.firstName) {
+      // Если есть имя, используем его
+      return currentUser.firstName;
+    }
+    // Если нет имени, пытаемся взять из session
+    return session.user?.name || "Пользователь";
+  };
+
+  const userName = getUserName();
+  // Определяем, первый ли это визит (если есть firstName, значит пользователь уже был и заполнил профиль)
+  const isReturningUser = !!currentUser?.firstName;
+  const greeting = isReturningUser ? "С возвращением" : "Добро пожаловать";
+
   return (
     <div className="space-y-8 min-w-0 w-full">
       {/* Заголовок */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Добро пожаловать, {session.user?.name || "Пользователь"}!
+          {greeting}, {userName}!
         </h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
           Ваша панель управления профсоюзом МООП РЗ

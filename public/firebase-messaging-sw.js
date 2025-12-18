@@ -131,14 +131,71 @@ messaging.onBackgroundMessage((payload) => {
 
 // Handle notification click
 self.addEventListener('notificationclick', (event) => {
-  console.log('[firebase-messaging-sw.js] Notification click received.');
+  console.log('[firebase-messaging-sw.js] Notification click received.', event.notification);
   
   event.notification.close();
 
-  if (event.notification.data?.url) {
-    event.waitUntil(
-      clients.openWindow(event.notification.data.url)
-    );
+  // Получаем URL из разных мест (для совместимости)
+  const url = event.notification.data?.url 
+    || event.notification.data?.link
+    || event.notification.tag; // Используем tag как fallback для чатов
+  
+  // Если URL нет, но есть тип уведомления - формируем URL
+  let targetUrl = url;
+  if (!targetUrl && event.notification.data?.type) {
+    const type = event.notification.data.type;
+    const baseUrl = self.location.origin;
+    
+    switch (type) {
+      case 'chat_message':
+        // Для сообщений чата используем senderId если есть
+        if (event.notification.data.senderId) {
+          targetUrl = `${baseUrl}/dashboard/chat?userId=${event.notification.data.senderId}`;
+        } else {
+          targetUrl = `${baseUrl}/dashboard/chat`;
+        }
+        break;
+      case 'news_published':
+        targetUrl = event.notification.data.newsId 
+          ? `${baseUrl}/dashboard/news/${event.notification.data.newsId}`
+          : `${baseUrl}/dashboard/news`;
+        break;
+      case 'post_comment':
+      case 'comment_reply':
+        targetUrl = event.notification.data.postId
+          ? `${baseUrl}/posts/${event.notification.data.postId}`
+          : `${baseUrl}/dashboard`;
+        break;
+      case 'ticket_response':
+        targetUrl = event.notification.data.ticketId
+          ? `${baseUrl}/dashboard/appeals/${event.notification.data.ticketId}`
+          : `${baseUrl}/dashboard/appeals`;
+        break;
+      default:
+        targetUrl = `${baseUrl}/dashboard`;
+    }
   }
+  
+  // Если URL все еще нет, используем главную страницу
+  if (!targetUrl) {
+    targetUrl = self.location.origin + '/dashboard';
+  }
+
+  console.log('[firebase-messaging-sw.js] Opening URL:', targetUrl);
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Если есть открытое окно с этим URL - фокусируем его
+      for (const client of clientList) {
+        if (client.url === targetUrl || client.url.startsWith(targetUrl.split('?')[0])) {
+          return client.focus().then(() => client.navigate(targetUrl));
+        }
+      }
+      // Иначе открываем новое окно
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
 });
 
