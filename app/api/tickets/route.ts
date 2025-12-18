@@ -146,24 +146,36 @@ export async function POST(request: NextRequest) {
     // Получаем пользователя с организацией
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      include: {
-        organization: {
-          include: {
-            members: {
-              where: {
-                role: "PPO_HEAD",
-              },
-              take: 1,
-            },
-          },
-        },
+      select: {
+        id: true,
+        organizationId: true,
       },
     });
 
     // Находим Председателя организации
     let chairmanId: string | null = null;
-    if (user?.organization?.members && user.organization.members.length > 0) {
-      chairmanId = user.organization.members[0].id;
+    if (user?.organizationId) {
+      // Ищем Председателя по нескольким критериям:
+      // 1. ppoHeadOrganizationId === organizationId (PPO Head для этой организации)
+      // 2. role === PPO_HEAD и organizationId === organizationId
+      // 3. isPPOHead === true и organizationId === organizationId
+      const chairman = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { ppoHeadOrganizationId: user.organizationId },
+            { 
+              organizationId: user.organizationId,
+              role: "PPO_HEAD",
+            },
+            {
+              organizationId: user.organizationId,
+              isPPOHead: true,
+            },
+          ],
+        },
+        select: { id: true },
+      });
+      chairmanId = chairman?.id || null;
     }
 
     // Создаем или находим чат с Председателем, если он есть
