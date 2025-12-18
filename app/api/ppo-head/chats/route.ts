@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
           ? `Обращение #${privateChat.ticket.publicId}` 
           : chat.name,
         description: chat.type === "PRIVATE" && privateChat.ticket 
-          ? privateChat.ticket.subject 
+          ? privateChat.ticket.title 
           : chat.description,
         iconUrl: chat.iconUrl,
         isPublic: chat.isPublic,
