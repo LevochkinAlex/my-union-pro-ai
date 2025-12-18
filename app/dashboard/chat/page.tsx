@@ -39,6 +39,9 @@ function ChatPageContent() {
   const { showToast } = useToast();
   const currentUserId = session?.user?.id || null;
   
+  // Проверяем, является ли пользователь Председателем ППО
+  const isPPOHead = session?.user?.role === "PPO_HEAD" || (session?.user as any)?.isPPOHead;
+  
   // Мемоизируем функцию onError чтобы избежать бесконечного цикла
   const handleError = useCallback((error: string) => {
     showToast(error, "error");
@@ -184,7 +187,25 @@ function ChatPageContent() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className={`flex flex-col ${isPPOHead ? "h-[calc(100vh-10rem)]" : "h-[calc(100vh-8rem)]"}`}>
+      {/* Навигация для Председателя ППО */}
+      {isPPOHead && (
+        <div className="shrink-0 mb-4 border-b border-gray-200 dark:border-gray-700">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => router.push("/dashboard/chats/ppo-head")}
+              className="whitespace-nowrap border-b-2 border-transparent py-3 px-1 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
+            >
+              ← Чаты организации
+            </button>
+            <span className="whitespace-nowrap border-b-2 border-blue-500 py-3 px-1 text-sm font-medium text-blue-600 dark:text-blue-400">
+              Личные чаты
+            </span>
+          </nav>
+        </div>
+      )}
+      
+      <div className="flex flex-1 min-h-0 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
       {/* Сайдбар со списком чатов */}
       <div className={`${showChatView ? "hidden md:flex" : "flex"} w-full md:w-1/3 border-r border-gray-200 dark:border-gray-700 flex-col`}>
         <ChatSidebar
@@ -260,6 +281,7 @@ function ChatPageContent() {
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteConfirm({ isOpen: false, messageId: null })}
       />
+      </div>
     </div>
   );
 }

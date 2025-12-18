@@ -158,7 +158,7 @@ function MessageItemComponent({
 
   if (isDeleted) {
     return (
-      <div className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-2`}>
+      <div className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-2 px-4`}>
         <div className="px-4 py-2 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 italic text-sm">
           Сообщение удалено
         </div>
@@ -168,7 +168,7 @@ function MessageItemComponent({
 
   return (
     <div
-      className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-2 group`}
+      className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-2 px-4 group`}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => {
         setShowActions(false);
