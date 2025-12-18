@@ -13,18 +13,47 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "10");
     const skip = (page - 1) * limit;
 
-    // Кешируем новости на 2 минуты
-    const cacheKey = getCacheKey("news:list", { page, limit });
+    // Получаем организацию пользователя для фильтрации
+    let userOrganizationId: string | null = null;
+    if (session?.user?.id) {
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { organizationId: true },
+      });
+      userOrganizationId = user?.organizationId || null;
+    }
+
+    // Кешируем новости на 2 минуты (с учётом организации)
+    const cacheKey = getCacheKey("news:list", { page, limit, orgId: userOrganizationId });
     
     const cachedData = await withCache(
       cacheKey,
       async () => {
+        // Фильтруем новости по организации пользователя
+        // Показываем новости только из каналов организации пользователя
+        const whereClause: any = {
+          isPublished: true,
+        };
+
+        // Если пользователь авторизован и у него есть организация
+        // показываем только новости из каналов его организации
+        if (userOrganizationId) {
+          whereClause.channel = {
+            organizationId: userOrganizationId,
+          };
+        } else {
+          // Для неавторизованных или пользователей без организации
+          // показываем только новости без привязки к организации (общие)
+          whereClause.OR = [
+            { channelId: null },
+            { channel: { organizationId: null } },
+          ];
+        }
+
         // Получаем только опубликованные новости
         const [newsRaw, total] = await Promise.all([
           prisma.newsPost.findMany({
-            where: {
-              isPublished: true,
-            },
+            where: whereClause,
             include: {
               author: {
                 select: {
