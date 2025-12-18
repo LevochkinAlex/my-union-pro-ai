@@ -2,6 +2,7 @@
 
 import { useState, useEffect, memo } from "react";
 import { useSession } from "next-auth/react";
+import { safeFetchJson } from "@/lib/safe-fetch";
 
 interface NewsChannel {
   id: string;
@@ -40,15 +41,21 @@ function NewsChannelsComponent({ onChannelSelect, selectedChannelId }: Props) {
   const loadChannels = async () => {
     try {
       setLoading(true);
-      // Загружаем каналы организации пользователя
-      const response = await fetch("/api/news/channels");
-      if (response.ok) {
-        const data = await response.json();
+      // Загружаем каналы организации пользователя (не критичный запрос)
+      const data = await safeFetchJson<{ channels: NewsChannel[]; organization: any }>("/api/news/channels", {
+        ignoreServerErrors: true,
+        logErrors: false,
+      });
+      
+      if (data) {
         setChannels(data.channels || []);
         setOrganization(data.organization || null);
       }
     } catch (error) {
-      console.error("Ошибка загрузки каналов:", error);
+      // Только для критичных ошибок (не 503/500)
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Ошибка загрузки каналов:", error);
+      }
     } finally {
       setLoading(false);
     }

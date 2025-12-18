@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import QuestionnaireModal from "@/components/profile/QuestionnaireModal";
 import { calculateProfileProgress } from "@/lib/profile-progress";
+import { safeFetchJson } from "@/lib/safe-fetch";
 
 interface MembershipBannerProps {
   profileProgress: number; // 0-100
@@ -56,24 +57,39 @@ export default function MembershipBanner({
       isChecking = true;
       
       try {
-        // Загружаем актуальные данные профиля
-        const response = await fetch("/api/profile");
-        if (!response.ok || !mounted) {
+        // Загружаем актуальные данные профиля (не критичный запрос)
+        const data = await safeFetchJson<{ user: any }>("/api/profile", {
+          ignoreServerErrors: true,
+          logErrors: false,
+        });
+        
+        if (!mounted) {
           isChecking = false;
           return;
         }
         
-        const data = await response.json();
+        if (!data?.user) {
+          isChecking = false;
+          return;
+        }
+        
         const user = data.user;
         
-        // Проверяем документы
-        const docsResponse = await fetch("/api/documents");
-        if (!docsResponse.ok || !mounted) {
+        // Проверяем документы (не критичный запрос)
+        const docsData = await safeFetchJson<{ documents: any[] }>("/api/documents", {
+          ignoreServerErrors: true,
+          logErrors: false,
+        });
+        
+        if (!mounted) {
           isChecking = false;
           return;
         }
         
-        const docsData = await docsResponse.json();
+        if (!docsData) {
+          isChecking = false;
+          return;
+        }
         const documents = docsData.documents || [];
         
         // Проверяем наличие отправленных документов

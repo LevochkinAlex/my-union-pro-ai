@@ -6,6 +6,7 @@ import Image from "next/image";
 import clsx from "clsx";
 import NewsComments from "./NewsComments";
 import { getFileUrlWithCDN } from "@/lib/cdn";
+import { safeFetchJson } from "@/lib/safe-fetch";
 
 interface NewsPost {
   id: string;
@@ -125,19 +126,16 @@ export default function NewsCard({
           if (entry.isIntersecting && !hasIncrementedView.current) {
             hasIncrementedView.current = true;
             
-            // Увеличиваем счётчик просмотров
-            fetch(`/api/news/${post.id}/view`, {
+            // Увеличиваем счётчик просмотров (не критичный запрос)
+            safeFetchJson<{ viewCount: number }>(`/api/news/${post.id}/view`, {
               method: "POST",
-            })
-              .then((res) => res.json())
-              .then((data) => {
-                if (data.viewCount) {
-                  setLocalViewCount(data.viewCount);
-                }
-              })
-              .catch((err) => {
-                console.error("Failed to increment view count:", err);
-              });
+              ignoreServerErrors: true,
+              logErrors: false,
+            }).then((data) => {
+              if (data?.viewCount) {
+                setLocalViewCount(data.viewCount);
+              }
+            });
           }
         });
       },

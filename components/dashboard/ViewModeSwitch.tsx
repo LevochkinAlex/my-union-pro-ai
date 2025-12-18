@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { safeFetchJson } from "@/lib/safe-fetch";
 
 interface ViewModeOption {
   mode: string;
@@ -28,15 +29,22 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
 
   const loadViewMode = async () => {
     try {
-      const response = await fetch("/api/user/view-mode");
-      if (response.ok) {
-        const data = await response.json();
+      // Загружаем режим просмотра (не критичный запрос)
+      const data = await safeFetchJson<{ currentMode: string; availableModes: ViewModeOption[]; canSwitch: boolean }>("/api/user/view-mode", {
+        ignoreServerErrors: true,
+        logErrors: false,
+      });
+      
+      if (data) {
         setCurrentMode(data.currentMode);
         setAvailableModes(data.availableModes);
         setCanSwitch(data.canSwitch);
       }
     } catch (error) {
-      console.error("Error loading view mode:", error);
+      // Только для критичных ошибок (не 503/500)
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Error loading view mode:", error);
+      }
     } finally {
       setIsLoading(false);
     }
