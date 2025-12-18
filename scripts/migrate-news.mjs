@@ -12,10 +12,7 @@ import { resolve } from "path";
 // Загружаем переменные окружения
 dotenv.config({ path: resolve(process.cwd(), ".env.local") });
 
-// Исправляем DATABASE_URL если он указывает на внешний IP
-if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes("194.87.49.210")) {
-  process.env.DATABASE_URL = process.env.DATABASE_URL.replace(/@[^:]+:/, "@localhost:");
-}
+// Используем оригинальный DATABASE_URL - он уже настроен правильно
 
 const prisma = new PrismaClient();
 
