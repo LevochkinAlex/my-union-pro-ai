@@ -40,8 +40,13 @@ export async function GET(
     const chat = await prisma.chat.findUnique({
       where: { id: chatId },
       select: {
+        type: true,
         participant1Id: true,
         participant2Id: true,
+        participants: {
+          where: { leftAt: null },
+          select: { userId: true },
+        },
       },
     });
 
@@ -49,7 +54,13 @@ export async function GET(
       return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
     }
 
-    if (chat.participant1Id !== userId && chat.participant2Id !== userId) {
+    // Для GROUP чатов проверяем через таблицу participants
+    // Для PRIVATE чатов - через participant1Id/participant2Id
+    const isParticipant = chat.type === "GROUP"
+      ? chat.participants.some(p => p.userId === userId)
+      : (chat.participant1Id === userId || chat.participant2Id === userId);
+
+    if (!isParticipant) {
       return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
     }
 
@@ -418,8 +429,13 @@ export async function POST(
       where: { id: chatId },
       select: {
         id: true,
+        type: true,
         participant1Id: true,
         participant2Id: true,
+        participants: {
+          where: { leftAt: null },
+          select: { userId: true },
+        },
       },
     });
 
@@ -427,7 +443,13 @@ export async function POST(
       return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
     }
 
-    if (chat.participant1Id !== userId && chat.participant2Id !== userId) {
+    // Для GROUP чатов проверяем через таблицу participants
+    // Для PRIVATE чатов - через participant1Id/participant2Id
+    const isParticipant = chat.type === "GROUP"
+      ? chat.participants.some(p => p.userId === userId)
+      : (chat.participant1Id === userId || chat.participant2Id === userId);
+
+    if (!isParticipant) {
       return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
     }
 
