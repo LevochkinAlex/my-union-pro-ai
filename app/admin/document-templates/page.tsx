@@ -1,7 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import DocumentTemplateEditor from "@/components/admin/DocumentTemplateEditor";
+import dynamic from "next/dynamic";
+
+// Динамический импорт TinyMCE редактора для уменьшения бандла
+const DocumentTemplateEditor = dynamic(
+  () => import("@/components/admin/DocumentTemplateEditor"),
+  { 
+    loading: () => (
+      <div className="h-64 animate-pulse rounded-md border border-gray-300 bg-gray-200 dark:border-gray-600 dark:bg-gray-700" />
+    ),
+    ssr: false 
+  }
+);
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 
 // ИСПРАВЛЕНО: Убран импорт типа из @prisma/client, используем строковый литерал

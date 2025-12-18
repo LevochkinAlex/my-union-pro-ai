@@ -1,99 +1,106 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
-import { syncPushSubscription, setupForegroundMessageHandler } from "@/lib/firebase-push-notifications";
 
 /**
  * Component to initialize Firebase Cloud Messaging on app load
+ * Firebase загружается лениво только для авторизованных пользователей
  */
 export default function FirebasePushInit() {
   const { data: session } = useSession();
+  const firebaseLoadedRef = useRef(false);
+  const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (!session?.user?.id) {
-      // Не логируем как ошибку - это нормальное состояние для неавторизованных пользователей
+    if (!session?.user?.id || firebaseLoadedRef.current) {
       return;
     }
 
-    console.log("[Firebase] Session ready, initializing FCM...");
+    // Ленивая загрузка Firebase
+    const initFirebase = async () => {
+      try {
+        firebaseLoadedRef.current = true;
+        console.log("[Firebase] Session ready, loading Firebase module...");
+        
+        const { syncPushSubscription, setupForegroundMessageHandler } = await import("@/lib/firebase-push-notifications");
 
-    // Setup foreground message handler (async)
-    setupForegroundMessageHandler().catch((error: any) => {
-      // Suppress known non-critical errors from browser extensions
-      const errorMessage = error?.message || String(error);
-      if (
-        typeof errorMessage === "string" &&
-        (errorMessage.includes("message channel closed") ||
-          errorMessage.includes("listener indicated an asynchronous response") ||
-          errorMessage.includes("Extension context invalidated"))
-      ) {
-        // Suppress these errors - they're from browser extensions
-        return;
-      }
-      console.error("[Firebase] Error setting up message handler:", error);
-    });
+        // Setup foreground message handler
+        setupForegroundMessageHandler().catch((error: any) => {
+          const errorMessage = error?.message || String(error);
+          if (
+            typeof errorMessage === "string" &&
+            (errorMessage.includes("message channel closed") ||
+              errorMessage.includes("listener indicated an asynchronous response") ||
+              errorMessage.includes("Extension context invalidated"))
+          ) {
+            return;
+          }
+          console.error("[Firebase] Error setting up message handler:", error);
+        });
 
-    // Check notification permission
-    const checkPermission = async () => {
-      if (typeof window !== "undefined" && "Notification" in window) {
-        const permission = Notification.permission;
-        console.log("[Firebase] Browser notification permission:", permission);
+        // Check notification permission
+        if (typeof window !== "undefined" && "Notification" in window) {
+          const permission = Notification.permission;
+          console.log("[Firebase] Browser notification permission:", permission);
 
-        if (permission === "granted") {
-          console.log("[Firebase] ✅ Notifications are allowed");
-          // Sync subscription after a delay to ensure Firebase is initialized
-          setTimeout(() => {
-            syncPushSubscription().catch((error: any) => {
-              // Suppress known non-critical errors from browser extensions
-              const errorMessage = error?.message || String(error);
-              if (
-                typeof errorMessage === "string" &&
-                (errorMessage.includes("message channel closed") ||
-                  errorMessage.includes("listener indicated an asynchronous response") ||
-                  errorMessage.includes("Extension context invalidated"))
-              ) {
-                // Suppress these errors - they're from browser extensions
-                return;
-              }
-              console.warn("[Firebase] Sync error (non-critical):", error);
-            });
-          }, 2000);
-        } else if (permission === "default") {
-          console.log("[Firebase] ⚠️ Notification permission not requested yet");
-        } else {
-          console.log("[Firebase] ❌ Notifications are blocked by browser");
+          if (permission === "granted") {
+            console.log("[Firebase] ✅ Notifications are allowed");
+            setTimeout(() => {
+              syncPushSubscription().catch((error: any) => {
+                const errorMessage = error?.message || String(error);
+                if (
+                  typeof errorMessage === "string" &&
+                  (errorMessage.includes("message channel closed") ||
+                    errorMessage.includes("listener indicated an asynchronous response") ||
+                    errorMessage.includes("Extension context invalidated"))
+                ) {
+                  return;
+                }
+                console.warn("[Firebase] Sync error (non-critical):", error);
+              });
+            }, 2000);
+          } else if (permission === "default") {
+            console.log("[Firebase] ⚠️ Notification permission not requested yet");
+          } else {
+            console.log("[Firebase] ❌ Notifications are blocked by browser");
+          }
         }
+
+        // Periodic sync every 60 seconds
+        intervalIdRef.current = setInterval(() => {
+          syncPushSubscription().catch((error: any) => {
+            const errorMessage = error?.message || String(error);
+            if (
+              typeof errorMessage === "string" &&
+              (errorMessage.includes("message channel closed") ||
+                errorMessage.includes("listener indicated an asynchronous response") ||
+                errorMessage.includes("Extension context invalidated"))
+            ) {
+              return;
+            }
+            console.warn("[Firebase] Periodic sync error (non-critical):", error);
+          });
+        }, 60000);
+
+      } catch (error) {
+        console.error("[Firebase] Failed to load Firebase module:", error);
+        firebaseLoadedRef.current = false;
       }
     };
 
-    // Initial check
-    setTimeout(() => {
-      checkPermission();
-    }, 2000);
+    // Задержка загрузки Firebase на 3 секунды после загрузки страницы
+    const timeoutId = setTimeout(() => {
+      initFirebase();
+    }, 3000);
 
-    // Periodic sync every 60 seconds
-    const intervalId = setInterval(() => {
-      console.log("[Firebase] Periodic sync...");
-      syncPushSubscription().catch((error: any) => {
-        // Suppress known non-critical errors from browser extensions
-        const errorMessage = error?.message || String(error);
-        if (
-          typeof errorMessage === "string" &&
-          (errorMessage.includes("message channel closed") ||
-            errorMessage.includes("listener indicated an asynchronous response") ||
-            errorMessage.includes("Extension context invalidated"))
-        ) {
-          // Suppress these errors - they're from browser extensions
-          return;
-        }
-        console.warn("[Firebase] Periodic sync error (non-critical):", error);
-      });
-    }, 60000);
-
-    return () => clearInterval(intervalId);
+    return () => {
+      clearTimeout(timeoutId);
+      if (intervalIdRef.current) {
+        clearInterval(intervalIdRef.current);
+      }
+    };
   }, [session?.user?.id]);
 
   return null;
 }
-
