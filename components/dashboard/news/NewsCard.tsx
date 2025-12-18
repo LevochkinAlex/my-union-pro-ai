@@ -45,6 +45,9 @@ interface NewsCardProps {
   onLikeToggle: (newsId: string) => void;
   onPollVote: (pollId: string, optionId: string) => void;
   priority?: boolean; // Для первых изображений - приоритетная загрузка
+  canManage?: boolean; // Может ли пользователь управлять (редактировать/удалять)
+  onEdit?: (newsId: string) => void;
+  onDelete?: (newsId: string) => void;
 }
 
 export default function NewsCard({
@@ -52,6 +55,9 @@ export default function NewsCard({
   onLikeToggle,
   onPollVote,
   priority = false,
+  canManage = false,
+  onEdit,
+  onDelete,
 }: NewsCardProps) {
   const router = useRouter();
   const [showComments, setShowComments] = useState(false);
@@ -59,8 +65,27 @@ export default function NewsCard({
   const [localViewCount, setLocalViewCount] = useState(post.viewCount);
   const [displayContent, setDisplayContent] = useState(post.content);
   const [mounted, setMounted] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const cardRef = useRef<HTMLElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const hasIncrementedView = useRef(false);
+
+  // Закрытие меню при клике вне его
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+
+    if (showMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showMenu]);
 
   // Отслеживание видимости карточки для инкремента просмотров
   // Устанавливаем mounted состояние
@@ -230,6 +255,54 @@ export default function NewsCard({
               {formatDate(post.publishedAt)}
             </p>
           </div>
+
+          {/* Меню управления для автора/администратора */}
+          {canManage && (onEdit || onDelete) && (
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200 transition-colors"
+                title="Действия"
+              >
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                </svg>
+              </button>
+
+              {showMenu && (
+                <div className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800 z-50">
+                  {onEdit && (
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        onEdit(post.id);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Редактировать
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        onDelete(post.id);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Удалить
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Cover Image */}

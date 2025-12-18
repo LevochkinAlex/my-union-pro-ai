@@ -7,7 +7,7 @@ import Link from "next/link";
 import NewsCard from "@/components/dashboard/news/NewsCard";
 import RichTextEditor from "@/components/admin/RichTextEditor";
 import ImageUploadWithCrop from "@/components/admin/ImageUploadWithCrop";
-import { alertSuccess, alertError } from "@/lib/alert";
+import { alertSuccess, alertError, confirm } from "@/lib/alert";
 
 interface NewsPost {
   id: string;
@@ -85,6 +85,7 @@ export default function PPOHeadNewsPage() {
   const [newChannelDescription, setNewChannelDescription] = useState("");
   const [newChannelIcon, setNewChannelIcon] = useState<string | null>(null);
   const [creatingChannel, setCreatingChannel] = useState(false);
+  const [editingNewsId, setEditingNewsId] = useState<string | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -242,71 +243,6 @@ export default function PPOHeadNewsPage() {
     );
   };
 
-  const handleCreateNews = async () => {
-    if (!title.trim() || !content.trim()) {
-      alertError("Заголовок и содержание обязательны");
-      return;
-    }
-
-    if (!selectedChannelId) {
-      alertError("Выберите канал публикации");
-      return;
-    }
-
-    // Валидация опросов
-    for (const poll of polls) {
-      if (!poll.question.trim()) {
-        alertError("Все опросы должны иметь вопрос");
-        return;
-      }
-      if (poll.options.length < 2) {
-        alertError("Каждый опрос должен иметь минимум 2 варианта ответа");
-        return;
-      }
-      for (const option of poll.options) {
-        if (!option.text.trim()) {
-          alertError("Все варианты ответов должны быть заполнены");
-          return;
-        }
-      }
-    }
-
-    try {
-      setSaving(true);
-      const response = await fetch("/api/ppo-head/news", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: title.trim(),
-          content: content.trim(),
-          coverImage: coverImage || null,
-          channelId: selectedChannelId,
-          isPublished,
-          polls: polls.length > 0 ? polls : undefined,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Не удалось создать новость");
-      }
-
-      alertSuccess("Новость успешно создана!");
-      setIsCreating(false);
-      setTitle("");
-      setContent("");
-      setCoverImage(null);
-      setPolls([]);
-      setIsPublished(false);
-      await loadNews();
-    } catch (error) {
-      console.error("Ошибка создания новости:", error);
-      alertError(error instanceof Error ? error.message : "Не удалось создать новость");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleLikeToggle = async (newsId: string) => {
     try {
       const response = await fetch(`/api/news/${newsId}/like`, {
@@ -357,6 +293,137 @@ export default function PPOHeadNewsPage() {
     }
   };
 
+  const handleEditNews = (newsId: string) => {
+    const newsToEdit = news.find((n) => n.id === newsId);
+    if (newsToEdit) {
+      setEditingNewsId(newsId);
+      setTitle(newsToEdit.title);
+      setContent(newsToEdit.content);
+      setCoverImage(newsToEdit.coverImage);
+      setSelectedChannelId(newsToEdit.channel?.id || "");
+      setIsPublished(!!newsToEdit.publishedAt);
+      setIsCreating(true);
+    }
+  };
+
+  const handleDeleteNews = async (newsId: string) => {
+    const confirmed = await confirm(
+      "Вы уверены, что хотите удалить эту новость? Это действие нельзя отменить.",
+      "Удаление новости"
+    );
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/ppo-head/news/${newsId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Не удалось удалить новость");
+      }
+
+      alertSuccess("Новость успешно удалена");
+      setNews((prev) => prev.filter((n) => n.id !== newsId));
+    } catch (error) {
+      console.error("Ошибка удаления новости:", error);
+      alertError(error instanceof Error ? error.message : "Не удалось удалить новость");
+    }
+  };
+
+  const handleSaveNews = async () => {
+    if (!title.trim() || !content.trim()) {
+      alertError("Заголовок и содержание обязательны");
+      return;
+    }
+
+    if (!selectedChannelId) {
+      alertError("Выберите канал публикации");
+      return;
+    }
+
+    // Валидация опросов (только для новых новостей)
+    if (!editingNewsId) {
+      for (const poll of polls) {
+        if (!poll.question.trim()) {
+          alertError("Все опросы должны иметь вопрос");
+          return;
+        }
+        if (poll.options.length < 2) {
+          alertError("Каждый опрос должен иметь минимум 2 варианта ответа");
+          return;
+        }
+        for (const option of poll.options) {
+          if (!option.text.trim()) {
+            alertError("Все варианты ответов должны быть заполнены");
+            return;
+          }
+        }
+      }
+    }
+
+    try {
+      setSaving(true);
+      
+      if (editingNewsId) {
+        // Обновление существующей новости
+        const response = await fetch(`/api/ppo-head/news/${editingNewsId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: title.trim(),
+            content: content.trim(),
+            coverImage: coverImage || null,
+            channelId: selectedChannelId,
+            isPublished,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Не удалось обновить новость");
+        }
+
+        alertSuccess("Новость успешно обновлена!");
+      } else {
+        // Создание новой новости
+        const response = await fetch("/api/ppo-head/news", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: title.trim(),
+            content: content.trim(),
+            coverImage: coverImage || null,
+            channelId: selectedChannelId,
+            isPublished,
+            polls: polls.length > 0 ? polls : undefined,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Не удалось создать новость");
+        }
+
+        alertSuccess("Новость успешно создана!");
+      }
+
+      setIsCreating(false);
+      setEditingNewsId(null);
+      setTitle("");
+      setContent("");
+      setCoverImage(null);
+      setPolls([]);
+      setIsPublished(false);
+      await loadNews();
+    } catch (error) {
+      console.error("Ошибка сохранения новости:", error);
+      alertError(error instanceof Error ? error.message : "Не удалось сохранить новость");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -393,7 +460,9 @@ export default function PPOHeadNewsPage() {
 
       {isCreating && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <h2 className="mb-4 text-xl font-semibold">Создание новости</h2>
+          <h2 className="mb-4 text-xl font-semibold">
+            {editingNewsId ? "Редактирование новости" : "Создание новости"}
+          </h2>
 
           <div className="space-y-4">
             <div>
@@ -546,15 +615,16 @@ export default function PPOHeadNewsPage() {
 
             <div className="flex gap-2">
               <button
-                onClick={handleCreateNews}
+                onClick={handleSaveNews}
                 disabled={saving}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {saving ? "Создание..." : "Создать новость"}
+                {saving ? "Сохранение..." : (editingNewsId ? "Сохранить изменения" : "Создать новость")}
               </button>
               <button
                 onClick={() => {
                   setIsCreating(false);
+                  setEditingNewsId(null);
                   setTitle("");
                   setContent("");
                   setCoverImage(null);
@@ -585,6 +655,9 @@ export default function PPOHeadNewsPage() {
               post={post}
               onLikeToggle={handleLikeToggle}
               onPollVote={handlePollVote}
+              canManage={true}
+              onEdit={handleEditNews}
+              onDelete={handleDeleteNews}
             />
           ))
         )}
