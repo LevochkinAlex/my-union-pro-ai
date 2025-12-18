@@ -513,6 +513,13 @@ export async function PUT(request: NextRequest) {
     // Инвалидируем кеш пользователей и профиля (профиль мог измениться)
     await invalidateUsersCache();
     await cacheDeletePattern(`profile:userId:${session.user.id}:*`);
+    
+    // Если изменилась организация, инвалидируем кеш новостей
+    // (чтобы пользователь видел новости своей новой организации)
+    if (body.organizationId !== undefined && organizationId !== userBeforeUpdate?.organizationId) {
+      await cacheDeletePattern(`news:list:*`);
+      console.log("[profile] Organization changed, news cache invalidated");
+    }
 
     return NextResponse.json({
       success: true,

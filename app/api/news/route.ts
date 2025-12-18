@@ -30,20 +30,24 @@ export async function GET(request: NextRequest) {
       cacheKey,
       async () => {
         // Фильтруем новости по организации пользователя
-        // Показываем новости только из каналов организации пользователя
+        // Показываем новости из каналов организации пользователя + общие новости
         const whereClause: any = {
           isPublished: true,
         };
 
         // Если пользователь авторизован и у него есть организация
-        // показываем только новости из каналов его организации
+        // показываем новости из каналов его организации + общие новости (без организации)
         if (userOrganizationId) {
-          whereClause.channel = {
-            organizationId: userOrganizationId,
-          };
+          whereClause.OR = [
+            // Новости из каналов организации пользователя
+            { channel: { organizationId: userOrganizationId } },
+            // Общие новости (без канала или канал без организации)
+            { channelId: null },
+            { channel: { organizationId: null } },
+          ];
         } else {
           // Для неавторизованных или пользователей без организации
-          // показываем только новости без привязки к организации (общие)
+          // показываем только общие новости без привязки к организации
           whereClause.OR = [
             { channelId: null },
             { channel: { organizationId: null } },
