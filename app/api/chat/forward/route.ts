@@ -165,9 +165,11 @@ export async function POST(request: NextRequest) {
       });
 
       // Используем правильный порядок имени: Фамилия Имя Отчество
+      // Фильтруем пустые значения и строки из пробелов, затем объединяем
       const senderName = sender
         ? [sender.lastName, sender.firstName, sender.middleName]
-            .filter(Boolean)
+            .filter((name) => name && name.trim().length > 0)
+            .map((name) => name.trim())
             .join(" ") || "Пользователь"
         : "Пользователь";
 
