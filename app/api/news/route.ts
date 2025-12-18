@@ -18,21 +18,9 @@ export async function GET(request: NextRequest) {
     if (session?.user?.id) {
       const user = await prisma.user.findUnique({
         where: { id: session.user.id },
-        select: { 
-          organizationId: true,
-          email: true,
-          organization: {
-            select: { name: true },
-          },
-        },
+        select: { organizationId: true },
       });
       userOrganizationId = user?.organizationId || null;
-      console.log("[api/news] User organization:", {
-        userId: session.user.id,
-        email: user?.email,
-        organizationId: userOrganizationId,
-        organizationName: user?.organization?.name,
-      });
     }
 
     // Кешируем новости на 2 минуты (с учётом организации)
@@ -64,18 +52,6 @@ export async function GET(request: NextRequest) {
             { channelId: null },
             { channel: { organizationId: null } },
           ];
-        }
-
-        // Логируем условие фильтрации
-        console.log("[api/news] Where clause:", JSON.stringify(whereClause, null, 2));
-        
-        // Логируем каналы организации для отладки
-        if (userOrganizationId) {
-          const orgChannels = await prisma.newsChannel.findMany({
-            where: { organizationId: userOrganizationId },
-            select: { id: true, name: true, organizationId: true },
-          });
-          console.log("[api/news] Organization channels:", orgChannels);
         }
 
         // Получаем только опубликованные новости
@@ -119,12 +95,6 @@ export async function GET(request: NextRequest) {
             },
           }),
         ]);
-        
-        console.log("[api/news] Found news:", {
-          count: newsRaw.length,
-          total,
-          newsIds: newsRaw.map(n => n.id),
-        });
         
         // Возвращаем полный контент - клиент сам обрежет для превью
         // Это позволяет показывать полный текст при нажатии "Показать полностью"
