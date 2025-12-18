@@ -1,5 +1,3 @@
-<<<<<<< Current (Your changes)
-=======
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
@@ -978,4 +976,3 @@ export default function Chat() {
     </Suspense>
   );
 }
->>>>>>> Incoming (Background Agent changes)
