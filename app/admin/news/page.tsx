@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { alertError, confirm } from "@/lib/alert";
+import { getFileUrlWithCDN } from "@/lib/cdn";
 
 interface NewsPost {
   id: string;
@@ -171,7 +172,7 @@ export default function AdminNewsPage() {
                   {post.coverImage && (
                     <div className="h-32 w-full sm:h-24 sm:w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700">
                       <img
-                        src={post.coverImage}
+                        src={getFileUrlWithCDN(post.coverImage)}
                         alt={post.title}
                         className="h-full w-full object-cover"
                         onError={(e) => {
