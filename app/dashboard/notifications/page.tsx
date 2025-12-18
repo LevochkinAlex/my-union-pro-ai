@@ -158,134 +158,149 @@ export default function NotificationsPage() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Уведомления
-            </h1>
-            {unreadCount > 0 && (
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {unreadCount} непрочитанных
-              </p>
-            )}
-          </div>
-          {unreadCount > 0 && (
-            <button
-              onClick={markAllAsRead}
-              className="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              Прочитать все
-            </button>
-          )}
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+          <p className="text-gray-600 dark:text-gray-400">Загрузка уведомлений...</p>
         </div>
+      </div>
+    );
+  }
 
-        {/* Filters */}
-        <div className="mb-4 flex gap-2">
+  return (
+    <div className="space-y-6 sm:space-y-8">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+            Уведомления
+          </h1>
+          <p className="mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400">
+            {unreadCount > 0
+              ? `${unreadCount} непрочитанных уведомлений`
+              : "Все уведомления прочитаны"}
+          </p>
+        </div>
+        {unreadCount > 0 && (
+          <button
+            onClick={markAllAsRead}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 sm:px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700 whitespace-nowrap flex-shrink-0"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <span>Прочитать все</span>
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="-mb-px flex space-x-4 overflow-x-auto md:space-x-8">
           <button
             onClick={() => setFilter("all")}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
               filter === "all"
-                ? "bg-blue-600 text-white"
-                : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
             }`}
           >
-            Все
+            Все уведомления
           </button>
           <button
             onClick={() => setFilter("unread")}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm flex items-center gap-2 ${
               filter === "unread"
-                ? "bg-blue-600 text-white"
-                : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
             }`}
           >
             Непрочитанные
             {unreadCount > 0 && (
-              <span className="ml-2 px-2 py-0.5 text-xs bg-blue-700 rounded-full">
+              <span className="px-2 py-0.5 text-xs bg-blue-600 text-white rounded-full">
                 {unreadCount}
               </span>
             )}
           </button>
-        </div>
+        </nav>
+      </div>
 
-        {/* Notifications List */}
-        {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : notifications.length === 0 ? (
-          <div className="text-center py-12">
-            <svg
-              className="mx-auto h-12 w-12 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+      {/* Notifications List */}
+      {notifications.length === 0 ? (
+        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800 md:p-12">
+          <svg
+            className="mx-auto h-10 w-10 text-gray-400 md:h-12 md:w-12"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+            />
+          </svg>
+          <h3 className="mt-4 text-base font-medium text-gray-900 dark:text-white md:text-lg">
+            {filter === "unread" ? "Нет непрочитанных уведомлений" : "Уведомлений пока нет"}
+          </h3>
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 md:text-sm">
+            {filter === "unread"
+              ? "Все уведомления прочитаны"
+              : "Здесь будут появляться уведомления о новых событиях"}
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:gap-4">
+          {notifications.map((notification) => (
+            <div
+              key={notification.id}
+              onClick={() => handleNotificationClick(notification)}
+              className={`rounded-lg border p-4 sm:p-5 cursor-pointer transition-all hover:shadow-md ${
+                notification.readAt
+                  ? "bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700"
+                  : "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800"
+              }`}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-              />
-            </svg>
-            <p className="mt-4 text-gray-500 dark:text-gray-400">
-              {filter === "unread" ? "Нет непрочитанных уведомлений" : "Нет уведомлений"}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {notifications.map((notification) => (
-              <div
-                key={notification.id}
-                onClick={() => handleNotificationClick(notification)}
-                className={`bg-white dark:bg-gray-800 rounded-lg border p-4 cursor-pointer transition-all hover:shadow-md ${
-                  notification.readAt
-                    ? "border-gray-200 dark:border-gray-700 opacity-75"
-                    : "border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10"
-                }`}
-              >
-                <div className="flex items-start gap-4">
-                  <div
-                    className={`flex-shrink-0 mt-0.5 ${
-                      notification.readAt
-                        ? "text-gray-400 dark:text-gray-600"
-                        : "text-blue-600 dark:text-blue-400"
-                    }`}
-                  >
-                    {getNotificationIcon(notification.type)}
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div
+                  className={`flex-shrink-0 p-2 rounded-lg ${
+                    notification.readAt
+                      ? "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                      : "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400"
+                  }`}
+                >
+                  {getNotificationIcon(notification.type)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3
+                      className={`text-sm sm:text-base font-medium ${
+                        notification.readAt
+                          ? "text-gray-700 dark:text-gray-300"
+                          : "text-gray-900 dark:text-white font-semibold"
+                      }`}
+                    >
+                      {notification.title}
+                    </h3>
+                    {!notification.readAt && (
+                      <div className="flex-shrink-0 w-2.5 h-2.5 bg-blue-600 rounded-full mt-1.5" />
+                    )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3
-                        className={`text-sm font-medium ${
-                          notification.readAt
-                            ? "text-gray-700 dark:text-gray-300"
-                            : "text-gray-900 dark:text-white font-semibold"
-                        }`}
-                      >
-                        {notification.title}
-                      </h3>
-                      {!notification.readAt && (
-                        <div className="flex-shrink-0 w-2 h-2 bg-blue-600 rounded-full" />
-                      )}
-                    </div>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                      {notification.body}
-                    </p>
-                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
-                      {formatDate(notification.createdAt)}
-                    </p>
-                  </div>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                    {notification.body}
+                  </p>
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
+                    {formatDate(notification.createdAt)}
+                  </p>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
