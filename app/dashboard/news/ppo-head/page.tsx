@@ -374,22 +374,22 @@ export default function PPOHeadNewsPage() {
       <div className="flex gap-6 max-w-full">
         {/* Основная область */}
         <div className="flex-1 space-y-6 min-w-0">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                Новости
-              </h1>
-              <p className="mt-2 text-gray-600 dark:text-gray-400">
-                Управление новостями вашей организации
-              </p>
-            </div>
-            <button
-              onClick={() => setIsCreating(true)}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-            >
-              + Создать новость
-            </button>
-          </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Новости
+          </h1>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
+            Управление новостями вашей организации
+          </p>
+        </div>
+        <button
+          onClick={() => setIsCreating(true)}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+        >
+          + Создать новость
+        </button>
+      </div>
 
       {isCreating && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">

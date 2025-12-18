@@ -370,12 +370,12 @@ export default function PPOHeadDocumentsPage() {
           </p>
         </div>
         {activeTab === "organization" && (
-          <button
-            onClick={() => setIsCreating(true)}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-          >
-            + Создать документ
-          </button>
+        <button
+          onClick={() => setIsCreating(true)}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+        >
+          + Создать документ
+        </button>
         )}
       </div>
 

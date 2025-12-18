@@ -166,11 +166,11 @@ export async function POST(
         ppoHeadOrganizationId: id,
         organizationId: id, // Также привязываем к организации как члена
         viewMode: "PPO_HEAD",
-        firstName: firstName,
-        lastName: lastName,
-        middleName: middleName || null,
-        phone: phone,
-        jobTitle: jobTitle || null,
+          firstName: firstName,
+          lastName: lastName,
+          middleName: middleName || null,
+          phone: phone,
+          jobTitle: jobTitle || null,
         membershipStatus: "APPROVED", // Председатель автоматически является членом
       };
 

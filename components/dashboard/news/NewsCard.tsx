@@ -133,9 +133,9 @@ export default function NewsCard({
               logErrors: false,
             }).then((data) => {
               if (data?.viewCount) {
-                setLocalViewCount(data.viewCount);
-              }
-            });
+                  setLocalViewCount(data.viewCount);
+                }
+              });
           }
         });
       },

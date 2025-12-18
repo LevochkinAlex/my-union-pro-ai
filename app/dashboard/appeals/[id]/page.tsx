@@ -378,33 +378,33 @@ export default function TicketDetailPage() {
           </div>
         ) : (
           <>
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 flex-wrap mb-2">
-                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {ticket.title}
-                  </h1>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-bold text-purple-700 bg-purple-100 dark:text-purple-300 dark:bg-purple-900/30">
-                    #{ticket.publicId}
-                  </span>
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 flex-wrap mb-2">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                {ticket.title}
+              </h1>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-bold text-purple-700 bg-purple-100 dark:text-purple-300 dark:bg-purple-900/30">
+                #{ticket.publicId}
+              </span>
                   <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(ticket.status)}`}
                   >
                     {TICKET_STATUSES[ticket.status as keyof typeof TICKET_STATUSES]?.label ||
                       ticket.status}
-                  </span>
+              </span>
                   <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLORS[ticket.priority as keyof typeof PRIORITY_COLORS] || PRIORITY_COLORS.MEDIUM}`}
                   >
                     {PRIORITY_LABELS[ticket.priority as keyof typeof PRIORITY_LABELS] ||
                       ticket.priority}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {TICKET_TYPES[ticket.type as keyof typeof TICKET_TYPES] || ticket.type}
-                </p>
-              </div>
+              </span>
             </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {TICKET_TYPES[ticket.type as keyof typeof TICKET_TYPES] || ticket.type}
+            </p>
+          </div>
+        </div>
 
             {/* Причина отклонения */}
             {ticket.rejectionReason && ticket.status === "REJECTED" && (
@@ -416,32 +416,32 @@ export default function TicketDetailPage() {
               </div>
             )}
 
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
-              <div
-                className="prose prose-sm max-w-none dark:prose-invert"
-                dangerouslySetInnerHTML={{ __html: ticket.content }}
-              />
-            </div>
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+          <div
+            className="prose prose-sm max-w-none dark:prose-invert"
+            dangerouslySetInnerHTML={{ __html: ticket.content }}
+          />
+        </div>
 
-            {ticket.attachments && ticket.attachments.length > 0 && (
-              <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
-                <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
-                  Прикрепленные файлы
-                </h3>
-                <div className="space-y-2">
-                  {ticket.attachments.map((attachment) => (
-                    <FileAttachment
-                      key={attachment.id}
-                      fileName={attachment.fileName}
-                      filePath={attachment.filePath}
-                      fileSize={attachment.fileSize}
-                      mimeType={attachment.mimeType}
-                      showPreview={true}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
+        {ticket.attachments && ticket.attachments.length > 0 && (
+          <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+              Прикрепленные файлы
+            </h3>
+            <div className="space-y-2">
+              {ticket.attachments.map((attachment) => (
+                <FileAttachment
+                  key={attachment.id}
+                  fileName={attachment.fileName}
+                  filePath={attachment.filePath}
+                  fileSize={attachment.fileSize}
+                  mimeType={attachment.mimeType}
+                  showPreview={true}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
             {/* Оценка полезности ответа */}
             {ticket.helpfulRating && (
@@ -493,12 +493,12 @@ export default function TicketDetailPage() {
               </div>
             )}
 
-            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
-              <p>Создано: {new Date(ticket.createdAt).toLocaleString("ru-RU")}</p>
-              {ticket.updatedAt !== ticket.createdAt && (
-                <p>Обновлено: {new Date(ticket.updatedAt).toLocaleString("ru-RU")}</p>
-              )}
-            </div>
+        <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+          <p>Создано: {new Date(ticket.createdAt).toLocaleString("ru-RU")}</p>
+          {ticket.updatedAt !== ticket.createdAt && (
+            <p>Обновлено: {new Date(ticket.updatedAt).toLocaleString("ru-RU")}</p>
+          )}
+        </div>
           </>
         )}
       </div>

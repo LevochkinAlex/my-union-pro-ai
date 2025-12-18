@@ -53,14 +53,10 @@ interface Member {
   avatarUrl: string | null;
 }
 
-type ChatTab = "organization" | "personal";
-
 export default function PPOHeadChatsPage() {
   const { data: session } = useSession();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<ChatTab>("organization");
   const [organizationChats, setOrganizationChats] = useState<Chat[]>([]);
-  const [personalChats, setPersonalChats] = useState<Chat[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
@@ -88,26 +84,18 @@ export default function PPOHeadChatsPage() {
 
   const loadChats = async () => {
     try {
-      // Загружаем все чаты
+      // Загружаем чаты организации (с ticketId или группы)
       const response = await fetch("/api/ppo-head/chats");
       if (response.ok) {
         const data = await response.json();
         const allChats = data.chats || [];
         
-        // Разделяем на организационные (с ticketId или группы) и личные
-        const orgChats: Chat[] = [];
-        const persChats: Chat[] = [];
-        
-        allChats.forEach((chat: Chat) => {
-          if (chat.ticketId || chat.type === "GROUP") {
-            orgChats.push(chat);
-          } else {
-            persChats.push(chat);
-          }
-        });
+        // Фильтруем только организационные чаты (с ticketId или группы)
+        const orgChats = allChats.filter((chat: Chat) => 
+          chat.ticketId || chat.type === "GROUP"
+        );
         
         setOrganizationChats(orgChats);
-        setPersonalChats(persChats);
       }
     } catch (error) {
       console.error("Ошибка загрузки чатов:", error);
@@ -262,7 +250,6 @@ export default function PPOHeadChatsPage() {
     return null;
   };
 
-  const currentChats = activeTab === "organization" ? organizationChats : personalChats;
 
   if (isLoading) {
     return (
@@ -294,67 +281,47 @@ export default function PPOHeadChatsPage() {
         </button>
       </div>
 
-      {/* Табы */}
+      {/* Навигация */}
       <div className="border-b border-gray-200 dark:border-gray-700">
         <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setActiveTab("organization")}
-            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
-              activeTab === "organization"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
+          <span className="whitespace-nowrap border-b-2 border-blue-500 py-4 px-1 text-sm font-medium text-blue-600 dark:text-blue-400">
             Чаты организации
             {organizationChats.length > 0 && (
               <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
                 {organizationChats.length}
               </span>
             )}
-          </button>
+          </span>
           <button
-            onClick={() => setActiveTab("personal")}
-            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
-              activeTab === "personal"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
+            onClick={() => router.push("/dashboard/chat")}
+            className="whitespace-nowrap border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
           >
-            Личные
-            {personalChats.length > 0 && (
-              <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                {personalChats.length}
-              </span>
-            )}
+            Личные чаты →
           </button>
         </nav>
       </div>
 
-      {/* Содержимое таба */}
-      {activeTab === "organization" && (
-        <div className="rounded-lg border border-dashed border-blue-300 bg-blue-50/50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
-          <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>
-              Чаты обращений будут появляться здесь автоматически. Переписка ведётся от имени организации.
-            </span>
-          </div>
+      {/* Информационный блок */}
+      <div className="rounded-lg border border-dashed border-blue-300 bg-blue-50/50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+        <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>
+            Чаты обращений будут появляться здесь автоматически. Переписка ведётся от имени организации.
+          </span>
         </div>
-      )}
+      </div>
 
       <div className="grid gap-4">
-        {currentChats.length === 0 ? (
+        {organizationChats.length === 0 ? (
           <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-700 dark:bg-gray-800">
             <p className="text-gray-600 dark:text-gray-400">
-              {activeTab === "organization" 
-                ? "Чатов организации пока нет. Они появятся при создании обращений."
-                : "Личных чатов пока нет. Начните переписку с членом профсоюза."}
+              Чатов организации пока нет. Они появятся при создании обращений.
             </p>
           </div>
         ) : (
-          currentChats.map((chat) => (
+          organizationChats.map((chat) => (
             <div
               key={chat.id}
               className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"

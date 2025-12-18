@@ -453,7 +453,7 @@ export async function PUT(request: NextRequest) {
       // Если не передан (undefined), не трогаем существующее значение
       if (organizationId !== undefined) {
         updateData.organizationId = organizationId;
-        updateData.organizationName = null; // Очищаем старое текстовое поле (теперь используем только ID)
+      updateData.organizationName = null; // Очищаем старое текстовое поле (теперь используем только ID)
       }
     }
     

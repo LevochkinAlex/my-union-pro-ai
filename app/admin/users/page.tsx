@@ -37,9 +37,9 @@ export default async function AdminUsers() {
     <div className="p-8">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Управление пользователями
-          </h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Управление пользователями
+        </h1>
           {pendingCount > 0 && (
             <p className="mt-1 text-sm text-yellow-600 dark:text-yellow-400">
               ⚠️ {pendingCount} пользователей ожидают валидации

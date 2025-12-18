@@ -342,8 +342,8 @@ export default function OrganizationsPage() {
               const inviteResult = await inviteResponse.json();
               if (inviteResult.existingUserPromoted) {
                 alertSuccess("Организация успешно сохранена! Существующему пользователю предоставлены права председателя ППО. Уведомление отправлено на email.");
-              } else {
-                alertSuccess("Организация успешно сохранена! Инвайт-ссылка отправлена председателю на email.");
+            } else {
+              alertSuccess("Организация успешно сохранена! Инвайт-ссылка отправлена председателю на email.");
               }
             }
           } catch (inviteError) {
@@ -648,8 +648,8 @@ export default function OrganizationsPage() {
               {/* Header */}
               <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {isCreating ? "Создание организации" : "Редактирование организации"}
-                </h2>
+            {isCreating ? "Создание организации" : "Редактирование организации"}
+          </h2>
                 <button
                   onClick={() => {
                     setIsEditing(false);
@@ -668,7 +668,7 @@ export default function OrganizationsPage() {
 
               {/* Body */}
               <div className="max-h-[calc(100vh-200px)] overflow-y-auto px-6 py-4">
-                <div className="space-y-4">
+          <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Название организации *
@@ -816,14 +816,14 @@ export default function OrganizationsPage() {
                     Email председателя *
                   </label>
                   <div className="relative">
-                    <input
-                      type="email"
-                      value={formData.chairmanEmail}
-                      onChange={(e) => setFormData({ ...formData, chairmanEmail: e.target.value })}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
-                      placeholder="chairman@example.com"
+                  <input
+                    type="email"
+                    value={formData.chairmanEmail}
+                    onChange={(e) => setFormData({ ...formData, chairmanEmail: e.target.value })}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                    placeholder="chairman@example.com"
                       disabled={userConfirmed}
-                    />
+                  />
                     {searchingUser && (
                       <div className="absolute right-3 top-1/2 -translate-y-1/2">
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"></div>
@@ -978,18 +978,18 @@ export default function OrganizationsPage() {
 
               {/* Footer */}
               <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
-                <button
-                  onClick={() => {
-                    setIsEditing(false);
-                    setIsCreating(false);
-                    setSelectedOrg(null);
+              <button
+                onClick={() => {
+                  setIsEditing(false);
+                  setIsCreating(false);
+                  setSelectedOrg(null);
                     setExistingUser(null);
                     setUserConfirmed(false);
-                  }}
+                }}
                   className="rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-                >
-                  Отмена
-                </button>
+              >
+                Отмена
+              </button>
                 <button
                   onClick={handleSave}
                   className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
