@@ -46,6 +46,7 @@ interface ExistingUser {
   middleName: string | null;
   fullName: string | null;
   avatarUrl: string | null;
+  jobTitle: string | null;
   role: string;
   membershipStatus: string;
   isPPOHead: boolean;
@@ -166,6 +167,8 @@ export default function OrganizationsPage() {
       chairmanMiddleName: existingUser.middleName || "",
       chairmanEmail: existingUser.email || prev.chairmanEmail,
       chairmanPhone: existingUser.phone || prev.chairmanPhone,
+      // Подтягиваем должность только если она не была заполнена вручную
+      chairmanJobTitle: prev.chairmanJobTitle || existingUser.jobTitle || "",
       existingUserId: existingUser.id,
     }));
     setUserConfirmed(true);

@@ -195,7 +195,9 @@ export default async function DashboardLayout({
   }
 
   // Для обычных членов профсоюза добавляем стандартные пункты
-  if (userRole !== "PPO_HEAD") {
+  // ИСПРАВЛЕНО: Используем !showPPOHeadMenu вместо userRole !== "PPO_HEAD"
+  // чтобы избежать дублирования меню для пользователей с isPPOHead=true
+  if (!showPPOHeadMenu) {
     // Обращения (тикеты)
     menuItems.push({
       href: "/dashboard/appeals",
