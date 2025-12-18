@@ -56,6 +56,16 @@ export async function GET(request: NextRequest) {
         OR: [
           { participant1Id: userId },
           { participant2Id: userId },
+          // Также включаем групповые чаты, где пользователь участник
+          {
+            type: "GROUP",
+            participants: {
+              some: {
+                userId: userId,
+                leftAt: null,
+              },
+            },
+          },
         ],
       },
       include: {
@@ -79,6 +89,33 @@ export async function GET(request: NextRequest) {
             avatarUrl: true,
             phone: true,
             email: true,
+          },
+        },
+        ticket: {
+          select: {
+            id: true,
+            publicId: true,
+            title: true,
+          },
+        },
+        participants: {
+          where: { leftAt: null },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            participants: true,
+            messages: true,
           },
         },
       },
@@ -162,22 +199,47 @@ export async function GET(request: NextRequest) {
         // Форматируем чаты для ответа
         const formattedChats = chats.map((chat, index) => {
           const otherUser = chat.participant1Id === userId ? chat.participant2 : chat.participant1;
-          const normalizedUser = normalizeUserAvatar(otherUser);
+          const normalizedUser = otherUser ? normalizeUserAvatar(otherUser) : null;
 
           return {
             id: chat.id,
-            otherUser: {
+            type: chat.type || "PRIVATE",
+            name: chat.name,
+            description: chat.description,
+            iconUrl: chat.iconUrl,
+            isPublic: chat.isPublic,
+            otherUser: normalizedUser ? {
               id: normalizedUser.id,
               firstName: normalizedUser.firstName,
               lastName: normalizedUser.lastName,
               middleName: normalizedUser.middleName,
               avatarUrl: normalizedUser.avatarUrl,
               phone: normalizedUser.phone,
+            } : {
+              id: "",
+              firstName: null,
+              lastName: null,
+              middleName: null,
+              avatarUrl: null,
+              phone: null,
             },
             lastMessage: chat.lastMessage,
             lastMessageAt: chat.lastMessageAt,
             unreadCount: unreadCounts[index] || 0,
             createdAt: chat.createdAt,
+            // Ticket fields for appeal chats
+            ticketId: chat.ticket?.id || null,
+            ticketPublicId: chat.ticket?.publicId || null,
+            ticketTitle: chat.ticket?.title || null,
+            // Group participants
+            participants: chat.type === "GROUP" ? chat.participants?.map((p: any) => ({
+              id: p.id,
+              userId: p.userId,
+              user: p.user ? normalizeUserAvatar(p.user) : null,
+              role: p.role,
+            })) : [],
+            participantsCount: chat._count?.participants || 0,
+            _count: chat._count,
           };
         });
 

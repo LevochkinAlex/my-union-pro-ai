@@ -17,10 +17,31 @@ export interface ChatUser {
 
 export interface Chat {
   id: string;
+  type?: "PRIVATE" | "GROUP";
   otherUser: ChatUser;
   lastMessage: string | null;
   lastMessageAt: Date | null;
   unreadCount: number;
+  // Group-specific fields
+  name?: string | null;
+  description?: string | null;
+  iconUrl?: string | null;
+  isPublic?: boolean;
+  participants?: Array<{
+    id: string;
+    userId: string;
+    user: ChatUser;
+    role?: string;
+  }>;
+  participantsCount?: number;
+  _count?: {
+    participants?: number;
+    messages?: number;
+  };
+  // Ticket-related fields (for appeal chats)
+  ticketId?: string | null;
+  ticketPublicId?: string | null;
+  ticketTitle?: string | null;
 }
 
 export interface MessageAttachment {
