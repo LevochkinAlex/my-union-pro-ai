@@ -110,26 +110,8 @@ export async function POST(request: NextRequest) {
 
     // Получаем или создаем чат с ботом
     const userId = session.user.id;
-    const participant1Id = userId < botUser.id ? userId : botUser.id;
-    const participant2Id = userId < botUser.id ? botUser.id : userId;
-
-    let chat = await prisma.chat.findUnique({
-      where: {
-        participant1Id_participant2Id: {
-          participant1Id,
-          participant2Id,
-        },
-      },
-    });
-
-    if (!chat) {
-      chat = await prisma.chat.create({
-        data: {
-          participant1Id,
-          participant2Id,
-        },
-      });
-    }
+    const { getOrCreatePrivateChat } = await import("@/lib/chat-utils");
+    const chat = await getOrCreatePrivateChat(userId, botUser.id);
 
     // Загружаем историю сообщений из чата для контекста
     const chatHistory = await prisma.chatMessage.findMany({
