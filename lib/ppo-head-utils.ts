@@ -12,8 +12,19 @@ export async function getPPOHead(userId: string) {
     select: {
       id: true,
       role: true,
+      isPPOHead: true,
       organizationId: true,
+      ppoHeadOrganizationId: true,
       organization: {
+        select: {
+          id: true,
+          name: true,
+          inn: true,
+          chairmanName: true,
+          chairmanJobTitle: true,
+        },
+      },
+      ppoHeadOrganization: {
         select: {
           id: true,
           name: true,
@@ -25,11 +36,21 @@ export async function getPPOHead(userId: string) {
     },
   });
 
-  if (user?.role !== UserRole.PPO_HEAD || !user.organizationId) {
+  // Председатель может быть PPO_HEAD или isPPOHead=true
+  const isPPOHead = user?.role === UserRole.PPO_HEAD || user?.isPPOHead === true;
+  const organizationId = user?.ppoHeadOrganizationId || user?.organizationId;
+
+  if (!isPPOHead || !organizationId) {
     return null;
   }
 
-  return user;
+  return {
+    id: user.id,
+    role: user.role,
+    isPPOHead: user.isPPOHead,
+    organizationId: organizationId,
+    organization: user.ppoHeadOrganization || user.organization,
+  };
 }
 
 /**

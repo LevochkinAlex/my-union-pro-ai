@@ -100,7 +100,9 @@ export async function POST(
       const updateData: any = {
         isPPOHead: true,
         ppoHeadOrganizationId: id,
+        organizationId: id, // Также привязываем к организации как члена
         viewMode: "PPO_HEAD", // Переключаем в режим председателя
+        membershipStatus: "APPROVED", // Председатель автоматически является членом
       };
 
       // Если у пользователя роль MEMBER или PENDING_MEMBER - оставляем её, добавляем isPPOHead
@@ -162,12 +164,14 @@ export async function POST(
       const updateData: any = {
         isPPOHead: true,
         ppoHeadOrganizationId: id,
+        organizationId: id, // Также привязываем к организации как члена
         viewMode: "PPO_HEAD",
         firstName: firstName,
         lastName: lastName,
         middleName: middleName || null,
         phone: phone,
         jobTitle: jobTitle || null,
+        membershipStatus: "APPROVED", // Председатель автоматически является членом
       };
 
       // Если роль не MEMBER - ставим PPO_HEAD

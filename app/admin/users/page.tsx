@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import ImpersonateButton from "@/components/admin/users/ImpersonateButton";
+import QuickApproveButton from "@/components/admin/users/QuickApproveButton";
 
 export default async function AdminUsers() {
   const users = await prisma.user.findMany({
@@ -17,15 +18,34 @@ export default async function AdminUsers() {
           },
         },
       },
+      organization: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
     },
   });
+
+  // Подсчёт ожидающих валидации
+  const pendingCount = users.filter(u => 
+    u.membershipStatus === "DOCUMENTS_PENDING" || 
+    u.membershipStatus === "PENDING_VERIFICATION"
+  ).length;
 
   return (
     <div className="p-8">
       <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Управление пользователями
-        </h1>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Управление пользователями
+          </h1>
+          {pendingCount > 0 && (
+            <p className="mt-1 text-sm text-yellow-600 dark:text-yellow-400">
+              ⚠️ {pendingCount} пользователей ожидают валидации
+            </p>
+          )}
+        </div>
         <Link
           href="/admin/users/invite"
           className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
@@ -109,6 +129,9 @@ export default async function AdminUsers() {
                     >
                       Просмотр
                     </Link>
+                    {needsAttention && (
+                      <QuickApproveButton userId={user.id} userName={`${user.firstName} ${user.lastName}`} />
+                    )}
                     <ImpersonateButton userId={user.id} userEmail={user.email || ""} />
                   </div>
                 </td>
