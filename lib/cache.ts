@@ -2,6 +2,40 @@ import { Redis } from "ioredis";
 import { getRedisOptions } from "./redis";
 
 let redisClient: Redis | null = null;
+let initPromise: Promise<void> | null = null;
+
+// Инициализируем Redis при загрузке модуля (на сервере)
+if (typeof window === "undefined") {
+  initPromise = initRedisConnection();
+}
+
+async function initRedisConnection(): Promise<void> {
+  try {
+    const client = getRedisClient();
+    if (client) {
+      // Ждём готовности Redis
+      await new Promise<void>((resolve, reject) => {
+        if (client.status === "ready") {
+          resolve();
+          return;
+        }
+        const timeout = setTimeout(() => {
+          reject(new Error("Redis connection timeout"));
+        }, 5000);
+        client.once("ready", () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        client.once("error", (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+      });
+    }
+  } catch (error) {
+    console.warn("[Redis] Initial connection failed, will retry on demand:", error);
+  }
+}
 
 /**
  * Получить или создать Redis клиент
@@ -75,12 +109,7 @@ function getRedisClient(): Redis | null {
  */
 export async function cacheGet<T>(key: string): Promise<T | null> {
   const client = getRedisClient();
-  if (!client) {
-    console.log(`[Cache] No Redis client for key: ${key}`);
-    return null;
-  }
-  if (client.status !== "ready") {
-    console.log(`[Cache] Redis not ready (${client.status}) for key: ${key}`);
+  if (!client || client.status !== "ready") {
     return null;
   }
 
@@ -115,7 +144,6 @@ export async function cacheSet(
   try {
     const serialized = JSON.stringify(value);
     await client.setex(key, ttlSeconds, serialized);
-    console.log(`[Cache] SET ${key} (TTL: ${ttlSeconds}s)`);
     return true;
   } catch (error: any) {
     // Не логируем ошибки подключения - это нормально при временных проблемах
@@ -185,7 +213,6 @@ export async function withCache<T>(
   fn: () => Promise<T>,
   ttlSeconds: number = 300
 ): Promise<T> {
-  console.log(`[Cache] withCache called for key: ${key}`);
   // Пытаемся получить из кеша (если Redis доступен)
   const cached = await cacheGet<T>(key);
   if (cached !== null) {

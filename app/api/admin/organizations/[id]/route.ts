@@ -83,6 +83,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    console.log("[admin/organizations/PUT] Request received");
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
@@ -100,7 +101,11 @@ export async function PUT(
     }
 
     const { id } = await params;
+    console.log("[admin/organizations/PUT] Organization ID:", id);
+    
     const body = await request.json();
+    console.log("[admin/organizations/PUT] Request body keys:", Object.keys(body));
+    
     const {
       name,
       type,
@@ -230,13 +235,15 @@ export async function PUT(
       },
     });
 
+    console.log("[admin/organizations/PUT] Successfully updated organization:", organization.id);
     return NextResponse.json({ organization });
   } catch (error: any) {
-    console.error("[admin/organizations] PUT [id] error:", error);
-    console.error("[admin/organizations] PUT [id] error details:", {
+    console.error("[admin/organizations/PUT] Error:", error);
+    console.error("[admin/organizations/PUT] Error details:", {
       message: error?.message,
       code: error?.code,
       meta: error?.meta,
+      stack: error?.stack?.substring(0, 500),
     });
     
     // Возвращаем более детальную информацию об ошибке в режиме разработки

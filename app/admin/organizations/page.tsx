@@ -393,6 +393,30 @@ export default function OrganizationsPage() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="mb-4 inline-flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30">
+            <svg className="h-6 w-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Ошибка загрузки
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">{loadError}</p>
+          <button
+            onClick={() => loadOrganizations()}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          >
+            Повторить попытку
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const tree = buildTree(organizations);
 
   return (

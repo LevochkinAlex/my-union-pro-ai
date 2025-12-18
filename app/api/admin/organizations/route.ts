@@ -10,9 +10,13 @@ import { OrganizationType } from "@prisma/client";
  */
 export async function GET(request: NextRequest) {
   try {
+    console.log("[admin/organizations] GET request received");
+    
     const session = await getServerSession(authOptions);
+    console.log("[admin/organizations] Session:", session?.user?.id ? "authenticated" : "not authenticated");
 
     if (!session?.user?.id) {
+      console.log("[admin/organizations] No session, returning 401");
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
@@ -21,8 +25,10 @@ export async function GET(request: NextRequest) {
       where: { id: session.user.id },
       select: { role: true },
     });
+    console.log("[admin/organizations] User role:", user?.role);
 
     if (user?.role !== "SUPER_ADMIN") {
+      console.log("[admin/organizations] Access denied, user role:", user?.role);
       return NextResponse.json({ error: "Доступ запрещен" }, { status: 403 });
     }
 
@@ -37,6 +43,7 @@ export async function GET(request: NextRequest) {
     if (!includeInactive) {
       where.isActive = true;
     }
+    console.log("[admin/organizations] Query params:", { type, includeInactive, where });
 
     const organizations = await prisma.organization.findMany({
       where,
@@ -72,11 +79,20 @@ export async function GET(request: NextRequest) {
       ],
     });
 
+    console.log("[admin/organizations] Successfully loaded", organizations.length, "organizations");
     return NextResponse.json({ organizations });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[admin/organizations] GET error:", error);
+    console.error("[admin/organizations] GET error details:", {
+      message: error?.message,
+      code: error?.code,
+      stack: error?.stack?.substring(0, 500),
+    });
     return NextResponse.json(
-      { error: "Ошибка при получении организаций" },
+      { 
+        error: "Ошибка при получении организаций",
+        details: process.env.NODE_ENV === "development" ? error?.message : undefined,
+      },
       { status: 500 }
     );
   }
