@@ -7,6 +7,7 @@ import path from "path";
 import { existsSync } from "fs";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import { optimizeWithPreset, getMimeType, getOptimizedFilename } from "@/lib/image-optimizer";
+import { cacheDeletePattern, getCacheKey } from "@/lib/cache";
 
 // Инициализируем VDS хранилище при загрузке модуля
 if (typeof window === "undefined") {
@@ -100,6 +101,10 @@ export async function POST(request: NextRequest) {
       data: { avatarUrl },
     });
 
+    // Инвалидируем кеш профиля, чтобы при следующей загрузке получить актуальные данные
+    // Используем паттерн для удаления всех вариантов кеша профиля
+    await cacheDeletePattern(`profile:userId:${session.user.id}:*`);
+    
     console.log("[profile/avatar] Avatar uploaded successfully:", {
       userId: session.user.id,
       filename,

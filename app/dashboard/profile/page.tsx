@@ -461,14 +461,24 @@ export default function ProfilePage() {
 
   const [savingAdditionalInfo, setSavingAdditionalInfo] = useState(false);
 
-  const loadProfile = async () => {
+  const loadProfile = async (retryCount = 0) => {
+    const MAX_RETRIES = 2;
     try {
       setIsLoading(true);
-      const response = await fetch("/api/profile");
+      // Добавляем timestamp для предотвращения кеширования браузером
+      const response = await fetch(`/api/profile?t=${Date.now()}`, {
+        cache: 'no-store',
+      });
       if (!response.ok) {
-        throw new Error("Не удалось загрузить профиль");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Не удалось загрузить профиль");
       }
       const data = await response.json();
+      
+      if (!data.user) {
+        throw new Error("Данные профиля не получены");
+      }
+      
       const user = data.user;
       setProfileData({
         firstName: user.firstName ?? "",
@@ -496,9 +506,24 @@ export default function ProfilePage() {
         profession: user.profession ?? "",
         education: user.education ?? "",
       }));
+      
+      // Очищаем предыдущее сообщение об ошибке при успешной загрузке
+      if (message?.type === "error" && message?.text.includes("загрузить профиль")) {
+        setMessage(null);
+      }
     } catch (error) {
-      console.error(error);
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка загрузки профиля" });
+      console.error("Error loading profile:", error);
+      const errorMessage = error instanceof Error ? error.message : "Ошибка загрузки профиля";
+      
+      // Повторяем попытку, если не достигнут лимит
+      if (retryCount < MAX_RETRIES) {
+        console.log(`Retrying profile load, attempt ${retryCount + 1}/${MAX_RETRIES}`);
+        // Задержка перед повторной попыткой (1 секунда)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return loadProfile(retryCount + 1);
+      }
+      
+      setMessage({ type: "error", text: errorMessage });
     } finally {
       setIsLoading(false);
     }

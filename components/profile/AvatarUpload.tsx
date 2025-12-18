@@ -24,17 +24,23 @@ export default function AvatarUpload({ currentAvatarUrl, onSave, userName }: Ava
   const [previewUrl, setPreviewUrl] = useState<string | null>(null); // Для временного отображения кропнутого изображения
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Сбрасываем ошибку загрузки при изменении currentAvatarUrl и очищаем превью
+  // Отслеживаем изменения currentAvatarUrl для очистки previewUrl
+  const prevAvatarUrlRef = useRef<string | null | undefined>(currentAvatarUrl);
+  
   useEffect(() => {
-    // Всегда сбрасываем ошибку при изменении URL, чтобы новое изображение могло загрузиться
-    setImageLoadError(false);
-    
-    // Когда обновляется currentAvatarUrl, очищаем временное превью
-    if (currentAvatarUrl && previewUrl) {
+    // Если currentAvatarUrl обновился (стал отличным от предыдущего), очищаем previewUrl
+    // Это означает, что новое изображение успешно загружено на сервер
+    if (previewUrl && currentAvatarUrl && currentAvatarUrl !== prevAvatarUrlRef.current) {
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
     }
-  }, [currentAvatarUrl]);
+    
+    // Сохраняем текущий URL для следующего сравнения
+    prevAvatarUrlRef.current = currentAvatarUrl;
+    
+    // Всегда сбрасываем ошибку при изменении URL, чтобы новое изображение могло загрузиться
+    setImageLoadError(false);
+  }, [currentAvatarUrl, previewUrl]);
   
   // Очистка blob URL при размонтировании компонента
   useEffect(() => {
@@ -145,8 +151,10 @@ export default function AvatarUpload({ currentAvatarUrl, onSave, userName }: Ava
       try {
         await onSave(croppedImageBlob);
         setError(null);
-        // Превью останется до тех пор, пока не обновится currentAvatarUrl из пропсов
-        // Когда currentAvatarUrl обновится, previewUrl будет очищен
+        // Превью останется активным, показывая кропнутое изображение
+        // Когда currentAvatarUrl обновится и серверное изображение загрузится,
+        // previewUrl автоматически перестанет использоваться (так как serverAvatarUrl будет в приоритете)
+        // Но мы не очищаем его сразу, чтобы избежать мигания
       } catch (saveError) {
         // Если сохранение не удалось, очищаем превью и показываем ошибку
         URL.revokeObjectURL(blobUrl);
@@ -203,7 +211,10 @@ export default function AvatarUpload({ currentAvatarUrl, onSave, userName }: Ava
 
   // Определяем, какое изображение показывать: превью (если есть), затем currentAvatarUrl, иначе placeholder
   // Для currentAvatarUrl используем getFileUrl для правильной обработки через CDN
-  const displayUrl = previewUrl || (currentAvatarUrl ? getFileUrl(currentAvatarUrl) : null);
+  // previewUrl имеет приоритет - показываем его сразу после кропа для мгновенного отображения
+  const serverAvatarUrl = currentAvatarUrl ? getFileUrl(currentAvatarUrl) : null;
+  const displayUrl = previewUrl || serverAvatarUrl;
+  
   const shouldShowPlaceholder = !displayUrl || imageLoadError;
   const initials = getInitials(userName);
 
@@ -234,7 +245,7 @@ export default function AvatarUpload({ currentAvatarUrl, onSave, userName }: Ava
               onLoad={() => {
                 if (process.env.NODE_ENV === 'development') {
                   console.log("[AvatarUpload] Avatar image loaded successfully");
-                  console.log("[AvatarUpload] Avatar URL type:", displayUrl?.startsWith('data:') ? 'base64' : displayUrl?.startsWith('blob:') ? 'blob' : 'url');
+                  console.log("[AvatarUpload] Display URL type:", displayUrl?.startsWith('data:') ? 'base64' : displayUrl?.startsWith('blob:') ? 'blob' : 'url');
                 }
                 setImageLoadError(false);
               }}
