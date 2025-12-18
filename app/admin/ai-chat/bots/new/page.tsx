@@ -19,6 +19,8 @@ type ApiProvider = {
   id: string;
   name: string;
   type: string;
+  isActive?: boolean;
+  isDefault?: boolean;
   apiKey?: string | null;
   apiBaseUrl?: string | null;
 };
