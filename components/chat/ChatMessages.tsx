@@ -21,6 +21,7 @@ interface ChatMessagesProps {
   onForward: (message: Message) => void;
   onReaction: (messageId: string, emoji: string) => void;
   onImageClick: (url: string, name?: string) => void;
+  onProfileClick?: (userId: string) => void;
   // Deprecated - не используется с Virtuoso
   onSaveScrollPosition?: (chatId: string, position: number) => void;
   getSavedScrollPosition?: (chatId: string) => number | null;
@@ -96,7 +97,10 @@ function ChatMessagesComponent({
   onForward,
   onReaction,
   onImageClick,
+  onProfileClick,
 }: ChatMessagesProps) {
+  // Определяем, является ли чат групповым (показываем имена отправителей)
+  const isGroupChat = chat.type === "GROUP";
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const prevChatId = useRef<string | null>(null);
   const currentVisibleIndex = useRef<number | null>(null);
@@ -297,18 +301,20 @@ function ChatMessagesComponent({
           currentUserId={currentUserId}
           isOwn={item.message.senderId === currentUserId}
           isOldMessage={isOldMessage}
+          showSenderName={isGroupChat}
           onReply={onReply}
           onEdit={onEdit}
           onDelete={onDelete}
           onForward={onForward}
           onReaction={onReaction}
           onImageClick={onImageClick}
+          onProfileClick={onProfileClick}
         />
       );
     }
 
     return null;
-  }, [currentUserId, onReply, onEdit, onDelete, onForward, onReaction, onImageClick]);
+  }, [currentUserId, isGroupChat, onReply, onEdit, onDelete, onForward, onReaction, onImageClick, onProfileClick]);
 
   if (loading) {
     return <LoadingState />;

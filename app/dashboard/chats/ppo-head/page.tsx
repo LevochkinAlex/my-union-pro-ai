@@ -187,6 +187,13 @@ function PPOHeadChatsContent() {
     setShowChatView(false);
   }, []);
 
+  // Переход на профиль пользователя
+  const handleProfileClick = useCallback((userId: string) => {
+    if (userId && userId !== currentUserId) {
+      router.push(`/dashboard/social/profile/${userId}`);
+    }
+  }, [router, currentUserId]);
+
   // Создание группы
   const handleCreateGroup = async () => {
     if (!groupName.trim()) {
@@ -368,6 +375,7 @@ function PPOHeadChatsContent() {
                   onForward={handleForward}
                   onReaction={toggleReaction}
                   onImageClick={(url, name) => setSelectedImage({ url, name })}
+                  onProfileClick={handleProfileClick}
                   onSaveScrollPosition={saveScrollPosition}
                   getSavedScrollPosition={getScrollPosition}
                 />

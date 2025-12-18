@@ -181,6 +181,13 @@ function ChatPageContent() {
     setShowChatView(false);
   }, []);
 
+  // Переход на профиль пользователя
+  const handleProfileClick = useCallback((userId: string) => {
+    if (userId && userId !== currentUserId) {
+      router.push(`/dashboard/social/profile/${userId}`);
+    }
+  }, [router, currentUserId]);
+
   // Защита от hydration mismatch
   if (!mounted) {
     return <PageSkeleton />;
@@ -226,6 +233,7 @@ function ChatPageContent() {
             <ChatHeader
               chat={selectedChat}
               onBack={handleBackToList}
+              onProfileClick={handleProfileClick}
             />
 
             {/* Сообщения */}
@@ -245,6 +253,7 @@ function ChatPageContent() {
                 onForward={handleForward}
                 onReaction={toggleReaction}
                 onImageClick={(url, name) => setSelectedImage({ url, name })}
+                onProfileClick={handleProfileClick}
                 onSaveScrollPosition={saveScrollPosition}
                 getSavedScrollPosition={getScrollPosition}
               />
@@ -287,7 +296,15 @@ function ChatPageContent() {
 }
 
 // Заголовок чата
-function ChatHeader({ chat, onBack }: { chat: Chat; onBack: () => void }) {
+function ChatHeader({ chat, onBack, onProfileClick }: { chat: Chat; onBack: () => void; onProfileClick?: (userId: string) => void }) {
+  const isClickable = chat.type === "PRIVATE" && chat.otherUser?.id;
+  
+  const handleClick = () => {
+    if (isClickable && onProfileClick && chat.otherUser?.id) {
+      onProfileClick(chat.otherUser.id);
+    }
+  };
+
   return (
     <div className="flex items-center gap-3 p-3 md:p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
       {/* Кнопка назад (мобильная) */}
@@ -300,24 +317,37 @@ function ChatHeader({ chat, onBack }: { chat: Chat; onBack: () => void }) {
         </svg>
       </button>
 
-      {/* Аватар */}
-      {chat.otherUser.avatarUrl ? (
-        <img
-          src={getFileUrl(chat.otherUser.avatarUrl)}
-          alt={getUserName(chat.otherUser)}
-          className="w-10 h-10 rounded-full object-cover"
-        />
-      ) : (
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-          {chat.otherUser.firstName?.[0] || "?"}{chat.otherUser.lastName?.[0] || ""}
-        </div>
-      )}
+      {/* Аватар (кликабельный для личных чатов) */}
+      <button
+        onClick={handleClick}
+        disabled={!isClickable}
+        className={`flex-shrink-0 ${isClickable ? "cursor-pointer hover:opacity-80 transition-opacity" : "cursor-default"}`}
+        title={isClickable ? `Открыть профиль ${getUserName(chat.otherUser)}` : undefined}
+      >
+        {chat.otherUser.avatarUrl ? (
+          <img
+            src={getFileUrl(chat.otherUser.avatarUrl)}
+            alt={getUserName(chat.otherUser)}
+            className="w-10 h-10 rounded-full object-cover"
+          />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
+            {chat.otherUser.firstName?.[0] || "?"}{chat.otherUser.lastName?.[0] || ""}
+          </div>
+        )}
+      </button>
 
-      {/* Имя */}
+      {/* Имя (кликабельное для личных чатов) */}
       <div className="flex-1 min-w-0">
-        <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-          {getUserName(chat.otherUser)}
-        </h3>
+        <button
+          onClick={handleClick}
+          disabled={!isClickable}
+          className={`block text-left w-full ${isClickable ? "hover:underline cursor-pointer" : "cursor-default"}`}
+        >
+          <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+            {getUserName(chat.otherUser)}
+          </h3>
+        </button>
         {chat.otherUser.phone && (
           <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
             {chat.otherUser.phone}

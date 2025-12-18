@@ -130,12 +130,14 @@ interface MessageItemProps {
   currentUserId: string | null;
   isOwn: boolean;
   isOldMessage?: boolean; // Является ли сообщение старым (не в последних сообщениях)
+  showSenderName?: boolean; // Показывать имя отправителя (для групповых чатов)
   onReply?: (message: Message) => void;
   onEdit?: (message: Message) => void;
   onDelete?: (messageId: string) => void;
   onForward?: (message: Message) => void;
   onReaction?: (messageId: string, emoji: string) => void;
   onImageClick?: (url: string, name?: string) => void;
+  onProfileClick?: (userId: string) => void;
 }
 
 function MessageItemComponent({
@@ -143,12 +145,14 @@ function MessageItemComponent({
   currentUserId,
   isOwn,
   isOldMessage = false,
+  showSenderName = false,
   onReply,
   onEdit,
   onDelete,
   onForward,
   onReaction,
   onImageClick,
+  onProfileClick,
 }: MessageItemProps) {
   const [showActions, setShowActions] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -184,12 +188,26 @@ function MessageItemComponent({
       <div className={`flex items-end gap-2 max-w-[85%] md:max-w-[70%] ${isOwn ? "flex-row-reverse" : ""}`}>
         {/* Аватар для чужих сообщений */}
         {!isOwn && (
-          <div className="flex-shrink-0 mb-1">
+          <button 
+            className="flex-shrink-0 mb-1 cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={() => message.sender?.id && onProfileClick?.(message.sender.id)}
+            title={`Открыть профиль ${getUserName(message.sender)}`}
+          >
             <Avatar user={message.sender} size="sm" />
-          </div>
+          </button>
         )}
 
         <div className="flex flex-col">
+          {/* Имя отправителя для групповых чатов */}
+          {!isOwn && showSenderName && message.sender && (
+            <button
+              className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline text-left mb-0.5 ml-1"
+              onClick={() => message.sender?.id && onProfileClick?.(message.sender.id)}
+            >
+              {getUserName(message.sender)}
+            </button>
+          )}
+
           {/* Ответ на сообщение */}
           {message.replyTo && (
             <ReplyPreview message={message.replyTo} isOwn={isOwn} />
