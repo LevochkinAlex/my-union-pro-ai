@@ -42,6 +42,12 @@ model User {
   role             UserRole         @default(PENDING_MEMBER)
   membershipStatus MembershipStatus @default(PENDING_VERIFICATION)
 
+  // Двойная роль: Член профсоюза + Председатель ППО
+  isPPOHead              Boolean  @default(false) // Флаг что пользователь также является председателем ППО
+  ppoHeadOrganizationId  String?  // ID организации где пользователь является председателем
+  ppoHeadOrganization    Organization? @relation("PPOHeadOrganization", fields: [ppoHeadOrganizationId], references: [id])
+  viewMode               String   @default("MEMBER") // Текущий режим просмотра: MEMBER или PPO_HEAD
+
   // Персональные данные
   firstName   String?
   lastName    String?
@@ -368,7 +374,9 @@ model Organization {
   email   String?
 
   // Председатель
-  chairmanName     String? // ФИО председателя
+  chairmanId       String?  @unique // ID пользователя-председателя (связь с User)
+  chairman         User?    @relation("PPOHeadOrganization")
+  chairmanName     String? // ФИО председателя (дублируется для отображения)
   chairmanJobTitle String? // Должность председателя (из справочника должностей)
 
   // Члены

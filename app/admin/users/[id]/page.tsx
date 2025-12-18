@@ -24,29 +24,76 @@ interface UserData {
   lastName: string | null;
   middleName: string | null;
   phone: string | null;
+  authPhone: string | null;
   dateOfBirth: Date | null;
   address: string | null;
+  avatarUrl: string | null;
   jobTitle: string | null;
   profession: string | null;
   education: string | null;
+  workplace: string | null;
+  workplaceInn: string | null;
+  directorName: string | null;
+  directorPosition: string | null;
+  employmentStatus: string | null;
   role: string;
   membershipStatus: string;
+  unionCardNumber: string | null;
+  membershipJoinedAt: Date | null;
+  unionMembershipStatus: string | null;
   awards: string | null;
   aboutMe: string | null;
   hobbies: string | null;
   maritalStatus: string | null;
+  spouseInfo: string | null;
   hasChildren: boolean | null;
   childrenInfo: string | null;
+  childrenBirthDates: string | null;
   training: string | null;
   additionalInfo: string | null;
+  professions: string | null;
+  educations: string | null;
+  preferredDiscountCity: string | null;
+  bestBenefitsUserId: string | null;
+  bestBenefitsStatus: string | null;
+  isPPOHead: boolean;
+  viewMode: string | null;
   createdAt: Date;
   updatedAt: Date;
+  emailVerified: Date | null;
   organization: {
     id: string;
     name: string;
   } | null;
+  ppoHeadOrganization: {
+    id: string;
+    name: string;
+  } | null;
   documents: Document[];
+  membershipHistory: Array<{
+    id: string;
+    organizationName: string;
+    status: string;
+    statusDate: Date;
+    notes: string | null;
+  }>;
 }
+
+type TabKey = "profile" | "work" | "family" | "education" | "documents" | "membership";
+
+const MARITAL_STATUS_MAP: Record<string, string> = {
+  SINGLE: "Не женат/Не замужем",
+  MARRIED: "Женат/Замужем",
+  DIVORCED: "В разводе",
+  WIDOWED: "Вдовец/Вдова",
+  CIVIL_UNION: "В гражданском браке",
+};
+
+const EMPLOYMENT_STATUS_MAP: Record<string, string> = {
+  WORK: "Работает",
+  STUDY: "Учится",
+  RETIREMENT: "На пенсии",
+};
 
 export default function AdminUserDetailsPage() {
   const params = useParams();
@@ -58,6 +105,7 @@ export default function AdminUserDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
   const [validationComment, setValidationComment] = useState("");
+  const [activeTab, setActiveTab] = useState<TabKey>("profile");
 
   const loadUser = useCallback(async () => {
     if (!userId) return;

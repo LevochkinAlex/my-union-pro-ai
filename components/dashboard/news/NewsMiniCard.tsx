@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { getFileUrlWithCDN } from "@/lib/cdn";
 
 interface NewsMiniCardProps {
   post: {
@@ -80,13 +81,11 @@ export default function NewsMiniCard({ post, priority = false }: NewsMiniCardPro
         {post.coverImage && !post.coverImage.startsWith("data:") && (
           <div className="relative w-full h-32 overflow-hidden bg-gray-100 dark:bg-gray-700">
             <Image
-              src={(() => {
-                if (post.coverImage.startsWith("http")) {
-                  return post.coverImage;
-                }
-                const { getFileUrlWithCDN } = require("@/lib/cdn");
-                return getFileUrlWithCDN(post.coverImage, true);
-              })()}
+              src={
+                post.coverImage.startsWith("http") || post.coverImage.startsWith("https")
+                  ? post.coverImage
+                  : getFileUrlWithCDN(post.coverImage, true)
+              }
               alt={post.title}
               fill
               sizes="(max-width: 768px) 100vw, 300px"
@@ -94,6 +93,11 @@ export default function NewsMiniCard({ post, priority = false }: NewsMiniCardPro
               loading={priority ? "eager" : "lazy"}
               priority={priority}
               quality={75}
+              onError={(e) => {
+                console.error("[NewsMiniCard] Failed to load cover image:", post.coverImage);
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+              }}
             />
           </div>
         )}
@@ -104,19 +108,21 @@ export default function NewsMiniCard({ post, priority = false }: NewsMiniCardPro
             {post.author.avatarUrl && !post.author.avatarUrl.startsWith("data:") ? (
               <div className="relative w-6 h-6 rounded-full overflow-hidden flex-shrink-0">
                 <Image
-                  src={(() => {
-                    if (post.author.avatarUrl!.startsWith("http")) {
-                      return post.author.avatarUrl!;
-                    }
-                    const { getFileUrlWithCDN } = require("@/lib/cdn");
-                    return getFileUrlWithCDN(post.author.avatarUrl!, true);
-                  })()}
+                  src={
+                    post.author.avatarUrl.startsWith("http") || post.author.avatarUrl.startsWith("https")
+                      ? post.author.avatarUrl
+                      : getFileUrlWithCDN(post.author.avatarUrl, true)
+                  }
                   alt={authorName}
                   width={24}
                   height={24}
                   className="object-cover"
                   loading="lazy"
                   quality={60}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                  }}
                 />
               </div>
             ) : (

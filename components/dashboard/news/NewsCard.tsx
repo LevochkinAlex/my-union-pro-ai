@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import clsx from "clsx";
 import NewsComments from "./NewsComments";
+import { getFileUrlWithCDN } from "@/lib/cdn";
 
 interface NewsPost {
   id: string;
@@ -199,10 +200,11 @@ export default function NewsCard({
             ) : (
               <div className="relative h-10 w-10 rounded-full overflow-hidden flex-shrink-0">
                 <img
-                  src={(() => {
-                    const { getFileUrlWithCDN } = require("@/lib/cdn");
-                    return getFileUrlWithCDN(post.author.avatarUrl, true);
-                  })()}
+                  src={
+                    post.author.avatarUrl.startsWith("http") || post.author.avatarUrl.startsWith("https")
+                      ? post.author.avatarUrl
+                      : getFileUrlWithCDN(post.author.avatarUrl, true)
+                  }
                   alt={authorName}
                   className="h-full w-full object-cover"
                   onError={(e) => {
@@ -236,13 +238,11 @@ export default function NewsCard({
         {post.coverImage && (
           <div className="mb-4 -mx-4 sm:-mx-6 bg-gray-100 dark:bg-gray-700">
             <img
-              src={(() => {
-                if (post.coverImage.startsWith("data:") || post.coverImage.startsWith("http")) {
-                  return post.coverImage;
-                }
-                const { getFileUrlWithCDN } = require("@/lib/cdn");
-                return getFileUrlWithCDN(post.coverImage, true);
-              })()}
+              src={
+                post.coverImage.startsWith("data:") || post.coverImage.startsWith("http") || post.coverImage.startsWith("https")
+                  ? post.coverImage
+                  : getFileUrlWithCDN(post.coverImage, true)
+              }
               alt={post.title}
               className="w-full h-auto max-h-96 object-cover"
               loading={priority ? "eager" : "lazy"}

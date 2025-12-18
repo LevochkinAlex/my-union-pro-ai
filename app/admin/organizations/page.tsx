@@ -37,6 +37,22 @@ interface JobTitle {
   name: string;
 }
 
+interface ExistingUser {
+  id: string;
+  email: string | null;
+  phone: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  middleName: string | null;
+  fullName: string | null;
+  avatarUrl: string | null;
+  role: string;
+  membershipStatus: string;
+  isPPOHead: boolean;
+  currentPPOOrganization: { id: string; name: string } | null;
+  memberOrganization: { id: string; name: string } | null;
+}
+
 export default function OrganizationsPage() {
   const { data: session, status: sessionStatus } = useSession();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -46,6 +62,12 @@ export default function OrganizationsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [jobTitles, setJobTitles] = useState<string[]>([]);
+  
+  // Состояние для найденного существующего пользователя
+  const [existingUser, setExistingUser] = useState<ExistingUser | null>(null);
+  const [searchingUser, setSearchingUser] = useState(false);
+  const [userConfirmed, setUserConfirmed] = useState(false);
+  
   const [formData, setFormData] = useState<{
     name: string;
     type: OrganizationType;
@@ -62,6 +84,7 @@ export default function OrganizationsPage() {
     chairmanLastName: string;
     chairmanMiddleName: string;
     isActive: boolean;
+    existingUserId: string;
   }>({
     name: "",
     type: "FEDERAL",
@@ -78,12 +101,85 @@ export default function OrganizationsPage() {
     chairmanLastName: "",
     chairmanMiddleName: "",
     isActive: true,
+    existingUserId: "",
   });
 
   useEffect(() => {
     loadOrganizations();
     loadJobTitles();
   }, []);
+
+  // Функция поиска существующего пользователя по email или телефону
+  const searchExistingUser = async (email?: string, phone?: string) => {
+    if (!email && !phone) {
+      setExistingUser(null);
+      return;
+    }
+
+    try {
+      setSearchingUser(true);
+      const params = new URLSearchParams();
+      if (email) params.append("email", email);
+      if (phone) params.append("phone", phone);
+      
+      const response = await fetch(`/api/admin/users/search?${params}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.found && data.user) {
+          setExistingUser(data.user);
+          // Если пользователь найден и ещё не подтверждён, НЕ заполняем данные автоматически
+          // Пользователь должен сначала подтвердить
+        } else {
+          setExistingUser(null);
+          setUserConfirmed(false);
+        }
+      }
+    } catch (error) {
+      console.error("Ошибка поиска пользователя:", error);
+    } finally {
+      setSearchingUser(false);
+    }
+  };
+
+  // Debounce поиска при вводе email или телефона
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (formData.chairmanEmail || formData.chairmanPhone) {
+        searchExistingUser(formData.chairmanEmail, formData.chairmanPhone);
+      } else {
+        setExistingUser(null);
+        setUserConfirmed(false);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [formData.chairmanEmail, formData.chairmanPhone]);
+
+  // Функция подтверждения использования существующего пользователя
+  const confirmExistingUser = () => {
+    if (!existingUser) return;
+    
+    // Заполняем данные из существующего пользователя
+    setFormData(prev => ({
+      ...prev,
+      chairmanFirstName: existingUser.firstName || "",
+      chairmanLastName: existingUser.lastName || "",
+      chairmanMiddleName: existingUser.middleName || "",
+      chairmanEmail: existingUser.email || prev.chairmanEmail,
+      chairmanPhone: existingUser.phone || prev.chairmanPhone,
+      existingUserId: existingUser.id,
+    }));
+    setUserConfirmed(true);
+  };
+
+  // Функция сброса привязки к существующему пользователю
+  const resetExistingUser = () => {
+    setExistingUser(null);
+    setUserConfirmed(false);
+    setFormData(prev => ({
+      ...prev,
+      existingUserId: "",
+    }));
+  };
 
   const loadOrganizations = async () => {
     try {
@@ -132,6 +228,8 @@ export default function OrganizationsPage() {
     setIsCreating(true);
     setIsEditing(false);
     setSelectedOrg(null);
+    setExistingUser(null);
+    setUserConfirmed(false);
     setFormData({
       name: "",
       type: "FEDERAL",
@@ -148,6 +246,7 @@ export default function OrganizationsPage() {
       chairmanLastName: "",
       chairmanMiddleName: "",
       isActive: true,
+      existingUserId: "",
     });
   };
 
@@ -155,6 +254,8 @@ export default function OrganizationsPage() {
     setSelectedOrg(org);
     setIsEditing(true);
     setIsCreating(false);
+    setExistingUser(null);
+    setUserConfirmed(false);
     // Парсим ФИО председателя из chairmanName
     const nameParts = (org.chairmanName || "").split(" ");
     setFormData({
@@ -173,6 +274,7 @@ export default function OrganizationsPage() {
       chairmanLastName: nameParts[0] || "",
       chairmanMiddleName: nameParts[2] || "",
       isActive: org.isActive,
+      existingUserId: "",
     });
   };
 
@@ -225,6 +327,7 @@ export default function OrganizationsPage() {
                 lastName: formData.chairmanLastName,
                 middleName: formData.chairmanMiddleName,
                 jobTitle: formData.chairmanJobTitle,
+                existingUserId: formData.existingUserId || undefined, // Передаём ID существующего пользователя
               }),
             });
 
@@ -233,7 +336,12 @@ export default function OrganizationsPage() {
               console.error("Ошибка отправки инвайта:", inviteError);
               alertError(`Организация сохранена, но не удалось отправить инвайт: ${inviteError.error || "Неизвестная ошибка"}`);
             } else {
-              alertSuccess("Организация успешно сохранена! Инвайт-ссылка отправлена председателю на email.");
+              const inviteResult = await inviteResponse.json();
+              if (inviteResult.existingUserPromoted) {
+                alertSuccess("Организация успешно сохранена! Существующему пользователю предоставлены права председателя ППО. Уведомление отправлено на email.");
+              } else {
+                alertSuccess("Организация успешно сохранена! Инвайт-ссылка отправлена председателю на email.");
+              }
             }
           } catch (inviteError) {
             console.error("Ошибка отправки инвайта:", inviteError);
@@ -242,6 +350,10 @@ export default function OrganizationsPage() {
         } else {
           alertSuccess("Организация успешно сохранена!");
         }
+        
+        // Сбрасываем состояние существующего пользователя
+        setExistingUser(null);
+        setUserConfirmed(false);
 
         await loadOrganizations();
         setIsEditing(false);
@@ -512,13 +624,48 @@ export default function OrganizationsPage() {
         </button>
       </div>
 
+      {/* Модальное окно редактирования/создания организации */}
       {(isEditing || isCreating) && (
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <h2 className="mb-4 text-xl font-semibold">
-            {isCreating ? "Создание организации" : "Редактирование организации"}
-          </h2>
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/50 transition-opacity"
+            onClick={() => {
+              setIsEditing(false);
+              setIsCreating(false);
+              setSelectedOrg(null);
+              setExistingUser(null);
+              setUserConfirmed(false);
+            }}
+          />
+          
+          {/* Modal */}
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="relative w-full max-w-3xl rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  {isCreating ? "Создание организации" : "Редактирование организации"}
+                </h2>
+                <button
+                  onClick={() => {
+                    setIsEditing(false);
+                    setIsCreating(false);
+                    setSelectedOrg(null);
+                    setExistingUser(null);
+                    setUserConfirmed(false);
+                  }}
+                  className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
 
-          <div className="space-y-4">
+              {/* Body */}
+              <div className="max-h-[calc(100vh-200px)] overflow-y-auto px-6 py-4">
+                <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Название организации *
@@ -665,13 +812,21 @@ export default function OrganizationsPage() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Email председателя *
                   </label>
-                  <input
-                    type="email"
-                    value={formData.chairmanEmail}
-                    onChange={(e) => setFormData({ ...formData, chairmanEmail: e.target.value })}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
-                    placeholder="chairman@example.com"
-                  />
+                  <div className="relative">
+                    <input
+                      type="email"
+                      value={formData.chairmanEmail}
+                      onChange={(e) => setFormData({ ...formData, chairmanEmail: e.target.value })}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                      placeholder="chairman@example.com"
+                      disabled={userConfirmed}
+                    />
+                    {searchingUser && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"></div>
+                      </div>
+                    )}
+                  </div>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     На этот email будет отправлена инвайт-ссылка для авторизации
                   </p>
@@ -686,9 +841,102 @@ export default function OrganizationsPage() {
                     onChange={(e) => setFormData({ ...formData, chairmanPhone: e.target.value })}
                     className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
                     placeholder="+7 (999) 123-45-67"
+                    disabled={userConfirmed}
                   />
                 </div>
               </div>
+
+              {/* Предупреждение о существующем пользователе */}
+              {existingUser && !userConfirmed && (
+                <div className="mt-4 rounded-lg border border-yellow-300 bg-yellow-50 p-4 dark:border-yellow-700 dark:bg-yellow-900/20">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">
+                        Найден существующий пользователь!
+                      </h4>
+                      <div className="mt-2 flex items-center gap-3">
+                        {existingUser.avatarUrl && (
+                          <img 
+                            src={existingUser.avatarUrl} 
+                            alt="" 
+                            className="h-10 w-10 rounded-full object-cover"
+                          />
+                        )}
+                        <div>
+                          <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                            <strong>{existingUser.fullName || "Без имени"}</strong>
+                          </p>
+                          <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                            {existingUser.email && <span className="mr-2">{existingUser.email}</span>}
+                            {existingUser.phone && <span>{existingUser.phone}</span>}
+                          </p>
+                          <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                            Роль: {existingUser.role === "MEMBER" ? "Член профсоюза" : existingUser.role}
+                            {existingUser.isPPOHead && existingUser.currentPPOOrganization && (
+                              <span className="ml-1">
+                                (уже председатель: {existingUser.currentPPOOrganization.name})
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
+                        Если вы подтвердите, этому пользователю будут предоставлены права председателя ППО. 
+                        Он сможет переключаться между режимами «Член профсоюза» и «Председатель ППО».
+                      </p>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={confirmExistingUser}
+                          className="rounded bg-yellow-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-yellow-700"
+                        >
+                          Подтвердить и использовать данные
+                        </button>
+                        <button
+                          type="button"
+                          onClick={resetExistingUser}
+                          className="rounded border border-yellow-600 px-3 py-1.5 text-xs font-medium text-yellow-600 hover:bg-yellow-100 dark:text-yellow-400 dark:hover:bg-yellow-900/30"
+                        >
+                          Создать нового пользователя
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Показываем инфо что пользователь подтверждён */}
+              {userConfirmed && existingUser && (
+                <div className="mt-4 rounded-lg border border-green-300 bg-green-50 p-4 dark:border-green-700 dark:bg-green-900/20">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <svg className="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                          Используется существующий пользователь: {existingUser.fullName}
+                        </p>
+                        <p className="text-xs text-green-600 dark:text-green-400">
+                          Ему будут предоставлены права председателя ППО
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={resetExistingUser}
+                      className="text-sm text-green-600 hover:text-green-700 dark:text-green-400"
+                    >
+                      Отменить
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-4">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -722,23 +970,30 @@ export default function OrganizationsPage() {
               </label>
             </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={handleSave}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-              >
-                Сохранить
-              </button>
-              <button
-                onClick={() => {
-                  setIsEditing(false);
-                  setIsCreating(false);
-                  setSelectedOrg(null);
-                }}
-                className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
-              >
-                Отмена
-              </button>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+                <button
+                  onClick={() => {
+                    setIsEditing(false);
+                    setIsCreating(false);
+                    setSelectedOrg(null);
+                    setExistingUser(null);
+                    setUserConfirmed(false);
+                  }}
+                  className="rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={handleSave}
+                  className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
+                >
+                  Сохранить
+                </button>
+              </div>
             </div>
           </div>
         </div>

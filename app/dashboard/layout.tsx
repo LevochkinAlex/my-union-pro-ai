@@ -25,9 +25,24 @@ export default async function DashboardLayout({
   const membershipStatus = session.user.membershipStatus;
   const isImpersonating = session.user.isImpersonating || false;
   
+  // Получаем дополнительные данные пользователя из БД (viewMode, isPPOHead)
+  const userData = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      viewMode: true,
+      isPPOHead: true,
+      ppoHeadOrganizationId: true,
+    },
+  });
+  
+  const viewMode = userData?.viewMode || "MEMBER";
+  const isPPOHead = userData?.isPPOHead || false;
+  
   console.log("[dashboard/layout] ✅ User authenticated:", {
     userId: session.user.id,
     role: userRole,
+    viewMode,
+    isPPOHead,
     isImpersonating
   });
 
@@ -36,6 +51,11 @@ export default async function DashboardLayout({
     console.log("[dashboard/layout] ℹ️ Super admin detected, redirecting to /admin/dashboard");
     redirect("/admin/dashboard");
   }
+
+  // Определяем какое меню показывать на основе viewMode
+  // Если пользователь может быть и членом и председателем, используем viewMode
+  // Если роль PPO_HEAD без двойной роли - показываем меню председателя
+  const showPPOHeadMenu = (userRole === "PPO_HEAD") || (isPPOHead && viewMode === "PPO_HEAD");
 
   // Создаем базовое меню
   let menuItems: Array<{
@@ -56,7 +76,7 @@ export default async function DashboardLayout({
   ];
 
   // Для Председателя добавляем специальные пункты меню
-  if (userRole === "PPO_HEAD") {
+  if (showPPOHeadMenu) {
     menuItems.push({
       href: "/dashboard/documents",
       label: "Документы",

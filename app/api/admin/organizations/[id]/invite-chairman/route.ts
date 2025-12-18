@@ -42,6 +42,7 @@ export async function POST(
       lastName,
       middleName,
       jobTitle,
+      existingUserId, // ID существующего пользователя (если выбран в админке)
     } = body;
 
     // Валидация
@@ -64,30 +65,128 @@ export async function POST(
       );
     }
 
+    // Если передан existingUserId - это существующий пользователь, которому нужно дать права председателя
+    if (existingUserId) {
+      const existingUser = await prisma.user.findUnique({
+        where: { id: existingUserId },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          isPPOHead: true,
+          ppoHeadOrganizationId: true,
+        },
+      });
+
+      if (!existingUser) {
+        return NextResponse.json(
+          { error: "Указанный пользователь не найден" },
+          { status: 404 }
+        );
+      }
+
+      // Проверяем, не является ли пользователь уже председателем этой организации
+      if (existingUser.ppoHeadOrganizationId === id) {
+        return NextResponse.json(
+          { error: "Пользователь уже является председателем этой организации" },
+          { status: 400 }
+        );
+      }
+
+      // Обновляем пользователя: добавляем права председателя (двойная роль)
+      // НЕ меняем основную роль, если он член профсоюза - добавляем isPPOHead
+      const updateData: any = {
+        isPPOHead: true,
+        ppoHeadOrganizationId: id,
+        viewMode: "PPO_HEAD", // Переключаем в режим председателя
+      };
+
+      // Если у пользователя роль MEMBER или PENDING_MEMBER - оставляем её, добавляем isPPOHead
+      // Если роль уже PPO_HEAD - просто обновляем организацию
+      if (existingUser.role !== "MEMBER" && existingUser.role !== "PENDING_MEMBER") {
+        updateData.role = "PPO_HEAD";
+      }
+
+      await prisma.user.update({
+        where: { id: existingUserId },
+        data: updateData,
+      });
+
+      // Обновляем организацию - связываем с председателем
+      await prisma.organization.update({
+        where: { id },
+        data: {
+          chairmanId: existingUserId,
+          chairmanName: [lastName, firstName, middleName].filter(Boolean).join(" "),
+          chairmanJobTitle: jobTitle || null,
+        },
+      });
+
+      // Отправляем email с уведомлением о новых правах
+      const userEmail = existingUser.email || email;
+      await sendPPOHeadPromotionEmail(
+        userEmail,
+        existingUser.firstName || firstName,
+        existingUser.lastName || lastName,
+        organization.name
+      );
+
+      return NextResponse.json({
+        success: true,
+        message: "Существующему пользователю предоставлены права председателя ППО",
+        userId: existingUserId,
+        existingUserPromoted: true,
+      });
+    }
+
     // Проверяем, не существует ли уже пользователь с таким email
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
 
     if (existingUser) {
-      // Если пользователь уже существует, проверяем, является ли он председателем этой организации
-      if (existingUser.organizationId === id && existingUser.role === "PPO_HEAD") {
+      // Если пользователь уже существует и это НЕ был явный выбор в админке
+      // Делаем его председателем с двойной ролью
+      
+      // Проверяем, является ли он уже председателем этой организации
+      if (existingUser.ppoHeadOrganizationId === id) {
         return NextResponse.json(
           { error: "Пользователь уже является председателем этой организации" },
           { status: 400 }
         );
       }
-      // Если пользователь существует, но не связан с этой организацией, обновляем его
+
+      // Обновляем пользователя: добавляем права председателя (двойная роль)
+      const updateData: any = {
+        isPPOHead: true,
+        ppoHeadOrganizationId: id,
+        viewMode: "PPO_HEAD",
+        firstName: firstName,
+        lastName: lastName,
+        middleName: middleName || null,
+        phone: phone,
+        jobTitle: jobTitle || null,
+      };
+
+      // Если роль не MEMBER - ставим PPO_HEAD
+      if (existingUser.role !== "MEMBER" && existingUser.role !== "PENDING_MEMBER") {
+        updateData.role = "PPO_HEAD";
+      }
+
       const updatedUser = await prisma.user.update({
         where: { id: existingUser.id },
+        data: updateData,
+      });
+
+      // Обновляем организацию
+      await prisma.organization.update({
+        where: { id },
         data: {
-          organizationId: id,
-          role: "PPO_HEAD",
-          firstName: firstName,
-          lastName: lastName,
-          middleName: middleName || null,
-          phone: phone,
-          jobTitle: jobTitle || null,
+          chairmanId: updatedUser.id,
+          chairmanName: [lastName, firstName, middleName].filter(Boolean).join(" "),
+          chairmanJobTitle: jobTitle || null,
         },
       });
 
@@ -113,6 +212,7 @@ export async function POST(
         success: true,
         message: "Инвайт-ссылка отправлена существующему пользователю",
         userId: updatedUser.id,
+        existingUserPromoted: true,
       });
     }
 
@@ -137,11 +237,24 @@ export async function POST(
         jobTitle: jobTitle || null,
         organizationId: id,
         role: "PPO_HEAD",
+        isPPOHead: true,
+        ppoHeadOrganizationId: id,
+        viewMode: "PPO_HEAD",
         membershipStatus: "APPROVED",
         emailVerified: null, // Email будет подтвержден при переходе по инвайт-ссылке
         resetToken: inviteToken,
         resetTokenExpires: inviteTokenExpires,
         bestBenefitsPassword: encryptedBbPassword,
+      },
+    });
+
+    // Обновляем организацию - связываем с председателем
+    await prisma.organization.update({
+      where: { id },
+      data: {
+        chairmanId: newUser.id,
+        chairmanName: [lastName, firstName, middleName].filter(Boolean).join(" "),
+        chairmanJobTitle: jobTitle || null,
       },
     });
 
@@ -317,6 +430,125 @@ async function sendChairmanInviteEmail(
   await sendEmail({
     to: email,
     subject: `Приглашение в МойСоюз — Председатель ${organizationName}`,
+    html: htmlContent,
+    text: textContent,
+  });
+}
+
+/**
+ * Отправляет email существующему пользователю о предоставлении прав председателя
+ */
+async function sendPPOHeadPromotionEmail(
+  email: string,
+  firstName: string,
+  lastName: string,
+  organizationName: string
+) {
+  const fullName = `${firstName} ${lastName}`;
+  const baseUrl = process.env.NEXTAUTH_URL || "https://myunion.pro";
+  const dashboardUrl = `${baseUrl}/dashboard`;
+  
+  const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Новые права в МойСоюз</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+  <div style="max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    <!-- Header -->
+    <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px 20px; text-align: center;">
+      <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">
+        🎉 Поздравляем, ${firstName}!
+      </h1>
+    </div>
+    
+    <!-- Content -->
+    <div style="padding: 40px 30px;">
+      <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
+        Здравствуйте, ${fullName}!
+      </p>
+      
+      <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
+        Вам предоставлены права <strong>Председателя ППО</strong> для организации <strong>${organizationName}</strong>.
+      </p>
+      
+      <div style="margin: 30px 0; padding: 20px; background-color: #ecfdf5; border-left: 4px solid #10b981; border-radius: 4px;">
+        <h3 style="margin: 0 0 10px; font-size: 16px; color: #065f46;">
+          🔄 Переключение режимов
+        </h3>
+        <p style="margin: 0; font-size: 14px; color: #065f46; line-height: 1.6;">
+          Теперь в вашем личном кабинете доступен переключатель режимов работы. 
+          Вы можете работать как <strong>Член профсоюза</strong> или как <strong>Председатель ППО</strong>.
+        </p>
+      </div>
+      
+      <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #333333;">
+        Нажмите кнопку ниже, чтобы перейти в личный кабинет и начать работу.
+      </p>
+      
+      <!-- Button -->
+      <div style="text-align: center; margin: 40px 0;">
+        <a href="${dashboardUrl}" 
+           style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);">
+          🚀 Перейти в личный кабинет
+        </a>
+      </div>
+      
+      <div style="margin-top: 30px; padding: 20px; background-color: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 4px;">
+        <h3 style="margin: 0 0 10px; font-size: 16px; color: #1e40af;">
+          📋 Возможности кабинета Председателя:
+        </h3>
+        <ul style="margin: 0; padding-left: 20px; color: #1e40af; line-height: 1.8;">
+          <li>Управление документами профкома</li>
+          <li>Обработка обращений членов профсоюза</li>
+          <li>Создание новостей и управление каналами</li>
+          <li>Валидация заявок на вступление в профсоюз</li>
+          <li>Управление чатами и группами</li>
+        </ul>
+      </div>
+    </div>
+    
+    <!-- Footer -->
+    <div style="background-color: #f8f8f8; padding: 20px 30px; text-align: center; border-top: 1px solid #e0e0e0;">
+      <p style="margin: 0 0 10px; font-size: 14px; color: #666666;">
+        <strong>МойСоюз</strong> — современная платформа для профсоюзов
+      </p>
+      <p style="margin: 0; font-size: 12px; color: #999999;">
+        Техподдержка: <a href="mailto:support@myunion.pro" style="color: #10b981; text-decoration: none;">support@myunion.pro</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const textContent = `
+Поздравляем, ${firstName}!
+
+Вам предоставлены права Председателя ППО для организации ${organizationName}.
+
+Теперь в вашем личном кабинете доступен переключатель режимов работы. 
+Вы можете работать как Член профсоюза или как Председатель ППО.
+
+Перейти в личный кабинет: ${dashboardUrl}
+
+Возможности кабинета Председателя:
+- Управление документами профкома
+- Обработка обращений членов профсоюза
+- Создание новостей и управление каналами
+- Валидация заявок на вступление в профсоюз
+- Управление чатами и группами
+
+МойСоюз — современная платформа для профсоюзов
+Техподдержка: support@myunion.pro
+  `.trim();
+
+  await sendEmail({
+    to: email,
+    subject: `🎉 Вам предоставлены права Председателя ППО — ${organizationName}`,
     html: htmlContent,
     text: textContent,
   });

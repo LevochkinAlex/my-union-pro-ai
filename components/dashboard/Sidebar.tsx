@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "@/components/ThemeToggle";
 import { LogoIcon } from "@/components/Logo";
 import { signOut } from "next-auth/react";
+import ViewModeSwitch from "./ViewModeSwitch";
 
 interface NavItem {
   href: string;
@@ -207,6 +208,13 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
 
           {/* Bottom section */}
           <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
+            {/* View Mode Switch - только для пользователей с двойной ролью */}
+            {!isAdmin && (
+              <div className={`${isCollapsed ? "px-3 py-3 flex justify-center" : "px-4 py-3"}`}>
+                <ViewModeSwitch collapsed={isCollapsed} />
+              </div>
+            )}
+            
             {/* Version info */}
             {!isCollapsed && (
               <div className="px-4 py-3 text-center">
