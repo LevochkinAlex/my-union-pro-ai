@@ -42,12 +42,6 @@ type ChatBot = {
     apiKey?: string;
     apiBaseUrl?: string;
   } | null;
-  knowledgeBases?: Array<{
-    knowledgeBase: {
-      id: string;
-      name: string;
-    };
-  }>;
   knowledgeBases: Array<{
     knowledgeBase: {
       id: string;
