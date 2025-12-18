@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateAppealPublicId, formatAppealId } from "@/lib/appeal-id";
 import { saveTicketToKnowledgeBase } from "@/lib/user-knowledge-base";
-import { sendChatMessage } from "@/lib/chat-server-utils";
+// Chat creation is done inline for appeal chats
 
 /**
  * GET /api/tickets - Получить тикеты пользователя
@@ -192,22 +192,24 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Создаем ОТДЕЛЬНЫЙ чат для обращения (не личный чат!)
+    // Создаем ОТДЕЛЬНЫЙ чат для обращения (тип GROUP для обхода unique constraint)
     // Чат обращения - это отдельная переписка от имени организации
     let chatId: string | null = null;
     if (chairmanId && chairmanId !== session.user.id) {
-      // Нормализуем ID участников: меньший ID всегда participant1Id
-      const participant1Id = session.user.id < chairmanId ? session.user.id : chairmanId;
-      const participant2Id = session.user.id < chairmanId ? chairmanId : session.user.id;
-
-      // Создаем НОВЫЙ чат специально для этого обращения
+      // Создаем чат типа GROUP для обращения (позволяет иметь несколько чатов между пользователями)
       const chat = await prisma.chat.create({
         data: {
-          type: "PRIVATE",
-          participant1Id,
-          participant2Id,
-          name: `Обращение #${publicId}`, // Название для идентификации
-          description: title, // Тема обращения
+          type: "GROUP", // GROUP позволяет несколько чатов между теми же участниками
+          name: `Обращение #${publicId}`,
+          description: title,
+          createdById: session.user.id,
+          isPublic: false, // Закрытый чат
+          participants: {
+            create: [
+              { userId: session.user.id, role: "member" },
+              { userId: chairmanId, role: "admin" },
+            ],
+          },
         },
       });
       chatId = chat.id;
@@ -219,7 +221,22 @@ export async function POST(request: NextRequest) {
       });
 
       // Создаем первое сообщение в чате с текстом обращения
-      await sendChatMessage(chatId, session.user.id, `📋 **${title}**\n\n${content}`);
+      await prisma.chatMessage.create({
+        data: {
+          chatId: chat.id,
+          senderId: session.user.id,
+          content: `📋 **${title}**\n\n${content.replace(/<[^>]*>/g, "")}`,
+        },
+      });
+
+      // Обновляем lastMessage в чате
+      await prisma.chat.update({
+        where: { id: chat.id },
+        data: {
+          lastMessageAt: new Date(),
+          lastMessage: `📋 ${title}`,
+        },
+      });
     }
 
     // Логируем создание обращения
