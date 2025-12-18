@@ -30,7 +30,8 @@ export default function AvatarUpload({ currentAvatarUrl, onSave, userName }: Ava
   useEffect(() => {
     // Если currentAvatarUrl обновился (стал отличным от предыдущего), очищаем previewUrl
     // Это означает, что новое изображение успешно загружено на сервер
-    if (previewUrl && currentAvatarUrl && currentAvatarUrl !== prevAvatarUrlRef.current) {
+    if (previewUrl && currentAvatarUrl && currentAvatarUrl !== prevAvatarUrlRef.current && prevAvatarUrlRef.current !== undefined) {
+      console.log("[AvatarUpload] Avatar URL updated, clearing preview. Old:", prevAvatarUrlRef.current?.substring(0, 50), "New:", currentAvatarUrl.substring(0, 50));
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
     }
@@ -137,7 +138,15 @@ export default function AvatarUpload({ currentAvatarUrl, onSave, userName }: Ava
   const handleSave = async () => {
     try {
       setIsUploading(true);
+      console.log("[AvatarUpload] Starting crop and save process...");
+      
+      if (!imageSrc || !croppedAreaPixels) {
+        throw new Error("Нет изображения или области для кропа");
+      }
+      
+      console.log("[AvatarUpload] Creating cropped image...");
       const croppedImageBlob = await createCroppedImage();
+      console.log("[AvatarUpload] Cropped image created, size:", croppedImageBlob.size, "type:", croppedImageBlob.type);
       
       // Создаем временный blob URL для немедленного отображения
       const blobUrl = URL.createObjectURL(croppedImageBlob);
@@ -149,20 +158,23 @@ export default function AvatarUpload({ currentAvatarUrl, onSave, userName }: Ava
       setImageSrc(null);
       
       try {
+        console.log("[AvatarUpload] Calling onSave callback...");
         await onSave(croppedImageBlob);
+        console.log("[AvatarUpload] Avatar saved successfully");
         setError(null);
         // Превью останется активным, показывая кропнутое изображение
         // Когда currentAvatarUrl обновится и серверное изображение загрузится,
         // previewUrl автоматически перестанет использоваться (так как serverAvatarUrl будет в приоритете)
         // Но мы не очищаем его сразу, чтобы избежать мигания
       } catch (saveError) {
+        console.error("[AvatarUpload] Save callback failed:", saveError);
         // Если сохранение не удалось, очищаем превью и показываем ошибку
         URL.revokeObjectURL(blobUrl);
         setPreviewUrl(null);
         throw saveError;
       }
     } catch (error) {
-      console.error("Error uploading avatar:", error);
+      console.error("[AvatarUpload] Error uploading avatar:", error);
       const errorMessage = error instanceof Error ? error.message : "Ошибка при загрузке фото";
       setError(errorMessage);
       // Не закрываем кроппер при ошибке, чтобы пользователь мог попробовать снова

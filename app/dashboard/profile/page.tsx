@@ -1013,20 +1013,27 @@ export default function ProfilePage() {
 
   const handleAvatarSave = async (croppedImageBlob: Blob) => {
     try {
+      console.log("[Profile] Starting avatar upload, blob size:", croppedImageBlob.size, "type:", croppedImageBlob.type);
+      
       const formData = new FormData();
       formData.append("avatar", croppedImageBlob, "avatar.jpg");
 
+      console.log("[Profile] Sending avatar to server...");
       const response = await fetch("/api/profile/avatar", {
         method: "POST",
         body: formData,
       });
 
+      console.log("[Profile] Avatar upload response status:", response.status, response.statusText);
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Не удалось загрузить фото");
+        const errorData = await response.json().catch(() => ({ error: "Неизвестная ошибка" }));
+        console.error("[Profile] Avatar upload error:", errorData);
+        throw new Error(errorData.error || "Не удалось загрузить фото");
       }
 
       const data = await response.json();
+      console.log("[Profile] Avatar uploaded successfully, new URL:", data.avatarUrl);
       
       // Обновляем avatarUrl - компонент AvatarUpload сам обработает его через getFileUrl
       setProfileData(prev => ({ ...prev, avatarUrl: data.avatarUrl }));
@@ -1035,8 +1042,9 @@ export default function ProfilePage() {
       // Не перезагружаем весь профиль сразу, чтобы не потерять временное превью
       // Обновление URL выше достаточно для обновления изображения
     } catch (error) {
-      console.error(error);
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка загрузки фото" });
+      console.error("[Profile] Avatar save error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Ошибка загрузки фото";
+      setMessage({ type: "error", text: errorMessage });
       throw error; // Re-throw to let AvatarUpload handle it
     }
   };

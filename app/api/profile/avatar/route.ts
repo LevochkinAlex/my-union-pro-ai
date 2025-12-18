@@ -103,13 +103,19 @@ export async function POST(request: NextRequest) {
 
     // Инвалидируем кеш профиля, чтобы при следующей загрузке получить актуальные данные
     // Используем паттерн для удаления всех вариантов кеша профиля
-    await cacheDeletePattern(`profile:userId:${session.user.id}:*`);
+    try {
+      await cacheDeletePattern(`profile:userId:${session.user.id}:*`);
+    } catch (cacheError) {
+      // Не блокируем загрузку аватара, если инвалидация кеша не удалась
+      console.warn("[profile/avatar] Cache invalidation failed (non-critical):", cacheError);
+    }
     
     console.log("[profile/avatar] Avatar uploaded successfully:", {
       userId: session.user.id,
       filename,
       originalSize: avatarFile.size,
       optimizedSize: optimizedBuffer.length,
+      avatarUrl,
     });
 
     return NextResponse.json({
