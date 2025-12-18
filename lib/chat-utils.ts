@@ -5,10 +5,11 @@ import { formatFileSize as formatFileSizeUtil } from "@/lib/file-utils";
 
 /**
  * Получить полное имя пользователя
+ * В русской традиции: Фамилия Имя Отчество
  */
 export function getUserName(user: ChatUser | any | null | undefined): string {
   if (!user) return "Пользователь";
-  const parts = [user.firstName, user.middleName, user.lastName].filter(Boolean);
+  const parts = [user.lastName, user.firstName, user.middleName].filter(Boolean);
   return parts.length > 0 ? parts.join(" ") : "Пользователь";
 }
 
