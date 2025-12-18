@@ -149,7 +149,7 @@ export default function MonitoringPage() {
 
       {/* Overview Tab */}
       {activeTab === "overview" && (
-
+        <>
       {isLoading && !metrics ? (
         <div className="flex items-center justify-center py-12">
           <div className="text-gray-600 dark:text-gray-400">Загрузка метрик...</div>
@@ -322,8 +322,8 @@ export default function MonitoringPage() {
           </div>
         </div>
       )}
-      </div>
-    )}
+        </>
+      )}
     </div>
   );
 }
