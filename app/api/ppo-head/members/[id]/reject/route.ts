@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendUserNotification } from "@/lib/notifications";
-import { getOrCreatePrivateChat, sendChatMessage } from "@/lib/chat-utils";
+import { getOrCreatePrivateChat, sendChatMessage } from "@/lib/chat-server-utils";
 import { getPPOHead, isMemberOfOrganization } from "@/lib/ppo-head-utils";
 
 /**

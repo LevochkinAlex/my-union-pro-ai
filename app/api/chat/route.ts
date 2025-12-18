@@ -243,7 +243,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Используем утилиту для создания/поиска чата с нормализацией ID
-    const { getOrCreatePrivateChat } = await import("@/lib/chat-utils");
+    const { getOrCreatePrivateChat } = await import("@/lib/chat-server-utils");
     let chat = await getOrCreatePrivateChat(userId, targetUserId);
 
     // Загружаем полную информацию о чате с участниками

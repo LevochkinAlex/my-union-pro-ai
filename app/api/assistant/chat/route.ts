@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
 
     // Получаем или создаем чат с ботом
     const userId = session.user.id;
-    const { getOrCreatePrivateChat } = await import("@/lib/chat-utils");
+    const { getOrCreatePrivateChat } = await import("@/lib/chat-server-utils");
     const chat = await getOrCreatePrivateChat(userId, botUser.id);
 
     // Загружаем историю сообщений из чата для контекста

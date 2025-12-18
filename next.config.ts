@@ -16,50 +16,8 @@ const nextConfig = {
       bodySizeLimit: '50mb',
     },
   },
-  // Исключаем Prisma из клиентского бандла (перемещено из experimental в Next.js 16)
+  // Исключаем Prisma из клиентского бандла
   serverExternalPackages: ['@prisma/client', 'prisma'],
-  // Исключаем Prisma из webpack бандла
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        net: false,
-        tls: false,
-        child_process: false,
-        crypto: false,
-        stream: false,
-        os: false,
-        path: false,
-        buffer: false,
-        util: false,
-      };
-      // Явно исключаем Prisma из клиентского бандла
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        '@prisma/client': false,
-        'prisma': false,
-      };
-      // Исключаем модули, которые используют Prisma
-      config.externals = config.externals || [];
-      if (typeof config.externals === 'function') {
-        const originalExternals = config.externals;
-        config.externals = [
-          ...(Array.isArray(config.externals) ? config.externals : []),
-          ({ request }, callback) => {
-            if (request === '@prisma/client' || request === 'prisma' || request?.includes('@prisma')) {
-              return callback(null, `commonjs ${request}`);
-            }
-            if (typeof originalExternals === 'function') {
-              return originalExternals({ request }, callback);
-            }
-            callback();
-          },
-        ];
-      }
-    }
-    return config;
-  },
   images: {
     remotePatterns: [
       {
