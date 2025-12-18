@@ -5,7 +5,17 @@ import { useSession } from "next-auth/react";
 import { alertSuccess, alertError } from "@/lib/alert";
 
 // ИСПРАВЛЕНО: Убран импорт типа из @prisma/client, используем строковый литерал
-type DocumentType = "MEMBERSHIP_APPLICATION" | "CONTRIBUTION_APPLICATION" | "OTHER";
+type DocumentType = 
+  | "MEMBERSHIP_APPLICATION" 
+  | "CONTRIBUTION_APPLICATION" 
+  | "MEMBERSHIP_REMOVAL_APPLICATION"
+  | "MEMBERSHIP_TRANSFER_APPLICATION"
+  | "AGENDA"
+  | "PROTOCOL"
+  | "RESOLUTION"
+  | "PROTOCOL_EXTRACT"
+  | "APPEAL"
+  | "OTHER";
 
 interface DocumentTemplate {
   id: string;
@@ -57,7 +67,7 @@ export default function PPOHeadDocumentsPage() {
     protocolNumber: string;
   }>({
     templateId: "",
-    type: DocumentType.AGENDA,
+    type: AGENDA,
     title: "",
     meetingDate: "",
     meetingTime: "",
@@ -156,12 +166,12 @@ export default function PPOHeadDocumentsPage() {
       }
 
       // Валидация в зависимости от типа документа
-      if (formData.type === DocumentType.AGENDA && formData.agendaItems.every(item => !item.trim())) {
+      if (formData.type === AGENDA && formData.agendaItems.every(item => !item.trim())) {
         alertError("Добавьте хотя бы один пункт повестки дня");
         return;
       }
 
-      if ((formData.type === DocumentType.PROTOCOL || formData.type === DocumentType.RESOLUTION) && 
+      if ((formData.type === PROTOCOL || formData.type === RESOLUTION) && 
           formData.votingParticipants.length === 0) {
         alertError("Выберите участников голосования");
         return;
@@ -186,7 +196,7 @@ export default function PPOHeadDocumentsPage() {
       // Сбрасываем форму
       setFormData({
         templateId: "",
-        type: DocumentType.AGENDA,
+        type: AGENDA,
         title: "",
         meetingDate: "",
         meetingTime: "",
@@ -313,10 +323,10 @@ export default function PPOHeadDocumentsPage() {
                 }}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
               >
-                <option value={DocumentType.AGENDA}>Повестка дня</option>
-                <option value={DocumentType.PROTOCOL}>Протокол</option>
-                <option value={DocumentType.RESOLUTION}>Постановление</option>
-                <option value={DocumentType.PROTOCOL_EXTRACT}>Выписка из протокола</option>
+                <option value={AGENDA}>Повестка дня</option>
+                <option value={PROTOCOL}>Протокол</option>
+                <option value={RESOLUTION}>Постановление</option>
+                <option value={PROTOCOL_EXTRACT}>Выписка из протокола</option>
               </select>
             </div>
 
@@ -395,7 +405,7 @@ export default function PPOHeadDocumentsPage() {
               />
             </div>
 
-            {formData.type === DocumentType.AGENDA && (
+            {formData.type === AGENDA && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Пункты повестки дня *
@@ -432,7 +442,7 @@ export default function PPOHeadDocumentsPage() {
               </div>
             )}
 
-            {(formData.type === DocumentType.PROTOCOL || formData.type === DocumentType.RESOLUTION) && (
+            {(formData.type === PROTOCOL || formData.type === RESOLUTION) && (
               <>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -512,7 +522,7 @@ export default function PPOHeadDocumentsPage() {
               </>
             )}
 
-            {formData.type === DocumentType.PROTOCOL && (
+            {formData.type === PROTOCOL && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Номер протокола
@@ -527,7 +537,7 @@ export default function PPOHeadDocumentsPage() {
               </div>
             )}
 
-            {formData.type === DocumentType.RESOLUTION && (
+            {formData.type === RESOLUTION && (
               <>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -581,7 +591,7 @@ export default function PPOHeadDocumentsPage() {
                   setIsCreating(false);
                   setFormData({
                     templateId: "",
-                    type: DocumentType.AGENDA,
+                    type: AGENDA,
                     title: "",
                     meetingDate: "",
                     meetingTime: "",

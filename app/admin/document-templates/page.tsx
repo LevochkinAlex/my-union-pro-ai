@@ -5,7 +5,17 @@ import DocumentTemplateEditor from "@/components/admin/DocumentTemplateEditor";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 
 // ИСПРАВЛЕНО: Убран импорт типа из @prisma/client, используем строковый литерал
-type DocumentType = "MEMBERSHIP_APPLICATION" | "CONTRIBUTION_APPLICATION" | "OTHER";
+type DocumentType = 
+  | "MEMBERSHIP_APPLICATION" 
+  | "CONTRIBUTION_APPLICATION" 
+  | "MEMBERSHIP_REMOVAL_APPLICATION"
+  | "MEMBERSHIP_TRANSFER_APPLICATION"
+  | "AGENDA"
+  | "PROTOCOL"
+  | "RESOLUTION"
+  | "PROTOCOL_EXTRACT"
+  | "APPEAL"
+  | "OTHER";
 
 interface DocumentTemplate {
   id: string;
@@ -76,7 +86,7 @@ export default function DocumentTemplatesPage() {
   }>({
     name: "",
     description: "",
-    type: DocumentType.MEMBERSHIP_APPLICATION,
+    type: MEMBERSHIP_APPLICATION,
     htmlContent: "",
     cssStyles: "",
     isActive: true,
@@ -116,7 +126,7 @@ export default function DocumentTemplatesPage() {
     setFormData({
       name: "",
       description: "",
-      type: DocumentType.MEMBERSHIP_APPLICATION,
+      type: MEMBERSHIP_APPLICATION,
       htmlContent: "",
       cssStyles: "",
       isActive: true,
@@ -327,36 +337,36 @@ export default function DocumentTemplatesPage() {
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
               >
                 <optgroup label="Заявления">
-                  <option value={DocumentType.MEMBERSHIP_APPLICATION}>
+                  <option value={MEMBERSHIP_APPLICATION}>
                     Заявление о вступлении
                   </option>
-                  <option value={DocumentType.CONTRIBUTION_APPLICATION}>
+                  <option value={CONTRIBUTION_APPLICATION}>
                     Заявление о взносах
                   </option>
-                  <option value={DocumentType.MEMBERSHIP_REMOVAL_APPLICATION}>
+                  <option value={MEMBERSHIP_REMOVAL_APPLICATION}>
                     Заявление о снятии с учета
                   </option>
-                  <option value={DocumentType.MEMBERSHIP_TRANSFER_APPLICATION}>
+                  <option value={MEMBERSHIP_TRANSFER_APPLICATION}>
                     Заявление о переходе в другой профсоюз
                   </option>
                 </optgroup>
                 <optgroup label="Документы профкома">
-                  <option value={DocumentType.AGENDA}>
+                  <option value={AGENDA}>
                     Повестка дня заседания профкома
                   </option>
-                  <option value={DocumentType.PROTOCOL}>
+                  <option value={PROTOCOL}>
                     Протокол заседания профкома
                   </option>
-                  <option value={DocumentType.RESOLUTION}>
+                  <option value={RESOLUTION}>
                     Постановление профсоюзного комитета
                   </option>
-                  <option value={DocumentType.PROTOCOL_EXTRACT}>
+                  <option value={PROTOCOL_EXTRACT}>
                     Выписка из протокола
                   </option>
                 </optgroup>
                 <optgroup label="Прочее">
-                  <option value={DocumentType.APPEAL}>Обращение</option>
-                  <option value={DocumentType.OTHER}>Прочее</option>
+                  <option value={APPEAL}>Обращение</option>
+                  <option value={OTHER}>Прочее</option>
                 </optgroup>
               </select>
             </div>

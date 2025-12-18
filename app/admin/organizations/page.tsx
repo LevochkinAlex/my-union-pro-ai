@@ -61,7 +61,7 @@ export default function OrganizationsPage() {
     isActive: boolean;
   }>({
     name: "",
-    type: OrganizationType.FEDERAL,
+    type: FEDERAL,
     parentId: "",
     inn: "",
     address: "",
@@ -115,7 +115,7 @@ export default function OrganizationsPage() {
     setSelectedOrg(null);
     setFormData({
       name: "",
-      type: OrganizationType.FEDERAL,
+      type: FEDERAL,
       parentId: "",
       inn: "",
       address: "",
@@ -426,9 +426,9 @@ export default function OrganizationsPage() {
                 onChange={(e) => setFormData({ ...formData, type: e.target.value as OrganizationType })}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
               >
-                <option value={OrganizationType.FEDERAL}>Федерация</option>
-                <option value={OrganizationType.REGIONAL}>Региональное отделение</option>
-                <option value={OrganizationType.PRIMARY}>ППО (Первичная профсоюзная организация)</option>
+                <option value={FEDERAL}>Федерация</option>
+                <option value={REGIONAL}>Региональное отделение</option>
+                <option value={PRIMARY}>ППО (Первичная профсоюзная организация)</option>
               </select>
             </div>
 
