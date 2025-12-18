@@ -9,6 +9,7 @@ export type NotificationType =
   | "user_post" // Новый пост пользователя
   | "documents_ready" // Документы готовы
   | "ticket_response" // Ответ на обращение
+  | "ticket_rated" // Оценка обращения
   | "document_regeneration_required" // Требуется перегенерация документов
   | "news_published" // Опубликована новость
   | "mass_notification"; // Массовое уведомление

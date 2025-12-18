@@ -73,6 +73,10 @@ export default function TicketDetailPage() {
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [selectedRating, setSelectedRating] = useState(0);
+  const [ratingComment, setRatingComment] = useState("");
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -116,6 +120,52 @@ export default function TicketDetailPage() {
 
   const canEdit = ticket?.status === "PENDING";
   const canDelete = ticket?.status === "PENDING" || ticket?.status === "REJECTED";
+  const canRate = (ticket?.status === "RESOLVED" || ticket?.status === "CLOSED") && !ticket?.helpfulRating;
+
+  const handleSubmitRating = async () => {
+    if (!ticket || selectedRating === 0) {
+      alertError("Выберите оценку");
+      return;
+    }
+
+    try {
+      setIsSubmittingRating(true);
+      const response = await fetch(`/api/tickets/${ticket.id}/rate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rating: selectedRating,
+          comment: ratingComment.trim() || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Ошибка при сохранении оценки");
+      }
+
+      const data = await response.json();
+      setTicket((prev) =>
+        prev
+          ? {
+              ...prev,
+              helpfulRating: data.ticket.helpfulRating,
+              helpfulRatingComment: data.ticket.helpfulRatingComment,
+              helpfulRatingAt: data.ticket.helpfulRatingAt,
+            }
+          : null
+      );
+      setShowRatingModal(false);
+      setSelectedRating(0);
+      setRatingComment("");
+      alertSuccess("Спасибо за вашу оценку!");
+    } catch (err) {
+      console.error("Error submitting rating:", err);
+      alertError(err instanceof Error ? err.message : "Не удалось сохранить оценку");
+    } finally {
+      setIsSubmittingRating(false);
+    }
+  };
 
   const handleSaveEdit = async () => {
     if (!ticket) return;
@@ -393,6 +443,56 @@ export default function TicketDetailPage() {
               </div>
             )}
 
+            {/* Оценка полезности ответа */}
+            {ticket.helpfulRating && (
+              <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+                <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                  Ваша оценка полезности ответа
+                </h3>
+                <div className="flex items-center gap-2">
+                  <div className="flex">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <svg
+                        key={star}
+                        className={`h-5 w-5 ${
+                          star <= ticket.helpfulRating!
+                            ? "text-yellow-400"
+                            : "text-gray-300 dark:text-gray-600"
+                        }`}
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                    ))}
+                  </div>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    ({ticket.helpfulRating}/5)
+                  </span>
+                </div>
+                {ticket.helpfulRatingComment && (
+                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                    &quot;{ticket.helpfulRatingComment}&quot;
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Кнопка для оценки (если можно оценить) */}
+            {canRate && (
+              <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+                <button
+                  onClick={() => setShowRatingModal(true)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-yellow-600"
+                >
+                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  Оценить полезность ответа
+                </button>
+              </div>
+            )}
+
             <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
               <p>Создано: {new Date(ticket.createdAt).toLocaleString("ru-RU")}</p>
               {ticket.updatedAt !== ticket.createdAt && (
@@ -402,6 +502,74 @@ export default function TicketDetailPage() {
           </>
         )}
       </div>
+
+      {/* Модалка оценки */}
+      {showRatingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800 w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">Оцените полезность ответа</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Насколько полезным был ответ на ваше обращение?
+            </p>
+            
+            {/* Звезды для выбора */}
+            <div className="flex justify-center gap-2 mb-4">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => setSelectedRating(star)}
+                  className="focus:outline-none transition-transform hover:scale-110"
+                >
+                  <svg
+                    className={`h-10 w-10 ${
+                      star <= selectedRating
+                        ? "text-yellow-400"
+                        : "text-gray-300 dark:text-gray-600"
+                    }`}
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                </button>
+              ))}
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Комментарий (необязательно)
+              </label>
+              <textarea
+                value={ratingComment}
+                onChange={(e) => setRatingComment(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                rows={3}
+                placeholder="Что было полезно или что можно улучшить..."
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleSubmitRating}
+                disabled={selectedRating === 0 || isSubmittingRating}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isSubmittingRating ? "Сохранение..." : "Отправить оценку"}
+              </button>
+              <button
+                onClick={() => {
+                  setShowRatingModal(false);
+                  setSelectedRating(0);
+                  setRatingComment("");
+                }}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

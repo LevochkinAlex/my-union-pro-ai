@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { alertSuccess, alertError } from "@/lib/alert";
 
 interface Member {
   id: string;
@@ -27,6 +28,10 @@ export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     loadMembers();
@@ -63,19 +68,26 @@ export default function MembersPage() {
         throw new Error(error.error || "Ошибка при одобрении");
       }
 
+      alertSuccess("Заявка одобрена! Пользователю отправлено поздравление.");
       await loadMembers();
     } catch (err) {
       console.error("Error approving member:", err);
-      alert(err instanceof Error ? err.message : "Не удалось одобрить заявку");
+      alertError(err instanceof Error ? err.message : "Не удалось одобрить заявку");
     }
   };
 
-  const handleReject = async (memberId: string, reason: string) => {
+  const handleReject = async () => {
+    if (!selectedMember || !rejectionReason.trim()) {
+      alertError("Укажите причину отклонения");
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/ppo-head/members/${memberId}/reject`, {
+      setIsSubmitting(true);
+      const response = await fetch(`/api/ppo-head/members/${selectedMember.id}/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({ reason: rejectionReason.trim() }),
       });
 
       if (!response.ok) {
@@ -83,10 +95,16 @@ export default function MembersPage() {
         throw new Error(error.error || "Ошибка при отклонении");
       }
 
+      alertSuccess("Заявка отклонена");
+      setShowRejectModal(false);
+      setSelectedMember(null);
+      setRejectionReason("");
       await loadMembers();
     } catch (err) {
       console.error("Error rejecting member:", err);
-      alert(err instanceof Error ? err.message : "Не удалось отклонить заявку");
+      alertError(err instanceof Error ? err.message : "Не удалось отклонить заявку");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -253,10 +271,8 @@ export default function MembersPage() {
                     </button>
                     <button
                       onClick={() => {
-                        const reason = prompt("Укажите причину отклонения:");
-                        if (reason) {
-                          handleReject(member.id, reason);
-                        }
+                        setSelectedMember(member);
+                        setShowRejectModal(true);
                       }}
                       className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
                     >
@@ -267,6 +283,52 @@ export default function MembersPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Модалка отклонения */}
+      {showRejectModal && selectedMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800 w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">Отклонить заявку</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Заявка от:{" "}
+              <strong>
+                {[selectedMember.lastName, selectedMember.firstName, selectedMember.middleName]
+                  .filter(Boolean)
+                  .join(" ")}
+              </strong>
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Укажите причину отклонения. Это сообщение будет отправлено заявителю в чат и на email.
+            </p>
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 mb-4"
+              rows={4}
+              placeholder="Например: В документах обнаружены ошибки, требуется корректировка..."
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={handleReject}
+                disabled={isSubmitting || !rejectionReason.trim()}
+                className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {isSubmitting ? "Отклонение..." : "Отклонить заявку"}
+              </button>
+              <button
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setSelectedMember(null);
+                  setRejectionReason("");
+                }}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
