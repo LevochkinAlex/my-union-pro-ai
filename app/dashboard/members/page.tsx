@@ -435,6 +435,366 @@ export default function MembersPage() {
           </div>
         </div>
       )}
+
+      {/* Модалка с детальной информацией о члене */}
+      {showDetailModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div 
+            className="fixed inset-0 bg-black/50 transition-opacity"
+            onClick={() => {
+              setShowDetailModal(false);
+              setMemberDetails(null);
+            }}
+          />
+          
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="relative w-full max-w-4xl rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Карточка члена профсоюза
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowDetailModal(false);
+                    setMemberDetails(null);
+                  }}
+                  className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
+                {loadingDetails ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+                      <p className="text-gray-600 dark:text-gray-400">Загрузка данных...</p>
+                    </div>
+                  </div>
+                ) : memberDetails ? (
+                  <div className="p-6">
+                    {/* Profile Header */}
+                    <div className="flex items-start gap-4 mb-6">
+                      {memberDetails.avatarUrl ? (
+                        <img src={memberDetails.avatarUrl} alt="" className="h-20 w-20 rounded-full object-cover" />
+                      ) : (
+                        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
+                          <span className="text-2xl font-bold text-gray-500 dark:text-gray-400">
+                            {memberDetails.firstName?.[0]}{memberDetails.lastName?.[0]}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                          {memberDetails.lastName} {memberDetails.firstName} {memberDetails.middleName}
+                        </h3>
+                        <p className="text-gray-600 dark:text-gray-400">{memberDetails.email}</p>
+                        <p className="text-gray-600 dark:text-gray-400">{memberDetails.phone}</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                            memberDetails.membershipStatus === "APPROVED"
+                              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                              : memberDetails.membershipStatus === "DOCUMENTS_PENDING"
+                              ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                              : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+                          }`}>
+                            {memberDetails.membershipStatus}
+                          </span>
+                          {memberDetails.unionCardNumber && (
+                            <span className="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                              № {memberDetails.unionCardNumber}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Quick Actions */}
+                      {memberDetails.membershipStatus !== "APPROVED" && (
+                        <div className="flex flex-col gap-2">
+                          <button
+                            onClick={() => {
+                              handleApprove(memberDetails.id);
+                              setShowDetailModal(false);
+                            }}
+                            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+                          >
+                            ✓ Одобрить
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedMember(memberDetails);
+                              setShowDetailModal(false);
+                              setShowRejectModal(true);
+                            }}
+                            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                          >
+                            ✕ Отклонить
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tabs */}
+                    <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
+                      <nav className="-mb-px flex space-x-4 overflow-x-auto">
+                        {[
+                          { key: "profile", label: "Профиль" },
+                          { key: "work", label: "Работа" },
+                          { key: "family", label: "Семья" },
+                          { key: "education", label: "Образование" },
+                          { key: "documents", label: `Документы (${memberDetails.documents?.length || 0})` },
+                        ].map((tab) => (
+                          <button
+                            key={tab.key}
+                            onClick={() => setDetailTab(tab.key as DetailTab)}
+                            className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium ${
+                              detailTab === tab.key
+                                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400"
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </nav>
+                    </div>
+
+                    {/* Tab Content */}
+                    {detailTab === "profile" && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <InfoField label="Email" value={memberDetails.email} />
+                          <InfoField label="Телефон" value={memberDetails.phone} />
+                          <InfoField label="Телефон регистрации" value={memberDetails.authPhone} />
+                          <InfoField label="Дата рождения" value={memberDetails.dateOfBirth ? new Date(memberDetails.dateOfBirth).toLocaleDateString("ru-RU") : null} />
+                          <InfoField label="Адрес" value={memberDetails.address} className="md:col-span-2" />
+                          <InfoField label="Город для скидок" value={memberDetails.preferredDiscountCity} />
+                          <InfoField label="Дата вступления" value={memberDetails.membershipJoinedAt ? new Date(memberDetails.membershipJoinedAt).toLocaleDateString("ru-RU") : null} />
+                        </div>
+                        {(memberDetails.aboutMe || memberDetails.hobbies) && (
+                          <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">О себе</h4>
+                            <div className="space-y-3">
+                              {memberDetails.aboutMe && <InfoField label="О себе" value={memberDetails.aboutMe} />}
+                              {memberDetails.hobbies && <InfoField label="Хобби" value={memberDetails.hobbies} />}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {detailTab === "work" && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <InfoField label="Организация (Профсоюз)" value={memberDetails.organization?.name} />
+                          <InfoField label="Статус занятости" value={memberDetails.employmentStatus ? EMPLOYMENT_STATUS_MAP[memberDetails.employmentStatus] || memberDetails.employmentStatus : null} />
+                          <InfoField label="Место работы" value={memberDetails.workplace} />
+                          <InfoField label="ИНН работодателя" value={memberDetails.workplaceInn} />
+                          <InfoField label="Руководитель" value={memberDetails.directorName} />
+                          <InfoField label="Должность руководителя" value={memberDetails.directorPosition} />
+                          <InfoField label="Должность" value={memberDetails.jobTitle} />
+                          <InfoField label="Профессия" value={memberDetails.profession} />
+                        </div>
+                        {(() => {
+                          const professions = parseJsonField(memberDetails.professions);
+                          return professions && professions.length > 0 && (
+                            <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+                              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Профессии</h4>
+                              <div className="space-y-2">
+                                {professions.map((p: any, i: number) => (
+                                  <div key={i} className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                                    <p className="font-medium text-gray-900 dark:text-white">{p.name}</p>
+                                    {p.experience && <p className="text-sm text-gray-600 dark:text-gray-400">Опыт: {p.experience}</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                    {detailTab === "family" && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <InfoField label="Семейное положение" value={memberDetails.maritalStatus ? MARITAL_STATUS_MAP[memberDetails.maritalStatus] || memberDetails.maritalStatus : null} />
+                          <InfoField label="Информация о супруге" value={memberDetails.spouseInfo} />
+                          <InfoField label="Есть дети" value={memberDetails.hasChildren === true ? "Да" : memberDetails.hasChildren === false ? "Нет" : null} />
+                          <InfoField label="О детях" value={memberDetails.childrenInfo} />
+                        </div>
+                        {(() => {
+                          const children = parseJsonField(memberDetails.childrenBirthDates);
+                          return children && children.length > 0 && (
+                            <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+                              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Дети</h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {children.map((child: any, i: number) => (
+                                  <div key={i} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                                    <p className="font-medium text-gray-900 dark:text-white">{child.name}</p>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                      {child.gender === "М" ? "👦" : "👧"} {child.birthDate ? new Date(child.birthDate).toLocaleDateString("ru-RU") : ""}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                    {detailTab === "education" && (
+                      <div className="space-y-4">
+                        <InfoField label="Образование" value={memberDetails.education} />
+                        
+                        {(() => {
+                          const educations = parseJsonField(memberDetails.educations);
+                          return educations && educations.length > 0 && (
+                            <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+                              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Учебные заведения</h4>
+                              <div className="space-y-3">
+                                {educations.map((edu: any, i: number) => (
+                                  <div key={i} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                                    <p className="font-medium text-gray-900 dark:text-white">{edu.institution}</p>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                      {edu.level} • {edu.specialty} • {edu.year}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {(() => {
+                          const trainings = parseJsonField(memberDetails.training);
+                          return trainings && trainings.length > 0 && (
+                            <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+                              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Повышение квалификации</h4>
+                              <div className="space-y-3">
+                                {trainings.map((t: any, i: number) => (
+                                  <div key={i} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                                    <p className="font-medium text-gray-900 dark:text-white">{t.name}</p>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                      {t.year} {t.description && `• ${t.description}`}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {(() => {
+                          const awards = parseJsonField(memberDetails.awards);
+                          return awards && awards.length > 0 && (
+                            <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+                              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Награды</h4>
+                              <div className="space-y-3">
+                                {awards.map((a: any, i: number) => (
+                                  <div key={i} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`rounded px-2 py-0.5 text-xs ${
+                                        a.type === "государственная" ? "bg-yellow-100 text-yellow-800" :
+                                        a.type === "ведомственная" ? "bg-blue-100 text-blue-800" :
+                                        "bg-green-100 text-green-800"
+                                      }`}>
+                                        {a.type}
+                                      </span>
+                                      <span className="text-sm text-gray-500">{a.year}</span>
+                                    </div>
+                                    <p className="mt-1 text-gray-900 dark:text-white">{a.description}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {memberDetails.additionalInfo && (
+                          <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+                            <InfoField label="Дополнительная информация" value={memberDetails.additionalInfo} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {detailTab === "documents" && (
+                      <div className="space-y-4">
+                        {!memberDetails.documents || memberDetails.documents.length === 0 ? (
+                          <p className="text-gray-500 dark:text-gray-400 text-center py-8">Документов нет</p>
+                        ) : (
+                          memberDetails.documents.map((doc) => (
+                            <div key={doc.id} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <h4 className="font-medium text-gray-900 dark:text-white">{doc.title}</h4>
+                                  <div className="mt-1 flex flex-wrap gap-2">
+                                    <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                                      {doc.type}
+                                    </span>
+                                    <span className={`rounded px-2 py-0.5 text-xs ${
+                                      doc.status === "SIGNED" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                                      doc.status === "PENDING" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" :
+                                      "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+                                    }`}>
+                                      {doc.status}
+                                    </span>
+                                  </div>
+                                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Создан: {new Date(doc.createdAt).toLocaleString("ru-RU")}
+                                  </p>
+                                </div>
+                                <div className="flex gap-2">
+                                  {doc.filePath && (
+                                    <a
+                                      href={`/api/documents/${doc.id}/download`}
+                                      target="_blank"
+                                      className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
+                                    >
+                                      📄 Скачать
+                                    </a>
+                                  )}
+                                  {doc.signedFilePath && (
+                                    <a
+                                      href={`/api/documents/${doc.id}/download?signed=true`}
+                                      target="_blank"
+                                      className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700"
+                                    >
+                                      ✓ Подписанный
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Helper component for info fields
+function InfoField({ label, value, className = "" }: { label: string; value: string | null | undefined; className?: string }) {
+  return (
+    <div className={className}>
+      <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">{label}</label>
+      <p className="mt-1 text-gray-900 dark:text-white whitespace-pre-wrap break-words">
+        {value || <span className="text-gray-400 dark:text-gray-600">—</span>}
+      </p>
     </div>
   );
 }

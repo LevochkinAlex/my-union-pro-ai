@@ -10,10 +10,14 @@ interface SystemMetrics {
     used: number;
     total: number;
     percentage: number;
+    process: number;
   };
   cpu: number;
   restarts: number;
   responseTime: number;
+  nodeVersion?: string;
+  platform?: string;
+  hostname?: string;
 }
 
 interface ApiHealth {
@@ -215,7 +219,7 @@ export default function MonitoringPage() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Дополнительная информация
             </h2>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Перезапусков</p>
                 <p className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -228,7 +232,26 @@ export default function MonitoringPage() {
                   {metrics.responseTime.toFixed(0)}ms
                 </p>
               </div>
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Память процесса</p>
+                <p className="text-xl font-semibold text-gray-900 dark:text-white">
+                  {formatBytes(metrics.memory.process || 0)}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Node.js</p>
+                <p className="text-xl font-semibold text-gray-900 dark:text-white">
+                  {metrics.nodeVersion || "N/A"}
+                </p>
+              </div>
             </div>
+            {metrics.platform && (
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <span className="font-medium">Сервер:</span> {metrics.hostname} • {metrics.platform}
+                </p>
+              </div>
+            )}
           </div>
         </>
       ) : (

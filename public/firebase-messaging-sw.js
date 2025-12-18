@@ -2,6 +2,40 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
+// Global error handler to suppress extension-related errors
+self.addEventListener('error', (event) => {
+  const errorMessage = event.message || '';
+  if (
+    errorMessage.includes('message channel closed') ||
+    errorMessage.includes('listener indicated an asynchronous response') ||
+    errorMessage.includes('Extension context invalidated')
+  ) {
+    event.preventDefault();
+    return;
+  }
+});
+
+self.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason?.message || String(event.reason) || '';
+  if (
+    reason.includes('message channel closed') ||
+    reason.includes('listener indicated an asynchronous response') ||
+    reason.includes('Extension context invalidated')
+  ) {
+    event.preventDefault();
+    return;
+  }
+});
+
+// Handle message events from the main thread
+self.addEventListener('message', (event) => {
+  // Don't return true for async handling - this causes the "message channel closed" error
+  // Just handle the message synchronously or use event.waitUntil for async work
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 // ===========================================
 // IMAGE CACHING для чата
 // ===========================================

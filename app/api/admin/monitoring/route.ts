@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { exec } from "child_process";
+import { promisify } from "util";
+import os from "os";
+
+const execAsync = promisify(exec);
 
 /**
  * Get system monitoring metrics
@@ -18,18 +23,56 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get PM2 metrics (if available)
-    const metrics = {
-      status: "online" as const,
+    // Get system metrics
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
+    const cpuLoad = os.loadavg()[0]; // 1-minute load average
+    const cpuCount = os.cpus().length;
+    const cpuPercent = (cpuLoad / cpuCount) * 100;
+
+    // Get PM2 metrics
+    let pm2Data = {
       uptime: 0,
-      memory: {
-        used: 0,
-        total: 0,
-        percentage: 0,
-      },
-      cpu: 0,
       restarts: 0,
+      status: "online" as "online" | "offline" | "error",
+      memory: 0,
+    };
+
+    try {
+      const { stdout } = await execAsync("pm2 jlist 2>/dev/null || echo '[]'");
+      const pm2List = JSON.parse(stdout.trim() || "[]");
+      const app = pm2List.find((p: any) => p.name === "my-union-pro");
+      
+      if (app) {
+        pm2Data = {
+          uptime: app.pm2_env?.pm_uptime 
+            ? Math.floor((Date.now() - app.pm2_env.pm_uptime) / 1000) 
+            : 0,
+          restarts: app.pm2_env?.restart_time || 0,
+          status: app.pm2_env?.status === "online" ? "online" : "offline",
+          memory: app.monit?.memory || 0,
+        };
+      }
+    } catch (pm2Error) {
+      console.warn("[monitoring] PM2 metrics unavailable:", pm2Error);
+    }
+
+    const metrics = {
+      status: pm2Data.status,
+      uptime: pm2Data.uptime,
+      memory: {
+        used: usedMem,
+        total: totalMem,
+        percentage: (usedMem / totalMem) * 100,
+        process: pm2Data.memory,
+      },
+      cpu: Math.min(cpuPercent, 100),
+      restarts: pm2Data.restarts,
       responseTime: 0,
+      nodeVersion: process.version,
+      platform: `${os.platform()} ${os.release()}`,
+      hostname: os.hostname(),
     };
 
     // Test API endpoints
