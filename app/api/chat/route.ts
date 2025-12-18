@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
 import { normalizeUserAvatar } from "@/lib/api-helpers";
+import { getOrCreatePrivateChat } from "@/lib/chat-server-utils";
 import * as Sentry from "@sentry/nextjs";
 
 // Проверка доступности prisma
@@ -243,7 +244,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Используем утилиту для создания/поиска чата с нормализацией ID
-    const { getOrCreatePrivateChat } = await import("@/lib/chat-server-utils");
     let chat = await getOrCreatePrivateChat(userId, targetUserId);
 
     // Загружаем полную информацию о чате с участниками

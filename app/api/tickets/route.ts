@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateAppealPublicId, formatAppealId } from "@/lib/appeal-id";
 import { saveTicketToKnowledgeBase } from "@/lib/user-knowledge-base";
+import { getOrCreatePrivateChat, sendChatMessage } from "@/lib/chat-server-utils";
 
 /**
  * GET /api/tickets - Получить тикеты пользователя
@@ -168,30 +169,9 @@ export async function POST(request: NextRequest) {
     // Создаем или находим чат с Председателем, если он есть
     let chatId: string | null = null;
     if (chairmanId) {
-      // Ищем существующий чат
-      const existingChat = await prisma.chat.findFirst({
-        where: {
-          OR: [
-            { participant1Id: session.user.id, participant2Id: chairmanId },
-            { participant1Id: chairmanId, participant2Id: session.user.id },
-          ],
-        },
-      });
-
-      if (existingChat) {
-        chatId = existingChat.id;
-      } else {
-        // Создаем новый чат
-        const newChat = await prisma.chat.create({
-          data: {
-            participant1Id: session.user.id,
-            participant2Id: chairmanId,
-            lastMessageAt: new Date(),
-            lastMessage: content.substring(0, 100) + (content.length > 100 ? "..." : ""),
-          },
-        });
-        chatId = newChat.id;
-      }
+      // Используем утилиту для создания/поиска чата с нормализацией ID
+      const chat = await getOrCreatePrivateChat(session.user.id, chairmanId);
+      chatId = chat.id;
     }
 
     // Создаем тикет
@@ -211,23 +191,7 @@ export async function POST(request: NextRequest) {
 
     // Создаем первое сообщение в чате с текстом обращения
     if (chatId) {
-      await prisma.chatMessage.create({
-        data: {
-          chatId,
-          senderId: session.user.id,
-          content: `Обращение: ${title}\n\n${content}`,
-        },
-      });
-
-      // Обновляем последнее сообщение в чате
-      await prisma.chat.update({
-        where: { id: chatId },
-        data: {
-          lastMessageAt: new Date(),
-          lastMessage: content.substring(0, 100) + (content.length > 100 ? "..." : ""),
-          participant2ReadAt: null, // Помечаем как непрочитанное для Председателя
-        },
-      });
+      await sendChatMessage(chatId, session.user.id, `Обращение: ${title}\n\n${content}`);
     }
 
     // Логируем создание обращения

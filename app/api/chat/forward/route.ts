@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendUserNotification } from "@/lib/notifications";
+import { getOrCreatePrivateChat } from "@/lib/chat-server-utils";
 
 // POST - пересылка сообщения
 export async function POST(request: NextRequest) {
@@ -80,7 +81,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Используем утилиту для создания/поиска чата с нормализацией ID
-    const { getOrCreatePrivateChat } = await import("@/lib/chat-server-utils");
     let chat = await getOrCreatePrivateChat(userId, targetUserId);
 
     // Подготавливаем текст для lastMessage (реальное содержимое сообщения)
