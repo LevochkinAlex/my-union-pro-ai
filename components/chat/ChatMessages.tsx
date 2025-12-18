@@ -99,8 +99,8 @@ function ChatMessagesComponent({
   onImageClick,
   onProfileClick,
 }: ChatMessagesProps) {
-  // Определяем, является ли чат групповым (показываем имена отправителей)
-  const isGroupChat = chat.type === "GROUP";
+  // Определяем, является ли чат групповым или чатом обращения (показываем имена отправителей)
+  const isGroupChat = chat.type === "GROUP" || !!chat.ticketId;
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const prevChatId = useRef<string | null>(null);
   const currentVisibleIndex = useRef<number | null>(null);

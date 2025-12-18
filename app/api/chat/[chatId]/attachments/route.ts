@@ -34,8 +34,13 @@ export async function POST(
     const chat = await prisma.chat.findUnique({
       where: { id: chatId },
       select: {
+        type: true,
         participant1Id: true,
         participant2Id: true,
+        participants: {
+          where: { userId, leftAt: null },
+          select: { userId: true },
+        },
       },
     });
 
@@ -43,7 +48,13 @@ export async function POST(
       return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
     }
 
-    if (chat.participant1Id !== userId && chat.participant2Id !== userId) {
+    // Для GROUP чатов проверяем через таблицу participants
+    // Для PRIVATE чатов - через participant1Id/participant2Id
+    const isParticipant = chat.type === "GROUP"
+      ? chat.participants.length > 0
+      : (chat.participant1Id === userId || chat.participant2Id === userId);
+
+    if (!isParticipant) {
       return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
     }
 
@@ -181,10 +192,10 @@ export async function POST(
       },
     });
 
-    // Определяем получателя сообщения
-    const recipientId = chat.participant1Id === userId 
-      ? chat.participant2Id 
-      : chat.participant1Id;
+    // Определяем получателя сообщения (только для PRIVATE чатов)
+    const recipientId = chat.type === "PRIVATE"
+      ? (chat.participant1Id === userId ? chat.participant2Id : chat.participant1Id)
+      : null;
 
     // Обновляем последнее сообщение в чате
     // Если есть вложение, показываем тип вложения, иначе - текст сообщения
@@ -194,9 +205,12 @@ export async function POST(
       data: {
         lastMessage: content.trim() || attachmentText,
         lastMessageAt: new Date(),
-        ...(chat.participant1Id === userId
+        // Сбрасываем прочитанность для получателя (только для PRIVATE чатов)
+        ...(chat.type === "PRIVATE" && chat.participant1Id === userId
           ? { participant2ReadAt: null }
-          : { participant1ReadAt: null }),
+          : chat.type === "PRIVATE"
+          ? { participant1ReadAt: null }
+          : {}),
       },
     });
 
