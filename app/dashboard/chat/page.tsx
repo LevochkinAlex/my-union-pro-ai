@@ -208,24 +208,26 @@ function ChatPageContent() {
             />
 
             {/* Сообщения */}
-            <ChatMessages
-              chat={selectedChat}
-              messages={messages}
-              currentUserId={currentUserId}
-              loading={loadingMessages}
-              loadingOlder={loadingOlder}
-              hasMore={hasMore}
-              isBotTyping={isBotTyping}
-              onLoadMore={loadOlderMessages}
-              onReply={handleReply}
-              onEdit={handleEdit}
-              onDelete={handleDeleteRequest}
-              onForward={handleForward}
-              onReaction={toggleReaction}
-              onImageClick={(url, name) => setSelectedImage({ url, name })}
-              onSaveScrollPosition={saveScrollPosition}
-              getSavedScrollPosition={getScrollPosition}
-            />
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+              <ChatMessages
+                chat={selectedChat}
+                messages={messages}
+                currentUserId={currentUserId}
+                loading={loadingMessages}
+                loadingOlder={loadingOlder}
+                hasMore={hasMore}
+                isBotTyping={isBotTyping}
+                onLoadMore={loadOlderMessages}
+                onReply={handleReply}
+                onEdit={handleEdit}
+                onDelete={handleDeleteRequest}
+                onForward={handleForward}
+                onReaction={toggleReaction}
+                onImageClick={(url, name) => setSelectedImage({ url, name })}
+                onSaveScrollPosition={saveScrollPosition}
+                getSavedScrollPosition={getScrollPosition}
+              />
+            </div>
 
             {/* Поле ввода */}
             <ChatInput

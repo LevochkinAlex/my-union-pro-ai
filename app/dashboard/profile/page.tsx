@@ -1002,10 +1002,13 @@ export default function ProfilePage() {
       }
 
       const data = await response.json();
+      
+      // Обновляем avatarUrl - компонент AvatarUpload сам обработает его через getFileUrl
       setProfileData(prev => ({ ...prev, avatarUrl: data.avatarUrl }));
       setMessage({ type: "success", text: "Фото профиля успешно обновлено" });
-      // Перезагружаем профиль, чтобы убедиться, что все данные синхронизированы
-      await loadProfile();
+      
+      // Не перезагружаем весь профиль сразу, чтобы не потерять временное превью
+      // Обновление URL выше достаточно для обновления изображения
     } catch (error) {
       console.error(error);
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка загрузки фото" });
@@ -1125,7 +1128,8 @@ export default function ProfilePage() {
             <OrganizationAutocomplete
               value={profileData.organizationId || ""}
               onChange={(organizationId) => {
-                setProfileData({ ...profileData, organizationId: organizationId || null });
+                // Используем функциональное обновление для сохранения всех полей
+                setProfileData(prev => ({ ...prev, organizationId: organizationId || null }));
                 // Автосохранение при выборе организации
                 if (organizationId) {
                   handleFieldBlur("organizationId", organizationId);

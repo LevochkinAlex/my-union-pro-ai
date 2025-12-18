@@ -32,20 +32,34 @@ export default function OrganizationAutocomplete({
   const [justSelected, setJustSelected] = useState(false);
   const [userTyping, setUserTyping] = useState(false);
   const [displayValue, setDisplayValue] = useState("");
+  const [savedDisplayValue, setSavedDisplayValue] = useState<string>(""); // Сохраняем значение для восстановления
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Находим отображаемое значение для выбранной организации
+  // Важно: сохраняем предыдущее значение, если организация не найдена в options (например, при загрузке)
   useEffect(() => {
     if (value) {
       const selectedOrg = options.find((org) => org.id === value);
       if (selectedOrg) {
-        setDisplayValue(selectedOrg.fullPath || selectedOrg.indentedName || selectedOrg.name);
+        const newDisplayValue = selectedOrg.fullPath || selectedOrg.indentedName || selectedOrg.name;
+        setDisplayValue(newDisplayValue);
+        setSavedDisplayValue(newDisplayValue); // Сохраняем значение
+      } else if (options.length === 0) {
+        // Если options еще не загружены, используем сохраненное значение
+        if (savedDisplayValue) {
+          setDisplayValue(savedDisplayValue);
+        }
+        // Если сохраненного значения нет, оставляем текущее displayValue
       } else {
+        // Только если options загружены, но организация не найдена, сбрасываем
+        // Это может произойти, если организация была удалена из справочника
         setDisplayValue("");
+        setSavedDisplayValue("");
       }
     } else {
       setDisplayValue("");
+      setSavedDisplayValue("");
     }
   }, [value, options]);
 

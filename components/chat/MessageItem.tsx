@@ -59,7 +59,7 @@ const LazyImage = memo(function LazyImage({
     <div
       ref={imgRef}
       className={`relative overflow-hidden bg-gray-200 dark:bg-gray-700 ${onClick ? "cursor-pointer" : ""} ${className}`}
-      style={{ minHeight: "100px" }}
+      style={{ width: "100%", display: "block" }}
     >
       {/* Blur placeholder для старых изображений */}
       {shouldShowPlaceholder && (
@@ -107,9 +107,10 @@ const LazyImage = memo(function LazyImage({
           src={src}
           alt={alt}
           onClick={onClick}
-          className={`max-w-full h-auto transition-all duration-500 ${
+          className={`w-full h-auto transition-all duration-500 ${
             isLoaded ? "opacity-100 blur-0" : "opacity-0 blur-sm"
           }`}
+          style={{ maxWidth: "100%", display: "block" }}
           onLoad={() => setIsLoaded(true)}
           onError={() => setHasError(true)}
           loading="lazy"
@@ -353,7 +354,7 @@ const Attachments = memo(function Attachments({
               src={getFileUrl(attachment.filePath)}
               alt={attachment.originalName}
               onClick={() => onImageClick?.(getFileUrl(attachment.filePath), attachment.originalName)}
-              className="rounded-lg max-w-[300px] hover:opacity-90 transition-opacity"
+              className="rounded-lg w-full hover:opacity-90 transition-opacity"
               isOldImage={isOldMessage}
             />
           );
