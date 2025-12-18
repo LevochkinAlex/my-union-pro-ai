@@ -21,6 +21,7 @@ type ApiProvider = {
   name: string;
   displayName?: string;
   type: string;
+  isDefault?: boolean;
   apiKey?: string | null;
   apiBaseUrl?: string | null;
   availableModels: string[]; // Ensure this is always an array
