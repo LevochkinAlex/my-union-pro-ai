@@ -67,7 +67,7 @@ export default function PPOHeadDocumentsPage() {
     protocolNumber: string;
   }>({
     templateId: "",
-    type: AGENDA,
+    type: "AGENDA",
     title: "",
     meetingDate: "",
     meetingTime: "",
@@ -166,12 +166,12 @@ export default function PPOHeadDocumentsPage() {
       }
 
       // Валидация в зависимости от типа документа
-      if (formData.type === AGENDA && formData.agendaItems.every(item => !item.trim())) {
+      if (formData.type === "AGENDA" && formData.agendaItems.every(item => !item.trim())) {
         alertError("Добавьте хотя бы один пункт повестки дня");
         return;
       }
 
-      if ((formData.type === PROTOCOL || formData.type === RESOLUTION) && 
+      if ((formData.type === "PROTOCOL" || formData.type === "RESOLUTION") && 
           formData.votingParticipants.length === 0) {
         alertError("Выберите участников голосования");
         return;
@@ -196,7 +196,7 @@ export default function PPOHeadDocumentsPage() {
       // Сбрасываем форму
       setFormData({
         templateId: "",
-        type: AGENDA,
+        type: "AGENDA",
         title: "",
         meetingDate: "",
         meetingTime: "",
@@ -405,7 +405,7 @@ export default function PPOHeadDocumentsPage() {
               />
             </div>
 
-            {formData.type === AGENDA && (
+            {formData.type === "AGENDA" && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Пункты повестки дня *
@@ -442,7 +442,7 @@ export default function PPOHeadDocumentsPage() {
               </div>
             )}
 
-            {(formData.type === PROTOCOL || formData.type === RESOLUTION) && (
+            {(formData.type === "PROTOCOL" || formData.type === "RESOLUTION") && (
               <>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -522,7 +522,7 @@ export default function PPOHeadDocumentsPage() {
               </>
             )}
 
-            {formData.type === PROTOCOL && (
+            {formData.type === "PROTOCOL" && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Номер протокола
@@ -537,7 +537,7 @@ export default function PPOHeadDocumentsPage() {
               </div>
             )}
 
-            {formData.type === RESOLUTION && (
+            {formData.type === "RESOLUTION" && (
               <>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -591,7 +591,7 @@ export default function PPOHeadDocumentsPage() {
                   setIsCreating(false);
                   setFormData({
                     templateId: "",
-                    type: AGENDA,
+                    type: "AGENDA",
                     title: "",
                     meetingDate: "",
                     meetingTime: "",
