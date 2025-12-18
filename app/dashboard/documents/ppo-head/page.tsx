@@ -323,10 +323,10 @@ export default function PPOHeadDocumentsPage() {
                 }}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
               >
-                <option value={AGENDA}>Повестка дня</option>
-                <option value={PROTOCOL}>Протокол</option>
-                <option value={RESOLUTION}>Постановление</option>
-                <option value={PROTOCOL_EXTRACT}>Выписка из протокола</option>
+                <option value="AGENDA">Повестка дня</option>
+                <option value="PROTOCOL">Протокол</option>
+                <option value="RESOLUTION">Постановление</option>
+                <option value="PROTOCOL_EXTRACT">Выписка из протокола</option>
               </select>
             </div>
 
