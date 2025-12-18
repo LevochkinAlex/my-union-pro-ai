@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { alertSuccess, alertError } from "@/lib/alert";
 
-// ИСПРАВЛЕНО: Убран импорт типа из @prisma/client, используем строковый литерал
+// Типы документов
 type DocumentType = 
   | "MEMBERSHIP_APPLICATION" 
   | "CONTRIBUTION_APPLICATION" 
@@ -16,6 +16,17 @@ type DocumentType =
   | "PROTOCOL_EXTRACT"
   | "APPEAL"
   | "OTHER";
+
+// Типы документов организации (заседания профкома)
+const ORGANIZATION_DOC_TYPES: DocumentType[] = ["AGENDA", "PROTOCOL", "RESOLUTION", "PROTOCOL_EXTRACT"];
+
+// Типы личных документов
+const PERSONAL_DOC_TYPES: DocumentType[] = [
+  "MEMBERSHIP_APPLICATION", 
+  "CONTRIBUTION_APPLICATION", 
+  "MEMBERSHIP_REMOVAL_APPLICATION",
+  "MEMBERSHIP_TRANSFER_APPLICATION"
+];
 
 interface DocumentTemplate {
   id: string;
@@ -42,9 +53,13 @@ interface Document {
   createdAt: string;
 }
 
+type DocumentTab = "organization" | "personal";
+
 export default function PPOHeadDocumentsPage() {
   const { data: session } = useSession();
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const [activeTab, setActiveTab] = useState<DocumentTab>("organization");
+  const [orgDocuments, setOrgDocuments] = useState<Document[]>([]);
+  const [personalDocuments, setPersonalDocuments] = useState<Document[]>([]);
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -107,10 +122,36 @@ export default function PPOHeadDocumentsPage() {
 
   const loadDocuments = async () => {
     try {
-      const response = await fetch("/api/ppo-head/documents");
-      if (response.ok) {
-        const data = await response.json();
-        setDocuments(data.documents || []);
+      // Загружаем документы организации
+      const orgResponse = await fetch("/api/ppo-head/documents");
+      if (orgResponse.ok) {
+        const data = await orgResponse.json();
+        const allDocs = data.documents || [];
+        
+        // Разделяем на документы организации и личные
+        const orgDocs = allDocs.filter((d: Document) => 
+          ORGANIZATION_DOC_TYPES.includes(d.type as DocumentType)
+        );
+        const persDocs = allDocs.filter((d: Document) => 
+          PERSONAL_DOC_TYPES.includes(d.type as DocumentType) || 
+          !ORGANIZATION_DOC_TYPES.includes(d.type as DocumentType)
+        );
+        
+        setOrgDocuments(orgDocs);
+        setPersonalDocuments(persDocs);
+      }
+      
+      // Также загружаем личные документы председателя
+      const personalResponse = await fetch("/api/documents");
+      if (personalResponse.ok) {
+        const data = await personalResponse.json();
+        const userDocs = data.documents || [];
+        // Объединяем с существующими личными документами
+        setPersonalDocuments(prev => {
+          const existingIds = new Set(prev.map(d => d.id));
+          const newDocs = userDocs.filter((d: Document) => !existingIds.has(d.id));
+          return [...prev, ...newDocs];
+        });
       }
     } catch (error) {
       console.error("Ошибка загрузки документов:", error);
@@ -275,6 +316,37 @@ export default function PPOHeadDocumentsPage() {
     return [member.lastName, member.firstName, member.middleName].filter(Boolean).join(" ");
   };
 
+  const getDocumentTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      AGENDA: "Повестка дня",
+      PROTOCOL: "Протокол",
+      RESOLUTION: "Постановление",
+      PROTOCOL_EXTRACT: "Выписка из протокола",
+      MEMBERSHIP_APPLICATION: "Заявление о вступлении",
+      CONTRIBUTION_APPLICATION: "Заявление о взносах",
+      MEMBERSHIP_REMOVAL_APPLICATION: "Заявление о выходе",
+      MEMBERSHIP_TRANSFER_APPLICATION: "Заявление о переводе",
+      APPEAL: "Обращение",
+      OTHER: "Другое",
+    };
+    return labels[type] || type;
+  };
+
+  const getDocumentStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      DRAFT: "Черновик",
+      GENERATED: "Сформирован",
+      SIGNED: "Подписан",
+      PENDING: "На рассмотрении",
+      APPROVED: "Одобрен",
+      REJECTED: "Отклонён",
+      ARCHIVED: "В архиве",
+    };
+    return labels[status] || status;
+  };
+
+  const currentDocuments = activeTab === "organization" ? orgDocuments : personalDocuments;
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -291,21 +363,80 @@ export default function PPOHeadDocumentsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Документы профкома
+            Документы
           </h1>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Создание и управление документами заседаний профсоюзного комитета
+            Управление документами организации и личными документами
           </p>
         </div>
-        <button
-          onClick={() => setIsCreating(true)}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-        >
-          + Создать документ
-        </button>
+        {activeTab === "organization" && (
+          <button
+            onClick={() => setIsCreating(true)}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          >
+            + Создать документ
+          </button>
+        )}
       </div>
 
-      {isCreating && (
+      {/* Табы */}
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab("organization")}
+            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+              activeTab === "organization"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Документы организации
+            {orgDocuments.length > 0 && (
+              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                {orgDocuments.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("personal")}
+            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+              activeTab === "personal"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Личные
+            {personalDocuments.length > 0 && (
+              <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                {personalDocuments.length}
+              </span>
+            )}
+          </button>
+        </nav>
+      </div>
+
+      {/* Информационный блок для таба организации */}
+      {activeTab === "organization" && !isCreating && (
+        <div className="rounded-lg border border-dashed border-blue-300 bg-blue-50/50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+          <div className="flex items-start gap-3">
+            <svg className="h-6 w-6 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <div className="text-sm text-blue-700 dark:text-blue-300">
+              <p className="font-medium mb-1">Алгоритм проведения заседания Профкома:</p>
+              <ol className="list-decimal list-inside space-y-1 text-blue-600 dark:text-blue-400">
+                <li>Создайте <strong>Повестку дня</strong> с пунктами для обсуждения</li>
+                <li>После заседания оформите <strong>Протокол</strong> с результатами голосования</li>
+                <li>На основании протокола создайте <strong>Постановление</strong></li>
+                <li>При необходимости сформируйте <strong>Выписку из протокола</strong></li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Форма создания документа организации */}
+      {isCreating && activeTab === "organization" && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <h2 className="mb-4 text-xl font-semibold">Создание документа</h2>
 
@@ -616,19 +747,19 @@ export default function PPOHeadDocumentsPage() {
         </div>
       )}
 
+      {/* Список документов */}
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-          Созданные документы
-        </h2>
-        {documents.length === 0 ? (
+        {currentDocuments.length === 0 ? (
           <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
             <p className="text-gray-600 dark:text-gray-400">
-              Документов пока нет. Создайте первый документ.
+              {activeTab === "organization" 
+                ? "Документов организации пока нет. Создайте первый документ."
+                : "Личных документов пока нет."}
             </p>
           </div>
         ) : (
           <div className="grid gap-4">
-            {documents.map((doc) => (
+            {currentDocuments.map((doc) => (
               <div
                 key={doc.id}
                 className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
@@ -638,10 +769,21 @@ export default function PPOHeadDocumentsPage() {
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                       {doc.title}
                     </h3>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                      Тип: {doc.type} | Статус: {doc.status}
-                    </p>
-                    <p className="mt-1 text-xs text-gray-500">
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                        {getDocumentTypeLabel(doc.type)}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                        doc.status === "SIGNED" || doc.status === "APPROVED"
+                          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                          : doc.status === "REJECTED"
+                          ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                          : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                      }`}>
+                        {getDocumentStatusLabel(doc.status)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500">
                       Создан: {new Date(doc.createdAt).toLocaleDateString("ru-RU")}
                     </p>
                   </div>
@@ -650,7 +792,7 @@ export default function PPOHeadDocumentsPage() {
                       href={doc.filePath}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
                     >
                       Скачать
                     </a>
@@ -664,4 +806,3 @@ export default function PPOHeadDocumentsPage() {
     </div>
   );
 }
-
