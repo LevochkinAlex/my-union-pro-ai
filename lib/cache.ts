@@ -185,6 +185,7 @@ export async function withCache<T>(
   fn: () => Promise<T>,
   ttlSeconds: number = 300
 ): Promise<T> {
+  console.log(`[Cache] withCache called for key: ${key}`);
   // Пытаемся получить из кеша (если Redis доступен)
   const cached = await cacheGet<T>(key);
   if (cached !== null) {

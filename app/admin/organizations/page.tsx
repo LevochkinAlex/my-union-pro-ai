@@ -39,6 +39,7 @@ interface JobTitle {
 export default function OrganizationsPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -85,13 +86,29 @@ export default function OrganizationsPage() {
   const loadOrganizations = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/admin/organizations");
-      if (response.ok) {
-        const data = await response.json();
-        setOrganizations(data.organizations || []);
+      setLoadError(null);
+      console.log("[organizations] Loading organizations...");
+      const response = await fetch("/api/admin/organizations?includeInactive=true");
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("[organizations] API error:", response.status, errorData);
+        const errorMsg = errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+        setLoadError(errorMsg);
+        alertError(`Ошибка загрузки: ${errorMsg}`);
+        setOrganizations([]);
+        return;
       }
+      
+      const data = await response.json();
+      console.log("[organizations] Loaded:", data.organizations?.length || 0, "organizations");
+      setOrganizations(data.organizations || []);
     } catch (error) {
-      console.error("Ошибка загрузки организаций:", error);
+      console.error("[organizations] Error loading organizations:", error);
+      const errorMsg = error instanceof Error ? error.message : "Ошибка сети при загрузке организаций";
+      setLoadError(errorMsg);
+      alertError(errorMsg);
+      setOrganizations([]);
     } finally {
       setIsLoading(false);
     }
