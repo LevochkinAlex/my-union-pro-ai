@@ -83,16 +83,17 @@ export async function POST(request: NextRequest) {
     const { getOrCreatePrivateChat } = await import("@/lib/chat-utils");
     let chat = await getOrCreatePrivateChat(userId, targetUserId);
 
-    // Обновляем последнее сообщение, если чат был только что создан
-    if (chat.lastMessage !== "Пересланное сообщение") {
-      await prisma.chat.update({
-        where: { id: chat.id },
-        data: {
-          lastMessage: "Пересланное сообщение",
-          lastMessageAt: new Date(),
-        },
-      });
-    }
+    // Подготавливаем текст для lastMessage (реальное содержимое сообщения)
+    // Если есть вложения, добавляем пометку
+    const hasAttachments = originalMessage.attachments.length > 0;
+    const messagePreview = hasAttachments
+      ? `📎 ${originalMessage.content || "Вложение"}`
+      : originalMessage.content || "Пересланное сообщение";
+    
+    // Ограничиваем длину preview для lastMessage (обычно ограничение в БД ~255 символов)
+    const lastMessageText = messagePreview.length > 200 
+      ? messagePreview.substring(0, 200) + "..."
+      : messagePreview;
 
     // Создаем пересланное сообщение
     const forwardedMessage = await prisma.chatMessage.create({
@@ -140,11 +141,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Обновляем последнее сообщение в чате
+    // Обновляем последнее сообщение в чате с реальным содержимым
     await prisma.chat.update({
       where: { id: chat.id },
       data: {
-        lastMessage: "Пересланное сообщение",
+        lastMessage: lastMessageText,
         lastMessageAt: new Date(),
         ...(chat.participant1Id === userId
           ? { participant2ReadAt: null }
