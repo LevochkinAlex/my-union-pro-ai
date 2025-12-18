@@ -15,9 +15,9 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '50mb',
     },
-    // Исключаем Prisma из клиентского бандла
-    serverComponentsExternalPackages: ['@prisma/client', 'prisma'],
   },
+  // Исключаем Prisma из клиентского бандла (перемещено из experimental в Next.js 16)
+  serverExternalPackages: ['@prisma/client', 'prisma'],
   // Исключаем Prisma из webpack бандла
   webpack: (config, { isServer }) => {
     if (!isServer) {
