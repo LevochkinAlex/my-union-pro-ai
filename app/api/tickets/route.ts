@@ -192,6 +192,66 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Сначала обрабатываем файлы (нужны для сообщения в чате)
+    const uploadedFiles: Array<{
+      fileName: string;
+      originalName: string;
+      filePath: string;
+      fileSize: number;
+      mimeType: string;
+    }> = [];
+
+    if (files && files.length > 0) {
+      const fs = await import("fs/promises");
+      const path = await import("path");
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "tickets");
+
+      // Создаем директорию, если её нет
+      try {
+        await fs.mkdir(uploadDir, { recursive: true });
+      } catch (error) {
+        // Директория уже существует
+      }
+
+      for (const file of files) {
+        // Проверяем тип файла (запрещаем исполняемые скрипты)
+        const dangerousExtensions = [".exe", ".bat", ".cmd", ".sh", ".ps1", ".js", ".jar", ".app"];
+        const fileExtension = path.extname(file.name).toLowerCase();
+        
+        if (dangerousExtensions.includes(fileExtension)) {
+          continue; // Пропускаем опасные файлы
+        }
+
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const fileName = `${Date.now()}-${file.name}`;
+        const filePath = path.join(uploadDir, fileName);
+        const relativePath = `/uploads/tickets/${fileName}`;
+
+        await fs.writeFile(filePath, buffer);
+
+        uploadedFiles.push({
+          fileName: fileName,
+          originalName: file.name,
+          filePath: relativePath,
+          fileSize: buffer.length,
+          mimeType: file.type || "application/octet-stream",
+        });
+      }
+
+      // Сохраняем вложения к тикету
+      if (uploadedFiles.length > 0) {
+        await prisma.ticketAttachment.createMany({
+          data: uploadedFiles.map(f => ({
+            ticketId: ticket.id,
+            fileName: f.originalName,
+            filePath: f.filePath,
+            fileSize: f.fileSize,
+            mimeType: f.mimeType,
+          })),
+        });
+      }
+    }
+
     // Создаем ОТДЕЛЬНЫЙ чат для обращения (тип GROUP для обхода unique constraint)
     // Чат обращения - это отдельная переписка от имени организации
     let chatId: string | null = null;
@@ -220,14 +280,35 @@ export async function POST(request: NextRequest) {
         data: { chatId: chat.id },
       });
 
+      // Формируем текст сообщения с информацией о файлах
+      let messageContent = `📋 **${title}**\n\n${content.replace(/<[^>]*>/g, "")}`;
+      if (uploadedFiles.length > 0) {
+        messageContent += `\n\n📎 Прикреплено файлов: ${uploadedFiles.length}`;
+      }
+
       // Создаем первое сообщение в чате с текстом обращения
-      await prisma.chatMessage.create({
+      const chatMessage = await prisma.chatMessage.create({
         data: {
           chatId: chat.id,
           senderId: session.user.id,
-          content: `📋 **${title}**\n\n${content.replace(/<[^>]*>/g, "")}`,
+          content: messageContent,
         },
       });
+
+      // Прикрепляем файлы к сообщению в чате (если есть)
+      if (uploadedFiles.length > 0) {
+        await prisma.chatMessageAttachment.createMany({
+          data: uploadedFiles.map(f => ({
+            messageId: chatMessage.id,
+            type: f.mimeType.startsWith("image/") ? "image" : "file",
+            fileName: f.fileName,
+            originalName: f.originalName,
+            filePath: f.filePath,
+            fileSize: f.fileSize,
+            mimeType: f.mimeType,
+          })),
+        });
+      }
 
       // Обновляем lastMessage в чате
       await prisma.chat.update({
@@ -249,56 +330,10 @@ export async function POST(request: NextRequest) {
         metadata: {
           type,
           priority,
+          filesCount: uploadedFiles.length,
         },
       },
     });
-
-    // Обрабатываем файлы, если они есть
-    if (files && files.length > 0) {
-      const fs = await import("fs/promises");
-      const path = await import("path");
-      const uploadDir = path.join(process.cwd(), "public", "uploads", "tickets");
-
-      // Создаем директорию, если её нет
-      try {
-        await fs.mkdir(uploadDir, { recursive: true });
-      } catch (error) {
-        // Директория уже существует
-      }
-
-      const attachments = [];
-
-      for (const file of files) {
-        // Проверяем тип файла (запрещаем исполняемые скрипты)
-        const dangerousExtensions = [".exe", ".bat", ".cmd", ".sh", ".ps1", ".js", ".jar", ".app"];
-        const fileExtension = path.extname(file.name).toLowerCase();
-        
-        if (dangerousExtensions.includes(fileExtension)) {
-          continue; // Пропускаем опасные файлы
-        }
-
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const fileName = `${Date.now()}-${file.name}`;
-        const filePath = path.join(uploadDir, fileName);
-        const relativePath = `/uploads/tickets/${fileName}`;
-
-        await fs.writeFile(filePath, buffer);
-
-        attachments.push({
-          ticketId: ticket.id,
-          fileName: file.name,
-          filePath: relativePath,
-          fileSize: buffer.length,
-          mimeType: file.type || "application/octet-stream",
-        });
-      }
-
-      if (attachments.length > 0) {
-        await prisma.ticketAttachment.createMany({
-          data: attachments,
-        });
-      }
-    }
 
     // Сохраняем тикет в базу знаний пользователя (асинхронно, не блокируем ответ)
     saveTicketToKnowledgeBase(
@@ -311,7 +346,7 @@ export async function POST(request: NextRequest) {
       {
         publicId: ticket.publicId,
         priority: ticket.priority,
-        attachmentsCount: files?.length || 0,
+        attachmentsCount: uploadedFiles.length,
       }
     ).catch((error) => {
       console.error("[tickets] Error saving ticket to knowledge base:", error);
