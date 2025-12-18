@@ -16,6 +16,7 @@ interface Chat {
   isPublic: boolean;
   lastMessage: string | null;
   lastMessageAt: string | null;
+  ticketId?: string | null;
   participant1: {
     id: string;
     firstName: string | null;
@@ -52,10 +53,14 @@ interface Member {
   avatarUrl: string | null;
 }
 
+type ChatTab = "organization" | "personal";
+
 export default function PPOHeadChatsPage() {
   const { data: session } = useSession();
   const router = useRouter();
-  const [chats, setChats] = useState<Chat[]>([]);
+  const [activeTab, setActiveTab] = useState<ChatTab>("organization");
+  const [organizationChats, setOrganizationChats] = useState<Chat[]>([]);
+  const [personalChats, setPersonalChats] = useState<Chat[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
@@ -83,10 +88,26 @@ export default function PPOHeadChatsPage() {
 
   const loadChats = async () => {
     try {
+      // Загружаем все чаты
       const response = await fetch("/api/ppo-head/chats");
       if (response.ok) {
         const data = await response.json();
-        setChats(data.chats || []);
+        const allChats = data.chats || [];
+        
+        // Разделяем на организационные (с ticketId или группы) и личные
+        const orgChats: Chat[] = [];
+        const persChats: Chat[] = [];
+        
+        allChats.forEach((chat: Chat) => {
+          if (chat.ticketId || chat.type === "GROUP") {
+            orgChats.push(chat);
+          } else {
+            persChats.push(chat);
+          }
+        });
+        
+        setOrganizationChats(orgChats);
+        setPersonalChats(persChats);
       }
     } catch (error) {
       console.error("Ошибка загрузки чатов:", error);
@@ -241,6 +262,8 @@ export default function PPOHeadChatsPage() {
     return null;
   };
 
+  const currentChats = activeTab === "organization" ? organizationChats : personalChats;
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -271,15 +294,67 @@ export default function PPOHeadChatsPage() {
         </button>
       </div>
 
+      {/* Табы */}
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab("organization")}
+            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+              activeTab === "organization"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Чаты организации
+            {organizationChats.length > 0 && (
+              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                {organizationChats.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("personal")}
+            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+              activeTab === "personal"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Личные
+            {personalChats.length > 0 && (
+              <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                {personalChats.length}
+              </span>
+            )}
+          </button>
+        </nav>
+      </div>
+
+      {/* Содержимое таба */}
+      {activeTab === "organization" && (
+        <div className="rounded-lg border border-dashed border-blue-300 bg-blue-50/50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+          <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>
+              Чаты обращений будут появляться здесь автоматически. Переписка ведётся от имени организации.
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-4">
-        {chats.length === 0 ? (
+        {currentChats.length === 0 ? (
           <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-700 dark:bg-gray-800">
             <p className="text-gray-600 dark:text-gray-400">
-              Чатов пока нет. Создайте группу или начните личный чат.
+              {activeTab === "organization" 
+                ? "Чатов организации пока нет. Они появятся при создании обращений."
+                : "Личных чатов пока нет. Начните переписку с членом профсоюза."}
             </p>
           </div>
         ) : (
-          chats.map((chat) => (
+          currentChats.map((chat) => (
             <div
               key={chat.id}
               className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
@@ -302,6 +377,10 @@ export default function PPOHeadChatsPage() {
                           <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                           </svg>
+                        ) : chat.ticketId ? (
+                          <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                          </svg>
                         ) : (
                           <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -314,6 +393,11 @@ export default function PPOHeadChatsPage() {
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                           {getChatName(chat)}
                         </h3>
+                        {chat.ticketId && (
+                          <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                            Обращение
+                          </span>
+                        )}
                         {chat.type === "GROUP" && (
                           <>
                             {chat.isPublic ? (
@@ -387,7 +471,7 @@ export default function PPOHeadChatsPage() {
 
       {/* Модалка создания группы */}
       {showCreateGroupModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-semibold mb-4">Создать группу</h2>
             <div className="space-y-4">
@@ -498,7 +582,7 @@ export default function PPOHeadChatsPage() {
 
       {/* Модалка приглашения в группу */}
       {showInviteModal && selectedChat && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-semibold mb-4">
               Пригласить в группу "{selectedChat.name}"
@@ -571,4 +655,3 @@ export default function PPOHeadChatsPage() {
     </div>
   );
 }
-

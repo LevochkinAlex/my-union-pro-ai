@@ -367,23 +367,27 @@ export default function PPOHeadNewsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Новости
-          </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Управление новостями вашей организации
-          </p>
-        </div>
-        <button
-          onClick={() => setIsCreating(true)}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-        >
-          + Создать новость
-        </button>
-      </div>
+    <div className="pb-8">
+      {/* Макет с 2 колонками */}
+      <div className="flex gap-6 max-w-full">
+        {/* Основная область */}
+        <div className="flex-1 space-y-6 min-w-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                Новости
+              </h1>
+              <p className="mt-2 text-gray-600 dark:text-gray-400">
+                Управление новостями вашей организации
+              </p>
+            </div>
+            <button
+              onClick={() => setIsCreating(true)}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+            >
+              + Создать новость
+            </button>
+          </div>
 
       {isCreating && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -584,9 +588,99 @@ export default function PPOHeadNewsPage() {
         )}
       </div>
 
+        </div>
+
+        {/* Правый сайдбар */}
+        <aside className="hidden xl:block w-80 flex-shrink-0">
+          <div className="sticky top-6 space-y-4">
+            {/* Каналы организации */}
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                    Новостные каналы
+                  </h2>
+                  <button
+                    onClick={() => setShowChannelModal(true)}
+                    className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                  >
+                    + Создать
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {channels.length === 0 ? (
+                    <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
+                      Создайте первый канал
+                    </div>
+                  ) : (
+                    channels.map((channel) => (
+                      <div
+                        key={channel.id}
+                        className={`group flex items-start gap-3 rounded-lg p-3 transition cursor-pointer ${
+                          selectedChannelId === channel.id
+                            ? "bg-blue-50 dark:bg-blue-900/20"
+                            : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                        }`}
+                        onClick={() => setSelectedChannelId(channel.id)}
+                      >
+                        {channel.iconUrl ? (
+                          <img
+                            src={channel.iconUrl}
+                            alt={channel.name}
+                            className="h-12 w-12 flex-shrink-0 rounded-lg object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+                            <svg
+                              className="h-6 w-6"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
+                              />
+                            </svg>
+                          </div>
+                        )}
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                              {channel.name}
+                            </h3>
+                            {channel.isMain && (
+                              <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                Основной
+                              </span>
+                            )}
+                          </div>
+                          {channel.description && (
+                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1">
+                              {channel.description}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            {channel._count?.newsPosts || 0} публикаций
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
       {/* Модалка создания канала */}
       {showChannelModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800 w-full max-w-md">
             <h2 className="text-xl font-semibold mb-4">Создать новый канал</h2>
             <div className="space-y-4">

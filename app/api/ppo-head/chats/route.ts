@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Получаем все чаты, где Председатель является участником
-    // Личные чаты
+    // Личные чаты (включая чаты обращений)
     const privateChats = await prisma.chat.findMany({
       where: {
         type: "PRIVATE",
@@ -51,6 +51,13 @@ export async function GET(request: NextRequest) {
             firstName: true,
             lastName: true,
             avatarUrl: true,
+          },
+        },
+        ticket: {
+          select: {
+            id: true,
+            ticketNumber: true,
+            subject: true,
           },
         },
         _count: {
@@ -115,27 +122,37 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const allChats = [...privateChats, ...groupChats].map((chat) => ({
-      id: chat.id,
-      type: chat.type,
-      name: chat.name,
-      description: chat.description,
-      iconUrl: chat.iconUrl,
-      isPublic: chat.isPublic,
-      lastMessage: chat.lastMessage,
-      lastMessageAt: chat.lastMessageAt?.toISOString() || null,
-      participant1: chat.type === "PRIVATE" ? (chat as typeof privateChats[0]).participant1 : null,
-      participant2: chat.type === "PRIVATE" ? (chat as typeof privateChats[0]).participant2 : null,
-      participants: chat.type === "GROUP" ? (chat as typeof groupChats[0]).participants.map((p) => ({
-        id: p.id,
-        user: p.user,
-        role: p.role,
-      })) : [],
-      _count: {
-        participants: chat.type === "GROUP" ? (chat as typeof groupChats[0])._count.participants : 2,
-        messages: chat._count.messages,
-      },
-    }));
+    const allChats = [...privateChats, ...groupChats].map((chat) => {
+      const privateChat = chat as typeof privateChats[0];
+      const groupChat = chat as typeof groupChats[0];
+      
+      return {
+        id: chat.id,
+        type: chat.type,
+        name: chat.type === "PRIVATE" && privateChat.ticket 
+          ? `Обращение #${privateChat.ticket.ticketNumber}` 
+          : chat.name,
+        description: chat.type === "PRIVATE" && privateChat.ticket 
+          ? privateChat.ticket.subject 
+          : chat.description,
+        iconUrl: chat.iconUrl,
+        isPublic: chat.isPublic,
+        lastMessage: chat.lastMessage,
+        lastMessageAt: chat.lastMessageAt?.toISOString() || null,
+        ticketId: chat.type === "PRIVATE" ? privateChat.ticket?.id || null : null,
+        participant1: chat.type === "PRIVATE" ? privateChat.participant1 : null,
+        participant2: chat.type === "PRIVATE" ? privateChat.participant2 : null,
+        participants: chat.type === "GROUP" ? groupChat.participants.map((p) => ({
+          id: p.id,
+          user: p.user,
+          role: p.role,
+        })) : [],
+        _count: {
+          participants: chat.type === "GROUP" ? groupChat._count.participants : 2,
+          messages: chat._count.messages,
+        },
+      };
+    });
 
     return NextResponse.json({ chats: allChats });
   } catch (error: any) {
