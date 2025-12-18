@@ -167,10 +167,8 @@ export async function DELETE(
       // Удаляем голоса в опросах
       prisma.newsPollVote.deleteMany({
         where: {
-          option: {
-            poll: {
-              newsPostId: id,
-            },
+          poll: {
+            newsPostId: id,
           },
         },
       }),
