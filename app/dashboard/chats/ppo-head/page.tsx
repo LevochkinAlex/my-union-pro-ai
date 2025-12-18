@@ -287,7 +287,7 @@ export default function PPOHeadChatsPage() {
               <div className="flex items-start justify-between">
                 <div
                   className="flex-1 cursor-pointer"
-                  onClick={() => router.push(`/dashboard/chats?chatId=${chat.id}`)}
+                  onClick={() => router.push(`/dashboard/chat?chatId=${chat.id}`)}
                 >
                   <div className="flex items-center gap-3">
                     {getChatAvatar(chat) ? (
@@ -373,7 +373,7 @@ export default function PPOHeadChatsPage() {
                     </>
                   )}
                   <button
-                    onClick={() => router.push(`/dashboard/chats?chatId=${chat.id}`)}
+                    onClick={() => router.push(`/dashboard/chat?chatId=${chat.id}`)}
                     className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
                   >
                     Открыть

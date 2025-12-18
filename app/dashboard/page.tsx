@@ -8,6 +8,7 @@ import NewsList from "@/components/dashboard/news/NewsList";
 import MembershipBanner from "@/components/dashboard/MembershipBanner";
 import UserCard from "@/components/dashboard/users/UserCard";
 import PostsListClient from "@/components/posts/PostsListClient";
+import PPOHeadDashboard from "@/components/dashboard/PPOHeadDashboard";
 import { calculateProfileProgress } from "@/lib/profile-progress";
 
 export default async function DashboardPage() {
@@ -26,6 +27,135 @@ export default async function DashboardPage() {
   }
   
   console.log("[dashboard/page] ✅ Rendering dashboard for user:", userId);
+
+  // Получаем роль пользователя
+  const userRole = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      role: true,
+      firstName: true,
+      lastName: true,
+      organization: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  // Если пользователь - Председатель, показываем специальный дашборд
+  if (userRole?.role === "PPO_HEAD" && userRole.organization) {
+    // Получаем статистику для Председателя
+    const [pendingAppeals, pendingMembers, activeMembers, totalNews, totalDocuments, recentAppeals, recentMembers] = await Promise.all([
+      // Количество новых обращений
+      prisma.ticket.count({
+        where: {
+          organizationId: userRole.organization.id,
+          status: "PENDING",
+        },
+      }),
+      // Количество заявок на валидации
+      prisma.user.count({
+        where: {
+          organizationId: userRole.organization.id,
+          membershipStatus: {
+            in: ["DOCUMENTS_PENDING", "PROFILE_INCOMPLETE"],
+          },
+        },
+      }),
+      // Количество активных членов
+      prisma.user.count({
+        where: {
+          organizationId: userRole.organization.id,
+          membershipStatus: "APPROVED",
+        },
+      }),
+      // Количество новостей
+      prisma.newsPost.count({
+        where: {
+          channel: {
+            organizationId: userRole.organization.id,
+          },
+        },
+      }),
+      // Количество документов
+      prisma.document.count({
+        where: {
+          organizationId: userRole.organization.id,
+          type: {
+            in: ["AGENDA", "PROTOCOL", "RESOLUTION", "PROTOCOL_EXTRACT"],
+          },
+        },
+      }),
+      // Последние обращения
+      prisma.ticket.findMany({
+        where: {
+          organizationId: userRole.organization.id,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 5,
+        select: {
+          id: true,
+          publicId: true,
+          title: true,
+          status: true,
+          createdAt: true,
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      }),
+      // Последние заявки на вступление
+      prisma.user.findMany({
+        where: {
+          organizationId: userRole.organization.id,
+          membershipStatus: {
+            in: ["DOCUMENTS_PENDING", "PROFILE_INCOMPLETE"],
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 5,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    const userName = userRole.firstName || session.user?.name || "Председатель";
+
+    return (
+      <PPOHeadDashboard
+        userName={userName}
+        organizationName={userRole.organization.name}
+        stats={{
+          pendingAppeals,
+          pendingMembers,
+          activeMembers,
+          totalNews,
+          totalDocuments,
+        }}
+        recentAppeals={recentAppeals.map((a) => ({
+          ...a,
+          createdAt: a.createdAt.toISOString(),
+        }))}
+        recentMembers={recentMembers.map((m) => ({
+          ...m,
+          createdAt: m.createdAt.toISOString(),
+        }))}
+      />
+    );
+  }
 
   // ОПТИМИЗАЦИЯ: Выполняем все запросы параллельно
   const sevenDaysAgo = new Date();

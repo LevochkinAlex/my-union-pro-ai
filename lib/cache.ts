@@ -75,8 +75,13 @@ function getRedisClient(): Redis | null {
  */
 export async function cacheGet<T>(key: string): Promise<T | null> {
   const client = getRedisClient();
-  if (!client || client.status !== "ready") {
-    return null; // Если Redis недоступен, возвращаем null
+  if (!client) {
+    console.log(`[Cache] No Redis client for key: ${key}`);
+    return null;
+  }
+  if (client.status !== "ready") {
+    console.log(`[Cache] Redis not ready (${client.status}) for key: ${key}`);
+    return null;
   }
 
   try {
@@ -110,6 +115,7 @@ export async function cacheSet(
   try {
     const serialized = JSON.stringify(value);
     await client.setex(key, ttlSeconds, serialized);
+    console.log(`[Cache] SET ${key} (TTL: ${ttlSeconds}s)`);
     return true;
   } catch (error: any) {
     // Не логируем ошибки подключения - это нормально при временных проблемах
