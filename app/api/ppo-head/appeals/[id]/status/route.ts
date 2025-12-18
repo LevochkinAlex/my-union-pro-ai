@@ -149,7 +149,7 @@ export async function PUT(
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
       await sendUserNotification({
         userId: ticket.userId,
-        type: "ticket_status",
+        type: "ticket_response",
         title: `${STATUS_EMOJI[status] || "📌"} Статус обращения изменен`,
         body: `Обращение #${ticket.publicId}: ${STATUS_NAMES[status] || status}`,
         url: `${baseUrl}/dashboard/appeals/${ticket.id}`,
