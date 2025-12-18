@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle, XCircle, Activity, Server, Database, Clock } from "lucide-react";
+import { AlertCircle, CheckCircle, XCircle, Activity, Server, Database, Clock, ExternalLink } from "lucide-react";
 
 interface SystemMetrics {
   status: "online" | "offline" | "error";
@@ -28,6 +28,7 @@ interface ApiHealth {
 }
 
 export default function MonitoringPage() {
+  const [activeTab, setActiveTab] = useState<"overview" | "grafana">("overview");
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const [apiHealth, setApiHealth] = useState<ApiHealth[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -80,17 +81,74 @@ export default function MonitoringPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Мониторинг системы</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Обновлено: {lastUpdate.toLocaleTimeString("ru-RU")}
+            {activeTab === "overview" && `Обновлено: ${lastUpdate.toLocaleTimeString("ru-RU")}`}
+            {activeTab === "grafana" && "Полный мониторинг через Grafana"}
           </p>
         </div>
-        <button
-          onClick={fetchMetrics}
-          disabled={isLoading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-        >
-          {isLoading ? "Обновление..." : "Обновить"}
-        </button>
+        <div className="flex items-center gap-3">
+          {activeTab === "overview" && (
+            <button
+              onClick={fetchMetrics}
+              disabled={isLoading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isLoading ? "Обновление..." : "Обновить"}
+            </button>
+          )}
+          {activeTab === "grafana" && (
+            <a
+              href="/grafana/d/myunion-overview"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Открыть в новой вкладке
+            </a>
+          )}
+        </div>
       </div>
+
+      {/* Tabs */}
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab("overview")}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === "overview"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Обзор
+          </button>
+          <button
+            onClick={() => setActiveTab("grafana")}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === "grafana"
+                ? "border-purple-500 text-purple-600 dark:text-purple-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Grafana Dashboard
+          </button>
+        </nav>
+      </div>
+
+      {/* Grafana Tab */}
+      {activeTab === "grafana" && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden" style={{ height: "calc(100vh - 300px)", minHeight: "600px" }}>
+          <iframe
+            src="/grafana/d/myunion-overview?kiosk=tv&theme=dark"
+            className="w-full h-full border-0"
+            title="Grafana Dashboard"
+            allow="fullscreen"
+          />
+        </div>
+      )}
+
+      {/* Overview Tab */}
+      {activeTab === "overview" && (
 
       {isLoading && !metrics ? (
         <div className="flex items-center justify-center py-12">
@@ -264,6 +322,8 @@ export default function MonitoringPage() {
           </div>
         </div>
       )}
+      </div>
+    )}
     </div>
   );
 }
