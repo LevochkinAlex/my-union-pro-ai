@@ -7,8 +7,21 @@ import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/button/Button";
 import Select from "@/components/ui/Select";
 import TextArea from "@/components/ui/TextArea";
-import { KnowledgeBase, ApiProvider } from "@prisma/client";
 import Label from "@/components/form/Label";
+
+// ИСПРАВЛЕНО: Убраны импорты типов из @prisma/client, чтобы избежать попадания Prisma Client в клиентский бандл
+type KnowledgeBase = {
+  id: string;
+  name: string;
+};
+
+type ApiProvider = {
+  id: string;
+  name: string;
+  type: string;
+  apiKey?: string | null;
+  apiBaseUrl?: string | null;
+};
 
 type ApiProviderWithModels = ApiProvider & {
   availableModels: string[];

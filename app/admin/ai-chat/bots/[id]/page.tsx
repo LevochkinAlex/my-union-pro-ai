@@ -8,20 +8,32 @@ import InputField from "@/components/ui/InputField";
 import Select from "@/components/ui/Select";
 import TextArea from "@/components/ui/TextArea";
 import Label from "@/components/form/Label";
-import { KnowledgeBase as PrismaKnowledgeBase, ApiProvider as PrismaApiProvider, ChatBot as PrismaChatBot } from "@prisma/client";
 
-// The types were too complex and caused issues. Let's simplify and use Prisma's generated types where possible.
+// ИСПРАВЛЕНО: Убраны импорты типов из @prisma/client, чтобы избежать попадания Prisma Client в клиентский бандл
+// Используем локальные типы вместо Prisma типов
 type KnowledgeBase = {
   id: string;
   name: string;
 };
 
-type ApiProvider = Omit<PrismaApiProvider, 'createdAt' | 'updatedAt'> & {
-  updatedAt: string;
+type ApiProvider = {
+  id: string;
+  name: string;
+  type: string;
+  apiKey?: string | null;
+  apiBaseUrl?: string | null;
   availableModels: string[]; // Ensure this is always an array
+  updatedAt: string;
 };
 
-type ChatBot = Omit<PrismaChatBot, 'temperature' | 'maxTokens' | 'createdAt' | 'updatedAt'> & {
+type ChatBot = {
+  id: string;
+  name: string;
+  description?: string | null;
+  systemPrompt: string;
+  tone: string;
+  context?: string | null;
+  model: string;
   temperature: number;
   maxTokens: number;
   apiProvider?: ApiProvider | null;
