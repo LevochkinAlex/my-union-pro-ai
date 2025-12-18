@@ -79,17 +79,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
     }
 
-    // Определяем порядок участников для чата
-    const participant1Id = userId < targetUserId ? userId : targetUserId;
-    const participant2Id = userId < targetUserId ? targetUserId : userId;
-
     // Ищем существующий чат или создаем новый
-    let chat = await prisma.chat.findUnique({
+    let chat = await prisma.chat.findFirst({
       where: {
-        participant1Id_participant2Id: {
-          participant1Id,
-          participant2Id,
-        },
+        type: "PRIVATE",
+        OR: [
+          { participant1Id: userId, participant2Id: targetUserId },
+          { participant1Id: targetUserId, participant2Id: userId },
+        ],
       },
     });
 
