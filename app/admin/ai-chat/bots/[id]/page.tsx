@@ -36,11 +36,18 @@ type ChatBot = {
   model: string;
   temperature: number;
   maxTokens: number;
+  apiProviderId?: string | null;
   apiProvider?: ApiProvider | null;
   providerOverride?: {
     apiKey?: string;
     apiBaseUrl?: string;
   } | null;
+  knowledgeBases?: Array<{
+    knowledgeBase: {
+      id: string;
+      name: string;
+    };
+  }>;
   knowledgeBases: Array<{
     knowledgeBase: {
       id: string;
