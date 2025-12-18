@@ -7,8 +7,12 @@ import Button from "@/components/ui/button/Button";
 import InputField from "@/components/ui/InputField";
 import TextArea from "@/components/ui/TextArea";
 import Label from "@/components/form/Label";
-import { Prisma } from "@prisma/client";
-function isJsonObject(value: Prisma.JsonValue | null): value is Prisma.JsonObject {
+// ИСПРАВЛЕНО: Убран импорт типа из @prisma/client, используем локальные типы
+type JsonValue = string | number | boolean | null | JsonObject | JsonArray;
+type JsonObject = { [key: string]: JsonValue };
+type JsonArray = JsonValue[];
+
+function isJsonObject(value: JsonValue | null): value is JsonObject {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 

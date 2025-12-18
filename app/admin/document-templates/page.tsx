@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { DocumentType } from "@prisma/client";
 import DocumentTemplateEditor from "@/components/admin/DocumentTemplateEditor";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
+
+// ИСПРАВЛЕНО: Убран импорт типа из @prisma/client, используем строковый литерал
+type DocumentType = "MEMBERSHIP_APPLICATION" | "CONTRIBUTION_APPLICATION" | "OTHER";
 
 interface DocumentTemplate {
   id: string;

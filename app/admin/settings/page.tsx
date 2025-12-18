@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { UserRole } from "@prisma/client";
+
+// ИСПРАВЛЕНО: Убран импорт типа из @prisma/client, используем строковый литерал
+type UserRole = "MEMBER" | "PENDING_MEMBER" | "PPO_HEAD" | "REGIONAL_CHAIRMAN" | "FEDERAL_CHAIRMAN" | "SUPER_ADMIN";
 
 interface EnvVariables {
   NEXT_PUBLIC_APP_URL?: string;

@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { DocumentType } from "@prisma/client";
 import { alertSuccess, alertError } from "@/lib/alert";
+
+// ИСПРАВЛЕНО: Убран импорт типа из @prisma/client, используем строковый литерал
+type DocumentType = "MEMBERSHIP_APPLICATION" | "CONTRIBUTION_APPLICATION" | "OTHER";
 
 interface DocumentTemplate {
   id: string;

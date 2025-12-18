@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { OrganizationType } from "@prisma/client";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
+
+// ИСПРАВЛЕНО: Убран импорт типа из @prisma/client, используем строковый литерал
+type OrganizationType = "PRIMARY" | "REGIONAL" | "FEDERAL";
 
 interface Organization {
   id: string;
