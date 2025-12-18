@@ -36,6 +36,8 @@ type ChatBot = {
   model: string;
   temperature: number;
   maxTokens: number;
+  isActive?: boolean;
+  isDefault?: boolean;
   apiProviderId?: string | null;
   apiProvider?: ApiProvider | null;
   providerOverride?: {
