@@ -6,6 +6,7 @@ import { formatFileSize as formatFileSizeUtil } from "@/lib/file-utils";
 /**
  * Получить полное имя пользователя
  * В русской традиции: Фамилия Имя Отчество
+ * Консистентно с остальным приложением (lib/documents.ts, MergeAccountsModal, ppo-head pages)
  */
 export function getUserName(user: ChatUser | any | null | undefined): string {
   if (!user) return "Пользователь";
