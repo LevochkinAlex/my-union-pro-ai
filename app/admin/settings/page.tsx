@@ -36,7 +36,7 @@ export default function AdminSettingsPage() {
     if (status === "unauthenticated") {
       router.push("/");
     }
-    if (status === "authenticated" && session?.user?.role !== UserRole.SUPER_ADMIN) {
+    if (status === "authenticated" && session?.user?.role !== "SUPER_ADMIN") {
       router.push("/");
     }
   }, [status, session, router]);
