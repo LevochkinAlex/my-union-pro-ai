@@ -56,8 +56,8 @@ export async function GET(request: NextRequest) {
         ticket: {
           select: {
             id: true,
-            ticketNumber: true,
-            subject: true,
+            publicId: true,
+            title: true,
           },
         },
         _count: {
@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
         id: chat.id,
         type: chat.type,
         name: chat.type === "PRIVATE" && privateChat.ticket 
-          ? `Обращение #${privateChat.ticket.ticketNumber}` 
+          ? `Обращение #${privateChat.ticket.publicId}` 
           : chat.name,
         description: chat.type === "PRIVATE" && privateChat.ticket 
           ? privateChat.ticket.subject 
