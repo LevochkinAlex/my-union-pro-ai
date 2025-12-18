@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 
 // ИСПРАВЛЕНО: Убран импорт типа из @prisma/client, используем строковый литерал
@@ -37,6 +38,7 @@ interface JobTitle {
 }
 
 export default function OrganizationsPage() {
+  const { data: session, status: sessionStatus } = useSession();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -382,12 +384,84 @@ export default function OrganizationsPage() {
     ));
   };
 
+  // Показываем состояние загрузки сессии
+  if (sessionStatus === "loading") {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+          <p className="text-gray-600 dark:text-gray-400">Проверка авторизации...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Проверяем авторизацию
+  if (sessionStatus === "unauthenticated" || !session?.user) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="mb-4 inline-flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 dark:bg-yellow-900/30">
+            <svg className="h-6 w-6 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Требуется авторизация
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Для доступа к этой странице необходимо войти в систему как администратор.
+          </p>
+          <a
+            href="/login"
+            className="inline-block rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          >
+            Войти в систему
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // Проверяем роль
+  if (session.user.role !== "SUPER_ADMIN") {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="mb-4 inline-flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30">
+            <svg className="h-6 w-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Доступ запрещен
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-2">
+            У вас нет прав для доступа к этой странице.
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
+            Текущая роль: {session.user.role || "не определена"}
+          </p>
+          <a
+            href="/dashboard"
+            className="inline-block rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          >
+            Вернуться в личный кабинет
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
           <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
           <p className="text-gray-600 dark:text-gray-400">Загрузка организаций...</p>
+          <p className="mt-2 text-xs text-gray-500">
+            Сессия: {session.user.id ? "активна" : "не активна"}
+          </p>
         </div>
       </div>
     );
