@@ -10,7 +10,7 @@ const LazyImage = memo(function LazyImage({
   alt,
   onClick,
   className = "",
-  isOldImage = false, // Для старых изображений (не в начале списка) используем blur placeholder
+  isOldImage = false, // Для старых изображений (история) используем blur placeholder
 }: {
   src: string;
   alt: string;
@@ -19,148 +19,107 @@ const LazyImage = memo(function LazyImage({
   isOldImage?: boolean;
 }) {
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isInView, setIsInView] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const [showImage, setShowImage] = useState(!isOldImage); // Для новых загружаем сразу
-  const [isDownloading, setIsDownloading] = useState(false);
-  const imgRef = useRef<HTMLDivElement>(null);
-
-  // IntersectionObserver для определения видимости
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setIsInView(true);
-            observer.disconnect();
-          }
-        });
-      },
-      {
-        rootMargin: "300px", // Начинаем проверку за 300px до появления
-        threshold: 0,
-      }
-    );
-
-    if (imgRef.current) {
-      observer.observe(imgRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, []);
+  const [showImage, setShowImage] = useState(!isOldImage);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   const handleDownload = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsDownloading(true);
     setShowImage(true);
   };
 
-  // Для старых изображений показываем blur placeholder до явного запроса
+  const handleRetry = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setHasError(false);
+    setIsLoaded(false);
+    // Force reload by changing src
+    if (imgRef.current) {
+      const currentSrc = imgRef.current.src;
+      imgRef.current.src = '';
+      setTimeout(() => {
+        if (imgRef.current) imgRef.current.src = currentSrc;
+      }, 100);
+    }
+  };
+
+  // Для старых изображений показываем blur placeholder
   const shouldShowPlaceholder = isOldImage && !showImage;
-  const shouldLoadImage = isInView && showImage;
 
   return (
     <div
-      ref={imgRef}
-      className={`relative overflow-hidden bg-gray-200 dark:bg-gray-700 ${onClick ? "cursor-pointer" : ""} ${className}`}
+      className={`relative overflow-hidden rounded-lg ${onClick ? "cursor-pointer" : ""} ${className}`}
       style={{ 
-        width: "100%", 
-        display: "block",
-        // Если плейсхолдер - задаем фиксированные размеры как у WhatsApp
-        minHeight: shouldShowPlaceholder || (!isLoaded && shouldLoadImage) ? "200px" : undefined,
-        aspectRatio: shouldShowPlaceholder || (!isLoaded && shouldLoadImage) ? "4/3" : undefined,
+        width: "100%",
+        // Только для placeholder используем фиксированные размеры
+        minHeight: shouldShowPlaceholder ? "150px" : undefined,
+        aspectRatio: shouldShowPlaceholder ? "4/3" : undefined,
       }}
     >
       {/* Blur placeholder для старых изображений (как в WhatsApp) */}
       {shouldShowPlaceholder && (
         <div 
-          className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden"
-          style={{
-            background: "linear-gradient(135deg, #667eea40 0%, #764ba240 50%, #6B8DD640 100%)",
-          }}
+          className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20"
         >
-          {/* Blur overlay */}
-          <div 
-            className="absolute inset-0"
-            style={{
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
-              background: "rgba(0, 0, 0, 0.1)",
-            }}
-          />
-          
-          {/* Иконка и кнопка */}
-          <div className="relative z-10 flex flex-col items-center gap-3">
-            {/* Иконка изображения */}
-            <div className="p-3 rounded-full bg-white/20 backdrop-blur-sm">
-              <svg className="w-8 h-8 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="absolute inset-0 backdrop-blur-xl bg-black/10" />
+          <div className="relative z-10 flex flex-col items-center gap-2">
+            <div className="p-2 rounded-full bg-white/20">
+              <svg className="w-6 h-6 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
-            
-            {/* Кнопка загрузить */}
             <button
               onClick={handleDownload}
-              className="flex items-center gap-2 px-4 py-2 bg-white/90 dark:bg-gray-800/90 rounded-full shadow-lg hover:bg-white dark:hover:bg-gray-800 transition-all text-sm font-medium text-gray-900 dark:text-white hover:scale-105"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/90 dark:bg-gray-800/90 rounded-full shadow-lg text-xs font-medium text-gray-900 dark:text-white hover:scale-105 transition-transform"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-              Загрузить фото
+              Загрузить
             </button>
           </div>
         </div>
       )}
 
-      {/* Placeholder загрузки */}
-      {shouldLoadImage && !isLoaded && !hasError && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-200 dark:bg-gray-700">
-          <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-2" />
-          {isDownloading && (
-            <span className="text-xs text-gray-500 dark:text-gray-400">Загрузка...</span>
-          )}
-        </div>
-      )}
-      
       {/* Ошибка загрузки */}
       {hasError && (
-        <div 
-          className="absolute inset-0 flex flex-col items-center justify-center text-gray-400"
-          style={{ minHeight: "150px" }}
-        >
-          <svg className="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="flex flex-col items-center justify-center py-8 text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-lg">
+          <svg className="w-8 h-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
-          <span className="text-xs">Не удалось загрузить</span>
+          <span className="text-xs mb-2">Ошибка загрузки</span>
           <button
-            onClick={handleDownload}
-            className="mt-2 px-3 py-1 text-xs bg-gray-300 dark:bg-gray-600 rounded-full hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
+            onClick={handleRetry}
+            className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
           >
             Повторить
           </button>
         </div>
       )}
       
-      {/* Изображение */}
-      {shouldLoadImage && !hasError && (
-        <img
-          src={src}
-          alt={alt}
-          onClick={onClick}
-          className={`w-full h-auto transition-all duration-500 ${
-            isLoaded ? "opacity-100 blur-0" : "opacity-0 blur-sm"
-          }`}
-          style={{ maxWidth: "100%", display: isLoaded ? "block" : "none" }}
-          onLoad={() => {
-            setIsLoaded(true);
-            setIsDownloading(false);
-          }}
-          onError={() => {
-            setHasError(true);
-            setIsDownloading(false);
-          }}
-          loading="lazy"
-        />
+      {/* Изображение - всегда рендерим для быстрой загрузки */}
+      {showImage && !hasError && (
+        <div className="relative">
+          {/* Маленький индикатор загрузки поверх изображения */}
+          {!isLoaded && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+          <img
+            ref={imgRef}
+            src={src}
+            alt={alt}
+            onClick={onClick}
+            className={`w-full h-auto rounded-lg transition-opacity duration-300 ${
+              isLoaded ? "opacity-100" : "opacity-0"
+            }`}
+            style={{ maxWidth: "100%", minHeight: isLoaded ? undefined : "100px" }}
+            onLoad={() => setIsLoaded(true)}
+            onError={() => setHasError(true)}
+            loading="eager"
+            decoding="async"
+          />
+        </div>
       )}
     </div>
   );
