@@ -178,15 +178,7 @@ export async function POST(request: NextRequest) {
       chairmanId = chairman?.id || null;
     }
 
-    // Создаем или находим чат с Председателем, если он есть
-    let chatId: string | null = null;
-    if (chairmanId) {
-      // Используем утилиту для создания/поиска чата с нормализацией ID
-      const chat = await getOrCreatePrivateChat(session.user.id, chairmanId);
-      chatId = chat.id;
-    }
-
-    // Создаем тикет
+    // Создаем тикет сначала (без chatId)
     const ticket = await prisma.ticket.create({
       data: {
         userId: session.user.id,
@@ -197,13 +189,24 @@ export async function POST(request: NextRequest) {
         title,
         content,
         organizationId: user?.organizationId || null,
-        chatId: chatId,
       },
     });
 
-    // Создаем первое сообщение в чате с текстом обращения
-    if (chatId) {
-      await sendChatMessage(chatId, session.user.id, `Обращение: ${title}\n\n${content}`);
+    // Создаем или находим чат с Председателем, если он есть
+    let chatId: string | null = null;
+    if (chairmanId && chairmanId !== session.user.id) {
+      // Используем утилиту для создания/поиска чата с нормализацией ID
+      const chat = await getOrCreatePrivateChat(session.user.id, chairmanId);
+      chatId = chat.id;
+
+      // Связываем тикет с чатом (связь идёт через Ticket.chatId)
+      await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: { chatId: chat.id },
+      });
+
+      // Создаем первое сообщение в чате с текстом обращения
+      await sendChatMessage(chatId, session.user.id, `📋 Обращение #${publicId}\n\n**${title}**\n\n${content}`);
     }
 
     // Логируем создание обращения
