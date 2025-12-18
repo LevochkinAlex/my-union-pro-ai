@@ -5,6 +5,17 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { alertSuccess, alertError } from "@/lib/alert";
 
+interface Document {
+  id: string;
+  type: string;
+  status: string;
+  title: string;
+  fileName: string | null;
+  filePath: string | null;
+  signedFilePath: string | null;
+  createdAt: string;
+}
+
 interface Member {
   id: string;
   firstName: string | null;
@@ -14,13 +25,61 @@ interface Member {
   phone: string | null;
   membershipStatus: string;
   createdAt: string;
-  documents?: Array<{
-    id: string;
-    type: string;
-    status: string;
-    filePath: string | null;
-  }>;
+  documents?: Document[];
 }
+
+interface MemberDetails extends Member {
+  authPhone: string | null;
+  dateOfBirth: string | null;
+  address: string | null;
+  avatarUrl: string | null;
+  jobTitle: string | null;
+  profession: string | null;
+  education: string | null;
+  workplace: string | null;
+  workplaceInn: string | null;
+  directorName: string | null;
+  directorPosition: string | null;
+  employmentStatus: string | null;
+  role: string;
+  unionCardNumber: string | null;
+  membershipJoinedAt: string | null;
+  unionMembershipStatus: string | null;
+  awards: string | null;
+  aboutMe: string | null;
+  hobbies: string | null;
+  maritalStatus: string | null;
+  spouseInfo: string | null;
+  hasChildren: boolean | null;
+  childrenInfo: string | null;
+  childrenBirthDates: string | null;
+  training: string | null;
+  additionalInfo: string | null;
+  professions: string | null;
+  educations: string | null;
+  preferredDiscountCity: string | null;
+  bestBenefitsUserId: string | null;
+  bestBenefitsStatus: string | null;
+  updatedAt: string;
+  emailVerified: string | null;
+  organization: { id: string; name: string } | null;
+}
+
+type DetailTab = "profile" | "work" | "family" | "education" | "documents";
+
+const MARITAL_STATUS_MAP: Record<string, string> = {
+  SINGLE: "Не женат/Не замужем",
+  MARRIED: "Женат/Замужем",
+  DIVORCED: "В разводе",
+  WIDOWED: "Вдовец/Вдова",
+  CIVIL_UNION: "В гражданском браке",
+};
+
+const EMPLOYMENT_STATUS_MAP: Record<string, string> = {
+  WORK: "Работает",
+  STUDY: "Учится",
+  RETIREMENT: "На пенсии",
+};
 
 export default function MembersPage() {
   const { data: session } = useSession();
@@ -32,6 +91,12 @@ export default function MembersPage() {
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Detail modal state
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [memberDetails, setMemberDetails] = useState<MemberDetails | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [detailTab, setDetailTab] = useState<DetailTab>("profile");
 
   useEffect(() => {
     loadMembers();
@@ -105,6 +170,37 @@ export default function MembersPage() {
       alertError(err instanceof Error ? err.message : "Не удалось отклонить заявку");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const loadMemberDetails = async (memberId: string) => {
+    try {
+      setLoadingDetails(true);
+      setShowDetailModal(true);
+      setDetailTab("profile");
+
+      const response = await fetch(`/api/ppo-head/members/${memberId}`);
+      if (!response.ok) {
+        throw new Error("Ошибка загрузки данных");
+      }
+
+      const data = await response.json();
+      setMemberDetails(data.member);
+    } catch (err) {
+      console.error("Error loading member details:", err);
+      alertError("Не удалось загрузить данные члена профсоюза");
+      setShowDetailModal(false);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const parseJsonField = (field: string | null) => {
+    if (!field) return null;
+    try {
+      return JSON.parse(field);
+    } catch {
+      return null;
     }
   };
 
@@ -261,25 +357,33 @@ export default function MembersPage() {
                     </div>
                   )}
                 </div>
-                {activeTab === "validation" && (
-                  <div className="ml-4 flex gap-2">
-                    <button
-                      onClick={() => handleApprove(member.id)}
-                      className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-                    >
-                      Одобрить
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedMember(member);
-                        setShowRejectModal(true);
-                      }}
-                      className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-                    >
-                      Отклонить
-                    </button>
-                  </div>
-                )}
+                <div className="ml-4 flex flex-col gap-2">
+                  <button
+                    onClick={() => loadMemberDetails(member.id)}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  >
+                    Подробнее
+                  </button>
+                  {activeTab === "validation" && (
+                    <>
+                      <button
+                        onClick={() => handleApprove(member.id)}
+                        className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+                      >
+                        Одобрить
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedMember(member);
+                          setShowRejectModal(true);
+                        }}
+                        className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                      >
+                        Отклонить
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           ))}
