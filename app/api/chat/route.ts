@@ -198,17 +198,36 @@ export async function GET(request: NextRequest) {
 
         // Форматируем чаты для ответа
         const formattedChats = chats.map((chat, index) => {
-          const otherUser = chat.participant1Id === userId ? chat.participant2 : chat.participant1;
-          const normalizedUser = otherUser ? normalizeUserAvatar(otherUser) : null;
+          let otherUserData: any = null;
 
-          return {
-            id: chat.id,
-            type: chat.type || "PRIVATE",
-            name: chat.name,
-            description: chat.description,
-            iconUrl: chat.iconUrl,
-            isPublic: chat.isPublic,
-            otherUser: normalizedUser ? {
+          if (chat.type === "GROUP") {
+            // Для GROUP чатов (обращения) показываем название чата и кол-во участников
+            // Находим другого участника (не текущего пользователя)
+            const otherParticipant = chat.participants?.find((p: any) => p.userId !== userId);
+            const otherUser = otherParticipant?.user;
+            
+            // Определяем название чата
+            const chatName = chat.name || "Чат";
+            
+            otherUserData = {
+              id: chat.id, // Используем ID чата как ID
+              // Ставим в lastName название чата, чтобы getUserName вернул его
+              firstName: null,
+              lastName: chatName,
+              middleName: null,
+              avatarUrl: chat.iconUrl || null,
+              phone: null,
+              isGroup: true,
+              participantsCount: chat._count?.participants || 0,
+              // Если это чат обращения, добавляем инфо о другом участнике
+              otherParticipantName: otherUser ? `${otherUser.firstName || ""} ${otherUser.lastName || ""}`.trim() : null,
+            };
+          } else {
+            // Для PRIVATE чатов - обычная логика
+            const otherUser = chat.participant1Id === userId ? chat.participant2 : chat.participant1;
+            const normalizedUser = otherUser ? normalizeUserAvatar(otherUser) : null;
+            
+            otherUserData = normalizedUser ? {
               id: normalizedUser.id,
               firstName: normalizedUser.firstName,
               lastName: normalizedUser.lastName,
@@ -222,7 +241,17 @@ export async function GET(request: NextRequest) {
               middleName: null,
               avatarUrl: null,
               phone: null,
-            },
+            };
+          }
+
+          return {
+            id: chat.id,
+            type: chat.type || "PRIVATE",
+            name: chat.name,
+            description: chat.description,
+            iconUrl: chat.iconUrl,
+            isPublic: chat.isPublic,
+            otherUser: otherUserData,
             lastMessage: chat.lastMessage,
             lastMessageAt: chat.lastMessageAt,
             unreadCount: unreadCounts[index] || 0,

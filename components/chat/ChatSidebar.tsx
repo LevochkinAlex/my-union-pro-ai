@@ -200,7 +200,10 @@ const ChatList = memo(function ChatList({
   return (
     <div>
       {chats.map((chat) => {
-        if (currentUserId && chat.otherUser.id === currentUserId) return null;
+        // Для приватных чатов пропускаем чаты с самим собой
+        // Для групповых чатов (включая обращения) - показываем всегда
+        const isGroupOrAppeal = chat.type === "GROUP" || chat.ticketId || (chat.otherUser as any)?.isGroup;
+        if (!isGroupOrAppeal && currentUserId && chat.otherUser.id === currentUserId) return null;
         
         return (
           <ChatItem
@@ -224,6 +227,26 @@ const ChatItem = memo(function ChatItem({
   isSelected: boolean;
   onSelect: (chat: Chat) => void;
 }) {
+  const isGroupChat = chat.type === "GROUP" || (chat.otherUser as any)?.isGroup;
+  const isAppealChat = !!(chat.ticketId);
+  
+  // Определяем название чата
+  const getChatName = () => {
+    if (isAppealChat && chat.ticketPublicId) return `Обращение #${chat.ticketPublicId}`;
+    if (chat.name) return chat.name;
+    return getUserName(chat.otherUser);
+  };
+
+  // Определяем подзаголовок
+  const getSubtitle = () => {
+    if (isGroupChat) {
+      const count = (chat as any).participantsCount || chat._count?.participants || 0;
+      if (count > 0) return `${count} участник${count === 1 ? "" : count < 5 ? "а" : "ов"}`;
+    }
+    if (chat.ticketTitle) return chat.ticketTitle;
+    return chat.lastMessage || "Нет сообщений";
+  };
+
   return (
     <button
       onClick={() => onSelect(chat)}
@@ -231,12 +254,33 @@ const ChatItem = memo(function ChatItem({
         isSelected ? "bg-blue-50 dark:bg-blue-900/20" : ""
       }`}
     >
-      <Avatar user={chat.otherUser} size="md" />
+      {isAppealChat ? (
+        <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center text-white flex-shrink-0">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+          </svg>
+        </div>
+      ) : isGroupChat ? (
+        <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center text-white flex-shrink-0">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </div>
+      ) : (
+        <Avatar user={chat.otherUser} size="md" />
+      )}
       <div className="flex-1 text-left min-w-0">
         <div className="flex items-center justify-between mb-1 gap-2">
-          <p className="font-medium text-gray-900 dark:text-white truncate text-sm md:text-base">
-            {getUserName(chat.otherUser)}
-          </p>
+          <div className="flex items-center gap-2 min-w-0">
+            <p className="font-medium text-gray-900 dark:text-white truncate text-sm md:text-base">
+              {getChatName()}
+            </p>
+            {isAppealChat && (
+              <span className="shrink-0 text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 px-1.5 py-0.5 rounded">
+                Обращение
+              </span>
+            )}
+          </div>
           {chat.lastMessageAt && (
             <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap flex-shrink-0">
               {formatTime(chat.lastMessageAt.toString())}
@@ -245,7 +289,7 @@ const ChatItem = memo(function ChatItem({
         </div>
         <div className="flex items-center gap-2">
           <p className="text-sm text-gray-500 dark:text-gray-400 truncate flex-1">
-            {chat.lastMessage || "Нет сообщений"}
+            {getSubtitle()}
           </p>
           {chat.unreadCount > 0 && (
             <span className="bg-blue-500 text-white text-xs font-medium px-2 py-0.5 rounded-full min-w-[20px] text-center flex-shrink-0">
