@@ -39,8 +39,13 @@ interface NewsPost {
 export default function NewsPage() {
   const { data: session } = useSession();
   
-  // Если пользователь - Председатель, показываем специальную страницу
-  if (session?.user?.role === "PPO_HEAD") {
+  // Если пользователь - Председатель (по роли, флагу isPPOHead или viewMode), показываем специальную страницу
+  const isPPOHead = 
+    session?.user?.role === "PPO_HEAD" || 
+    (session?.user as any)?.isPPOHead === true ||
+    (session?.user as any)?.viewMode === "PPO_HEAD";
+    
+  if (isPPOHead) {
     return <PPOHeadNewsPage />;
   }
 
