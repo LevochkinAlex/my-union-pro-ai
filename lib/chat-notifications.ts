@@ -1,5 +1,3 @@
-<<<<<<< Current (Your changes)
-=======
 /**
  * Chat Notifications - звуки и веб-пуши для ответов бота
  */
@@ -172,5 +170,3 @@ export function notifyBotResponse(message: string, sessionType?: "STATEMENT" | "
   playNotificationSound();
   showChatNotification(message, sessionType);
 }
-
->>>>>>> Incoming (Background Agent changes)
