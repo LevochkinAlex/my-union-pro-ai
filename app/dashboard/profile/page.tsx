@@ -1230,25 +1230,25 @@ export default function ProfilePage() {
                 } : null}
                 onChange={(workplace) => {
                   if (workplace) {
-                    const updatedData = {
-                      ...profileData,
+                    // Используем функциональное обновление для сохранения всех полей
+                    setProfileData(prev => ({
+                      ...prev,
                       workplace: workplace.name,
                       workplaceInn: workplace.inn,
                       directorName: workplace.directorName,
                       directorPosition: workplace.directorPosition,
-                    };
-                    setProfileData(updatedData);
+                    }));
                     // Автосохранение
                     handleFieldBlur("workplace", workplace.name);
                   } else {
-                    const updatedData = {
-                      ...profileData,
+                    // Используем функциональное обновление для сохранения всех полей
+                    setProfileData(prev => ({
+                      ...prev,
                       workplace: "",
                       workplaceInn: "",
                       directorName: "",
                       directorPosition: "",
-                    };
-                    setProfileData(updatedData);
+                    }));
                   }
                 }}
                 required
@@ -1262,7 +1262,8 @@ export default function ProfilePage() {
                 name="jobTitle"
                 value={profileData.jobTitle}
                 onChange={(value) => {
-                  setProfileData({ ...profileData, jobTitle: value });
+                  // Используем функциональное обновление для сохранения всех полей
+                  setProfileData(prev => ({ ...prev, jobTitle: value }));
                   // Автосохранение при выборе из списка
                   if (jobTitles.includes(value)) {
                     handleFieldBlur("jobTitle", value);
@@ -1298,7 +1299,8 @@ export default function ProfilePage() {
                   email={profileData.email || ""}
                   emailVerified={emailVerified}
                   onEmailChange={(email) => {
-                    setProfileData({ ...profileData, email });
+                    // Используем функциональное обновление для сохранения всех полей
+                    setProfileData(prev => ({ ...prev, email }));
                     // После изменения email нужно перезагрузить профиль чтобы получить обновленный emailVerified
                     if (emailVerified) {
                       setEmailVerified(null);
@@ -1311,7 +1313,8 @@ export default function ProfilePage() {
                       if (response.ok) {
                         const data = await response.json();
                         setEmailVerified(data.user.emailVerified ? new Date(data.user.emailVerified) : null);
-                        setProfileData({ ...profileData, email: data.user.email || "" });
+                        // Используем функциональное обновление для сохранения всех полей
+                        setProfileData(prev => ({ ...prev, email: data.user.email || "" }));
                       }
                     } catch (error) {
                       console.error("Failed to reload profile:", error);
