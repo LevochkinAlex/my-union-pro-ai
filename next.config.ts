@@ -15,6 +15,20 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '50mb',
     },
+    // Исключаем Prisma из клиентского бандла
+    serverComponentsExternalPackages: ['@prisma/client', 'prisma'],
+  },
+  // Исключаем Prisma из webpack бандла
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+      };
+    }
+    return config;
   },
   images: {
     remotePatterns: [
