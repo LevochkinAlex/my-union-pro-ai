@@ -79,22 +79,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
     }
 
-    // Ищем существующий чат или создаем новый
-    let chat = await prisma.chat.findFirst({
-      where: {
-        type: "PRIVATE",
-        OR: [
-          { participant1Id: userId, participant2Id: targetUserId },
-          { participant1Id: targetUserId, participant2Id: userId },
-        ],
-      },
-    });
+    // Используем утилиту для создания/поиска чата с нормализацией ID
+    const { getOrCreatePrivateChat } = await import("@/lib/chat-utils");
+    let chat = await getOrCreatePrivateChat(userId, targetUserId);
 
-    if (!chat) {
-      chat = await prisma.chat.create({
+    // Обновляем последнее сообщение, если чат был только что создан
+    if (chat.lastMessage !== "Пересланное сообщение") {
+      await prisma.chat.update({
+        where: { id: chat.id },
         data: {
-          participant1Id,
-          participant2Id,
           lastMessage: "Пересланное сообщение",
           lastMessageAt: new Date(),
         },

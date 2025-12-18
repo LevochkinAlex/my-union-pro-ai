@@ -114,6 +114,7 @@ export async function POST(
         await sendEmail({
           to: ticket.user.email,
           subject: `Обращение #${ticket.publicId} отклонено`,
+          text: `Ваше обращение #${ticket.publicId} отклонено. Причина: ${reason}`,
           html: `
             <h2>Ваше обращение отклонено</h2>
             <p>Ваше обращение <strong>#${ticket.publicId}</strong> было отклонено.</p>

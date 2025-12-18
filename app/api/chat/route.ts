@@ -242,15 +242,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
     }
 
-    // Ищем существующий чат или создаем новый
-    let chat = await prisma.chat.findFirst({
-      where: {
-        type: "PRIVATE",
-        OR: [
-          { participant1Id: userId, participant2Id: targetUserId },
-          { participant1Id: targetUserId, participant2Id: userId },
-        ],
-      },
+    // Используем утилиту для создания/поиска чата с нормализацией ID
+    const { getOrCreatePrivateChat } = await import("@/lib/chat-utils");
+    let chat = await getOrCreatePrivateChat(userId, targetUserId);
+
+    // Загружаем полную информацию о чате с участниками
+    const chatWithParticipants = await prisma.chat.findUnique({
+      where: { id: chat.id },
       include: {
         participant1: {
           select: {
@@ -275,38 +273,14 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (!chat) {
-      chat = await prisma.chat.create({
-        data: {
-          participant1Id,
-          participant2Id,
-        },
-        include: {
-          participant1: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              middleName: true,
-              avatarUrl: true,
-              phone: true,
-            },
-          },
-          participant2: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              middleName: true,
-              avatarUrl: true,
-              phone: true,
-            },
-          },
-        },
-      });
+    if (!chatWithParticipants || !chatWithParticipants.participant1 || !chatWithParticipants.participant2) {
+      // Это не должно произойти, но на всякий случай
+      return NextResponse.json({ error: "Ошибка создания чата" }, { status: 500 });
     }
 
-    const otherUser = chat.participant1Id === userId ? chat.participant2 : chat.participant1;
+    const otherUser = chatWithParticipants.participant1Id === userId 
+      ? chatWithParticipants.participant2 
+      : chatWithParticipants.participant1;
     const normalizedUser = normalizeUserAvatar(otherUser);
 
     return NextResponse.json({

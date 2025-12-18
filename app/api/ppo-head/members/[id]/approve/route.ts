@@ -81,9 +81,10 @@ export async function POST(
     // Отправляем уведомление
     await sendUserNotification({
       userId: member.id,
-      type: "MEMBERSHIP_APPROVED",
+      type: "documents_ready",
       title: "Заявка одобрена",
-      message: congratulationMessage,
+      body: congratulationMessage,
+      url: `${process.env.NEXT_PUBLIC_APP_URL || ""}/dashboard/profile`,
     });
 
     return NextResponse.json({

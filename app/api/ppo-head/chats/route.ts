@@ -124,15 +124,15 @@ export async function GET(request: NextRequest) {
       isPublic: chat.isPublic,
       lastMessage: chat.lastMessage,
       lastMessageAt: chat.lastMessageAt?.toISOString() || null,
-      participant1: chat.participant1,
-      participant2: chat.participant2,
-      participants: chat.type === "GROUP" ? chat.participants.map((p) => ({
+      participant1: chat.type === "PRIVATE" ? (chat as typeof privateChats[0]).participant1 : null,
+      participant2: chat.type === "PRIVATE" ? (chat as typeof privateChats[0]).participant2 : null,
+      participants: chat.type === "GROUP" ? (chat as typeof groupChats[0]).participants.map((p) => ({
         id: p.id,
         user: p.user,
         role: p.role,
       })) : [],
       _count: {
-        participants: chat.type === "GROUP" ? chat._count.participants : 2,
+        participants: chat.type === "GROUP" ? (chat as typeof groupChats[0])._count.participants : 2,
         messages: chat._count.messages,
       },
     }));

@@ -1,51 +1,47 @@
 import { ChatUser } from "@/types/chat";
-import { getFileUrlWithCDN } from "@/lib/cdn";
+import { getFileUrlWithCDN, getFileUrlByCategory } from "@/lib/cdn";
 import { prisma } from "@/lib/prisma";
+import { formatFileSize as formatFileSizeUtil } from "@/lib/file-utils";
 
 /**
  * Получить полное имя пользователя
  */
-export function getUserName(user: ChatUser | null | undefined): string {
-  if (!user) return "Неизвестный";
-  const parts = [user.lastName, user.firstName, user.middleName].filter(Boolean);
-  return parts.length > 0 ? parts.join(" ") : "Неизвестный";
+export function getUserName(user: ChatUser | any | null | undefined): string {
+  if (!user) return "Пользователь";
+  const parts = [user.firstName, user.middleName, user.lastName].filter(Boolean);
+  return parts.length > 0 ? parts.join(" ") : "Пользователь";
 }
 
 /**
  * Получить инициалы пользователя
  */
-export function getInitials(user: ChatUser | null | undefined): string {
+export function getInitials(user: ChatUser | any | null | undefined): string {
   if (!user) return "?";
-  const first = user.firstName?.[0] || "";
-  const last = user.lastName?.[0] || "";
-  return (first + last).toUpperCase() || "?";
+  const first = user.firstName?.[0]?.toUpperCase() || "";
+  const last = user.lastName?.[0]?.toUpperCase() || "";
+  return (first + last) || "?";
 }
 
 /**
  * Форматировать время сообщения
  */
 export function formatTime(dateString: string | Date): string {
-  const date = new Date(dateString);
+  const date = typeof dateString === "string" ? new Date(dateString) : dateString;
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const minutes = Math.floor(diffMs / 60000);
 
-  if (diffDays === 0) {
-    return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
-  } else if (diffDays === 1) {
-    return "Вчера";
-  } else if (diffDays < 7) {
-    return date.toLocaleDateString("ru-RU", { weekday: "short" });
-  } else {
-    return date.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
-  }
+  if (minutes < 1) return "только что";
+  if (minutes < 60) return `${minutes} мин назад`;
+  if (minutes < 1440) return `${Math.floor(minutes / 60)} ч назад`;
+  return date.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
 /**
  * Форматировать дату для группировки сообщений
  */
-export function formatMessageDate(dateString: string): string {
-  const date = new Date(dateString);
+export function formatMessageDate(dateString: string | Date): string {
+  const date = typeof dateString === "string" ? new Date(dateString) : dateString;
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -54,6 +50,8 @@ export function formatMessageDate(dateString: string): string {
     return "Сегодня";
   } else if (diffDays === 1) {
     return "Вчера";
+  } else if (diffDays < 7) {
+    return date.toLocaleDateString("ru-RU", { weekday: "long" });
   } else {
     return date.toLocaleDateString("ru-RU", {
       day: "numeric",
@@ -68,7 +66,18 @@ export function formatMessageDate(dateString: string): string {
  */
 export function getFileUrl(filePath: string | null | undefined): string {
   if (!filePath) return "";
-  if (filePath.startsWith("data:")) return filePath;
+  
+  // Если это data URL или уже полный URL
+  if (filePath.startsWith("data:") || filePath.startsWith("http://") || filePath.startsWith("https://")) {
+    return filePath;
+  }
+
+  // Если это путь к документу, используем CDN для documents
+  if (filePath.includes("/documents/") || filePath.includes("documents-")) {
+    const filename = filePath.split("/").pop() || filePath;
+    return getFileUrlByCategory("documents", filename);
+  }
+
   return getFileUrlWithCDN(filePath, true);
 }
 
@@ -76,13 +85,12 @@ export function getFileUrl(filePath: string | null | undefined): string {
  * Форматировать размер файла
  */
 export function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + " Б";
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " КБ";
-  return (bytes / (1024 * 1024)).toFixed(1) + " МБ";
+  return formatFileSizeUtil(bytes);
 }
 
 /**
  * Создает или находит личный чат между двумя пользователями
+ * Нормализует ID участников: меньший ID всегда будет participant1Id
  * @param userId1 ID первого пользователя
  * @param userId2 ID второго пользователя
  * @returns Chat объект
@@ -91,14 +99,16 @@ export async function getOrCreatePrivateChat(
   userId1: string,
   userId2: string
 ) {
+  // Нормализуем ID участников: меньший ID всегда participant1Id
+  const participant1Id = userId1 < userId2 ? userId1 : userId2;
+  const participant2Id = userId1 < userId2 ? userId2 : userId1;
+
   // Ищем существующий чат
   let chat = await prisma.chat.findFirst({
     where: {
       type: "PRIVATE",
-      OR: [
-        { participant1Id: userId1, participant2Id: userId2 },
-        { participant1Id: userId2, participant2Id: userId1 },
-      ],
+      participant1Id,
+      participant2Id,
     },
   });
 
@@ -107,8 +117,8 @@ export async function getOrCreatePrivateChat(
     chat = await prisma.chat.create({
       data: {
         type: "PRIVATE",
-        participant1Id: userId1,
-        participant2Id: userId2,
+        participant1Id,
+        participant2Id,
       },
     });
   }

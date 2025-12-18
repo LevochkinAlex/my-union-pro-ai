@@ -89,9 +89,10 @@ export async function POST(
     // Отправляем уведомление
     await sendUserNotification({
       userId: member.id,
-      type: "MEMBERSHIP_REJECTED",
+      type: "ticket_response",
       title: "Заявка отклонена",
-      message: `Ваша заявка на вступление в профсоюз отклонена. Причина: ${reason}`,
+      body: `Ваша заявка на вступление в профсоюз отклонена. Причина: ${reason}`,
+      url: `${process.env.NEXT_PUBLIC_APP_URL || ""}/dashboard/profile`,
     });
 
     return NextResponse.json({

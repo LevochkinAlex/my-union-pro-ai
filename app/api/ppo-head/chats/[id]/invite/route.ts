@@ -50,6 +50,7 @@ export async function POST(
           },
           select: {
             userId: true,
+            role: true,
           },
         },
       },

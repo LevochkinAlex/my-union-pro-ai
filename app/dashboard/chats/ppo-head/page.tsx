@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 import ImageUploadWithCrop from "@/components/admin/ImageUploadWithCrop";
+import { getUserName } from "@/lib/chat-utils";
 
 interface Chat {
   id: string;
@@ -224,13 +225,9 @@ export default function PPOHeadChatsPage() {
     }
     // Для личных чатов определяем собеседника
     if (session?.user?.id === chat.participant1?.id) {
-      return [chat.participant2?.lastName, chat.participant2?.firstName, chat.participant2?.middleName]
-        .filter(Boolean)
-        .join(" ") || "Пользователь";
+      return getUserName(chat.participant2) || "Пользователь";
     }
-    return [chat.participant1?.lastName, chat.participant1?.firstName, chat.participant1?.middleName]
-      .filter(Boolean)
-      .join(" ") || "Пользователь";
+    return getUserName(chat.participant1) || "Пользователь";
   };
 
   const getChatAvatar = (chat: Chat) => {
@@ -426,7 +423,6 @@ export default function PPOHeadChatsPage() {
                   value={groupIcon}
                   onChange={setGroupIcon}
                   label=""
-                  aspectRatio={1}
                 />
               </div>
               <div className="flex items-center">

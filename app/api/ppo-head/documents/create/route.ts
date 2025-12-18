@@ -3,8 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DocumentType } from "@prisma/client";
-import { generateDocumentFromTemplate } from "@/lib/document-templates/renderer";
-import { extractUserVariables } from "@/lib/document-templates/renderer";
+import { generateDocumentFromTemplate, extractUserVariables, renderTemplate, generatePDFFromHTML } from "@/lib/document-templates/renderer";
 import { uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import { getPPOHead } from "@/lib/ppo-head-utils";
 
@@ -154,8 +153,20 @@ export async function POST(request: NextRequest) {
       .map((p) => `${p.name}${p.jobTitle ? ` - ${p.jobTitle}` : ""}`)
       .join("\n");
 
+    // Получаем полный объект председателя для извлечения переменных
+    const fullChairman = await prisma.user.findUnique({
+      where: { id: chairman.id },
+    });
+
+    if (!fullChairman) {
+      return NextResponse.json(
+        { error: "Председатель не найден" },
+        { status: 404 }
+      );
+    }
+
     // Извлекаем базовые переменные из председателя
-    const baseVariables = await extractUserVariables(chairman);
+    const baseVariables = await extractUserVariables(fullChairman);
 
     // Добавляем специфичные переменные для документов профкома
     const variables = {

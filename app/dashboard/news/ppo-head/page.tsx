@@ -622,7 +622,6 @@ export default function PPOHeadNewsPage() {
                   value={newChannelIcon}
                   onChange={setNewChannelIcon}
                   label=""
-                  aspectRatio={1}
                 />
               </div>
               <div className="flex gap-2">
