@@ -82,58 +82,42 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
   const currentModeData = availableModes.find((m) => m.mode === currentMode);
   const otherMode = availableModes.find((m) => m.mode !== currentMode);
 
+  // В стиле обычного пункта меню
+  const icon = currentMode === "PPO_HEAD" ? (
+    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+    </svg>
+  ) : (
+    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    </svg>
+  );
+
   if (collapsed) {
-    // В свёрнутом состоянии показываем только иконку
     return (
       <button
         onClick={() => otherMode && handleSwitch(otherMode.mode)}
         disabled={isSwitching}
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-sm hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50"
+        className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
         title={`Переключить на: ${otherMode?.label}`}
       >
         {isSwitching ? (
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-        ) : currentMode === "PPO_HEAD" ? (
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-          </svg>
-        ) : (
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-          </svg>
-        )}
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-500 border-t-transparent" />
+        ) : icon}
       </button>
     );
   }
 
   return (
     <div className="relative">
-      {/* Переключатель */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 hover:border-blue-300 dark:hover:border-blue-700 transition-all"
+        className="flex w-full items-center gap-2.5 rounded-lg text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 px-2.5 py-2"
       >
-        <div className={`flex items-center justify-center h-8 w-8 rounded-lg ${
-          currentMode === "PPO_HEAD" 
-            ? "bg-gradient-to-r from-purple-500 to-blue-500 text-white" 
-            : "bg-gradient-to-r from-blue-500 to-green-500 text-white"
-        }`}>
-          {currentMode === "PPO_HEAD" ? (
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          ) : (
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          )}
-        </div>
-        <div className="flex-1 text-left min-w-0">
-          <p className="text-xs text-gray-500 dark:text-gray-400">Режим работы</p>
-          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-            {currentModeData?.label || "Загрузка..."}
-          </p>
-        </div>
+        <span className="flex-shrink-0">{icon}</span>
+        <span className="flex-1 text-left">
+          {currentMode === "PPO_HEAD" ? "Режим: Председатель" : "Режим: Участник"}
+        </span>
         <svg 
           className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`} 
           fill="none" 
@@ -147,49 +131,30 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
       {/* Dropdown */}
       {isOpen && (
         <>
-          {/* Backdrop */}
-          <div 
-            className="fixed inset-0 z-10" 
-            onClick={() => setIsOpen(false)} 
-          />
-          
-          {/* Menu */}
-          <div className="absolute bottom-full left-0 right-0 mb-2 z-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="p-2 space-y-1">
+          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="py-1">
               {availableModes.map((mode) => (
                 <button
                   key={mode.mode}
                   onClick={() => handleSwitch(mode.mode)}
                   disabled={isSwitching}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
                     mode.mode === currentMode
                       ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
                       : "hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
                   } ${isSwitching ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
-                  <div className={`flex items-center justify-center h-8 w-8 rounded-lg ${
-                    mode.mode === "PPO_HEAD" 
-                      ? "bg-gradient-to-r from-purple-500 to-blue-500 text-white" 
-                      : "bg-gradient-to-r from-blue-500 to-green-500 text-white"
-                  }`}>
-                    {mode.mode === "PPO_HEAD" ? (
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                      </svg>
-                    ) : (
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                    )}
-                  </div>
-                  <div className="flex-1 text-left min-w-0">
-                    <p className="text-sm font-medium">{mode.label}</p>
-                    {mode.organizationName && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {mode.organizationName}
-                      </p>
-                    )}
-                  </div>
+                  {mode.mode === "PPO_HEAD" ? (
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  )}
+                  <span className="flex-1 text-left">{mode.label}</span>
                   {mode.mode === currentMode && (
                     <svg className="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -197,12 +162,6 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
                   )}
                 </button>
               ))}
-            </div>
-            
-            <div className="px-3 py-2 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700">
-              <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                Выберите режим работы с платформой
-              </p>
             </div>
           </div>
         </>

@@ -67,6 +67,11 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
 
         {/* Navigation */}
         <nav className={`flex-1 py-2 space-y-1 overflow-y-auto ${isCollapsed ? "px-2" : "px-3"}`}>
+          {/* View Mode Switch - в начале меню для пользователей с двойной ролью */}
+          {!isAdmin && (
+            <ViewModeSwitch collapsed={isCollapsed} />
+          )}
+          
           {/* Menu items */}
           {items.map((item) => {
 
@@ -206,15 +211,17 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
 
           {/* Bottom section - компактная версия */}
           <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
-            {/* View Mode Switch - только для пользователей с двойной ролью */}
-            {!isAdmin && (
-              <div className={`${isCollapsed ? "px-2 py-2 flex justify-center" : "px-3 py-2"}`}>
-                <ViewModeSwitch collapsed={isCollapsed} />
+            {/* Version */}
+            {!isCollapsed && (
+              <div className="px-3 py-2">
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center">
+                  v{process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0'}
+                </p>
               </div>
             )}
 
-            {/* Actions row - объединяем все кнопки в одну строку */}
-            <div className={`${isCollapsed ? "px-2 py-2" : "px-3 py-2"} border-t border-gray-200 dark:border-gray-700`}>
+            {/* Actions row */}
+            <div className={`${isCollapsed ? "px-2 py-2" : "px-3 py-2"} ${!isCollapsed ? "border-t border-gray-200 dark:border-gray-700" : ""}`}>
               <div className={`flex items-center ${isCollapsed ? "flex-col gap-2" : "justify-between gap-1"}`}>
                 {/* Account icon */}
                 <Link
@@ -245,7 +252,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                 {/* Theme toggle */}
                 <ThemeToggle collapsed={isCollapsed} />
 
-                {/* Collapse button - теперь в одной строке */}
+                {/* Collapse button */}
                 <button
                   onClick={() => setIsCollapsed(!isCollapsed)}
                   className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
@@ -283,15 +290,6 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                 </button>
               </div>
             </div>
-            
-            {/* Version - очень компактно */}
-            {!isCollapsed && (
-              <div className="px-3 pb-2 text-center">
-                <p className="text-[10px] text-gray-400 dark:text-gray-500">
-                  v{process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0'}
-                </p>
-              </div>
-            )}
           </div>
       </div>
     </aside>
