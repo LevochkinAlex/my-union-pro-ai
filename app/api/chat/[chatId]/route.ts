@@ -87,13 +87,22 @@ export async function GET(
 
         const fetchMessages = async () => prisma.chatMessage.findMany({
           where: whereClause,
-          include: {
+          select: {
+            id: true,
+            chatId: true,
+            senderId: true,
+            content: true,
+            reactions: true,
+            replyToId: true,
+            forwardedFromId: true,
+            editedAt: true,
+            deletedAt: true,
+            createdAt: true,
             sender: {
               select: {
                 id: true,
                 firstName: true,
                 lastName: true,
-                middleName: true,
                 avatarUrl: true,
               },
             },
@@ -112,14 +121,11 @@ export async function GET(
               select: {
                 id: true,
                 content: true,
-                createdAt: true,
                 sender: {
                   select: {
                     id: true,
                     firstName: true,
                     lastName: true,
-                    middleName: true,
-                    avatarUrl: true,
                   },
                 },
               },
@@ -128,14 +134,11 @@ export async function GET(
               select: {
                 id: true,
                 content: true,
-                createdAt: true,
                 sender: {
                   select: {
                     id: true,
                     firstName: true,
                     lastName: true,
-                    middleName: true,
-                    avatarUrl: true,
                   },
                 },
               },
@@ -148,7 +151,7 @@ export async function GET(
         });
 
         if (shouldCache && cacheKey) {
-          return withCache(cacheKey, fetchMessages, 30);
+          return withCache(cacheKey, fetchMessages, 60); // Увеличили кеш до 60 сек
         }
         return fetchMessages();
       }

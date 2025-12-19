@@ -8,6 +8,7 @@ import {
   getOrCreatePrivateChat,
   ChatFilter 
 } from "@/lib/chat-service";
+import { withCache, getCacheKey } from "@/lib/cache";
 import * as Sentry from "@sentry/nextjs";
 
 // GET - получение списка чатов пользователя
@@ -36,7 +37,9 @@ export async function GET(request: NextRequest) {
       filter.hasTicket = false;
     }
 
-    // Используем Sentry span для отслеживания производительности
+    // Кешируем список чатов на короткое время (15 сек)
+    const cacheKey = getCacheKey(`user:chats:${userId}`, filter);
+    
     const chats = await Sentry.startSpan(
       {
         op: "db.query",
@@ -44,7 +47,11 @@ export async function GET(request: NextRequest) {
       },
       async (span) => {
         span.setAttribute("userId", userId);
-        return getUserChats(userId, filter);
+        return withCache(
+          cacheKey,
+          () => getUserChats(userId, filter),
+          15 // 15 секунд кеш
+        );
       }
     );
 
