@@ -176,6 +176,9 @@ export default async function DashboardPage() {
   // ОПТИМИЗАЦИЯ: Выполняем все запросы параллельно
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  
+  // Получаем организацию пользователя для фильтрации
+  const userOrganizationId = userRole?.organization?.id;
 
   const [
     subscriptions,
@@ -194,10 +197,16 @@ export default async function DashboardPage() {
       },
     }),
     
-    // 2. Получаем свежие новости (последние 5)
+    // 2. Получаем свежие новости (последние 5) - ТОЛЬКО из организации пользователя
     prisma.newsPost.findMany({
       where: {
         isPublished: true,
+        // Фильтруем по организации пользователя через канал
+        ...(userOrganizationId ? {
+          channel: {
+            organizationId: userOrganizationId,
+          },
+        } : {}),
       },
       orderBy: {
         createdAt: "desc",
@@ -262,7 +271,7 @@ export default async function DashboardPage() {
       return null;
     }),
     
-    // 4. Получаем новых пользователей (последние 10, зарегистрированных за последние 7 дней)
+    // 4. Получаем новых пользователей (последние 10) - ТОЛЬКО из организации пользователя
     prisma.user.findMany({
       where: {
         id: {
@@ -274,6 +283,10 @@ export default async function DashboardPage() {
         role: {
           not: "SUPER_ADMIN",
         },
+        // Фильтруем по организации пользователя
+        ...(userOrganizationId ? {
+          organizationId: userOrganizationId,
+        } : {}),
       },
       orderBy: {
         createdAt: "desc",
