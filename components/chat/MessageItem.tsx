@@ -350,44 +350,47 @@ function MessageItemComponent({
               <ForwardedPreview message={message.forwardedFrom} isOwn={isOwn} />
             )}
 
-            {/* Основной контент */}
-            <div
-              className={`relative px-3 sm:px-4 py-2 rounded-2xl min-w-0 max-w-full w-full overflow-hidden ${
-                isOwn
-                  ? "bg-blue-500 text-white rounded-br-md"
-                  : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md"
-              }`}
-            >
-              {/* Вложения */}
-              {hasAttachments && (
-                <Attachments
-                  attachments={message.attachments!}
-                  isOwn={isOwn}
-                  isOldMessage={isOldMessage}
-                  onImageClick={onImageClick}
-                />
-              )}
-
-              {/* Текст сообщения с обнаружением ссылок */}
-              {message.content && (
-                <MessageContent content={message.content} isOwn={isOwn} />
-              )}
-
-              {/* Время и статус редактирования */}
+            {/* Основной контент с кнопкой реакции */}
+            <div className="relative">
+              {/* Бабл сообщения */}
               <div
-                className={`flex items-center gap-1 mt-1 text-xs ${
-                  isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"
+                className={`px-3 sm:px-4 py-2 rounded-2xl min-w-0 max-w-full w-full overflow-hidden ${
+                  isOwn
+                    ? "bg-blue-500 text-white rounded-br-md"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md"
                 }`}
               >
-                <span>{formatTime(message.createdAt)}</span>
-                {message.editedAt && <span>(ред.)</span>}
+                {/* Вложения */}
+                {hasAttachments && (
+                  <Attachments
+                    attachments={message.attachments!}
+                    isOwn={isOwn}
+                    isOldMessage={isOldMessage}
+                    onImageClick={onImageClick}
+                  />
+                )}
+
+                {/* Текст сообщения с обнаружением ссылок */}
+                {message.content && (
+                  <MessageContent content={message.content} isOwn={isOwn} />
+                )}
+
+                {/* Время и статус редактирования */}
+                <div
+                  className={`flex items-center gap-1 mt-1 text-xs ${
+                    isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"
+                  }`}
+                >
+                  <span>{formatTime(message.createdAt)}</span>
+                  {message.editedAt && <span>(ред.)</span>}
+                </div>
               </div>
 
-              {/* Кнопка быстрой реакции при наведении (как в Telegram) */}
+              {/* Кнопка быстрой реакции при наведении (вне overflow-hidden) */}
               {isHovered && (
                 <button
                   onClick={handleQuickReaction}
-                  className={`absolute ${isOwn ? "-left-3" : "-right-3"} top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-200 dark:border-gray-600 hover:scale-110 transition-transform z-10`}
+                  className={`absolute ${isOwn ? "-left-4" : "-right-4"} top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-200 dark:border-gray-600 hover:scale-110 transition-transform z-10`}
                   title="Поставить ❤️"
                 >
                   <span className="text-base">❤️</span>
