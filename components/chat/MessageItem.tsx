@@ -10,7 +10,7 @@ const LazyImage = memo(function LazyImage({
   alt,
   onClick,
   className = "",
-  isOldImage = false, // Для старых изображений (история) используем blur placeholder
+  isOldImage = false,
 }: {
   src: string;
   alt: string;
@@ -32,7 +32,6 @@ const LazyImage = memo(function LazyImage({
     e.stopPropagation();
     setHasError(false);
     setIsLoaded(false);
-    // Force reload by changing src
     if (imgRef.current) {
       const currentSrc = imgRef.current.src;
       imgRef.current.src = '';
@@ -42,7 +41,6 @@ const LazyImage = memo(function LazyImage({
     }
   };
 
-  // Для старых изображений показываем blur placeholder
   const shouldShowPlaceholder = isOldImage && !showImage;
 
   return (
@@ -50,16 +48,12 @@ const LazyImage = memo(function LazyImage({
       className={`relative overflow-hidden rounded-lg ${onClick ? "cursor-pointer" : ""} ${className}`}
       style={{ 
         width: "100%",
-        // Только для placeholder используем фиксированные размеры
         minHeight: shouldShowPlaceholder ? "150px" : undefined,
         aspectRatio: shouldShowPlaceholder ? "4/3" : undefined,
       }}
     >
-      {/* Blur placeholder для старых изображений (как в WhatsApp) */}
       {shouldShowPlaceholder && (
-        <div 
-          className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20"
-        >
+        <div className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20">
           <div className="absolute inset-0 backdrop-blur-xl bg-black/10" />
           <div className="relative z-10 flex flex-col items-center gap-2">
             <div className="p-2 rounded-full bg-white/20">
@@ -80,7 +74,6 @@ const LazyImage = memo(function LazyImage({
         </div>
       )}
 
-      {/* Ошибка загрузки */}
       {hasError && (
         <div className="flex flex-col items-center justify-center py-8 text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-lg">
           <svg className="w-8 h-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -96,10 +89,8 @@ const LazyImage = memo(function LazyImage({
         </div>
       )}
       
-      {/* Изображение - всегда рендерим для быстрой загрузки */}
       {showImage && !hasError && (
         <div className="relative">
-          {/* Маленький индикатор загрузки поверх изображения */}
           {!isLoaded && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-lg">
               <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -110,14 +101,16 @@ const LazyImage = memo(function LazyImage({
             src={src}
             alt={alt}
             onClick={onClick}
-            className={`w-full h-auto rounded-lg transition-opacity duration-300 ${
+            loading={isOldImage ? "lazy" : "eager"}
+            decoding="async"
+            onLoad={() => setIsLoaded(true)}
+            onError={() => {
+              setHasError(true);
+              setIsLoaded(true);
+            }}
+            className={`max-w-full max-h-[400px] object-contain rounded-lg transition-opacity duration-200 ${
               isLoaded ? "opacity-100" : "opacity-0"
             }`}
-            style={{ maxWidth: "100%", minHeight: isLoaded ? undefined : "100px" }}
-            onLoad={() => setIsLoaded(true)}
-            onError={() => setHasError(true)}
-            loading="eager"
-            decoding="async"
           />
         </div>
       )}
@@ -129,8 +122,8 @@ interface MessageItemProps {
   message: Message;
   currentUserId: string | null;
   isOwn: boolean;
-  isOldMessage?: boolean; // Является ли сообщение старым (не в последних сообщениях)
-  showSenderName?: boolean; // Показывать имя отправителя (для групповых чатов)
+  isOldMessage?: boolean;
+  showSenderName?: boolean;
   onReply?: (message: Message) => void;
   onEdit?: (message: Message) => void;
   onDelete?: (messageId: string) => void;
@@ -139,6 +132,8 @@ interface MessageItemProps {
   onImageClick?: (url: string, name?: string) => void;
   onProfileClick?: (userId: string) => void;
 }
+
+const QUICK_EMOJIS = ["😊", "👍", "❤️", "🤝", "✌️", "⚡", "🔥"];
 
 function MessageItemComponent({
   message,
@@ -154,12 +149,58 @@ function MessageItemComponent({
   onImageClick,
   onProfileClick,
 }: MessageItemProps) {
-  const [showActions, setShowActions] = useState(false);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showContextMenu, setShowContextMenu] = useState(false);
+  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
+  const [isHovered, setIsHovered] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
+  // Закрытие контекстного меню при клике вне
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowContextMenu(false);
+      }
+    };
+    
+    if (showContextMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showContextMenu]);
+
+  // Обработчик правого клика
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (rect) {
+      // Позиционируем меню относительно viewport
+      const x = Math.min(e.clientX, window.innerWidth - 220);
+      const y = Math.min(e.clientY, window.innerHeight - 350);
+      setContextMenuPos({ x, y });
+    }
+    setShowContextMenu(true);
+  }, []);
+
+  // Быстрая реакция по двойному клику
   const handleDoubleClick = useCallback(() => {
     onReaction?.(message.id, "❤️");
   }, [message.id, onReaction]);
+
+  // Быстрая реакция кнопкой при наведении
+  const handleQuickReaction = useCallback(() => {
+    onReaction?.(message.id, "❤️");
+  }, [message.id, onReaction]);
+
+  const handleReaction = useCallback((emoji: string) => {
+    onReaction?.(message.id, emoji);
+    setShowContextMenu(false);
+  }, [message.id, onReaction]);
+
+  const handleAction = useCallback((action: () => void) => {
+    action();
+    setShowContextMenu(false);
+  }, []);
 
   const isDeleted = !!message.deletedAt;
   const hasAttachments = message.attachments && message.attachments.length > 0;
@@ -176,116 +217,259 @@ function MessageItemComponent({
   }
 
   return (
-    <div
-      className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-2 px-4 group`}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => {
-        setShowActions(false);
-        setShowEmojiPicker(false);
-      }}
-      onDoubleClick={handleDoubleClick}
-    >
-      <div className={`flex items-end gap-2 max-w-[85%] md:max-w-[70%] ${isOwn ? "flex-row-reverse" : ""}`}>
-        {/* Аватар для чужих сообщений */}
-        {!isOwn && (
-          <button 
-            className="flex-shrink-0 mb-1 cursor-pointer hover:opacity-80 transition-opacity"
-            onClick={() => message.sender?.id && onProfileClick?.(message.sender.id)}
-            title={`Открыть профиль ${getUserName(message.sender)}`}
-          >
-            <Avatar user={message.sender} size="sm" />
-          </button>
-        )}
-
-        <div className="flex flex-col">
-          {/* Имя отправителя для групповых чатов */}
-          {!isOwn && showSenderName && message.sender && (
-            <button
-              className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline text-left mb-0.5 ml-1"
+    <>
+      <div
+        ref={containerRef}
+        className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-2 px-4`}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onContextMenu={handleContextMenu}
+        onDoubleClick={handleDoubleClick}
+      >
+        <div className={`flex items-end gap-2 max-w-[85%] md:max-w-[70%] ${isOwn ? "flex-row-reverse" : ""}`}>
+          {/* Аватар для чужих сообщений */}
+          {!isOwn && (
+            <button 
+              className="flex-shrink-0 mb-1 cursor-pointer hover:opacity-80 transition-opacity"
               onClick={() => message.sender?.id && onProfileClick?.(message.sender.id)}
+              title={`Открыть профиль ${getUserName(message.sender)}`}
             >
-              {getUserName(message.sender)}
+              <Avatar user={message.sender} size="sm" />
             </button>
           )}
 
-          {/* Ответ на сообщение */}
-          {message.replyTo && (
-            <ReplyPreview message={message.replyTo} isOwn={isOwn} />
-          )}
-
-          {/* Пересланное сообщение */}
-          {message.forwardedFrom && (
-            <ForwardedPreview message={message.forwardedFrom} isOwn={isOwn} />
-          )}
-
-          {/* Основной контент */}
-          <div
-            className={`relative px-4 py-2 rounded-2xl ${
-              isOwn
-                ? "bg-blue-500 text-white rounded-br-md"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md"
-            }`}
-          >
-            {/* Вложения */}
-            {hasAttachments && (
-              <Attachments
-                attachments={message.attachments!}
-                isOwn={isOwn}
-                isOldMessage={isOldMessage}
-                onImageClick={onImageClick}
-              />
+          <div className="flex flex-col relative">
+            {/* Имя отправителя для групповых чатов */}
+            {!isOwn && showSenderName && message.sender && (
+              <button
+                className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline text-left mb-0.5 ml-1"
+                onClick={() => message.sender?.id && onProfileClick?.(message.sender.id)}
+              >
+                {getUserName(message.sender)}
+              </button>
             )}
 
-            {/* Текст сообщения */}
-            {message.content && (
-              <p className="whitespace-pre-wrap break-words text-sm md:text-base">
-                {message.content}
-              </p>
+            {/* Ответ на сообщение */}
+            {message.replyTo && (
+              <ReplyPreview message={message.replyTo} isOwn={isOwn} />
             )}
 
-            {/* Время и статус редактирования */}
+            {/* Пересланное сообщение */}
+            {message.forwardedFrom && (
+              <ForwardedPreview message={message.forwardedFrom} isOwn={isOwn} />
+            )}
+
+            {/* Основной контент */}
             <div
-              className={`flex items-center gap-1 mt-1 text-xs ${
-                isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"
+              className={`relative px-4 py-2 rounded-2xl ${
+                isOwn
+                  ? "bg-blue-500 text-white rounded-br-md"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md"
               }`}
             >
-              <span>{formatTime(message.createdAt)}</span>
-              {message.editedAt && <span>(ред.)</span>}
+              {/* Вложения */}
+              {hasAttachments && (
+                <Attachments
+                  attachments={message.attachments!}
+                  isOwn={isOwn}
+                  isOldMessage={isOldMessage}
+                  onImageClick={onImageClick}
+                />
+              )}
+
+              {/* Текст сообщения */}
+              {message.content && (
+                <p className="whitespace-pre-wrap break-words text-sm md:text-base">
+                  {message.content}
+                </p>
+              )}
+
+              {/* Время и статус редактирования */}
+              <div
+                className={`flex items-center gap-1 mt-1 text-xs ${
+                  isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"
+                }`}
+              >
+                <span>{formatTime(message.createdAt)}</span>
+                {message.editedAt && <span>(ред.)</span>}
+              </div>
+
+              {/* Кнопка быстрой реакции при наведении (как в Telegram) */}
+              {isHovered && (
+                <button
+                  onClick={handleQuickReaction}
+                  className={`absolute ${isOwn ? "-left-3" : "-right-3"} top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-200 dark:border-gray-600 hover:scale-110 transition-transform z-10`}
+                  title="Поставить ❤️"
+                >
+                  <span className="text-base">❤️</span>
+                </button>
+              )}
             </div>
+
+            {/* Реакции */}
+            {hasReactions && (
+              <Reactions
+                reactions={message.reactions!}
+                currentUserId={currentUserId}
+                isOwn={isOwn}
+                onReaction={(emoji) => onReaction?.(message.id, emoji)}
+              />
+            )}
           </div>
-
-          {/* Реакции */}
-          {hasReactions && (
-            <Reactions
-              reactions={message.reactions!}
-              currentUserId={currentUserId}
-              isOwn={isOwn}
-              onReaction={(emoji) => onReaction?.(message.id, emoji)}
-            />
-          )}
         </div>
+      </div>
 
-        {/* Действия */}
-        {showActions && (
-          <MessageActions
-            message={message}
-            isOwn={isOwn}
-            showEmojiPicker={showEmojiPicker}
-            onToggleEmojiPicker={() => setShowEmojiPicker(!showEmojiPicker)}
-            onReply={() => onReply?.(message)}
-            onEdit={() => onEdit?.(message)}
-            onDelete={() => onDelete?.(message.id)}
-            onForward={() => onForward?.(message)}
-            onReaction={(emoji) => {
-              onReaction?.(message.id, emoji);
-              setShowEmojiPicker(false);
-            }}
+      {/* Контекстное меню (телеграм-стиль) */}
+      {showContextMenu && (
+        <ContextMenu
+          ref={menuRef}
+          position={contextMenuPos}
+          isOwn={isOwn}
+          onReaction={handleReaction}
+          onReply={() => handleAction(() => onReply?.(message))}
+          onEdit={() => handleAction(() => onEdit?.(message))}
+          onDelete={() => handleAction(() => onDelete?.(message.id))}
+          onForward={() => handleAction(() => onForward?.(message))}
+          onCopyText={() => {
+            navigator.clipboard.writeText(message.content || "");
+            setShowContextMenu(false);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+// Контекстное меню в стиле Telegram
+const ContextMenu = memo(function ContextMenu({
+  ref,
+  position,
+  isOwn,
+  onReaction,
+  onReply,
+  onEdit,
+  onDelete,
+  onForward,
+  onCopyText,
+}: {
+  ref?: React.Ref<HTMLDivElement>;
+  position: { x: number; y: number };
+  isOwn: boolean;
+  onReaction: (emoji: string) => void;
+  onReply: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onForward: () => void;
+  onCopyText: () => void;
+}) {
+  return (
+    <div
+      ref={ref}
+      className="fixed z-50 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 py-2 min-w-[200px] animate-in fade-in zoom-in-95 duration-100"
+      style={{ left: position.x, top: position.y }}
+    >
+      {/* Панель быстрых реакций */}
+      <div className="flex items-center justify-center gap-1 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+        {QUICK_EMOJIS.map((emoji) => (
+          <button
+            key={emoji}
+            onClick={() => onReaction(emoji)}
+            className="w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors hover:scale-110"
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
+
+      {/* Действия */}
+      <div className="py-1">
+        <MenuItem
+          icon={
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
+          }
+          label="Ответить"
+          onClick={onReply}
+        />
+        
+        {isOwn && (
+          <MenuItem
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            }
+            label="Редактировать"
+            onClick={onEdit}
           />
+        )}
+
+        <MenuItem
+          icon={
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          }
+          label="Копировать текст"
+          onClick={onCopyText}
+        />
+
+        <MenuItem
+          icon={
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          }
+          label="Переслать"
+          onClick={onForward}
+        />
+
+        {isOwn && (
+          <>
+            <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+            <MenuItem
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              }
+              label="Удалить"
+              onClick={onDelete}
+              danger
+            />
+          </>
         )}
       </div>
     </div>
   );
-}
+});
+
+const MenuItem = memo(function MenuItem({
+  icon,
+  label,
+  onClick,
+  danger = false,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+        danger 
+          ? "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20" 
+          : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+      }`}
+    >
+      {icon}
+      <span className="font-medium">{label}</span>
+    </button>
+  );
+});
 
 // Подкомпоненты
 const Avatar = memo(function Avatar({ user, size }: { user: ChatUser; size: "sm" | "md" }) {
@@ -341,8 +525,12 @@ const ForwardedPreview = memo(function ForwardedPreview({
   isOwn: boolean;
 }) {
   return (
-    <div className={`mb-1 text-xs ${isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"}`}>
-      <span className="flex items-center gap-1">
+    <div
+      className={`mb-1 flex items-center gap-1 text-xs ${
+        isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"
+      }`}
+    >
+      <span className="inline-flex">
         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
         </svg>
@@ -451,146 +639,5 @@ const Reactions = memo(function Reactions({
   );
 });
 
-const MessageActions = memo(function MessageActions({
-  message,
-  isOwn,
-  showEmojiPicker,
-  onToggleEmojiPicker,
-  onReply,
-  onEdit,
-  onDelete,
-  onForward,
-  onReaction,
-}: {
-  message: Message;
-  isOwn: boolean;
-  showEmojiPicker: boolean;
-  onToggleEmojiPicker: () => void;
-  onReply: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  onForward: () => void;
-  onReaction: (emoji: string) => void;
-}) {
-  const [showDropdown, setShowDropdown] = useState(false);
-  const quickEmojis = ["❤️", "👍", "😂", "😮", "😢", "🔥"];
-
-  const handleAction = (action: () => void) => {
-    action();
-    setShowDropdown(false);
-  };
-
-  return (
-    <div className={`relative flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${isOwn ? "mr-2" : "ml-2"}`}>
-      {/* Quick emoji picker */}
-      {showEmojiPicker && (
-        <div className="absolute bottom-full mb-1 flex items-center gap-1 bg-white dark:bg-gray-800 rounded-full shadow-lg px-2 py-1 border border-gray-200 dark:border-gray-700 z-20">
-          {quickEmojis.map((emoji) => (
-            <button
-              key={emoji}
-              onClick={() => onReaction(emoji)}
-              className="hover:scale-125 transition-transform p-1"
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Три точки - кнопка меню */}
-      <button
-        onClick={() => setShowDropdown(!showDropdown)}
-        className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        title="Действия"
-      >
-        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-          <circle cx="12" cy="5" r="2" />
-          <circle cx="12" cy="12" r="2" />
-          <circle cx="12" cy="19" r="2" />
-        </svg>
-      </button>
-
-      {/* Dropdown меню */}
-      {showDropdown && (
-        <div 
-          className={`absolute ${isOwn ? "right-0" : "left-0"} bottom-full mb-1 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[160px] z-30`}
-        >
-          <DropdownItem
-            icon="emoji"
-            label="Реакция"
-            onClick={() => {
-              onToggleEmojiPicker();
-              setShowDropdown(false);
-            }}
-          />
-          <DropdownItem
-            icon="reply"
-            label="Ответить"
-            onClick={() => handleAction(onReply)}
-          />
-          <DropdownItem
-            icon="forward"
-            label="Переслать"
-            onClick={() => handleAction(onForward)}
-          />
-          {isOwn && (
-            <>
-              <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
-              <DropdownItem
-                icon="edit"
-                label="Редактировать"
-                onClick={() => handleAction(onEdit)}
-              />
-              <DropdownItem
-                icon="delete"
-                label="Удалить"
-                onClick={() => handleAction(onDelete)}
-                danger
-              />
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-});
-
-const DropdownItem = memo(function DropdownItem({
-  icon,
-  label,
-  onClick,
-  danger = false,
-}: {
-  icon: "emoji" | "reply" | "forward" | "edit" | "delete";
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-}) {
-  const icons = {
-    emoji: "M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
-    reply: "M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6",
-    forward: "M13 7l5 5m0 0l-5 5m5-5H6",
-    edit: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
-    delete: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16",
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors ${
-        danger 
-          ? "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20" 
-          : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-      }`}
-    >
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icons[icon]} />
-      </svg>
-      <span>{label}</span>
-    </button>
-  );
-});
-
 export const MessageItem = memo(MessageItemComponent);
 export default MessageItem;
-
