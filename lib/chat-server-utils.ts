@@ -2,45 +2,26 @@
  * Серверные утилиты для чата
  * ВАЖНО: Этот файл содержит Prisma и должен использоваться ТОЛЬКО на сервере!
  * НЕ импортировать в клиентские компоненты!
+ * 
+ * DEPRECATED: Этот файл оставлен для обратной совместимости.
+ * Используйте lib/chat-service.ts для новых функций.
  */
 
 import { prisma } from "@/lib/prisma";
+import { 
+  getOrCreatePrivateChat as newGetOrCreatePrivateChat,
+  sendMessage,
+} from "@/lib/chat-service";
 
 /**
+ * @deprecated Используйте getOrCreatePrivateChat из lib/chat-service.ts
  * Создает или находит личный чат между двумя пользователями
- * Нормализует ID участников: меньший ID всегда будет participant1Id
- * @param userId1 ID первого пользователя
- * @param userId2 ID второго пользователя
- * @returns Chat объект
  */
 export async function getOrCreatePrivateChat(
   userId1: string,
   userId2: string
 ) {
-  // Нормализуем ID участников: меньший ID всегда participant1Id
-  const participant1Id = userId1 < userId2 ? userId1 : userId2;
-  const participant2Id = userId1 < userId2 ? userId2 : userId1;
-
-  // Ищем существующий чат
-  let chat = await prisma.chat.findFirst({
-    where: {
-      type: "PRIVATE",
-      participant1Id,
-      participant2Id,
-    },
-  });
-
-  // Если чат не найден, создаем новый
-  if (!chat) {
-    chat = await prisma.chat.create({
-      data: {
-        type: "PRIVATE",
-        participant1Id,
-        participant2Id,
-      },
-    });
-  }
-
+  const { chat } = await newGetOrCreatePrivateChat(userId1, userId2);
   return chat;
 }
 
@@ -87,5 +68,16 @@ export async function sendChatMessage(
       data: updateData,
     }),
   ]);
-}
 
+  // Также сбрасываем readAt в ChatParticipant
+  await prisma.chatParticipant.updateMany({
+    where: {
+      chatId,
+      userId: { not: senderId },
+      leftAt: null,
+    },
+    data: {
+      readAt: null,
+    },
+  });
+}

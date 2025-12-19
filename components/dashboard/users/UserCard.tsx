@@ -57,9 +57,9 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
      user.avatarUrl.startsWith('data:') || 
      user.avatarUrl.startsWith('/'));
 
-  // Проверяем статус подписки только при наведении или перед кликом на кнопку (ленивая загрузка)
+  // Проверяем статус подписки лениво (только при первом взаимодействии)
   const checkSubscriptionStatus = async () => {
-    if (subscriptionChecked) return; // Уже проверяли
+    if (subscriptionChecked || isLoading) return; // Уже проверяли или идет загрузка
     
     setSubscriptionChecked(true);
     try {
@@ -77,6 +77,11 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
   const handleSubscribe = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // Проверяем статус перед действием, если еще не проверяли
+    if (!subscriptionChecked) {
+      await checkSubscriptionStatus();
+    }
     
     return Sentry.startSpan(
       {
@@ -181,10 +186,7 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
           {/* Action Button - снизу на всю ширину */}
           <button
             onMouseEnter={checkSubscriptionStatus}
-            onClick={(e) => {
-              checkSubscriptionStatus();
-              handleSubscribe(e);
-            }}
+            onClick={handleSubscribe}
             disabled={isLoading}
             className={`w-full py-2 px-4 rounded-lg border font-medium text-sm transition-colors ${
               isSubscribed

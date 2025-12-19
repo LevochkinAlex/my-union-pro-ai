@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { invalidateChatCache } from "@/lib/cache-invalidation";
+import { 
+  requireChatAccess, 
+  ChatAccessError, 
+  markAsRead 
+} from "@/lib/chat-service";
 
 // POST /api/chat/[chatId]/read - пометить все сообщения в чате как прочитанные
 export async function POST(
@@ -19,59 +23,23 @@ export async function POST(
     const chatId = resolvedParams.chatId;
     const userId = session.user.id;
 
-    // Проверяем, что пользователь является участником чата
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
-      select: {
-        type: true,
-        participant1Id: true,
-        participant2Id: true,
-        participants: {
-          where: { userId, leftAt: null },
-          select: { id: true, userId: true },
-        },
-      },
-    });
-
-    if (!chat) {
-      return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
-    }
-
-    // Для GROUP чатов проверяем через таблицу participants
-    // Для PRIVATE чатов - через participant1Id/participant2Id
-    const isParticipant = chat.type === "GROUP"
-      ? chat.participants.length > 0
-      : (chat.participant1Id === userId || chat.participant2Id === userId);
-
-    if (!isParticipant) {
-      return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
-    }
-
-    // Обновляем время прочтения
-    const now = new Date();
-    
-    if (chat.type === "GROUP") {
-      // Для GROUP чатов обновляем readAt в таблице participants
-      if (chat.participants[0]) {
-        await prisma.chatParticipant.update({
-          where: { id: chat.participants[0].id },
-          data: { readAt: now },
-        });
+    // Проверяем доступ через сервис
+    try {
+      await requireChatAccess(chatId, userId);
+    } catch (error) {
+      if (error instanceof ChatAccessError) {
+        return NextResponse.json({ error: error.message }, { status: 403 });
       }
-    } else {
-      // Для PRIVATE чатов используем поля participant1ReadAt/participant2ReadAt
-      await prisma.chat.update({
-        where: { id: chatId },
-        data: chat.participant1Id === userId
-          ? { participant1ReadAt: now }
-          : { participant2ReadAt: now },
-      });
+      throw error;
     }
 
-    // Инвалидируем кеш чатов
+    // Используем сервис для пометки как прочитанное
+    await markAsRead(chatId, userId);
+
+    // Инвалидируем кеш
     await invalidateChatCache(userId);
 
-    return NextResponse.json({ success: true, readAt: now });
+    return NextResponse.json({ success: true, readAt: new Date() });
   } catch (error) {
     console.error("[chat/read] Error:", error);
     return NextResponse.json(

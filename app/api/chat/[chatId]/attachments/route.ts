@@ -2,11 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { writeFile, mkdir } from "fs/promises";
+import { mkdir } from "fs/promises";
 import path from "path";
 import { processMediaFile, detectFileType } from "@/lib/media-processor";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import { optimizeWithPreset, getMimeType } from "@/lib/image-optimizer";
+import { sendUserNotification } from "@/lib/notifications";
+import { 
+  requireChatAccess, 
+  ChatAccessError,
+  getChatParticipantIds,
+} from "@/lib/chat-service";
 
 // Инициализируем VDS хранилище при загрузке модуля
 if (typeof window === "undefined") {
@@ -30,8 +36,20 @@ export async function POST(
     const chatId = resolvedParams.chatId;
     const userId = session.user.id;
 
-    // Проверяем, что пользователь является участником чата
-    const chat = await prisma.chat.findUnique({
+    // Проверяем доступ через сервис
+    let chat: any;
+    try {
+      const result = await requireChatAccess(chatId, userId);
+      chat = result.chat;
+    } catch (error) {
+      if (error instanceof ChatAccessError) {
+        return NextResponse.json({ error: error.message }, { status: 403 });
+      }
+      throw error;
+    }
+
+    // Получаем полную информацию о чате
+    const fullChat = await prisma.chat.findUnique({
       where: { id: chatId },
       select: {
         type: true,
@@ -40,24 +58,6 @@ export async function POST(
         participant2Id: true,
       },
     });
-
-    if (!chat) {
-      return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
-    }
-
-    // Проверяем доступ в зависимости от типа чата
-    if (chat.type === "GROUP") {
-      const isParticipant = await prisma.chatParticipant.findFirst({
-        where: { chatId, userId, leftAt: null },
-      });
-      if (!isParticipant) {
-        return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
-      }
-    } else {
-      if (chat.participant1Id !== userId && chat.participant2Id !== userId) {
-        return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
-      }
-    }
 
     const formData = await request.formData();
     const file = formData.get("file") as File;
@@ -68,19 +68,15 @@ export async function POST(
       return NextResponse.json({ error: "Файл не предоставлен" }, { status: 400 });
     }
 
-    // Проверяем, что сообщение для ответа существует и принадлежит этому чату
+    // Проверяем сообщение для ответа
     if (replyToId) {
       const replyToMessage = await prisma.chatMessage.findUnique({
         where: { id: replyToId },
         select: { chatId: true },
       });
 
-      if (!replyToMessage) {
+      if (!replyToMessage || replyToMessage.chatId !== chatId) {
         return NextResponse.json({ error: "Сообщение для ответа не найдено" }, { status: 404 });
-      }
-
-      if (replyToMessage.chatId !== chatId) {
-        return NextResponse.json({ error: "Сообщение для ответа не принадлежит этому чату" }, { status: 403 });
       }
     }
 
@@ -91,12 +87,12 @@ export async function POST(
     let buffer: Buffer = Buffer.from(bytes) as Buffer;
     let originalName = file.name;
     
-    // Используем универсальный медиа-процессор для определения типа и обработки
+    // Обрабатываем медиа-файл
     let processedFile;
     try {
       processedFile = await processMediaFile(buffer, originalName, {
         convertHeic: true,
-        maxWidth: 2048, // Ограничиваем размер для чата
+        maxWidth: 2048,
         maxHeight: 2048,
         quality: 85,
       });
@@ -104,7 +100,6 @@ export async function POST(
       originalName = processedFile.fileName;
     } catch (error) {
       console.error(`[chat/attachments] Error processing media file:`, error);
-      // Если обработка не удалась, определяем тип файла хотя бы
       const detectedType = await detectFileType(buffer, originalName);
       if (detectedType) {
         originalName = originalName.replace(/\.[^.]+$/, `.${detectedType.ext}`);
@@ -114,7 +109,7 @@ export async function POST(
     let mimeType = processedFile?.mimeType || file.type || "application/octet-stream";
     let fileExtension = path.extname(originalName);
     
-    // ✨ Дополнительная оптимизация для изображений (сжатие + WebP)
+    // Оптимизация изображений
     if (mimeType.startsWith("image/") && mimeType !== "image/gif") {
       try {
         const originalSize = buffer.length;
@@ -133,23 +128,18 @@ export async function POST(
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExtension}`;
     const fileKey = `chat/${fileName}`;
     
-    let filePath: string;
-    let dbFilePath: string; // Путь для сохранения в БД
-    
-    // Всегда загружаем на VDS - локальное хранилище отключено
+    // Загружаем на VDS
     if (!isVDSStorageConfigured()) {
-      throw new Error("VDS storage не настроен. Настройте переменные окружения VDS_STORAGE_HOST, VDS_STORAGE_PASSWORD или VDS_STORAGE_PRIVATE_KEY_PATH");
+      throw new Error("VDS storage не настроен");
     }
 
+    let filePath: string;
     try {
       filePath = await uploadFileToVDS(fileKey, buffer, mimeType);
-      // Сохраняем путь, который возвращает uploadFileToVDS (относительный путь /uploads/chat/...)
-      // getFileUrl в компоненте чата автоматически преобразует его в нужный URL (CDN или API route)
-      dbFilePath = filePath; // Это будет /uploads/chat/filename.jpg
-      console.log(`[chat/attachments] File uploaded to VDS: ${filePath}, DB path: ${dbFilePath}`);
+      console.log(`[chat/attachments] File uploaded to VDS: ${filePath}`);
     } catch (vdsError) {
       console.error("[chat/attachments] VDS upload failed:", vdsError);
-      throw new Error(`Не удалось загрузить файл на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
+      throw new Error(`Не удалось загрузить файл на сервер`);
     }
 
     // Определяем тип файла
@@ -161,7 +151,6 @@ export async function POST(
     }
 
     // Создаем сообщение с вложением
-    // Если пользователь не ввел текст, оставляем пустую строку (не показываем автоматический текст)
     const message = await prisma.chatMessage.create({
       data: {
         chatId,
@@ -173,8 +162,8 @@ export async function POST(
             type: attachmentType,
             fileName: fileName,
             originalName: originalName,
-            filePath: dbFilePath,
-            fileSize: buffer.length, // Используем размер буфера после возможной конвертации
+            filePath: filePath,
+            fileSize: buffer.length,
             mimeType: mimeType || null,
           },
         },
@@ -193,53 +182,74 @@ export async function POST(
       },
     });
 
-    // Определяем получателя сообщения
-    const recipientId = chat.participant1Id === userId 
-      ? chat.participant2Id 
-      : chat.participant1Id;
-
-    // Обновляем последнее сообщение в чате
-    // Если есть вложение, показываем тип вложения, иначе - текст сообщения
+    // Обновляем чат
     const attachmentText = attachmentType === "image" ? "📷 Фото" : attachmentType === "video" ? "🎥 Видео" : "📎 Файл";
     await prisma.chat.update({
       where: { id: chatId },
       data: {
         lastMessage: content.trim() || attachmentText,
         lastMessageAt: new Date(),
-        ...(chat.participant1Id === userId
-          ? { participant2ReadAt: null }
-          : { participant1ReadAt: null }),
       },
     });
 
-    // Отправляем пуш-уведомление получателю (только если recipientId не null)
-    if (recipientId) {
+    // Сбрасываем readAt для участников
+    await prisma.chatParticipant.updateMany({
+      where: {
+        chatId,
+        userId: { not: userId },
+        leftAt: null,
+      },
+      data: {
+        readAt: null,
+      },
+    });
+
+    // Также для старой схемы
+    if (fullChat?.participant1Id || fullChat?.participant2Id) {
+      const updateData: any = {};
+      if (fullChat.participant1Id === userId) {
+        updateData.participant2ReadAt = null;
+      } else if (fullChat.participant2Id === userId) {
+        updateData.participant1ReadAt = null;
+      }
+      if (Object.keys(updateData).length > 0) {
+        await prisma.chat.update({
+          where: { id: chatId },
+          data: updateData,
+        });
+      }
+    }
+
+    // Отправляем уведомления
+    const recipientIds = await getChatParticipantIds(chatId, userId);
+    if (recipientIds.length > 0) {
       try {
         const sender = await prisma.user.findUnique({
           where: { id: userId },
-          select: {
-            firstName: true,
-            lastName: true,
-            middleName: true,
-          },
+          select: { firstName: true, lastName: true },
         });
 
         const senderName = sender 
-          ? `${sender.firstName || ""} ${sender.middleName || ""} ${sender.lastName || ""}`.trim() || "Пользователь"
+          ? `${sender.firstName || ""} ${sender.lastName || ""}`.trim() || "Пользователь"
           : "Пользователь";
 
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://myunion.pro";
-        const messagePreview = (content.trim() || attachmentText).substring(0, 100);
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
+        const isGroupChat = fullChat?.type === "GROUP";
 
-        const { sendUserNotification } = await import("@/lib/notifications");
-        await sendUserNotification({
-          userId: recipientId,
-          type: "chat_message",
-          title: `💬 ${attachmentText} от ${senderName}`,
-          body: content.trim() || attachmentText,
-          url: `${baseUrl}/dashboard/chat?userId=${userId}`,
-          senderName,
-        });
+        await Promise.all(
+          recipientIds.map((recipientId) =>
+            sendUserNotification({
+              userId: recipientId,
+              type: "chat_message",
+              title: `💬 ${attachmentText} от ${senderName}`,
+              body: content.trim() || attachmentText,
+              url: isGroupChat
+                ? `${baseUrl}/dashboard/chats/ppo-head?chatId=${chatId}`
+                : `${baseUrl}/dashboard/chat?chatId=${chatId}`,
+              senderName,
+            }).catch(console.error)
+          )
+        );
       } catch (notificationError) {
         console.error("[chat/attachments] Error sending notification:", notificationError);
       }
@@ -248,12 +258,6 @@ export async function POST(
     return NextResponse.json({ message });
   } catch (error: any) {
     console.error("[chat/attachments] Error:", error);
-    console.error("[chat/attachments] Error stack:", error?.stack);
-    console.error("[chat/attachments] Error details:", {
-      message: error?.message,
-      name: error?.name,
-      code: error?.code,
-    });
     return NextResponse.json(
       { 
         error: "Внутренняя ошибка сервера",
@@ -263,4 +267,3 @@ export async function POST(
     );
   }
 }
-

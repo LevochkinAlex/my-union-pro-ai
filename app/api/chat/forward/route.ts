@@ -3,7 +3,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendUserNotification } from "@/lib/notifications";
-import { getOrCreatePrivateChat } from "@/lib/chat-server-utils";
+import { 
+  getOrCreatePrivateChat, 
+  checkChatAccess 
+} from "@/lib/chat-service";
 
 // POST - пересылка сообщения
 export async function POST(request: NextRequest) {
@@ -45,12 +48,6 @@ export async function POST(request: NextRequest) {
           },
         },
         attachments: true,
-        chat: {
-          select: {
-            participant1Id: true,
-            participant2Id: true,
-          },
-        },
       },
     });
 
@@ -58,10 +55,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Сообщение не найдено" }, { status: 404 });
     }
 
-    // Проверяем, что пользователь имеет доступ к оригинальному сообщению
-    const hasAccess =
-      originalMessage.chat.participant1Id === userId ||
-      originalMessage.chat.participant2Id === userId;
+    // Проверяем доступ к оригинальному сообщению через сервис
+    const { hasAccess } = await checkChatAccess(originalMessage.chatId, userId);
 
     if (!hasAccess) {
       return NextResponse.json(
@@ -80,17 +75,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
     }
 
-    // Используем утилиту для создания/поиска чата с нормализацией ID
-    let chat = await getOrCreatePrivateChat(userId, targetUserId);
+    // Создаем/находим чат через сервис
+    const { chat } = await getOrCreatePrivateChat(userId, targetUserId);
 
-    // Подготавливаем текст для lastMessage (реальное содержимое сообщения)
-    // Если есть вложения, добавляем пометку
+    // Подготавливаем preview
     const hasAttachments = originalMessage.attachments.length > 0;
     const messagePreview = hasAttachments
       ? `📎 ${originalMessage.content || "Вложение"}`
       : originalMessage.content || "Пересланное сообщение";
     
-    // Ограничиваем длину preview для lastMessage (обычно ограничение в БД ~255 символов)
     const lastMessageText = messagePreview.length > 200 
       ? messagePreview.substring(0, 200) + "..."
       : messagePreview;
@@ -141,31 +134,50 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Обновляем последнее сообщение в чате с реальным содержимым
+    // Обновляем чат
     await prisma.chat.update({
       where: { id: chat.id },
       data: {
         lastMessage: lastMessageText,
         lastMessageAt: new Date(),
-        ...(chat.participant1Id === userId
-          ? { participant2ReadAt: null }
-          : { participant1ReadAt: null }),
       },
     });
 
-    // Отправляем пуш-уведомление получателю
+    // Сбрасываем readAt через ChatParticipant
+    await prisma.chatParticipant.updateMany({
+      where: {
+        chatId: chat.id,
+        userId: { not: userId },
+        leftAt: null,
+      },
+      data: {
+        readAt: null,
+      },
+    });
+
+    // Также для старой схемы
+    if (chat.participant1Id || chat.participant2Id) {
+      const updateData: any = {};
+      if (chat.participant1Id === userId) {
+        updateData.participant2ReadAt = null;
+      } else if (chat.participant2Id === userId) {
+        updateData.participant1ReadAt = null;
+      }
+      if (Object.keys(updateData).length > 0) {
+        await prisma.chat.update({
+          where: { id: chat.id },
+          data: updateData,
+        });
+      }
+    }
+
+    // Отправляем уведомление
     try {
       const sender = await prisma.user.findUnique({
         where: { id: userId },
-        select: {
-          firstName: true,
-          lastName: true,
-          middleName: true,
-        },
+        select: { firstName: true, lastName: true, middleName: true },
       });
 
-      // Используем правильный порядок имени: Фамилия Имя Отчество
-      // Фильтруем пустые значения и строки из пробелов, затем объединяем
       const senderName = sender
         ? [sender.lastName, sender.firstName, sender.middleName]
             .filter((name) => name && name.trim().length > 0)
@@ -173,33 +185,27 @@ export async function POST(request: NextRequest) {
             .join(" ") || "Пользователь"
         : "Пользователь";
 
-      const baseUrl =
-        process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://myunion.pro";
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
 
-      // Отправляем уведомление только если targetUserId валиден
-      if (targetUserId && typeof targetUserId === 'string' && targetUserId.trim() !== '') {
+      if (targetUserId) {
         await sendUserNotification({
           userId: targetUserId,
           type: "chat_message",
           title: `📨 Пересланное сообщение от ${senderName}`,
           body: originalMessage.content.substring(0, 100),
-          url: `${baseUrl}/dashboard/chat?userId=${userId}`,
+          url: `${baseUrl}/dashboard/chat?chatId=${chat.id}`,
           senderName,
         });
       }
     } catch (notificationError) {
       console.error("[chat/forward] Error sending notification:", notificationError);
-      // Не прерываем пересылку из-за ошибки уведомлений
     }
 
     return NextResponse.json({ message: forwardedMessage });
   } catch (error: any) {
     console.error("[chat/forward] Error:", error);
     return NextResponse.json(
-      {
-        error: "Внутренняя ошибка сервера",
-        details: process.env.NODE_ENV === "development" ? error?.message : undefined,
-      },
+      { error: "Внутренняя ошибка сервера" },
       { status: 500 }
     );
   }

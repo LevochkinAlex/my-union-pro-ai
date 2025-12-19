@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateAppealPublicId, formatAppealId } from "@/lib/appeal-id";
 import { saveTicketToKnowledgeBase } from "@/lib/user-knowledge-base";
-// Chat creation is done inline for appeal chats
+import { createGroupChat } from "@/lib/chat-service";
 
 /**
  * GET /api/tickets - Получить тикеты пользователя
@@ -155,22 +155,12 @@ export async function POST(request: NextRequest) {
     // Находим Председателя организации
     let chairmanId: string | null = null;
     if (user?.organizationId) {
-      // Ищем Председателя по нескольким критериям:
-      // 1. ppoHeadOrganizationId === organizationId (PPO Head для этой организации)
-      // 2. role === PPO_HEAD и organizationId === organizationId
-      // 3. isPPOHead === true и organizationId === organizationId
       const chairman = await prisma.user.findFirst({
         where: {
           OR: [
             { ppoHeadOrganizationId: user.organizationId },
-            { 
-              organizationId: user.organizationId,
-              role: "PPO_HEAD",
-            },
-            {
-              organizationId: user.organizationId,
-              isPPOHead: true,
-            },
+            { organizationId: user.organizationId, role: "PPO_HEAD" },
+            { organizationId: user.organizationId, isPPOHead: true },
           ],
         },
         select: { id: true },
@@ -178,7 +168,7 @@ export async function POST(request: NextRequest) {
       chairmanId = chairman?.id || null;
     }
 
-    // Создаем тикет сначала (без chatId)
+    // Создаем тикет
     const ticket = await prisma.ticket.create({
       data: {
         userId: session.user.id,
@@ -192,7 +182,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Сначала обрабатываем файлы (нужны для сообщения в чате)
+    // Обрабатываем файлы
     const uploadedFiles: Array<{
       fileName: string;
       originalName: string;
@@ -206,7 +196,6 @@ export async function POST(request: NextRequest) {
       const path = await import("path");
       const uploadDir = path.join(process.cwd(), "public", "uploads", "tickets");
 
-      // Создаем директорию, если её нет
       try {
         await fs.mkdir(uploadDir, { recursive: true });
       } catch (error) {
@@ -214,12 +203,11 @@ export async function POST(request: NextRequest) {
       }
 
       for (const file of files) {
-        // Проверяем тип файла (запрещаем исполняемые скрипты)
         const dangerousExtensions = [".exe", ".bat", ".cmd", ".sh", ".ps1", ".js", ".jar", ".app"];
         const fileExtension = path.extname(file.name).toLowerCase();
         
         if (dangerousExtensions.includes(fileExtension)) {
-          continue; // Пропускаем опасные файлы
+          continue;
         }
 
         const buffer = Buffer.from(await file.arrayBuffer());
@@ -238,7 +226,6 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // Сохраняем вложения к тикету
       if (uploadedFiles.length > 0) {
         await prisma.ticketAttachment.createMany({
           data: uploadedFiles.map(f => ({
@@ -252,41 +239,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Создаем ОТДЕЛЬНЫЙ чат для обращения (тип GROUP для обхода unique constraint)
-    // Чат обращения - это отдельная переписка от имени организации
+    // Создаем чат для обращения через сервис
     let chatId: string | null = null;
     if (chairmanId && chairmanId !== session.user.id) {
-      // Создаем чат типа GROUP для обращения (позволяет иметь несколько чатов между пользователями)
-      const chat = await prisma.chat.create({
-        data: {
-          type: "GROUP", // GROUP позволяет несколько чатов между теми же участниками
-          name: `Обращение #${publicId}`,
-          description: title,
-          createdById: session.user.id,
-          isPublic: false, // Закрытый чат
-          participants: {
-            create: [
-              { userId: session.user.id, role: "member" },
-              { userId: chairmanId, role: "admin" },
-            ],
-          },
-        },
-      });
+      const chat = await createGroupChat(
+        session.user.id,
+        `Обращение #${publicId}`,
+        title,
+        [chairmanId],
+        {
+          isPublic: false,
+          ticketId: ticket.id,
+        }
+      );
       chatId = chat.id;
 
-      // Связываем тикет с чатом
-      await prisma.ticket.update({
-        where: { id: ticket.id },
-        data: { chatId: chat.id },
-      });
-
-      // Формируем текст сообщения с информацией о файлах
+      // Формируем текст первого сообщения
       let messageContent = `📋 **${title}**\n\n${content.replace(/<[^>]*>/g, "")}`;
       if (uploadedFiles.length > 0) {
         messageContent += `\n\n📎 Прикреплено файлов: ${uploadedFiles.length}`;
       }
 
-      // Создаем первое сообщение в чате с текстом обращения
+      // Создаем первое сообщение
       const chatMessage = await prisma.chatMessage.create({
         data: {
           chatId: chat.id,
@@ -295,7 +269,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Прикрепляем файлы к сообщению в чате (если есть)
+      // Прикрепляем файлы к сообщению
       if (uploadedFiles.length > 0) {
         await prisma.chatMessageAttachment.createMany({
           data: uploadedFiles.map(f => ({
@@ -320,7 +294,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Логируем создание обращения
+    // Логируем создание
     await prisma.ticketActionLog.create({
       data: {
         ticketId: ticket.id,
@@ -335,7 +309,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Сохраняем тикет в базу знаний пользователя (асинхронно, не блокируем ответ)
+    // Сохраняем в базу знаний
     saveTicketToKnowledgeBase(
       session.user.id,
       ticket.id,
@@ -362,6 +336,7 @@ export async function POST(request: NextRequest) {
         priority: ticket.priority,
         title: ticket.title,
         createdAt: ticket.createdAt,
+        chatId,
       },
     });
   } catch (error) {
@@ -372,4 +347,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

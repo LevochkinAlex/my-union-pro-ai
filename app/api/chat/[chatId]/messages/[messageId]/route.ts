@@ -4,6 +4,10 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
+import { 
+  requireChatAccess, 
+  ChatAccessError 
+} from "@/lib/chat-service";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "chat");
 
@@ -22,7 +26,17 @@ export async function PATCH(
     const { chatId, messageId } = resolvedParams;
     const userId = session.user.id;
 
-    // Проверяем, есть ли файл в запросе
+    // Проверяем доступ через сервис
+    try {
+      await requireChatAccess(chatId, userId);
+    } catch (error) {
+      if (error instanceof ChatAccessError) {
+        return NextResponse.json({ error: error.message }, { status: 403 });
+      }
+      throw error;
+    }
+
+    // Парсим тело запроса
     const contentType = request.headers.get("content-type") || "";
     let content = "";
     let file: File | null = null;
@@ -40,35 +54,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Сообщение не может быть пустым" }, { status: 400 });
     }
 
-    // Проверяем, что пользователь является участником чата
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
-      select: {
-        type: true,
-        participant1Id: true,
-        participant2Id: true,
-      },
-    });
-
-    if (!chat) {
-      return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
-    }
-
-    // Проверяем доступ в зависимости от типа чата
-    if (chat.type === "GROUP") {
-      const isParticipant = await prisma.chatParticipant.findFirst({
-        where: { chatId, userId, leftAt: null },
-      });
-      if (!isParticipant) {
-        return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
-      }
-    } else {
-      if (chat.participant1Id !== userId && chat.participant2Id !== userId) {
-        return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
-      }
-    }
-
-    // Проверяем, что сообщение существует и принадлежит пользователю
+    // Проверяем сообщение
     const message = await prisma.chatMessage.findUnique({
       where: { id: messageId },
       select: {
@@ -95,26 +81,24 @@ export async function PATCH(
       return NextResponse.json({ error: "Нельзя редактировать удаленное сообщение" }, { status: 400 });
     }
 
-    // Если есть новый файл, удаляем старые вложения и создаем новое
+    // Обработка нового файла
     if (file && file.size > 0) {
-      // Удаляем старые вложения с диска
+      // Удаляем старые вложения
       if (message.attachments && message.attachments.length > 0) {
         for (const attachment of message.attachments) {
           try {
             const filePath = path.join(process.cwd(), "public", attachment.filePath.replace(/^\//, ""));
             await unlink(filePath);
           } catch (fileError) {
-            console.warn(`[chat] Failed to delete attachment file ${attachment.filePath}:`, fileError);
+            console.warn(`[chat] Failed to delete attachment file:`, fileError);
           }
         }
       }
 
-      // Удаляем старые вложения из БД
       await prisma.chatMessageAttachment.deleteMany({
         where: { messageId: messageId },
       });
 
-      // Создаем директорию для загрузок
       await mkdir(UPLOAD_DIR, { recursive: true });
 
       const fileExtension = path.extname(file.name);
@@ -125,7 +109,6 @@ export async function PATCH(
       const buffer = Buffer.from(bytes);
       await writeFile(filePath, buffer);
 
-      // Определяем тип файла
       const mimeType = file.type || "";
       let attachmentType = "file";
       if (mimeType.startsWith("image/")) {
@@ -134,7 +117,6 @@ export async function PATCH(
         attachmentType = "video";
       }
 
-      // Создаем новое вложение
       await prisma.chatMessageAttachment.create({
         data: {
           messageId: messageId,
@@ -186,10 +168,7 @@ export async function PATCH(
   } catch (error: any) {
     console.error("[chat] PATCH Error:", error);
     return NextResponse.json(
-      {
-        error: "Внутренняя ошибка сервера",
-        details: process.env.NODE_ENV === "development" ? error?.message : undefined,
-      },
+      { error: "Внутренняя ошибка сервера" },
       { status: 500 }
     );
   }
@@ -208,27 +187,19 @@ export async function DELETE(
 
     const resolvedParams = await Promise.resolve(params);
     const { chatId, messageId } = resolvedParams;
-    // Учитываем имперсонализацию: если админ имперсонирует пользователя, используем ID имперсонируемого
     const userId = session.user.id;
 
-    // Проверяем, что пользователь является участником чата
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
-      select: {
-        participant1Id: true,
-        participant2Id: true,
-      },
-    });
-
-    if (!chat) {
-      return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
+    // Проверяем доступ через сервис
+    try {
+      await requireChatAccess(chatId, userId);
+    } catch (error) {
+      if (error instanceof ChatAccessError) {
+        return NextResponse.json({ error: error.message }, { status: 403 });
+      }
+      throw error;
     }
 
-    if (chat.participant1Id !== userId && chat.participant2Id !== userId) {
-      return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
-    }
-
-    // Проверяем, что сообщение существует
+    // Проверяем сообщение
     const message = await prisma.chatMessage.findUnique({
       where: { id: messageId },
       select: {
@@ -246,38 +217,22 @@ export async function DELETE(
       return NextResponse.json({ error: "Сообщение не принадлежит этому чату" }, { status: 403 });
     }
 
-    // Проверяем, что пользователь является отправителем сообщения
     if (message.senderId !== userId) {
-      console.log(`[chat] DELETE: User ${userId} tried to delete message ${messageId} from sender ${message.senderId}`);
       return NextResponse.json({ error: "Вы можете удалять только свои сообщения" }, { status: 403 });
     }
 
     if (message.deletedAt) {
-      console.log(`[chat] DELETE: Message ${messageId} already deleted at ${message.deletedAt}`);
       return NextResponse.json({ error: "Сообщение уже удалено" }, { status: 400 });
     }
 
-    console.log(`[chat] DELETE: Deleting message ${messageId} by user ${userId} in chat ${chatId}`);
-
-    // Помечаем сообщение как удаленное (мягкое удаление)
-    const deletedAt = new Date();
+    // Мягкое удаление
     const updatedMessage = await prisma.chatMessage.update({
       where: { id: messageId },
       data: {
-        deletedAt: deletedAt,
+        deletedAt: new Date(),
         content: "Сообщение удалено",
       },
     });
-
-    console.log(`[chat] ✅ Message ${messageId} deleted by user ${userId}`);
-    console.log(`[chat] DeletedAt: ${updatedMessage.deletedAt}, ChatId: ${chatId}`);
-
-    // Проверяем, что сообщение действительно помечено как удаленное
-    const verifyMessage = await prisma.chatMessage.findUnique({
-      where: { id: messageId },
-      select: { deletedAt: true, chatId: true },
-    });
-    console.log(`[chat] Verification: message ${messageId} deletedAt = ${verifyMessage?.deletedAt}`);
 
     return NextResponse.json({ 
       success: true, 
@@ -288,12 +243,8 @@ export async function DELETE(
   } catch (error: any) {
     console.error("[chat] DELETE Error:", error);
     return NextResponse.json(
-      {
-        error: "Внутренняя ошибка сервера",
-        details: process.env.NODE_ENV === "development" ? error?.message : undefined,
-      },
+      { error: "Внутренняя ошибка сервера" },
       { status: 500 }
     );
   }
 }
-

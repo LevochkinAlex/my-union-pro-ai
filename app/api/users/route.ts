@@ -30,33 +30,20 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    // Оптимизированный поиск: используем startsWith для более быстрого поиска
-    // и только если нужно - contains для более глубокого поиска
+    // Поиск по полям пользователя
     if (search) {
-      const searchLower = search.toLowerCase().trim();
-      // Если поиск короткий (1-2 символа), используем startsWith для производительности
-      // Если длиннее - используем contains, но ограничиваем результаты
-      if (searchLower.length <= 2) {
-        where.OR = [
-          { firstName: { startsWith: search, mode: "insensitive" } },
-          { lastName: { startsWith: search, mode: "insensitive" } },
-          { middleName: { startsWith: search, mode: "insensitive" } },
-          { email: { startsWith: search, mode: "insensitive" } },
-          { phone: { startsWith: search, mode: "insensitive" } },
-        ];
-      } else {
-        // Для длинных запросов используем contains, но с ограничением результатов
-        where.OR = [
-          { firstName: { contains: search, mode: "insensitive" } },
-          { lastName: { contains: search, mode: "insensitive" } },
-          { middleName: { contains: search, mode: "insensitive" } },
-          { email: { contains: search, mode: "insensitive" } },
-          { phone: { contains: search, mode: "insensitive" } },
-        ];
-        // Ограничиваем результаты при поиске для производительности
-        if (limit > 50) {
-          limit = 50;
-        }
+      const searchTrimmed = search.trim();
+      // Используем contains для полнотекстового поиска
+      where.OR = [
+        { firstName: { contains: searchTrimmed, mode: "insensitive" } },
+        { lastName: { contains: searchTrimmed, mode: "insensitive" } },
+        { middleName: { contains: searchTrimmed, mode: "insensitive" } },
+        { email: { contains: searchTrimmed, mode: "insensitive" } },
+        { phone: { contains: searchTrimmed, mode: "insensitive" } },
+      ];
+      // Ограничиваем результаты при поиске для производительности
+      if (limit > 50) {
+        limit = 50;
       }
     }
 
@@ -143,8 +130,14 @@ export async function GET(request: NextRequest) {
 
     const { users, total, organizations } = result;
 
+    // Преобразуем даты в ISO строки для корректной сериализации
+    const serializedUsers = users.map((user) => ({
+      ...user,
+      createdAt: user.createdAt.toISOString(),
+    }));
+
     return NextResponse.json({
-      users,
+      users: serializedUsers,
       total,
       page,
       limit,

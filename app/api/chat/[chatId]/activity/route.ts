@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { 
+  requireChatAccess, 
+  ChatAccessError, 
+  markAsRead 
+} from "@/lib/chat-service";
 
 /**
  * POST /api/chat/[chatId]/activity - Отметить чат как активный (heartbeat)
@@ -21,46 +25,18 @@ export async function POST(
     const chatId = resolvedParams.chatId;
     const userId = session.user.id;
 
-    // Проверяем, что пользователь является участником чата
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
-      select: {
-        type: true,
-        participant1Id: true,
-        participant2Id: true,
-      },
-    });
-
-    if (!chat) {
-      return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
+    // Проверяем доступ через сервис
+    try {
+      await requireChatAccess(chatId, userId);
+    } catch (error) {
+      if (error instanceof ChatAccessError) {
+        return NextResponse.json({ error: error.message }, { status: 403 });
+      }
+      throw error;
     }
 
-    // Проверяем доступ в зависимости от типа чата
-    if (chat.type === "GROUP") {
-      const isParticipant = await prisma.chatParticipant.findFirst({
-        where: { chatId, userId, leftAt: null },
-      });
-      if (!isParticipant) {
-        return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
-      }
-      // Для GROUP чата обновляем readAt в ChatParticipant
-      await prisma.chatParticipant.updateMany({
-        where: { chatId, userId, leftAt: null },
-        data: { readAt: new Date() },
-      });
-    } else {
-      // Для PRIVATE чата
-      if (chat.participant1Id !== userId && chat.participant2Id !== userId) {
-        return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
-      }
-      // Обновляем время последней активности
-      await prisma.chat.update({
-        where: { id: chatId },
-        data: chat.participant1Id === userId
-          ? { participant1ReadAt: new Date() }
-          : { participant2ReadAt: new Date() },
-      });
-    }
+    // Обновляем время активности через markAsRead
+    await markAsRead(chatId, userId);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -71,4 +47,3 @@ export async function POST(
     );
   }
 }
-

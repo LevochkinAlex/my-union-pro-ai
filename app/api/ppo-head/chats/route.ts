@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { getPPOHead } from "@/lib/ppo-head-utils";
+import { getUserChats, ChatFilter } from "@/lib/chat-service";
 
 /**
  * GET /api/ppo-head/chats
@@ -26,135 +26,56 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Получаем все чаты, где Председатель является участником
-    // Личные чаты (включая чаты обращений)
-    const privateChats = await prisma.chat.findMany({
-      where: {
-        type: "PRIVATE",
-        OR: [
-          { participant1Id: chairman.id },
-          { participant2Id: chairman.id },
-        ],
-      },
-      include: {
-        participant1: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatarUrl: true,
-          },
-        },
-        participant2: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatarUrl: true,
-          },
-        },
-        ticket: {
-          select: {
-            id: true,
-            publicId: true,
-            title: true,
-          },
-        },
-        _count: {
-          select: {
-            messages: true,
-          },
-        },
-      },
-      orderBy: {
-        lastMessageAt: "desc",
-      },
-    });
+    // Получаем параметры фильтрации
+    const { searchParams } = new URL(request.url);
+    const typeParam = searchParams.get("type");
+    const hasTicketParam = searchParams.get("hasTicket");
 
-    // Групповые чаты, где Председатель является участником или создателем
-    const groupChats = await prisma.chat.findMany({
-      where: {
-        type: "GROUP",
-        OR: [
-          { createdById: chairman.id },
-          {
-            participants: {
-              some: {
-                userId: chairman.id,
-                leftAt: null,
-              },
-            },
-          },
-        ],
-      },
-      include: {
-        createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        participants: {
-          where: {
-            leftAt: null,
-          },
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
-        _count: {
-          select: {
-            participants: true,
-            messages: true,
-          },
-        },
-      },
-      orderBy: {
-        lastMessageAt: "desc",
-      },
-    });
+    // Строим фильтр
+    const filter: ChatFilter = {};
+    
+    if (typeParam === "PRIVATE" || typeParam === "GROUP") {
+      filter.type = typeParam;
+    }
 
-    const allChats = [...privateChats, ...groupChats].map((chat) => {
-      const privateChat = chat as typeof privateChats[0];
-      const groupChat = chat as typeof groupChats[0];
-      
-      return {
-        id: chat.id,
-        type: chat.type,
-        name: chat.type === "PRIVATE" && privateChat.ticket 
-          ? `Обращение #${privateChat.ticket.publicId}` 
-          : chat.name,
-        description: chat.type === "PRIVATE" && privateChat.ticket 
-          ? privateChat.ticket.title 
-          : chat.description,
-        iconUrl: chat.iconUrl,
-        isPublic: chat.isPublic,
-        lastMessage: chat.lastMessage,
-        lastMessageAt: chat.lastMessageAt?.toISOString() || null,
-        ticketId: chat.type === "PRIVATE" ? privateChat.ticket?.id || null : null,
-        participant1: chat.type === "PRIVATE" ? privateChat.participant1 : null,
-        participant2: chat.type === "PRIVATE" ? privateChat.participant2 : null,
-        participants: chat.type === "GROUP" ? groupChat.participants.map((p) => ({
-          id: p.id,
-          user: p.user,
-          role: p.role,
-        })) : [],
-        _count: {
-          participants: chat.type === "GROUP" ? groupChat._count.participants : 2,
-          messages: chat._count.messages,
-        },
-      };
-    });
+    if (hasTicketParam === "true") {
+      filter.hasTicket = true;
+    } else if (hasTicketParam === "false") {
+      filter.hasTicket = false;
+    }
 
-    return NextResponse.json({ chats: allChats });
+    // Используем новый сервис
+    const chats = await getUserChats(chairman.id, filter);
+
+    // Форматируем для совместимости с фронтендом
+    const formattedChats = chats.map((chat) => ({
+      id: chat.id,
+      type: chat.type,
+      name: chat.displayName,
+      description: chat.description || chat.ticketTitle,
+      iconUrl: chat.displayAvatar,
+      isPublic: chat.isPublic,
+      lastMessage: chat.lastMessage,
+      lastMessageAt: chat.lastMessageAt?.toISOString() || null,
+      unreadCount: chat.unreadCount,
+      createdAt: chat.createdAt,
+      ticketId: chat.ticketId,
+      ticketPublicId: chat.ticketPublicId,
+      ticketTitle: chat.ticketTitle,
+      otherUser: chat.otherUser,
+      participants: chat.participants.map((p) => ({
+        id: p.id,
+        userId: p.userId,
+        user: p.user,
+        role: p.role,
+      })),
+      participantsCount: chat.participantsCount,
+      _count: {
+        participants: chat.participantsCount,
+      },
+    }));
+
+    return NextResponse.json({ chats: formattedChats });
   } catch (error: any) {
     console.error("[ppo-head/chats] GET error:", error);
     return NextResponse.json(
@@ -166,4 +87,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
