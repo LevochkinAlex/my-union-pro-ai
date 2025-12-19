@@ -291,17 +291,13 @@ export function ChatPageBase({
   const handleForwardToChat = useCallback(async (targetChat: Chat) => {
     if (!forwardingMessage) return;
     
-    // Получаем ID пользователя для пересылки
-    const targetUserId = targetChat.type === "PRIVATE" 
-      ? targetChat.otherUser?.id 
-      : targetChat.participants?.[0]?.userId;
-    
-    if (!targetUserId) {
-      showToast("Не удалось определить получателя", "error");
+    // Пересылка работает только в PRIVATE чаты
+    if (targetChat.type !== "PRIVATE" || !targetChat.otherUser?.id) {
+      showToast("Можно переслать только в личный чат", "error");
       return;
     }
     
-    const success = await forwardMessage(forwardingMessage.id, targetUserId);
+    const success = await forwardMessage(forwardingMessage.id, targetChat.otherUser.id);
     
     if (success) {
       showToast("Сообщение переслано", "success");
@@ -422,7 +418,7 @@ export function ChatPageBase({
       {forwardingMessage && (
         <ForwardModal
           message={forwardingMessage}
-          chats={chats.filter(c => c.id !== selectedChat?.id)}
+          chats={chats.filter(c => c.id !== selectedChat?.id && c.type === "PRIVATE")}
           onSelect={handleForwardToChat}
           onClose={() => setForwardingMessage(null)}
         />
