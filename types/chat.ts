@@ -22,6 +22,7 @@ export interface Chat {
   lastMessage: string | null;
   lastMessageAt: Date | null;
   unreadCount: number;
+  createdAt?: Date | string | null;
   // Group-specific fields
   name?: string | null;
   description?: string | null;
