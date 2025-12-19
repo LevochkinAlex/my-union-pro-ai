@@ -279,7 +279,7 @@ export default function TicketDetailPage() {
         <div className="flex gap-2">
           {ticket.chatId && (
             <Link
-              href={`/dashboard/chats?chatId=${ticket.chatId}`}
+              href={`/dashboard/chat?chatId=${ticket.chatId}`}
               className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -104,6 +104,7 @@ function ChatPageContent() {
 
     const userId = searchParams.get("userId");
     const botChatId = searchParams.get("botChatId");
+    const chatId = searchParams.get("chatId");
 
     if (userId && userId !== currentUserId) {
       createOrOpenChat(userId).then((chat) => {
@@ -113,8 +114,10 @@ function ChatPageContent() {
           router.replace("/dashboard/chat", { scroll: false });
         }
       });
-    } else if (botChatId) {
-      const chat = chats.find(c => c.id === botChatId);
+    } else if (chatId || botChatId) {
+      // Ищем чат по ID (поддержка chatId и botChatId)
+      const targetChatId = chatId || botChatId;
+      const chat = chats.find(c => c.id === targetChatId);
       if (chat) {
         selectChat(chat);
         setShowChatView(true);

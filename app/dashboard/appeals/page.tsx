@@ -311,7 +311,7 @@ export default function AppealsPage() {
                 {/* Кнопка чата */}
                 {ticket.chatId && (
                   <Link
-                    href={`/dashboard/chats?chatId=${ticket.chatId}`}
+                    href={`/dashboard/chat?chatId=${ticket.chatId}`}
                     onClick={(e) => e.stopPropagation()}
                     className="flex-shrink-0 w-8 h-8 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 flex items-center justify-center hover:bg-green-500/20 transition-colors"
                     title="Открыть чат"

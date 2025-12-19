@@ -22,28 +22,66 @@ interface Ticket {
     lastName: string | null;
     middleName: string | null;
     email: string | null;
+    avatarUrl: string | null;
   };
   commentsCount: number;
+  attachmentsCount?: number;
   lastCommentAt: string | null;
   chatId: string | null;
   rejectionReason: string | null;
 }
 
-const TICKET_TYPES = {
-  LEGAL: "Юридическое обращение",
-  ACCOUNTING: "Бухгалтерское обращение",
-  TECHNICAL: "Техническая поддержка",
-  HR: "Кадровые вопросы",
-  OTHER: "Прочее",
+const TICKET_TYPES: Record<string, { label: string; icon: React.ReactNode }> = {
+  LEGAL: { 
+    label: "Юридическое", 
+    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>
+  },
+  ACCOUNTING: { 
+    label: "Бухгалтерия", 
+    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+  },
+  TECHNICAL: { 
+    label: "Техподдержка", 
+    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+  },
+  HR: { 
+    label: "Кадры", 
+    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+  },
+  OTHER: { 
+    label: "Прочее", 
+    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+  },
 };
 
-const TICKET_STATUSES = {
-  PENDING: { label: "Ожидание", color: "yellow" },
-  IN_PROGRESS: { label: "В работе", color: "blue" },
-  RESOLVED: { label: "Решено", color: "green" },
-  REJECTED: { label: "Отклонено", color: "red" },
-  CLOSED: { label: "Закрыто", color: "gray" },
+const TICKET_STATUSES: Record<string, { label: string; color: string; bgClass: string }> = {
+  PENDING: { label: "Ожидание", color: "yellow", bgClass: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400" },
+  IN_PROGRESS: { label: "В работе", color: "blue", bgClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
+  RESOLVED: { label: "Решено", color: "green", bgClass: "bg-green-500/10 text-green-600 dark:text-green-400" },
+  REJECTED: { label: "Отклонено", color: "red", bgClass: "bg-red-500/10 text-red-600 dark:text-red-400" },
+  CLOSED: { label: "Закрыто", color: "gray", bgClass: "bg-gray-500/10 text-gray-600 dark:text-gray-400" },
 };
+
+const PRIORITY_ICONS: Record<string, { icon: React.ReactNode; color: string }> = {
+  LOW: { 
+    icon: <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" /></svg>,
+    color: "text-gray-400"
+  },
+  MEDIUM: { 
+    icon: <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" /></svg>,
+    color: "text-blue-500"
+  },
+  HIGH: { 
+    icon: <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" /></svg>,
+    color: "text-orange-500"
+  },
+  URGENT: { 
+    icon: <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clipRule="evenodd" transform="rotate(180 10 10)" /></svg>,
+    color: "text-red-500"
+  },
+};
+
+type FilterStatus = "all" | keyof typeof TICKET_STATUSES;
 
 export default function PPOHeadAppealsPage() {
   const { data: session } = useSession();
@@ -51,22 +89,27 @@ export default function PPOHeadAppealsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | keyof typeof TICKET_STATUSES>("all");
+  const [filter, setFilter] = useState<FilterStatus>("all");
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
 
+  // Подсчёт по статусам
+  const statusCounts = tickets.reduce((acc, ticket) => {
+    acc[ticket.status] = (acc[ticket.status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
   useEffect(() => {
     loadTickets();
-  }, [filter]);
+  }, []);
 
   const loadTickets = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      const url = filter === "all" ? "/api/ppo-head/appeals" : `/api/ppo-head/appeals?status=${filter}`;
-      const response = await fetch(url);
+      const response = await fetch("/api/ppo-head/appeals");
       if (!response.ok) {
         throw new Error("Ошибка загрузки обращений");
       }
@@ -80,6 +123,10 @@ export default function PPOHeadAppealsPage() {
       setIsLoading(false);
     }
   };
+
+  const filteredTickets = filter === "all" 
+    ? tickets 
+    : tickets.filter(t => t.status === filter);
 
   const handleReject = async (ticket: Ticket) => {
     if (!rejectionReason.trim()) {
@@ -110,45 +157,19 @@ export default function PPOHeadAppealsPage() {
     }
   };
 
-  const handleDelete = async (ticketId: string) => {
-    const confirmed = await confirm(
-      "Вы уверены, что хотите удалить это обращение?",
-      "Подтвердите удаление"
-    );
-    if (!confirmed) return;
-
-    try {
-      const response = await fetch(`/api/ppo-head/appeals/${ticketId}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Ошибка при удалении обращения");
-      }
-
-      alertSuccess("Обращение удалено");
-      await loadTickets();
-    } catch (err) {
-      console.error("Error deleting ticket:", err);
-      alertError(err instanceof Error ? err.message : "Не удалось удалить обращение");
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    const statusInfo = TICKET_STATUSES[status as keyof typeof TICKET_STATUSES];
-    const colorMap = {
-      yellow: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-      blue: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-      green: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-      red: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-      gray: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
-    };
-    return colorMap[statusInfo?.color || "gray"] || colorMap.gray;
-  };
-
   const getUserName = (user: Ticket["user"]) => {
-    return [user.lastName, user.firstName, user.middleName].filter(Boolean).join(" ") || user.email || "Неизвестно";
+    return [user.lastName, user.firstName].filter(Boolean).join(" ") || user.email || "Неизвестно";
+  };
+
+  const getUserInitials = (user: Ticket["user"]) => {
+    const first = user.firstName?.[0] || "";
+    const last = user.lastName?.[0] || "";
+    return (first + last) || "?";
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" });
   };
 
   if (isLoading) {
@@ -164,15 +185,14 @@ export default function PPOHeadAppealsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Обращения членов профсоюза
-          </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Управление обращениями от членов вашей организации
-          </p>
-        </div>
+      {/* Заголовок */}
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+          Обращения членов профсоюза
+        </h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Управление обращениями от членов вашей организации
+        </p>
       </div>
 
       {error && (
@@ -181,147 +201,207 @@ export default function PPOHeadAppealsPage() {
         </div>
       )}
 
-      {/* Filter buttons */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setFilter("all")}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            filter === "all"
-              ? "bg-blue-600 text-white"
-              : "bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200"
-          }`}
-        >
-          Все
-        </button>
-        {Object.entries(TICKET_STATUSES).map(([key, value]) => (
+      {/* Табы */}
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto">
           <button
-            key={key}
-            onClick={() => setFilter(key as keyof typeof TICKET_STATUSES)}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              filter === key
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200"
+            onClick={() => setFilter("all")}
+            className={`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${
+              filter === "all"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
             }`}
           >
-            {value.label}
+            Все
+            <span className={`rounded-full px-2 py-0.5 text-xs ${
+              filter === "all" 
+                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" 
+                : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+            }`}>
+              {tickets.length}
+            </span>
           </button>
-        ))}
+          {Object.entries(TICKET_STATUSES).map(([key, value]) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key as FilterStatus)}
+              className={`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${
+                filter === key
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+              }`}
+            >
+              {value.label}
+              {(statusCounts[key] || 0) > 0 && (
+                <span className={`rounded-full px-2 py-0.5 text-xs ${
+                  filter === key 
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" 
+                    : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+                }`}>
+                  {statusCounts[key]}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
       </div>
 
-      {tickets.length === 0 ? (
-        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-700 dark:bg-gray-800">
-          <p className="text-gray-600 dark:text-gray-400">
-            Обращений не найдено
-          </p>
+      {/* Список обращений */}
+      {filteredTickets.length === 0 ? (
+        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
+          <svg className="mx-auto h-10 w-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+          </svg>
+          <h3 className="mt-3 text-sm font-medium text-gray-900 dark:text-white">
+            {filter === "all" ? "Обращений пока нет" : "Нет обращений в этом статусе"}
+          </h3>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {tickets.map((ticket) => (
-            <div
-              key={ticket.id}
-              className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {ticket.title}
-                    </h3>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-bold text-purple-700 bg-purple-100 dark:text-purple-300 dark:bg-purple-900/30">
-                      #{ticket.publicId}
-                    </span>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(ticket.status)}`}>
-                      {TICKET_STATUSES[ticket.status as keyof typeof TICKET_STATUSES]?.label || ticket.status}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                    От: {getUserName(ticket.user)}
-                  </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                    Тип: {TICKET_TYPES[ticket.type as keyof typeof TICKET_TYPES] || ticket.type}
-                  </p>
-                  {ticket.rejectionReason && (
-                    <div className="mt-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                      <p className="text-sm font-medium text-red-800 dark:text-red-200">
-                        Причина отклонения:
-                      </p>
-                      <p className="text-sm text-red-700 dark:text-red-300 mt-1">
-                        {ticket.rejectionReason}
-                      </p>
+        <div className="space-y-2">
+          {filteredTickets.map((ticket) => {
+            const typeInfo = TICKET_TYPES[ticket.type] || TICKET_TYPES.OTHER;
+            const statusInfo = TICKET_STATUSES[ticket.status] || TICKET_STATUSES.PENDING;
+            const priorityInfo = PRIORITY_ICONS[ticket.priority] || PRIORITY_ICONS.MEDIUM;
+            
+            return (
+              <div
+                key={ticket.id}
+                className="group flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 transition-all hover:border-blue-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-600"
+              >
+                {/* Аватар автора */}
+                <div className="flex-shrink-0">
+                  {ticket.user.avatarUrl ? (
+                    <img
+                      src={ticket.user.avatarUrl}
+                      alt={getUserName(ticket.user)}
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold">
+                      {getUserInitials(ticket.user)}
                     </div>
                   )}
-                  <div className="mt-4 flex gap-2 text-xs text-gray-500 dark:text-gray-400">
-                    <span>Создано: {new Date(ticket.createdAt).toLocaleDateString("ru-RU")}</span>
+                </div>
+
+                {/* Основная информация */}
+                <div 
+                  className="flex-1 min-w-0 cursor-pointer"
+                  onClick={() => router.push(`/dashboard/appeals/${ticket.id}`)}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-900 dark:text-white truncate text-sm">
+                      {ticket.title}
+                    </span>
+                    <span className="flex-shrink-0 text-xs font-mono text-purple-600 dark:text-purple-400">
+                      #{ticket.publicId}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    <span className="truncate max-w-[120px]">{getUserName(ticket.user)}</span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      {typeInfo.icon}
+                      {typeInfo.label}
+                    </span>
+                    <span>•</span>
+                    <span>{formatDate(ticket.createdAt)}</span>
                     {ticket.commentsCount > 0 && (
                       <>
                         <span>•</span>
-                        <span>Комментариев: {ticket.commentsCount}</span>
+                        <span className="flex items-center gap-1" title="Комментарии">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                          </svg>
+                          {ticket.commentsCount}
+                        </span>
                       </>
                     )}
                   </div>
                 </div>
-                <div className="flex gap-2 ml-4">
+
+                {/* Приоритет */}
+                <div className={`flex-shrink-0 ${priorityInfo.color}`} title={`Приоритет: ${ticket.priority}`}>
+                  {priorityInfo.icon}
+                </div>
+
+                {/* Статус */}
+                <div className={`flex-shrink-0 px-2 py-1 rounded text-xs font-medium ${statusInfo.bgClass}`}>
+                  {statusInfo.label}
+                </div>
+
+                {/* Действия */}
+                <div className="flex-shrink-0 flex items-center gap-1">
+                  {/* Кнопка чата */}
                   {ticket.chatId && (
                     <Link
-                      href={`/dashboard/chats?chatId=${ticket.chatId}`}
-                      className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+                      href={`/dashboard/chats/ppo-head?chatId=${ticket.chatId}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-8 h-8 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 flex items-center justify-center hover:bg-green-500/20 transition-colors"
                       title="Открыть чат"
                     >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                       </svg>
-                      Чат
                     </Link>
                   )}
-                  <button
-                    onClick={() => router.push(`/dashboard/appeals/${ticket.id}`)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                  >
-                    Открыть
-                  </button>
+
+                  {/* Кнопка отклонения */}
                   {ticket.status !== "REJECTED" && ticket.status !== "CLOSED" && (
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setSelectedTicket(ticket);
                         setShowRejectModal(true);
                       }}
-                      className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                      className="w-8 h-8 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center hover:bg-red-500/20 transition-colors"
+                      title="Отклонить"
                     >
-                      Отклонить
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   )}
+
+                  {/* Стрелка */}
                   <button
-                    onClick={() => handleDelete(ticket.id)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-gray-600 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+                    onClick={() => router.push(`/dashboard/appeals/${ticket.id}`)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                   >
-                    Удалить
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </button>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
       {/* Reject Modal */}
       {showRejectModal && selectedTicket && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800 w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Отклонить обращение</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => {
+            setShowRejectModal(false);
+            setRejectionReason("");
+            setSelectedTicket(null);
+          }} />
+          <div className="relative rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800 w-full max-w-md mx-4">
+            <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Отклонить обращение</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Укажите причину отклонения обращения. Это сообщение будет отправлено автору обращения.
+              Укажите причину отклонения. Это сообщение будет отправлено автору.
             </p>
             <textarea
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 mb-4"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white mb-4 focus:ring-2 focus:ring-red-500 outline-none"
               rows={4}
               placeholder="Причина отклонения..."
             />
             <div className="flex gap-2">
               <button
                 onClick={() => handleReject(selectedTicket)}
-                className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
+                className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-white font-medium hover:bg-red-700 transition-colors"
               >
                 Отклонить
               </button>
@@ -331,7 +411,7 @@ export default function PPOHeadAppealsPage() {
                   setRejectionReason("");
                   setSelectedTicket(null);
                 }}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 font-medium hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors"
               >
                 Отмена
               </button>
@@ -342,4 +422,3 @@ export default function PPOHeadAppealsPage() {
     </div>
   );
 }
-
