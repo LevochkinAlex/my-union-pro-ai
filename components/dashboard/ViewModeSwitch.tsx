@@ -64,10 +64,8 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
       if (response.ok) {
         setCurrentMode(newMode);
         setIsOpen(false);
-        // Перезагружаем страницу для применения нового меню
-        router.refresh();
-        // Редирект на главную страницу дашборда
-        window.location.href = "/dashboard";
+        // Полная перезагрузка страницы с очисткой кеша
+        window.location.replace("/dashboard?t=" + Date.now());
       }
     } catch (error) {
       console.error("Error switching view mode:", error);
