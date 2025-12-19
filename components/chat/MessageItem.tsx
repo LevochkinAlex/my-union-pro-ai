@@ -311,6 +311,7 @@ function MessageItemComponent({
       <div
         ref={containerRef}
         className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-2 px-4`}
+        style={{ height: "fit-content", width: "100%", display: "flex", verticalAlign: "bottom", boxSizing: "content-box" }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onContextMenu={handleContextMenu}
@@ -573,9 +574,18 @@ const Avatar = memo(function Avatar({ user, size }: { user: ChatUser; size: "sm"
     );
   }
 
+  const initials = getInitials(user);
+  const hasInitials = initials && initials !== "П" && initials.trim() !== "";
+
   return (
     <div className={`${sizeClass} rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold`}>
-      {getInitials(user)}
+      {hasInitials ? (
+        initials
+      ) : (
+        <svg className={`${size === "sm" ? "w-4 h-4" : "w-5 h-5"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+      )}
     </div>
   );
 });

@@ -24,10 +24,10 @@ export function getUserName(user: ChatUser | any | null | undefined): string {
  * Получить инициалы пользователя
  */
 export function getInitials(user: ChatUser | any | null | undefined): string {
-  if (!user) return "?";
+  if (!user) return "П";
   const first = user.firstName?.[0]?.toUpperCase() || "";
   const last = user.lastName?.[0]?.toUpperCase() || "";
-  return (first + last) || "?";
+  return (first + last) || "П";
 }
 
 /**
