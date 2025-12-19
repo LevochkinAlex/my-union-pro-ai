@@ -64,7 +64,9 @@ export default function NewsCard({
   const [localViewCount, setLocalViewCount] = useState(post.viewCount);
   const [displayContent, setDisplayContent] = useState(post.content);
   const [mounted, setMounted] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const cardRef = useRef<HTMLElement>(null);
+  const imageRef = useRef<HTMLDivElement>(null);
   const hasIncrementedView = useRef(false);
 
   // Отслеживание видимости карточки для инкремента просмотров
@@ -72,6 +74,27 @@ export default function NewsCard({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Ленивая загрузка изображения через Intersection Observer
+  useEffect(() => {
+    if (!post.coverImage || !imageRef.current || imageLoaded) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setImageLoaded(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "100px" } // Начинаем загрузку за 100px до появления в viewport
+    );
+
+    observer.observe(imageRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [post.coverImage, imageLoaded]);
 
   // Функция для извлечения текста из HTML (работаем на сервере и клиенте)
   const getTextFromHTML = (html: string) => {
@@ -270,29 +293,52 @@ export default function NewsCard({
 
         {/* Cover Image */}
         {post.coverImage && (
-          <div className="mb-4 -mx-4 sm:-mx-6 bg-gray-100 dark:bg-gray-700">
-            <img
-              src={
-                post.coverImage.startsWith("data:") || post.coverImage.startsWith("http") || post.coverImage.startsWith("https")
-                  ? post.coverImage
-                  : getFileUrlWithCDN(post.coverImage, true)
-              }
-              alt={post.title}
-              className="w-full h-auto max-h-96 object-cover"
-              loading={priority ? "eager" : "lazy"}
-              decoding="async"
-              fetchPriority={priority ? "high" : "auto"}
-              onError={(e) => {
-                // Тихо скрываем изображение, если оно не найдено
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                // Скрываем родительский div, если изображение не загрузилось
-                const parent = target.parentElement;
-                if (parent) {
-                  parent.style.display = 'none';
-                }
-              }}
-            />
+          <div 
+            ref={imageRef}
+            className="mb-4 -mx-4 sm:-mx-6 bg-gray-100 dark:bg-gray-700 relative overflow-hidden"
+          >
+            {(priority || imageLoaded) ? (
+              post.coverImage.startsWith("data:") || post.coverImage.startsWith("http") || post.coverImage.startsWith("https") ? (
+                <img
+                  src={post.coverImage}
+                  alt={post.title}
+                  className="w-full h-auto max-h-96 object-cover"
+                  loading={priority ? "eager" : "lazy"}
+                  decoding="async"
+                  fetchPriority={priority ? "high" : "auto"}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.style.display = 'none';
+                    }
+                  }}
+                />
+              ) : (
+                <Image
+                  src={getFileUrlWithCDN(post.coverImage, true)}
+                  alt={post.title}
+                  width={800}
+                  height={400}
+                  className="w-full h-auto max-h-96 object-cover"
+                  loading={priority ? "eager" : "lazy"}
+                  priority={priority}
+                  placeholder="blur"
+                  blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q=="
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.style.display = 'none';
+                    }
+                  }}
+                />
+              )
+            ) : (
+              <div className="w-full h-64 bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            )}
           </div>
         )}
 

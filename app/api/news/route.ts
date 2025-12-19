@@ -54,11 +54,17 @@ export async function GET(request: NextRequest) {
           ];
         }
 
-        // Получаем только опубликованные новости
+        // Получаем только опубликованные новости с оптимизированным select
         const [newsRaw, total] = await Promise.all([
           prisma.newsPost.findMany({
             where: whereClause,
-            include: {
+            select: {
+              id: true,
+              title: true,
+              content: true,
+              coverImage: true,
+              publishedAt: true,
+              viewCount: true,
               author: {
                 select: {
                   id: true,
@@ -74,7 +80,11 @@ export async function GET(request: NextRequest) {
                 },
               },
               polls: {
-                include: {
+                select: {
+                  id: true,
+                  question: true,
+                  options: true,
+                  isClosed: true,
                   _count: {
                     select: {
                       votes: true,
@@ -90,9 +100,7 @@ export async function GET(request: NextRequest) {
             take: limit,
           }),
           prisma.newsPost.count({
-            where: {
-              isPublished: true,
-            },
+            where: whereClause,
           }),
         ]);
         
