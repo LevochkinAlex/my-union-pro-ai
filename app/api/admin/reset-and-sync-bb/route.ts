@@ -17,8 +17,13 @@ function generatePassword(length = 12) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Разрешаем внутренние запросы с заголовком X-Internal-Request
-    const isInternalRequest = request.headers.get("X-Internal-Request") === "true";
+    // Разрешаем внутренние запросы с заголовком X-Internal-Request или с localhost
+    const isInternalRequest = 
+      request.headers.get("X-Internal-Request") === "true" ||
+      request.headers.get("host")?.includes("localhost") ||
+      request.headers.get("x-forwarded-for")?.includes("127.0.0.1") ||
+      request.ip === "127.0.0.1" ||
+      request.ip === "::1";
     
     if (!isInternalRequest) {
       const session = await getServerSession(authOptions);
