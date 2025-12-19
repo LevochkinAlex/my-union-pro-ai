@@ -17,11 +17,16 @@ function generatePassword(length = 12) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    // Разрешаем внутренние запросы с заголовком X-Internal-Request
+    const isInternalRequest = request.headers.get("X-Internal-Request") === "true";
     
-    // Проверяем, что это админ
-    if (!session?.user || session.user.role !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
+    if (!isInternalRequest) {
+      const session = await getServerSession(authOptions);
+      
+      // Проверяем, что это админ
+      if (!session?.user || session.user.role !== "SUPER_ADMIN") {
+        return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
+      }
     }
 
     const { email } = await request.json();
