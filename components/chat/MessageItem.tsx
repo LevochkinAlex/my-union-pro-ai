@@ -198,9 +198,10 @@ const LazyImage = memo(function LazyImage({
               setHasError(true);
               setIsLoaded(true);
             }}
-            className={`max-w-full max-h-[400px] object-contain rounded-lg transition-opacity duration-200 ${
+            className={`max-w-full max-h-[400px] w-full h-auto object-contain rounded-lg transition-opacity duration-200 ${
               isLoaded ? "opacity-100" : "opacity-0"
             }`}
+            style={{ maxWidth: "100%", height: "auto" }}
           />
         </div>
       )}
@@ -310,14 +311,13 @@ function MessageItemComponent({
     <>
       <div
         ref={containerRef}
-        className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-2 px-4`}
-        style={{ height: "fit-content", width: "100%", display: "flex", verticalAlign: "bottom", boxSizing: "content-box" }}
+        className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-2 px-2 sm:px-4 w-full min-w-0`}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onContextMenu={handleContextMenu}
         onDoubleClick={handleDoubleClick}
       >
-        <div className={`flex items-end gap-2 max-w-[85%] md:max-w-[70%] ${isOwn ? "flex-row-reverse" : ""}`}>
+        <div className={`flex items-end gap-2 max-w-[90%] sm:max-w-[85%] md:max-w-[70%] min-w-0 ${isOwn ? "flex-row-reverse" : ""}`}>
           {/* Аватар для чужих сообщений */}
           {!isOwn && (
             <button 
@@ -329,11 +329,11 @@ function MessageItemComponent({
             </button>
           )}
 
-          <div className="flex flex-col relative">
+          <div className="flex flex-col relative min-w-0 flex-1">
             {/* Имя отправителя для групповых чатов */}
             {!isOwn && showSenderName && message.sender && (
               <button
-                className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline text-left mb-0.5 ml-1"
+                className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline text-left mb-0.5 ml-1 truncate"
                 onClick={() => message.sender?.id && onProfileClick?.(message.sender.id)}
               >
                 {getUserName(message.sender)}
@@ -352,7 +352,7 @@ function MessageItemComponent({
 
             {/* Основной контент */}
             <div
-              className={`relative px-4 py-2 rounded-2xl ${
+              className={`relative px-3 sm:px-4 py-2 rounded-2xl min-w-0 max-w-full w-full overflow-hidden ${
                 isOwn
                   ? "bg-blue-500 text-white rounded-br-md"
                   : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md"
@@ -599,13 +599,13 @@ const ReplyPreview = memo(function ReplyPreview({
 }) {
   return (
     <div
-      className={`mb-1 px-3 py-1.5 rounded-lg border-l-2 ${
+      className={`mb-1 px-2 sm:px-3 py-1.5 rounded-lg border-l-2 min-w-0 ${
         isOwn
           ? "bg-blue-400/30 border-blue-300"
           : "bg-gray-200 dark:bg-gray-600 border-gray-400"
       }`}
     >
-      <p className={`text-xs font-medium ${isOwn ? "text-blue-100" : "text-gray-600 dark:text-gray-300"}`}>
+      <p className={`text-xs font-medium truncate ${isOwn ? "text-blue-100" : "text-gray-600 dark:text-gray-300"}`}>
         {getUserName(message.sender)}
       </p>
       <p className={`text-xs truncate ${isOwn ? "text-blue-50" : "text-gray-500 dark:text-gray-400"}`}>
@@ -650,7 +650,7 @@ const Attachments = memo(function Attachments({
   onImageClick?: (url: string, name?: string) => void;
 }) {
   return (
-    <div className="mb-2 space-y-2">
+    <div className="mb-2 space-y-2 w-full max-w-full min-w-0">
       {attachments.map((attachment) => {
         const isImage = attachment.mimeType?.startsWith("image/") || 
                        ["jpg", "jpeg", "png", "gif", "webp", "heic"].some(ext => 
@@ -663,7 +663,7 @@ const Attachments = memo(function Attachments({
               src={getFileUrl(attachment.filePath)}
               alt={attachment.originalName}
               onClick={() => onImageClick?.(getFileUrl(attachment.filePath), attachment.originalName)}
-              className="rounded-lg w-full hover:opacity-90 transition-opacity"
+              className="rounded-lg w-full hover:opacity-90 transition-opacity max-w-full"
               isOldImage={isOldMessage}
             />
           );
@@ -677,27 +677,28 @@ const Attachments = memo(function Attachments({
             download={attachment.originalName}
             target="_blank"
             rel="noopener noreferrer"
-            className={`flex items-center gap-3 p-3 rounded-xl transition-all hover:scale-[1.02] ${
+            className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl transition-all min-w-0 max-w-full w-full ${
               isOwn 
                 ? "bg-blue-400/30 hover:bg-blue-400/40" 
                 : "bg-white/80 dark:bg-gray-600/80 hover:bg-white dark:hover:bg-gray-600 shadow-sm"
             }`}
+            style={{ maxWidth: "100%", transform: "none" }}
           >
             <FileTypeIcon 
               mimeType={attachment.mimeType} 
               fileName={attachment.originalName} 
-              className="w-12 h-12 flex-shrink-0" 
+              className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0" 
             />
-            <div className="min-w-0 flex-1">
-              <p className={`text-sm font-medium truncate ${isOwn ? "text-white" : "text-gray-900 dark:text-white"}`}>
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <p className={`text-xs sm:text-sm font-medium truncate ${isOwn ? "text-white" : "text-gray-900 dark:text-white"}`}>
                 {attachment.originalName}
               </p>
               <p className={`text-xs mt-0.5 ${isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"}`}>
                 {formatFileSize(attachment.fileSize)}
               </p>
             </div>
-            <div className={`p-2 rounded-full ${isOwn ? "bg-blue-400/50" : "bg-gray-100 dark:bg-gray-500"}`}>
-              <svg className={`w-4 h-4 ${isOwn ? "text-white" : "text-gray-600 dark:text-gray-300"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className={`p-1.5 sm:p-2 rounded-full flex-shrink-0 ${isOwn ? "bg-blue-400/50" : "bg-gray-100 dark:bg-gray-500"}`}>
+              <svg className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isOwn ? "text-white" : "text-gray-600 dark:text-gray-300"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
             </div>
@@ -776,8 +777,8 @@ const MessageContent = memo(function MessageContent({
   }, [content]);
 
   return (
-    <div>
-      <p className="whitespace-pre-wrap break-words text-sm md:text-base">
+    <div className="min-w-0">
+      <p className="whitespace-pre-wrap break-words break-all text-sm md:text-base overflow-wrap-anywhere">
         {parts.map((part, i) => 
           part.type === 'link' ? (
             <a
@@ -785,14 +786,14 @@ const MessageContent = memo(function MessageContent({
               href={part.content}
               target="_blank"
               rel="noopener noreferrer"
-              className={`underline hover:no-underline ${
+              className={`underline hover:no-underline break-all ${
                 isOwn ? "text-blue-100 hover:text-white" : "text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
               }`}
             >
               {part.content}
             </a>
           ) : (
-            <span key={i}>{part.content}</span>
+            <span key={i} className="break-words">{part.content}</span>
           )
         )}
       </p>

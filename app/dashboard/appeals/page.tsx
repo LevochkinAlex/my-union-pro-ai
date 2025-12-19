@@ -62,14 +62,7 @@ export default function AppealsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | keyof typeof TICKET_STATUSES>("all");
   
-  // Если пользователь - Председатель, показываем специальную страницу
-  if (session?.user?.role === "PPO_HEAD") {
-    return <PPOHeadAppealsPage />;
-  }
-
-  useEffect(() => {
-    loadTickets();
-  }, [filter]);
+  const isPPOHead = session?.user?.role === "PPO_HEAD";
 
   const loadTickets = async () => {
     try {
@@ -91,6 +84,17 @@ export default function AppealsPage() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!isPPOHead) {
+      loadTickets();
+    }
+  }, [filter, isPPOHead]);
+  
+  // Если пользователь - Председатель, показываем специальную страницу
+  if (isPPOHead) {
+    return <PPOHeadAppealsPage />;
+  }
 
   const getStatusColor = (status: string) => {
     const statusInfo = TICKET_STATUSES[status as keyof typeof TICKET_STATUSES];
@@ -141,31 +145,33 @@ export default function AppealsPage() {
         </div>
       )}
 
-      {/* Filter buttons */}
-      <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 -mx-2 px-2 sm:mx-0 sm:px-0">
-        <button
-          onClick={() => setFilter("all")}
-          className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
-            filter === "all"
-              ? "bg-blue-600 text-white"
-              : "bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200"
-          }`}
-        >
-          Все
-        </button>
-        {Object.entries(TICKET_STATUSES).map(([key, value]) => (
+      {/* Filter tabs */}
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="-mb-px flex gap-4 sm:gap-6 overflow-x-auto scrollbar-hide">
           <button
-            key={key}
-            onClick={() => setFilter(key as keyof typeof TICKET_STATUSES)}
-            className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
-              filter === key
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200"
+            onClick={() => setFilter("all")}
+            className={`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors ${
+              filter === "all"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
             }`}
           >
-            {value.label}
+            Все
           </button>
-        ))}
+          {Object.entries(TICKET_STATUSES).map(([key, value]) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key as keyof typeof TICKET_STATUSES)}
+              className={`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors ${
+                filter === key
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
+              }`}
+            >
+              {value.label}
+            </button>
+          ))}
+        </nav>
       </div>
 
       {tickets.length === 0 ? (

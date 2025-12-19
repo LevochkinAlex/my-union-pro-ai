@@ -328,33 +328,33 @@ function PPOHeadChatsContent() {
   return (
     <div className="flex flex-col h-[calc(100vh-10rem)]">
       {/* Навигация и кнопка создания группы */}
-      <div className="shrink-0 mb-4 flex items-center justify-between">
-        <div className="border-b border-gray-200 dark:border-gray-700 flex-1">
-          <nav className="-mb-px flex space-x-8">
-            <span className="whitespace-nowrap border-b-2 border-blue-500 py-3 px-1 text-sm font-medium text-blue-600 dark:text-blue-400">
-              Чаты организации
-              {organizationChats.length > 0 && (
-                <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                  {organizationChats.length}
-                </span>
-              )}
-            </span>
-            <button
-              onClick={() => router.push("/dashboard/chat")}
-              className="whitespace-nowrap border-b-2 border-transparent py-3 px-1 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
-            >
-              Личные чаты →
-            </button>
-          </nav>
+      <div className="shrink-0 mb-4 flex items-center justify-between gap-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-1 inline-flex">
+          <button
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white flex items-center gap-2"
+          >
+            Чаты организации
+            {organizationChats.length > 0 && (
+              <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-medium">
+                {organizationChats.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => router.push("/dashboard/chat")}
+            className="px-4 py-2 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            Личные чаты
+          </button>
         </div>
         <button
           onClick={() => setShowCreateGroupModal(true)}
-          className="ml-4 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 flex items-center gap-2"
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 flex items-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Создать группу
+          <span className="hidden sm:inline">Создать группу</span>
         </button>
       </div>
 

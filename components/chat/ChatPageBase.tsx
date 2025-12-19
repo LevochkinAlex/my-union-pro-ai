@@ -292,7 +292,7 @@ export function ChatPageBase({
 
   const handleProfileClick = useCallback((userId: string) => {
     if (enableProfileClick && userId && userId !== currentUserId) {
-      router.push(`/dashboard/social/profile/${userId}`);
+      router.push(`/dashboard/profile/${userId}`);
     }
   }, [router, currentUserId, enableProfileClick]);
 
@@ -316,9 +316,9 @@ export function ChatPageBase({
       )}
 
       {/* Основной контейнер чата */}
-      <div className="flex flex-1 min-h-0 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="flex flex-1 min-h-0 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden w-full max-w-full min-w-0">
         {/* Сайдбар */}
-        <div className={`${showChatView ? "hidden md:flex" : "flex"} w-full md:w-1/3 border-r border-gray-200 dark:border-gray-700 flex-col`}>
+        <div className={`${showChatView ? "hidden md:flex" : "flex"} w-full md:w-1/3 border-r border-gray-200 dark:border-gray-700 flex-col min-w-0`}>
           <Sidebar
             chats={filteredChats}
             selectedChat={selectedChat}
@@ -330,7 +330,7 @@ export function ChatPageBase({
         </div>
 
         {/* Область чата */}
-        <div className={`${showChatView ? "flex" : "hidden md:flex"} flex-1 flex-col`}>
+        <div className={`${showChatView ? "flex" : "hidden md:flex"} flex-1 flex-col w-full h-full min-w-0 max-w-full overflow-hidden`}>
           {selectedChat ? (
             <>
               <Header
@@ -339,7 +339,7 @@ export function ChatPageBase({
                 onProfileClick={enableProfileClick ? handleProfileClick : undefined}
               />
 
-              <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+              <div className="flex-1 flex flex-col overflow-hidden min-h-0 w-full max-w-full">
                 <ChatMessages
                   chat={selectedChat}
                   messages={messages}
@@ -558,6 +558,8 @@ function DefaultChatHeader({
     }
   };
 
+  const isClickable = !!onProfileClick && !!chat.otherUser?.id;
+
   return (
     <div className="flex items-center gap-3 p-3 md:p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
       <button
@@ -569,9 +571,10 @@ function DefaultChatHeader({
         </svg>
       </button>
 
-      <div 
-        className={onProfileClick ? "cursor-pointer" : ""}
+      <button 
+        className={`flex-shrink-0 ${isClickable ? "cursor-pointer hover:opacity-80 transition-opacity" : "cursor-default"}`}
         onClick={handleClick}
+        disabled={!isClickable}
       >
         {chat.otherUser?.avatarUrl ? (
           <img
@@ -584,11 +587,12 @@ function DefaultChatHeader({
             {chat.otherUser?.firstName?.[0] || "?"}{chat.otherUser?.lastName?.[0] || ""}
           </div>
         )}
-      </div>
+      </button>
 
-      <div 
-        className={`flex-1 min-w-0 ${onProfileClick ? "cursor-pointer" : ""}`}
+      <button 
+        className={`flex-1 min-w-0 text-left ${isClickable ? "cursor-pointer hover:opacity-80 transition-opacity" : "cursor-default"}`}
         onClick={handleClick}
+        disabled={!isClickable}
       >
         <h3 className="font-semibold text-gray-900 dark:text-white truncate">
           {getUserName(chat.otherUser)}
@@ -598,7 +602,7 @@ function DefaultChatHeader({
             {chat.otherUser.phone}
           </p>
         )}
-      </div>
+      </button>
     </div>
   );
 }

@@ -133,7 +133,11 @@ function ChatInputComponent({
     if (textarea) {
       textarea.style.height = "auto";
       const scrollHeight = textarea.scrollHeight;
-      textarea.style.height = scrollHeight + "px";
+      const maxHeight = 150; // Максимальная высота в пикселях
+      const newHeight = Math.min(scrollHeight, maxHeight);
+      textarea.style.height = newHeight + "px";
+      textarea.style.maxHeight = maxHeight + "px";
+      textarea.style.overflowY = scrollHeight > maxHeight ? "auto" : "hidden";
     }
   }, [text]);
 
@@ -265,7 +269,7 @@ function ChatInputComponent({
       {/* Поле ввода */}
       <div className="p-3 md:p-4 flex items-end gap-2" style={{ width: "100%", height: "fit-content", justifyContent: "flex-end" }}>
         {/* Кнопка прикрепления файла с выпадающим меню */}
-        <div className="relative" ref={attachMenuRef} style={{ display: "flex", justifyContent: "flex-end", alignItems: "flex-start", boxSizing: "content-box" }}>
+        <div className="relative" ref={attachMenuRef} style={{ display: "flex", justifyContent: "flex-end", alignItems: "flex-start", boxSizing: "border-box" }}>
           <button
             onClick={() => setShowAttachMenu(!showAttachMenu)}
             disabled={disabled}
@@ -333,7 +337,7 @@ function ChatInputComponent({
         />
 
         {/* Текстовое поле */}
-        <div className="flex-1 relative" style={{ height: "fit-content", width: "100%", display: "flex", verticalAlign: "bottom", overflow: "hidden", boxSizing: "content-box" }}>
+        <div className="flex-1 relative" style={{ height: "fit-content", width: "100%", display: "flex", verticalAlign: "bottom", overflow: "hidden", boxSizing: "border-box" }}>
           <textarea
             ref={textareaRef}
             value={text}
@@ -343,7 +347,7 @@ function ChatInputComponent({
             disabled={disabled}
             rows={1}
             className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-2xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm md:text-base disabled:opacity-50"
-            style={{ minHeight: "48px", height: "100%", width: "100%" }}
+            style={{ minHeight: "48px", height: "100%", width: "100%", boxSizing: "border-box" }}
           />
         </div>
 

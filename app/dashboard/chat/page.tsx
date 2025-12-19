@@ -32,12 +32,38 @@ const AlertDialog = dynamic(() => import("@/components/ui/AlertDialog"), {
   ssr: false,
 });
 
+// Компонент табов для переключения между типами чатов
+function ChatTabs({ isPPOHead }: { isPPOHead: boolean }) {
+  const router = useRouter();
+
+  if (!isPPOHead) return null;
+
+  return (
+    <div className="shrink-0 mb-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-1 inline-flex">
+        <button
+          onClick={() => router.push("/dashboard/chats/ppo-head")}
+          className="px-4 py-2 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >
+          Чаты организации
+        </button>
+        <button
+          className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white"
+        >
+          Личные чаты
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ChatPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
   const { showToast } = useToast();
   const currentUserId = session?.user?.id || null;
+  const isPPOHead = session?.user?.role === "PPO_HEAD";
   
   // Мемоизируем функцию onError чтобы избежать бесконечного цикла
   const handleError = useCallback((error: string) => {
@@ -227,13 +253,23 @@ function ChatPageContent() {
     setShowChatView(false);
   }, []);
 
+  const handleProfileClick = useCallback((userId: string) => {
+    if (userId && userId !== currentUserId) {
+      router.push(`/dashboard/profile/${userId}`);
+    }
+  }, [router, currentUserId]);
+
   // Защита от hydration mismatch
   if (!mounted) {
     return <PageSkeleton />;
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-8rem)]">
+      {/* Табы для председателей ППО */}
+      <ChatTabs isPPOHead={isPPOHead} />
+
+      <div className={`flex flex-1 min-h-0 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden`}>
       {/* Сайдбар со списком чатов */}
       <div className={`${showChatView ? "hidden md:flex" : "flex"} w-full md:w-1/3 border-r border-gray-200 dark:border-gray-700 flex-col`}>
         <ChatSidebar
@@ -247,17 +283,18 @@ function ChatPageContent() {
       </div>
 
       {/* Область чата */}
-      <div className={`${showChatView ? "flex" : "hidden md:flex"} flex-1 flex-col`}>
+      <div className={`${showChatView ? "flex" : "hidden md:flex"} flex-1 flex-col w-full h-full`}>
         {selectedChat ? (
           <>
             {/* Заголовок чата */}
             <ChatHeader
               chat={selectedChat}
               onBack={handleBackToList}
+              onProfileClick={handleProfileClick}
             />
 
             {/* Сообщения */}
-            <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0 w-full h-fit">
               <ChatMessages
                 chat={selectedChat}
                 messages={messages}
@@ -273,6 +310,7 @@ function ChatPageContent() {
                 onForward={handleForward}
                 onReaction={toggleReaction}
                 onImageClick={(url, name) => setSelectedImage({ url, name })}
+                onProfileClick={handleProfileClick}
                 onSaveScrollPosition={saveScrollPosition}
                 getSavedScrollPosition={getScrollPosition}
               />
@@ -291,6 +329,7 @@ function ChatPageContent() {
         ) : (
           <EmptyChatState />
         )}
+      </div>
       </div>
 
       {/* Модалы */}
@@ -314,7 +353,15 @@ function ChatPageContent() {
 }
 
 // Заголовок чата
-function ChatHeader({ chat, onBack }: { chat: Chat; onBack: () => void }) {
+function ChatHeader({ chat, onBack, onProfileClick }: { chat: Chat; onBack: () => void; onProfileClick?: (userId: string) => void }) {
+  const handleAvatarClick = () => {
+    if (onProfileClick && chat.otherUser?.id) {
+      onProfileClick(chat.otherUser.id);
+    }
+  };
+
+  const isClickable = !!onProfileClick && !!chat.otherUser?.id;
+
   return (
     <div className="flex items-center gap-3 p-3 md:p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
       {/* Кнопка назад (мобильная) */}
@@ -328,20 +375,30 @@ function ChatHeader({ chat, onBack }: { chat: Chat; onBack: () => void }) {
       </button>
 
       {/* Аватар */}
-      {chat.otherUser.avatarUrl ? (
-        <img
-          src={getFileUrl(chat.otherUser.avatarUrl)}
-          alt={getUserName(chat.otherUser)}
-          className="w-10 h-10 rounded-full object-cover"
-        />
-      ) : (
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-          {chat.otherUser.firstName?.[0] || "?"}{chat.otherUser.lastName?.[0] || ""}
-        </div>
-      )}
+      <button
+        onClick={handleAvatarClick}
+        className={`flex-shrink-0 ${isClickable ? "cursor-pointer hover:opacity-80 transition-opacity" : "cursor-default"}`}
+        disabled={!isClickable}
+      >
+        {chat.otherUser.avatarUrl ? (
+          <img
+            src={getFileUrl(chat.otherUser.avatarUrl)}
+            alt={getUserName(chat.otherUser)}
+            className="w-10 h-10 rounded-full object-cover"
+          />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
+            {chat.otherUser.firstName?.[0] || "?"}{chat.otherUser.lastName?.[0] || ""}
+          </div>
+        )}
+      </button>
 
       {/* Имя */}
-      <div className="flex-1 min-w-0">
+      <button
+        onClick={handleAvatarClick}
+        className={`flex-1 min-w-0 text-left ${isClickable ? "cursor-pointer hover:opacity-80 transition-opacity" : "cursor-default"}`}
+        disabled={!isClickable}
+      >
         <h3 className="font-semibold text-gray-900 dark:text-white truncate">
           {getUserName(chat.otherUser)}
         </h3>
@@ -350,7 +407,7 @@ function ChatHeader({ chat, onBack }: { chat: Chat; onBack: () => void }) {
             {chat.otherUser.phone}
           </p>
         )}
-      </div>
+      </button>
     </div>
   );
 }

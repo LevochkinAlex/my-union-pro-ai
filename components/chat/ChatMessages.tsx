@@ -325,7 +325,7 @@ function ChatMessagesComponent({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+    <div className="flex-1 flex flex-col overflow-hidden min-h-0 w-full max-w-full min-w-0">
       <Virtuoso
         key={chat.id}
         ref={virtuosoRef}
@@ -344,8 +344,8 @@ function ChatMessagesComponent({
         startReached={handleStartReached}
         rangeChanged={handleRangeChanged}
         increaseViewportBy={{ top: 200, bottom: 400 }}
-        className="flex-1"
-        style={{ height: "100%" }}
+        className="flex-1 w-full max-w-full min-w-0"
+        style={{ height: "100%", width: "100%", maxWidth: "100%", overflowX: "hidden" }}
         components={{
           Header: () => (
             <>
