@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { LogoIcon } from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
+import ViewModeSwitch from "./ViewModeSwitch";
 
 interface NavItem {
   href: string;
@@ -248,6 +249,13 @@ export default function MobileMenu({
 
           {/* User section */}
           <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+            {/* View Mode Switch - для председателей */}
+            {!isAdmin && (
+              <div className="mb-4">
+                <ViewModeSwitch />
+              </div>
+            )}
+            
             <div className="flex items-center gap-3 mb-4">
               {/* Avatar with link */}
               <Link
