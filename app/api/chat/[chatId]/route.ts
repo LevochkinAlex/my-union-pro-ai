@@ -40,6 +40,7 @@ export async function GET(
     const chat = await prisma.chat.findUnique({
       where: { id: chatId },
       select: {
+        type: true,
         participant1Id: true,
         participant2Id: true,
       },
@@ -49,8 +50,24 @@ export async function GET(
       return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
     }
 
-    if (chat.participant1Id !== userId && chat.participant2Id !== userId) {
-      return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
+    // Проверяем доступ к чату в зависимости от типа
+    if (chat.type === "GROUP") {
+      // Для GROUP чатов проверяем через ChatParticipant
+      const isParticipant = await prisma.chatParticipant.findFirst({
+        where: {
+          chatId: chatId,
+          userId: userId,
+          leftAt: null,
+        },
+      });
+      if (!isParticipant) {
+        return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
+      }
+    } else {
+      // Для PRIVATE чатов проверяем participant1Id/participant2Id
+      if (chat.participant1Id !== userId && chat.participant2Id !== userId) {
+        return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
+      }
     }
 
     // Получаем параметры пагинации из query string
@@ -418,6 +435,8 @@ export async function POST(
       where: { id: chatId },
       select: {
         id: true,
+        type: true,
+        name: true,
         participant1Id: true,
         participant2Id: true,
       },
@@ -427,8 +446,24 @@ export async function POST(
       return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
     }
 
-    if (chat.participant1Id !== userId && chat.participant2Id !== userId) {
-      return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
+    // Проверяем доступ к чату в зависимости от типа
+    if (chat.type === "GROUP") {
+      // Для GROUP чатов проверяем через ChatParticipant
+      const isParticipant = await prisma.chatParticipant.findFirst({
+        where: {
+          chatId: chatId,
+          userId: userId,
+          leftAt: null,
+        },
+      });
+      if (!isParticipant) {
+        return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
+      }
+    } else {
+      // Для PRIVATE чатов проверяем participant1Id/participant2Id
+      if (chat.participant1Id !== userId && chat.participant2Id !== userId) {
+        return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
+      }
     }
 
     // Создаем сообщение
@@ -458,14 +493,34 @@ export async function POST(
       sender: normalizeUserAvatar(message.sender),
     };
 
-    // Определяем получателя сообщения
-    const recipientId = chat.participant1Id === userId 
-      ? chat.participant2Id 
-      : chat.participant1Id;
+    // Определяем получателей сообщения в зависимости от типа чата
+    let recipientIds: string[] = [];
+    const isGroupChat = chat.type === "GROUP";
+    
+    if (isGroupChat) {
+      // Для GROUP чатов - получаем всех участников кроме отправителя
+      const participants = await prisma.chatParticipant.findMany({
+        where: {
+          chatId: chatId,
+          leftAt: null,
+          userId: { not: userId },
+        },
+        select: { userId: true },
+      });
+      recipientIds = participants.map(p => p.userId);
+    } else {
+      // Для PRIVATE чатов - один получатель
+      const recipientId = chat.participant1Id === userId 
+        ? chat.participant2Id 
+        : chat.participant1Id;
+      if (recipientId) {
+        recipientIds = [recipientId];
+      }
+    }
 
     // Проверяем, является ли получатель ботом (определяем до использования в условиях)
     const botUser = await getOrCreateAIBotUser();
-    const isBotChat = recipientId ? recipientId === botUser.id : false;
+    const isBotChat = !isGroupChat && recipientIds.length === 1 && recipientIds[0] === botUser.id;
 
     // Получаем информацию о чате с временем последнего чтения
     const chatWithReadTime = await prisma.chat.findUnique({
@@ -476,15 +531,18 @@ export async function POST(
       },
     });
 
-    // Проверяем, открыт ли чат у получателя
+    // Проверяем, открыт ли чат у получателя (только для PRIVATE чатов)
     // Чат считается открытым, если получатель запрашивал сообщения в последние 30 секунд
-    const recipientReadAt = chat.participant1Id === userId
-      ? chatWithReadTime?.participant2ReadAt
-      : chatWithReadTime?.participant1ReadAt;
+    let isChatOpen = false;
+    if (!isGroupChat) {
+      const recipientReadAt = chat.participant1Id === userId
+        ? chatWithReadTime?.participant2ReadAt
+        : chatWithReadTime?.participant1ReadAt;
 
-    const isChatOpen = recipientReadAt 
-      ? (Date.now() - new Date(recipientReadAt).getTime()) < 30000 // 30 секунд
-      : false;
+      isChatOpen = recipientReadAt 
+        ? (Date.now() - new Date(recipientReadAt).getTime()) < 30000 // 30 секунд
+        : false;
+    }
 
     // Если это чат с ботом, получаем ответ от бота
     if (isBotChat) {
@@ -637,24 +695,35 @@ ${formattedSearchInfo ? `### ⚠️ КРИТИЧЕСКИ ВАЖНО - ИСПОЛ
     }
 
     // Обновляем последнее сообщение в чате
-    await prisma.chat.update({
-      where: { id: chatId },
-      data: {
-        lastMessage: content.trim().substring(0, 100), // Первые 100 символов
-        lastMessageAt: new Date(),
-        // Сбрасываем прочитанность для получателя
-        ...(chat.participant1Id === userId
-          ? { participant2ReadAt: null }
-          : { participant1ReadAt: null }),
-      },
-    });
+    // Обновляем lastMessage в чате
+    if (isGroupChat) {
+      // Для GROUP чатов просто обновляем lastMessage
+      await prisma.chat.update({
+        where: { id: chatId },
+        data: {
+          lastMessage: content.trim().substring(0, 100),
+          lastMessageAt: new Date(),
+        },
+      });
+    } else {
+      // Для PRIVATE чатов также сбрасываем readAt для получателя
+      await prisma.chat.update({
+        where: { id: chatId },
+        data: {
+          lastMessage: content.trim().substring(0, 100),
+          lastMessageAt: new Date(),
+          ...(chat.participant1Id === userId
+            ? { participant2ReadAt: null }
+            : { participant1ReadAt: null }),
+        },
+      });
+    }
 
     // Инвалидируем кеш сообщений чата
     await invalidateChatCache(chatId);
 
-    // Отправляем пуш-уведомление получателю (только если это не бот и recipientId не null)
-    // Отправляем всегда, но логируем статус открытости чата
-    if (recipientId && !isBotChat) {
+    // Отправляем пуш-уведомления получателям (только если это не бот и есть получатели)
+    if (recipientIds.length > 0 && !isBotChat) {
       try {
         // Получаем информацию об отправителе для уведомления
         const sender = await prisma.user.findUnique({
@@ -673,33 +742,47 @@ ${formattedSearchInfo ? `### ⚠️ КРИТИЧЕСКИ ВАЖНО - ИСПОЛ
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://myunion.pro";
         const messagePreview = content.trim().substring(0, 100);
 
-        console.log("[chat] 📤 Отправка пуш-уведомления получателю:", {
-          recipientId,
+        console.log("[chat] 📤 Отправка пуш-уведомлений получателям:", {
+          recipientCount: recipientIds.length,
+          isGroupChat,
           senderName,
           chatId,
           isChatOpen,
           messagePreview: messagePreview.substring(0, 50),
         });
 
-        const notificationResult = await sendUserNotification({
-          userId: recipientId,
-          type: "chat_message",
-          title: `💬 Новое сообщение от ${senderName}`,
-          body: messagePreview,
-          url: `${baseUrl}/dashboard/chat?userId=${userId}`,
-          senderName,
-        });
+        // Отправляем уведомления всем получателям
+        const notificationPromises = recipientIds.map(recipientId => 
+          sendUserNotification({
+            userId: recipientId,
+            type: "chat_message",
+            title: isGroupChat 
+              ? `💬 ${chat.name || "Групповой чат"}: ${senderName}`
+              : `💬 Новое сообщение от ${senderName}`,
+            body: messagePreview,
+            url: isGroupChat
+              ? `${baseUrl}/dashboard/chats/ppo-head?chatId=${chatId}`
+              : `${baseUrl}/dashboard/chat?chatId=${chatId}`,
+            senderName,
+          }).catch(err => {
+            console.error(`[chat] ⚠️ Ошибка отправки уведомления пользователю ${recipientId}:`, err?.message);
+            return { push: false, email: false };
+          })
+        );
 
-        console.log("[chat] ✅ Уведомление отправлено получателю:", {
-          pushSent: notificationResult?.push || false,
-          emailSent: notificationResult?.email || false,
+        const notificationResults = await Promise.all(notificationPromises);
+
+        console.log("[chat] ✅ Уведомления отправлены:", {
+          total: notificationResults.length,
+          pushSent: notificationResults.filter(r => r?.push).length,
+          emailSent: notificationResults.filter(r => r?.email).length,
           isChatOpen,
         });
       } catch (notificationError: any) {
-        console.error("[chat] ⚠️ Ошибка отправки пуш-уведомления:", {
+        console.error("[chat] ⚠️ Ошибка отправки пуш-уведомлений:", {
           error: notificationError?.message,
           stack: notificationError?.stack,
-          recipientId,
+          recipientCount: recipientIds.length,
           chatId,
         });
         // Не прерываем отправку сообщения из-за ошибки уведомления
