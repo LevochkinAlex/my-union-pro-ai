@@ -184,7 +184,16 @@ export async function PUT(request: NextRequest) {
     const directorPosition = normalizeString(body.directorPosition);
     const profession = normalizeString(body.profession);
     const education = normalizeEducation(body.education);
-    const organizationId = normalizeString(body.organizationId);
+    
+    // ВАЖНО: organizationId обрабатываем отдельно, чтобы различать:
+    // - undefined: поле не передано (не трогаем текущее значение)
+    // - "" (пустая строка): явно очистили организацию (устанавливаем null)
+    // - непустая строка: установили новую организацию
+    const organizationId = body.organizationId === undefined 
+      ? undefined  // Не трогаем
+      : (typeof body.organizationId === "string" && body.organizationId.trim() !== "" 
+          ? body.organizationId.trim() 
+          : null);  // Пустая строка -> null (явная очистка)
 
     // Валидация организации, если указана
     if (organizationId) {
@@ -342,8 +351,8 @@ export async function PUT(request: NextRequest) {
     // Используем фактические значения, которые будут сохранены
     // ВАЖНО: organizationId сравниваем только если он явно передан в body
     // Это предотвращает ложное определение изменений при автосохранении других полей
-    const actualOrganizationId = body.organizationId !== undefined 
-      ? (organizationId || null)
+    const actualOrganizationId = organizationId !== undefined 
+      ? organizationId  // null или непустая строка
       : (userBeforeUpdate?.organizationId || null);
     
     const documentsAffectingFields = [
@@ -441,8 +450,9 @@ export async function PUT(request: NextRequest) {
     
     // ВАЖНО: organizationId обновляем только если он явно передан в body
     // Это предотвращает случайное стирание организации при автосохранении других полей
-    if (body.organizationId !== undefined) {
-      updateData.organizationId = organizationId || null;
+    // organizationId может быть: undefined (не трогаем), null (явная очистка), или строка (новое значение)
+    if (organizationId !== undefined) {
+      updateData.organizationId = organizationId; // null или непустая строка
       updateData.organizationName = null; // Очищаем старое текстовое поле (теперь используем только ID)
     }
     

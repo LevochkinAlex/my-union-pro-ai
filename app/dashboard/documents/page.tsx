@@ -27,11 +27,7 @@ export default function DocumentsPage() {
   const { data: session } = useSession();
   const router = useRouter();
   
-  // Если пользователь - Председатель, показываем специальную страницу
-  if (session?.user?.role === "PPO_HEAD") {
-    return <PPOHeadDocumentsPage />;
-  }
-
+  // Все hooks должны быть объявлены ДО любых условных return
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +35,11 @@ export default function DocumentsPage() {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regeneratingDocId, setRegeneratingDocId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+  
+  // Если пользователь - Председатель, показываем специальную страницу
+  if (session?.user?.role === "PPO_HEAD") {
+    return <PPOHeadDocumentsPage />;
+  }
 
   useEffect(() => {
     loadDocuments();

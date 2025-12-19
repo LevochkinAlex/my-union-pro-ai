@@ -56,15 +56,16 @@ export default function AppealsPage() {
   const { data: session } = useSession();
   const router = useRouter();
   
-  // Если пользователь - Председатель, показываем специальную страницу
-  if (session?.user?.role === "PPO_HEAD") {
-    return <PPOHeadAppealsPage />;
-  }
-
+  // Все hooks должны быть объявлены ДО любых условных return
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | keyof typeof TICKET_STATUSES>("all");
+  
+  // Если пользователь - Председатель, показываем специальную страницу
+  if (session?.user?.role === "PPO_HEAD") {
+    return <PPOHeadAppealsPage />;
+  }
 
   useEffect(() => {
     loadTickets();
