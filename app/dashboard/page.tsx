@@ -476,50 +476,74 @@ export default async function DashboardPage() {
           )}
 
           {/* Свежие новости */}
-          {recentNews.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
-              <div className="flex items-center justify-between mb-4 md:justify-start gap-4 w-full md:w-auto">
-                <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">
-                  Свежие новости
-                </h2>
-                <Link
-                  href="/dashboard/news"
-                  className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
-                >
-                  Все новости
-                </Link>
-              </div>
-              <NewsList news={recentNews} />
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
+            <div className="flex items-center justify-between mb-4 md:justify-start gap-4 w-full md:w-auto">
+              <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">
+                Свежие новости
+              </h2>
+              <Link
+                href="/dashboard/news"
+                className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
+              >
+                Все новости
+              </Link>
             </div>
-          )}
+            {recentNews.length > 0 ? (
+              <NewsList news={recentNews} />
+            ) : (
+              <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4">
+                Пока нет новостей в вашей организации
+              </p>
+            )}
+          </div>
 
-          {/* Скидки убраны для оптимизации производительности - доступны в разделе /dashboard/discounts */}
+          {/* Скидки */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
+            <div className="flex items-center justify-between mb-4 md:justify-start gap-4 w-full md:w-auto">
+              <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">
+                Скидки и привилегии
+              </h2>
+              <Link
+                href="/dashboard/discounts"
+                className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
+              >
+                Все скидки
+              </Link>
+            </div>
+            <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4">
+              Перейдите в раздел скидок, чтобы увидеть доступные предложения
+            </p>
+          </div>
         </div>
 
         {/* Правая колонка: Сайдбар (1/3 ширины на lg+) */}
         <div className="space-y-6 min-w-0">
 
           {/* Новые участники */}
-          {newUsers.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
-              <div className="flex items-center justify-between gap-4 w-full">
-                <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">
-                  Новые участники
-                </h2>
-                <Link
-                  href="/dashboard/users"
-                  className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
-                >
-                  Все участники
-                </Link>
-              </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
+            <div className="flex items-center justify-between gap-4 w-full">
+              <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">
+                Новые коллеги
+              </h2>
+              <Link
+                href="/dashboard/users"
+                className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
+              >
+                Все коллеги
+              </Link>
+            </div>
+            {newUsers.length > 0 ? (
               <div className="mt-4 space-y-3">
                 {newUsers.map((user) => (
                   <UserCard key={user.id} user={user} />
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4 mt-4">
+                Пока нет новых коллег в вашей организации
+              </p>
+            )}
+          </div>
 
           {/* Быстрые действия */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
