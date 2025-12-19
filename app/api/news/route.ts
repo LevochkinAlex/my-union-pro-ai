@@ -129,24 +129,49 @@ export async function GET(request: NextRequest) {
       userLikes = likes.map((l) => l.newsPostId);
     }
 
-    // Если пользователь авторизован, получаем его голоса в опросах
+    // Получаем статистику по всем опросам и голоса пользователя
+    const pollIds = news.flatMap((n) => n.polls.map((p) => p.id));
+    
     let userPollVotes: Record<string, string> = {};
-    if (session?.user?.id) {
-      const pollIds = news.flatMap((n) => n.polls.map((p) => p.id));
-      if (pollIds.length > 0) {
-        const votes = await prisma.newsPollVote.findMany({
+    let pollStats: Record<string, { optionId: string; count: number }[]> = {};
+    
+    if (pollIds.length > 0) {
+      // Получаем статистику голосов по всем опросам
+      const allVotes = await prisma.newsPollVote.groupBy({
+        by: ["pollId", "optionId"],
+        where: {
+          pollId: { in: pollIds },
+        },
+        _count: {
+          optionId: true,
+        },
+      });
+      
+      // Группируем статистику по pollId
+      pollStats = allVotes.reduce((acc, vote) => {
+        if (!acc[vote.pollId]) {
+          acc[vote.pollId] = [];
+        }
+        acc[vote.pollId].push({
+          optionId: vote.optionId,
+          count: vote._count.optionId,
+        });
+        return acc;
+      }, {} as Record<string, { optionId: string; count: number }[]>);
+      
+      // Получаем голоса текущего пользователя
+      if (session?.user?.id) {
+        const userVotes = await prisma.newsPollVote.findMany({
           where: {
             userId: session.user.id,
-            pollId: {
-              in: pollIds,
-            },
+            pollId: { in: pollIds },
           },
           select: {
             pollId: true,
             optionId: true,
           },
         });
-        userPollVotes = votes.reduce(
+        userPollVotes = userVotes.reduce(
           (acc, vote) => {
             acc[vote.pollId] = vote.optionId;
             return acc;
@@ -160,10 +185,27 @@ export async function GET(request: NextRequest) {
       news: news.map((post) => ({
         ...post,
         isLiked: userLikes.includes(post.id),
-        polls: post.polls.map((poll) => ({
-          ...poll,
-          userVote: userPollVotes[poll.id] || null,
-        })),
+        polls: post.polls.map((poll) => {
+          const options = poll.options as Array<{ id: string; text: string }>;
+          const stats = pollStats[poll.id] || [];
+          const totalVotes = stats.reduce((sum, s) => sum + s.count, 0);
+          
+          return {
+            ...poll,
+            options: options.map((option) => {
+              const voteCount = stats.find((s) => s.optionId === option.id)?.count || 0;
+              const percentage = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 1000) / 10 : 0;
+              
+              return {
+                ...option,
+                voteCount,
+                percentage,
+              };
+            }),
+            totalVotes,
+            userVote: userPollVotes[poll.id] || null,
+          };
+        }),
       })),
       pagination: {
         page,

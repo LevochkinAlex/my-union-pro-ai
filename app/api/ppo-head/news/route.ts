@@ -99,6 +99,33 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // Получаем статистику по всем опросам
+    const pollIds = news.flatMap((n) => n.polls.map((p) => p.id));
+    let pollStats: Record<string, { optionId: string; count: number }[]> = {};
+    
+    if (pollIds.length > 0) {
+      const allVotes = await prisma.newsPollVote.groupBy({
+        by: ["pollId", "optionId"],
+        where: {
+          pollId: { in: pollIds },
+        },
+        _count: {
+          optionId: true,
+        },
+      });
+      
+      pollStats = allVotes.reduce((acc, vote) => {
+        if (!acc[vote.pollId]) {
+          acc[vote.pollId] = [];
+        }
+        acc[vote.pollId].push({
+          optionId: vote.optionId,
+          count: vote._count.optionId,
+        });
+        return acc;
+      }, {} as Record<string, { optionId: string; count: number }[]>);
+    }
+
     return NextResponse.json({
       news: news.map((post) => ({
         id: post.id,
@@ -111,14 +138,29 @@ export async function GET(request: NextRequest) {
         channel: post.channel,
         _count: post._count,
         isLiked: post.likes.length > 0,
-        polls: post.polls.map((poll) => ({
-          id: poll.id,
-          question: poll.question,
-          options: poll.options as any[],
-          totalVotes: poll._count.votes,
-          userVote: poll.votes[0]?.optionId || null,
-          isClosed: poll.isClosed,
-        })),
+        polls: post.polls.map((poll) => {
+          const options = poll.options as Array<{ id: string; text: string }>;
+          const stats = pollStats[poll.id] || [];
+          const totalVotes = stats.reduce((sum, s) => sum + s.count, 0);
+          
+          return {
+            id: poll.id,
+            question: poll.question,
+            options: options.map((option) => {
+              const voteCount = stats.find((s) => s.optionId === option.id)?.count || 0;
+              const percentage = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 1000) / 10 : 0;
+              
+              return {
+                ...option,
+                voteCount,
+                percentage,
+              };
+            }),
+            totalVotes,
+            userVote: poll.votes[0]?.optionId || null,
+            isClosed: poll.isClosed,
+          };
+        }),
       })),
     });
   } catch (error: any) {
