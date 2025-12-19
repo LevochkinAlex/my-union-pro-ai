@@ -17,16 +17,23 @@ function generatePassword(length = 12) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Разрешаем внутренние запросы с секретным ключом или проверкой сессии
+    // Разрешаем внутренние запросы с секретным ключом
+    // Проверяем секрет ПЕРЕД вызовом getServerSession, чтобы избежать авторизации
     const internalSecret = request.headers.get("X-Internal-Secret");
     const expectedSecret = process.env.INTERNAL_API_SECRET || "internal-secret-key-change-in-production";
     const isInternalRequest = internalSecret === expectedSecret;
     
+    // Если это не внутренний запрос, проверяем сессию
     if (!isInternalRequest) {
-      const session = await getServerSession(authOptions);
-      
-      // Проверяем, что это админ
-      if (!session?.user || session.user.role !== "SUPER_ADMIN") {
+      try {
+        const session = await getServerSession(authOptions);
+        
+        // Проверяем, что это админ
+        if (!session?.user || session.user.role !== "SUPER_ADMIN") {
+          return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
+        }
+      } catch (authError) {
+        // Игнорируем ошибки авторизации для внутренних запросов
         return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
       }
     }
