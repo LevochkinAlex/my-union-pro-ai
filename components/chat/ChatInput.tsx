@@ -13,6 +13,72 @@ interface ChatInputProps {
   onCancelEdit: () => void;
 }
 
+// Иконки для типов файлов
+const FileTypeIcon = memo(function FileTypeIcon({ 
+  mimeType, 
+  fileName,
+  className = "w-6 h-6"
+}: { 
+  mimeType?: string;
+  fileName: string;
+  className?: string;
+}) {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  
+  // PDF
+  if (mimeType === 'application/pdf' || ext === 'pdf') {
+    return (
+      <svg className={`${className} text-red-500`} viewBox="0 0 24 24" fill="currentColor">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 2l5 5h-5V4zm-2 9.5c0 .28-.22.5-.5.5s-.5-.22-.5-.5v-3c0-.28.22-.5.5-.5s.5.22.5.5v3zm-1.5-2c0 .83.67 1.5 1.5 1.5h.5v1.5c0 .28-.22.5-.5.5h-1c-.28 0-.5-.22-.5-.5v-3c0-.28.22-.5.5-.5h1c.28 0 .5.22.5.5v.5h-.5c-.28 0-.5.22-.5.5zm4.5 2c0 .28-.22.5-.5.5h-.5c-.83 0-1.5-.67-1.5-1.5v-2c0-.83.67-1.5 1.5-1.5h.5c.28 0 .5.22.5.5s-.22.5-.5.5h-.5c-.28 0-.5.22-.5.5v2c0 .28.22.5.5.5h.5c.28 0 .5.22.5.5z"/>
+      </svg>
+    );
+  }
+  
+  // Word documents
+  if (mimeType?.includes('word') || ext === 'doc' || ext === 'docx') {
+    return (
+      <svg className={`${className} text-blue-600`} viewBox="0 0 24 24" fill="currentColor">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 2l5 5h-5V4zM9.5 13l1.5 5 1.5-5h1l1.5 5 1.5-5h1l-2 7h-1l-1.5-5-1.5 5h-1l-2-7h1z"/>
+      </svg>
+    );
+  }
+  
+  // Excel
+  if (mimeType?.includes('spreadsheet') || mimeType?.includes('excel') || ext === 'xls' || ext === 'xlsx') {
+    return (
+      <svg className={`${className} text-green-600`} viewBox="0 0 24 24" fill="currentColor">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 2l5 5h-5V4zM9 13l2 3-2 3h1.5l1.25-2 1.25 2H14.5l-2-3 2-3H13l-1.25 2L10.5 13H9z"/>
+      </svg>
+    );
+  }
+  
+  // Archive
+  if (mimeType?.includes('zip') || mimeType?.includes('rar') || mimeType?.includes('archive') || 
+      ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext || '')) {
+    return (
+      <svg className={`${className} text-yellow-600`} viewBox="0 0 24 24" fill="currentColor">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 2l5 5h-5V4zm-3 5h2v2h-2v2h2v2h-2v2h2v2h-2v2h2v-2h-2v-2h2v-2h-2v-2h2V9h-2z"/>
+      </svg>
+    );
+  }
+  
+  // Text files
+  if (mimeType?.includes('text') || ext === 'txt') {
+    return (
+      <svg className={`${className} text-gray-600`} viewBox="0 0 24 24" fill="currentColor">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 2l5 5h-5V4zM8 12h8v2H8v-2zm0 4h6v2H8v-2z"/>
+      </svg>
+    );
+  }
+  
+  // Default file icon
+  return (
+    <svg className={`${className} text-gray-500`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+    </svg>
+  );
+});
+
 function ChatInputComponent({
   replyingTo,
   editingMessage,
@@ -24,8 +90,11 @@ function ChatInputComponent({
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
 
   // Инициализация текста при редактировании
   useEffect(() => {
@@ -43,6 +112,20 @@ function ChatInputComponent({
       }
     };
   }, []);
+
+  // Закрытие меню вложений при клике вне
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) {
+        setShowAttachMenu(false);
+      }
+    };
+    
+    if (showAttachMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showAttachMenu]);
 
   // Автовысота textarea
   useEffect(() => {
@@ -63,6 +146,7 @@ function ChatInputComponent({
     }
 
     setFile(selectedFile);
+    setShowAttachMenu(false);
 
     // Создаём превью для изображений
     if (selectedFile.type.startsWith("image/")) {
@@ -71,6 +155,16 @@ function ChatInputComponent({
       setFilePreview(null);
     }
   }, [filePreview]);
+
+  const handlePhotoClick = useCallback(() => {
+    fileInputRef.current?.click();
+    setShowAttachMenu(false);
+  }, []);
+
+  const handleDocumentClick = useCallback(() => {
+    docInputRef.current?.click();
+    setShowAttachMenu(false);
+  }, []);
 
   const clearFile = useCallback(() => {
     if (filePreview) {
@@ -139,25 +233,25 @@ function ChatInputComponent({
       {/* Превью файла */}
       {file && (
         <div className="px-4 pt-3 pb-2">
-          <div className="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+          <div className="flex items-center gap-3 p-3 bg-gray-100 dark:bg-gray-700 rounded-xl">
             {filePreview ? (
-              <img src={filePreview} alt="Preview" className="w-12 h-12 rounded object-cover" />
+              <img src={filePreview} alt="Preview" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
             ) : (
-              <div className="w-12 h-12 bg-gray-200 dark:bg-gray-600 rounded flex items-center justify-center">
-                <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
+              <div className="w-14 h-14 bg-white dark:bg-gray-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+                <FileTypeIcon mimeType={file.type} fileName={file.name} className="w-8 h-8" />
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-900 dark:text-white truncate">{file.name}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {(file.size / 1024).toFixed(1)} КБ
+              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{file.name}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {file.size < 1024 * 1024 
+                  ? `${(file.size / 1024).toFixed(1)} КБ` 
+                  : `${(file.size / (1024 * 1024)).toFixed(1)} МБ`}
               </p>
             </div>
             <button
               onClick={clearFile}
-              className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              className="p-2 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -169,23 +263,83 @@ function ChatInputComponent({
 
       {/* Поле ввода */}
       <div className="p-3 md:p-4 flex items-end gap-2">
-        {/* Кнопка прикрепления файла */}
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={disabled}
-          className="p-2.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors disabled:opacity-50"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-          </svg>
-        </button>
+        {/* Кнопка прикрепления файла с выпадающим меню */}
+        <div className="relative" ref={attachMenuRef}>
+          <button
+            onClick={() => setShowAttachMenu(!showAttachMenu)}
+            disabled={disabled}
+            className={`p-2.5 rounded-full transition-colors disabled:opacity-50 ${
+              showAttachMenu 
+                ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" 
+                : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+            }`}
+          >
+            <svg className={`w-5 h-5 transition-transform ${showAttachMenu ? "rotate-45" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            </svg>
+          </button>
 
+          {/* Выпадающее меню вложений */}
+          {showAttachMenu && (
+            <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden min-w-[180px] animate-in slide-in-from-bottom-2 duration-150">
+              <div className="py-1">
+                <button
+                  onClick={handlePhotoClick}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-medium">Фото</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Изображение или GIF</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={handleDocumentClick}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-medium">Документ</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">PDF, Word, Excel и др.</p>
+                  </div>
+                </button>
+
+                {/* Будущие опции */}
+                <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
+                
+                <div className="px-4 py-2 text-xs text-gray-400 dark:text-gray-500 text-center">
+                  Скоро: контакт, геолокация
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Input для фото */}
         <input
           ref={fileInputRef}
           type="file"
           onChange={handleFileChange}
           className="hidden"
-          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+          accept="image/*,.heic,.heif"
+        />
+
+        {/* Input для документов */}
+        <input
+          ref={docInputRef}
+          type="file"
+          onChange={handleFileChange}
+          className="hidden"
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.rtf,.csv,.zip,.rar,.7z"
         />
 
         {/* Текстовое поле */}
@@ -219,5 +373,6 @@ function ChatInputComponent({
 }
 
 export const ChatInput = memo(ChatInputComponent);
+export { FileTypeIcon };
 export default ChatInput;
 

@@ -1,8 +1,98 @@
 "use client";
 
-import { memo, useState, useCallback, useRef, useEffect } from "react";
+import { memo, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Message, ChatUser } from "@/types/chat";
 import { getUserName, getInitials, formatTime, getFileUrl, formatFileSize } from "@/lib/chat-utils";
+
+// URL регулярное выражение для детекции ссылок
+const URL_REGEX = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/gi;
+
+// Типизированный интерфейс для link preview
+interface LinkPreview {
+  url: string;
+  title: string | null;
+  description: string | null;
+  image: string | null;
+  siteName: string | null;
+  favicon: string | null;
+}
+
+// Иконки для типов файлов
+const FileTypeIcon = memo(function FileTypeIcon({ 
+  mimeType, 
+  fileName,
+  className = "w-6 h-6"
+}: { 
+  mimeType?: string;
+  fileName: string;
+  className?: string;
+}) {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  
+  // PDF
+  if (mimeType === 'application/pdf' || ext === 'pdf') {
+    return (
+      <div className={`${className} rounded-lg bg-red-500 flex items-center justify-center`}>
+        <span className="text-white text-xs font-bold">PDF</span>
+      </div>
+    );
+  }
+  
+  // Word documents
+  if (mimeType?.includes('word') || ext === 'doc' || ext === 'docx') {
+    return (
+      <div className={`${className} rounded-lg bg-blue-600 flex items-center justify-center`}>
+        <span className="text-white text-xs font-bold">DOC</span>
+      </div>
+    );
+  }
+  
+  // Excel
+  if (mimeType?.includes('spreadsheet') || mimeType?.includes('excel') || ext === 'xls' || ext === 'xlsx') {
+    return (
+      <div className={`${className} rounded-lg bg-green-600 flex items-center justify-center`}>
+        <span className="text-white text-xs font-bold">XLS</span>
+      </div>
+    );
+  }
+  
+  // Archive
+  if (mimeType?.includes('zip') || mimeType?.includes('rar') || mimeType?.includes('archive') || 
+      ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext || '')) {
+    return (
+      <div className={`${className} rounded-lg bg-yellow-500 flex items-center justify-center`}>
+        <span className="text-white text-xs font-bold">ZIP</span>
+      </div>
+    );
+  }
+  
+  // Text files
+  if (mimeType?.includes('text') || ext === 'txt') {
+    return (
+      <div className={`${className} rounded-lg bg-gray-500 flex items-center justify-center`}>
+        <span className="text-white text-xs font-bold">TXT</span>
+      </div>
+    );
+  }
+  
+  // CSV
+  if (ext === 'csv') {
+    return (
+      <div className={`${className} rounded-lg bg-emerald-500 flex items-center justify-center`}>
+        <span className="text-white text-xs font-bold">CSV</span>
+      </div>
+    );
+  }
+  
+  // Default file icon
+  return (
+    <div className={`${className} rounded-lg bg-gray-400 flex items-center justify-center`}>
+      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+      </svg>
+    </div>
+  );
+});
 
 // Компонент для lazy loading изображений с blur эффектом (как в WhatsApp)
 const LazyImage = memo(function LazyImage({
@@ -277,11 +367,9 @@ function MessageItemComponent({
                 />
               )}
 
-              {/* Текст сообщения */}
+              {/* Текст сообщения с обнаружением ссылок */}
               {message.content && (
-                <p className="whitespace-pre-wrap break-words text-sm md:text-base">
-                  {message.content}
-                </p>
+                <MessageContent content={message.content} isOwn={isOwn} />
               )}
 
               {/* Время и статус редактирования */}
@@ -555,7 +643,7 @@ const Attachments = memo(function Attachments({
     <div className="mb-2 space-y-2">
       {attachments.map((attachment) => {
         const isImage = attachment.mimeType?.startsWith("image/") || 
-                       ["jpg", "jpeg", "png", "gif", "webp"].some(ext => 
+                       ["jpg", "jpeg", "png", "gif", "webp", "heic"].some(ext => 
                          attachment.fileName.toLowerCase().endsWith(ext));
 
         if (isImage) {
@@ -571,6 +659,7 @@ const Attachments = memo(function Attachments({
           );
         }
 
+        // Документы с красивым превью
         return (
           <a
             key={attachment.id}
@@ -578,24 +667,187 @@ const Attachments = memo(function Attachments({
             download={attachment.originalName}
             target="_blank"
             rel="noopener noreferrer"
-            className={`flex items-center gap-2 p-2 rounded-lg ${
-              isOwn ? "bg-blue-400/30" : "bg-gray-200 dark:bg-gray-600"
+            className={`flex items-center gap-3 p-3 rounded-xl transition-all hover:scale-[1.02] ${
+              isOwn 
+                ? "bg-blue-400/30 hover:bg-blue-400/40" 
+                : "bg-white/80 dark:bg-gray-600/80 hover:bg-white dark:hover:bg-gray-600 shadow-sm"
             }`}
           >
-            <svg className="w-8 h-8 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
+            <FileTypeIcon 
+              mimeType={attachment.mimeType} 
+              fileName={attachment.originalName} 
+              className="w-12 h-12 flex-shrink-0" 
+            />
             <div className="min-w-0 flex-1">
               <p className={`text-sm font-medium truncate ${isOwn ? "text-white" : "text-gray-900 dark:text-white"}`}>
                 {attachment.originalName}
               </p>
-              <p className={`text-xs ${isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"}`}>
+              <p className={`text-xs mt-0.5 ${isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"}`}>
                 {formatFileSize(attachment.fileSize)}
               </p>
+            </div>
+            <div className={`p-2 rounded-full ${isOwn ? "bg-blue-400/50" : "bg-gray-100 dark:bg-gray-500"}`}>
+              <svg className={`w-4 h-4 ${isOwn ? "text-white" : "text-gray-600 dark:text-gray-300"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
             </div>
           </a>
         );
       })}
+    </div>
+  );
+});
+
+// Компонент для контента сообщения с ссылками и их превью
+const MessageContent = memo(function MessageContent({
+  content,
+  isOwn,
+}: {
+  content: string;
+  isOwn: boolean;
+}) {
+  const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  
+  // Находим первый URL в сообщении
+  const firstUrl = useMemo(() => {
+    const match = content.match(URL_REGEX);
+    return match ? match[0] : null;
+  }, [content]);
+
+  // Загружаем превью ссылки
+  useEffect(() => {
+    if (!firstUrl) return;
+    
+    let isCancelled = false;
+    setIsLoadingPreview(true);
+    
+    fetch('/api/link-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: firstUrl }),
+    })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (!isCancelled && data) {
+          setLinkPreview(data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!isCancelled) setIsLoadingPreview(false);
+      });
+    
+    return () => { isCancelled = true; };
+  }, [firstUrl]);
+
+  // Разбиваем текст на части (текст и ссылки)
+  const parts = useMemo(() => {
+    const result: { type: 'text' | 'link'; content: string }[] = [];
+    let lastIndex = 0;
+    
+    content.replace(URL_REGEX, (match, offset) => {
+      // Добавляем текст до ссылки
+      if (offset > lastIndex) {
+        result.push({ type: 'text', content: content.slice(lastIndex, offset) });
+      }
+      // Добавляем ссылку
+      result.push({ type: 'link', content: match });
+      lastIndex = offset + match.length;
+      return match;
+    });
+    
+    // Добавляем оставшийся текст
+    if (lastIndex < content.length) {
+      result.push({ type: 'text', content: content.slice(lastIndex) });
+    }
+    
+    return result;
+  }, [content]);
+
+  return (
+    <div>
+      <p className="whitespace-pre-wrap break-words text-sm md:text-base">
+        {parts.map((part, i) => 
+          part.type === 'link' ? (
+            <a
+              key={i}
+              href={part.content}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`underline hover:no-underline ${
+                isOwn ? "text-blue-100 hover:text-white" : "text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+              }`}
+            >
+              {part.content}
+            </a>
+          ) : (
+            <span key={i}>{part.content}</span>
+          )
+        )}
+      </p>
+      
+      {/* Превью ссылки */}
+      {linkPreview && (linkPreview.title || linkPreview.image) && (
+        <a
+          href={linkPreview.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`mt-2 block rounded-xl overflow-hidden transition-all hover:opacity-90 ${
+            isOwn 
+              ? "bg-blue-400/30" 
+              : "bg-white/80 dark:bg-gray-600/80 shadow-sm"
+          }`}
+        >
+          {linkPreview.image && (
+            <div className="relative aspect-video w-full overflow-hidden">
+              <img 
+                src={linkPreview.image} 
+                alt={linkPreview.title || ''} 
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            </div>
+          )}
+          <div className="p-3">
+            <div className="flex items-center gap-2 mb-1">
+              {linkPreview.favicon && (
+                <img 
+                  src={linkPreview.favicon} 
+                  alt="" 
+                  className="w-4 h-4 rounded"
+                  onError={(e) => e.currentTarget.style.display = 'none'}
+                />
+              )}
+              <span className={`text-xs ${isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"}`}>
+                {linkPreview.siteName || new URL(linkPreview.url).hostname}
+              </span>
+            </div>
+            {linkPreview.title && (
+              <p className={`text-sm font-medium line-clamp-2 ${isOwn ? "text-white" : "text-gray-900 dark:text-white"}`}>
+                {linkPreview.title}
+              </p>
+            )}
+            {linkPreview.description && (
+              <p className={`text-xs mt-1 line-clamp-2 ${isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"}`}>
+                {linkPreview.description}
+              </p>
+            )}
+          </div>
+        </a>
+      )}
+      
+      {/* Индикатор загрузки превью */}
+      {isLoadingPreview && firstUrl && (
+        <div className={`mt-2 p-3 rounded-xl ${isOwn ? "bg-blue-400/20" : "bg-gray-100 dark:bg-gray-700"}`}>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin opacity-50" />
+            <span className={`text-xs ${isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"}`}>
+              Загрузка превью...
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 });

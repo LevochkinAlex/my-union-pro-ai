@@ -335,15 +335,25 @@ export function useChat(options: UseChatOptions = {}) {
       });
 
       if (response.ok) {
-        // Перезагружаем сообщения для обновления реакций
-        loadMessages(selectedChat.id, true);
+        const data = await response.json();
+        // Обновляем реакции в локальном состоянии сразу после ответа API
+        setMessages(prev => prev.map(m => 
+          m.id === messageId 
+            ? { ...m, reactions: data.reactions } 
+            : m
+        ));
         return true;
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("[useChat] Error toggling reaction:", response.status, errorData);
+        options.onError?.("Ошибка при добавлении реакции");
       }
     } catch (error) {
       console.error("[useChat] Error toggling reaction:", error);
+      options.onError?.("Ошибка при добавлении реакции");
     }
     return false;
-  }, [selectedChat, loadMessages]);
+  }, [selectedChat, options.onError]);
 
   // Пересылка сообщения
   const forwardMessage = useCallback(async (
