@@ -47,13 +47,8 @@ export async function POST(request: NextRequest) {
         attachments: true,
         chat: {
           select: {
-            type: true,
             participant1Id: true,
             participant2Id: true,
-            participants: {
-              where: { userId, leftAt: null },
-              select: { userId: true },
-            },
           },
         },
       },
@@ -64,11 +59,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Проверяем, что пользователь имеет доступ к оригинальному сообщению
-    // Для GROUP чатов проверяем через таблицу participants
-    // Для PRIVATE чатов - через participant1Id/participant2Id
-    const hasAccess = originalMessage.chat.type === "GROUP"
-      ? originalMessage.chat.participants.length > 0
-      : (originalMessage.chat.participant1Id === userId || originalMessage.chat.participant2Id === userId);
+    const hasAccess =
+      originalMessage.chat.participant1Id === userId ||
+      originalMessage.chat.participant2Id === userId;
 
     if (!hasAccess) {
       return NextResponse.json(

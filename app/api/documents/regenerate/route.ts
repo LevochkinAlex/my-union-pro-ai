@@ -245,11 +245,6 @@ export async function POST() {
       },
     });
 
-    // Инвалидируем кеш профиля, чтобы пользователь видел актуальные данные
-    const { cacheDeletePattern } = await import("@/lib/cache");
-    await cacheDeletePattern(`profile:userId:*${user.id}*`);
-    await cacheDeletePattern(`profile:*`);
-
     console.log("[regenerate-documents] ✅ Documents regenerated successfully");
 
     return NextResponse.json({

@@ -25,13 +25,8 @@ export async function POST(
     const chat = await prisma.chat.findUnique({
       where: { id: chatId },
       select: {
-        type: true,
         participant1Id: true,
         participant2Id: true,
-        participants: {
-          where: { userId, leftAt: null },
-          select: { id: true, userId: true },
-        },
       },
     });
 
@@ -39,36 +34,17 @@ export async function POST(
       return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
     }
 
-    // Для GROUP чатов проверяем через таблицу participants
-    // Для PRIVATE чатов - через participant1Id/participant2Id
-    const isParticipant = chat.type === "GROUP"
-      ? chat.participants.length > 0
-      : (chat.participant1Id === userId || chat.participant2Id === userId);
-
-    if (!isParticipant) {
+    if (chat.participant1Id !== userId && chat.participant2Id !== userId) {
       return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
     }
 
     // Обновляем время последней активности (отметка, что чат открыт)
-    const now = new Date();
-    
-    if (chat.type === "GROUP") {
-      // Для GROUP чатов обновляем readAt в таблице participants
-      if (chat.participants[0]) {
-        await prisma.chatParticipant.update({
-          where: { id: chat.participants[0].id },
-          data: { readAt: now },
-        });
-      }
-    } else {
-      // Для PRIVATE чатов используем поля participant1ReadAt/participant2ReadAt
-      await prisma.chat.update({
-        where: { id: chatId },
-        data: chat.participant1Id === userId
-          ? { participant1ReadAt: now }
-          : { participant2ReadAt: now },
-      });
-    }
+    await prisma.chat.update({
+      where: { id: chatId },
+      data: chat.participant1Id === userId
+        ? { participant1ReadAt: new Date() }
+        : { participant2ReadAt: new Date() },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

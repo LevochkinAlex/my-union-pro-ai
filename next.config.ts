@@ -10,23 +10,6 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: packageJson.version,
   },
-  // Перенаправляем запросы к /uploads/* на API роуты
-  async rewrites() {
-    return [
-      {
-        source: '/uploads/posts/:filename',
-        destination: '/api/uploads/posts/:filename',
-      },
-      {
-        source: '/uploads/avatars/:filename',
-        destination: '/api/uploads/avatars/:filename',
-      },
-      {
-        source: '/uploads/chat/:filename',
-        destination: '/api/uploads/chat/:filename',
-      },
-    ];
-  },
   // Увеличиваем лимит размера тела запроса для загрузки файлов до 50MB (для HEIC)
   experimental: {
     serverActions: {

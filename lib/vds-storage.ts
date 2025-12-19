@@ -241,10 +241,9 @@ export async function uploadFileToVDS(
     if (existsSync(directPath)) {
       const stats = await require("fs/promises").stat(directPath);
       if (stats.size === buffer.length) {
-        // Возвращаем CDN URL для прямого доступа через nginx
-        const cdnUrl = `https://cdn.myunion.pro/uploads/${fileKey}`;
+        const relativePath = `/uploads/${fileKey}`;
         console.log("[vds-storage] ✅ File saved directly and verified:", directPath, `(${stats.size} bytes)`);
-        return cdnUrl;
+        return relativePath;
       } else {
         throw new Error(`File size mismatch: expected ${buffer.length}, got ${stats.size}`);
       }
@@ -307,12 +306,14 @@ export async function uploadFileToVDS(
       // Игнорируем ошибки удаления временного файла
     }
 
-    // Возвращаем CDN URL для прямого доступа через nginx
-    const cdnUrl = `https://cdn.myunion.pro/uploads/${fileKey}`;
+    // Возвращаем относительный путь для использования через API роуты
+    // Файл будет доступен через /api/uploads/{category}/{filename}
+    // Формат: /uploads/posts/filename.jpg
+    const relativePath = `/uploads/${fileKey}`;
     console.log("[vds-storage] File uploaded successfully to VDS:", fileKey);
-    console.log("[vds-storage] File will be served via CDN:", cdnUrl);
+    console.log("[vds-storage] File will be served via API route:", relativePath);
     
-    return cdnUrl;
+    return relativePath;
   } catch (error) {
     console.error("[vds-storage] Error uploading file to VDS:", error);
     
@@ -343,12 +344,11 @@ async function saveFileDirectlyOnVDS(fileKey: string, buffer: Buffer): Promise<s
   // Сохраняем файл напрямую
   await writeFile(filePath, buffer);
   
-  // Возвращаем CDN URL для прямого доступа через nginx
-  const cdnUrl = `https://cdn.myunion.pro/uploads/${fileKey}`;
+  const relativePath = `/uploads/${fileKey}`;
   console.log("[vds-storage] File saved directly on VDS:", filePath);
-  console.log("[vds-storage] File will be served via CDN:", cdnUrl);
+  console.log("[vds-storage] File will be served via:", relativePath);
   
-  return cdnUrl;
+  return relativePath;
 }
 
 /**
@@ -361,8 +361,6 @@ async function uploadFileLocally(fileKey: string, buffer: Buffer): Promise<strin
   await mkdir(localDir, { recursive: true });
   await writeFile(localPath, buffer);
   
-  // При локальной разработке используем относительный путь
-  // На проде файлы должны загружаться на VDS
   return `/uploads/${fileKey}`;
 }
 

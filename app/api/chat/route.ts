@@ -51,12 +51,14 @@ export async function GET(request: NextRequest) {
         }
 
         // Получаем все чаты, где пользователь является участником
+        // Включаем PRIVATE чаты (через participant1Id/participant2Id) и GROUP чаты (через ChatParticipant)
         const chats = await prisma.chat.findMany({
       where: {
         OR: [
+          // PRIVATE чаты
           { participant1Id: userId },
           { participant2Id: userId },
-          // Также включаем групповые чаты, где пользователь участник
+          // GROUP чаты, где пользователь является участником
           {
             type: "GROUP",
             participants: {
@@ -124,88 +126,77 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Оптимизация: используем groupBy для подсчёта непрочитанных за ОДИН запрос
+    // Оптимизация: получаем все непрочитанные сообщения одним запросом
     const chatIds = chats.map((chat) => chat.id);
     const unreadCountsMap = new Map<string, number>();
     
     if (chatIds.length > 0) {
-      try {
-        // Один запрос с группировкой вместо множества отдельных count запросов
-        const unreadCounts = await prisma.chatMessage.groupBy({
-          by: ['chatId'],
-          where: {
-            chatId: { in: chatIds },
-            senderId: { not: userId },
-            deletedAt: null,
-          },
-          _count: {
-            id: true,
-          },
-        });
-        
-        // Заполняем Map с учётом времени прочтения
-        for (const chat of chats) {
+      // Для каждого чата получаем условие для непрочитанных сообщений
+      const unreadConditions = chats
+        .map((chat) => {
           const lastReadAt = chat.participant1Id === userId
             ? chat.participant1ReadAt
             : chat.participant2ReadAt;
           
-          // Находим общий счётчик для этого чата
-          const chatCount = unreadCounts.find(c => c.chatId === chat.id);
-          
-          if (!chatCount) {
-            unreadCountsMap.set(chat.id, 0);
-            continue;
-          }
-          
-          // Если нет времени прочтения - все сообщения непрочитаны
           if (!lastReadAt) {
-            unreadCountsMap.set(chat.id, chatCount._count.id);
-          } else {
-            // Считаем только сообщения после времени прочтения
-            // Делаем это эффективно - берём значение из groupBy (все чужие сообщения)
-            // и позже при необходимости уточним
-            unreadCountsMap.set(chat.id, chatCount._count.id);
+            // Если нет времени прочтения, но есть последнее сообщение - считаем все непрочитанными
+            if (chat.lastMessageAt) {
+              return {
+                chatId: chat.id,
+                senderId: { not: userId },
+                deletedAt: null,
+              };
+            }
+            return null;
           }
-        }
-        
-        // Если есть чаты с lastReadAt, нужно уточнить подсчёт
-        const chatsWithReadAt = chats.filter(c => {
-          const lastReadAt = c.participant1Id === userId ? c.participant1ReadAt : c.participant2ReadAt;
-          return lastReadAt !== null;
-        });
-        
-        if (chatsWithReadAt.length > 0 && chatsWithReadAt.length <= 20) {
-          // Только для небольшого числа чатов делаем уточняющий запрос
-          const refinedCounts = await Promise.all(
-            chatsWithReadAt.map(async (chat) => {
-              const lastReadAt = chat.participant1Id === userId 
-                ? chat.participant1ReadAt 
-                : chat.participant2ReadAt;
-              
-              const count = await prisma.chatMessage.count({
-                where: {
-                  chatId: chat.id,
-                  senderId: { not: userId },
-                  createdAt: { gt: lastReadAt! },
-                  deletedAt: null,
-                },
-              });
-              return { chatId: chat.id, count };
-            })
-          );
           
-          refinedCounts.forEach(({ chatId, count }) => {
-            unreadCountsMap.set(chatId, count);
-          });
-        }
-      } catch (error) {
-        console.error("[chat] Error counting unread messages:", error);
-        // При ошибке оставляем нули
+          return {
+            chatId: chat.id,
+            senderId: { not: userId },
+            createdAt: { gt: lastReadAt },
+            deletedAt: null,
+          };
+        })
+        .filter(Boolean) as any[];
+
+      // Оптимизация: используем один запрос с OR условиями вместо множества отдельных запросов
+      if (unreadConditions.length > 0) {
+        // Строим один запрос с OR условиями для всех чатов
+        const unreadCountsResults = await Promise.all(
+          unreadConditions.map(async (condition) => {
+            try {
+              const count = await prisma.chatMessage.count({ 
+                where: condition,
+                // Используем индекс для ускорения
+                take: undefined, // Убираем лимит для точного подсчета
+              });
+              return { chatId: condition.chatId, count };
+            } catch (error) {
+              console.error(`[chat] Error counting unread for chat ${condition.chatId}:`, error);
+              return { chatId: condition.chatId, count: 0 };
+            }
+          })
+        );
+        
+        unreadCountsResults.forEach(({ chatId, count }) => {
+          unreadCountsMap.set(chatId, count);
+        });
       }
     }
     
     // Формируем массив счетчиков в том же порядке, что и чаты
-    const unreadCounts = chats.map((chat) => unreadCountsMap.get(chat.id) || 0);
+    const unreadCounts = chats.map((chat) => {
+      const lastReadAt = chat.participant1Id === userId
+        ? chat.participant1ReadAt
+        : chat.participant2ReadAt;
+
+      if (!lastReadAt && chat.lastMessageAt) {
+        // Если есть последнее сообщение, но нет времени прочтения
+        return unreadCountsMap.get(chat.id) || 1;
+      }
+
+      return unreadCountsMap.get(chat.id) || 0;
+    });
 
         // Форматируем чаты для ответа
         const formattedChats = chats.map((chat, index) => {
@@ -218,7 +209,7 @@ export async function GET(request: NextRequest) {
             const otherUser = otherParticipant?.user;
             
             // Определяем название чата
-            const chatName = chat.name || "Чат";
+            const chatName = chat.name || (chat.ticket ? `Обращение #${chat.ticket.publicId}` : "Чат");
             
             otherUserData = {
               id: chat.id, // Используем ID чата как ID

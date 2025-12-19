@@ -176,10 +176,9 @@ export default function AdminUserDetailsPage() {
   const pendingDocuments = user.documents.filter(
     (doc) => doc.status === "SIGNED" || doc.status === "PENDING"
   );
-  // Показываем кнопки валидации для пользователей, которые ожидают одобрения
-  const canValidate = user.role === "PENDING_MEMBER" && 
-    user.membershipStatus !== "APPROVED" && 
-    user.membershipStatus !== "REJECTED";
+  const canValidate = pendingDocuments.length > 0 && 
+    (user.membershipStatus === "DOCUMENTS_PENDING" || 
+     user.membershipStatus === "PENDING_VERIFICATION");
 
   // Парсим JSON поля
   const parseJsonField = (field: string | null) => {

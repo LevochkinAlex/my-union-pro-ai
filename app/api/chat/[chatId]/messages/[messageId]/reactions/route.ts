@@ -27,13 +27,8 @@ export async function POST(
     const chat = await prisma.chat.findUnique({
       where: { id: chatId },
       select: {
-        type: true,
         participant1Id: true,
         participant2Id: true,
-        participants: {
-          where: { userId, leftAt: null },
-          select: { userId: true },
-        },
       },
     });
 
@@ -41,13 +36,7 @@ export async function POST(
       return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
     }
 
-    // Для GROUP чатов проверяем через таблицу participants
-    // Для PRIVATE чатов - через participant1Id/participant2Id
-    const isParticipant = chat.type === "GROUP"
-      ? chat.participants.length > 0
-      : (chat.participant1Id === userId || chat.participant2Id === userId);
-
-    if (!isParticipant) {
+    if (chat.participant1Id !== userId && chat.participant2Id !== userId) {
       return NextResponse.json({ error: "Нет доступа к этому чату" }, { status: 403 });
     }
 

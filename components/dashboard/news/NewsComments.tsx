@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 import { useToast } from "@/components/ui/Toast";
-import { getFileUrlWithCDN } from "@/lib/cdn";
 
 interface Comment {
   id: string;
@@ -36,23 +35,6 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
-
-  // Загружаем аватар текущего пользователя
-  useEffect(() => {
-    if (session?.user?.id) {
-      fetch("/api/profile")
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.user?.avatarUrl) {
-            setCurrentUserAvatar(data.user.avatarUrl);
-          }
-        })
-        .catch((error) => {
-          console.error("[NewsComments] Failed to load user avatar:", error);
-        });
-    }
-  }, [session?.user?.id]);
 
   useEffect(() => {
     loadComments();
@@ -173,35 +155,39 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
     return user.email;
   };
 
-  // Компонент аватара с поддержкой base64 и CDN
+  // Компонент аватара с поддержкой base64
   const Avatar = ({ user, size = 8 }: { user: Comment["user"]; size?: number }) => {
     const name = userName(user);
-    const sizeClass = size === 8 ? 'h-8 w-8' : 'h-6 w-6';
+    const sizeClass = `h-${size} w-${size}`;
     
     if (user.avatarUrl) {
       // Проверяем, является ли изображение data URL (base64)
       const isDataUrl = user.avatarUrl.startsWith('data:');
-      const isHttpUrl = user.avatarUrl.startsWith('http://') || user.avatarUrl.startsWith('https://');
       
-      // Получаем правильный URL
-      const avatarSrc = isDataUrl || isHttpUrl 
-        ? user.avatarUrl 
-        : getFileUrlWithCDN(user.avatarUrl, true);
-      
-      return (
-        <div className={`${sizeClass} rounded-full overflow-hidden flex-shrink-0`}>
-          <img
-            src={avatarSrc}
-            alt={name}
-            className="h-full w-full object-cover"
-            onError={(e) => {
-              // При ошибке загрузки скрываем изображение
-              const target = e.target as HTMLImageElement;
-              target.style.display = 'none';
-            }}
-          />
-        </div>
-      );
+      if (isDataUrl) {
+        // Для base64 используем обычный img тег
+        return (
+          <div className={`${sizeClass} rounded-full overflow-hidden flex-shrink-0`}>
+            <img
+              src={user.avatarUrl}
+              alt={name}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        );
+      } else {
+        // Для обычных URL используем Next Image
+        return (
+          <div className={`relative ${sizeClass} rounded-full overflow-hidden flex-shrink-0`}>
+            <Image
+              src={user.avatarUrl}
+              alt={name}
+              fill
+              className="object-cover"
+            />
+          </div>
+        );
+      }
     }
     
     // Фолбэк - круг с первой буквой
@@ -234,10 +220,10 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
             <Avatar 
               user={{
                 id: session.user.id,
-                firstName: session.user.firstName || null,
-                lastName: session.user.lastName || null,
+                firstName: session.user.firstName,
+                lastName: session.user.lastName,
                 email: session.user.email || "",
-                avatarUrl: currentUserAvatar,
+                avatarUrl: session.user.avatarUrl,
               }} 
               size={8} 
             />

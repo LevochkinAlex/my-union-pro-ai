@@ -1,88 +1,112 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensureSuperAdmin } from "@/lib/admin-auth";
-import { invalidateUsersCache } from "@/lib/cache-invalidation";
+import { MembershipStatus } from "@prisma/client";
+import { sendMembershipStatusNotification } from "@/lib/membership-notifications";
 
-/**
- * POST /api/admin/users/[id]/validate
- * Валидация пользователя (одобрение или отклонение)
- */
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
     const { error } = await ensureSuperAdmin();
-    if (error) {
-      return error;
-    }
+    if (error) return error;
 
     const resolvedParams = await Promise.resolve(params);
     const userId = resolvedParams.id;
 
     if (!userId) {
+      return NextResponse.json({ error: "ID пользователя не указан" }, { status: 400 });
+    }
+
+    const { status, comment } = await request.json();
+
+    if (!status || !["APPROVED", "REJECTED"].includes(status)) {
       return NextResponse.json(
-        { error: "ID пользователя не указан" },
+        { error: "Некорректный статус. Допустимые значения: APPROVED, REJECTED" },
         { status: 400 }
       );
     }
 
-    const body = await request.json();
-    const { status, comment } = body;
-
-    if (!status || (status !== "APPROVED" && status !== "REJECTED")) {
-      return NextResponse.json(
-        { error: "Неверный статус. Используйте APPROVED или REJECTED" },
-        { status: 400 }
-      );
-    }
-
-    // Получаем пользователя
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: {
-        id: true,
-        role: true,
-        membershipStatus: true,
+      include: {
+        documents: {
+          where: {
+            type: {
+              in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
+            },
+          },
+        },
       },
     });
 
     if (!user) {
-      return NextResponse.json(
-        { error: "Пользователь не найден" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
     }
 
-    // Обновляем статус
-    const updateData: any = {};
-
-    if (status === "APPROVED") {
-      // Одобряем пользователя
-      updateData.membershipStatus = "APPROVED";
-      updateData.role = "MEMBER";
-    } else {
-      // Отклоняем пользователя
-      updateData.membershipStatus = "REJECTED";
-    }
-
-    await prisma.user.update({
+    // Обновляем статус пользователя
+    const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: updateData,
+      data: {
+        membershipStatus: status as MembershipStatus,
+      },
     });
 
-    // Инвалидируем кеш
-    await invalidateUsersCache();
+    // Обновляем статус документов
+    if (status === "APPROVED") {
+      await prisma.document.updateMany({
+        where: {
+          userId: userId,
+          type: {
+            in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
+          },
+          status: {
+            in: ["SIGNED", "PENDING"],
+          },
+        },
+        data: {
+          status: "APPROVED",
+        },
+      });
+    } else if (status === "REJECTED") {
+      await prisma.document.updateMany({
+        where: {
+          userId: userId,
+          type: {
+            in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
+          },
+          status: {
+            in: ["SIGNED", "PENDING"],
+          },
+        },
+        data: {
+          status: "REJECTED",
+        },
+      });
+    }
+
+    // Отправляем уведомления (пуши и email)
+    try {
+      await sendMembershipStatusNotification(userId, status, comment);
+    } catch (notificationError) {
+      console.error("[admin/users/validate] Ошибка отправки уведомлений:", notificationError);
+      // Не прерываем процесс, если уведомления не отправились
+    }
 
     return NextResponse.json({
       success: true,
-      message: status === "APPROVED" ? "Пользователь одобрен" : "Пользователь отклонен",
+      user: updatedUser,
+      message: status === "APPROVED" 
+        ? "Пользователь успешно одобрен" 
+        : "Пользователь отклонен",
     });
-  } catch (error) {
-    console.error("[admin/users/validate] Error:", error);
+  } catch (err) {
+    console.error(`[admin/users/validate] Error:`, err);
     return NextResponse.json(
-      { error: "Ошибка при валидации пользователя" },
+      { error: "Внутренняя ошибка сервера" },
       { status: 500 }
     );
   }
 }
+
