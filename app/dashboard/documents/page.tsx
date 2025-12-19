@@ -36,66 +36,72 @@ export default function DocumentsPage() {
   const [regeneratingDocId, setRegeneratingDocId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   
+  const isPPOHead = session?.user?.role === "PPO_HEAD";
+
+  // useEffect должен быть ДО условного return (правила хуков React)
+  useEffect(() => {
+    // Не загружаем данные для PPO_HEAD - у них своя страница
+    if (!isPPOHead) {
+      loadDocuments();
+      loadProfileStatus();
+    }
+    
+    async function loadProfileStatus() {
+      try {
+        const response = await fetch("/api/profile");
+        if (response.ok) {
+          const data = await response.json();
+          setProfileChanged(data.user?.profileChangedAfterDocuments || false);
+        }
+      } catch (err) {
+        console.error("Ошибка загрузки статуса профиля:", err);
+      }
+    }
+
+    async function loadDocuments() {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const response = await fetch("/api/documents");
+        if (!response.ok) {
+          throw new Error("Ошибка загрузки документов");
+        }
+
+        const data = await response.json();
+        // Фильтруем документы: скрываем только загруженные пользователем документы типа OTHER
+        // (но оставляем системный документ - устав, который всегда доступен)
+        const filteredDocuments = (data.documents || []).filter((doc: Document) => {
+          // Показываем все документы, кроме загруженных пользователем OTHER документов
+          if (doc.type === "OTHER") {
+            // Показываем устав (системный документ) - он всегда должен быть доступен
+            const isCharter = 
+              doc.id === "charter-system" ||
+              doc.title?.toLowerCase().includes("устав") ||
+              doc.description?.toLowerCase().includes("устав");
+            
+            // Скрываем только загруженные пользователем файлы (имеют путь в /uploads/documents/)
+            const isUploadedFile = doc.filePath?.startsWith("/uploads/documents/");
+            
+            // Показываем устав, скрываем только загруженные пользователем
+            return isCharter || !isUploadedFile;
+          }
+          return true;
+        });
+        setDocuments(filteredDocuments);
+      } catch (err) {
+        console.error("Ошибка загрузки документов:", err);
+        setError(err instanceof Error ? err.message : "Не удалось загрузить документы");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  }, [isPPOHead]);
+  
   // Если пользователь - Председатель, показываем специальную страницу
-  if (session?.user?.role === "PPO_HEAD") {
+  if (isPPOHead) {
     return <PPOHeadDocumentsPage />;
   }
-
-  useEffect(() => {
-    loadDocuments();
-    loadProfileStatus();
-  }, []);
-
-  const loadProfileStatus = async () => {
-    try {
-      const response = await fetch("/api/profile");
-      if (response.ok) {
-        const data = await response.json();
-        setProfileChanged(data.user?.profileChangedAfterDocuments || false);
-      }
-    } catch (err) {
-      console.error("Ошибка загрузки статуса профиля:", err);
-    }
-  };
-
-  const loadDocuments = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      const response = await fetch("/api/documents");
-      if (!response.ok) {
-        throw new Error("Ошибка загрузки документов");
-      }
-
-      const data = await response.json();
-      // Фильтруем документы: скрываем только загруженные пользователем документы типа OTHER
-      // (но оставляем системный документ - устав, который всегда доступен)
-      const filteredDocuments = (data.documents || []).filter((doc: Document) => {
-        // Показываем все документы, кроме загруженных пользователем OTHER документов
-        if (doc.type === "OTHER") {
-          // Показываем устав (системный документ) - он всегда должен быть доступен
-          const isCharter = 
-            doc.id === "charter-system" ||
-            doc.title?.toLowerCase().includes("устав") ||
-            doc.description?.toLowerCase().includes("устав");
-          
-          // Скрываем только загруженные пользователем файлы (имеют путь в /uploads/documents/)
-          const isUploadedFile = doc.filePath?.startsWith("/uploads/documents/");
-          
-          // Показываем устав, скрываем только загруженные пользователем
-          return isCharter || !isUploadedFile;
-        }
-        return true;
-      });
-      setDocuments(filteredDocuments);
-    } catch (err) {
-      console.error("Ошибка загрузки документов:", err);
-      setError(err instanceof Error ? err.message : "Не удалось загрузить документы");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleRegenerateDocuments = async () => {
     const confirmed = await confirm("Вы уверены, что хотите переформировать документы? Старые документы будут заменены.", "Подтвердите переформирование");

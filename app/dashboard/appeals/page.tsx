@@ -62,35 +62,41 @@ export default function AppealsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | keyof typeof TICKET_STATUSES>("all");
   
+  const isPPOHead = session?.user?.role === "PPO_HEAD";
+
+  // useEffect должен быть ДО условного return (правила хуков React)
+  useEffect(() => {
+    // Не загружаем данные для PPO_HEAD - у них своя страница
+    if (!isPPOHead) {
+      loadTickets();
+    }
+    
+    async function loadTickets() {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const url = filter === "all" ? "/api/tickets" : `/api/tickets?status=${filter}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error("Ошибка загрузки обращений");
+        }
+
+        const data = await response.json();
+        setTickets(data.tickets || []);
+      } catch (err) {
+        console.error("Error loading tickets:", err);
+        setError(err instanceof Error ? err.message : "Не удалось загрузить обращения");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  }, [filter, isPPOHead]);
+  
   // Если пользователь - Председатель, показываем специальную страницу
-  if (session?.user?.role === "PPO_HEAD") {
+  if (isPPOHead) {
     return <PPOHeadAppealsPage />;
   }
-
-  useEffect(() => {
-    loadTickets();
-  }, [filter]);
-
-  const loadTickets = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      const url = filter === "all" ? "/api/tickets" : `/api/tickets?status=${filter}`;
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error("Ошибка загрузки обращений");
-      }
-
-      const data = await response.json();
-      setTickets(data.tickets || []);
-    } catch (err) {
-      console.error("Error loading tickets:", err);
-      setError(err instanceof Error ? err.message : "Не удалось загрузить обращения");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const getStatusColor = (status: string) => {
     const statusInfo = TICKET_STATUSES[status as keyof typeof TICKET_STATUSES];
