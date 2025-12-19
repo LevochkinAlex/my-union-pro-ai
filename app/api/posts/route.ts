@@ -30,13 +30,36 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
 
+    // Получаем организацию текущего пользователя для фильтрации
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { organizationId: true },
+    });
+
     const where: any = {};
+    
+    // Если указан конкретный userId - показываем его посты (профиль пользователя)
     if (userId) {
       where.authorId = userId;
+    } 
+    // Иначе показываем посты только от пользователей своей организации
+    else if (currentUser?.organizationId) {
+      where.author = {
+        organizationId: currentUser.organizationId,
+      };
+    }
+    // Если у пользователя нет организации - показываем только его посты
+    else {
+      where.authorId = session.user.id;
     }
 
     // Кешируем посты на 1 минуту (данные обновляются часто, но кеш помогает при повторных запросах)
-    const cacheKey = getCacheKey("posts:list", { userId, page, limit });
+    const cacheKey = getCacheKey("posts:list", { 
+      userId, 
+      organizationId: currentUser?.organizationId || "none",
+      page, 
+      limit 
+    });
     
     const posts = await Sentry.startSpan(
       {

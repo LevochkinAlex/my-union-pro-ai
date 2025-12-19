@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// GET /api/union-members - получить список членов профсоюза
+// GET /api/union-members - получить список членов профсоюза из своей организации
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -15,14 +15,26 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const limit = parseInt(searchParams.get("limit") || "10");
 
-    // Получаем случайных членов профсоюза (кроме текущего пользователя)
+    // Получаем организацию текущего пользователя
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { organizationId: true },
+    });
+
+    // Если у пользователя нет организации, возвращаем пустой список
+    if (!currentUser?.organizationId) {
+      return NextResponse.json({ members: [], hasOrganization: false });
+    }
+
+    // Получаем членов профсоюза только из организации пользователя
     const members = await prisma.user.findMany({
       where: {
         id: {
           not: session.user.id,
         },
+        organizationId: currentUser.organizationId,
         role: {
-          in: ["MEMBER", "PPO_HEAD", "SUPER_ADMIN"],
+          in: ["MEMBER", "PPO_HEAD"],
         },
       },
       select: {
@@ -43,7 +55,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ members });
+    return NextResponse.json({ members, hasOrganization: true });
   } catch (error) {
     console.error("[union-members] Error:", error);
     return NextResponse.json(
