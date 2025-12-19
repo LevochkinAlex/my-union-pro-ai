@@ -17,14 +17,10 @@ function generatePassword(length = 12) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Разрешаем внутренние запросы с заголовком X-Internal-Request или с localhost
-    const host = request.headers.get("host") || "";
-    const forwardedFor = request.headers.get("x-forwarded-for") || "";
-    const isInternalRequest = 
-      request.headers.get("X-Internal-Request") === "true" ||
-      host.includes("localhost") ||
-      forwardedFor.includes("127.0.0.1") ||
-      forwardedFor.includes("::1");
+    // Разрешаем внутренние запросы с секретным ключом или проверкой сессии
+    const internalSecret = request.headers.get("X-Internal-Secret");
+    const expectedSecret = process.env.INTERNAL_API_SECRET || "internal-secret-key-change-in-production";
+    const isInternalRequest = internalSecret === expectedSecret;
     
     if (!isInternalRequest) {
       const session = await getServerSession(authOptions);
