@@ -51,9 +51,14 @@ export async function activateBestBenefitsDiscount(
       console.log("[BestBenefits Activation] Using PERSONAL token for user:", params.email);
       token = await getUserBestBenefitsToken(params.email, params.password);
     } else {
-      // Fallback to organization token (legacy, not recommended)
-      console.warn("[BestBenefits Activation] ⚠️ Using organization token - discounts won't be personal!");
-      token = await getBestBenefitsToken();
+      // НЕ используем organization token - это может активировать скидки от организации (p-crusader@yandex.ru)
+      // Вместо этого возвращаем ошибку
+      console.error("[BestBenefits Activation] ❌ Cannot activate discount: no password provided. Cannot use organization token to prevent activating discounts for wrong user.");
+      return {
+        status: "error",
+        success: false,
+        message: "Необходимо синхронизировать аккаунт с BestBenefits перед активацией скидок.",
+      };
     }
 
     // ✅ НАЙДЕН ПРАВИЛЬНЫЙ ENDPOINT: POST /api/promo
@@ -183,8 +188,9 @@ export async function checkDiscountActivation(
     if (password) {
       token = await getUserBestBenefitsToken(bestBenefitsUserId, password);
     } else {
-      console.warn("[BestBenefits Activation] ⚠️ Using organization token for check");
-      token = await getBestBenefitsToken();
+      // НЕ используем organization token - это может вернуть скидки от организации (p-crusader@yandex.ru)
+      console.warn("[BestBenefits Activation] ⚠️ No password provided - cannot check activation without personal token");
+      return false;
     }
 
     // ✅ Используем правильный endpoint согласно документации
@@ -267,14 +273,17 @@ export async function getUserActivatedDiscounts(
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       // Use personal token if password provided
+      // ВАЖНО: НЕ используем organization token, чтобы не получить скидки от p-crusader@yandex.ru
       let token: string;
       
       if (password) {
         console.log("[BestBenefits Activation] Using PERSONAL token for user:", bestBenefitsUserId);
         token = await getUserBestBenefitsToken(bestBenefitsUserId, password);
       } else {
-        console.warn("[BestBenefits Activation] ⚠️ Using organization token - may not see user's personal discounts!");
-        token = await getBestBenefitsToken();
+        // НЕ используем organization token - это может вернуть скидки от организации
+        // Вместо этого возвращаем пустой массив, чтобы не показывать чужие скидки
+        console.warn("[BestBenefits Activation] ⚠️ No password provided - cannot use personal token. Returning empty array to prevent showing organization discounts.");
+        return [];
       }
 
       console.log(`[BestBenefits Activation] Fetching activated discounts for user: ${bestBenefitsUserId} (attempt ${attempt + 1}/${retries + 1})`);
