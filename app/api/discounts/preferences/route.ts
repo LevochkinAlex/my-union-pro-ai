@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getValidActivatedDiscounts } from "@/lib/discount-activation";
 
 const preferenceSchema = z.object({
   pushEnabled: z.boolean().optional(),
@@ -46,18 +47,36 @@ export async function GET() {
       where: { userId: session.user.id },
     });
 
+    // Получаем активированные скидки из DiscountActivation (основной источник)
+    const activations = await getValidActivatedDiscounts(session.user.id);
+    const claimed = activations.map(a => ({
+      id: a.discountId,
+      promoCode: a.promoCode,
+    }));
+
     if (!preference) {
       return NextResponse.json({
         pushEnabled: false,
-        filters: null,
+        filters: {
+          claimed,
+          favorites: [],
+        },
         geolocation: null,
         updatedAt: null,
       });
     }
 
+    // Мерджим с DiscountPreference для обратной совместимости
+    const filters = (preference.filters as any) || {};
+    const favorites = Array.isArray(filters.favorites) ? filters.favorites : [];
+
     return NextResponse.json({
       pushEnabled: preference.pushEnabled,
-      filters: preference.filters,
+      filters: {
+        ...filters,
+        claimed, // Используем данные из DiscountActivation
+        favorites,
+      },
       geolocation: preference.geolocation,
       updatedAt: preference.updatedAt,
     });

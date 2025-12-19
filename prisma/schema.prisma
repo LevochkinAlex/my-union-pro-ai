@@ -141,6 +141,7 @@ model User {
   // Push Notifications
   pushSubscriptions  PushSubscription[]
   discountPreference DiscountPreference?
+  discountActivations DiscountActivation[] @relation("DiscountActivations")
 
   // Уведомления (история)
   notifications UserNotification[]
@@ -1048,6 +1049,27 @@ model DiscountPreference {
   updatedAt DateTime @updatedAt
 
   @@index([pushEnabled])
+}
+
+// Активированные скидки пользователя с промокодами и сроками действия
+model DiscountActivation {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation("DiscountActivations", fields: [userId], references: [id], onDelete: Cascade)
+  discountId   Int      // ID скидки из BestBenefits
+  promoCode    String?  // Промокод (сохраняем локально, даже если BestBenefits очистит)
+  activatedAt  DateTime @default(now()) // Дата активации
+  validUntil   DateTime? // Срок действия скидки (из BestBenefits API)
+  syncedFromBB Boolean  @default(false) // Синхронизировано ли из BestBenefits
+  lastSyncedAt DateTime? // Когда последний раз синхронизировали с BestBenefits
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, discountId])
+  @@index([userId])
+  @@index([discountId])
+  @@index([validUntil])
 }
 
 // Уведомления пользователя (история всех уведомлений)

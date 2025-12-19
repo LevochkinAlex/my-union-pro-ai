@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getUserActivatedDiscounts } from "@/lib/best-benefits-activation";
 import { decryptPassword } from "@/lib/best-benefits-password";
+import {
+  syncDiscountsWithBestBenefits,
+  getValidActivatedDiscounts,
+  updateDiscountValidity,
+} from "@/lib/discount-activation";
+import { fetchBestBenefitsDiscounts } from "@/lib/best-benefits";
 
 /**
  * Синхронизация скидок конкретного пользователя (только для админов)
@@ -91,21 +96,57 @@ export async function POST(request: NextRequest) {
       console.warn(`[admin/sync-user-discounts] ⚠️ No password - using organization token (legacy)`);
     }
 
-    // Получаем активированные скидки из BestBenefits
-    const bbActivated = await getUserActivatedDiscounts(
+    // Синхронизируем скидки с BestBenefits
+    const syncResult = await syncDiscountsWithBestBenefits(
+      user.id,
       user.bestBenefitsUserId,
-      userPassword,
-      {
-        timeout: 20000,
-        retries: 3,
-      }
+      userPassword
     );
 
-    console.log(`[admin/sync-user-discounts] ✅ Fetched ${bbActivated.length} activated discounts from BestBenefits`);
-    const discountsWithPromoCodes = bbActivated.filter(d => d.promoCode);
-    console.log(`[admin/sync-user-discounts] Discounts with promo codes: ${discountsWithPromoCodes.length}`);
+    console.log(`[admin/sync-user-discounts] Sync result:`, syncResult);
 
-    // Получаем существующие preferences
+    // Получаем информацию о скидках для обновления сроков действия
+    const validActivations = await getValidActivatedDiscounts(user.id);
+    
+    if (validActivations.length > 0) {
+      console.log(`[admin/sync-user-discounts] Updating validity for ${validActivations.length} discounts`);
+      
+      // Получаем информацию о скидках из BestBenefits для обновления validUntil
+      const discountIds = validActivations.map(a => a.discountId);
+      
+      try {
+        // Запрашиваем информацию о скидках пакетами
+        const batchSize = 50;
+        for (let i = 0; i < discountIds.length; i += batchSize) {
+          const batch = discountIds.slice(i, i + batchSize);
+          const idsParam = batch.join(",");
+          
+          const discountsData = await fetchBestBenefitsDiscounts({
+            ids: idsParam,
+            limit: batchSize,
+          });
+
+          // Обновляем сроки действия для каждой скидки
+          for (const discount of discountsData.discounts) {
+            if (discount.validUntil) {
+              await updateDiscountValidity(
+                user.id,
+                discount.id,
+                discount.validUntil
+              );
+            }
+          }
+        }
+      } catch (error) {
+        console.error("[admin/sync-user-discounts] Error updating discount validity:", error);
+        // Не критично, продолжаем
+      }
+    }
+
+    // Получаем финальный список валидных активированных скидок
+    const finalActivations = await getValidActivatedDiscounts(user.id);
+
+    // Обновляем DiscountPreference для обратной совместимости
     const existingPrefs = await prisma.discountPreference.findUnique({
       where: { userId: user.id },
     });
@@ -114,83 +155,30 @@ export async function POST(request: NextRequest) {
     const existingFavorites = Array.isArray(existingFilters.favorites)
       ? existingFilters.favorites
       : [];
-    const existingClaimed = Array.isArray(existingFilters.claimed)
-      ? existingFilters.claimed
-      : [];
 
-    // Создаем Map локальных промокодов
-    const localPromoCodesMap = new Map<string, string>();
-    existingClaimed.forEach((item: any) => {
-      if (typeof item === 'object' && item !== null && item.id && item.promoCode) {
-        const discountId = String(item.id);
-        const promoCode = typeof item.promoCode === 'string' 
-          ? item.promoCode.trim() 
-          : String(item.promoCode).trim();
-        if (promoCode && promoCode.length > 0 && promoCode.toLowerCase() !== 'null' && promoCode.toLowerCase() !== 'undefined') {
-          localPromoCodesMap.set(discountId, promoCode);
-        }
-      }
-    });
+    // Формируем claimed из DiscountActivation
+    const claimed = finalActivations.map(a => ({
+      id: a.discountId,
+      promoCode: a.promoCode,
+    }));
 
-    // Мерджим данные из BestBenefits с локальными
-    const updatedClaimed = bbActivated.map(bbItem => {
-      let promoCodeFromBB = bbItem.promoCode;
-      if (promoCodeFromBB && (promoCodeFromBB.toLowerCase() === 'null' || promoCodeFromBB.toLowerCase() === 'undefined' || promoCodeFromBB.trim() === '')) {
-        promoCodeFromBB = null;
-      }
-
-      const savedLocalPromoCode = localPromoCodesMap.get(String(bbItem.id));
-      const finalPromoCode = promoCodeFromBB || savedLocalPromoCode || null;
-
-      return {
-        id: bbItem.id,
-        promoCode: finalPromoCode,
-      };
-    });
-
-    // Добавляем локальные claimed скидки с промокодами, которых нет в BestBenefits
-    const bbIdsSet = new Set(bbActivated.map(d => String(d.id)));
-    existingClaimed.forEach((item: any) => {
-      if (typeof item === 'object' && item !== null && item.id) {
-        const discountId = String(item.id);
-        const promoCode = item.promoCode 
-          ? (typeof item.promoCode === 'string' ? item.promoCode.trim() : String(item.promoCode).trim())
-          : null;
-        
-        if (discountId && !bbIdsSet.has(discountId) && promoCode && promoCode.length > 0 && promoCode.toLowerCase() !== 'null' && promoCode.toLowerCase() !== 'undefined') {
-          updatedClaimed.push({
-            id: typeof item.id === 'number' ? item.id : parseInt(discountId),
-            promoCode: promoCode,
-          });
-        }
-      }
-    });
-
-    const newPromoCodesCount = updatedClaimed.filter(d => d.promoCode).length;
-    const hadPromoCodesCount = existingClaimed.filter((item: any) => 
-      typeof item === 'object' && item?.promoCode
-    ).length;
-
-    // Сохраняем preferences
     await prisma.discountPreference.upsert({
       where: { userId: user.id },
       create: {
         userId: user.id,
         pushEnabled: false,
         filters: {
-          claimed: updatedClaimed,
+          claimed,
           favorites: existingFavorites,
         },
       },
       update: {
         filters: {
-          claimed: updatedClaimed,
+          claimed,
           favorites: existingFavorites,
         },
       },
     });
-
-    console.log(`[admin/sync-user-discounts] ✅ Saved ${updatedClaimed.length} claimed discounts with ${newPromoCodesCount} promo codes`);
 
     return NextResponse.json({
       success: true,
@@ -199,28 +187,24 @@ export async function POST(request: NextRequest) {
         id: user.id,
         email: user.email,
         phone: user.phone,
-        name: `${user.firstName} ${user.lastName}`,
+        name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email || user.phone,
       },
       stats: {
-        totalDiscounts: updatedClaimed.length,
-        discountsWithPromoCodes: newPromoCodesCount,
-        promoCodesRestored: newPromoCodesCount > hadPromoCodesCount ? newPromoCodesCount - hadPromoCodesCount : 0,
+        synced: syncResult.synced,
+        expired: syncResult.expired,
+        total: finalActivations.length,
+        withPromoCodes: finalActivations.filter(a => a.promoCode).length,
       },
-      discounts: updatedClaimed.map(d => ({
-        id: d.id,
-        hasPromoCode: !!d.promoCode,
-        promoCode: d.promoCode || null,
-      })),
+      errors: syncResult.errors.length > 0 ? syncResult.errors : undefined,
     });
   } catch (error) {
     console.error("[admin/sync-user-discounts] Error:", error);
     return NextResponse.json(
       {
         error: "Не удалось синхронизировать скидки",
-        details: error instanceof Error ? error.message : "Unknown error",
+        details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
     );
   }
 }
-

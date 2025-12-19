@@ -51,10 +51,10 @@ export default function PPOHeadDashboard({
       {/* Заголовок */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Добро пожаловать, {userName}!
+          С возвращением, {userName}!
         </h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Кабинет Председателя · {organizationName}
+          Ваш личный кабинет председателя Профсоюза · {organizationName}
         </p>
       </div>
 

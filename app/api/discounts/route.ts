@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { fetchBestBenefitsDiscounts } from "@/lib/best-benefits";
 import type { DiscountSearchParams } from "@/types/discounts";
 import { prisma } from "@/lib/prisma";
+import { getValidActivatedDiscounts } from "@/lib/discount-activation";
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,20 +17,27 @@ export async function GET(request: NextRequest) {
     await enrichParamsWithPreference(params, session.user.id);
     const payload = await fetchBestBenefitsDiscounts(params);
 
-    // Обогащаем скидки промокодами из сохраненных preferences
-    // И также сохраняем промокоды из API, если их нет в preferences
+    // Получаем активированные скидки из DiscountActivation (основной источник)
+    const activations = await getValidActivatedDiscounts(session.user.id);
+    const promoCodesMap = new Map<string, string>();
+    
+    activations.forEach((activation) => {
+      if (activation.promoCode) {
+        promoCodesMap.set(String(activation.discountId), activation.promoCode);
+      }
+    });
+
+    // Также проверяем DiscountPreference для обратной совместимости
     const preferences = await prisma.discountPreference.findUnique({
       where: { userId: session.user.id },
     });
 
-    // Обогащаем промокодами даже если preferences нет
+    // Обогащаем скидки промокодами из DiscountActivation
     if (payload.discounts && payload.discounts.length > 0) {
       const filters = (preferences?.filters as any) || {};
       const claimed = Array.isArray(filters.claimed) ? filters.claimed : [];
       
-      // Создаем Map для быстрого поиска промокодов
-      // Используем строковые ключи для надежности (ID могут быть числами или строками)
-      const promoCodesMap = new Map<string, string>();
+      // Дополняем promoCodesMap из preferences (для обратной совместимости)
       console.log(`[api/discounts] Processing ${claimed.length} claimed items for promo codes...`);
       
       claimed.forEach((item: any, index: number) => {
@@ -76,8 +84,14 @@ export async function GET(request: NextRequest) {
       // Добавляем промокоды к скидкам (промокоды из preferences имеют приоритет)
       console.log(`[api/discounts] Enriching ${payload.discounts?.length || 0} discounts with promo codes...`);
       
-      // Создаем Set для быстрой проверки, какие скидки получены (включая старый формат)
+      // Создаем Set для быстрой проверки, какие скидки получены
+      // Используем DiscountActivation как основной источник
       const claimedIdsSet = new Set<string>();
+      activations.forEach((activation) => {
+        claimedIdsSet.add(String(activation.discountId));
+      });
+      
+      // Дополняем из preferences для обратной совместимости
       claimed.forEach((item: any) => {
         if (typeof item === 'object' && item !== null && item.id) {
           claimedIdsSet.add(String(item.id));

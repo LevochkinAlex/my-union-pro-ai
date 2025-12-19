@@ -425,7 +425,7 @@ export default async function DashboardPage() {
           {greeting}, {userName}!
         </h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Ваша панель управления профсоюзом МООП РЗ
+          Ваш личный кабинет члена Профсоюза
         </p>
       </div>
 

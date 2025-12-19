@@ -2,13 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getUserActivatedDiscounts } from "@/lib/best-benefits-activation";
 import { decryptPassword } from "@/lib/best-benefits-password";
+import {
+  syncDiscountsWithBestBenefits,
+  getValidActivatedDiscounts,
+  updateDiscountValidity,
+} from "@/lib/discount-activation";
+import { fetchBestBenefitsDiscounts } from "@/lib/best-benefits";
 
 /**
  * Синхронизация активированных скидок с BestBenefits
- * Проверяет, какие скидки пользователь активировал напрямую на сайте BestBenefits
- * и обновляет локальные preferences
+ * 
+ * Обновленная версия с использованием таблицы DiscountActivation:
+ * - Сохраняет промокоды в нашу БД (даже если BestBenefits очистит базу)
+ * - Проверяет срок действия скидок (validUntil)
+ * - Автоматически удаляет устаревшие скидки
  */
 export async function POST(request: NextRequest) {
   try {
@@ -24,7 +32,7 @@ export async function POST(request: NextRequest) {
         id: true,
         email: true,
         bestBenefitsUserId: true,
-        bestBenefitsPassword: true, // Need password for personal token
+        bestBenefitsPassword: true,
       },
     });
 
@@ -38,6 +46,7 @@ export async function POST(request: NextRequest) {
         success: true,
         message: "Пользователь ещё не синхронизирован с BestBenefits",
         synced: [],
+        expired: 0,
       });
     }
 
@@ -54,28 +63,59 @@ export async function POST(request: NextRequest) {
       console.warn(`[sync-discounts] ⚠️ No password - using organization token (legacy)`);
     }
 
-    // Fetch activated discounts from BestBenefits using personal token
-    // ВАЖНО: НЕ используем fallback на локальные данные - только данные из BestBenefits API
-    // Это гарантирует, что промокоды всегда актуальны и валидны
-    const bbActivated = await getUserActivatedDiscounts(
-      user.bestBenefitsUserId, 
-      userPassword,
-      {
-        timeout: 15000, // 15 секунд
-        retries: 2,
-      }
+    // Синхронизируем скидки с BestBenefits
+    const syncResult = await syncDiscountsWithBestBenefits(
+      user.id,
+      user.bestBenefitsUserId,
+      userPassword
     );
 
-    console.log("[sync-discounts] ✅ Fetched activated discounts from BestBenefits:", {
-      count: bbActivated.length,
-      discounts: bbActivated.map(d => ({ id: d.id, hasPromoCode: !!d.promoCode, promoCode: d.promoCode })),
-      discountsWithPromoCodes: bbActivated.filter(d => d.promoCode).length,
-    });
-    
-    // ВАЖНО: Если BestBenefits API вернул скидки без промокодов, но у нас есть локальные промокоды - сохраняем их
-    // Это гарантирует, что уже полученные промокоды не теряются
+    console.log("[sync-discounts] Sync result:", syncResult);
 
-    // Get existing preferences для сохранения favorites и уже полученных промокодов
+    // Получаем информацию о скидках для обновления сроков действия
+    // Запрашиваем только активированные скидки пользователя
+    const validActivations = await getValidActivatedDiscounts(user.id);
+    
+    if (validActivations.length > 0) {
+      console.log(`[sync-discounts] Updating validity for ${validActivations.length} discounts`);
+      
+      // Получаем информацию о скидках из BestBenefits для обновления validUntil
+      const discountIds = validActivations.map(a => a.discountId);
+      
+      try {
+        // Запрашиваем информацию о скидках пакетами
+        const batchSize = 50;
+        for (let i = 0; i < discountIds.length; i += batchSize) {
+          const batch = discountIds.slice(i, i + batchSize);
+          const idsParam = batch.join(",");
+          
+          const discountsData = await fetchBestBenefitsDiscounts({
+            ids: idsParam,
+            limit: batchSize,
+          });
+
+          // Обновляем сроки действия для каждой скидки
+          for (const discount of discountsData.discounts) {
+            if (discount.validUntil) {
+              await updateDiscountValidity(
+                user.id,
+                discount.id,
+                discount.validUntil
+              );
+            }
+          }
+        }
+      } catch (error) {
+        console.error("[sync-discounts] Error updating discount validity:", error);
+        // Не критично, продолжаем
+      }
+    }
+
+    // Получаем финальный список валидных активированных скидок
+    const finalActivations = await getValidActivatedDiscounts(user.id);
+
+    // Обновляем DiscountPreference для обратной совместимости
+    // (для компонентов, которые еще используют filters.claimed)
     const existingPrefs = await prisma.discountPreference.findUnique({
       where: { userId: user.id },
     });
@@ -84,178 +124,38 @@ export async function POST(request: NextRequest) {
     const existingFavorites = Array.isArray(existingFilters.favorites)
       ? existingFilters.favorites
       : [];
-    const existingClaimed = Array.isArray(existingFilters.claimed) 
-      ? existingFilters.claimed 
-      : [];
-    
-    const localPromoCodesMap = new Map<string, string>();
-    existingClaimed.forEach((item: any) => {
-      let discountId: string | null = null;
-      let promoCode: string | null = null;
-      
-      if (typeof item === 'object' && item !== null && item.id) {
-        discountId = String(item.id);
-        promoCode = item.promoCode 
-          ? (typeof item.promoCode === 'string' ? item.promoCode.trim() : String(item.promoCode).trim())
-          : null;
-      } else if (typeof item === 'number') {
-        discountId = String(item);
-      }
-      
-      // Сохраняем только валидные промокоды
-      if (discountId && promoCode && promoCode.length > 0 && promoCode.toLowerCase() !== 'null' && promoCode.toLowerCase() !== 'undefined') {
-        localPromoCodesMap.set(discountId, promoCode);
-        console.log(`[sync-discounts] Found saved local promo code for discount ${discountId}:`, promoCode);
-      }
-    });
-    
-    // Мерджим: приоритет у промокодов из BestBenefits API, но если их нет - используем уже сохраненные локальные
-    const updatedClaimed = bbActivated.map(bbItem => {
-      // Нормализуем промокод из BestBenefits: строки "null", "undefined" и пустые значения превращаем в null
-      let promoCodeFromBB = bbItem.promoCode;
-      if (promoCodeFromBB && (promoCodeFromBB.toLowerCase() === 'null' || promoCodeFromBB.toLowerCase() === 'undefined' || promoCodeFromBB.trim() === '')) {
-        console.log(`[sync-discounts] ⚠️ Invalid promo code from BestBenefits for discount ${bbItem.id}, normalizing to null:`, promoCodeFromBB);
-        promoCodeFromBB = null;
-      }
-      
-      // Пробуем найти уже сохраненный локальный промокод, если BestBenefits не вернул
-      // Это безопасно, т.к. промокоды не меняются после получения
-      const savedLocalPromoCode = localPromoCodesMap.get(String(bbItem.id));
-      
-      // Приоритет: BestBenefits > уже сохраненный локальный
-      const finalPromoCode = promoCodeFromBB || savedLocalPromoCode || null;
-      
-      const result = {
-        id: bbItem.id,
-        promoCode: finalPromoCode,
-      };
-      
-      console.log(`[sync-discounts] Processing discount ${bbItem.id}:`, {
-        id: result.id,
-        promoCodeFromBB: promoCodeFromBB,
-        savedLocalPromoCode: savedLocalPromoCode,
-        finalPromoCode: result.promoCode,
-        hasPromoCode: !!result.promoCode,
-        source: promoCodeFromBB ? 'BestBenefits API' : (savedLocalPromoCode ? 'saved local' : 'none'),
-      });
-      
-      return result;
-    });
 
-    // ВАЖНО: Добавляем локальные claimed скидки, которых нет в BestBenefits API
-    // Это необходимо для сохранения промокодов, которые были получены локально
-    // но по какой-то причине не отображаются в BestBenefits API
-    const bbIdsSet = new Set(bbActivated.map(d => String(d.id)));
-    existingClaimed.forEach((item: any) => {
-      let discountId: string | null = null;
-      let promoCode: string | null = null;
-      
-      if (typeof item === 'object' && item !== null && item.id) {
-        discountId = String(item.id);
-        promoCode = item.promoCode 
-          ? (typeof item.promoCode === 'string' ? item.promoCode.trim() : String(item.promoCode).trim())
-          : null;
-      } else if (typeof item === 'number') {
-        discountId = String(item);
-      }
-      
-      // Если скидка есть локально с промокодом, но нет в BestBenefits API - сохраняем её
-      // Это важно для сохранения уже полученных промокодов
-      if (discountId && !bbIdsSet.has(discountId) && promoCode && promoCode.length > 0 && promoCode.toLowerCase() !== 'null' && promoCode.toLowerCase() !== 'undefined') {
-        const id = typeof item === 'object' ? item.id : parseInt(discountId);
-        updatedClaimed.push({
-          id: id,
-          promoCode: promoCode,
-        });
-        console.log(`[sync-discounts] ✅ Keeping local discount ${discountId} with promo code (not found in BestBenefits API):`, {
-          id,
-          promoCode,
-        });
-      }
-    });
+    // Формируем claimed из DiscountActivation
+    const claimed = finalActivations.map(a => ({
+      id: a.discountId,
+      promoCode: a.promoCode,
+    }));
 
-    console.log("[sync-discounts] ✅ Prepared updated claimed discounts:", {
-      count: updatedClaimed.length,
-      discountsWithPromoCodes: updatedClaimed.filter(d => d.promoCode).length,
-      discounts: updatedClaimed.map(d => ({ id: d.id, promoCode: d.promoCode })),
-    });
-
-    // ВАЖНО: Убеждаемся, что все промокоды валидны перед сохранением
-    const validatedClaimed = updatedClaimed.map(item => {
-      if (item.promoCode) {
-        const promoCode = typeof item.promoCode === 'string' 
-          ? item.promoCode.trim() 
-          : String(item.promoCode).trim();
-        
-        // Валидируем промокод
-        if (promoCode.length === 0 || 
-            promoCode.toLowerCase() === 'null' || 
-            promoCode.toLowerCase() === 'undefined') {
-          console.warn(`[sync-discounts] ⚠️ Invalid promo code for discount ${item.id}, removing:`, promoCode);
-          return {
-            id: item.id,
-            promoCode: null,
-          };
-        }
-        
-        return {
-          id: item.id,
-          promoCode: promoCode,
-        };
-      }
-      
-      return item;
-    });
-
-    // Save merged preferences
     await prisma.discountPreference.upsert({
       where: { userId: user.id },
       create: {
         userId: user.id,
         pushEnabled: false,
         filters: {
-          claimed: validatedClaimed,
+          claimed,
           favorites: existingFavorites,
         },
       },
       update: {
         filters: {
-          claimed: validatedClaimed,
+          claimed,
           favorites: existingFavorites,
         },
       },
     });
-    
-    // Проверяем, что промокоды действительно сохранились
-    const savedPrefs = await prisma.discountPreference.findUnique({
-      where: { userId: user.id },
-    });
-    const savedClaimed = (savedPrefs?.filters as any)?.claimed || [];
-    const savedPromoCodesCount = savedClaimed.filter((d: any) => 
-      typeof d === 'object' && d.promoCode && 
-      d.promoCode.trim().length > 0 && 
-      d.promoCode.toLowerCase() !== 'null' && 
-      d.promoCode.toLowerCase() !== 'undefined'
-    ).length;
-    
-    console.log("[sync-discounts] ✅ Verified saved promo codes in database:", {
-      userId: user.id,
-      bbActivated: bbActivated.length,
-      totalClaimed: validatedClaimed.length,
-      savedClaimed: savedClaimed.length,
-      discountsWithPromoCodes: validatedClaimed.filter(d => d.promoCode).length,
-      savedDiscountsWithPromoCodes: savedPromoCodesCount,
-      savedDiscounts: savedClaimed.map((d: any) => ({ 
-        id: typeof d === 'object' ? d.id : d, 
-        promoCode: typeof d === 'object' ? d.promoCode : null,
-      })),
-    });
 
     return NextResponse.json({
       success: true,
-      message: `Синхронизировано ${bbActivated.length} скидок с BestBenefits`,
-      synced: bbActivated.map(d => d.id),
-      totalClaimed: updatedClaimed.length,
+      message: `Синхронизировано ${syncResult.synced} скидок, удалено ${syncResult.expired} устаревших`,
+      synced: syncResult.synced,
+      expired: syncResult.expired,
+      total: finalActivations.length,
+      errors: syncResult.errors.length > 0 ? syncResult.errors : undefined,
     });
   } catch (error) {
     console.error("[sync-discounts] ❌ Error:", error);
@@ -264,12 +164,11 @@ export async function POST(request: NextRequest) {
       console.error("[sync-discounts] Error stack:", error.stack);
     }
     return NextResponse.json(
-      { 
+      {
         error: "Не удалось синхронизировать скидки",
-        details: error instanceof Error ? error.message : String(error)
+        details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
     );
   }
 }
-
