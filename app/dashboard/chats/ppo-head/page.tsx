@@ -120,14 +120,16 @@ function PPOHeadChatsContent() {
 
     const chatId = searchParams.get("chatId");
     if (chatId) {
-      const chat = organizationChats.find(c => c.id === chatId);
+      // Ищем чат по ID напрямую в chats, чтобы избежать бесконечного цикла
+      const chat = chats.find(c => c.id === chatId && (c.ticketId || c.type === "GROUP"));
       if (chat) {
         selectChat(chat);
         setShowChatView(true);
         router.replace("/dashboard/chats/ppo-head", { scroll: false });
       }
     }
-  }, [mounted, loading, searchParams, organizationChats, selectChat, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, loading, searchParams, chats.length]); // Используем chats.length вместо organizationChats
 
   useEffect(() => {
     if (selectedChat) {
