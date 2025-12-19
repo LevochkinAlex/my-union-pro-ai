@@ -43,6 +43,17 @@ function PPOHeadChatsContent() {
   const { data: session } = useSession();
   const { showToast } = useToast();
   const currentUserId = session?.user?.id || null;
+  
+  // Проверяем режим просмотра - эта страница только для председателей
+  const isPPOHead = session?.user?.viewMode === "PPO_HEAD" || 
+    (session?.user?.role === "PPO_HEAD" && !session?.user?.isPPOHead);
+
+  // Редирект для обычных членов на страницу личных чатов
+  useEffect(() => {
+    if (session && !isPPOHead) {
+      router.replace("/dashboard/chat");
+    }
+  }, [session, isPPOHead, router]);
 
   const handleError = useCallback((error: string) => {
     showToast(error, "error");

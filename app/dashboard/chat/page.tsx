@@ -43,6 +43,13 @@ function ChatPageContent() {
   const isPPOHead = session?.user?.viewMode === "PPO_HEAD" || 
     (session?.user?.role === "PPO_HEAD" && !session?.user?.isPPOHead);
   
+  // Редирект для председателей на страницу организационных чатов
+  useEffect(() => {
+    if (session && isPPOHead) {
+      router.replace("/dashboard/chats/ppo-head");
+    }
+  }, [session, isPPOHead, router]);
+  
   // Мемоизируем функцию onError чтобы избежать бесконечного цикла
   const handleError = useCallback((error: string) => {
     showToast(error, "error");
