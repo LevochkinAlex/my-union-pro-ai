@@ -221,7 +221,7 @@ function PPOHeadChatsContent() {
   // Переход на профиль пользователя
   const handleProfileClick = useCallback((userId: string) => {
     if (userId && userId !== currentUserId) {
-      router.push(`/dashboard/social/profile/${userId}`);
+      router.push(`/dashboard/profile/${userId}`);
     }
   }, [router, currentUserId]);
 
@@ -388,6 +388,7 @@ function PPOHeadChatsContent() {
                   setShowInviteModal(true);
                 }}
                 onDelete={() => handleDeleteGroup(selectedChat.id)}
+                onProfileClick={handleProfileClick}
               />
 
               <div className="flex-1 flex flex-col overflow-hidden min-h-0">
@@ -827,11 +828,13 @@ function OrgChatHeader({
   onBack,
   onInvite,
   onDelete,
+  onProfileClick,
 }: {
   chat: Chat;
   onBack: () => void;
   onInvite: () => void;
   onDelete: () => void;
+  onProfileClick?: (userId: string) => void;
 }) {
   const [showMenu, setShowMenu] = useState(false);
 
@@ -850,6 +853,15 @@ function OrgChatHeader({
     return chat.otherUser?.phone || "";
   };
 
+  const handleAvatarClick = () => {
+    // Для обычных чатов (не группы и не обращения) кликаем на профиль
+    if (onProfileClick && chat.otherUser?.id && chat.type !== "GROUP" && !chat.ticketId) {
+      onProfileClick(chat.otherUser.id);
+    }
+  };
+
+  const isClickable = !!onProfileClick && !!chat.otherUser?.id && chat.type !== "GROUP" && !chat.ticketId;
+
   return (
     <div className="flex items-center gap-3 p-3 md:p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
       <button
@@ -861,32 +873,44 @@ function OrgChatHeader({
         </svg>
       </button>
 
-      {chat.type === "GROUP" ? (
-        chat.iconUrl ? (
-          <img src={getFileUrl(chat.iconUrl)} alt="" className="w-10 h-10 rounded-full object-cover" />
-        ) : (
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center text-white">
+      <button
+        onClick={handleAvatarClick}
+        disabled={!isClickable}
+        className={isClickable ? "cursor-pointer hover:opacity-80 transition-opacity" : "cursor-default"}
+      >
+        {chat.type === "GROUP" ? (
+          chat.iconUrl ? (
+            <img src={getFileUrl(chat.iconUrl)} alt="" className="w-10 h-10 rounded-full object-cover" />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center text-white">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+          )
+        ) : chat.ticketId ? (
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center text-white">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
             </svg>
           </div>
-        )
-      ) : chat.ticketId ? (
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center text-white">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-          </svg>
-        </div>
-      ) : chat.otherUser?.avatarUrl ? (
-        <img src={getFileUrl(chat.otherUser.avatarUrl)} alt="" className="w-10 h-10 rounded-full object-cover" />
-      ) : (
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-          {chat.otherUser?.firstName?.[0] || "?"}{chat.otherUser?.lastName?.[0] || ""}
-        </div>
-      )}
+        ) : chat.otherUser?.avatarUrl ? (
+          <img src={getFileUrl(chat.otherUser.avatarUrl)} alt="" className="w-10 h-10 rounded-full object-cover" />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
+            {chat.otherUser?.firstName?.[0] || "?"}{chat.otherUser?.lastName?.[0] || ""}
+          </div>
+        )}
+      </button>
 
       <div className="flex-1 min-w-0">
-        <h3 className="font-semibold text-gray-900 dark:text-white truncate">{getChatName()}</h3>
+        <button
+          onClick={handleAvatarClick}
+          disabled={!isClickable}
+          className={`text-left ${isClickable ? "cursor-pointer hover:underline" : "cursor-default"}`}
+        >
+          <h3 className="font-semibold text-gray-900 dark:text-white truncate">{getChatName()}</h3>
+        </button>
         <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{getSubtitle()}</p>
       </div>
 
