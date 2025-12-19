@@ -92,6 +92,12 @@ function ChatPageContent() {
     onError: handleError,
   });
 
+  // Фильтруем только личные чаты (PRIVATE без ticketId)
+  // Организационные чаты (GROUP, с ticketId) показываются только в /dashboard/chats/ppo-head
+  const personalChats = chats.filter((chat) => 
+    chat.type === "PRIVATE" && !chat.ticketId
+  );
+
   // Инициализация - loadChats только один раз при монтировании
   useEffect(() => {
     setMounted(true);
@@ -268,9 +274,6 @@ function ChatPageContent() {
   if (!mounted) {
     return <PageSkeleton />;
   }
-
-  // Фильтруем только личные чаты (PRIVATE)
-  const personalChats = chats.filter(c => c.type === "PRIVATE");
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">

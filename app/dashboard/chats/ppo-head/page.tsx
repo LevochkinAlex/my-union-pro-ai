@@ -60,6 +60,7 @@ function PPOHeadChatsContent() {
   }, [showToast]);
 
   const [mounted, setMounted] = useState(false);
+  const [activeTab, setActiveTab] = useState<"organization" | "personal">("organization");
   const [showChatView, setShowChatView] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
@@ -109,10 +110,18 @@ function PPOHeadChatsContent() {
     onError: handleError,
   });
 
-  // Фильтруем только организационные чаты (с ticketId или группы)
+  // Фильтруем чаты по типу
+  // Организационные: с ticketId или группы
   const organizationChats = chats.filter((chat) => 
     chat.ticketId || chat.type === "GROUP"
   );
+  // Личные: PRIVATE чаты без ticketId
+  const personalChats = chats.filter((chat) => 
+    chat.type === "PRIVATE" && !chat.ticketId
+  );
+  
+  // Текущий список чатов в зависимости от таба
+  const currentChats = activeTab === "organization" ? organizationChats : personalChats;
 
   useEffect(() => {
     setMounted(true);
@@ -125,17 +134,30 @@ function PPOHeadChatsContent() {
     if (!mounted || loading) return;
 
     const chatId = searchParams.get("chatId");
+    const tab = searchParams.get("tab");
+    
+    // Устанавливаем таб из URL если есть
+    if (tab === "personal") {
+      setActiveTab("personal");
+    }
+    
     if (chatId) {
-      // Ищем чат по ID напрямую в chats, чтобы избежать бесконечного цикла
-      const chat = chats.find(c => c.id === chatId && (c.ticketId || c.type === "GROUP"));
+      // Ищем чат по ID в любом из списков
+      const chat = chats.find(c => c.id === chatId);
       if (chat) {
+        // Определяем таб по типу чата
+        if (chat.ticketId || chat.type === "GROUP") {
+          setActiveTab("organization");
+        } else {
+          setActiveTab("personal");
+        }
         selectChat(chat);
         setShowChatView(true);
         router.replace("/dashboard/chats/ppo-head", { scroll: false });
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted, loading, searchParams, chats.length]); // Используем chats.length вместо organizationChats
+  }, [mounted, loading, searchParams, chats.length]);
 
   useEffect(() => {
     if (selectedChat) {
@@ -332,45 +354,96 @@ function PPOHeadChatsContent() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-10rem)]">
-      {/* Заголовок и кнопка создания группы */}
-      <div className="shrink-0 mb-4 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      {/* Заголовок с табами */}
+      <div className="shrink-0 mb-4">
+        <div className="flex items-center justify-between gap-4 mb-4">
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-            Чаты организации
+            Чаты
           </h1>
-          {organizationChats.length > 0 && (
-            <span className="rounded-full bg-blue-100 dark:bg-blue-900/30 px-2.5 py-0.5 text-sm font-medium text-blue-600 dark:text-blue-400">
-              {organizationChats.length}
-            </span>
+          {activeTab === "organization" && (
+            <button
+              onClick={() => setShowCreateGroupModal(true)}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="hidden sm:inline">Создать группу</span>
+            </button>
           )}
         </div>
-        <button
-          onClick={() => setShowCreateGroupModal(true)}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 flex items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          <span className="hidden sm:inline">Создать группу</span>
-        </button>
+        
+        {/* Табы */}
+        <div className="flex border-b border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => setActiveTab("organization")}
+            className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "organization"
+                ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+          >
+            <span className="flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              Чаты организации
+              {organizationChats.length > 0 && (
+                <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full text-xs">
+                  {organizationChats.length}
+                </span>
+              )}
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab("personal")}
+            className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "personal"
+                ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+          >
+            <span className="flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              Личные чаты
+              {personalChats.length > 0 && (
+                <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full text-xs">
+                  {personalChats.length}
+                </span>
+              )}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Основной интерфейс чата */}
       <div className="flex flex-1 min-h-0 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
         {/* Сайдбар со списком чатов */}
         <div className={`${showChatView ? "hidden md:flex" : "flex"} w-full md:w-1/3 border-r border-gray-200 dark:border-gray-700 flex-col`}>
-          <OrgChatSidebar
-            chats={organizationChats}
-            selectedChat={selectedChat}
-            loading={loading}
-            currentUserId={currentUserId}
-            onSelectChat={handleSelectChat}
-            onInvite={(chat) => {
-              setInviteChat(chat);
-              setShowInviteModal(true);
-            }}
-            onDelete={handleDeleteGroup}
-          />
+          {activeTab === "organization" ? (
+            <OrgChatSidebar
+              chats={organizationChats}
+              selectedChat={selectedChat}
+              loading={loading}
+              currentUserId={currentUserId}
+              onSelectChat={handleSelectChat}
+              onInvite={(chat) => {
+                setInviteChat(chat);
+                setShowInviteModal(true);
+              }}
+              onDelete={handleDeleteGroup}
+            />
+          ) : (
+            <PersonalChatSidebar
+              chats={personalChats}
+              selectedChat={selectedChat}
+              loading={loading}
+              currentUserId={currentUserId}
+              onSelectChat={handleSelectChat}
+            />
+          )}
         </div>
 
         {/* Область чата */}
@@ -678,6 +751,125 @@ function OrgChatSidebar({
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+// Сайдбар для личных чатов
+function PersonalChatSidebar({
+  chats,
+  selectedChat,
+  loading,
+  currentUserId,
+  onSelectChat,
+}: {
+  chats: Chat[];
+  selectedChat: Chat | null;
+  loading: boolean;
+  currentUserId: string | null;
+  onSelectChat: (chat: Chat) => void;
+}) {
+  if (loading) {
+    return (
+      <div className="p-4">
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-3 animate-pulse">
+              <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700" />
+              <div className="flex-1">
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2" />
+                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (chats.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+        <div className="w-16 h-16 mb-4 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+        </div>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Нет личных чатов
+        </p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+          Начните переписку с коллегами из профсети
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+          Личные чаты
+          <span className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full text-gray-600 dark:text-gray-400">
+            {chats.length}
+          </span>
+        </h2>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {chats.map((chat) => (
+          <PersonalChatItem
+            key={chat.id}
+            chat={chat}
+            isSelected={selectedChat?.id === chat.id}
+            currentUserId={currentUserId}
+            onClick={() => onSelectChat(chat)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Элемент личного чата в сайдбаре
+function PersonalChatItem({
+  chat,
+  isSelected,
+  currentUserId,
+  onClick,
+}: {
+  chat: Chat;
+  isSelected: boolean;
+  currentUserId: string | null;
+  onClick: () => void;
+}) {
+  const name = getUserName(chat.otherUser);
+  const avatar = chat.otherUser?.avatarUrl;
+
+  return (
+    <div
+      className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+        isSelected ? "bg-blue-50 dark:bg-blue-900/30" : ""
+      }`}
+      onClick={onClick}
+    >
+      {avatar ? (
+        <img src={getFileUrl(avatar)} alt="" className="w-12 h-12 rounded-full object-cover" />
+      ) : (
+        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
+          {chat.otherUser?.firstName?.[0] || "?"}{chat.otherUser?.lastName?.[0] || ""}
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-gray-900 dark:text-white truncate">{name}</p>
+        {chat.lastMessage && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{chat.lastMessage}</p>
+        )}
+      </div>
+      {chat.unreadCount && chat.unreadCount > 0 && (
+        <span className="shrink-0 bg-blue-600 text-white text-xs font-medium px-2 py-0.5 rounded-full">
+          {chat.unreadCount}
+        </span>
+      )}
     </div>
   );
 }
