@@ -289,6 +289,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Инвалидируем кеш профиля, чтобы пользователь видел актуальные данные
+    const { cacheDeletePattern } = await import("@/lib/cache");
+    await cacheDeletePattern(`profile:userId:${user.id}:*`);
+
     // Отправляем уведомление пользователю о готовности документов
     try {
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";

@@ -463,9 +463,9 @@ export async function POST(
       ? chat.participant2Id 
       : chat.participant1Id;
 
-    // Проверяем, является ли получатель ботом
+    // Проверяем, является ли получатель ботом (определяем до использования в условиях)
     const botUser = await getOrCreateAIBotUser();
-    const isBotChat = recipientId === botUser.id;
+    const isBotChat = recipientId ? recipientId === botUser.id : false;
 
     // Получаем информацию о чате с временем последнего чтения
     const chatWithReadTime = await prisma.chat.findUnique({
@@ -690,19 +690,20 @@ ${formattedSearchInfo ? `### ⚠️ КРИТИЧЕСКИ ВАЖНО - ИСПОЛ
           senderName,
         });
 
-      console.log("[chat] ✅ Уведомление отправлено получателю:", {
-        pushSent: notificationResult?.push || false,
-        emailSent: notificationResult?.email || false,
-        isChatOpen,
-      });
-    } catch (notificationError: any) {
-      console.error("[chat] ⚠️ Ошибка отправки пуш-уведомления:", {
-        error: notificationError?.message,
-        stack: notificationError?.stack,
-        recipientId,
-        chatId,
-      });
-      // Не прерываем отправку сообщения из-за ошибки уведомления
+        console.log("[chat] ✅ Уведомление отправлено получателю:", {
+          pushSent: notificationResult?.push || false,
+          emailSent: notificationResult?.email || false,
+          isChatOpen,
+        });
+      } catch (notificationError: any) {
+        console.error("[chat] ⚠️ Ошибка отправки пуш-уведомления:", {
+          error: notificationError?.message,
+          stack: notificationError?.stack,
+          recipientId,
+          chatId,
+        });
+        // Не прерываем отправку сообщения из-за ошибки уведомления
+      }
     }
 
     return NextResponse.json({ message: normalizedMessage });
