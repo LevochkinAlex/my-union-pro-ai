@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions);
     
     // Проверяем, что это админ
-    if (!session?.user || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
+    if (!session?.user || session.user.role !== "SUPER_ADMIN") {
       return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
     }
 
