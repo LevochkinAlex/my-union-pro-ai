@@ -26,10 +26,6 @@ interface User {
   } | null;
 }
 
-interface Organization {
-  id: string;
-  name: string;
-}
 
 // Обертка для Suspense
 export default function UsersPage() {
@@ -51,10 +47,8 @@ function UsersPageContent() {
   const searchParams = useSearchParams();
   const { data: session } = useSession();
   const [users, setUsers] = useState<User[]>([]);
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [selectedOrg, setSelectedOrg] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -64,9 +58,7 @@ function UsersPageContent() {
   // Инициализация из URL параметров
   useEffect(() => {
     const searchParam = searchParams.get("search");
-    const orgParam = searchParams.get("organizationId");
     if (searchParam) setSearch(searchParam);
-    if (orgParam) setSelectedOrg(orgParam);
   }, [searchParams]);
 
   const handlePostCreated = useCallback(() => {
@@ -79,7 +71,6 @@ function UsersPageContent() {
     try {
       const params = new URLSearchParams();
       if (search) params.append("search", search);
-      if (selectedOrg) params.append("organizationId", selectedOrg);
       params.append("page", page.toString());
       params.append("limit", "20");
 
@@ -100,14 +91,12 @@ function UsersPageContent() {
       const data = await response.json();
       // API теперь возвращает даты в правильном формате, но на всякий случай проверяем
       setUsers(data.users || []);
-      setOrganizations(data.organizations || []);
       setTotalPages(data.totalPages || 1);
       setTotal(data.total || 0);
 
       // Обновляем URL без перезагрузки страницы
       const newParams = new URLSearchParams();
       if (search) newParams.append("search", search);
-      if (selectedOrg) newParams.append("organizationId", selectedOrg);
       router.replace(`/dashboard/users?${newParams.toString()}`, {
         scroll: false,
       });
@@ -116,7 +105,7 @@ function UsersPageContent() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, selectedOrg, router]);
+  }, [page, search, router]);
 
   useEffect(() => {
     loadUsers();
@@ -129,14 +118,6 @@ function UsersPageContent() {
       loadUsers();
     },
     [loadUsers]
-  );
-
-  const handleOrgChange = useCallback(
-    (value: string) => {
-      setSelectedOrg(value);
-      setPage(1);
-    },
-    []
   );
 
   const handlePageChange = useCallback((newPage: number) => {
@@ -219,13 +200,10 @@ function UsersPageContent() {
             </p>
           </div>
 
-          {/* Поиск и фильтры */}
+          {/* Поиск */}
           <SearchForm
             search={search}
             onSearchChange={setSearch}
-            selectedOrg={selectedOrg}
-            onOrgChange={handleOrgChange}
-            organizations={organizations}
             total={total}
             onSubmit={handleSearch}
           />
@@ -269,13 +247,10 @@ function UsersPageContent() {
         onClose={() => setShowUsersPanel(false)}
         title="Профсеть"
       >
-        {/* Поиск и фильтры */}
+        {/* Поиск */}
         <SearchForm
           search={search}
           onSearchChange={setSearch}
-          selectedOrg={selectedOrg}
-          onOrgChange={handleOrgChange}
-          organizations={organizations}
           total={total}
           onSubmit={handleSearch}
           isMobile={true}

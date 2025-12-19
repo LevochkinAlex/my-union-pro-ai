@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { withCache, getCacheKey } from "@/lib/cache";
 import * as Sentry from "@sentry/nextjs";
 
-// GET - получение списка пользователей с поиском и фильтрацией
+// GET - получение списка пользователей с поиском (только внутри организации пользователя)
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -13,9 +13,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
+    // Получаем организацию текущего пользователя
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { organizationId: true },
+    });
+
+    const userOrganizationId = currentUser?.organizationId;
+
     const searchParams = request.nextUrl.searchParams;
     const search = searchParams.get("search") || "";
-    const organizationId = searchParams.get("organizationId") || "";
     const page = parseInt(searchParams.get("page") || "1");
     let limit = parseInt(searchParams.get("limit") || "20");
     const skip = (page - 1) * limit;
@@ -28,6 +35,10 @@ export async function GET(request: NextRequest) {
       role: {
         not: "SUPER_ADMIN",
       },
+      // ВАЖНО: Показываем только пользователей из той же организации
+      ...(userOrganizationId ? {
+        organizationId: userOrganizationId,
+      } : {}),
     };
 
     // Поиск по полям пользователя
@@ -47,13 +58,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Фильтр по организации
-    if (organizationId) {
-      where.organizationId = organizationId;
-    }
-
     // Кешируем запрос пользователей на 2 минуты (данные меняются редко)
-    const cacheKey = getCacheKey("users:list", { search, organizationId, page, limit });
+    const cacheKey = getCacheKey("users:list", { search, organizationId: userOrganizationId || "none", page, limit });
     
     const result = await Sentry.startSpan(
       {
@@ -62,7 +68,7 @@ export async function GET(request: NextRequest) {
       },
       async (span) => {
         span.setAttribute("search", search);
-        span.setAttribute("organizationId", organizationId || "all");
+        span.setAttribute("organizationId", userOrganizationId || "none");
         span.setAttribute("page", page);
         span.setAttribute("limit", limit);
         
@@ -100,35 +106,14 @@ export async function GET(request: NextRequest) {
               prisma.user.count({ where }),
             ]);
 
-            // Получаем список организаций для фильтра (кешируем отдельно на 10 минут)
-            const orgCacheKey = getCacheKey("organizations:list", {});
-            const organizations = await withCache(
-              orgCacheKey,
-              async () => {
-                return await prisma.organization.findMany({
-                  where: {
-                    isActive: true,
-                  },
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                  orderBy: {
-                    name: "asc",
-                  },
-                });
-              },
-              600 // 10 минут
-            );
-
-            return { users, total, organizations };
+            return { users, total };
           },
           120 // 2 минуты
         );
       }
     );
 
-    const { users, total, organizations } = result;
+    const { users, total } = result;
 
     // Преобразуем даты в ISO строки для корректной сериализации
     const serializedUsers = users.map((user) => ({
@@ -142,7 +127,6 @@ export async function GET(request: NextRequest) {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
-      organizations,
     });
   } catch (error) {
     Sentry.captureException(error);

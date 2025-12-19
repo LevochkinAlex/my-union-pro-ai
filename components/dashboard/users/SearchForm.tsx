@@ -3,9 +3,6 @@
 interface SearchFormProps {
   search: string;
   onSearchChange: (value: string) => void;
-  selectedOrg: string;
-  onOrgChange: (value: string) => void;
-  organizations: Array<{ id: string; name: string }>;
   total: number;
   onSubmit: (e: React.FormEvent) => void;
   isMobile?: boolean;
@@ -14,9 +11,6 @@ interface SearchFormProps {
 export default function SearchForm({
   search,
   onSearchChange,
-  selectedOrg,
-  onOrgChange,
-  organizations,
   total,
   onSubmit,
   isMobile = false,
@@ -29,76 +23,46 @@ export default function SearchForm({
     ? "w-full px-4 py-3 pl-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
     : "w-full px-4 py-2 pl-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent";
 
-  const selectClass = isMobile
-    ? "w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation"
-    : "w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent";
-
   const buttonClass = isMobile
     ? "w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-lg font-medium active:bg-blue-700 transition-colors touch-manipulation text-base"
     : "w-full lg:w-auto px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors";
 
   const searchId = isMobile ? "mobile-search" : "search";
-  const orgId = isMobile ? "mobile-organization" : "organization";
 
   return (
     <div className={containerClass}>
       <form onSubmit={onSubmit} className="space-y-4">
-        <div className="flex flex-col gap-4">
-          {/* Поиск */}
-          <div className="sm:col-span-2">
-            <label
-              htmlFor={searchId}
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+        {/* Поиск */}
+        <div>
+          <label
+            htmlFor={searchId}
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+          >
+            Поиск по имени, email или телефону
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              id={searchId}
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Введите имя, email или телефон..."
+              className={inputClass}
+              autoComplete="off"
+            />
+            <svg
+              className="absolute left-3 top-2.5 h-5 w-5 text-gray-400 pointer-events-none"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              Поиск по имени, email или телефону
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                id={searchId}
-                value={search}
-                onChange={(e) => onSearchChange(e.target.value)}
-                placeholder="Введите имя, email или телефон..."
-                className={inputClass}
-                autoComplete="off"
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
-              <svg
-                className="absolute left-3 top-2.5 h-5 w-5 text-gray-400 pointer-events-none"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-            </div>
-          </div>
-
-          {/* Фильтр по организации */}
-          <div>
-            <label
-              htmlFor={orgId}
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-            >
-              Организация
-            </label>
-            <select
-              id={orgId}
-              value={selectedOrg}
-              onChange={(e) => onOrgChange(e.target.value)}
-              className={selectClass}
-            >
-              <option value="">Все организации</option>
-              {organizations.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
-              ))}
-            </select>
+            </svg>
           </div>
         </div>
 
