@@ -62,7 +62,9 @@ export default function AppealsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | keyof typeof TICKET_STATUSES>("all");
   
-  const isPPOHead = session?.user?.role === "PPO_HEAD";
+  // Проверяем режим просмотра вместо роли для корректного переключения
+  const isPPOHead = session?.user?.viewMode === "PPO_HEAD" || 
+    (session?.user?.role === "PPO_HEAD" && !session?.user?.isPPOHead);
 
   const loadTickets = async () => {
     try {

@@ -28,14 +28,23 @@ export default async function DashboardPage() {
   
   console.log("[dashboard/page] ✅ Rendering dashboard for user:", userId);
 
-  // Получаем роль пользователя
+  // Получаем роль и режим просмотра пользователя
   const userRole = await prisma.user.findUnique({
     where: { id: userId },
     select: {
       role: true,
       firstName: true,
       lastName: true,
+      viewMode: true,
+      isPPOHead: true,
+      ppoHeadOrganizationId: true,
       organization: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      ppoHeadOrganization: {
         select: {
           id: true,
           name: true,
@@ -44,21 +53,28 @@ export default async function DashboardPage() {
     },
   });
 
-  // Если пользователь - Председатель, показываем специальный дашборд
-  if (userRole?.role === "PPO_HEAD" && userRole.organization) {
+  // Определяем показывать ли дашборд председателя на основе viewMode
+  const showPPOHeadDashboard = 
+    userRole?.viewMode === "PPO_HEAD" || 
+    (userRole?.role === "PPO_HEAD" && !userRole?.isPPOHead);
+  
+  const ppoOrganization = userRole?.ppoHeadOrganization || userRole?.organization;
+
+  // Если пользователь в режиме Председателя, показываем специальный дашборд
+  if (showPPOHeadDashboard && ppoOrganization) {
     // Получаем статистику для Председателя
     const [pendingAppeals, pendingMembers, activeMembers, totalNews, totalDocuments, recentAppeals, recentMembers] = await Promise.all([
       // Количество новых обращений
       prisma.ticket.count({
         where: {
-          organizationId: userRole.organization.id,
+          organizationId: ppoOrganization.id,
           status: "PENDING",
         },
       }),
       // Количество заявок на валидации
       prisma.user.count({
         where: {
-          organizationId: userRole.organization.id,
+          organizationId: ppoOrganization.id,
           membershipStatus: {
             in: ["DOCUMENTS_PENDING", "PROFILE_INCOMPLETE"],
           },
@@ -67,7 +83,7 @@ export default async function DashboardPage() {
       // Количество активных членов
       prisma.user.count({
         where: {
-          organizationId: userRole.organization.id,
+          organizationId: ppoOrganization.id,
           membershipStatus: "APPROVED",
         },
       }),
@@ -75,14 +91,14 @@ export default async function DashboardPage() {
       prisma.newsPost.count({
         where: {
           channel: {
-            organizationId: userRole.organization.id,
+            organizationId: ppoOrganization.id,
           },
         },
       }),
       // Количество документов
       prisma.document.count({
         where: {
-          organizationId: userRole.organization.id,
+          organizationId: ppoOrganization.id,
           type: {
             in: ["AGENDA", "PROTOCOL", "RESOLUTION", "PROTOCOL_EXTRACT"],
           },
@@ -91,7 +107,7 @@ export default async function DashboardPage() {
       // Последние обращения
       prisma.ticket.findMany({
         where: {
-          organizationId: userRole.organization.id,
+          organizationId: ppoOrganization.id,
         },
         orderBy: {
           createdAt: "desc",
@@ -114,7 +130,7 @@ export default async function DashboardPage() {
       // Последние заявки на вступление
       prisma.user.findMany({
         where: {
-          organizationId: userRole.organization.id,
+          organizationId: ppoOrganization.id,
           membershipStatus: {
             in: ["DOCUMENTS_PENDING", "PROFILE_INCOMPLETE"],
           },
@@ -137,7 +153,7 @@ export default async function DashboardPage() {
     return (
       <PPOHeadDashboard
         userName={userName}
-        organizationName={userRole.organization.name}
+        organizationName={ppoOrganization.name}
         stats={{
           pendingAppeals,
           pendingMembers,

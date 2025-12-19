@@ -36,7 +36,9 @@ export default function DocumentsPage() {
   const [regeneratingDocId, setRegeneratingDocId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   
-  const isPPOHead = session?.user?.role === "PPO_HEAD";
+  // Проверяем режим просмотра вместо роли для корректного переключения
+  const isPPOHead = session?.user?.viewMode === "PPO_HEAD" || 
+    (session?.user?.role === "PPO_HEAD" && !session?.user?.isPPOHead);
 
   // Функции загрузки данных вынесены из useEffect для повторного использования
   const loadProfileStatus = async () => {

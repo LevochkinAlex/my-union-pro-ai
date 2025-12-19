@@ -21,6 +21,9 @@ declare module "next-auth" {
       avatarUrl?: string | null;
       originalAdminId?: string; // ID админа при impersonation
       isImpersonating?: boolean; // Флаг режима impersonation
+      viewMode?: string; // Текущий режим работы: MEMBER или PPO_HEAD
+      isPPOHead?: boolean; // Является ли пользователь председателем ППО
+      ppoHeadOrganizationId?: string | null; // ID организации председателя
     };
   }
 }

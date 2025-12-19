@@ -63,7 +63,9 @@ function ChatPageContent() {
   const { data: session } = useSession();
   const { showToast } = useToast();
   const currentUserId = session?.user?.id || null;
-  const isPPOHead = session?.user?.role === "PPO_HEAD";
+  // Проверяем режим просмотра вместо роли для корректного переключения
+  const isPPOHead = session?.user?.viewMode === "PPO_HEAD" || 
+    (session?.user?.role === "PPO_HEAD" && !session?.user?.isPPOHead);
   
   // Мемоизируем функцию onError чтобы избежать бесконечного цикла
   const handleError = useCallback((error: string) => {

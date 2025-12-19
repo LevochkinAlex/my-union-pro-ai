@@ -688,6 +688,30 @@ export const authOptions: NextAuthOptions = {
         session.user.lastName = token.lastName;
         // avatarUrl не хранится в токене (слишком длинный URL), будет получаться из БД при необходимости
         session.user.avatarUrl = undefined;
+        
+        // Получаем актуальные viewMode и isPPOHead из БД
+        // Это важно для корректного переключения режимов
+        try {
+          const userData = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: {
+              viewMode: true,
+              isPPOHead: true,
+              ppoHeadOrganizationId: true,
+            },
+          });
+          
+          if (userData) {
+            (session.user as any).viewMode = userData.viewMode || "MEMBER";
+            (session.user as any).isPPOHead = userData.isPPOHead || false;
+            (session.user as any).ppoHeadOrganizationId = userData.ppoHeadOrganizationId || null;
+          }
+        } catch (error) {
+          console.error("[Auth] Error fetching viewMode:", error);
+          (session.user as any).viewMode = "MEMBER";
+          (session.user as any).isPPOHead = false;
+        }
+        
         // Копируем поля impersonation из токена в сессию
         // ВАЖНО: Явно очищаем поля, если их нет в токене
         if (token.originalAdminId) {
