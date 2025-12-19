@@ -66,6 +66,7 @@ export async function POST(
       where: { id },
       data: {
         membershipStatus: "APPROVED",
+        unionMembershipStatus: "ACCEPTED", // Принят на учет
         membershipJoinedAt: new Date(),
       },
     });

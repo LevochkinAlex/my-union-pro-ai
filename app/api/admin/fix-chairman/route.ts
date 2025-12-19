@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
         data: {
           organizationId: chairman.ppoHeadOrganizationId,
           membershipStatus: "APPROVED",
+          unionMembershipStatus: "ACCEPTED", // Принят на учет
         },
       });
       fixed.push({
@@ -75,10 +76,25 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Также исправляем всех пользователей со статусом APPROVED, но без unionMembershipStatus = ACCEPTED
+    const approvedWithoutAccepted = await prisma.user.updateMany({
+      where: {
+        membershipStatus: "APPROVED",
+        OR: [
+          { unionMembershipStatus: null },
+          { unionMembershipStatus: "NOT_ACCEPTED" },
+        ],
+      },
+      data: {
+        unionMembershipStatus: "ACCEPTED",
+      },
+    });
+
     return NextResponse.json({
       success: true,
-      message: `Исправлено ${fixed.length} председателей`,
+      message: `Исправлено ${fixed.length} председателей и ${approvedWithoutAccepted.count} членов профсоюза`,
       fixed,
+      approvedMembersFixed: approvedWithoutAccepted.count,
     });
   } catch (error: any) {
     console.error("[admin/fix-chairman] Error:", error);

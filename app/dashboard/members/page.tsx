@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { alertSuccess, alertError } from "@/lib/alert";
 
@@ -82,7 +83,8 @@ const EMPLOYMENT_STATUS_MAP: Record<string, string> = {
 };
 
 export default function MembersPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"validation" | "active">("validation");
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -98,9 +100,22 @@ export default function MembersPage() {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailTab, setDetailTab] = useState<DetailTab>("profile");
 
+  // Проверяем режим просмотра - страница только для председателей
+  const isPPOHead = session?.user?.viewMode === "PPO_HEAD" || 
+    (session?.user?.role === "PPO_HEAD" && !(session?.user as any)?.isPPOHead);
+
+  // Редирект для обычных членов
   useEffect(() => {
-    loadMembers();
-  }, [activeTab]);
+    if (status === "authenticated" && !isPPOHead) {
+      router.replace("/dashboard");
+    }
+  }, [status, isPPOHead, router]);
+
+  useEffect(() => {
+    if (isPPOHead) {
+      loadMembers();
+    }
+  }, [activeTab, isPPOHead]);
 
   const loadMembers = async () => {
     try {
