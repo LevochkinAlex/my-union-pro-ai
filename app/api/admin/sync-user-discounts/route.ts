@@ -12,15 +12,27 @@ import { decryptPassword } from "@/lib/best-benefits-password";
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    // Разрешаем внутренние запросы с секретным ключом
+    const internalSecret = request.headers.get("X-Internal-Secret");
+    const expectedSecret = process.env.INTERNAL_API_SECRET || "internal-secret-key-change-in-production";
+    const isInternalRequest = internalSecret === expectedSecret;
+    
+    // Если это не внутренний запрос, проверяем сессию
+    if (!isInternalRequest) {
+      try {
+        const session = await getServerSession(authOptions);
 
-    // Check authorization - only admins
-    const role = session?.user?.role as string | undefined;
-    if (!role || !["SUPER_ADMIN", "ADMIN"].includes(role)) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 403 }
-      );
+        // Check authorization - only admins
+        const role = session?.user?.role as string | undefined;
+        if (!role || !["SUPER_ADMIN", "ADMIN"].includes(role)) {
+          return NextResponse.json(
+            { error: "Unauthorized" },
+            { status: 403 }
+          );
+        }
+      } catch (authError) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      }
     }
 
     const { userId, email, phone } = await request.json();
