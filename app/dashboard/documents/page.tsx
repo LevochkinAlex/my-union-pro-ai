@@ -24,19 +24,10 @@ interface Document {
 }
 
 export default function DocumentsPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
   
-  // Если пользователь - Председатель (по роли, флагу isPPOHead или viewMode), показываем специальную страницу
-  const isPPOHead = 
-    session?.user?.role === "PPO_HEAD" || 
-    (session?.user as any)?.isPPOHead === true ||
-    (session?.user as any)?.viewMode === "PPO_HEAD";
-    
-  if (isPPOHead) {
-    return <PPOHeadDocumentsPage />;
-  }
-
+  // Все хуки должны быть объявлены ДО любых условных return
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,10 +36,36 @@ export default function DocumentsPage() {
   const [regeneratingDocId, setRegeneratingDocId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
 
+  // Если пользователь - Председатель (по роли, флагу isPPOHead или viewMode), показываем специальную страницу
+  const isPPOHead = 
+    session?.user?.role === "PPO_HEAD" || 
+    (session?.user as any)?.isPPOHead === true ||
+    (session?.user as any)?.viewMode === "PPO_HEAD";
+
   useEffect(() => {
-    loadDocuments();
-    loadProfileStatus();
-  }, []);
+    // Загружаем документы только если не PPO_HEAD
+    if (!isPPOHead && status === "authenticated") {
+      loadDocuments();
+      loadProfileStatus();
+    }
+  }, [isPPOHead, status]);
+  
+  // Если пользователь - Председатель, показываем специальную страницу
+  if (isPPOHead) {
+    return <PPOHeadDocumentsPage />;
+  }
+  
+  // Показываем загрузку пока сессия грузится
+  if (status === "loading") {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+          <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
 
   const loadProfileStatus = async () => {
     try {

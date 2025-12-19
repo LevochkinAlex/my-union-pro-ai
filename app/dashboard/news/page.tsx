@@ -37,18 +37,9 @@ interface NewsPost {
 }
 
 export default function NewsPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   
-  // Если пользователь - Председатель (по роли, флагу isPPOHead или viewMode), показываем специальную страницу
-  const isPPOHead = 
-    session?.user?.role === "PPO_HEAD" || 
-    (session?.user as any)?.isPPOHead === true ||
-    (session?.user as any)?.viewMode === "PPO_HEAD";
-    
-  if (isPPOHead) {
-    return <PPOHeadNewsPage />;
-  }
-
+  // Все хуки должны быть объявлены ДО любых условных return
   const [news, setNews] = useState<NewsPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -58,6 +49,12 @@ export default function NewsPage() {
   const observerTarget = useRef<HTMLDivElement>(null);
   const isLoadingRef = useRef(false); // Ref для предотвращения дублирования
   const loadNewsRef = useRef<((pageNum?: number) => Promise<void>) | null>(null);
+
+  // Если пользователь - Председатель (по роли, флагу isPPOHead или viewMode), показываем специальную страницу
+  const isPPOHead = 
+    session?.user?.role === "PPO_HEAD" || 
+    (session?.user as any)?.isPPOHead === true ||
+    (session?.user as any)?.viewMode === "PPO_HEAD";
 
   const loadNews = useCallback(async (pageNum = 1) => {
     // Предотвращаем повторные запросы через ref
@@ -98,10 +95,29 @@ export default function NewsPage() {
     loadNewsRef.current = loadNews;
   }, [loadNews]);
 
-  // Загружаем первую страницу только один раз
+  // Загружаем первую страницу только один раз (если не PPO_HEAD)
   useEffect(() => {
-    loadNews();
-  }, []);
+    if (!isPPOHead && status === "authenticated") {
+      loadNews();
+    }
+  }, [isPPOHead, status]);
+  
+  // Если пользователь - Председатель, показываем специальную страницу
+  if (isPPOHead) {
+    return <PPOHeadNewsPage />;
+  }
+  
+  // Показываем загрузку пока сессия грузится
+  if (status === "loading") {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+          <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Infinite scroll с Intersection Observer
   useEffect(() => {

@@ -75,23 +75,20 @@ const PRIORITY_ICONS: Record<string, { icon: React.ReactNode; color: string }> =
 type FilterStatus = "all" | keyof typeof TICKET_STATUSES;
 
 export default function AppealsPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
   
+  // Все хуки должны быть объявлены ДО любых условных return
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FilterStatus>("all");
+
   // Если пользователь - Председатель (по роли, флагу isPPOHead или viewMode), показываем специальную страницу
   const isPPOHead = 
     session?.user?.role === "PPO_HEAD" || 
     (session?.user as any)?.isPPOHead === true ||
     (session?.user as any)?.viewMode === "PPO_HEAD";
-    
-  if (isPPOHead) {
-    return <PPOHeadAppealsPage />;
-  }
-
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<FilterStatus>("all");
 
   // Подсчёт по статусам
   const statusCounts = tickets.reduce((acc, ticket) => {
@@ -100,8 +97,28 @@ export default function AppealsPage() {
   }, {} as Record<string, number>);
 
   useEffect(() => {
-    loadTickets();
-  }, []);
+    // Загружаем обращения только если не PPO_HEAD
+    if (!isPPOHead && status === "authenticated") {
+      loadTickets();
+    }
+  }, [isPPOHead, status]);
+
+  // Если пользователь - Председатель, показываем специальную страницу
+  if (isPPOHead) {
+    return <PPOHeadAppealsPage />;
+  }
+  
+  // Показываем загрузку пока сессия грузится
+  if (status === "loading") {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+          <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
 
   const loadTickets = async () => {
     try {
