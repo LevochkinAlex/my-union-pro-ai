@@ -234,15 +234,124 @@ export async function DELETE(
   }
 
   try {
-    await prisma.user.delete({
-      where: { id: userId },
+    // Используем транзакцию для удаления всех связанных данных
+    await prisma.$transaction(async (tx) => {
+      // Удаляем чаты, где пользователь является участником (для PRIVATE чатов)
+      // Сначала удаляем сообщения из этих чатов
+      const userChats = await tx.chat.findMany({
+        where: {
+          OR: [
+            { participant1Id: userId },
+            { participant2Id: userId },
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (userChats.length > 0) {
+        const chatIds = userChats.map(c => c.id);
+        
+        // Удаляем вложения сообщений
+        await tx.chatMessageAttachment.deleteMany({
+          where: { message: { chatId: { in: chatIds } } },
+        });
+        
+        // Удаляем сообщения
+        await tx.chatMessage.deleteMany({
+          where: { chatId: { in: chatIds } },
+        });
+        
+        // Удаляем участников групповых чатов
+        await tx.chatParticipant.deleteMany({
+          where: { chatId: { in: chatIds } },
+        });
+        
+        // Удаляем сами чаты
+        await tx.chat.deleteMany({
+          where: { id: { in: chatIds } },
+        });
+      }
+
+      // Удаляем участие в групповых чатах
+      await tx.chatParticipant.deleteMany({
+        where: { userId },
+      });
+
+      // Удаляем сообщения пользователя в оставшихся чатах
+      // Сначала удаляем вложения
+      await tx.chatMessageAttachment.deleteMany({
+        where: { message: { senderId: userId } },
+      });
+      await tx.chatMessage.deleteMany({
+        where: { senderId: userId },
+      });
+
+      // Удаляем посты пользователя и связанные данные
+      const userPosts = await tx.userPost.findMany({
+        where: { authorId: userId },
+        select: { id: true },
+      });
+
+      if (userPosts.length > 0) {
+        const postIds = userPosts.map(p => p.id);
+        await tx.postComment.deleteMany({ where: { postId: { in: postIds } } });
+        await tx.postLike.deleteMany({ where: { postId: { in: postIds } } });
+        await tx.postView.deleteMany({ where: { postId: { in: postIds } } });
+        await tx.userPost.deleteMany({ where: { id: { in: postIds } } });
+      }
+
+      // Удаляем новости пользователя и связанные данные
+      const userNews = await tx.newsPost.findMany({
+        where: { authorId: userId },
+        select: { id: true },
+      });
+
+      if (userNews.length > 0) {
+        const newsIds = userNews.map(n => n.id);
+        await tx.newsComment.deleteMany({ where: { newsPostId: { in: newsIds } } });
+        await tx.newsLike.deleteMany({ where: { newsPostId: { in: newsIds } } });
+        await tx.newsView.deleteMany({ where: { newsPostId: { in: newsIds } } });
+        
+        // Удаляем голоса в опросах
+        const polls = await tx.newsPoll.findMany({
+          where: { newsPostId: { in: newsIds } },
+          select: { id: true },
+        });
+        if (polls.length > 0) {
+          await tx.newsPollVote.deleteMany({ where: { pollId: { in: polls.map(p => p.id) } } });
+          await tx.newsPoll.deleteMany({ where: { id: { in: polls.map(p => p.id) } } });
+        }
+        
+        await tx.newsPost.deleteMany({ where: { id: { in: newsIds } } });
+      }
+
+      // Удаляем обращения (тикеты) и связанные данные
+      const userTickets = await tx.ticket.findMany({
+        where: { userId },
+        select: { id: true },
+      });
+
+      if (userTickets.length > 0) {
+        const ticketIds = userTickets.map(t => t.id);
+        await tx.ticketComment.deleteMany({ where: { ticketId: { in: ticketIds } } });
+        await tx.ticketActionLog.deleteMany({ where: { ticketId: { in: ticketIds } } });
+        await tx.ticket.deleteMany({ where: { id: { in: ticketIds } } });
+      }
+
+      // Наконец удаляем самого пользователя (остальные связи удалятся каскадно)
+      await tx.user.delete({
+        where: { id: userId },
+      });
     });
+
+    // Инвалидируем кеш пользователей
+    await invalidateUsersCache();
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[admin/users] Ошибка удаления", error);
     return NextResponse.json(
-      { error: "Не удалось удалить пользователя" },
+      { error: "Не удалось удалить пользователя. Возможно есть связанные данные." },
       { status: 500 },
     );
   }

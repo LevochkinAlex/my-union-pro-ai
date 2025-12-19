@@ -106,6 +106,7 @@ export default function AdminUserDetailsPage() {
   const [validating, setValidating] = useState(false);
   const [validationComment, setValidationComment] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
+  const [deleting, setDeleting] = useState(false);
 
   const loadUser = useCallback(async () => {
     if (!userId) return;
@@ -127,6 +128,31 @@ export default function AdminUserDetailsPage() {
   useEffect(() => {
     loadUser();
   }, [loadUser]);
+
+  const handleDelete = async () => {
+    if (!confirm(`Вы уверены, что хотите удалить пользователя ${user?.email}?\n\nЭто действие нельзя отменить. Все связанные данные (документы, сообщения, обращения и т.д.) также будут удалены.`)) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/admin/users/${userId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Ошибка удаления");
+      }
+
+      alert("Пользователь успешно удален");
+      router.push("/admin/users");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Ошибка удаления");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleValidate = async (status: "APPROVED" | "REJECTED") => {
     if (!confirm(`Вы уверены, что хотите ${status === "APPROVED" ? "одобрить" : "отклонить"} этого пользователя?`)) {
@@ -255,24 +281,36 @@ export default function AdminUserDetailsPage() {
           </div>
 
           {/* Actions */}
-          {canValidate && (
-            <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2">
+            {canValidate && (
+              <>
+                <button
+                  onClick={() => handleValidate("APPROVED")}
+                  disabled={validating}
+                  className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+                >
+                  ✓ Одобрить
+                </button>
+                <button
+                  onClick={() => handleValidate("REJECTED")}
+                  disabled={validating}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  ✕ Отклонить
+                </button>
+              </>
+            )}
+            {/* Кнопка удаления - только если это не текущий пользователь */}
+            {session?.user?.id !== user.id && (
               <button
-                onClick={() => handleValidate("APPROVED")}
-                disabled={validating}
-                className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="rounded-lg border border-red-300 bg-white px-4 py-2 text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-700 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20"
               >
-                ✓ Одобрить
+                {deleting ? "Удаление..." : "🗑️ Удалить"}
               </button>
-              <button
-                onClick={() => handleValidate("REJECTED")}
-                disabled={validating}
-                className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
-              >
-                ✕ Отклонить
-              </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
