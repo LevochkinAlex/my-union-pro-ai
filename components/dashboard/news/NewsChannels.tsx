@@ -1,38 +1,77 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+
+interface NewsChannel {
+  id: string;
+  name: string;
+  description: string | null;
+  subscriberCount: number;
+  isMain: boolean;
+  organizationId: string | null;
+}
 
 function NewsChannelsComponent() {
-  const channels = [
-    {
-      id: "1",
-      name: "МООП РЗ РФ",
-      description: "Московская областная организация профсоюза",
-      members: 1247,
-      isMain: true,
-    },
-    {
-      id: "2",
-      name: "Профсоюз врачей Москвы",
-      description: "Объединение медицинских работников",
-      members: 892,
-      isMain: false,
-    },
-    {
-      id: "3",
-      name: "Профсоюз медсестер",
-      description: "Профессиональное сообщество медсестер",
-      members: 654,
-      isMain: false,
-    },
-    {
-      id: "4",
-      name: "Профсоюз фармацевтов",
-      description: "Работники аптечной сферы",
-      members: 423,
-      isMain: false,
-    },
-  ];
+  const { data: session } = useSession();
+  const [channels, setChannels] = useState<NewsChannel[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadChannels = async () => {
+      try {
+        const response = await fetch("/api/news/channels");
+        if (response.ok) {
+          const data = await response.json();
+          setChannels(data.channels || []);
+        }
+      } catch (error) {
+        console.error("Error loading channels:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadChannels();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div className="p-4">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+            Новостные каналы
+          </h2>
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-start gap-3 p-3 animate-pulse">
+                <div className="h-12 w-12 rounded-lg bg-gray-200 dark:bg-gray-700" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-3/4 rounded bg-gray-200 dark:bg-gray-700" />
+                  <div className="h-3 w-1/2 rounded bg-gray-200 dark:bg-gray-700" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (channels.length === 0) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div className="p-4">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+            Новостные каналы
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+            Нет доступных каналов
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -74,11 +113,13 @@ function NewsChannelsComponent() {
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1">
-                  {channel.description}
-                </p>
+                {channel.description && (
+                  <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1">
+                    {channel.description}
+                  </p>
+                )}
                 <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                  {channel.members.toLocaleString()} участников
+                  {channel.subscriberCount.toLocaleString()} участников
                 </p>
               </div>
             </div>
@@ -86,15 +127,16 @@ function NewsChannelsComponent() {
         </div>
       </div>
 
-      <div className="border-t border-gray-200 dark:border-gray-700 p-3">
-        <button className="w-full text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 transition">
-          Показать все каналы
-        </button>
-      </div>
+      {channels.length > 4 && (
+        <div className="border-t border-gray-200 dark:border-gray-700 p-3">
+          <button className="w-full text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 transition">
+            Показать все каналы
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 // Мемоизируем компонент, чтобы избежать лишних рендеров
 export default memo(NewsChannelsComponent);
-

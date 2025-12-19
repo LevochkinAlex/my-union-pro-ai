@@ -36,8 +36,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Получаем количество пользователей в организации
+    const memberCount = await prisma.user.count({
+      where: {
+        organizationId: user.organizationId,
+      },
+    });
+
     // Получаем каналы организации
-    const channels = await prisma.newsChannel.findMany({
+    const channelsRaw = await prisma.newsChannel.findMany({
       where: {
         organizationId: user.organizationId,
       },
@@ -59,10 +66,20 @@ export async function GET(request: NextRequest) {
       ],
     });
     
+    // Форматируем данные для клиента
+    const channels = channelsRaw.map((channel) => ({
+      id: channel.id,
+      name: channel.name,
+      description: channel.description || channel.organization?.name || null,
+      subscriberCount: memberCount,
+      isMain: channel.name === "Основной",
+      organizationId: channel.organizationId,
+    }));
+    
     // Сортируем: "Основной" канал всегда первый
     channels.sort((a, b) => {
-      if (a.name === "Основной") return -1;
-      if (b.name === "Основной") return 1;
+      if (a.isMain) return -1;
+      if (b.isMain) return 1;
       return 0;
     });
 
