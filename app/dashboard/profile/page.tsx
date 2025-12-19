@@ -287,6 +287,14 @@ export default function ProfilePage() {
       return;
     }
     
+    // Валидация года - не должен быть в будущем
+    const yearNum = parseInt(newAward.year, 10);
+    const currentYear = new Date().getFullYear();
+    if (isNaN(yearNum) || yearNum < 1900 || yearNum > currentYear) {
+      setMessage({ type: "error", text: `Год награды должен быть от 1900 до ${currentYear}` });
+      return;
+    }
+    
     if (editingAwardIndex !== null) {
       // Редактирование существующей награды
       const updatedAwards = [...awards];

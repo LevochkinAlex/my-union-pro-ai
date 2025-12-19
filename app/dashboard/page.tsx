@@ -360,6 +360,8 @@ export default async function DashboardPage() {
   let profileProgress = 0;
   let hasDocuments = false;
   let membershipStatus: "PENDING" | "APPROVED" | "REJECTED" | "PENDING_VERIFICATION" = "PENDING";
+  let hasAdditionalInfo = false;
+  let hasAwards = false;
 
   if (currentUser) {
     membershipStatus = currentUser.membershipStatus;
@@ -381,6 +383,23 @@ export default async function DashboardPage() {
         return false;
       }
     );
+    
+    // Проверяем заполнение дополнительной информации
+    hasAdditionalInfo = !!(
+      currentUser.additionalInfo || 
+      currentUser.aboutMe || 
+      currentUser.hobbies
+    );
+    
+    // Проверяем наличие наград
+    if (currentUser.awards) {
+      try {
+        const awards = JSON.parse(currentUser.awards);
+        hasAwards = Array.isArray(awards) && awards.length > 0;
+      } catch {
+        hasAwards = false;
+      }
+    }
   }
 
   // Формируем имя пользователя из ФИО
@@ -416,6 +435,8 @@ export default async function DashboardPage() {
           profileProgress={profileProgress}
           hasDocuments={hasDocuments}
           membershipStatus={membershipStatus}
+          hasAdditionalInfo={hasAdditionalInfo}
+          hasAwards={hasAwards}
         />
       )}
 

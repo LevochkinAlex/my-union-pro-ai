@@ -96,6 +96,24 @@ export default function MembershipBanner({
         const newMembershipStatus = user?.membershipStatus || membershipStatus;
         const newProfileProgress = user ? calculateProfileProgress(user).total : profileProgress;
         
+        // Проверяем заполнение дополнительной информации
+        const newHasAdditionalInfo = !!(
+          user?.additionalInfo || 
+          user?.aboutMe || 
+          user?.hobbies
+        );
+        
+        // Проверяем наличие наград
+        let newHasAwards = false;
+        if (user?.awards) {
+          try {
+            const parsedAwards = JSON.parse(user.awards);
+            newHasAwards = Array.isArray(parsedAwards) && parsedAwards.length > 0;
+          } catch {
+            newHasAwards = false;
+          }
+        }
+        
         if (!mounted) {
           isChecking = false;
           return;
@@ -112,6 +130,14 @@ export default function MembershipBanner({
         
         if (newProfileProgress !== profileProgress) {
           setProfileProgress(newProfileProgress);
+        }
+        
+        if (newHasAdditionalInfo !== hasAdditionalInfo) {
+          setHasAdditionalInfo(newHasAdditionalInfo);
+        }
+        
+        if (newHasAwards !== hasAwards) {
+          setHasAwards(newHasAwards);
         }
       } catch (error) {
         console.error("[MembershipBanner] Ошибка обновления данных:", error);
