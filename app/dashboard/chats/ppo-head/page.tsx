@@ -321,25 +321,17 @@ function PPOHeadChatsContent() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-10rem)]">
-      {/* Навигация и кнопка создания группы */}
+      {/* Заголовок и кнопка создания группы */}
       <div className="shrink-0 mb-4 flex items-center justify-between gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-1 inline-flex">
-          <button
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white flex items-center gap-2"
-          >
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
             Чаты организации
-            {organizationChats.length > 0 && (
-              <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-medium">
-                {organizationChats.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => router.push("/dashboard/chat")}
-            className="px-4 py-2 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          >
-            Личные чаты
-          </button>
+          </h1>
+          {organizationChats.length > 0 && (
+            <span className="rounded-full bg-blue-100 dark:bg-blue-900/30 px-2.5 py-0.5 text-sm font-medium text-blue-600 dark:text-blue-400">
+              {organizationChats.length}
+            </span>
+          )}
         </div>
         <button
           onClick={() => setShowCreateGroupModal(true)}

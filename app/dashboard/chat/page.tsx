@@ -32,30 +32,6 @@ const AlertDialog = dynamic(() => import("@/components/ui/AlertDialog"), {
   ssr: false,
 });
 
-// Компонент табов для переключения между типами чатов
-function ChatTabs({ isPPOHead }: { isPPOHead: boolean }) {
-  const router = useRouter();
-
-  if (!isPPOHead) return null;
-
-  return (
-    <div className="shrink-0 mb-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-1 inline-flex">
-        <button
-          onClick={() => router.push("/dashboard/chats/ppo-head")}
-          className="px-4 py-2 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >
-          Чаты организации
-        </button>
-        <button
-          className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white"
-        >
-          Личные чаты
-        </button>
-      </div>
-    </div>
-  );
-}
 
 function ChatPageContent() {
   const router = useRouter();
@@ -286,16 +262,16 @@ function ChatPageContent() {
     return <PageSkeleton />;
   }
 
+  // Фильтруем только личные чаты (PRIVATE)
+  const personalChats = chats.filter(c => c.type === "PRIVATE");
+
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
-      {/* Табы для председателей ППО */}
-      <ChatTabs isPPOHead={isPPOHead} />
-
       <div className={`flex flex-1 min-h-0 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden`}>
       {/* Сайдбар со списком чатов */}
       <div className={`${showChatView ? "hidden md:flex" : "flex"} w-full md:w-1/3 border-r border-gray-200 dark:border-gray-700 flex-col`}>
         <ChatSidebar
-          chats={chats}
+          chats={personalChats}
           selectedChat={selectedChat}
           loading={loading}
           currentUserId={currentUserId}
