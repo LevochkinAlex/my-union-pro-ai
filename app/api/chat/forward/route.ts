@@ -176,14 +176,17 @@ export async function POST(request: NextRequest) {
       const baseUrl =
         process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://myunion.pro";
 
-      await sendUserNotification({
-        userId: targetUserId,
-        type: "chat_message",
-        title: `📨 Пересланное сообщение от ${senderName}`,
-        body: originalMessage.content.substring(0, 100),
-        url: `${baseUrl}/dashboard/chat?userId=${userId}`,
-        senderName,
-      });
+      // Отправляем уведомление только если targetUserId валиден
+      if (targetUserId && typeof targetUserId === 'string' && targetUserId.trim() !== '') {
+        await sendUserNotification({
+          userId: targetUserId,
+          type: "chat_message",
+          title: `📨 Пересланное сообщение от ${senderName}`,
+          body: originalMessage.content.substring(0, 100),
+          url: `${baseUrl}/dashboard/chat?userId=${userId}`,
+          senderName,
+        });
+      }
     } catch (notificationError) {
       console.error("[chat/forward] Error sending notification:", notificationError);
       // Не прерываем пересылку из-за ошибки уведомлений

@@ -200,35 +200,37 @@ export async function POST(
       },
     });
 
-    // Отправляем пуш-уведомление получателю
-    try {
-      const sender = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          firstName: true,
-          lastName: true,
-          middleName: true,
-        },
-      });
+    // Отправляем пуш-уведомление получателю (только если recipientId не null)
+    if (recipientId) {
+      try {
+        const sender = await prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            firstName: true,
+            lastName: true,
+            middleName: true,
+          },
+        });
 
-      const senderName = sender 
-        ? `${sender.firstName || ""} ${sender.middleName || ""} ${sender.lastName || ""}`.trim() || "Пользователь"
-        : "Пользователь";
+        const senderName = sender 
+          ? `${sender.firstName || ""} ${sender.middleName || ""} ${sender.lastName || ""}`.trim() || "Пользователь"
+          : "Пользователь";
 
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://myunion.pro";
-      const messagePreview = (content.trim() || attachmentText).substring(0, 100);
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://myunion.pro";
+        const messagePreview = (content.trim() || attachmentText).substring(0, 100);
 
-      const { sendUserNotification } = await import("@/lib/notifications");
-      await sendUserNotification({
-        userId: recipientId,
-        type: "chat_message",
-        title: `💬 ${attachmentText} от ${senderName}`,
-        body: content.trim() || attachmentText,
-        url: `${baseUrl}/dashboard/chat?userId=${userId}`,
-        senderName,
-      });
-    } catch (notificationError) {
-      console.error("[chat/attachments] Error sending notification:", notificationError);
+        const { sendUserNotification } = await import("@/lib/notifications");
+        await sendUserNotification({
+          userId: recipientId,
+          type: "chat_message",
+          title: `💬 ${attachmentText} от ${senderName}`,
+          body: content.trim() || attachmentText,
+          url: `${baseUrl}/dashboard/chat?userId=${userId}`,
+          senderName,
+        });
+      } catch (notificationError) {
+        console.error("[chat/attachments] Error sending notification:", notificationError);
+      }
     }
 
     return NextResponse.json({ message });

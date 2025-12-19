@@ -652,42 +652,43 @@ ${formattedSearchInfo ? `### ⚠️ КРИТИЧЕСКИ ВАЖНО - ИСПОЛ
     // Инвалидируем кеш сообщений чата
     await invalidateChatCache(chatId);
 
-    // Отправляем пуш-уведомление получателю (только если это не бот)
+    // Отправляем пуш-уведомление получателю (только если это не бот и recipientId не null)
     // Отправляем всегда, но логируем статус открытости чата
-    try {
-      // Получаем информацию об отправителе для уведомления
-      const sender = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          firstName: true,
-          lastName: true,
-          middleName: true,
-        },
-      });
+    if (recipientId && !isBotChat) {
+      try {
+        // Получаем информацию об отправителе для уведомления
+        const sender = await prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            firstName: true,
+            lastName: true,
+            middleName: true,
+          },
+        });
 
-      const senderName = sender 
-        ? `${sender.firstName || ""} ${sender.middleName || ""} ${sender.lastName || ""}`.trim() || "Пользователь"
-        : "Пользователь";
+        const senderName = sender 
+          ? `${sender.firstName || ""} ${sender.middleName || ""} ${sender.lastName || ""}`.trim() || "Пользователь"
+          : "Пользователь";
 
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://myunion.pro";
-      const messagePreview = content.trim().substring(0, 100);
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://myunion.pro";
+        const messagePreview = content.trim().substring(0, 100);
 
-      console.log("[chat] 📤 Отправка пуш-уведомления получателю:", {
-        recipientId,
-        senderName,
-        chatId,
-        isChatOpen,
-        messagePreview: messagePreview.substring(0, 50),
-      });
+        console.log("[chat] 📤 Отправка пуш-уведомления получателю:", {
+          recipientId,
+          senderName,
+          chatId,
+          isChatOpen,
+          messagePreview: messagePreview.substring(0, 50),
+        });
 
-      const notificationResult = await sendUserNotification({
-        userId: recipientId,
-        type: "chat_message",
-        title: `💬 Новое сообщение от ${senderName}`,
-        body: messagePreview,
-        url: `${baseUrl}/dashboard/chat?userId=${userId}`,
-        senderName,
-      });
+        const notificationResult = await sendUserNotification({
+          userId: recipientId,
+          type: "chat_message",
+          title: `💬 Новое сообщение от ${senderName}`,
+          body: messagePreview,
+          url: `${baseUrl}/dashboard/chat?userId=${userId}`,
+          senderName,
+        });
 
       console.log("[chat] ✅ Уведомление отправлено получателю:", {
         pushSent: notificationResult?.push || false,

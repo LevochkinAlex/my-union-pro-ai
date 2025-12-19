@@ -28,6 +28,12 @@ interface NotificationData {
  */
 export async function sendUserNotification(data: NotificationData) {
   try {
+    // Проверяем, что userId не null/undefined
+    if (!data.userId || typeof data.userId !== 'string' || data.userId.trim() === '') {
+      console.error(`[notifications] Invalid userId: ${data.userId}`);
+      return { push: false, email: false };
+    }
+
     // Получаем настройки пользователя
     const user = await prisma.user.findUnique({
       where: { id: data.userId },
