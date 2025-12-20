@@ -58,15 +58,19 @@ async function getBBToken() {
 }
 
 /**
- * Очищает HTML-описание
+ * Очищает HTML-описание от мусора
  */
 function cleanDescription(html) {
   if (!html) return null;
   
+  // Удаляем все bullet-символы (Unicode)
+  const bulletChars = /[\u2022\u2023\u2043\u204C\u204D\u2219\u25AA\u25AB\u25B6\u25B8\u25BA\u25BC\u25C6\u25CB\u25CF\u25D8\u25E6\u2605\u2606\u2713\u2714\u2716\u2717\u27A4\u2B9A●○•◦◆◇■□▪▫▶►▸▹▻→➔➤✓✔☐☑★☆]/g;
+  
   let cleaned = html
-    .replace(/[●○•■▪◦◆◇★☆▶►▸▹→✓✔☑]/g, "")
-    .replace(/^\s*[-–—]\s*/gm, "")
-    .replace(/\n\s*[-–—]\s*/g, "\n");
+    .replace(bulletChars, "")               // Удаляем все bullet-символы
+    .replace(/^\s*[-–—―]\s*/gm, "")         // Удаляем тире в начале строки
+    .replace(/\n\s*[-–—―]\s*/g, "\n")       // Удаляем тире после переноса
+    .replace(/^\s+/gm, "");                  // Убираем пробелы в начале строк
   
   if (/<[^>]+>/.test(cleaned)) {
     cleaned = cleaned
