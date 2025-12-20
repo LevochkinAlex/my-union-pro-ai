@@ -6,6 +6,7 @@
  * Использование: node scripts/sync-discounts.mjs
  */
 
+import { config } from "dotenv";
 import { PrismaClient } from "@prisma/client";
 import crypto from "crypto";
 import fs from "fs/promises";
@@ -13,21 +14,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const prisma = new PrismaClient();
 
-// Загружаем .env если не загружен
-const envPath = path.join(__dirname, "..", ".env");
-try {
-  const envContent = await fs.readFile(envPath, "utf-8");
-  envContent.split("\n").forEach((line) => {
-    const [key, ...valueParts] = line.split("=");
-    if (key && !process.env[key]) {
-      process.env[key] = valueParts.join("=").trim();
-    }
-  });
-} catch (e) {
-  // .env может отсутствовать
-}
+// Загружаем .env из корня проекта
+config({ path: path.join(__dirname, "..", ".env") });
+
+const prisma = new PrismaClient();
 
 const API_BASE_URL = process.env.BEST_BENEFITS_API_URL ?? "https://bestbenefits.ru/api/products";
 const BB_AUTH_URL = process.env.BEST_BENEFITS_AUTH_URL ?? "https://bestbenefits.ru/api/v2/auth";
