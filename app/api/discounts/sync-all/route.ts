@@ -19,53 +19,83 @@ interface SyncResult {
 }
 
 /**
- * Очищает HTML-описание от мусора (жирные точки, лишние теги и т.д.)
+ * Очищает HTML-описание от мусора и форматирует для хранения
+ * Сохраняет структуру (списки, параграфы) в чистом виде
  */
 function cleanDescription(html: string | null | undefined): string | null {
   if (!html) return null;
   
-  let cleaned = html
-    // Удаляем жирные точки (bullet points) - разные варианты
-    .replace(/•\s*/g, "")
-    .replace(/●\s*/g, "")
-    .replace(/○\s*/g, "")
-    .replace(/■\s*/g, "")
-    .replace(/▪\s*/g, "")
-    .replace(/◦\s*/g, "")
-    // Удаляем HTML-теги для пунктов списка
-    .replace(/<li[^>]*>/gi, "\n• ")
-    .replace(/<\/li>/gi, "")
-    .replace(/<ul[^>]*>/gi, "\n")
-    .replace(/<\/ul>/gi, "\n")
-    .replace(/<ol[^>]*>/gi, "\n")
-    .replace(/<\/ol>/gi, "\n")
-    // Заменяем <br> на переносы строк
-    .replace(/<br\s*\/?>/gi, "\n")
-    // Заменяем <p> на параграфы
-    .replace(/<p[^>]*>/gi, "\n")
-    .replace(/<\/p>/gi, "\n")
-    // Удаляем div-ы
-    .replace(/<div[^>]*>/gi, "\n")
-    .replace(/<\/div>/gi, "")
-    // Сохраняем ссылки как текст
-    .replace(/<a[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/gi, "$2 ($1)")
-    // Удаляем оставшиеся HTML теги
-    .replace(/<[^>]+>/g, "")
-    // Декодируем HTML entities
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
+  let cleaned = html;
+  
+  // 1. Удаляем все варианты маркеров списков
+  cleaned = cleaned
+    .replace(/[●○•■▪◦◆◇★☆▶►▸▹→✓✔☑]/g, '')
+    .replace(/^\s*[-–—]\s*/gm, '')
+    .replace(/\n\s*[-–—]\s*/g, '\n');
+  
+  // 2. Обрабатываем HTML если есть
+  if (/<[^>]+>/.test(cleaned)) {
+    cleaned = cleaned
+      // Убираем inline стили и классы
+      .replace(/\s*style="[^"]*"/gi, '')
+      .replace(/\s*style='[^']*'/gi, '')
+      .replace(/\s*class="[^"]*"/gi, '')
+      .replace(/\s*class='[^']*'/gi, '')
+      // Конвертируем списки в текст с маркерами
+      .replace(/<li[^>]*>/gi, '\n— ')
+      .replace(/<\/li>/gi, '')
+      .replace(/<ul[^>]*>/gi, '\n')
+      .replace(/<\/ul>/gi, '\n')
+      .replace(/<ol[^>]*>/gi, '\n')
+      .replace(/<\/ol>/gi, '\n')
+      // Заменяем br на переносы
+      .replace(/<br\s*\/?>/gi, '\n')
+      // Параграфы
+      .replace(/<p[^>]*>/gi, '\n\n')
+      .replace(/<\/p>/gi, '')
+      // Дивы
+      .replace(/<div[^>]*>/gi, '\n')
+      .replace(/<\/div>/gi, '')
+      // Сохраняем ссылки
+      .replace(/<a[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/gi, '$2')
+      // Жирный текст
+      .replace(/<strong[^>]*>/gi, '')
+      .replace(/<\/strong>/gi, '')
+      .replace(/<b[^>]*>/gi, '')
+      .replace(/<\/b>/gi, '')
+      // Курсив
+      .replace(/<em[^>]*>/gi, '')
+      .replace(/<\/em>/gi, '')
+      .replace(/<i[^>]*>/gi, '')
+      .replace(/<\/i>/gi, '')
+      // Убираем все оставшиеся теги
+      .replace(/<[^>]+>/g, '');
+  }
+  
+  // 3. Декодируем HTML entities
+  cleaned = cleaned
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&mdash;/g, "—")
-    .replace(/&ndash;/g, "–")
-    // Убираем множественные пробелы и переносы
-    .replace(/\s+/g, " ")
-    .replace(/\n\s*\n/g, "\n\n")
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code)));
+  
+  // 4. Очищаем форматирование
+  cleaned = cleaned
+    // Убираем множественные пробелы (но не переносы)
+    .replace(/[ \t]+/g, ' ')
+    // Убираем пробелы в начале строк
+    .replace(/\n +/g, '\n')
+    // Убираем множественные переносы (более 2)
+    .replace(/\n{3,}/g, '\n\n')
+    // Убираем пустые строки с тире
+    .replace(/\n—\s*\n/g, '\n')
     .trim();
   
-  // Если осталась пустая строка, возвращаем null
   return cleaned.length > 0 ? cleaned : null;
 }
 

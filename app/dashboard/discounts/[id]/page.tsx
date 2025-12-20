@@ -5,68 +5,121 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { DiscountItem } from "@/types/discounts";
 import Image from "next/image";
 
-// Санитизация и улучшение HTML описания
+// Санитизация и улучшение HTML описания для красивого отображения
 function sanitizeDescription(html: string): string {
   if (!html) return "";
   
-  // Если это уже HTML, очищаем от встроенных стилей и атрибутов
-  if (html.includes('<') && html.includes('>')) {
-    let cleaned = html
-      // Убираем все style атрибуты
+  let text = html;
+  
+  // 1. Удаляем все типы маркеров списков (жирные точки и т.д.)
+  text = text
+    .replace(/[●○•■▪◦◆◇★☆▶►▸▹→]/g, '') // Удаляем спец символы маркеров
+    .replace(/^\s*[-–—]\s*/gm, '')  // Удаляем тире в начале строки
+    .replace(/\n\s*[-–—]\s*/g, '\n'); // Удаляем тире после переноса
+  
+  // 2. Если содержит HTML-теги, обрабатываем их
+  if (/<[^>]+>/.test(text)) {
+    text = text
+      // Убираем все style и class атрибуты
       .replace(/\s*style="[^"]*"/gi, '')
       .replace(/\s*style='[^']*'/gi, '')
-      // Убираем все class атрибуты
       .replace(/\s*class="[^"]*"/gi, '')
       .replace(/\s*class='[^']*'/gi, '')
-      // Убираем background, color и другие inline стили
-      .replace(/\s*background[^=]*="[^"]*"/gi, '')
-      .replace(/\s*color[^=]*="[^"]*"/gi, '')
-      // Убираем пустые span и div теги
-      .replace(/<span[^>]*>(.*?)<\/span>/gi, '$1')
-      .replace(/<div[^>]*>(.*?)<\/div>/gi, '$1')
-      // Убираем лишние пробелы
-      .trim();
+      // Конвертируем списки в красивый формат
+      .replace(/<li[^>]*>/gi, '<li>')
+      .replace(/<ul[^>]*>/gi, '<ul class="list-disc ml-6 my-3 space-y-2">')
+      .replace(/<ol[^>]*>/gi, '<ol class="list-decimal ml-6 my-3 space-y-2">')
+      // Убираем пустые span и div
+      .replace(/<span[^>]*>([\s\S]*?)<\/span>/gi, '$1')
+      .replace(/<div[^>]*>([\s\S]*?)<\/div>/gi, '<p>$1</p>')
+      // Убираем пустые параграфы
+      .replace(/<p>\s*<\/p>/gi, '')
+      // Убираем br перед закрывающими тегами
+      .replace(/<br\s*\/?>\s*<\/(li|p|div)>/gi, '</$1>');
+  } else {
+    // 3. Это обычный текст - форматируем красиво
+    text = text
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n');
     
-    return cleaned;
+    // Определяем строки, которые выглядят как пункты списка
+    const lines = text.split('\n').filter(line => line.trim().length > 0);
+    const processedLines: string[] = [];
+    let inList = false;
+    let listItems: string[] = [];
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      
+      // Проверяем, начинается ли с маркера списка (цифра или символ)
+      const isListItem = /^(\d+[\.\):]|\*|-|–|—|•|●|○|■|▪)\s+/.test(trimmed) ||
+                         (trimmed.length > 0 && /^[А-ЯA-Z]/.test(trimmed) && trimmed.length < 200);
+      
+      if (isListItem && trimmed.includes(':')) {
+        // Это заголовок пункта - делаем жирным
+        const colonIndex = trimmed.indexOf(':');
+        const title = trimmed.slice(0, colonIndex + 1).replace(/^(\d+[\.\):]|\*|-|–|—|•|●|○|■|▪)\s*/, '');
+        const content = trimmed.slice(colonIndex + 1).trim();
+        
+        if (inList) {
+          listItems.push(`<li><strong>${title}</strong> ${content}</li>`);
+        } else {
+          inList = true;
+          listItems = [`<li><strong>${title}</strong> ${content}</li>`];
+        }
+      } else if (isListItem) {
+        // Обычный пункт списка
+        const cleanedItem = trimmed.replace(/^(\d+[\.\):]|\*|-|–|—|•|●|○|■|▪)\s*/, '');
+        if (inList) {
+          listItems.push(`<li>${cleanedItem}</li>`);
+        } else {
+          inList = true;
+          listItems = [`<li>${cleanedItem}</li>`];
+        }
+      } else {
+        // Не пункт списка
+        if (inList && listItems.length > 0) {
+          processedLines.push(`<ul class="list-disc ml-6 my-3 space-y-2">${listItems.join('')}</ul>`);
+          listItems = [];
+          inList = false;
+        }
+        processedLines.push(`<p class="mb-3">${trimmed}</p>`);
+      }
+    }
+    
+    // Закрываем последний список если есть
+    if (inList && listItems.length > 0) {
+      processedLines.push(`<ul class="list-disc ml-6 my-3 space-y-2">${listItems.join('')}</ul>`);
+    }
+    
+    text = processedLines.join('');
   }
   
-  // Если это обычный текст, форматируем
-  let formatted = html
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n');
+  // 4. Финальная очистка
+  text = text
+    // Убираем множественные пробелы
+    .replace(/\s+/g, ' ')
+    // Но сохраняем переносы после тегов
+    .replace(/>\s+</g, '><')
+    // Добавляем пробелы после точек если их нет
+    .replace(/\.([А-ЯA-Z])/g, '. $1')
+    // Декодируем HTML entities
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+    .trim();
   
-  // Заменяем маркированные списки
-  formatted = formatted.replace(/(?:^|\n)([-•]\s+[^\n]+(?:\n[-•]\s+[^\n]+)*)/gm, (match) => {
-    const items = match.trim().split(/\n/).filter(Boolean);
-    const listItems = items.map(item => {
-      const content = item.replace(/^[-•]\s+/, '').trim();
-      return `<li>${content}</li>`;
-    }).join('');
-    return `<ul>${listItems}</ul>`;
-  });
-  
-  // Заменяем нумерованные списки
-  formatted = formatted.replace(/(?:^|\n)(\d+[\.\)]\s+[^\n]+(?:\n\d+[\.\)]\s+[^\n]+)*)/gm, (match) => {
-    const items = match.trim().split(/\n/).filter(Boolean);
-    const listItems = items.map(item => {
-      const content = item.replace(/^\d+[\.\)]\s+/, '').trim();
-      return `<li>${content}</li>`;
-    }).join('');
-    return `<ol>${listItems}</ol>`;
-  });
-  
-  // Заменяем двойные переносы на параграфы
-  formatted = formatted.replace(/\n\n+/g, '</p><p>');
-  
-  // Заменяем одиночные переносы на <br>
-  formatted = formatted.replace(/\n/g, '<br>');
-  
-  // Оборачиваем в параграф
-  if (!formatted.startsWith('<')) {
-    formatted = `<p>${formatted}</p>`;
+  // Если после всех преобразований нет тегов, оборачиваем в параграф
+  if (!/<[^>]+>/.test(text) && text.length > 0) {
+    text = `<p>${text}</p>`;
   }
   
-  return formatted;
+  return text;
 }
 
 export default function DiscountDetailPage() {
