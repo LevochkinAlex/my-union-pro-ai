@@ -1770,3 +1770,27 @@ model PostComment {
   @@index([parentId])
   @@index([createdAt])
 }
+
+// Логирование синхронизаций (cron jobs)
+model SyncLog {
+  id String @id @default(cuid())
+
+  type      String   // Тип синхронизации: DISCOUNTS, USERS, etc.
+  source    String   // Источник: CRON, MANUAL, API
+  status    String   // SUCCESS, PARTIAL, FAILED
+  
+  itemsCreated Int    @default(0)
+  itemsUpdated Int    @default(0)
+  itemsFailed  Int    @default(0)
+  
+  duration  Int      // Время выполнения в миллисекундах
+  errors    Json?    // Массив ошибок (если есть)
+  metadata  Json?    // Дополнительные данные
+  
+  createdAt DateTime @default(now())
+
+  @@index([type])
+  @@index([source])
+  @@index([status])
+  @@index([createdAt])
+}

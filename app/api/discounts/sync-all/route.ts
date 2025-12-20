@@ -397,6 +397,20 @@ export async function POST(request: NextRequest): Promise<NextResponse<SyncResul
     const duration = Date.now() - startTime;
     console.log(`[sync-all] Sync completed in ${duration}ms: ${created} created, ${updated} updated, ${imagesProcessed} images processed`);
 
+    // Записываем лог синхронизации
+    await prisma.syncLog.create({
+      data: {
+        type: "DISCOUNTS",
+        source: "MANUAL",
+        status: errors.length === 0 ? "SUCCESS" : "PARTIAL",
+        itemsCreated: created,
+        itemsUpdated: updated,
+        itemsFailed: errors.length,
+        duration,
+        errors: errors.length > 0 ? errors.slice(0, 50) : undefined,
+      },
+    }).catch((e) => console.error("[sync-all] Failed to write sync log:", e));
+
     return NextResponse.json({
       success: true,
       synced: created + updated,
@@ -408,6 +422,20 @@ export async function POST(request: NextRequest): Promise<NextResponse<SyncResul
     });
   } catch (error) {
     console.error("[sync-all] Sync failed:", error);
+    
+    const duration = Date.now() - startTime;
+    
+    // Записываем лог ошибки
+    await prisma.syncLog.create({
+      data: {
+        type: "DISCOUNTS",
+        source: "MANUAL",
+        status: "FAILED",
+        duration,
+        errors: [error instanceof Error ? error.message : String(error)],
+      },
+    }).catch(() => {});
+
     return NextResponse.json(
       {
         success: false,
@@ -416,7 +444,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SyncResul
         created: 0,
         imagesProcessed: 0,
         errors: [error instanceof Error ? error.message : String(error)],
-        duration: Date.now() - startTime,
+        duration,
       },
       { status: 500 }
     );
