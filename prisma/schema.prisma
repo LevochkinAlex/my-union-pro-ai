@@ -142,6 +142,7 @@ model User {
   pushSubscriptions  PushSubscription[]
   discountPreference DiscountPreference?
   discountActivations DiscountActivation[] @relation("DiscountActivations")
+  discountFavorites   DiscountFavorite[]   @relation("DiscountFavorites")
 
   // Уведомления (история)
   notifications UserNotification[]
@@ -1051,12 +1052,88 @@ model DiscountPreference {
   @@index([pushEnabled])
 }
 
+// Локальное хранилище скидок (синхронизация с BestBenefits)
+model Discount {
+  id              Int      @id // ID из BestBenefits (не автоинкремент)
+  title           String   // Название скидки
+  description     String?  @db.Text // Полное описание (очищенное от HTML-мусора)
+  shortDescription String? @db.Text // Краткое описание
+  discountValue   String?  // Размер скидки (например "10%", "500₽")
+  
+  // Изображение (хранится локально на CDN)
+  imageUrl        String?  @db.Text // URL на CDN (вместо base64)
+  originalImageUrl String? @db.Text // Оригинальный URL/base64 для сверки
+  
+  // Ссылки
+  partnerUrl      String?  @db.Text // Ссылка на партнера
+  
+  // Категории и города (JSON массивы для простоты)
+  categories      Json?    // [{id, name, order}]
+  mainCategoryId  Int?     // ID главной категории
+  mainCategoryName String? // Название главной категории
+  cities          Json?    // [{id, name}]
+  tags            Json?    // ["tag1", "tag2"]
+  
+  // Дополнительные поля
+  isPremium       Boolean  @default(false)
+  validUntil      DateTime? // Срок действия скидки
+  
+  // Синхронизация
+  bbUpdatedAt     DateTime? // Дата обновления в BestBenefits
+  lastSyncedAt    DateTime  @default(now()) // Когда синхронизировали
+  isActive        Boolean   @default(true) // Активна ли скидка
+  
+  // Связи
+  activations     DiscountActivation[] @relation("DiscountActivations")
+  favorites       DiscountFavorite[]   @relation("DiscountFavorites")
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([mainCategoryId])
+  @@index([isActive])
+  @@index([validUntil])
+  @@index([lastSyncedAt])
+}
+
+// Категории скидок (синхронизация с BestBenefits)
+model DiscountCategory {
+  id              Int      @id // ID из BestBenefits
+  name            String   // Название категории
+  order           Int      @default(0) // Порядок сортировки
+  iconName        String?  // Название иконки (опционально)
+  discountCount   Int      @default(0) // Количество скидок в категории
+  
+  lastSyncedAt    DateTime @default(now())
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([order])
+}
+
+// Избранные скидки пользователя
+model DiscountFavorite {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation("DiscountFavorites", fields: [userId], references: [id], onDelete: Cascade)
+  discountId   Int
+  discount     Discount @relation("DiscountFavorites", fields: [discountId], references: [id], onDelete: Cascade)
+  
+  createdAt    DateTime @default(now())
+  
+  @@unique([userId, discountId])
+  @@index([userId])
+  @@index([discountId])
+}
+
 // Активированные скидки пользователя с промокодами и сроками действия
 model DiscountActivation {
   id           String   @id @default(cuid())
   userId       String
   user         User     @relation("DiscountActivations", fields: [userId], references: [id], onDelete: Cascade)
   discountId   Int      // ID скидки из BestBenefits
+  discount     Discount? @relation("DiscountActivations", fields: [discountId], references: [id], onDelete: SetNull)
   promoCode    String?  // Промокод (сохраняем локально, даже если BestBenefits очистит)
   activatedAt  DateTime @default(now()) // Дата активации
   validUntil   DateTime? // Срок действия скидки (из BestBenefits API)
