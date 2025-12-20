@@ -900,12 +900,12 @@ export default function DiscountDetailPage() {
                     </div>
                   </div>
 
-                  {/* Описание из BestBenefits */}
+                  {/* Описание из BestBenefits - показываем полное с прокруткой */}
                   {discount.shortDescription ? (
                     <div className="mb-6">
-                      <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
+                      <div className="max-h-40 overflow-y-auto rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
                         <div 
-                          className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-words"
+                          className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-words [&_ul]:space-y-1 [&_ul]:ml-4 [&_ul]:list-disc [&_ol]:space-y-1 [&_ol]:ml-4 [&_ol]:list-decimal [&_li]:break-words [&_li]:leading-relaxed"
                           dangerouslySetInnerHTML={{ 
                             __html: sanitizeDescription(discount.shortDescription)
                           }}
@@ -914,15 +914,11 @@ export default function DiscountDetailPage() {
                     </div>
                   ) : discount.description ? (
                     <div className="mb-6">
-                      <div className="max-h-48 overflow-y-auto rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
+                      <div className="max-h-52 overflow-y-auto rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
                         <div 
                           className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-words [&_ul]:space-y-1 [&_ul]:ml-4 [&_ul]:list-disc [&_ol]:space-y-1 [&_ol]:ml-4 [&_ol]:list-decimal [&_li]:break-words [&_li]:leading-relaxed"
                           dangerouslySetInnerHTML={{ 
-                            __html: sanitizeDescription(
-                              discount.description.length > 500 
-                                ? discount.description.substring(0, 500) + '...' 
-                                : discount.description
-                            )
+                            __html: sanitizeDescription(discount.description)
                           }}
                         />
                       </div>
