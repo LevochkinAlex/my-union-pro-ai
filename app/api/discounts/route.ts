@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { fetchBestBenefitsDiscounts } from "@/lib/best-benefits";
-import type { DiscountSearchParams } from "@/types/discounts";
+import type { DiscountSearchParams, DiscountOption } from "@/types/discounts";
 import { prisma } from "@/lib/prisma";
 import { getValidActivatedDiscounts } from "@/lib/discount-activation";
+import { decryptPassword } from "@/lib/best-benefits-password";
+import { getUserBestBenefitsToken } from "@/lib/best-benefits-user-auth";
 
 export async function GET(request: NextRequest) {
   try {
@@ -209,6 +211,58 @@ export async function GET(request: NextRequest) {
         }
         return discount;
       });
+    }
+
+    // Обогащаем скидки options если запрашивается одна скидка (для детальной страницы)
+    // Options приходят только с персональным токеном пользователя
+    if (payload.discounts && payload.discounts.length === 1 && params.ids) {
+      const discount = payload.discounts[0];
+      
+      // Если options нет или пустой - пробуем получить с персональным токеном
+      if (!discount.options || discount.options.length === 0) {
+        try {
+          const user = await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { bestBenefitsUserId: true, bestBenefitsPassword: true }
+          });
+          
+          if (user?.bestBenefitsPassword && user?.bestBenefitsUserId) {
+            const password = decryptPassword(user.bestBenefitsPassword);
+            const userToken = await getUserBestBenefitsToken(user.bestBenefitsUserId, password);
+            
+            // Запрашиваем скидку с персональным токеном
+            const response = await fetch(`https://bestbenefits.ru/api/products/${discount.id}`, {
+              headers: {
+                "Accept": "application/json",
+                "Authorization": `Bearer ${userToken}`,
+              },
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              const bbDiscount = data.data || data;
+              
+              if (bbDiscount.options && bbDiscount.options.length > 0) {
+                const options: DiscountOption[] = bbDiscount.options.map((opt: any) => ({
+                  id: opt.id,
+                  name: opt.name,
+                }));
+                
+                console.log(`[api/discounts] Enriched discount ${discount.id} with ${options.length} options from personal token:`,
+                  options.map(o => `${o.id}: ${o.name}`).join(', ')
+                );
+                
+                payload.discounts[0] = {
+                  ...discount,
+                  options,
+                };
+              }
+            }
+          }
+        } catch (error) {
+          console.warn("[api/discounts] Failed to enrich options with personal token:", error);
+        }
+      }
     }
 
     return NextResponse.json(payload, {
