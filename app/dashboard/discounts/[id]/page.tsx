@@ -190,6 +190,7 @@ export default function DiscountDetailPage() {
         console.log("📝 Short Description:", disc.shortDescription, "Type:", typeof disc.shortDescription);
         console.log("📄 Description:", disc.description?.substring(0, 200));
         console.log("🔗 Partner URL:", disc.partnerUrl, "Type:", typeof disc.partnerUrl);
+        console.log("🎁 Options:", disc.options, "Count:", disc.options?.length || 0);
         setDiscount(disc);
       } else {
         console.error("❌ No discounts in response:", data);
