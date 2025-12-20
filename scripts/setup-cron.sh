@@ -19,77 +19,30 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Загружаем переменные окружения
-if [ -f /opt/my-union-pro/.env ]; then
-    source /opt/my-union-pro/.env
-fi
+# Создаем директорию для логов
+mkdir -p /var/log/myunion
+touch /var/log/myunion/sync-discounts.log
+chmod 644 /var/log/myunion/sync-discounts.log
 
-# Проверяем наличие CRON_SECRET
-if [ -z "$CRON_SECRET" ]; then
-    # Генерируем новый секретный ключ
-    CRON_SECRET=$(openssl rand -hex 32)
-    echo -e "${YELLOW}Генерируем новый CRON_SECRET...${NC}"
-    
-    # Добавляем в .env если его там нет
-    if ! grep -q "CRON_SECRET=" /opt/my-union-pro/.env 2>/dev/null; then
-        echo "" >> /opt/my-union-pro/.env
-        echo "# Секретный ключ для cron-заданий" >> /opt/my-union-pro/.env
-        echo "CRON_SECRET=$CRON_SECRET" >> /opt/my-union-pro/.env
-        echo -e "${GREEN}CRON_SECRET добавлен в .env${NC}"
-    fi
-fi
+# Удаляем старые cron-задания связанные со скидками
+echo -e "${YELLOW}Очистка старых cron-заданий...${NC}"
+crontab -l 2>/dev/null | grep -v "sync-discounts\|cron-sync-discounts" | crontab - 2>/dev/null || true
 
-# Создаем скрипт для вызова cron API
-cat > /opt/my-union-pro/scripts/cron-sync-discounts.sh << 'EOF'
-#!/bin/bash
-# Скрипт синхронизации скидок (вызывается cron)
+# Добавляем новое задание - запуск скрипта напрямую
+# Синхронизация скидок каждый день в 03:00 по Москве (00:00 UTC)
+CRON_JOB="0 0 * * * cd /opt/my-union-pro && /usr/bin/node scripts/sync-discounts.mjs >> /var/log/myunion/sync-discounts.log 2>&1"
 
-# Загружаем переменные окружения
-source /opt/my-union-pro/.env
-
-# Вызываем API
-curl -s -X GET \
-    -H "Authorization: Bearer $CRON_SECRET" \
-    "http://localhost:3000/api/cron/sync-discounts" \
-    >> /var/log/myunion-sync.log 2>&1
-
-echo "" >> /var/log/myunion-sync.log
-echo "--- $(date) ---" >> /var/log/myunion-sync.log
-EOF
-
-chmod +x /opt/my-union-pro/scripts/cron-sync-discounts.sh
-echo -e "${GREEN}Создан скрипт cron-sync-discounts.sh${NC}"
-
-# Создаем лог-файл
-touch /var/log/myunion-sync.log
-chmod 644 /var/log/myunion-sync.log
-
-# Добавляем задание в crontab
-CRON_JOB="0 3 * * * /opt/my-union-pro/scripts/cron-sync-discounts.sh"
-
-# Проверяем, есть ли уже такое задание
-if crontab -l 2>/dev/null | grep -q "cron-sync-discounts"; then
-    echo -e "${YELLOW}Cron-задание уже существует, обновляем...${NC}"
-    # Удаляем старое задание
-    crontab -l 2>/dev/null | grep -v "cron-sync-discounts" | crontab -
-fi
-
-# Добавляем новое задание
 (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
 
 echo -e "${GREEN}Cron-задание добавлено:${NC}"
-echo -e "  ${YELLOW}$CRON_JOB${NC}"
+echo -e "  ${YELLOW}0 0 * * * - Синхронизация скидок (03:00 МСК)${NC}"
 
 # Проверяем cron
 echo -e "\n${GREEN}Текущие cron-задания:${NC}"
 crontab -l
 
-# Перезапускаем pm2 чтобы подхватить новый CRON_SECRET
-echo -e "\n${YELLOW}Перезапуск приложения для применения CRON_SECRET...${NC}"
-cd /opt/my-union-pro && pm2 restart my-union-pro
-
 echo -e "\n${GREEN}=== Настройка завершена ===${NC}"
-echo -e "Синхронизация скидок будет запускаться каждый день в 03:00"
-echo -e "Логи доступны в: /var/log/myunion-sync.log"
-echo -e "\nДля ручного запуска: /opt/my-union-pro/scripts/cron-sync-discounts.sh"
-
+echo -e "Синхронизация скидок: каждый день в 03:00 МСК"
+echo -e "Логи: /var/log/myunion/sync-discounts.log"
+echo -e "\nДля ручного запуска:"
+echo -e "  cd /opt/my-union-pro && node scripts/sync-discounts.mjs"
