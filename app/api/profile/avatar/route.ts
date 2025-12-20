@@ -10,6 +10,8 @@ import { optimizeWithPreset, getMimeType, getOptimizedFilename } from "@/lib/ima
 import { cacheDeletePattern, getCacheKey } from "@/lib/cache";
 import { invalidateUsersCache } from "@/lib/cache-invalidation";
 
+const CDN_URL = process.env.NEXT_PUBLIC_CDN_URL || "https://cdn.myunion.pro";
+
 // Инициализируем VDS хранилище при загрузке модуля
 if (typeof window === "undefined") {
   initVDSStorageFromEnv();
@@ -87,7 +89,18 @@ export async function POST(request: NextRequest) {
     if (isVDSStorageConfigured()) {
       try {
         const fileKey = `avatars/${filename}`;
-        avatarUrl = await uploadFileToVDS(fileKey, optimizedBuffer, mimeType);
+        const uploadedPath = await uploadFileToVDS(fileKey, optimizedBuffer, mimeType);
+        
+        // Конвертируем относительный путь в CDN URL
+        // uploadedPath = "/uploads/avatars/filename.webp" -> "https://cdn.myunion.pro/uploads/avatars/filename.webp"
+        if (uploadedPath.startsWith("/uploads/")) {
+          avatarUrl = `${CDN_URL}${uploadedPath}`;
+        } else if (uploadedPath.startsWith("http")) {
+          avatarUrl = uploadedPath; // Уже полный URL
+        } else {
+          avatarUrl = `${CDN_URL}/uploads/${fileKey}`;
+        }
+        
         console.log(`[profile/avatar] Avatar uploaded to VDS: ${avatarUrl}`);
       } catch (vdsError) {
         console.error("[profile/avatar] VDS upload failed:", vdsError);
