@@ -53,9 +53,9 @@ export default async function DashboardLayout({
   }
 
   // Определяем какое меню показывать на основе viewMode
-  // Если пользователь может быть и членом и председателем, используем viewMode
-  // Если роль PPO_HEAD без двойной роли - показываем меню председателя
-  const showPPOHeadMenu = (userRole === "PPO_HEAD") || (isPPOHead && viewMode === "PPO_HEAD");
+  // ВАЖНО: Всегда используем viewMode для определения меню, даже если роль PPO_HEAD
+  // Это позволяет председателям переключаться в режим обычного участника
+  const showPPOHeadMenu = viewMode === "PPO_HEAD";
 
   // Создаем базовое меню
   let menuItems: Array<{
