@@ -893,7 +893,15 @@ export default function ProfilePage() {
     try {
       // Не отправляем email и organization, так как email обновляется через EmailValidationField,
       // а organization - это только для отображения, отправляем organizationId
-      const { email, organization, ...profileDataToSend } = profileData;
+      const { email, organization, organizationId, ...restData } = profileData;
+      
+      // ВАЖНО: organizationId отправляем только если он установлен (не null)
+      // Если null - не включаем в запрос, чтобы API не стирало существующую организацию
+      const profileDataToSend: any = { ...restData };
+      if (organizationId) {
+        profileDataToSend.organizationId = organizationId;
+      }
+      
       const response = await fetch("/api/profile", {
         method: "PUT",
         headers: {
