@@ -1084,7 +1084,6 @@ model Discount {
   isActive        Boolean   @default(true) // Активна ли скидка
   
   // Связи
-  activations     DiscountActivation[] @relation("DiscountActivations")
   favorites       DiscountFavorite[]   @relation("DiscountFavorites")
   
   createdAt       DateTime @default(now())
@@ -1132,8 +1131,7 @@ model DiscountActivation {
   id           String   @id @default(cuid())
   userId       String
   user         User     @relation("DiscountActivations", fields: [userId], references: [id], onDelete: Cascade)
-  discountId   Int      // ID скидки из BestBenefits
-  discount     Discount? @relation("DiscountActivations", fields: [discountId], references: [id], onDelete: SetNull)
+  discountId   Int      // ID скидки из BestBenefits (связь добавим позже после синхронизации)
   promoCode    String?  // Промокод (сохраняем локально, даже если BestBenefits очистит)
   activatedAt  DateTime @default(now()) // Дата активации
   validUntil   DateTime? // Срок действия скидки (из BestBenefits API)
