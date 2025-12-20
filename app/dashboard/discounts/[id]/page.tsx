@@ -999,14 +999,15 @@ export default function DiscountDetailPage() {
           </div>
         </div>
 
-        {/* Promo Code Modal - Новый дизайн как у BestBenefits */}
+        {/* Promo Code Modal - Прямоугольная карточка */}
         {showPromoModal && discount && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-lg p-4 overflow-y-auto">
-            <div className="relative w-full max-w-md my-8">
-              {/* Карточка промокода с blur-фоном */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 overflow-y-auto">
+            <div className="relative w-full max-w-2xl my-8">
+              {/* Прямоугольная карточка промокода 16:9 */}
               <div 
                 ref={promoCardRef}
-                className="relative overflow-hidden rounded-3xl shadow-2xl"
+                className="relative overflow-hidden rounded-2xl shadow-2xl"
+                style={{ aspectRatio: '16/9' }}
               >
                 {/* Фоновое изображение с blur */}
                 <div className="absolute inset-0">
@@ -1014,211 +1015,162 @@ export default function DiscountDetailPage() {
                     <img
                       src={discount.imageUrl}
                       alt=""
-                      className="h-full w-full object-cover scale-110 blur-xl opacity-30"
+                      className="h-full w-full object-cover scale-125 blur-2xl"
                     />
                   ) : (
-                    <div className="h-full w-full bg-gradient-to-br from-slate-800 to-slate-900" />
+                    <div className="h-full w-full bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900" />
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-b from-slate-900/80 via-slate-900/90 to-slate-900/95" />
+                  {/* Затемнение для читаемости */}
+                  <div className="absolute inset-0 bg-black/40" />
                 </div>
 
-                {/* Контент */}
-                <div className="relative p-6 sm:p-8">
-                  {/* Close button */}
-                  <button
-                    onClick={() => setShowPromoModal(false)}
-                    className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white/70 backdrop-blur-sm transition hover:bg-white/20 hover:text-white"
-                  >
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-
-                  {/* Логотип скидки */}
-                  {discount.imageUrl && (
-                    <div className="mb-4 flex justify-center">
-                      <div className="h-16 w-16 overflow-hidden rounded-2xl bg-white shadow-lg">
-                        <img
-                          src={discount.imageUrl}
-                          alt={discount.title}
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
+                {/* Контент карточки */}
+                <div className="relative h-full flex flex-col p-5 sm:p-6">
+                  {/* Верхний ряд: Заголовок слева, QR справа */}
+                  <div className="flex justify-between items-start gap-4">
+                    {/* Заголовок слева */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm sm:text-base font-semibold text-white leading-tight line-clamp-2 drop-shadow-lg">
+                        {discount.title}
+                      </h3>
+                      {discount.validUntil && (
+                        <p className="mt-1 text-xs text-white/70 drop-shadow">
+                          до {new Date(discount.validUntil).toLocaleDateString('ru-RU')}
+                        </p>
+                      )}
                     </div>
-                  )}
 
-                  {/* Заголовок */}
-                  <h2 className="mb-2 text-center text-xl font-bold text-white sm:text-2xl">
-                    {displayPromoCode && displayPromoCode.trim().length > 0 
-                      ? "Ваш промокод" 
-                      : "Скидка активирована"}
-                  </h2>
-                  <p className="mb-6 text-center text-sm text-white/60">
-                    {discount.title}
-                  </p>
-
-                  {/* Промокод или инструкции */}
-                  {displayPromoCode && displayPromoCode.trim().length > 0 ? (
-                    <div className="mb-6">
-                      {/* Блок с промокодом */}
-                      <div className="rounded-2xl bg-white/10 p-4 backdrop-blur-sm">
-                        {/* Промокод крупно */}
-                        <div className="mb-4 flex justify-center">
-                          <div className="inline-flex items-center gap-1 rounded-xl bg-white px-4 py-3 shadow-lg">
-                            {displayPromoCode.split('').map((char, idx) => (
-                              <span
-                                key={idx}
-                                className="font-mono text-2xl font-bold text-slate-800 sm:text-3xl"
-                              >
-                                {char}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* QR-код */}
-                        {qrCodeUrl && (
-                          <div className="mb-4 flex justify-center">
-                            <div className="rounded-xl bg-white p-2 shadow-lg">
-                              <img src={qrCodeUrl} alt="QR Code" className="h-24 w-24 sm:h-28 sm:w-28" />
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Срок действия */}
-                        {discount.validUntil && (
-                          <p className="text-center text-xs text-white/50">
-                            Действует до {new Date(discount.validUntil).toLocaleDateString('ru-RU')}
-                          </p>
-                        )}
+                    {/* QR-код справа */}
+                    {qrCodeUrl && displayPromoCode && displayPromoCode.trim().length > 0 && (
+                      <div className="flex-shrink-0 rounded-lg bg-white p-1.5 shadow-xl">
+                        <img src={qrCodeUrl} alt="QR Code" className="h-16 w-16 sm:h-20 sm:w-20" />
                       </div>
-                    </div>
-                  ) : (
-                    /* Для скидок без промокода */
-                    <div className="mb-6 rounded-2xl bg-white/10 p-4 backdrop-blur-sm">
+                    )}
+                  </div>
+
+                  {/* Промокод по центру */}
+                  <div className="flex-1 flex items-center justify-center">
+                    {displayPromoCode && displayPromoCode.trim().length > 0 ? (
+                      <div className="rounded-xl bg-white px-6 py-3 sm:px-8 sm:py-4 shadow-2xl border-4 border-white">
+                        <span className="font-mono text-xl sm:text-3xl font-black text-slate-900 tracking-wider">
+                          {displayPromoCode}
+                        </span>
+                      </div>
+                    ) : (
                       <div className="text-center">
-                        <div className="mb-3 text-4xl">🎉</div>
-                        <p className="text-sm leading-relaxed text-white/80">
+                        <div className="text-5xl mb-2">🎉</div>
+                        <p className="text-white/90 font-medium text-sm sm:text-base max-w-xs">
                           {discount.shortDescription 
-                            ? discount.shortDescription.replace(/<[^>]*>/g, '').substring(0, 150) + '...'
+                            ? discount.shortDescription.replace(/<[^>]*>/g, '').substring(0, 100)
                             : "Покажите эту карточку для получения скидки"
                           }
                         </p>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
-                  {/* Кнопки действий */}
-                  <div className="space-y-3">
-                    {/* Выбрать вариант скидки - если нет промокода но есть options */}
-                    {(!displayPromoCode || displayPromoCode.trim().length === 0) && discount.options && discount.options.length > 0 && (
+                  {/* Нижний ряд: кнопки действий */}
+                  <div className="flex items-center justify-between gap-2">
+                    {/* Копировать */}
+                    {displayPromoCode && displayPromoCode.trim().length > 0 ? (
+                      <button
+                        onClick={handleCopyPromo}
+                        className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                          copied 
+                            ? "bg-emerald-500 text-white" 
+                            : "bg-white/90 text-slate-800 hover:bg-white"
+                        }`}
+                      >
+                        {copied ? (
+                          <>
+                            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                            <span className="hidden sm:inline">Скопировано</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                              <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                            </svg>
+                            <span className="hidden sm:inline">Скопировать</span>
+                          </>
+                        )}
+                      </button>
+                    ) : discount.options && discount.options.length > 0 ? (
                       <button
                         onClick={() => {
                           setShowPromoModal(false);
                           setShowOptionsModal(true);
                         }}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 font-semibold text-white transition hover:bg-blue-700"
+                        className="flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-600"
                       >
-                        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clipRule="evenodd" />
                         </svg>
-                        Выбрать вариант скидки ({discount.options.length})
+                        <span className="hidden sm:inline">Выбрать вариант</span>
                       </button>
+                    ) : (
+                      <div />
                     )}
 
-                    {/* Копировать */}
-                    {displayPromoCode && displayPromoCode.trim().length > 0 && (
+                    {/* Правая группа кнопок */}
+                    <div className="flex items-center gap-2">
+                      {/* Скачать */}
                       <button
-                        onClick={handleCopyPromo}
-                        className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 font-semibold transition ${
-                          copied 
-                            ? "bg-emerald-500 text-white" 
-                            : "bg-white text-slate-900 hover:bg-gray-100"
+                        onClick={handleDownloadPromoCard}
+                        disabled={isDownloading}
+                        className="flex items-center gap-1.5 rounded-lg bg-white/20 backdrop-blur px-3 py-2 text-sm font-semibold text-white hover:bg-white/30 disabled:opacity-50"
+                      >
+                        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                        <span className="hidden sm:inline">Скачать</span>
+                      </button>
+
+                      {/* Избранное */}
+                      <button
+                        onClick={handleToggleFavorite}
+                        className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                          isFavorite 
+                            ? "bg-rose-500 text-white" 
+                            : "bg-white/20 backdrop-blur text-white hover:bg-white/30"
                         }`}
                       >
-                        {copied ? (
-                          <>
-                            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                            Скопировано!
-                          </>
-                        ) : (
-                          <>
-                            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                              <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
-                              <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
-                            </svg>
-                            Скопировать код
-                          </>
-                        )}
-                      </button>
-                    )}
-
-                    {/* Скачать как картинку */}
-                    <button
-                      onClick={handleDownloadPromoCard}
-                      disabled={isDownloading}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-3.5 font-semibold text-white backdrop-blur-sm transition hover:bg-white/20 disabled:opacity-50"
-                    >
-                      {isDownloading ? (
-                        <>
-                          <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                          </svg>
-                          Скачивание...
-                        </>
-                      ) : (
-                        <>
-                          <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                          </svg>
-                          Скачать карточку
-                        </>
-                      )}
-                    </button>
-
-                    {/* Добавить в избранное */}
-                    <button
-                      onClick={() => {
-                        handleToggleFavorite();
-                      }}
-                      className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 font-semibold transition ${
-                        isFavorite 
-                          ? "bg-rose-500/20 text-rose-400" 
-                          : "bg-white/10 text-white hover:bg-white/20"
-                      }`}
-                    >
-                      <svg className={`h-5 w-5 ${isFavorite ? "fill-current" : ""}`} viewBox="0 0 20 20" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor">
-                        <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                      </svg>
-                      {isFavorite ? "В избранном" : "Добавить в избранное"}
-                    </button>
-
-                    {/* Перейти на сайт партнера */}
-                    {discount.partnerUrl && (
-                      <button
-                        onClick={handleOpenPartner}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3.5 font-semibold text-white transition hover:bg-emerald-600"
-                      >
-                        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                          <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                        <svg className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`} viewBox="0 0 20 20" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2}>
+                          <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
                         </svg>
-                        Перейти на сайт
                       </button>
-                    )}
+                    </div>
                   </div>
-
-                  {/* Подсказка */}
-                  <p className="mt-4 text-center text-xs text-white/40">
-                    {displayPromoCode && displayPromoCode.trim().length > 0
-                      ? "Используйте промокод при оформлении заказа"
-                      : "Покажите эту карточку для получения скидки"
-                    }
-                  </p>
                 </div>
+
+                {/* Кнопка закрытия */}
+                <button
+                  onClick={() => setShowPromoModal(false)}
+                  className="absolute right-3 top-3 rounded-full bg-black/30 p-1.5 text-white/80 backdrop-blur-sm transition hover:bg-black/50 hover:text-white"
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Дополнительные кнопки под карточкой */}
+              <div className="mt-4 flex justify-center gap-3">
+                {discount.partnerUrl && (
+                  <button
+                    onClick={handleOpenPartner}
+                    className="flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-600"
+                  >
+                    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                      <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                    </svg>
+                    Перейти на сайт партнёра
+                  </button>
+                )}
               </div>
             </div>
           </div>
