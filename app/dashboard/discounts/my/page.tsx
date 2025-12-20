@@ -473,6 +473,32 @@ export default function MyDiscountsPage() {
     router.push(`/dashboard/discounts/${discountId}`);
   };
 
+  const handleRemoveFromFavorites = async (discountId: number) => {
+    try {
+      // Оптимистичное обновление UI
+      setDiscounts(prev => prev.filter(d => d.id !== discountId));
+      
+      // Обновляем preferences на сервере
+      const response = await fetch("/api/discounts/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          favorites: discounts.filter(d => d.id !== discountId).map(d => d.id),
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to update favorites");
+      }
+      
+      console.log(`[MyDiscounts] Removed discount ${discountId} from favorites`);
+    } catch (error) {
+      console.error("[MyDiscounts] Failed to remove from favorites:", error);
+      // Восстанавливаем список при ошибке
+      loadMyDiscounts();
+    }
+  };
+
 
   if (loading) {
     return (
@@ -585,9 +611,26 @@ export default function MyDiscountsPage() {
                 {/* Content */}
                 <div className="flex flex-1 flex-col justify-between p-6">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {discount.title}
-                    </h3>
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {discount.title}
+                      </h3>
+                      {/* Кнопка удаления из избранного */}
+                      {activeTab === "favorites" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveFromFavorites(discount.id);
+                          }}
+                          className="flex-shrink-0 rounded-full p-1.5 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                          title="Удалить из избранного"
+                        >
+                          <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
 
                     {/* Promo Code */}
                     {/* Показываем промокод для всех полученных скидок, независимо от активной вкладки */}
