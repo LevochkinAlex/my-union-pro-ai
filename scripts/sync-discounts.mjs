@@ -304,13 +304,21 @@ async function syncDiscounts() {
           }
         }
 
-        const discountData = {
-          title: bbDiscount.name ?? "Без названия",
+        // ===== КОМПЛИМЕНТАРНАЯ СИНХРОНИЗАЦИЯ =====
+        // 🔒 СОХРАНЯЕМ (не перезаписываем если уже есть):
+        //    - title (название)
+        //    - imageUrl (картинка на CDN)
+        // 🔄 ОБНОВЛЯЕМ (динамичные данные):
+        //    - description, shortDescription (условия меняются)
+        //    - validUntil (срок действия)
+        //    - cities, categories (география и категории)
+        //    - partnerUrl, discountValue и т.д.
+        
+        // Данные которые ВСЕГДА обновляем (динамичные)
+        const dynamicData = {
           description: cleanDescription(bbDiscount.description),
           shortDescription: cleanDescription(bbDiscount.short_description),
           discountValue: bbDiscount.discount_value ?? null,
-          imageUrl: imageUrl ?? existing?.imageUrl ?? null,
-          originalImageUrl: originalImage?.slice(0, 100) ?? null,
           partnerUrl: bbDiscount.cta_url ?? null,
           categories: bbDiscount.categories ?? [],
           mainCategoryId: bbDiscount.main_category?.id ?? null,
@@ -325,10 +333,29 @@ async function syncDiscounts() {
         };
 
         if (existing) {
-          await prisma.discount.update({ where: { id: discountId }, data: discountData });
+          // ОБНОВЛЕНИЕ: сохраняем title и imageUrl если уже есть
+          const updateData = {
+            ...dynamicData,
+            // Сохраняем существующее название если есть, иначе берём из BB
+            title: existing.title || bbDiscount.name || "Без названия",
+            // Сохраняем CDN картинку если уже загружена
+            imageUrl: existing.imageUrl?.includes("cdn.myunion.pro") 
+              ? existing.imageUrl 
+              : (imageUrl ?? existing.imageUrl ?? null),
+            originalImageUrl: originalImage?.slice(0, 100) ?? existing.originalImageUrl ?? null,
+          };
+          await prisma.discount.update({ where: { id: discountId }, data: updateData });
           updated++;
         } else {
-          await prisma.discount.create({ data: { id: discountId, ...discountData } });
+          // СОЗДАНИЕ: берём всё из BB
+          const createData = {
+            id: discountId,
+            title: bbDiscount.name ?? "Без названия",
+            imageUrl: imageUrl ?? null,
+            originalImageUrl: originalImage?.slice(0, 100) ?? null,
+            ...dynamicData,
+          };
+          await prisma.discount.create({ data: createData });
           created++;
         }
       } catch (error) {

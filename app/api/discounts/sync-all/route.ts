@@ -329,14 +329,15 @@ export async function POST(request: NextRequest): Promise<NextResponse<SyncResul
         const cleanedDescription = cleanDescription(bbDiscount.description);
         const cleanedShortDescription = cleanDescription(bbDiscount.short_description);
 
-        // Подготавливаем данные
-        const discountData = {
-          title: bbDiscount.name ?? "Без названия",
+        // ===== КОМПЛИМЕНТАРНАЯ СИНХРОНИЗАЦИЯ =====
+        // 🔒 СОХРАНЯЕМ (не перезаписываем если уже есть): title, imageUrl
+        // 🔄 ОБНОВЛЯЕМ (динамичные данные): description, validUntil, cities, categories
+        
+        // Данные которые ВСЕГДА обновляем (динамичные)
+        const dynamicData = {
           description: cleanedDescription,
           shortDescription: cleanedShortDescription,
           discountValue: bbDiscount.discount_value ?? null,
-          imageUrl: imageUrl ?? existing?.imageUrl ?? null,
-          originalImageUrl: originalImage?.slice(0, 100) ?? null,
           partnerUrl: bbDiscount.cta_url ?? null,
           categories: bbDiscount.categories ?? [],
           mainCategoryId: bbDiscount.main_category?.id ?? null,
@@ -351,18 +352,28 @@ export async function POST(request: NextRequest): Promise<NextResponse<SyncResul
         };
 
         if (existing) {
-          // Обновляем существующую
-          await prisma.discount.update({
-            where: { id: discountId },
-            data: discountData,
-          });
+          // ОБНОВЛЕНИЕ: сохраняем title и imageUrl если уже есть
+          const updateData = {
+            ...dynamicData,
+            // Сохраняем существующее название если есть
+            title: existing.title || bbDiscount.name || "Без названия",
+            // Сохраняем CDN картинку если уже загружена
+            imageUrl: existing.imageUrl?.includes("cdn.myunion.pro") 
+              ? existing.imageUrl 
+              : (imageUrl ?? existing.imageUrl ?? null),
+            originalImageUrl: originalImage?.slice(0, 100) ?? existing.originalImageUrl ?? null,
+          };
+          await prisma.discount.update({ where: { id: discountId }, data: updateData });
           updated++;
         } else {
-          // Создаем новую
+          // СОЗДАНИЕ: берём всё из BB
           await prisma.discount.create({
             data: {
               id: discountId,
-              ...discountData,
+              title: bbDiscount.name ?? "Без названия",
+              imageUrl: imageUrl ?? null,
+              originalImageUrl: originalImage?.slice(0, 100) ?? null,
+              ...dynamicData,
             },
           });
           created++;
