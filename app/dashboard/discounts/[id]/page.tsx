@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { DiscountItem, DiscountOption } from "@/types/discounts";
 import Image from "next/image";
+import QRCode from "qrcode";
 
 // Санитизация и улучшение HTML описания для красивого отображения
 function sanitizeDescription(html: string): string {
@@ -145,6 +146,9 @@ export default function DiscountDetailPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [hasSynced, setHasSynced] = useState(false);
   const [isMapExpanded, setIsMapExpanded] = useState(!!selectedCityId); // Открыт если выбран город
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const promoCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Сбрасываем флаги при смене скидки
@@ -394,6 +398,151 @@ export default function DiscountDetailPage() {
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       console.warn("Failed to copy promo code", error);
+    }
+  };
+
+  // Генерация QR-кода для промокода
+  const generateQRCode = useCallback(async (code: string) => {
+    try {
+      const url = await QRCode.toDataURL(code, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#ffffff',
+        },
+      });
+      setQrCodeUrl(url);
+    } catch (error) {
+      console.error("Failed to generate QR code:", error);
+    }
+  }, []);
+
+  // Генерируем QR-код при открытии модалки с промокодом
+  useEffect(() => {
+    const promoCode = activatedPromoCode || discount?.promoCode;
+    if (showPromoModal && promoCode && promoCode.trim().length > 0) {
+      generateQRCode(promoCode);
+    }
+  }, [showPromoModal, activatedPromoCode, discount?.promoCode, generateQRCode]);
+
+  // Скачивание промокода как картинки
+  const handleDownloadPromoCard = async () => {
+    if (!discount || isDownloading) return;
+    setIsDownloading(true);
+    
+    try {
+      const promoCode = activatedPromoCode || discount.promoCode;
+      
+      // Создаем canvas
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      
+      canvas.width = 600;
+      canvas.height = 400;
+      
+      // Фон с градиентом
+      const gradient = ctx.createLinearGradient(0, 0, 600, 400);
+      gradient.addColorStop(0, '#1e3a5f');
+      gradient.addColorStop(1, '#0f172a');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 600, 400);
+      
+      // Добавляем blur эффект (симуляция)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+      for (let i = 0; i < 5; i++) {
+        const x = Math.random() * 600;
+        const y = Math.random() * 400;
+        const r = 50 + Math.random() * 100;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      // Логотип / Заголовок
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 24px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(discount.title.substring(0, 35) + (discount.title.length > 35 ? '...' : ''), 300, 50);
+      
+      // Рамка для промокода
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.lineWidth = 2;
+      ctx.roundRect(50, 90, 350, 100, 16);
+      ctx.fill();
+      ctx.stroke();
+      
+      // Промокод
+      if (promoCode && promoCode.trim().length > 0) {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 36px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(promoCode, 225, 155);
+      } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '18px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Покажите эту карточку', 225, 145);
+        ctx.fillText('для получения скидки', 225, 170);
+      }
+      
+      // QR-код (если есть)
+      if (qrCodeUrl) {
+        const qrImg = new window.Image();
+        qrImg.crossOrigin = 'anonymous';
+        await new Promise<void>((resolve) => {
+          qrImg.onload = () => {
+            ctx.fillStyle = '#ffffff';
+            ctx.roundRect(430, 90, 120, 120, 8);
+            ctx.fill();
+            ctx.drawImage(qrImg, 435, 95, 110, 110);
+            resolve();
+          };
+          qrImg.onerror = () => resolve();
+          qrImg.src = qrCodeUrl;
+        });
+      }
+      
+      // Информация о скидке
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.font = '14px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'left';
+      
+      if (discount.discountValue) {
+        ctx.fillText(`Скидка: ${discount.discountValue}`, 50, 240);
+      }
+      
+      if (discount.validUntil) {
+        ctx.fillText(`Действует до: ${new Date(discount.validUntil).toLocaleDateString('ru-RU')}`, 50, 265);
+      }
+      
+      // Категория
+      if (discount.mainCategory) {
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.8)';
+        ctx.roundRect(50, 290, ctx.measureText(discount.mainCategory.name).width + 20, 28, 14);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '12px system-ui, -apple-system, sans-serif';
+        ctx.fillText(discount.mainCategory.name, 60, 309);
+      }
+      
+      // Водяной знак
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.font = '12px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText('MyUnion Pro', 580, 380);
+      
+      // Скачиваем
+      const link = document.createElement('a');
+      link.download = `promo-${discount.id}-${promoCode || 'card'}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (error) {
+      console.error("Failed to download promo card:", error);
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -839,84 +988,126 @@ export default function DiscountDetailPage() {
           </div>
         </div>
 
-        {/* Promo Code Modal */}
+        {/* Promo Code Modal - Новый дизайн как у BestBenefits */}
         {showPromoModal && discount && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-md dark:backdrop-blur-lg p-4">
-            <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800">
-              {/* Close button */}
-              <button
-                onClick={() => setShowPromoModal(false)}
-                className="absolute right-4 top-4 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-lg p-4 overflow-y-auto">
+            <div className="relative w-full max-w-md my-8">
+              {/* Карточка промокода с blur-фоном */}
+              <div 
+                ref={promoCardRef}
+                className="relative overflow-hidden rounded-3xl shadow-2xl"
               >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+                {/* Фоновое изображение с blur */}
+                <div className="absolute inset-0">
+                  {discount.imageUrl ? (
+                    <img
+                      src={discount.imageUrl}
+                      alt=""
+                      className="h-full w-full object-cover scale-110 blur-xl opacity-30"
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-gradient-to-br from-slate-800 to-slate-900" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-b from-slate-900/80 via-slate-900/90 to-slate-900/95" />
+                </div>
 
-              {/* Icon */}
-              <div className="mb-4 flex justify-center">
-                <div className="text-6xl">👍</div>
-              </div>
+                {/* Контент */}
+                <div className="relative p-6 sm:p-8">
+                  {/* Close button */}
+                  <button
+                    onClick={() => setShowPromoModal(false)}
+                    className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white/70 backdrop-blur-sm transition hover:bg-white/20 hover:text-white"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
 
-              {/* Title */}
-              <h2 className="mb-6 text-center text-2xl font-bold text-gray-900 dark:text-white">
-                {displayPromoCode && displayPromoCode.trim().length > 0 
-                  ? "Промокод получен!" 
-                  : "Скидка активирована!"}
-              </h2>
+                  {/* Логотип скидки */}
+                  {discount.imageUrl && (
+                    <div className="mb-4 flex justify-center">
+                      <div className="h-16 w-16 overflow-hidden rounded-2xl bg-white shadow-lg">
+                        <img
+                          src={discount.imageUrl}
+                          alt={discount.title}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    </div>
+                  )}
 
-              {/* Promo Code or Instructions */}
-              {(() => {
-                // Проверяем, не является ли промокод специальным случаем
-                const isSpecialCase = displayPromoCode && (
-                  displayPromoCode === "Штрихкод в купоне" ||
-                  displayPromoCode.toLowerCase().includes("штрихкод") ||
-                  displayPromoCode.toLowerCase().includes("barcode")
-                );
-                
-                // Если специальный случай, показываем инструкцию вместо промокода
-                if (isSpecialCase) {
-                  return (
+                  {/* Заголовок */}
+                  <h2 className="mb-2 text-center text-xl font-bold text-white sm:text-2xl">
+                    {displayPromoCode && displayPromoCode.trim().length > 0 
+                      ? "Ваш промокод" 
+                      : "Скидка активирована"}
+                  </h2>
+                  <p className="mb-6 text-center text-sm text-white/60">
+                    {discount.title}
+                  </p>
+
+                  {/* Промокод или инструкции */}
+                  {displayPromoCode && displayPromoCode.trim().length > 0 ? (
                     <div className="mb-6">
-                      <div className="rounded-xl border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-blue-100 p-6 text-center shadow-inner dark:border-blue-600 dark:from-blue-900/30 dark:to-blue-900/20">
-                        <div className="mb-4">
-                          <svg className="mx-auto h-16 w-16 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                          </svg>
+                      {/* Блок с промокодом */}
+                      <div className="rounded-2xl bg-white/10 p-4 backdrop-blur-sm">
+                        {/* Промокод крупно */}
+                        <div className="mb-4 flex justify-center">
+                          <div className="inline-flex items-center gap-1 rounded-xl bg-white px-4 py-3 shadow-lg">
+                            {displayPromoCode.split('').map((char, idx) => (
+                              <span
+                                key={idx}
+                                className="font-mono text-2xl font-bold text-slate-800 sm:text-3xl"
+                              >
+                                {char}
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                        <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
-                          Используйте штрихкод из купона
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Покажите QR-код кассиру в магазине для получения скидки
+
+                        {/* QR-код */}
+                        {qrCodeUrl && (
+                          <div className="mb-4 flex justify-center">
+                            <div className="rounded-xl bg-white p-2 shadow-lg">
+                              <img src={qrCodeUrl} alt="QR Code" className="h-24 w-24 sm:h-28 sm:w-28" />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Срок действия */}
+                        {discount.validUntil && (
+                          <p className="text-center text-xs text-white/50">
+                            Действует до {new Date(discount.validUntil).toLocaleDateString('ru-RU')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Для скидок без промокода */
+                    <div className="mb-6 rounded-2xl bg-white/10 p-4 backdrop-blur-sm">
+                      <div className="text-center">
+                        <div className="mb-3 text-4xl">🎉</div>
+                        <p className="text-sm leading-relaxed text-white/80">
+                          {discount.shortDescription 
+                            ? discount.shortDescription.replace(/<[^>]*>/g, '').substring(0, 150) + '...'
+                            : "Покажите эту карточку для получения скидки"
+                          }
                         </p>
                       </div>
                     </div>
-                  );
-                }
-                
-                return displayPromoCode && displayPromoCode.trim().length > 0 ? (
-                  <div className="mb-6">
-                    <div className="text-center mb-3">
-                      <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Ваш промокод
-                      </span>
-                    </div>
-                    <div className="relative rounded-xl border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-blue-100 p-6 text-center shadow-inner dark:border-blue-600 dark:from-blue-900/30 dark:to-blue-900/20">
-                      {/* Промокод с эффектом одноразового пароля */}
-                      <div className="mb-4 flex justify-center gap-1.5">
-                        {displayPromoCode.split('').map((char, idx) => (
-                          <div
-                            key={idx}
-                            className="flex h-12 w-10 items-center justify-center rounded-lg border-2 border-blue-300 bg-white font-mono text-2xl font-bold text-blue-700 shadow-sm dark:border-blue-700 dark:bg-gray-800 dark:text-blue-300"
-                          >
-                            {char}
-                          </div>
-                        ))}
-                      </div>
+                  )}
+
+                  {/* Кнопки действий */}
+                  <div className="space-y-3">
+                    {/* Копировать */}
+                    {displayPromoCode && displayPromoCode.trim().length > 0 && (
                       <button
                         onClick={handleCopyPromo}
-                        className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700 hover:shadow-lg active:scale-95"
+                        className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 font-semibold transition ${
+                          copied 
+                            ? "bg-emerald-500 text-white" 
+                            : "bg-white text-slate-900 hover:bg-gray-100"
+                        }`}
                       >
                         {copied ? (
                           <>
@@ -935,81 +1126,73 @@ export default function DiscountDetailPage() {
                           </>
                         )}
                       </button>
-                    </div>
+                    )}
+
+                    {/* Скачать как картинку */}
+                    <button
+                      onClick={handleDownloadPromoCard}
+                      disabled={isDownloading}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-3.5 font-semibold text-white backdrop-blur-sm transition hover:bg-white/20 disabled:opacity-50"
+                    >
+                      {isDownloading ? (
+                        <>
+                          <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          Скачивание...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                          Скачать карточку
+                        </>
+                      )}
+                    </button>
+
+                    {/* Добавить в избранное */}
+                    <button
+                      onClick={() => {
+                        handleToggleFavorite();
+                      }}
+                      className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 font-semibold transition ${
+                        isFavorite 
+                          ? "bg-rose-500/20 text-rose-400" 
+                          : "bg-white/10 text-white hover:bg-white/20"
+                      }`}
+                    >
+                      <svg className={`h-5 w-5 ${isFavorite ? "fill-current" : ""}`} viewBox="0 0 20 20" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor">
+                        <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                      </svg>
+                      {isFavorite ? "В избранном" : "Добавить в избранное"}
+                    </button>
+
+                    {/* Перейти на сайт партнера */}
+                    {discount.partnerUrl && (
+                      <button
+                        onClick={handleOpenPartner}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3.5 font-semibold text-white transition hover:bg-emerald-600"
+                      >
+                        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                          <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                        </svg>
+                        Перейти на сайт
+                      </button>
+                    )}
                   </div>
-                ) : null;
-              })()}
 
-              {/* Description or Instructions - показываем когда нет промокода */}
-              {(!displayPromoCode || displayPromoCode.trim().length === 0) && (
-                <>
-                  {/* Специальный блок для скидок без промокода */}
-                  <div className="mb-4 rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 p-4 dark:border-amber-700/50 dark:from-amber-900/20 dark:to-amber-900/10">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 text-2xl">💡</div>
-                      <div>
-                        <p className="font-medium text-amber-800 dark:text-amber-200">
-                          Специальное предложение от сервиса <span className="font-bold">{discount.title.split(' - ')[0]}</span>
-                        </p>
-                        <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
-                          Для получения скидки следуйте инструкциям ниже
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Описание из BestBenefits - показываем полное с прокруткой */}
-                  {discount.shortDescription ? (
-                    <div className="mb-6">
-                      <div className="max-h-40 overflow-y-auto rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
-                        <div 
-                          className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-words [&_ul]:space-y-1 [&_ul]:ml-4 [&_ul]:list-disc [&_ol]:space-y-1 [&_ol]:ml-4 [&_ol]:list-decimal [&_li]:break-words [&_li]:leading-relaxed"
-                          dangerouslySetInnerHTML={{ 
-                            __html: sanitizeDescription(discount.shortDescription)
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ) : discount.description ? (
-                    <div className="mb-6">
-                      <div className="max-h-52 overflow-y-auto rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
-                        <div 
-                          className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-words [&_ul]:space-y-1 [&_ul]:ml-4 [&_ul]:list-disc [&_ol]:space-y-1 [&_ol]:ml-4 [&_ol]:list-decimal [&_li]:break-words [&_li]:leading-relaxed"
-                          dangerouslySetInnerHTML={{ 
-                            __html: sanitizeDescription(discount.description)
-                          }}
-                        />
-                      </div>
-                      <p className="mt-2 text-center text-xs text-gray-500 dark:text-gray-400">
-                        Подробнее читайте в разделе "Условия использования"
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="mb-6">
-                      <div className="rounded-lg bg-gray-50 p-4 text-center dark:bg-gray-700/50">
-                        <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                          Перейдите на сайт партнёра для получения скидки
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Open Partner Button */}
-              <button
-                onClick={handleOpenPartner}
-                className="w-full rounded-lg bg-emerald-600 px-6 py-3.5 font-semibold text-white shadow-lg transition hover:bg-emerald-700"
-              >
-                {discount.partnerUrl ? "Перейти на сайт партнера" : "Открыть мои скидки"}
-              </button>
-
-              <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
-                {discount.promoCode 
-                  ? "Используйте промокод при оформлении заказа"
-                  : "Предъявите при оплате или покажите эту страницу"
-                }
-              </p>
+                  {/* Подсказка */}
+                  <p className="mt-4 text-center text-xs text-white/40">
+                    {displayPromoCode && displayPromoCode.trim().length > 0
+                      ? "Используйте промокод при оформлении заказа"
+                      : "Покажите эту карточку для получения скидки"
+                    }
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         )}
