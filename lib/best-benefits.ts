@@ -6,6 +6,7 @@ import {
   DiscountCategory,
   DiscountCity,
   DiscountItem,
+  DiscountOption,
   DiscountSearchParams,
   DiscountSearchResult,
 } from "@/types/discounts";
@@ -722,16 +723,20 @@ function normalizeDiscount(discount: BestBenefitsDiscount): DiscountItem {
   const description = discount.description || null;
   const shortDescription = discount.short_description || null;
   
-  // console.log(`[best-benefits] Discount ${discount.id} "${discount.name}":`, {
-  //   hasPromoCode: !!discount.promo_code,
-  //   promoCode: discount.promo_code,
-  //   hasDescription: !!description,
-  //   descriptionLength: description?.length || 0,
-  //   hasShortDescription: !!shortDescription,
-  //   shortDescriptionLength: shortDescription?.length || 0,
-  //   hasCtaUrl: !!discount.cta_url,
-  //   ctaUrl: discount.cta_url,
-  // });
+  // Нормализуем варианты скидки (options)
+  const options: DiscountOption[] | undefined = discount.options?.length 
+    ? discount.options.map((opt) => ({
+        id: opt.id,
+        name: opt.name,
+      }))
+    : undefined;
+  
+  // Логируем скидки с вариантами
+  if (options && options.length > 0) {
+    console.log(`[best-benefits] Discount ${discount.id} "${discount.name}" has ${options.length} options:`, 
+      options.map(o => `${o.id}: ${o.name}`).join(', ')
+    );
+  }
 
   return {
     id: discount.id,
@@ -755,6 +760,7 @@ function normalizeDiscount(discount: BestBenefitsDiscount): DiscountItem {
     cities: cityList.length > 0 ? cityList : [{ id: 0, name: "Онлайн" }],
     updatedAt: discount.updated_at ?? discount.created_at ?? null,
     validUntil: discount.end ?? null,
+    options, // Варианты скидки
   };
 }
 

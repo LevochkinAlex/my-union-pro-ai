@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { DiscountItem } from "@/types/discounts";
+import { DiscountItem, DiscountOption } from "@/types/discounts";
 import Image from "next/image";
 
 // Санитизация и улучшение HTML описания для красивого отображения
@@ -138,7 +138,10 @@ export default function DiscountDetailPage() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showPromoModal, setShowPromoModal] = useState(false);
+  const [showOptionsModal, setShowOptionsModal] = useState(false); // Модальное окно выбора варианта
   const [activatedPromoCode, setActivatedPromoCode] = useState<string | null>(null);
+  const [selectedOptionId, setSelectedOptionId] = useState<number | null>(null); // ID выбранного варианта
+  const [activatingOptionId, setActivatingOptionId] = useState<number | null>(null); // ID варианта в процессе активации
   const [isSyncing, setIsSyncing] = useState(false);
   const [hasSynced, setHasSynced] = useState(false);
   const [isMapExpanded, setIsMapExpanded] = useState(!!selectedCityId); // Открыт если выбран город
@@ -281,54 +284,89 @@ export default function DiscountDetailPage() {
       isClaimed,
       hasPromoCode: !!discount.promoCode,
       promoCode: discount.promoCode,
+      hasOptions: !!(discount.options && discount.options.length > 0),
+      optionsCount: discount.options?.length || 0,
     });
     
-    // Если ещё не активирована, активируем и получаем промокод
-    if (!isClaimed) {
-      setIsClaimed(true);
-      
-      try {
-        const response = await fetch("/api/discounts/activate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            discountId: discount.id,
-            promoCode: discount.promoCode || null, // Передаем промокод из discount
-            claimed: [discount.id],
-            favorites: isFavorite ? [discount.id] : [],
-          }),
-        });
-        
-        const result = await response.json();
-        console.log("🎯 ACTIVATION API RESPONSE:", result);
-        
-        // Перезагружаем preferences чтобы получить сохраненный промокод
-        await loadPreferences();
-        
-        // Определяем промокод для отображения
-        const finalPromoCode = result.promoCode || discount.promoCode || activatedPromoCode;
-        
-        if (finalPromoCode && finalPromoCode.trim().length > 0) {
-          console.log("✅ Setting promo code for display:", finalPromoCode);
-          setActivatedPromoCode(finalPromoCode);
-          setDiscount({
-            ...discount,
-            promoCode: finalPromoCode,
-          });
-        } else {
-          console.log("⚠️ No promo code available after activation");
-        }
-        
-        // Показываем модальное окно
-        setShowPromoModal(true);
-      } catch (error) {
-        console.error("❌ Failed to activate:", error);
-        // Показываем модальное окно даже при ошибке
-        setShowPromoModal(true);
-      }
-    } else {
-      // Если уже активирована, просто показываем модальное окно
+    // Если есть варианты (options) и скидка ещё не активирована, показываем модальное окно выбора
+    if (!isClaimed && discount.options && discount.options.length > 0) {
+      console.log("🎁 Showing options modal with", discount.options.length, "options");
+      setShowOptionsModal(true);
+      return;
+    }
+    
+    // Если уже активирована, просто показываем модальное окно
+    if (isClaimed) {
       console.log("⏩ Already claimed, showing modal with promo code:", discount.promoCode || activatedPromoCode);
+      setShowPromoModal(true);
+      return;
+    }
+    
+    // Если нет вариантов, активируем основную скидку
+    await activateDiscount(discount.id);
+  };
+
+  // Активация конкретного варианта скидки
+  const activateOption = async (optionId: number) => {
+    if (!discount) return;
+    
+    console.log("🎯 Activating option:", optionId);
+    setActivatingOptionId(optionId);
+    
+    try {
+      await activateDiscount(optionId);
+      setSelectedOptionId(optionId);
+      setShowOptionsModal(false);
+    } finally {
+      setActivatingOptionId(null);
+    }
+  };
+
+  // Универсальная функция активации (для скидки или варианта)
+  const activateDiscount = async (idToActivate: number) => {
+    if (!discount) return;
+    
+    console.log("🔄 Activating discount/option:", idToActivate);
+    setIsClaimed(true);
+    
+    try {
+      const response = await fetch("/api/discounts/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          discountId: idToActivate, // ID скидки или варианта
+          parentDiscountId: discount.id, // Родительская скидка (для сохранения в preferences)
+          promoCode: discount.promoCode || null,
+          claimed: [discount.id],
+          favorites: isFavorite ? [discount.id] : [],
+        }),
+      });
+      
+      const result = await response.json();
+      console.log("🎯 ACTIVATION API RESPONSE:", result);
+      
+      // Перезагружаем preferences чтобы получить сохраненный промокод
+      await loadPreferences();
+      
+      // Определяем промокод для отображения
+      const finalPromoCode = result.promoCode || discount.promoCode || activatedPromoCode;
+      
+      if (finalPromoCode && finalPromoCode.trim().length > 0) {
+        console.log("✅ Setting promo code for display:", finalPromoCode);
+        setActivatedPromoCode(finalPromoCode);
+        setDiscount({
+          ...discount,
+          promoCode: finalPromoCode,
+        });
+      } else {
+        console.log("⚠️ No promo code available after activation");
+      }
+      
+      // Показываем модальное окно с результатом
+      setShowPromoModal(true);
+    } catch (error) {
+      console.error("❌ Failed to activate:", error);
+      // Показываем модальное окно даже при ошибке
       setShowPromoModal(true);
     }
   };
@@ -763,19 +801,39 @@ export default function DiscountDetailPage() {
                 className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-base font-semibold text-white shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:ring-offset-gray-800 sm:px-6 sm:py-4 sm:text-lg ${
                   isClaimed
                     ? "bg-emerald-600 hover:bg-emerald-700"
-                    : "bg-blue-600 hover:bg-blue-700"
+                    : "bg-rose-600 hover:bg-rose-700"
                 }`}
               >
-                <span>{isClaimed ? "Открыть" : "Использовать"}</span>
-                <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                  <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                </svg>
+                {isClaimed ? (
+                  <>
+                    <span>Открыть</span>
+                    <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                      <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                    </svg>
+                  </>
+                ) : discount.options && discount.options.length > 0 ? (
+                  <>
+                    <span>Выбрать</span>
+                    <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </>
+                ) : (
+                  <>
+                    <span>Получить</span>
+                    <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </>
+                )}
               </button>
               <p className="mt-2 text-center text-xs text-gray-500 dark:text-gray-400 sm:mt-3 sm:text-sm">
                 {isClaimed
-                  ? "Скидка уже активирована. Нажмите чтобы открыть сайт партнера."
-                  : "При нажатии скидка будет активирована и откроется сайт партнера"}
+                  ? "Скидка уже активирована. Нажмите чтобы открыть."
+                  : discount.options && discount.options.length > 0
+                    ? `Доступно ${discount.options.length} ${discount.options.length === 1 ? 'вариант' : discount.options.length < 5 ? 'варианта' : 'вариантов'} скидки`
+                    : "При нажатии скидка будет активирована"}
               </p>
             </div>
           </div>
@@ -952,6 +1010,81 @@ export default function DiscountDetailPage() {
                   : "Предъявите при оплате или покажите эту страницу"
                 }
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* Options Selection Modal - выбор варианта скидки */}
+        {showOptionsModal && discount && discount.options && discount.options.length > 0 && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-md dark:backdrop-blur-lg p-4">
+            <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800">
+              {/* Close button */}
+              <button
+                onClick={() => setShowOptionsModal(false)}
+                className="absolute right-4 top-4 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
+              {/* Title */}
+              <h2 className="mb-2 text-center text-2xl font-bold text-gray-900 dark:text-white">
+                Выберите предложение
+              </h2>
+              <p className="mb-6 text-center text-sm text-gray-600 dark:text-gray-400">
+                Вариантов: {discount.options.length}
+              </p>
+
+              {/* Options list */}
+              <div className="space-y-3 max-h-80 overflow-y-auto">
+                {discount.options.map((option) => (
+                  <div
+                    key={option.id}
+                    className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-700/50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white leading-snug">
+                        {option.name}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => activateOption(option.id)}
+                      disabled={activatingOptionId !== null}
+                      className={`flex-shrink-0 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-md transition ${
+                        activatingOptionId === option.id
+                          ? "bg-gray-400 cursor-wait"
+                          : "bg-rose-600 hover:bg-rose-700 hover:shadow-lg active:scale-95"
+                      }`}
+                    >
+                      {activatingOptionId === option.id ? (
+                        <span className="flex items-center gap-2">
+                          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span>...</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5">
+                          Получить
+                          <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Cancel button */}
+              <button
+                onClick={() => setShowOptionsModal(false)}
+                className="mt-4 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              >
+                Отмена
+              </button>
             </div>
           </div>
         )}

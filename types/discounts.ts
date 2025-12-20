@@ -12,6 +12,12 @@ export interface BestBenefitsCity {
   longitude?: number | null;
 }
 
+// Вариант скидки (для скидок с несколькими предложениями)
+export interface BestBenefitsOption {
+  id: number;
+  name: string;
+}
+
 export interface BestBenefitsDiscount {
   id: number;
   parent_id?: number | null;
@@ -32,6 +38,7 @@ export interface BestBenefitsDiscount {
   tags?: string[] | null;
   isPremium?: boolean | null;
   isFavorite?: boolean | null;
+  options?: BestBenefitsOption[] | null; // Варианты скидки (например, разные промокоды)
 }
 
 export interface BestBenefitsResponse {
@@ -63,6 +70,12 @@ export interface DiscountCity {
   count?: number;
 }
 
+// Вариант скидки (нормализованный)
+export interface DiscountOption {
+  id: number;
+  name: string;
+}
+
 export interface DiscountItem {
   id: number;
   title: string;
@@ -80,6 +93,7 @@ export interface DiscountItem {
   distanceKm?: number | null;
   updatedAt?: string | null;
   validUntil?: string | null;
+  options?: DiscountOption[] | null; // Варианты скидки (для выбора конкретного промокода)
 }
 
 export interface DiscountSearchParams {

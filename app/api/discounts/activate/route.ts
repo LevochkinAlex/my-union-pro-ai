@@ -14,11 +14,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const { discountId, promoCode: requestPromoCode, claimed, favorites } = await request.json();
+    const { discountId, parentDiscountId, promoCode: requestPromoCode, claimed, favorites } = await request.json();
 
     if (!discountId || typeof discountId !== "number") {
       return NextResponse.json({ error: "discountId обязателен" }, { status: 400 });
     }
+
+    // Используем parentDiscountId для сохранения в базе (если это вариант скидки)
+    // discountId используется для активации в BestBenefits API
+    const discountIdForDb = parentDiscountId || discountId;
+    
+    console.log(`[activate-discount] Activating:`, {
+      discountId, // ID для API (скидка или вариант)
+      parentDiscountId, // ID родительской скидки (если есть)
+      discountIdForDb, // ID для сохранения в БД
+    });
 
     // Get user data for BestBenefits activation
     const user = await prisma.user.findUnique({
@@ -100,10 +110,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Получаем информацию о скидке для validUntil
+    // Используем discountIdForDb (родительскую скидку) для получения информации
     let validUntil: string | null = null;
     try {
       const discountInfo = await fetchBestBenefitsDiscounts({
-        ids: discountId.toString(),
+        ids: discountIdForDb.toString(),
         limit: 1,
       });
       if (discountInfo.discounts.length > 0) {
@@ -115,15 +126,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Сохраняем активацию в DiscountActivation
+    // Используем discountIdForDb для сохранения (родительская скидка)
     await saveDiscountActivation(user.id, {
-      discountId,
+      discountId: discountIdForDb,
       promoCode: promoCode || null,
       validUntil,
       activatedAt: new Date(),
     });
 
     console.log(`[activate-discount] ✅ Saved to DiscountActivation:`, {
-      discountId,
+      discountId: discountIdForDb,
+      activatedOptionId: discountId !== discountIdForDb ? discountId : null,
       promoCode,
       validUntil,
     });
@@ -167,7 +180,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      discountId,
+      discountId: discountIdForDb, // ID родительской скидки
+      activatedOptionId: discountId !== discountIdForDb ? discountId : null, // ID активированного варианта
       bestBenefitsActivated,
       promoCode: promoCode,
       validUntil: validUntil,
