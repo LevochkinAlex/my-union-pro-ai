@@ -882,46 +882,64 @@ export default function DiscountDetailPage() {
                 ) : null;
               })()}
 
-              {/* Description or Instructions */}
+              {/* Description or Instructions - показываем когда нет промокода */}
               {(!displayPromoCode || displayPromoCode.trim().length === 0) && (
-                discount.shortDescription ? (
-                  <div className="mb-6">
-                    <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
-                      <div 
-                        className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-words"
-                        dangerouslySetInnerHTML={{ 
-                          __html: sanitizeDescription(discount.shortDescription)
-                        }}
-                      />
+                <>
+                  {/* Специальный блок для скидок без промокода */}
+                  <div className="mb-4 rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 p-4 dark:border-amber-700/50 dark:from-amber-900/20 dark:to-amber-900/10">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 text-2xl">💡</div>
+                      <div>
+                        <p className="font-medium text-amber-800 dark:text-amber-200">
+                          Специальное предложение от сервиса <span className="font-bold">{discount.title.split(' - ')[0]}</span>
+                        </p>
+                        <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                          Для получения скидки следуйте инструкциям ниже
+                        </p>
+                      </div>
                     </div>
                   </div>
-                ) : discount.description ? (
-                  <div className="mb-6">
-                    <div className="max-h-48 overflow-y-auto rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
-                      <div 
-                        className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-words [&_ul]:space-y-1 [&_ul]:ml-4 [&_ul]:list-disc [&_ol]:space-y-1 [&_ol]:ml-4 [&_ol]:list-decimal [&_li]:break-words [&_li]:leading-relaxed"
-                        dangerouslySetInnerHTML={{ 
-                          __html: sanitizeDescription(
-                            discount.description.length > 500 
-                              ? discount.description.substring(0, 500) + '...' 
-                              : discount.description
-                          )
-                        }}
-                      />
+
+                  {/* Описание из BestBenefits */}
+                  {discount.shortDescription ? (
+                    <div className="mb-6">
+                      <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
+                        <div 
+                          className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-words"
+                          dangerouslySetInnerHTML={{ 
+                            __html: sanitizeDescription(discount.shortDescription)
+                          }}
+                        />
+                      </div>
                     </div>
-                    <p className="mt-2 text-center text-xs text-gray-500 dark:text-gray-400">
-                      Подробнее читайте в разделе "Условия использования"
-                    </p>
-                  </div>
-                ) : (
-                  <div className="mb-6">
-                    <div className="rounded-lg bg-gray-50 p-4 text-center dark:bg-gray-700/50">
-                      <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                        Представьте при оплате или покажите эту страницу
+                  ) : discount.description ? (
+                    <div className="mb-6">
+                      <div className="max-h-48 overflow-y-auto rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
+                        <div 
+                          className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-words [&_ul]:space-y-1 [&_ul]:ml-4 [&_ul]:list-disc [&_ol]:space-y-1 [&_ol]:ml-4 [&_ol]:list-decimal [&_li]:break-words [&_li]:leading-relaxed"
+                          dangerouslySetInnerHTML={{ 
+                            __html: sanitizeDescription(
+                              discount.description.length > 500 
+                                ? discount.description.substring(0, 500) + '...' 
+                                : discount.description
+                            )
+                          }}
+                        />
+                      </div>
+                      <p className="mt-2 text-center text-xs text-gray-500 dark:text-gray-400">
+                        Подробнее читайте в разделе "Условия использования"
                       </p>
                     </div>
-                  </div>
-                )
+                  ) : (
+                    <div className="mb-6">
+                      <div className="rounded-lg bg-gray-50 p-4 text-center dark:bg-gray-700/50">
+                        <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                          Перейдите на сайт партнёра для получения скидки
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Open Partner Button */}
