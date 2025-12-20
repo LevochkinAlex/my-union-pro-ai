@@ -1073,6 +1073,7 @@ model Discount {
   mainCategoryName String? // Название главной категории
   cities          Json?    // [{id, name}]
   tags            Json?    // ["tag1", "tag2"]
+  options         Json?    // [{id, name}] - варианты скидки (например Яндекс Лавка)
   
   // Дополнительные поля
   isPremium       Boolean  @default(false)

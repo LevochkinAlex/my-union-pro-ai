@@ -344,6 +344,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SyncResul
           mainCategoryName: bbDiscount.main_category?.name ?? null,
           cities: bbDiscount.cities ?? [],
           tags: bbDiscount.tags ?? [],
+          options: bbDiscount.options ?? [], // Варианты скидки (например Яндекс Лавка)
           isPremium: Boolean(bbDiscount.isPremium),
           validUntil: bbDiscount.end ? new Date(bbDiscount.end) : null,
           bbUpdatedAt: bbDiscount.updated_at ? new Date(bbDiscount.updated_at) : null,

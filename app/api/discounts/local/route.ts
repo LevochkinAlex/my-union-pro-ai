@@ -114,6 +114,7 @@ export async function GET(request: NextRequest) {
         ? { id: d.mainCategoryId, name: d.mainCategoryName || "" }
         : null,
       cities: (d.cities as any[]) || [],
+      options: (d.options as any[]) || null, // Варианты скидки (например Яндекс Лавка)
       updatedAt: d.bbUpdatedAt?.toISOString() || null,
       validUntil: d.validUntil?.toISOString() || null,
     }));
