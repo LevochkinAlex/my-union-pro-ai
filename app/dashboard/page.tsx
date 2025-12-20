@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import NewsList from "@/components/dashboard/news/NewsList";
-// import DiscountsScrollList from "@/components/dashboard/discounts/DiscountsScrollList"; // Не используется на главной
+import DiscountsPreview from "@/components/dashboard/discounts/DiscountsPreview";
 import MembershipBanner from "@/components/dashboard/MembershipBanner";
 import UserCard from "@/components/dashboard/users/UserCard";
 import PostsListClient from "@/components/posts/PostsListClient";
@@ -510,9 +510,7 @@ export default async function DashboardPage() {
                 Все скидки
               </Link>
             </div>
-            <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4">
-              Перейдите в раздел скидок, чтобы увидеть доступные предложения
-            </p>
+            <DiscountsPreview />
           </div>
         </div>
 
