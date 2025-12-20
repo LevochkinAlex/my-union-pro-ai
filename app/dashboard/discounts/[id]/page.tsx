@@ -787,21 +787,20 @@ export default function DiscountDetailPage() {
               return (
                 <div className="mt-4 sm:mt-6">
                   <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Промокод</h3>
-                  <div className="rounded-xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 p-4 shadow-sm dark:border-blue-700 dark:from-blue-900/30 dark:to-blue-900/20 sm:p-5">
-                    {/* Промокод с буквами в квадратах */}
-                    <div className="mb-3 flex flex-wrap justify-center gap-1.5 sm:gap-2">
-                      {promoCodeToShow.split('').map((char, idx) => (
-                        <div
-                          key={idx}
-                          className="flex h-10 w-8 items-center justify-center rounded-lg border-2 border-blue-300 bg-white font-mono text-lg font-bold text-blue-700 shadow-sm dark:border-blue-700 dark:bg-gray-800 dark:text-blue-300 sm:h-12 sm:w-10 sm:text-xl"
-                        >
-                          {char}
-                        </div>
-                      ))}
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
+                    {/* Промокод одной строкой */}
+                    <div className="mb-3 flex items-center justify-center">
+                      <span className="rounded-lg bg-white px-4 py-2 font-mono text-lg font-bold tracking-wider text-gray-900 shadow-sm dark:bg-gray-900 dark:text-white sm:text-xl">
+                        {promoCodeToShow}
+                      </span>
                     </div>
                     <button
                       onClick={handleCopyPromo}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700 hover:shadow-lg active:scale-95 sm:text-base"
+                      className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition sm:text-base ${
+                        copied 
+                          ? "bg-emerald-500 text-white" 
+                          : "bg-blue-600 text-white hover:bg-blue-700"
+                      }`}
                     >
                       {copied ? (
                         <>
