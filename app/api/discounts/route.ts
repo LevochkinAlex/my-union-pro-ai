@@ -187,6 +187,30 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Обогащаем описания из локальной БД (для скидок без описания из BestBenefits)
+    if (payload.discounts && payload.discounts.length > 0) {
+      const discountIds = payload.discounts.map((d: any) => d.id);
+      const localDiscounts = await prisma.discount.findMany({
+        where: { id: { in: discountIds } },
+        select: { id: true, description: true, shortDescription: true },
+      });
+      
+      const localDataMap = new Map(localDiscounts.map(d => [d.id, d]));
+      
+      payload.discounts = payload.discounts.map((discount: any) => {
+        const localData = localDataMap.get(discount.id);
+        if (localData) {
+          // Обогащаем описанием из локальной БД если в API его нет
+          return {
+            ...discount,
+            description: discount.description || localData.description || null,
+            shortDescription: discount.shortDescription || localData.shortDescription || null,
+          };
+        }
+        return discount;
+      });
+    }
+
     return NextResponse.json(payload, {
       status: 200,
       headers: {
