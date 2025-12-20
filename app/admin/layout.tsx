@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/dashboard/Sidebar";
+import MobileLayout from "@/components/dashboard/MobileLayout";
 
 export default async function AdminLayout({
   children,
@@ -58,20 +58,6 @@ export default async function AdminLayout({
             strokeLinejoin="round"
             strokeWidth={2}
             d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-          />
-        </svg>
-      ),
-    },
-    {
-      href: "/admin/news",
-      label: "Новости",
-      icon: (
-        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
           />
         </svg>
       ),
@@ -155,21 +141,31 @@ export default async function AdminLayout({
     },
   ];
 
+  const userInitial = session.user?.name?.charAt(0).toUpperCase() || "A";
+
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
-      {/* Sidebar */}
+      {/* Mobile Header and Menu */}
+      <MobileLayout
+        items={adminMenuItems}
+        userInitial={userInitial}
+        avatarUrl={null}
+        isAdmin={true}
+      />
+
+      {/* Desktop Sidebar */}
       <Sidebar
         items={adminMenuItems}
-        userInitial={session.user?.name?.charAt(0).toUpperCase() || "A"}
+        userInitial={userInitial}
         avatarUrl={null}
         isAdmin={true}
       />
 
       {/* Main content */}
-      <div id="main-content" className="flex flex-col flex-1 md:pl-64 transition-all duration-300">
-        <main className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden">
-          <div className="flex-1 overflow-y-auto">
-            <div className="px-4 py-8 sm:px-8 lg:px-12 h-full">
+      <div id="main-content" className="flex flex-col flex-1 md:pl-64 transition-all duration-300 min-w-0 bg-gray-50 dark:bg-gray-900">
+        <main className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden min-w-0 min-h-full">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden pt-16 md:pt-0 min-w-0 bg-gray-50 dark:bg-gray-900 min-h-full">
+            <div className="px-4 py-8 sm:px-8 lg:px-12 min-h-full w-full max-w-full min-w-0 bg-gray-50 dark:bg-gray-900">
               {children}
             </div>
           </div>
