@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DiscountCard from "./DiscountCard";
 import CityFilter from "./CityFilter";
+import CategoryFilter from "./CategoryFilter";
 import type {
   DiscountPreferenceResponse,
   DiscountSearchResult,
@@ -818,32 +819,13 @@ export default function DiscountsClient({
           }
         />
 
-        {/* Row 2: Categories */}
+        {/* Row 2: Categories Dropdown */}
         {(data.categories || []).length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {(data.categories || []).map((cat) => {
-              const isActive = filters.categoryIds.includes(cat.id);
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => {
-                    const next = isActive
-                      ? filters.categoryIds.filter((id) => id !== cat.id)
-                      : [...filters.categoryIds, cat.id];
-                    updateFilters({ categoryIds: next, page: 1 });
-                  }}
-                  className={clsx(
-                    "inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium transition",
-                    isActive
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                  )}
-                >
-                  {cat.name}
-                </button>
-              );
-            })}
-          </div>
+          <CategoryFilter
+            categories={data.categories || []}
+            selectedIds={filters.categoryIds}
+            onChange={(categoryIds) => updateFilters({ categoryIds, page: 1 })}
+          />
         )}
 
         {/* Row 3: Actions */}
