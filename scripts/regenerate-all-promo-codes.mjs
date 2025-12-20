@@ -15,37 +15,54 @@ import crypto from 'crypto';
 const prisma = new PrismaClient();
 
 // === Шифрование/Дешифрование пароля ===
-const ENCRYPTION_KEY = process.env.BB_ENCRYPTION_KEY || process.env.BEST_BENEFITS_ENCRYPTION_KEY || 'default-32-char-key-for-bb-pass!';
+// Формат хранения: salt (64 bytes hex) + iv (16 bytes hex) + tag (16 bytes hex) + encrypted
+const ENCRYPTION_KEY = process.env.BB_PASSWORD_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || 'default-key-change-in-production-32-chars!!';
+const ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 16;
+const SALT_LENGTH = 64;
+const TAG_LENGTH = 16;
+const TAG_POSITION = SALT_LENGTH + IV_LENGTH;
+const ENCRYPTED_POSITION = TAG_POSITION + TAG_LENGTH;
 
-function decryptPassword(encrypted) {
-  if (!encrypted) return null;
+function getKey() {
+  return crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+}
+
+function decryptPassword(encryptedPassword) {
+  if (!encryptedPassword) return null;
   
   try {
-    // Проверяем формат данных
-    if (!encrypted.includes(':')) {
-      console.warn('Invalid encrypted format (no separator)');
+    // Минимальная длина: salt (128 hex) + iv (32 hex) + tag (32 hex) + минимум 2 hex символа данных
+    if (encryptedPassword.length < ENCRYPTED_POSITION * 2 + 2) {
+      console.warn('Invalid encrypted format (too short):', encryptedPassword.length);
       return null;
     }
     
-    const parts = encrypted.split(':');
-    if (parts.length !== 3) {
-      console.warn('Invalid encrypted format (wrong parts count):', parts.length);
+    // Проверяем формат (hex строка)
+    if (!/^[0-9a-f]+$/i.test(encryptedPassword)) {
+      console.warn('Invalid encrypted format (not hex)');
       return null;
     }
     
-    const [ivHex, authTagHex, encryptedHex] = parts;
+    const key = getKey();
     
-    const iv = Buffer.from(ivHex, 'hex');
-    const authTag = Buffer.from(authTagHex, 'hex');
-    const encryptedBuffer = Buffer.from(encryptedHex, 'hex');
+    // Извлекаем компоненты
+    const salt = Buffer.from(encryptedPassword.substring(0, SALT_LENGTH * 2), 'hex');
+    const iv = Buffer.from(
+      encryptedPassword.substring(SALT_LENGTH * 2, TAG_POSITION * 2),
+      'hex'
+    );
+    const tag = Buffer.from(
+      encryptedPassword.substring(TAG_POSITION * 2, ENCRYPTED_POSITION * 2),
+      'hex'
+    );
+    const encrypted = encryptedPassword.substring(ENCRYPTED_POSITION * 2);
     
-    // Создаем ключ из строки
-    const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+    decipher.setAAD(salt);
+    decipher.setAuthTag(tag);
     
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(authTag);
-    
-    let decrypted = decipher.update(encryptedBuffer, null, 'utf8');
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
     
     return decrypted;
