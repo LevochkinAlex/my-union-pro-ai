@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import Image from "next/image";
 import { useToast } from "@/components/ui/Toast";
 
 interface Comment {
@@ -35,6 +34,21 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [currentUserAvatarUrl, setCurrentUserAvatarUrl] = useState<string | null>(null);
+
+  // Загружаем avatarUrl текущего пользователя из профиля (не хранится в session)
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetch("/api/profile")
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => {
+          if (data?.user?.avatarUrl) {
+            setCurrentUserAvatarUrl(data.user.avatarUrl);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [session?.user?.id]);
 
   useEffect(() => {
     loadComments();
@@ -155,39 +169,32 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
     return user.email;
   };
 
-  // Компонент аватара с поддержкой base64
+  // Компонент аватара с поддержкой CDN и base64
   const Avatar = ({ user, size = 8 }: { user: Comment["user"]; size?: number }) => {
     const name = userName(user);
-    const sizeClass = `h-${size} w-${size}`;
+    const pixelSize = size === 8 ? 32 : 24;
+    const sizeStyle = { width: pixelSize, height: pixelSize };
     
     if (user.avatarUrl) {
-      // Проверяем, является ли изображение data URL (base64)
-      const isDataUrl = user.avatarUrl.startsWith('data:');
-      
-      if (isDataUrl) {
-        // Для base64 используем обычный img тег
-        return (
-          <div className={`${sizeClass} rounded-full overflow-hidden flex-shrink-0`}>
-            <img
-              src={user.avatarUrl}
-              alt={name}
-              className="h-full w-full object-cover"
-            />
-          </div>
-        );
-      } else {
-        // Для обычных URL используем Next Image
-        return (
-          <div className={`relative ${sizeClass} rounded-full overflow-hidden flex-shrink-0`}>
-            <Image
-              src={user.avatarUrl}
-              alt={name}
-              fill
-              className="object-cover"
-            />
-          </div>
-        );
-      }
+      // Используем обычный img тег для всех URL (CDN, Yandex, base64)
+      // Next Image требует настройки remotePatterns для каждого домена
+      return (
+        <div 
+          className="rounded-full overflow-hidden flex-shrink-0"
+          style={sizeStyle}
+        >
+          <img
+            src={user.avatarUrl}
+            alt={name}
+            className="h-full w-full object-cover"
+            loading="lazy"
+            onError={(e) => {
+              // При ошибке загрузки скрываем изображение
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
+          />
+        </div>
+      );
     }
     
     // Фолбэк - круг с первой буквой
@@ -197,7 +204,10 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
       : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400';
     
     return (
-      <div className={`flex ${sizeClass} items-center justify-center rounded-full ${bgColor} ${textSize} font-semibold flex-shrink-0`}>
+      <div 
+        className={`flex items-center justify-center rounded-full ${bgColor} ${textSize} font-semibold flex-shrink-0`}
+        style={sizeStyle}
+      >
         {name.charAt(0).toUpperCase()}
       </div>
     );
@@ -223,7 +233,7 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
                 firstName: session.user.firstName,
                 lastName: session.user.lastName,
                 email: session.user.email || "",
-                avatarUrl: session.user.avatarUrl,
+                avatarUrl: currentUserAvatarUrl,
               }} 
               size={8} 
             />
