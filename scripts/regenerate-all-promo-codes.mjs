@@ -76,7 +76,8 @@ function decryptPassword(encryptedPassword) {
 const BEST_BENEFITS_API = 'https://bestbenefits.ru/api';
 
 async function getUserBestBenefitsToken(email, password) {
-  const response = await fetch(`${BEST_BENEFITS_API}/auth/login`, {
+  // Правильный endpoint: POST /api/auth
+  const response = await fetch(`${BEST_BENEFITS_API}/auth`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -91,7 +92,8 @@ async function getUserBestBenefitsToken(email, password) {
   }
   
   const data = await response.json();
-  return data.data?.token || data.token;
+  // Формат ответа: { access_token: "...", token_type: "Bearer", expires_in: ... }
+  return data.access_token || data.data?.token || data.token;
 }
 
 async function getUserActivatedDiscounts(email, password) {
