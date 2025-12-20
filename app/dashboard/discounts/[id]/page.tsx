@@ -284,17 +284,27 @@ export default function DiscountDetailPage() {
   const handleClaim = async () => {
     if (!discount) return;
     
+    const hasPromoCode = !!(activatedPromoCode || discount.promoCode);
+    const hasOptions = !!(discount.options && discount.options.length > 0);
+    
     console.log("🔘 HANDLE CLAIM START:", {
       isClaimed,
-      hasPromoCode: !!discount.promoCode,
-      promoCode: discount.promoCode,
-      hasOptions: !!(discount.options && discount.options.length > 0),
+      hasPromoCode,
+      promoCode: discount.promoCode || activatedPromoCode,
+      hasOptions,
       optionsCount: discount.options?.length || 0,
     });
     
     // Если есть варианты (options) и скидка ещё не активирована, показываем модальное окно выбора
-    if (!isClaimed && discount.options && discount.options.length > 0) {
-      console.log("🎁 Showing options modal with", discount.options.length, "options");
+    if (!isClaimed && hasOptions) {
+      console.log("🎁 Showing options modal with", discount.options!.length, "options");
+      setShowOptionsModal(true);
+      return;
+    }
+    
+    // Если уже активирована, НО промокода нет И есть options - даём переактивировать с выбором варианта
+    if (isClaimed && !hasPromoCode && hasOptions) {
+      console.log("🔄 Already claimed but no promo code and has options - showing options for re-activation");
       setShowOptionsModal(true);
       return;
     }
@@ -1099,6 +1109,22 @@ export default function DiscountDetailPage() {
 
                   {/* Кнопки действий */}
                   <div className="space-y-3">
+                    {/* Выбрать вариант скидки - если нет промокода но есть options */}
+                    {(!displayPromoCode || displayPromoCode.trim().length === 0) && discount.options && discount.options.length > 0 && (
+                      <button
+                        onClick={() => {
+                          setShowPromoModal(false);
+                          setShowOptionsModal(true);
+                        }}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 font-semibold text-white transition hover:bg-blue-700"
+                      >
+                        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clipRule="evenodd" />
+                        </svg>
+                        Выбрать вариант скидки ({discount.options.length})
+                      </button>
+                    )}
+
                     {/* Копировать */}
                     {displayPromoCode && displayPromoCode.trim().length > 0 && (
                       <button
