@@ -21,9 +21,9 @@ config({ path: path.join(__dirname, "..", ".env") });
 const prisma = new PrismaClient();
 
 const API_BASE_URL = process.env.BEST_BENEFITS_API_URL ?? "https://bestbenefits.ru/api/products";
-const BB_AUTH_URL = process.env.BEST_BENEFITS_AUTH_URL ?? "https://bestbenefits.ru/api/v2/auth";
-const BB_EMAIL = process.env.BEST_BENEFITS_EMAIL;
-const BB_PASSWORD = process.env.BEST_BENEFITS_PASSWORD;
+const BB_AUTH_URL = "https://bestbenefits.ru/api/auth";
+const BB_EMAIL = process.env.BB_LOGIN;
+const BB_PASSWORD = process.env.BB_PASSWORD;
 
 const VDS_HOST = process.env.VDS_STORAGE_HOST;
 const VDS_USER = process.env.VDS_STORAGE_USER ?? "root";
@@ -39,7 +39,7 @@ console.log(`Время: ${new Date().toISOString()}`);
  */
 async function getBBToken() {
   if (!BB_EMAIL || !BB_PASSWORD) {
-    throw new Error("BEST_BENEFITS_EMAIL и BEST_BENEFITS_PASSWORD не настроены");
+    throw new Error("BB_LOGIN и BB_PASSWORD не настроены в .env");
   }
 
   const response = await fetch(BB_AUTH_URL, {
