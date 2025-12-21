@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { safeFetchJson } from "@/lib/safe-fetch";
 
@@ -22,13 +22,36 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
   const [isLoading, setIsLoading] = useState(true);
   const [isSwitching, setIsSwitching] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     loadViewMode();
+    
+    // Очистка таймеров при размонтировании
+    return () => {
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+      }
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
   }, []);
+
+  // Повторная загрузка при изменении retryCount (для повторных попыток)
+  useEffect(() => {
+    if (retryCount > 0 && retryCount <= 3) {
+      retryTimeoutRef.current = setTimeout(() => {
+        loadViewMode();
+      }, 1000 * retryCount); // Экспоненциальная задержка: 1s, 2s, 3s
+    }
+  }, [retryCount]);
 
   const loadViewMode = async () => {
     try {
+      setIsLoading(true);
       // Загружаем режим просмотра (не критичный запрос)
       const data = await safeFetchJson<{ currentMode: string; availableModes: ViewModeOption[]; canSwitch: boolean }>("/api/user/view-mode", {
         ignoreServerErrors: true,
@@ -39,14 +62,27 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
         setCurrentMode(data.currentMode);
         setAvailableModes(data.availableModes);
         setCanSwitch(data.canSwitch);
+        setRetryCount(0); // Сбрасываем счетчик при успешной загрузке
+      } else {
+        // Если данных нет, пытаемся загрузить снова
+        if (retryCount < 3) {
+          setRetryCount(prev => prev + 1);
+        }
       }
     } catch (error) {
       // Только для критичных ошибок (не 503/500)
       if (process.env.NODE_ENV === 'development') {
         console.error("Error loading view mode:", error);
       }
+      // Повторная попытка при ошибке
+      if (retryCount < 3) {
+        setRetryCount(prev => prev + 1);
+      }
     } finally {
-      setIsLoading(false);
+      // Устанавливаем минимальное время загрузки, чтобы избежать мерцания
+      loadTimeoutRef.current = setTimeout(() => {
+        setIsLoading(false);
+      }, 300);
     }
   };
 
@@ -64,23 +100,50 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
       if (response.ok) {
         setCurrentMode(newMode);
         setIsOpen(false);
-        // Полная перезагрузка страницы с очисткой кеша
-        window.location.replace("/dashboard?t=" + Date.now());
+        // Обновляем локальное состояние перед перезагрузкой
+        setAvailableModes(prev => prev.map(m => ({ ...m })));
+        // Полная перезагрузка страницы с очисткой кеша и принудительным обновлением сессии
+        window.location.replace("/dashboard?t=" + Date.now() + "&refresh=1");
+      } else {
+        // Если переключение не удалось, перезагружаем данные
+        await loadViewMode();
       }
     } catch (error) {
       console.error("Error switching view mode:", error);
+      // При ошибке перезагружаем данные
+      await loadViewMode();
     } finally {
       setIsSwitching(false);
     }
   };
 
-  // Не показываем переключатель если нет возможности переключения
-  if (isLoading || !canSwitch || availableModes.length <= 1) {
+  // Показываем переключатель если:
+  // 1. Есть более одного режима (основное условие)
+  // 2. ИЛИ загрузка еще идет и уже есть хотя бы один режим (оптимистичное отображение)
+  // Это предотвращает исчезновение переключателя при медленной загрузке или после переключения режима
+  const hasModes = availableModes.length > 0;
+  const hasMultipleModes = availableModes.length > 1;
+  
+  // Показываем переключатель если есть несколько режимов ИЛИ если загрузка идет и есть хотя бы один режим
+  // (последнее условие предотвращает исчезновение во время загрузки)
+  const shouldShow = hasMultipleModes || (isLoading && hasModes) || isSwitching;
+  
+  // Если нет режимов и загрузка завершена, не показываем переключатель
+  if (!shouldShow) {
     return null;
   }
+  
+  // Если режимы еще не загружены, но мы знаем что пользователь может переключаться,
+  // показываем переключатель с текущим режимом (оптимистичное отображение)
+  const displayModes = availableModes.length > 0 
+    ? availableModes 
+    : [{ mode: currentMode, label: currentMode === "PPO_HEAD" ? "Председатель ППО" : "Член профсоюза" }];
+  
+  // Можем переключаться если есть более одного режима
+  const displayCanSwitch = displayModes.length > 1;
 
-  const currentModeData = availableModes.find((m) => m.mode === currentMode);
-  const otherMode = availableModes.find((m) => m.mode !== currentMode);
+  const currentModeData = displayModes.find((m) => m.mode === currentMode);
+  const otherMode = displayModes.find((m) => m.mode !== currentMode);
 
   // В стиле обычного пункта меню
   const icon = currentMode === "PPO_HEAD" ? (
@@ -94,10 +157,14 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
   );
 
   if (collapsed) {
+    // В свернутом режиме показываем переключатель только если есть другой режим
+    if (!otherMode) {
+      return null;
+    }
     return (
       <button
         onClick={() => otherMode && handleSwitch(otherMode.mode)}
-        disabled={isSwitching}
+        disabled={isSwitching || isLoading}
         className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
         title={`Переключить на: ${otherMode?.label}`}
       >
@@ -106,6 +173,12 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
         ) : icon}
       </button>
     );
+  }
+  
+  // В развернутом режиме показываем переключатель только если есть более одного режима
+  // (или если загрузка еще идет - оптимистичное отображение)
+  if (displayModes.length <= 1 && !isLoading && !isSwitching) {
+    return null;
   }
 
   return (
@@ -134,7 +207,7 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
           <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
           <div className="absolute top-full left-0 right-0 mt-1 z-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="py-1">
-              {availableModes.map((mode) => (
+              {displayModes.map((mode) => (
                 <button
                   key={mode.mode}
                   onClick={() => handleSwitch(mode.mode)}

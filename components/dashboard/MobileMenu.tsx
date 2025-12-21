@@ -50,16 +50,35 @@ export default function MobileMenu({
   const [canSwitch, setCanSwitch] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
   const [showModeDropdown, setShowModeDropdown] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Загрузка режимов просмотра
   useEffect(() => {
     if (!isAdmin) {
       loadViewMode();
     }
+    
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
   }, [isAdmin]);
+
+  // Повторная загрузка при изменении retryCount
+  useEffect(() => {
+    if (retryCount > 0 && retryCount <= 3 && !isAdmin) {
+      retryTimeoutRef.current = setTimeout(() => {
+        loadViewMode();
+      }, 1000 * retryCount);
+    }
+  }, [retryCount, isAdmin]);
 
   const loadViewMode = async () => {
     try {
+      setIsLoading(true);
       const data = await safeFetchJson<{ currentMode: string; availableModes: ViewModeOption[]; canSwitch: boolean }>("/api/user/view-mode", {
         ignoreServerErrors: true,
         logErrors: false,
@@ -69,9 +88,18 @@ export default function MobileMenu({
         setCurrentMode(data.currentMode);
         setAvailableModes(data.availableModes);
         setCanSwitch(data.canSwitch);
+        setRetryCount(0);
+      } else {
+        if (retryCount < 3) {
+          setRetryCount(prev => prev + 1);
+        }
       }
     } catch (error) {
-      // Ignore errors
+      if (retryCount < 3) {
+        setRetryCount(prev => prev + 1);
+      }
+    } finally {
+      setTimeout(() => setIsLoading(false), 300);
     }
   };
 
@@ -90,10 +118,18 @@ export default function MobileMenu({
         setCurrentMode(newMode);
         setShowModeDropdown(false);
         onClose();
-        window.location.replace("/dashboard?t=" + Date.now());
+        // Обновляем локальное состояние перед перезагрузкой
+        setAvailableModes(prev => prev.map(m => ({ ...m })));
+        // Полная перезагрузка страницы с очисткой кеша
+        window.location.replace("/dashboard?t=" + Date.now() + "&refresh=1");
+      } else {
+        // Если переключение не удалось, перезагружаем данные
+        await loadViewMode();
       }
     } catch (error) {
       console.error("Error switching view mode:", error);
+      // При ошибке перезагружаем данные
+      await loadViewMode();
     } finally {
       setIsSwitching(false);
     }
@@ -309,7 +345,7 @@ export default function MobileMenu({
             })}
 
             {/* View Mode Switch - показываем после пунктов меню */}
-            {!isAdmin && canSwitch && availableModes.length > 1 && (
+            {!isAdmin && (availableModes.length > 1 || (isLoading && availableModes.length > 0)) && (
               <div className="relative mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <button
                   onClick={() => setShowModeDropdown(!showModeDropdown)}

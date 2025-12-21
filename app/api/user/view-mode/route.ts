@@ -133,17 +133,55 @@ export async function PUT(request: NextRequest) {
     }
 
     // Обновляем режим просмотра
-    await prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
       data: { viewMode: mode },
+      select: {
+        viewMode: true,
+        role: true,
+        isPPOHead: true,
+        ppoHeadOrganization: {
+          select: {
+            id: true,
+            name: true,
+          }
+        },
+      },
     });
+
+    // Определяем доступные режимы для ответа (аналогично GET)
+    const availableModes: Array<{ mode: string; label: string; organizationName?: string }> = [];
+    
+    if (updatedUser.role === "MEMBER" || updatedUser.role === "PENDING_MEMBER" || updatedUser.isPPOHead) {
+      availableModes.push({
+        mode: "MEMBER",
+        label: "Член профсоюза",
+      });
+    }
+    
+    if (updatedUser.isPPOHead && updatedUser.ppoHeadOrganization) {
+      availableModes.push({
+        mode: "PPO_HEAD",
+        label: "Председатель ППО",
+        organizationName: updatedUser.ppoHeadOrganization.name,
+      });
+    }
+    
+    if (updatedUser.role === "PPO_HEAD" && !updatedUser.isPPOHead) {
+      availableModes.push({
+        mode: "PPO_HEAD",
+        label: "Председатель ППО",
+      });
+    }
 
     // Сбрасываем кеш страниц dashboard
     revalidatePath("/dashboard", "layout");
 
     return NextResponse.json({
       success: true,
-      currentMode: mode,
+      currentMode: updatedUser.viewMode || "MEMBER",
+      availableModes,
+      canSwitch: availableModes.length > 1,
       message: mode === "PPO_HEAD" 
         ? "Вы переключились в режим Председателя ППО" 
         : "Вы переключились в режим Члена профсоюза",
