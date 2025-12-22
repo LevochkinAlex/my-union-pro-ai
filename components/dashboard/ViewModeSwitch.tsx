@@ -62,13 +62,23 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
       setCurrentMode(storedData.currentMode);
       setAvailableModes(storedData.availableModes);
       setCanSwitch(storedData.canSwitch);
+      // Если сохраненные данные старше 1 минуты, помечаем как загрузку для обновления
+      if (storedData.timestamp && Date.now() - storedData.timestamp > 60 * 1000) {
+        setIsLoading(true);
+      }
     }
     
     // Затем загружаем актуальные данные
     loadViewMode();
     
+    // Периодически обновляем данные (каждые 30 секунд), чтобы они не устаревали
+    const refreshInterval = setInterval(() => {
+      loadViewMode();
+    }, 30000);
+    
     // Очистка таймеров при размонтировании
     return () => {
+      clearInterval(refreshInterval);
       if (loadTimeoutRef.current) {
         clearTimeout(loadTimeoutRef.current);
       }
@@ -113,7 +123,14 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
         // Сохраняем актуальные данные
         saveStoredData(data);
       } else {
-        // Если данных нет, пытаемся загрузить снова
+        // Если данных нет, но есть сохраненные данные - используем их
+        const storedData = loadStoredData();
+        if (storedData) {
+          setCurrentMode(storedData.currentMode);
+          setAvailableModes(storedData.availableModes);
+          setCanSwitch(storedData.canSwitch);
+        }
+        // Пытаемся загрузить снова
         if (retryCount < 3) {
           setRetryCount(prev => prev + 1);
         }
@@ -152,7 +169,8 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
         if (responseData.availableModes) {
           setAvailableModes(responseData.availableModes);
           setCanSwitch(responseData.canSwitch || responseData.availableModes.length > 1);
-          // Сохраняем обновленные данные
+          // Сохраняем обновленные данные ПЕРЕД перезагрузкой страницы
+          // Это гарантирует, что после перезагрузки переключатель не исчезнет
           saveStoredData({
             currentMode: responseData.currentMode || newMode,
             availableModes: responseData.availableModes,
@@ -161,8 +179,11 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
         }
         setCurrentMode(newMode);
         setIsOpen(false);
-        // Полная перезагрузка страницы с очисткой кеша и принудительным обновлением сессии
-        window.location.replace("/dashboard?t=" + Date.now() + "&refresh=1");
+        // Небольшая задержка перед перезагрузкой, чтобы данные успели сохраниться
+        setTimeout(() => {
+          // Полная перезагрузка страницы с очисткой кеша и принудительным обновлением сессии
+          window.location.replace("/dashboard?t=" + Date.now() + "&refresh=1");
+        }, 100);
       } else {
         // Если переключение не удалось, перезагружаем данные
         await loadViewMode();
@@ -179,24 +200,39 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
   // Показываем переключатель если:
   // 1. Есть более одного режима (основное условие)
   // 2. ИЛИ загрузка еще идет и уже есть хотя бы один режим (оптимистичное отображение)
+  // 3. ИЛИ есть сохраненные данные о том, что пользователь может переключаться
   // Это предотвращает исчезновение переключателя при медленной загрузке или после переключения режима
   const hasModes = availableModes.length > 0;
   const hasMultipleModes = availableModes.length > 1;
   
-  // Показываем переключатель если есть несколько режимов ИЛИ если загрузка идет и есть хотя бы один режим
-  // (последнее условие предотвращает исчезновение во время загрузки)
-  const shouldShow = hasMultipleModes || (isLoading && hasModes) || isSwitching;
+  // Проверяем сохраненные данные для определения, может ли пользователь переключаться
+  const storedData = loadStoredData();
+  const hasStoredMultipleModes = storedData?.availableModes?.length > 1;
+  const canSwitchFromStorage = storedData?.canSwitch === true;
   
-  // Если нет режимов и загрузка завершена, не показываем переключатель
-  if (!shouldShow) {
+  // Показываем переключатель если:
+  // - есть несколько режимов ИЛИ
+  // - загрузка идет и есть хотя бы один режим ИЛИ
+  // - идет переключение ИЛИ
+  // - есть сохраненные данные о том, что пользователь может переключаться (предотвращает исчезновение)
+  const shouldShow = hasMultipleModes || 
+                     (isLoading && hasModes) || 
+                     isSwitching || 
+                     (hasStoredMultipleModes || canSwitchFromStorage);
+  
+  // Если нет режимов, загрузка завершена, нет сохраненных данных и не идет переключение - не показываем
+  if (!shouldShow && !isLoading && !storedData) {
     return null;
   }
   
   // Если режимы еще не загружены, но мы знаем что пользователь может переключаться,
   // показываем переключатель с текущим режимом (оптимистичное отображение)
-  const displayModes = availableModes.length > 0 
-    ? availableModes 
-    : [{ mode: currentMode, label: currentMode === "PPO_HEAD" ? "Председатель ППО" : "Член профсоюза" }];
+  // Используем сохраненные данные, если текущие данные еще не загружены
+  const storedDataForDisplay = loadStoredData();
+  const fallbackModes = storedDataForDisplay?.availableModes || 
+    [{ mode: currentMode, label: currentMode === "PPO_HEAD" ? "Председатель ППО" : "Член профсоюза" }];
+  
+  const displayModes = availableModes.length > 0 ? availableModes : fallbackModes;
   
   // Можем переключаться если есть более одного режима
   const displayCanSwitch = displayModes.length > 1;
@@ -216,16 +252,36 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
   );
 
   if (collapsed) {
-    // В свернутом режиме показываем переключатель только если есть другой режим
-    if (!otherMode) {
+    // В свернутом режиме показываем переключатель если:
+    // - есть другой режим ИЛИ
+    // - загрузка идет и есть хотя бы один режим ИЛИ
+    // - идет переключение ИЛИ
+    // - есть сохраненные данные о том, что пользователь может переключаться
+    const storedDataForCollapsed = loadStoredData();
+    const hasStoredOtherMode = storedDataForCollapsed?.availableModes?.some(m => m.mode !== currentMode);
+    const shouldShowCollapsed = otherMode || 
+                                (isLoading && hasModes) || 
+                                isSwitching || 
+                                hasStoredOtherMode ||
+                                storedDataForCollapsed?.canSwitch;
+    
+    if (!shouldShowCollapsed) {
+      return null;
+    }
+    
+    // Используем сохраненные данные для определения другого режима, если текущие данные еще не загружены
+    const effectiveOtherMode = otherMode || 
+      (storedDataForCollapsed?.availableModes?.find(m => m.mode !== currentMode) || null);
+    
+    if (!effectiveOtherMode && !isLoading && !isSwitching) {
       return null;
     }
     return (
       <button
-        onClick={() => otherMode && handleSwitch(otherMode.mode)}
-        disabled={isSwitching || isLoading}
+        onClick={() => effectiveOtherMode && handleSwitch(effectiveOtherMode.mode)}
+        disabled={isSwitching || isLoading || !effectiveOtherMode}
         className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-        title={`Переключить на: ${otherMode?.label}`}
+        title={effectiveOtherMode ? `Переключить на: ${effectiveOtherMode.label}` : "Загрузка..."}
       >
         {isSwitching ? (
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-500 border-t-transparent" />
@@ -234,9 +290,18 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
     );
   }
   
-  // В развернутом режиме показываем переключатель только если есть более одного режима
-  // (или если загрузка еще идет - оптимистичное отображение)
-  if (displayModes.length <= 1 && !isLoading && !isSwitching) {
+  // В развернутом режиме показываем переключатель если:
+  // - есть более одного режима ИЛИ
+  // - загрузка еще идет ИЛИ
+  // - идет переключение ИЛИ
+  // - есть сохраненные данные о том, что пользователь может переключаться
+  const storedDataForDisplay = loadStoredData();
+  const shouldShowExpanded = displayModes.length > 1 || 
+                             isLoading || 
+                             isSwitching || 
+                             (storedDataForDisplay?.availableModes?.length > 1 || storedDataForDisplay?.canSwitch);
+  
+  if (!shouldShowExpanded) {
     return null;
   }
 

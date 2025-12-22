@@ -44,32 +44,43 @@ export async function GET() {
     const availableModes: Array<{ mode: string; label: string; organizationName?: string }> = [];
 
     // Определяем, является ли пользователь членом профсоюза
+    // ВАЖНО: Если пользователь имеет роль PPO_HEAD, но также может быть членом (есть организация),
+    // то режим MEMBER должен быть доступен
     const isMember = user.role === "MEMBER" || user.role === "PENDING_MEMBER";
     
     // Определяем, является ли пользователь председателем ППО
     const isPPOHead = user.isPPOHead || user.role === "PPO_HEAD";
     
-    // Режим "Член профсоюза" доступен если пользователь является членом
-    // (включая случаи с двойной ролью)
-    if (isMember) {
-      availableModes.push({
-        mode: "MEMBER",
-        label: "Член профсоюза",
-      });
+    // Если пользователь является председателем, но также может быть членом (есть организация),
+    // то оба режима должны быть доступны
+    const hasDualRole = isPPOHead && (isMember || user.ppoHeadOrganizationId);
+    
+    // Режим "Член профсоюза" доступен если:
+    // 1. Пользователь является членом ИЛИ
+    // 2. Пользователь является председателем и имеет организацию (может работать в обоих режимах)
+    if (isMember || (isPPOHead && user.ppoHeadOrganizationId)) {
+      if (!availableModes.find(m => m.mode === "MEMBER")) {
+        availableModes.push({
+          mode: "MEMBER",
+          label: "Член профсоюза",
+        });
+      }
     }
 
     // Режим "Председатель ППО" доступен если пользователь является председателем
     if (isPPOHead) {
-      availableModes.push({
-        mode: "PPO_HEAD",
-        label: "Председатель ППО",
-        organizationName: user.ppoHeadOrganization?.name,
-      });
+      if (!availableModes.find(m => m.mode === "PPO_HEAD")) {
+        availableModes.push({
+          mode: "PPO_HEAD",
+          label: "Председатель ППО",
+          organizationName: user.ppoHeadOrganization?.name,
+        });
+      }
     }
     
-    // Если пользователь имеет двойную роль (и член, и председатель),
-    // убеждаемся что оба режима добавлены (на случай если логика выше не сработала)
-    if (user.isPPOHead && isMember) {
+    // Дополнительная проверка: если пользователь имеет двойную роль,
+    // убеждаемся что оба режима добавлены
+    if (hasDualRole) {
       if (!availableModes.find(m => m.mode === "MEMBER")) {
         availableModes.push({
           mode: "MEMBER",
@@ -175,25 +186,36 @@ export async function PUT(request: NextRequest) {
     // Определяем, является ли пользователь председателем ППО
     const isPPOHead = updatedUser.isPPOHead || updatedUser.role === "PPO_HEAD";
     
-    // Режим "Член профсоюза" доступен если пользователь является членом
-    if (isMember) {
-      availableModes.push({
-        mode: "MEMBER",
-        label: "Член профсоюза",
-      });
+    // Если пользователь является председателем, но также может быть членом (есть организация),
+    // то оба режима должны быть доступны
+    const hasDualRole = isPPOHead && (isMember || updatedUser.ppoHeadOrganizationId);
+    
+    // Режим "Член профсоюза" доступен если:
+    // 1. Пользователь является членом ИЛИ
+    // 2. Пользователь является председателем и имеет организацию (может работать в обоих режимах)
+    if (isMember || (isPPOHead && updatedUser.ppoHeadOrganizationId)) {
+      if (!availableModes.find(m => m.mode === "MEMBER")) {
+        availableModes.push({
+          mode: "MEMBER",
+          label: "Член профсоюза",
+        });
+      }
     }
 
     // Режим "Председатель ППО" доступен если пользователь является председателем
     if (isPPOHead) {
-      availableModes.push({
-        mode: "PPO_HEAD",
-        label: "Председатель ППО",
-        organizationName: updatedUser.ppoHeadOrganization?.name,
-      });
+      if (!availableModes.find(m => m.mode === "PPO_HEAD")) {
+        availableModes.push({
+          mode: "PPO_HEAD",
+          label: "Председатель ППО",
+          organizationName: updatedUser.ppoHeadOrganization?.name,
+        });
+      }
     }
     
-    // Если пользователь имеет двойную роль, убеждаемся что оба режима добавлены
-    if (updatedUser.isPPOHead && isMember) {
+    // Дополнительная проверка: если пользователь имеет двойную роль,
+    // убеждаемся что оба режима добавлены
+    if (hasDualRole) {
       if (!availableModes.find(m => m.mode === "MEMBER")) {
         availableModes.push({
           mode: "MEMBER",

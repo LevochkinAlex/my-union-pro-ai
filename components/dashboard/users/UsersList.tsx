@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import dynamic from "next/dynamic";
 
 const UserCard = dynamic(() => import("@/components/dashboard/users/UserCard"), {
@@ -29,18 +30,18 @@ interface User {
 interface UsersListProps {
   users: User[];
   loading: boolean;
-  page: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
+  loadingMore?: boolean;
+  hasMore?: boolean;
+  observerTarget?: React.RefObject<HTMLDivElement>;
   isMobile?: boolean;
 }
 
 export default function UsersList({
   users,
   loading,
-  page,
-  totalPages,
-  onPageChange,
+  loadingMore = false,
+  hasMore = false,
+  observerTarget,
   isMobile = false,
 }: UsersListProps) {
   if (loading) {
@@ -134,42 +135,22 @@ export default function UsersList({
         ))}
       </div>
 
-      {/* Пагинация */}
-      {totalPages > 1 && (
-        <div
-          className={`flex items-center justify-center gap-2 ${
-            isMobile ? "pt-4 pb-4" : ""
-          }`}
-        >
-          <button
-            onClick={() => onPageChange(Math.max(1, page - 1))}
-            disabled={page === 1}
-            className={`${
-              isMobile
-                ? "px-4 py-2.5 text-base min-w-[80px] active:bg-gray-50 dark:active:bg-gray-700 touch-manipulation"
-                : "px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700"
-            } border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            Назад
-          </button>
-          <span
-            className={`px-4 ${
-              isMobile ? "py-2.5 text-sm" : "py-2"
-            } text-gray-700 dark:text-gray-300`}
-          >
-            Страница {page} из {totalPages}
-          </span>
-          <button
-            onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-            disabled={page === totalPages}
-            className={`${
-              isMobile
-                ? "px-4 py-2.5 text-base min-w-[80px] active:bg-gray-50 dark:active:bg-gray-700 touch-manipulation"
-                : "px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700"
-            } border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            Вперед
-          </button>
+      {/* Индикатор загрузки при подгрузке */}
+      {loadingMore && (
+        <div className="flex justify-center py-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      )}
+
+      {/* Элемент для Intersection Observer (infinite scroll) */}
+      {hasMore && !loadingMore && (
+        <div ref={observerTarget} className="h-4" />
+      )}
+
+      {/* Сообщение, если больше нет пользователей */}
+      {!hasMore && users.length > 0 && (
+        <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
+          Все пользователи загружены
         </div>
       )}
     </>

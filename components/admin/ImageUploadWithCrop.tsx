@@ -105,7 +105,14 @@ export default function ImageUploadWithCrop({
       const formData = new FormData();
       formData.append("file", croppedImageBlob, "cover.jpg");
 
-      const response = await fetch("/api/admin/news/upload-image", {
+      // Определяем, какой endpoint использовать (для админа или председателя)
+      // Проверяем текущий путь страницы
+      const isPPOHeadPage = window.location.pathname.includes('/ppo-head');
+      const endpoint = isPPOHeadPage 
+        ? "/api/ppo-head/news/upload-image"
+        : "/api/admin/news/upload-image";
+
+      const response = await fetch(endpoint, {
         method: "POST",
         body: formData,
       });
