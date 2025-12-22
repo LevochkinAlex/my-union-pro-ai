@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { safeFetchJson } from "@/lib/safe-fetch";
 
@@ -22,14 +22,94 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
   const [isLoading, setIsLoading] = useState(true);
   const [isSwitching, setIsSwitching] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Загружаем сохраненные данные из localStorage
+  const loadStoredData = () => {
+    try {
+      const stored = localStorage.getItem('viewModeData');
+      if (stored) {
+        const data = JSON.parse(stored);
+        // Используем сохраненные данные только если они не старше 5 минут
+        if (data.timestamp && Date.now() - data.timestamp < 5 * 60 * 1000) {
+          return data;
+        }
+      }
+    } catch (error) {
+      // Игнорируем ошибки парсинга
+    }
+    return null;
+  };
+
+  // Сохраняем данные в localStorage
+  const saveStoredData = (data: { currentMode: string; availableModes: ViewModeOption[]; canSwitch: boolean }) => {
+    try {
+      localStorage.setItem('viewModeData', JSON.stringify({
+        ...data,
+        timestamp: Date.now(),
+      }));
+    } catch (error) {
+      // Игнорируем ошибки сохранения (например, в приватном режиме)
+    }
+  };
 
   useEffect(() => {
+    // Загружаем сохраненные данные сразу для немедленного отображения
+    const storedData = loadStoredData();
+    if (storedData) {
+      setCurrentMode(storedData.currentMode);
+      setAvailableModes(storedData.availableModes);
+      setCanSwitch(storedData.canSwitch);
+      // Если сохраненные данные старше 1 минуты, помечаем как загрузку для обновления
+      if (storedData.timestamp && Date.now() - storedData.timestamp > 60 * 1000) {
+        setIsLoading(true);
+      }
+    }
+    
+    // Затем загружаем актуальные данные
     loadViewMode();
+    
+    // Периодически обновляем данные (каждые 30 секунд), чтобы они не устаревали
+    const refreshInterval = setInterval(() => {
+      loadViewMode();
+    }, 30000);
+    
+    // Очистка таймеров при размонтировании
+    return () => {
+      clearInterval(refreshInterval);
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+      }
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
   }, []);
+
+  // Повторная загрузка при изменении retryCount (для повторных попыток)
+  useEffect(() => {
+    if (retryCount > 0 && retryCount <= 3) {
+      retryTimeoutRef.current = setTimeout(() => {
+        loadViewMode();
+      }, 1000 * retryCount); // Экспоненциальная задержка: 1s, 2s, 3s
+    }
+  }, [retryCount]);
 
   const loadViewMode = async () => {
     try {
-      // Загружаем режим просмотра (не критичный запрос)
+      setIsLoading(true);
+      
+      // Сначала загружаем сохраненные данные для немедленного отображения
+      const storedData = loadStoredData();
+      if (storedData && availableModes.length === 0) {
+        setCurrentMode(storedData.currentMode);
+        setAvailableModes(storedData.availableModes);
+        setCanSwitch(storedData.canSwitch);
+      }
+      
+      // Затем загружаем актуальные данные с сервера
       const data = await safeFetchJson<{ currentMode: string; availableModes: ViewModeOption[]; canSwitch: boolean }>("/api/user/view-mode", {
         ignoreServerErrors: true,
         logErrors: false,
@@ -39,14 +119,36 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
         setCurrentMode(data.currentMode);
         setAvailableModes(data.availableModes);
         setCanSwitch(data.canSwitch);
+        setRetryCount(0); // Сбрасываем счетчик при успешной загрузке
+        // Сохраняем актуальные данные
+        saveStoredData(data);
+      } else {
+        // Если данных нет, но есть сохраненные данные - используем их
+        const storedData = loadStoredData();
+        if (storedData) {
+          setCurrentMode(storedData.currentMode);
+          setAvailableModes(storedData.availableModes);
+          setCanSwitch(storedData.canSwitch);
+        }
+        // Пытаемся загрузить снова
+        if (retryCount < 3) {
+          setRetryCount(prev => prev + 1);
+        }
       }
     } catch (error) {
       // Только для критичных ошибок (не 503/500)
       if (process.env.NODE_ENV === 'development') {
         console.error("Error loading view mode:", error);
       }
+      // Повторная попытка при ошибке
+      if (retryCount < 3) {
+        setRetryCount(prev => prev + 1);
+      }
     } finally {
-      setIsLoading(false);
+      // Устанавливаем минимальное время загрузки, чтобы избежать мерцания
+      loadTimeoutRef.current = setTimeout(() => {
+        setIsLoading(false);
+      }, 300);
     }
   };
 
@@ -62,25 +164,81 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
       });
 
       if (response.ok) {
+        const responseData = await response.json();
+        // Обновляем локальное состояние с данными из ответа
+        if (responseData.availableModes) {
+          setAvailableModes(responseData.availableModes);
+          setCanSwitch(responseData.canSwitch || responseData.availableModes.length > 1);
+          // Сохраняем обновленные данные ПЕРЕД перезагрузкой страницы
+          // Это гарантирует, что после перезагрузки переключатель не исчезнет
+          saveStoredData({
+            currentMode: responseData.currentMode || newMode,
+            availableModes: responseData.availableModes,
+            canSwitch: responseData.canSwitch || responseData.availableModes.length > 1,
+          });
+        }
         setCurrentMode(newMode);
         setIsOpen(false);
-        // Полная перезагрузка страницы с очисткой кеша
-        window.location.replace("/dashboard?t=" + Date.now());
+        // Небольшая задержка перед перезагрузкой, чтобы данные успели сохраниться
+        setTimeout(() => {
+          // Полная перезагрузка страницы с очисткой кеша и принудительным обновлением сессии
+          window.location.replace("/dashboard?t=" + Date.now() + "&refresh=1");
+        }, 100);
+      } else {
+        // Если переключение не удалось, перезагружаем данные
+        await loadViewMode();
       }
     } catch (error) {
       console.error("Error switching view mode:", error);
+      // При ошибке перезагружаем данные
+      await loadViewMode();
     } finally {
       setIsSwitching(false);
     }
   };
 
-  // Не показываем переключатель если нет возможности переключения
-  if (isLoading || !canSwitch || availableModes.length <= 1) {
+  // Показываем переключатель если:
+  // 1. Есть более одного режима (основное условие)
+  // 2. ИЛИ загрузка еще идет и уже есть хотя бы один режим (оптимистичное отображение)
+  // 3. ИЛИ есть сохраненные данные о том, что пользователь может переключаться
+  // Это предотвращает исчезновение переключателя при медленной загрузке или после переключения режима
+  const hasModes = availableModes.length > 0;
+  const hasMultipleModes = availableModes.length > 1;
+  
+  // Проверяем сохраненные данные для определения, может ли пользователь переключаться
+  const storedData = loadStoredData();
+  const hasStoredMultipleModes = storedData?.availableModes?.length > 1;
+  const canSwitchFromStorage = storedData?.canSwitch === true;
+  
+  // Показываем переключатель если:
+  // - есть несколько режимов ИЛИ
+  // - загрузка идет и есть хотя бы один режим ИЛИ
+  // - идет переключение ИЛИ
+  // - есть сохраненные данные о том, что пользователь может переключаться (предотвращает исчезновение)
+  const shouldShow = hasMultipleModes || 
+                     (isLoading && hasModes) || 
+                     isSwitching || 
+                     (hasStoredMultipleModes || canSwitchFromStorage);
+  
+  // Если нет режимов, загрузка завершена, нет сохраненных данных и не идет переключение - не показываем
+  if (!shouldShow && !isLoading && !storedData) {
     return null;
   }
+  
+  // Если режимы еще не загружены, но мы знаем что пользователь может переключаться,
+  // показываем переключатель с текущим режимом (оптимистичное отображение)
+  // Используем сохраненные данные, если текущие данные еще не загружены
+  const storedDataForDisplay = loadStoredData();
+  const fallbackModes = storedDataForDisplay?.availableModes || 
+    [{ mode: currentMode, label: currentMode === "PPO_HEAD" ? "Председатель ППО" : "Член профсоюза" }];
+  
+  const displayModes = availableModes.length > 0 ? availableModes : fallbackModes;
+  
+  // Можем переключаться если есть более одного режима
+  const displayCanSwitch = displayModes.length > 1;
 
-  const currentModeData = availableModes.find((m) => m.mode === currentMode);
-  const otherMode = availableModes.find((m) => m.mode !== currentMode);
+  const currentModeData = displayModes.find((m) => m.mode === currentMode);
+  const otherMode = displayModes.find((m) => m.mode !== currentMode);
 
   // В стиле обычного пункта меню
   const icon = currentMode === "PPO_HEAD" ? (
@@ -94,18 +252,57 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
   );
 
   if (collapsed) {
+    // В свернутом режиме показываем переключатель если:
+    // - есть другой режим ИЛИ
+    // - загрузка идет и есть хотя бы один режим ИЛИ
+    // - идет переключение ИЛИ
+    // - есть сохраненные данные о том, что пользователь может переключаться
+    const storedDataForCollapsed = loadStoredData();
+    const hasStoredOtherMode = storedDataForCollapsed?.availableModes?.some(m => m.mode !== currentMode);
+    const shouldShowCollapsed = otherMode || 
+                                (isLoading && hasModes) || 
+                                isSwitching || 
+                                hasStoredOtherMode ||
+                                storedDataForCollapsed?.canSwitch;
+    
+    if (!shouldShowCollapsed) {
+      return null;
+    }
+    
+    // Используем сохраненные данные для определения другого режима, если текущие данные еще не загружены
+    const effectiveOtherMode = otherMode || 
+      (storedDataForCollapsed?.availableModes?.find(m => m.mode !== currentMode) || null);
+    
+    if (!effectiveOtherMode && !isLoading && !isSwitching) {
+      return null;
+    }
     return (
       <button
-        onClick={() => otherMode && handleSwitch(otherMode.mode)}
-        disabled={isSwitching}
+        onClick={() => effectiveOtherMode && handleSwitch(effectiveOtherMode.mode)}
+        disabled={isSwitching || isLoading || !effectiveOtherMode}
         className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-        title={`Переключить на: ${otherMode?.label}`}
+        title={effectiveOtherMode ? `Переключить на: ${effectiveOtherMode.label}` : "Загрузка..."}
       >
         {isSwitching ? (
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-500 border-t-transparent" />
         ) : icon}
       </button>
     );
+  }
+  
+  // В развернутом режиме показываем переключатель если:
+  // - есть более одного режима ИЛИ
+  // - загрузка еще идет ИЛИ
+  // - идет переключение ИЛИ
+  // - есть сохраненные данные о том, что пользователь может переключаться
+  const storedDataForDisplay = loadStoredData();
+  const shouldShowExpanded = displayModes.length > 1 || 
+                             isLoading || 
+                             isSwitching || 
+                             (storedDataForDisplay?.availableModes?.length > 1 || storedDataForDisplay?.canSwitch);
+  
+  if (!shouldShowExpanded) {
+    return null;
   }
 
   return (
@@ -134,7 +331,7 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
           <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
           <div className="absolute top-full left-0 right-0 mt-1 z-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="py-1">
-              {availableModes.map((mode) => (
+              {displayModes.map((mode) => (
                 <button
                   key={mode.mode}
                   onClick={() => handleSwitch(mode.mode)}
