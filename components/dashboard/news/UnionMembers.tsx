@@ -29,20 +29,44 @@ function UnionMembersComponent() {
     }
   }, []);
 
-  const loadMembers = async () => {
+  const loadMembers = async (retryCount = 0) => {
     if (isLoadingRef.current || hasLoadedRef.current) return;
     
     isLoadingRef.current = true;
     try {
-      const response = await fetch("/api/union-members?limit=5");
-      if (response.ok) {
-        const data = await response.json();
-        setMembers(data.members || []);
-        setHasOrganization(data.hasOrganization !== false);
-        hasLoadedRef.current = true;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
+      try {
+        const response = await fetch("/api/union-members?limit=5", {
+          signal: controller.signal,
+          cache: 'no-cache',
+        });
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          const data = await response.json();
+          setMembers(data.members || []);
+          setHasOrganization(data.hasOrganization !== false);
+          hasLoadedRef.current = true;
+        } else if (response.status >= 500 && retryCount < 2) {
+          // Retry при ошибках сервера
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          isLoadingRef.current = false;
+          return loadMembers(retryCount + 1);
+        }
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if ((fetchError.name === 'AbortError' || fetchError.message?.includes('fetch')) && retryCount < 2) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          isLoadingRef.current = false;
+          return loadMembers(retryCount + 1);
+        }
+        throw fetchError;
       }
     } catch (error) {
       console.error("Failed to load members:", error);
+      // Не показываем ошибку пользователю, просто оставляем пустой список
     } finally {
       setLoading(false);
       isLoadingRef.current = false;
