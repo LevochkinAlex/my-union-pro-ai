@@ -116,9 +116,14 @@ export async function GET(request: NextRequest) {
     const { users, total } = result;
 
     // Преобразуем даты в ISO строки для корректной сериализации
+    // Проверяем тип, так как из кеша может прийти уже строка
     const serializedUsers = users.map((user) => ({
       ...user,
-      createdAt: user.createdAt.toISOString(),
+      createdAt: user.createdAt instanceof Date 
+        ? user.createdAt.toISOString() 
+        : typeof user.createdAt === 'string' 
+          ? user.createdAt 
+          : new Date(user.createdAt).toISOString(),
     }));
 
     return NextResponse.json({
