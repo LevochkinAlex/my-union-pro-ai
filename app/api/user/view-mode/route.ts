@@ -169,6 +169,7 @@ export async function PUT(request: NextRequest) {
         viewMode: true,
         role: true,
         isPPOHead: true,
+        ppoHeadOrganizationId: true,
         ppoHeadOrganization: {
           select: {
             id: true,
