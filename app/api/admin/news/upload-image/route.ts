@@ -102,12 +102,17 @@ export async function POST(request: NextRequest) {
     const fileKey = `news/${fileName}`;
     
     try {
-      const vdsUrl = await uploadFileToVDS(fileKey, optimizedBuffer, optimizedMime);
-      console.log(`[admin/news/upload-image] Image uploaded to VDS: ${vdsUrl}`);
+      const vdsPath = await uploadFileToVDS(fileKey, optimizedBuffer, optimizedMime);
+      console.log(`[admin/news/upload-image] Image uploaded to VDS: ${vdsPath}`);
+      
+      // Преобразуем путь в URL для API endpoint
+      // vdsPath будет типа /uploads/news/filename.webp
+      // Преобразуем в /api/uploads/news/filename.webp
+      const apiUrl = vdsPath.replace(/^\/uploads\//, '/api/uploads/');
       
       return NextResponse.json({
         success: true,
-        url: vdsUrl,
+        url: apiUrl,
         fileName: originalName,
       });
     } catch (vdsError) {
