@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
 
@@ -15,6 +16,7 @@ export default function ImageUploadWithCrop({
   onChange,
   label = "Изображение обложки",
 }: ImageUploadWithCropProps) {
+  const { data: session } = useSession();
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -106,9 +108,14 @@ export default function ImageUploadWithCrop({
       formData.append("file", croppedImageBlob, "cover.jpg");
 
       // Определяем, какой endpoint использовать (для админа или председателя)
-      // Проверяем текущий путь страницы
-      const isPPOHeadPage = window.location.pathname.includes('/ppo-head');
-      const endpoint = isPPOHeadPage 
+      // Проверяем роль пользователя и режим просмотра
+      const isPPOHead = session?.user?.viewMode === "PPO_HEAD" || 
+        (session?.user?.role === "PPO_HEAD" && !(session?.user as any)?.isPPOHead);
+      const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
+      
+      // Используем endpoint для председателя, если пользователь в режиме председателя
+      // Иначе используем админский endpoint (для супер-админов)
+      const endpoint = isPPOHead && !isSuperAdmin
         ? "/api/ppo-head/news/upload-image"
         : "/api/admin/news/upload-image";
 
