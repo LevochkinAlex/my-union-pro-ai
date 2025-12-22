@@ -24,6 +24,7 @@ export async function GET() {
         role: true,
         isPPOHead: true,
         viewMode: true,
+        ppoHeadOrganizationId: true,
         ppoHeadOrganization: {
           select: {
             id: true,
