@@ -26,7 +26,45 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Загружаем сохраненные данные из localStorage
+  const loadStoredData = () => {
+    try {
+      const stored = localStorage.getItem('viewModeData');
+      if (stored) {
+        const data = JSON.parse(stored);
+        // Используем сохраненные данные только если они не старше 5 минут
+        if (data.timestamp && Date.now() - data.timestamp < 5 * 60 * 1000) {
+          return data;
+        }
+      }
+    } catch (error) {
+      // Игнорируем ошибки парсинга
+    }
+    return null;
+  };
+
+  // Сохраняем данные в localStorage
+  const saveStoredData = (data: { currentMode: string; availableModes: ViewModeOption[]; canSwitch: boolean }) => {
+    try {
+      localStorage.setItem('viewModeData', JSON.stringify({
+        ...data,
+        timestamp: Date.now(),
+      }));
+    } catch (error) {
+      // Игнорируем ошибки сохранения (например, в приватном режиме)
+    }
+  };
+
   useEffect(() => {
+    // Загружаем сохраненные данные сразу для немедленного отображения
+    const storedData = loadStoredData();
+    if (storedData) {
+      setCurrentMode(storedData.currentMode);
+      setAvailableModes(storedData.availableModes);
+      setCanSwitch(storedData.canSwitch);
+    }
+    
+    // Затем загружаем актуальные данные
     loadViewMode();
     
     // Очистка таймеров при размонтировании
@@ -52,7 +90,16 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
   const loadViewMode = async () => {
     try {
       setIsLoading(true);
-      // Загружаем режим просмотра (не критичный запрос)
+      
+      // Сначала загружаем сохраненные данные для немедленного отображения
+      const storedData = loadStoredData();
+      if (storedData && availableModes.length === 0) {
+        setCurrentMode(storedData.currentMode);
+        setAvailableModes(storedData.availableModes);
+        setCanSwitch(storedData.canSwitch);
+      }
+      
+      // Затем загружаем актуальные данные с сервера
       const data = await safeFetchJson<{ currentMode: string; availableModes: ViewModeOption[]; canSwitch: boolean }>("/api/user/view-mode", {
         ignoreServerErrors: true,
         logErrors: false,
@@ -63,6 +110,8 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
         setAvailableModes(data.availableModes);
         setCanSwitch(data.canSwitch);
         setRetryCount(0); // Сбрасываем счетчик при успешной загрузке
+        // Сохраняем актуальные данные
+        saveStoredData(data);
       } else {
         // Если данных нет, пытаемся загрузить снова
         if (retryCount < 3) {
@@ -98,10 +147,20 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
       });
 
       if (response.ok) {
+        const responseData = await response.json();
+        // Обновляем локальное состояние с данными из ответа
+        if (responseData.availableModes) {
+          setAvailableModes(responseData.availableModes);
+          setCanSwitch(responseData.canSwitch || responseData.availableModes.length > 1);
+          // Сохраняем обновленные данные
+          saveStoredData({
+            currentMode: responseData.currentMode || newMode,
+            availableModes: responseData.availableModes,
+            canSwitch: responseData.canSwitch || responseData.availableModes.length > 1,
+          });
+        }
         setCurrentMode(newMode);
         setIsOpen(false);
-        // Обновляем локальное состояние перед перезагрузкой
-        setAvailableModes(prev => prev.map(m => ({ ...m })));
         // Полная перезагрузка страницы с очисткой кеша и принудительным обновлением сессии
         window.location.replace("/dashboard?t=" + Date.now() + "&refresh=1");
       } else {

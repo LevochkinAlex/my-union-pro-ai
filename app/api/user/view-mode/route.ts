@@ -43,29 +43,46 @@ export async function GET() {
     // Определяем доступные режимы
     const availableModes: Array<{ mode: string; label: string; organizationName?: string }> = [];
 
-    // Если пользователь член профсоюза
-    if (user.role === "MEMBER" || user.role === "PENDING_MEMBER" || user.isPPOHead) {
+    // Определяем, является ли пользователь членом профсоюза
+    const isMember = user.role === "MEMBER" || user.role === "PENDING_MEMBER";
+    
+    // Определяем, является ли пользователь председателем ППО
+    const isPPOHead = user.isPPOHead || user.role === "PPO_HEAD";
+    
+    // Режим "Член профсоюза" доступен если пользователь является членом
+    // (включая случаи с двойной ролью)
+    if (isMember) {
       availableModes.push({
         mode: "MEMBER",
         label: "Член профсоюза",
       });
     }
 
-    // Если пользователь также председатель ППО
-    if (user.isPPOHead && user.ppoHeadOrganization) {
+    // Режим "Председатель ППО" доступен если пользователь является председателем
+    if (isPPOHead) {
       availableModes.push({
         mode: "PPO_HEAD",
         label: "Председатель ППО",
-        organizationName: user.ppoHeadOrganization.name,
+        organizationName: user.ppoHeadOrganization?.name,
       });
     }
-
-    // Если роль PPO_HEAD (без двойной роли)
-    if (user.role === "PPO_HEAD" && !user.isPPOHead) {
-      availableModes.push({
-        mode: "PPO_HEAD",
-        label: "Председатель ППО",
-      });
+    
+    // Если пользователь имеет двойную роль (и член, и председатель),
+    // убеждаемся что оба режима добавлены (на случай если логика выше не сработала)
+    if (user.isPPOHead && isMember) {
+      if (!availableModes.find(m => m.mode === "MEMBER")) {
+        availableModes.push({
+          mode: "MEMBER",
+          label: "Член профсоюза",
+        });
+      }
+      if (!availableModes.find(m => m.mode === "PPO_HEAD")) {
+        availableModes.push({
+          mode: "PPO_HEAD",
+          label: "Председатель ППО",
+          organizationName: user.ppoHeadOrganization?.name,
+        });
+      }
     }
 
     return NextResponse.json({
@@ -151,27 +168,45 @@ export async function PUT(request: NextRequest) {
 
     // Определяем доступные режимы для ответа (аналогично GET)
     const availableModes: Array<{ mode: string; label: string; organizationName?: string }> = [];
+
+    // Определяем, является ли пользователь членом профсоюза
+    const isMember = updatedUser.role === "MEMBER" || updatedUser.role === "PENDING_MEMBER";
     
-    if (updatedUser.role === "MEMBER" || updatedUser.role === "PENDING_MEMBER" || updatedUser.isPPOHead) {
+    // Определяем, является ли пользователь председателем ППО
+    const isPPOHead = updatedUser.isPPOHead || updatedUser.role === "PPO_HEAD";
+    
+    // Режим "Член профсоюза" доступен если пользователь является членом
+    if (isMember) {
       availableModes.push({
         mode: "MEMBER",
         label: "Член профсоюза",
       });
     }
-    
-    if (updatedUser.isPPOHead && updatedUser.ppoHeadOrganization) {
+
+    // Режим "Председатель ППО" доступен если пользователь является председателем
+    if (isPPOHead) {
       availableModes.push({
         mode: "PPO_HEAD",
         label: "Председатель ППО",
-        organizationName: updatedUser.ppoHeadOrganization.name,
+        organizationName: updatedUser.ppoHeadOrganization?.name,
       });
     }
     
-    if (updatedUser.role === "PPO_HEAD" && !updatedUser.isPPOHead) {
-      availableModes.push({
-        mode: "PPO_HEAD",
-        label: "Председатель ППО",
-      });
+    // Если пользователь имеет двойную роль, убеждаемся что оба режима добавлены
+    if (updatedUser.isPPOHead && isMember) {
+      if (!availableModes.find(m => m.mode === "MEMBER")) {
+        availableModes.push({
+          mode: "MEMBER",
+          label: "Член профсоюза",
+        });
+      }
+      if (!availableModes.find(m => m.mode === "PPO_HEAD")) {
+        availableModes.push({
+          mode: "PPO_HEAD",
+          label: "Председатель ППО",
+          organizationName: updatedUser.ppoHeadOrganization?.name,
+        });
+      }
     }
 
     // Сбрасываем кеш страниц dashboard

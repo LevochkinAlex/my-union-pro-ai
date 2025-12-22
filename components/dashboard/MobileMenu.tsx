@@ -57,6 +57,13 @@ export default function MobileMenu({
   // Загрузка режимов просмотра
   useEffect(() => {
     if (!isAdmin) {
+      // Загружаем сохраненные данные сразу
+      const storedData = loadStoredData();
+      if (storedData) {
+        setCurrentMode(storedData.currentMode);
+        setAvailableModes(storedData.availableModes);
+        setCanSwitch(storedData.canSwitch);
+      }
       loadViewMode();
     }
     
@@ -76,9 +83,46 @@ export default function MobileMenu({
     }
   }, [retryCount, isAdmin]);
 
+  // Загружаем сохраненные данные из localStorage
+  const loadStoredData = () => {
+    try {
+      const stored = localStorage.getItem('viewModeData');
+      if (stored) {
+        const data = JSON.parse(stored);
+        if (data.timestamp && Date.now() - data.timestamp < 5 * 60 * 1000) {
+          return data;
+        }
+      }
+    } catch (error) {
+      // Игнорируем ошибки
+    }
+    return null;
+  };
+
+  // Сохраняем данные в localStorage
+  const saveStoredData = (data: { currentMode: string; availableModes: ViewModeOption[]; canSwitch: boolean }) => {
+    try {
+      localStorage.setItem('viewModeData', JSON.stringify({
+        ...data,
+        timestamp: Date.now(),
+      }));
+    } catch (error) {
+      // Игнорируем ошибки
+    }
+  };
+
   const loadViewMode = async () => {
     try {
       setIsLoading(true);
+      
+      // Сначала загружаем сохраненные данные
+      const storedData = loadStoredData();
+      if (storedData && availableModes.length === 0) {
+        setCurrentMode(storedData.currentMode);
+        setAvailableModes(storedData.availableModes);
+        setCanSwitch(storedData.canSwitch);
+      }
+      
       const data = await safeFetchJson<{ currentMode: string; availableModes: ViewModeOption[]; canSwitch: boolean }>("/api/user/view-mode", {
         ignoreServerErrors: true,
         logErrors: false,
@@ -89,6 +133,7 @@ export default function MobileMenu({
         setAvailableModes(data.availableModes);
         setCanSwitch(data.canSwitch);
         setRetryCount(0);
+        saveStoredData(data);
       } else {
         if (retryCount < 3) {
           setRetryCount(prev => prev + 1);
@@ -115,11 +160,20 @@ export default function MobileMenu({
       });
 
       if (response.ok) {
+        const responseData = await response.json();
+        // Обновляем локальное состояние с данными из ответа
+        if (responseData.availableModes) {
+          setAvailableModes(responseData.availableModes);
+          setCanSwitch(responseData.canSwitch || responseData.availableModes.length > 1);
+          saveStoredData({
+            currentMode: responseData.currentMode || newMode,
+            availableModes: responseData.availableModes,
+            canSwitch: responseData.canSwitch || responseData.availableModes.length > 1,
+          });
+        }
         setCurrentMode(newMode);
         setShowModeDropdown(false);
         onClose();
-        // Обновляем локальное состояние перед перезагрузкой
-        setAvailableModes(prev => prev.map(m => ({ ...m })));
         // Полная перезагрузка страницы с очисткой кеша
         window.location.replace("/dashboard?t=" + Date.now() + "&refresh=1");
       } else {
