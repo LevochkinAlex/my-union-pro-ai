@@ -629,7 +629,9 @@ function PPOHeadChatsContent() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-              Пригласить в "{inviteChat.name || "группу"}"
+              Пригласить в "{inviteChat.ticketId && inviteChat.ticketPublicId 
+                ? `Обращение #${inviteChat.ticketPublicId}` 
+                : (inviteChat.name || "группу")}"
             </h2>
             <div className="max-h-60 overflow-y-auto rounded-md border border-gray-300 p-2 dark:border-gray-600 mb-4">
               {members.map((member) => {

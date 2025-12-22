@@ -45,6 +45,14 @@ export async function invalidateChatCache(chatId: string) {
 }
 
 /**
+ * Инвалидировать кеш списка чатов пользователя
+ */
+export async function invalidateUserChatsCache(userId: string) {
+  await cacheDeletePattern(`user:chats:${userId}:*`);
+  console.log("[Cache] Invalidated user chats cache for user", userId);
+}
+
+/**
  * Инвалидировать весь кеш (использовать осторожно!)
  */
 export async function invalidateAllCache() {

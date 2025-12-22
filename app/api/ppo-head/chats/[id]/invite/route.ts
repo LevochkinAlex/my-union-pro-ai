@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getPPOHead } from "@/lib/ppo-head-utils";
 import { sendUserNotification } from "@/lib/notifications";
+import { invalidateChatCache, invalidateUserChatsCache } from "@/lib/cache-invalidation";
 
 /**
  * POST /api/ppo-head/chats/[id]/invite
@@ -52,6 +53,13 @@ export async function POST(
           select: {
             userId: true,
             role: true,
+          },
+        },
+        ticket: {
+          select: {
+            id: true,
+            publicId: true,
+            title: true,
           },
         },
       },
@@ -154,18 +162,43 @@ export async function POST(
       },
     });
 
+    // Инвалидируем кеш чата и списка чатов для всех новых участников
+    await invalidateChatCache(chatId);
+    await Promise.all(
+      newParticipantIds.map((userId: string) => invalidateUserChatsCache(userId))
+    );
+    // Также инвалидируем кеш для председателя
+    await invalidateUserChatsCache(chairman.id);
+
     // Отправляем уведомления приглашённым участникам
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
-    const chatName = chat.name || "группу";
+    
+    // Определяем название чата и URL для уведомления
+    // Если чат связан с обращением, используем название "Обращение #..."
+    const isAppealChat = !!chat.ticket;
+    const chatName = isAppealChat && chat.ticket?.publicId
+      ? `Обращение #${chat.ticket.publicId}`
+      : (chat.name || "группу");
+    
+    // URL для уведомления: если это обращение, ссылаемся на страницу обращения, иначе на чат
+    const notificationUrl = isAppealChat && chat.ticket?.id
+      ? `${baseUrl}/dashboard/appeals/${chat.ticket.id}`
+      : `${baseUrl}/dashboard/chat?chatId=${chatId}`;
+    
+    // Тип уведомления: для обращений используем ticket_response, иначе chat_message
+    const notificationType = isAppealChat ? "ticket_response" : "chat_message";
+    const notificationTitle = isAppealChat
+      ? `📋 Вас добавили в обращение`
+      : "👥 Вас добавили в группу";
     
     for (const member of newMembers) {
       try {
         await sendUserNotification({
           userId: member.id,
-          type: "chat_message",
-          title: "👥 Вас добавили в группу",
+          type: notificationType,
+          title: notificationTitle,
           body: `Вы добавлены в "${chatName}"`,
-          url: `${baseUrl}/dashboard/chat`,
+          url: notificationUrl,
           senderName: `${chairman.firstName || ""} ${chairman.lastName || ""}`.trim() || "Председатель",
         });
       } catch (notifyError) {
