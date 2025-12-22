@@ -18,15 +18,37 @@ function NewsChannelsComponent() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadChannels = async () => {
+    const loadChannels = async (retryCount = 0) => {
       try {
-        const response = await fetch("/api/news/channels");
-        if (response.ok) {
-          const data = await response.json();
-          setChannels(data.channels || []);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        
+        try {
+          const response = await fetch("/api/news/channels", {
+            signal: controller.signal,
+            cache: 'no-cache',
+          });
+          clearTimeout(timeoutId);
+          
+          if (response.ok) {
+            const data = await response.json();
+            setChannels(data.channels || []);
+          } else if (response.status >= 500 && retryCount < 2) {
+            // Retry при ошибках сервера
+            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+            return loadChannels(retryCount + 1);
+          }
+        } catch (fetchError: any) {
+          clearTimeout(timeoutId);
+          if ((fetchError.name === 'AbortError' || fetchError.message?.includes('fetch')) && retryCount < 2) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+            return loadChannels(retryCount + 1);
+          }
+          throw fetchError;
         }
       } catch (error) {
         console.error("Error loading channels:", error);
+        // Не показываем ошибку пользователю, просто оставляем пустой список
       } finally {
         setLoading(false);
       }

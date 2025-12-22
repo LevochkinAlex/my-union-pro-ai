@@ -72,42 +72,66 @@ export default function NewsPage() {
         setIsLoadingMore(true);
       }
 
-      // Добавляем cache: 'no-cache' для избежания проблем с кешем
-      const response = await fetch(`/api/news?page=${pageNum}&limit=10`, {
-        cache: 'no-cache',
-        headers: {
-          'Cache-Control': 'no-cache',
-        },
-      });
-      
-      if (!response.ok) {
-        // Если ошибка сервера, пробуем повторить запрос
-        if (response.status >= 500 && retryCount < 2) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Экспоненциальная задержка
+      // Добавляем timeout для запроса (10 секунд)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      try {
+        // Добавляем cache: 'no-cache' для избежания проблем с кешем
+        const response = await fetch(`/api/news?page=${pageNum}&limit=10`, {
+          cache: 'no-cache',
+          headers: {
+            'Cache-Control': 'no-cache',
+          },
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          // Если ошибка сервера, пробуем повторить запрос
+          if (response.status >= 500 && retryCount < 3) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Экспоненциальная задержка
+            isLoadingRef.current = false;
+            return loadNews(pageNum, retryCount + 1);
+          }
+          throw new Error(`Не удалось загрузить новости (${response.status})`);
+        }
+        
+        const data = await response.json();
+        
+        // Проверяем структуру ответа
+        if (!data || !Array.isArray(data.news)) {
+          throw new Error("Неверный формат данных");
+        }
+        
+        if (pageNum === 1) {
+          setNews(data.news || []);
+        } else {
+          setNews((prev) => [...prev, ...(data.news || [])]);
+        }
+        
+        setHasMore(data.pagination?.page < data.pagination?.totalPages);
+        setError(""); // Очищаем ошибку при успешной загрузке
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        // Если это ошибка timeout или сетевой ошибка, пробуем повторить
+        if ((fetchError.name === 'AbortError' || fetchError.message?.includes('fetch')) && retryCount < 3) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
           isLoadingRef.current = false;
           return loadNews(pageNum, retryCount + 1);
         }
-        throw new Error(`Не удалось загрузить новости (${response.status})`);
+        
+        throw fetchError;
       }
-      
-      const data = await response.json();
-      
-      // Проверяем структуру ответа
-      if (!data || !Array.isArray(data.news)) {
-        throw new Error("Неверный формат данных");
-      }
-      
-      if (pageNum === 1) {
-        setNews(data.news || []);
-      } else {
-        setNews((prev) => [...prev, ...(data.news || [])]);
-      }
-      
-      setHasMore(data.pagination?.page < data.pagination?.totalPages);
-      setError(""); // Очищаем ошибку при успешной загрузке
     } catch (err) {
       console.error("[NewsPage] Error loading news:", err);
-      const errorMessage = err instanceof Error ? err.message : "Произошла ошибка при загрузке новостей";
+      const errorMessage = err instanceof Error 
+        ? (err.name === 'AbortError' 
+          ? "Превышено время ожидания. Проверьте соединение с интернетом."
+          : err.message)
+        : "Произошла ошибка при загрузке новостей";
       setError(errorMessage);
       
       // Если это первая страница и есть ошибка, показываем её
