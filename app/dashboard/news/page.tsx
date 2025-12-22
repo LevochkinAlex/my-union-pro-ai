@@ -59,7 +59,7 @@ export default function NewsPage() {
   const isLoadingRef = useRef(false); // Ref для предотвращения дублирования
   const loadNewsRef = useRef<((pageNum?: number) => Promise<void>) | null>(null);
 
-  const loadNews = useCallback(async (pageNum = 1) => {
+  const loadNews = useCallback(async (pageNum = 1, retryCount = 0) => {
     // Предотвращаем повторные запросы через ref
     if (isLoadingRef.current) return;
     isLoadingRef.current = true;
@@ -67,15 +67,35 @@ export default function NewsPage() {
     try {
       if (pageNum === 1) {
         setLoading(true);
+        setError(""); // Очищаем ошибку при новой попытке
       } else {
         setIsLoadingMore(true);
       }
 
-      const response = await fetch(`/api/news?page=${pageNum}&limit=10`);
+      // Добавляем cache: 'no-cache' для избежания проблем с кешем
+      const response = await fetch(`/api/news?page=${pageNum}&limit=10`, {
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
+      
       if (!response.ok) {
-        throw new Error("Не удалось загрузить новости");
+        // Если ошибка сервера, пробуем повторить запрос
+        if (response.status >= 500 && retryCount < 2) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Экспоненциальная задержка
+          isLoadingRef.current = false;
+          return loadNews(pageNum, retryCount + 1);
+        }
+        throw new Error(`Не удалось загрузить новости (${response.status})`);
       }
+      
       const data = await response.json();
+      
+      // Проверяем структуру ответа
+      if (!data || !Array.isArray(data.news)) {
+        throw new Error("Неверный формат данных");
+      }
       
       if (pageNum === 1) {
         setNews(data.news || []);
@@ -83,9 +103,18 @@ export default function NewsPage() {
         setNews((prev) => [...prev, ...(data.news || [])]);
       }
       
-      setHasMore(data.pagination.page < data.pagination.totalPages);
+      setHasMore(data.pagination?.page < data.pagination?.totalPages);
+      setError(""); // Очищаем ошибку при успешной загрузке
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Произошла ошибка");
+      console.error("[NewsPage] Error loading news:", err);
+      const errorMessage = err instanceof Error ? err.message : "Произошла ошибка при загрузке новостей";
+      setError(errorMessage);
+      
+      // Если это первая страница и есть ошибка, показываем её
+      // Если это последующие страницы, просто логируем
+      if (pageNum === 1) {
+        setNews([]); // Очищаем новости при ошибке первой загрузки
+      }
     } finally {
       setLoading(false);
       setIsLoadingMore(false);
@@ -208,7 +237,23 @@ export default function NewsPage() {
 
         {error && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
-            {error}
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <p className="font-medium">{error}</p>
+                <p className="mt-1 text-sm opacity-90">
+                  Попробуйте обновить страницу или повторить попытку позже.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setError("");
+                  loadNews(1);
+                }}
+                className="flex-shrink-0 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+              >
+                Попробовать снова
+              </button>
+            </div>
           </div>
         )}
 

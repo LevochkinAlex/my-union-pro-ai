@@ -409,6 +409,9 @@ export async function POST(
     await invalidateChatCache(chatId);
 
     // Отправляем уведомления
+    // ВАЖНО: recipientIds содержит ТОЛЬКО участников конкретного чата, а не всех председателей
+    // Личные сообщения (PRIVATE без ticketId) обрабатываются как обычные сообщения
+    // Обращения (с ticketId) обрабатываются как обращения, но уведомления идут только участникам чата
     if (recipientIds.length > 0 && !isBotChat) {
       await sendNotifications(chatId, userId, content, recipientIds, isGroupChat, fullChat?.name);
     }
@@ -555,28 +558,84 @@ async function sendNotifications(
       ? `${sender.firstName || ""} ${sender.lastName || ""}`.trim() || "Пользователь"
       : "Пользователь";
 
+    // Проверяем, связан ли чат с обращением
+    // ВАЖНО: только чаты с ticketId являются обращениями
+    // Личные сообщения (PRIVATE без ticketId) НЕ должны обрабатываться как обращения
+    const chat = await prisma.chat.findUnique({
+      where: { id: chatId },
+      select: {
+        type: true,
+        ticket: {
+          select: {
+            id: true,
+            publicId: true,
+            title: true,
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                middleName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
     const messagePreview = content.trim().substring(0, 100);
 
-    await Promise.all(
-      recipientIds.map((recipientId) =>
-        sendUserNotification({
-          userId: recipientId,
-          type: "chat_message",
-          title: isGroupChat 
-            ? `💬 ${chatName || "Групповой чат"}: ${senderName}`
-            : `💬 Новое сообщение от ${senderName}`,
-          body: messagePreview,
-          url: isGroupChat
-            ? `${baseUrl}/dashboard/chats/ppo-head?chatId=${chatId}`
-            : `${baseUrl}/dashboard/chat?chatId=${chatId}`,
-          senderName,
-        }).catch((err) => {
-          console.error(`[chat] Error sending notification to ${recipientId}:`, err?.message);
-          return { push: false, email: false };
-        })
-      )
-    );
+    // Если чат связан с обращением (есть ticketId), создаем уведомление об обращении
+    // Личные сообщения (без ticketId) обрабатываются как обычные сообщения
+    // Уведомления отправляются ТОЛЬКО участникам конкретного чата (recipientIds), а не всем председателям
+    if (chat?.ticket) {
+      const ticket = chat.ticket;
+      const ticketOwnerName = ticket.user
+        ? [ticket.user.lastName, ticket.user.firstName, ticket.user.middleName].filter(Boolean).join(" ") || "Пользователь"
+        : "Пользователь";
+      
+      // Форматируем publicId для отображения
+      const formattedPublicId = ticket.publicId.length === 8
+        ? `${ticket.publicId.slice(0, 4)}-${ticket.publicId.slice(4)}`
+        : ticket.publicId;
+
+      await Promise.all(
+        recipientIds.map((recipientId) =>
+          sendUserNotification({
+            userId: recipientId,
+            type: "ticket_response",
+            title: `Обращение #${formattedPublicId}: ${ticketOwnerName}`,
+            body: messagePreview,
+            url: `${baseUrl}/dashboard/appeals/${ticket.id}`,
+            senderName,
+          }).catch((err) => {
+            console.error(`[chat] Error sending notification to ${recipientId}:`, err?.message);
+            return { push: false, email: false };
+          })
+        )
+      );
+    } else {
+      // Обычное уведомление о сообщении в чате
+      await Promise.all(
+        recipientIds.map((recipientId) =>
+          sendUserNotification({
+            userId: recipientId,
+            type: "chat_message",
+            title: isGroupChat 
+              ? `💬 ${chatName || "Групповой чат"}: ${senderName}`
+              : `💬 Новое сообщение от ${senderName}`,
+            body: messagePreview,
+            url: isGroupChat
+              ? `${baseUrl}/dashboard/chats/ppo-head?chatId=${chatId}`
+              : `${baseUrl}/dashboard/chat?chatId=${chatId}`,
+            senderName,
+          }).catch((err) => {
+            console.error(`[chat] Error sending notification to ${recipientId}:`, err?.message);
+            return { push: false, email: false };
+          })
+        )
+      );
+    }
   } catch (error: any) {
     console.error("[chat] Error sending notifications:", error?.message);
   }

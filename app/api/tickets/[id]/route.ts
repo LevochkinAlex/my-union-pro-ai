@@ -46,7 +46,8 @@ export async function GET(
       );
     }
 
-    // Проверяем, что тикет принадлежит пользователю или пользователь - Председатель организации
+    // Проверяем, что тикет принадлежит пользователю, пользователь - Председатель организации,
+    // или пользователь является участником чата обращения
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { role: true, organizationId: true },
@@ -54,8 +55,33 @@ export async function GET(
 
     const isOwner = ticket.userId === session.user.id;
     const isPPOHead = user?.role === "PPO_HEAD" && ticket.organizationId === user?.organizationId;
+    
+    // Проверяем, является ли пользователь участником чата обращения
+    let isChatParticipant = false;
+    if (ticket.chatId) {
+      const chat = await prisma.chat.findUnique({
+        where: { id: ticket.chatId },
+        select: {
+          participant1Id: true,
+          participant2Id: true,
+          participants: {
+            where: {
+              userId: session.user.id,
+              leftAt: null,
+            },
+            select: { id: true },
+          },
+        },
+      });
+      
+      isChatParticipant = !!(
+        chat?.participant1Id === session.user.id ||
+        chat?.participant2Id === session.user.id ||
+        (chat?.participants && chat.participants.length > 0)
+      );
+    }
 
-    if (!isOwner && !isPPOHead) {
+    if (!isOwner && !isPPOHead && !isChatParticipant) {
       return NextResponse.json(
         { error: "Доступ запрещен" },
         { status: 403 }

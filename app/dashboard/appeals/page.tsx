@@ -20,6 +20,14 @@ interface Ticket {
   commentsCount: number;
   lastCommentAt: string | null;
   chatId: string | null;
+  createdBy?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    middleName: string | null;
+    email: string | null;
+  };
+  isOwner?: boolean;
 }
 
 const TICKET_TYPES = {
@@ -233,6 +241,11 @@ export default function AppealsPage() {
                   <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                     {TICKET_TYPES[ticket.type as keyof typeof TICKET_TYPES] || ticket.type}
                   </p>
+                  {ticket.createdBy && !ticket.isOwner && (
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      От: {[ticket.createdBy.lastName, ticket.createdBy.firstName, ticket.createdBy.middleName].filter(Boolean).join(" ") || ticket.createdBy.email || "Пользователь"}
+                    </p>
+                  )}
                   <div className="mt-3 sm:mt-4 flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:gap-2 sm:gap-4 text-xs text-gray-500 dark:text-gray-400">
                     <span className="whitespace-nowrap">Создано: {new Date(ticket.createdAt).toLocaleDateString("ru-RU")}</span>
                     {ticket.attachmentsCount > 0 && (

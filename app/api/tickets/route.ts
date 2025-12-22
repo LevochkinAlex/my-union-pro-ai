@@ -23,8 +23,37 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
 
+    // Получаем ID чатов, в которых пользователь является участником
+    const userChats = await prisma.chat.findMany({
+      where: {
+        OR: [
+          // Старая схема PRIVATE чатов
+          { participant1Id: session.user.id },
+          { participant2Id: session.user.id },
+          // Новая схема через ChatParticipant
+          {
+            participants: {
+              some: {
+                userId: session.user.id,
+                leftAt: null,
+              },
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const userChatIds = userChats.map((chat) => chat.id);
+
+    // Обращения, созданные пользователем ИЛИ связанные с чатами, в которых пользователь участвует
     const where: any = {
-      userId: session.user.id,
+      OR: [
+        { userId: session.user.id },
+        ...(userChatIds.length > 0 ? [{ chatId: { in: userChatIds } }] : []),
+      ],
     };
 
     if (status && status !== "all") {
@@ -34,6 +63,15 @@ export async function GET(request: NextRequest) {
     const tickets = await prisma.ticket.findMany({
       where,
       include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            email: true,
+          },
+        },
         attachments: {
           select: {
             id: true,
@@ -80,6 +118,16 @@ export async function GET(request: NextRequest) {
         commentsCount: ticket._count.comments,
         lastCommentAt: ticket.comments[0]?.createdAt || null,
         chatId: ticket.chatId,
+        // Информация о создателе обращения
+        createdBy: {
+          id: ticket.user.id,
+          firstName: ticket.user.firstName,
+          lastName: ticket.user.lastName,
+          middleName: ticket.user.middleName,
+          email: ticket.user.email,
+        },
+        // Является ли текущий пользователь создателем обращения
+        isOwner: ticket.userId === session.user.id,
       })),
     });
   } catch (error) {

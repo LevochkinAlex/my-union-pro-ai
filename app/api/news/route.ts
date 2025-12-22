@@ -24,11 +24,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Кешируем новости на 2 минуты (с учётом организации)
+    // withCache всегда выполняет функцию, даже если Redis недоступен
     const cacheKey = getCacheKey("news:list", { page, limit, orgId: userOrganizationId });
     
-    const cachedData = await withCache(
-      cacheKey,
-      async () => {
+    let cachedData;
+    try {
+      cachedData = await withCache(
+        cacheKey,
+        async () => {
         // Фильтруем новости ТОЛЬКО по организации пользователя
         // Каждая организация создает свой ареал - пользователи видят только новости своей организации
         const whereClause: any = {
@@ -109,10 +112,86 @@ export async function GET(request: NextRequest) {
             coverImage: n.coverImage, // Возвращаем coverImage как есть
           };
         });
-        return { news, total };
-      },
-      120 // 2 минуты
-    );
+          return { news, total };
+        },
+        120 // 2 минуты
+      );
+    } catch (cacheError) {
+      // Если ошибка кеша, пробуем загрузить данные напрямую
+      console.error("[api/news] Cache error, loading directly:", cacheError);
+      const whereClause: any = {
+        isPublished: true,
+      };
+
+      if (userOrganizationId) {
+        whereClause.channel = {
+          organizationId: userOrganizationId,
+        };
+      } else {
+        whereClause.OR = [
+          { channelId: null },
+          { channel: { organizationId: null } },
+        ];
+      }
+
+      const [newsRaw, total] = await Promise.all([
+        prisma.newsPost.findMany({
+          where: whereClause,
+          select: {
+            id: true,
+            title: true,
+            content: true,
+            coverImage: true,
+            publishedAt: true,
+            viewCount: true,
+            author: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatarUrl: true,
+              },
+            },
+            _count: {
+              select: {
+                likes: true,
+                comments: true,
+              },
+            },
+            polls: {
+              select: {
+                id: true,
+                question: true,
+                options: true,
+                isClosed: true,
+                _count: {
+                  select: {
+                    votes: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            publishedAt: "desc",
+          },
+          skip,
+          take: limit,
+        }),
+        prisma.newsPost.count({
+          where: whereClause,
+        }),
+      ]);
+
+      cachedData = {
+        news: newsRaw.map(n => ({
+          ...n,
+          content: n.content || '',
+          coverImage: n.coverImage,
+        })),
+        total,
+      };
+    }
     
     const { news, total } = cachedData;
 
@@ -220,8 +299,33 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("[api/news] Error:", error);
+    
+    // Более детальная обработка ошибок
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    
+    // Если ошибка связана с базой данных
+    if (errorMessage.includes("Prisma") || errorMessage.includes("database")) {
+      console.error("[api/news] Database error:", error);
+      return NextResponse.json(
+        { error: "Ошибка базы данных. Попробуйте позже." },
+        { status: 503 }
+      );
+    }
+    
+    // Если ошибка связана с кешем
+    if (errorMessage.includes("cache") || errorMessage.includes("Cache")) {
+      console.error("[api/news] Cache error:", error);
+      // Пробуем вернуть данные без кеша
+      try {
+        // Здесь можно попробовать загрузить данные напрямую без кеша
+        // Но для простоты просто возвращаем ошибку
+      } catch (retryError) {
+        console.error("[api/news] Retry failed:", retryError);
+      }
+    }
+    
     return NextResponse.json(
-      { error: "Failed to fetch news" },
+      { error: "Не удалось загрузить новости. Попробуйте обновить страницу." },
       { status: 500 }
     );
   }
