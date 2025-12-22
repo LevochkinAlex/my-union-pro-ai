@@ -295,11 +295,11 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
   // - загрузка еще идет ИЛИ
   // - идет переключение ИЛИ
   // - есть сохраненные данные о том, что пользователь может переключаться
-  const storedDataForDisplay = loadStoredData();
+  const storedDataForExpanded = loadStoredData();
   const shouldShowExpanded = displayModes.length > 1 || 
                              isLoading || 
                              isSwitching || 
-                             (storedDataForDisplay?.availableModes?.length > 1 || storedDataForDisplay?.canSwitch);
+                             (storedDataForExpanded?.availableModes?.length > 1 || storedDataForExpanded?.canSwitch);
   
   if (!shouldShowExpanded) {
     return null;
