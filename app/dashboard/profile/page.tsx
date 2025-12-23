@@ -2193,39 +2193,6 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* Кнопки действий */}
-            {membershipData.membershipStatus === "ACCEPTED" && (
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <button
-                  onClick={handleGenerateRemoval}
-                  disabled={generatingDocument === "removal"}
-                  className="inline-flex items-center justify-center rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {generatingDocument === "removal" ? (
-                    <>
-                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                      Генерация...
-                    </>
-                  ) : (
-                    "Снять с учета"
-                  )}
-                </button>
-                <button
-                  onClick={handleGenerateTransfer}
-                  disabled={generatingDocument === "transfer"}
-                  className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {generatingDocument === "transfer" ? (
-                    <>
-                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                      Генерация...
-                    </>
-                  ) : (
-                    "Перейти в другой профсоюз"
-                  )}
-                </button>
-              </div>
-            )}
           </div>
         ) : (
           <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200">

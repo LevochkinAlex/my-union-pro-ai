@@ -10,25 +10,19 @@ interface UserSettings {
   emailAppealNotifications: boolean;
 }
 
-type TabKey = "notifications" | "security";
+type TabKey = "notifications";
 
 export default function SettingsPage() {
   const { data: session } = useSession();
   const [activeTab, setActiveTab] = useState<TabKey>("notifications");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [settings, setSettings] = useState<UserSettings>({
     pushNotificationsEnabled: true,
     pushSoundEnabled: true,
     emailBotNotifications: false,
     emailAppealNotifications: true,
-  });
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
   });
 
   useEffect(() => {
@@ -104,43 +98,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handlePasswordSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setMessage({ type: "error", text: "Новый пароль и подтверждение не совпадают" });
-      return;
-    }
-
-    setChangingPassword(true);
-    setMessage(null);
-    
-    try {
-      const response = await fetch("/api/profile/change-password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          currentPassword: passwordForm.currentPassword,
-          newPassword: passwordForm.newPassword,
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Не удалось изменить пароль");
-      }
-
-      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
-      setMessage({ type: "success", text: "Пароль успешно изменен" });
-    } catch (error) {
-      console.error(error);
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка изменения пароля" });
-    } finally {
-      setChangingPassword(false);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -158,7 +115,7 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white md:text-3xl">Настройки</h1>
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 md:text-base">
-          Управляйте уведомлениями и безопасностью вашего аккаунта
+          Управляйте уведомлениями вашего аккаунта
         </p>
       </div>
 
@@ -174,33 +131,8 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Вкладки */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-4 overflow-x-auto md:space-x-8">
-          <button
-            onClick={() => setActiveTab("notifications")}
-            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
-              activeTab === "notifications"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            Уведомления
-          </button>
-          <button
-            onClick={() => setActiveTab("security")}
-            className={`whitespace-nowrap border-b-2 px-1 py-3 text-xs font-medium md:py-4 md:text-sm ${
-              activeTab === "security"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            Безопасность
-          </button>
-        </nav>
-      </div>
 
-      {/* Вкладка: Уведомления */}
+      {/* Уведомления */}
       {activeTab === "notifications" && (
         <div className="w-full max-w-5xl rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 md:p-6">
           <h2 className="text-base font-semibold text-gray-900 dark:text-white md:text-lg mb-6">
@@ -341,60 +273,6 @@ export default function SettingsPage() {
               {isSaving ? "Сохранение..." : "Сохранить настройки"}
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Вкладка: Безопасность */}
-      {activeTab === "security" && (
-        <div className="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 md:p-6">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white md:text-lg">Изменение пароля</h2>
-          <form onSubmit={handlePasswordSubmit} className="mt-4 space-y-6">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Текущий пароль</label>
-              <input
-                type="password"
-                name="currentPassword"
-                value={passwordForm.currentPassword}
-                onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                required
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Новый пароль</label>
-              <input
-                type="password"
-                name="newPassword"
-                value={passwordForm.newPassword}
-                onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                minLength={8}
-                required
-              />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Минимум 8 символов</p>
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Подтверждение пароля</label>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={passwordForm.confirmPassword}
-                onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                minLength={8}
-                required
-              />
-            </div>
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={changingPassword}
-                className="inline-flex items-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {changingPassword ? "Изменение..." : "Изменить пароль"}
-              </button>
-            </div>
-          </form>
         </div>
       )}
     </div>
