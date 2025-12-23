@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -57,7 +57,13 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
      user.avatarUrl.startsWith('data:') || 
      user.avatarUrl.startsWith('/'));
 
-  // Проверяем статус подписки лениво (только при первом взаимодействии)
+  // Проверяем статус подписки сразу при монтировании компонента
+  useEffect(() => {
+    checkSubscriptionStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.id]);
+
+  // Проверяем статус подписки
   const checkSubscriptionStatus = async () => {
     if (subscriptionChecked || isLoading) return; // Уже проверяли или идет загрузка
     
@@ -185,7 +191,6 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
           
           {/* Action Button - снизу на всю ширину */}
           <button
-            onMouseEnter={checkSubscriptionStatus}
             onClick={handleSubscribe}
             disabled={isLoading}
             className={`w-full py-2 px-4 rounded-lg border font-medium text-sm transition-colors ${
