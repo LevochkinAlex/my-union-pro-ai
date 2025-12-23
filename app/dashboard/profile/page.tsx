@@ -197,7 +197,6 @@ export default function ProfilePage() {
     }>;
   } | null>(null);
   const [loadingMembership, setLoadingMembership] = useState(false);
-  const [generatingDocument, setGeneratingDocument] = useState<"removal" | "transfer" | null>(null);
   
   // Вычисление возраста
   const calculateAge = (birthDate: Date): number => {
@@ -714,73 +713,6 @@ export default function ProfilePage() {
     }
   }, [activeTab]);
 
-  // Обработчик генерации заявления о снятии с учета
-  const handleGenerateRemoval = async () => {
-    if (!confirm("Вы уверены, что хотите сгенерировать заявление о снятии с учета?")) {
-      return;
-    }
-
-    setGeneratingDocument("removal");
-    try {
-      const response = await fetch("/api/profile/membership/generate-removal", {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Не удалось сгенерировать заявление");
-      }
-
-      const data = await response.json();
-      setMessage({ type: "success", text: "Заявление о снятии с учета успешно сгенерировано и добавлено в документы" });
-      
-      // Перезагружаем данные о членстве
-      const membershipResponse = await fetch("/api/profile/membership");
-      if (membershipResponse.ok) {
-        const membershipData = await membershipResponse.json();
-        setMembershipData(membershipData);
-      }
-    } catch (error) {
-      console.error(error);
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка генерации заявления" });
-    } finally {
-      setGeneratingDocument(null);
-    }
-  };
-
-  // Обработчик генерации заявления о переходе
-  const handleGenerateTransfer = async () => {
-    if (!confirm("Вы уверены, что хотите сгенерировать заявление о переходе в другой профсоюз?")) {
-      return;
-    }
-
-    setGeneratingDocument("transfer");
-    try {
-      const response = await fetch("/api/profile/membership/generate-transfer", {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Не удалось сгенерировать заявление");
-      }
-
-      const data = await response.json();
-      setMessage({ type: "success", text: "Заявление о переходе в другой профсоюз успешно сгенерировано и добавлено в документы" });
-      
-      // Перезагружаем данные о членстве
-      const membershipResponse = await fetch("/api/profile/membership");
-      if (membershipResponse.ok) {
-        const membershipData = await membershipResponse.json();
-        setMembershipData(membershipData);
-      }
-    } catch (error) {
-      console.error(error);
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка генерации заявления" });
-    } finally {
-      setGeneratingDocument(null);
-    }
-  };
 
   useEffect(() => {
     if (message) {
