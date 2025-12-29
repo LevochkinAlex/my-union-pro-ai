@@ -4,7 +4,7 @@
  */
 
 import { JWT } from 'google-auth-library';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 
 // Конфигурация из переменных окружения
 const ISSUER_ID = process.env.GOOGLE_PAY_ISSUER_ID;
@@ -117,6 +117,7 @@ export interface LoyaltyObjectData {
   promoCode?: string;
   validUntil?: string;
   imageUrl?: string;
+  cardImageDataUrl?: string; // Data URL сгенерированной карточки
 }
 
 export async function createLoyaltyObject(data: LoyaltyObjectData): Promise<string> {
@@ -164,8 +165,23 @@ export async function createLoyaltyObject(data: LoyaltyObjectData): Promise<stri
     };
   }
 
-  // Добавляем изображение если есть
-  if (data.imageUrl) {
+  // Добавляем изображение карточки (приоритет: cardImageDataUrl > imageUrl)
+  // Для Google Wallet лучше использовать cardImageDataUrl - это сгенерированная карточка
+  if (data.cardImageDataUrl && data.cardImageDataUrl.startsWith('http')) {
+    // Если это уже публичный URL
+    loyaltyObject.heroImage = {
+      sourceUri: {
+        uri: data.cardImageDataUrl,
+      },
+      contentDescription: {
+        defaultValue: {
+          language: 'ru-RU',
+          value: data.discountTitle,
+        },
+      },
+    };
+  } else if (data.imageUrl) {
+    // Fallback на оригинальное изображение скидки
     loyaltyObject.heroImage = {
       sourceUri: {
         uri: data.imageUrl,
@@ -177,6 +193,33 @@ export async function createLoyaltyObject(data: LoyaltyObjectData): Promise<stri
         },
       },
     };
+  }
+
+  // Добавляем текстовые модули для лучшего отображения информации
+  loyaltyObject.textModulesData = [
+    {
+      header: 'Промокод',
+      body: data.promoCode || 'Покажите эту карту',
+      id: 'promo_code',
+    },
+    {
+      header: 'Пользователь',
+      body: data.accountName,
+      id: 'user_name',
+    },
+  ];
+
+  // Добавляем срок действия в текстовый модуль если есть
+  if (data.validUntil) {
+    loyaltyObject.textModulesData.push({
+      header: 'Действует до',
+      body: new Date(data.validUntil).toLocaleDateString('ru-RU', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }),
+      id: 'valid_until',
+    });
   }
 
   try {
@@ -252,7 +295,19 @@ async function updateLoyaltyObject(data: LoyaltyObjectData): Promise<string> {
     };
   }
 
-  if (data.imageUrl) {
+  if (data.cardImageDataUrl && data.cardImageDataUrl.startsWith('http')) {
+    loyaltyObject.heroImage = {
+      sourceUri: {
+        uri: data.cardImageDataUrl,
+      },
+      contentDescription: {
+        defaultValue: {
+          language: 'ru-RU',
+          value: data.discountTitle,
+        },
+      },
+    };
+  } else if (data.imageUrl) {
     loyaltyObject.heroImage = {
       sourceUri: {
         uri: data.imageUrl,
@@ -264,6 +319,32 @@ async function updateLoyaltyObject(data: LoyaltyObjectData): Promise<string> {
         },
       },
     };
+  }
+
+  // Добавляем текстовые модули
+  loyaltyObject.textModulesData = [
+    {
+      header: 'Промокод',
+      body: data.promoCode || 'Покажите эту карту',
+      id: 'promo_code',
+    },
+    {
+      header: 'Пользователь',
+      body: data.accountName,
+      id: 'user_name',
+    },
+  ];
+
+  if (data.validUntil) {
+    loyaltyObject.textModulesData.push({
+      header: 'Действует до',
+      body: new Date(data.validUntil).toLocaleDateString('ru-RU', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }),
+      id: 'valid_until',
+    });
   }
 
   try {
@@ -338,7 +419,8 @@ export async function createDiscountPass(
   userName: string,
   promoCode?: string,
   validUntil?: string,
-  imageUrl?: string
+  imageUrl?: string,
+  cardImageDataUrl?: string
 ): Promise<{ saveUrl: string; jwt: string }> {
   try {
     // Создаем или получаем класс пропуска
@@ -365,6 +447,7 @@ export async function createDiscountPass(
       promoCode,
       validUntil,
       imageUrl,
+      cardImageDataUrl,
     });
 
     // Генерируем JWT для добавления
