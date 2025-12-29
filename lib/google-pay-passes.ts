@@ -242,27 +242,36 @@ export async function createLoyaltyObject(data: LoyaltyObjectData): Promise<stri
   }
 
   try {
+    console.log('[createLoyaltyObject] Request URL:', url);
+    console.log('[createLoyaltyObject] Request body keys:', Object.keys(loyaltyObject));
+
+    const accessToken = await jwtClient.getAccessToken();
+    console.log('[createLoyaltyObject] Access token obtained:', accessToken ? 'yes' : 'no');
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${await jwtClient.getAccessToken()}`,
+        'Authorization': `Bearer ${accessToken}`,
       },
       body: JSON.stringify(loyaltyObject),
     });
 
+    console.log('[createLoyaltyObject] Response status:', response.status, response.statusText);
+
     if (!response.ok) {
       const error = await response.text();
+      console.error('[createLoyaltyObject] Error response:', error);
       // Если объект уже существует (409), обновляем его
       if (response.status === 409) {
-        console.log(`Loyalty object ${data.objectId} already exists, updating...`);
+        console.log(`[createLoyaltyObject] Loyalty object ${data.objectId} already exists, updating...`);
         return await updateLoyaltyObject(data);
       }
-      throw new Error(`Failed to create loyalty object: ${error}`);
+      throw new Error(`Failed to create loyalty object: ${response.status} ${response.statusText} - ${error}`);
     }
 
     const result = await response.json();
-    console.log(`✅ Loyalty object ${data.objectId} created successfully`);
+    console.log(`[createLoyaltyObject] ✅ Loyalty object ${data.objectId} created successfully:`, result.id);
     return result.id;
   } catch (error) {
     console.error('Error creating loyalty object:', error);
@@ -401,7 +410,14 @@ export async function generateSaveJWT(
     throw new Error('GOOGLE_PAY_ISSUER_ID is not set');
   }
 
-  const jwtClient = await getJWTClient();
+  const credentials = getServiceAccountCredentials();
+  const fullObjectId = `${ISSUER_ID}.${objectId}`;
+  
+  console.log('[generateSaveJWT] Generating JWT for:', {
+    issuerId: ISSUER_ID,
+    objectId: fullObjectId,
+    serviceAccountEmail: SERVICE_ACCOUNT_EMAIL,
+  });
   
   const payload = {
     iss: SERVICE_ACCOUNT_EMAIL,
@@ -411,21 +427,33 @@ export async function generateSaveJWT(
     payload: {
       loyaltyObjects: [
         {
-          id: `${ISSUER_ID}.${objectId}`,
+          id: fullObjectId,
         },
       ],
     },
   };
 
-  // Используем jsonwebtoken для подписи кастомного JWT
-  const credentials = getServiceAccountCredentials();
-  
-  const token = jwt.sign(payload, credentials.private_key, {
-    algorithm: 'RS256',
-    expiresIn: '1h',
+  console.log('[generateSaveJWT] JWT payload:', {
+    iss: payload.iss,
+    aud: payload.aud,
+    typ: payload.typ,
+    objectId: fullObjectId,
+    origins: payload.origins,
   });
-  
-  return token;
+
+  // Используем jsonwebtoken для подписи кастомного JWT
+  try {
+    const token = jwt.sign(payload, credentials.private_key, {
+      algorithm: 'RS256',
+      expiresIn: '1h',
+    });
+    
+    console.log('[generateSaveJWT] JWT generated successfully, length:', token.length);
+    return token;
+  } catch (error) {
+    console.error('[generateSaveJWT] Error signing JWT:', error);
+    throw error;
+  }
 }
 
 /**

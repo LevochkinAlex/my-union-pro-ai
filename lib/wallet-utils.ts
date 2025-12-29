@@ -211,6 +211,11 @@ async function downloadForAppleWallet(options: WalletDownloadOptions): Promise<v
  */
 async function downloadForGoogleWallet(options: WalletDownloadOptions): Promise<void> {
   try {
+    console.log('[Google Wallet] Starting download for Android:', {
+      discountId: options.discountId,
+      discountTitle: options.discountTitle,
+    });
+
     // Запрашиваем Google Pay pass с сервера
     const response = await fetch('/api/wallet/google-pass', {
       method: 'POST',
@@ -227,34 +232,66 @@ async function downloadForGoogleWallet(options: WalletDownloadOptions): Promise<
       }),
     });
 
+    console.log('[Google Wallet] API response status:', response.status);
+
     // Если API еще не настроен (501), используем fallback
     if (response.status === 501) {
-      console.warn('Google Pay API not configured, using image fallback');
+      console.warn('[Google Wallet] API not configured (501), using image fallback');
       downloadImageFallback(options);
       return;
     }
 
     if (!response.ok) {
-      throw new Error('Failed to generate Google Pay pass');
+      const errorText = await response.text();
+      console.error('[Google Wallet] API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText,
+      });
+      throw new Error(`Failed to generate Google Pay pass: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
+    console.log('[Google Wallet] API response data:', {
+      hasSaveUrl: !!data.saveUrl,
+      hasJwt: !!data.jwt,
+      hasError: !!data.error,
+      error: data.error,
+      message: data.message,
+    });
+
+    // Проверяем наличие ошибки в ответе
+    if (data.error) {
+      console.error('[Google Wallet] Error in response:', data.error, data.message);
+      downloadImageFallback(options);
+      return;
+    }
 
     // Если есть URL для добавления в Google Wallet, открываем его
     if (data.saveUrl) {
+      console.log('[Google Wallet] Opening saveUrl:', data.saveUrl.substring(0, 100) + '...');
       window.location.href = data.saveUrl;
     } else if (data.jwt) {
       // Если вернулся JWT, открываем его через Google Wallet API
-      window.location.href = `https://pay.google.com/gp/v/save/${data.jwt}`;
+      const saveUrl = `https://pay.google.com/gp/v/save/${data.jwt}`;
+      console.log('[Google Wallet] Opening JWT saveUrl:', saveUrl.substring(0, 100) + '...');
+      window.location.href = saveUrl;
     } else if (data.fallback?.imageDataUrl) {
       // Fallback на изображение
+      console.warn('[Google Wallet] Using fallback image');
       downloadImageFallback(options);
     } else {
+      console.error('[Google Wallet] Invalid response:', data);
       throw new Error('Invalid response from Google Pay API');
     }
   } catch (error) {
-    console.error('Failed to add to Google Wallet:', error);
+    console.error('[Google Wallet] Failed to add to Google Wallet:', error);
+    console.error('[Google Wallet] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     // Fallback: скачиваем как изображение
+    alert('Не удалось добавить в Google Wallet. Скачивается изображение карточки.');
     downloadImageFallback(options);
   }
 }

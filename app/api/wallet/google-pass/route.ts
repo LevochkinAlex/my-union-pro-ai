@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { createDiscountPass } from '@/lib/google-pay-passes';
 
 /**
  * API endpoint для генерации Google Pay pass для Android
  * 
- * Примечание: Для полноценной работы требуется:
- * 1. Google Pay API аккаунт
- * 2. Service Account ключ
- * 3. Issuer ID
- * 4. Class ID и Object ID
- * 
- * Пока что возвращаем базовую структуру или ошибку
+ * Требования:
+ * 1. GOOGLE_PAY_ISSUER_ID в .env.local
+ * 2. Включенный Google Pay Passes API в Google Cloud Console
+ * 3. Service Account с правами на Google Pay API
  */
 export async function POST(request: NextRequest) {
   try {
@@ -21,6 +19,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+
+    // Проверяем наличие Issuer ID
+    if (!process.env.GOOGLE_PAY_ISSUER_ID) {
+      console.warn('GOOGLE_PAY_ISSUER_ID is not set, returning fallback');
+      const body = await request.json();
+      return NextResponse.json(
+        {
+          error: 'Google Pay integration requires GOOGLE_PAY_ISSUER_ID',
+          message: 'Для работы Google Pay необходимо настроить GOOGLE_PAY_ISSUER_ID в .env.local',
+          fallback: {
+            imageDataUrl: body.imageDataUrl,
+          },
+        },
+        { status: 501 } // Not Implemented
       );
     }
 
@@ -34,83 +48,92 @@ export async function POST(request: NextRequest) {
       imageDataUrl,
     } = body;
 
-    // ВАЖНО: Для полноценной работы нужно:
-    // 1. Установить @google-pay/pass-rest-api
-    // 2. Настроить Google Pay API credentials
-    // 3. Создать класс и объект пропуска
-    // 4. Вернуть JWT или saveUrl для добавления в Google Wallet
-    
-    // Пока что возвращаем ошибку с инструкцией
-    return NextResponse.json(
-      {
-        error: 'Google Pay integration requires additional setup',
-        message: 'Для работы Google Pay необходимо настроить Google Pay API',
-        fallback: {
-          imageDataUrl,
-        },
-      },
-      { status: 501 } // Not Implemented
+    // Извлекаем URL изображения из dataUrl если нужно
+    let imageUrl: string | undefined;
+    if (imageDataUrl) {
+      // Если это data URL, можно сохранить его или использовать как есть
+      // Для Google Pay лучше использовать публичный URL
+      // Пока используем data URL, но в продакшене лучше загружать на сервер
+      imageUrl = imageDataUrl.startsWith('http') ? imageDataUrl : undefined;
+    }
+
+    // Используем сгенерированное изображение карточки как cardImageDataUrl
+    // Для Google Wallet лучше загрузить на сервер и использовать публичный URL
+    // Пока передаем dataUrl, но Google Wallet может не принять его напрямую
+    // В продакшене нужно загрузить изображение и получить публичный URL
+    const cardImageDataUrl = imageDataUrl?.startsWith('http') ? imageDataUrl : undefined;
+
+    console.log('[Google Pay API] Creating discount pass:', {
+      discountId,
+      discountTitle,
+      userId: String(session.user.id),
+      userName: userName || session.user.email || 'Пользователь',
+      promoCode,
+      validUntil,
+      hasImageUrl: !!imageUrl,
+      hasCardImageDataUrl: !!cardImageDataUrl,
+    });
+
+    // Создаем пропуск
+    const { saveUrl, jwt } = await createDiscountPass(
+      discountId,
+      discountTitle,
+      String(session.user.id),
+      userName || session.user.email || 'Пользователь',
+      promoCode,
+      validUntil,
+      imageUrl,
+      cardImageDataUrl
     );
 
-    /* Пример кода для полноценной реализации:
-    
-    // Создание класса пропуска
-    const loyaltyClass = {
-      id: `myunion_discount_class_${discountId}`,
-      issuerName: 'MyUnion Pro',
-      programName: 'Скидки и льготы',
-      programLogo: {
-        sourceUri: {
-          uri: 'https://myunion.pro/logo.png',
-        },
-      },
-      reviewStatus: 'UNDER_REVIEW',
-    };
+    console.log('[Google Pay API] Pass created successfully:', { saveUrl: saveUrl.substring(0, 100) + '...' });
 
-    // Создание объекта пропуска
-    const loyaltyObject = {
-      id: `myunion_discount_${discountId}_${session.user.id}`,
-      classId: loyaltyClass.id,
-      state: 'ACTIVE',
-      barcode: promoCode
-        ? {
-            type: 'QR_CODE',
-            value: promoCode,
-          }
-        : undefined,
-      accountName: userName || session.user.email || 'Пользователь',
-      accountId: String(session.user.id),
-      loyaltyPoints: {
-        label: 'Скидка',
-        balance: {
-          string: discountTitle,
-        },
-      },
-      validTimeInterval: validUntil
-        ? {
-            start: {
-              date: new Date().toISOString(),
-            },
-            end: {
-              date: new Date(validUntil).toISOString(),
-            },
-          }
-        : undefined,
-    };
-
-    // Использование Google Pay API для создания пропуска
-    // const jwt = await createLoyaltyObject(loyaltyClass, loyaltyObject);
-    // const saveUrl = `https://pay.google.com/gp/v/save/${jwt}`;
-    
-    // return NextResponse.json({
-    //   saveUrl,
-    //   jwt,
-    // });
-    */
+    return NextResponse.json({
+      saveUrl,
+      jwt,
+    });
   } catch (error) {
-    console.error('Error generating Google Pay pass:', error);
+    console.error('[Google Pay API] Error generating pass:', error);
+    console.error('[Google Pay API] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    
+    // Если ошибка связана с настройкой API, возвращаем fallback
+    if (error instanceof Error && (
+      error.message.includes('GOOGLE_PAY_ISSUER_ID') ||
+      error.message.includes('401') ||
+      error.message.includes('403')
+    )) {
+      try {
+        const body = await request.json().catch(() => ({}));
+        return NextResponse.json(
+          {
+            error: 'Google Pay API configuration error',
+            message: error.message,
+            fallback: {
+              imageDataUrl: body.imageDataUrl,
+            },
+          },
+          { status: 501 }
+        );
+      } catch (e) {
+        return NextResponse.json(
+          {
+            error: 'Google Pay API configuration error',
+            message: error.message,
+          },
+          { status: 501 }
+        );
+      }
+    }
+
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: process.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined,
+      },
       { status: 500 }
     );
   }

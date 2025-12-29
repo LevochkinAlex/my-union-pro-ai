@@ -292,6 +292,39 @@
 
 ---
 
+## Google Pay Passes API
+
+### `GOOGLE_PAY_ISSUER_ID`
+- **Описание:** Issuer ID для Google Pay Passes API
+- **Обязательно:** Да (для добавления скидок в Google Wallet на Android)
+- **Где получить:** [Google Pay Business Console](https://pay.google.com/business/console)
+- **Пример:**
+  ```bash
+  GOOGLE_PAY_ISSUER_ID="3388000000023063666"
+  ```
+
+### `GOOGLE_PAY_SERVICE_ACCOUNT_EMAIL`
+- **Описание:** Email Service Account для Google Pay API
+- **Обязательно:** Нет (по умолчанию используется Firebase Service Account)
+- **По умолчанию:** `firebase-adminsdk-fbsvc@myunion-c3187.iam.gserviceaccount.com`
+- **Пример:**
+  ```bash
+  GOOGLE_PAY_SERVICE_ACCOUNT_EMAIL="firebase-adminsdk-fbsvc@myunion-c3187.iam.gserviceaccount.com"
+  ```
+
+### `GOOGLE_PAY_PROJECT_ID`
+- **Описание:** ID проекта Google Cloud
+- **Обязательно:** Нет (по умолчанию используется `myunion-c3187`)
+- **По умолчанию:** `myunion-c3187`
+- **Пример:**
+  ```bash
+  GOOGLE_PAY_PROJECT_ID="myunion-c3187"
+  ```
+
+**Примечание:** Service Account ключ берется из `FIREBASE_PRIVATE_KEY`. Убедитесь, что Service Account имеет права на Google Pay Passes API.
+
+---
+
 ## Firebase
 
 ### `FIREBASE_PROJECT_ID`
