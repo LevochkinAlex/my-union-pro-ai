@@ -8,6 +8,12 @@ interface UserSettings {
   pushSoundEnabled: boolean;
   emailBotNotifications: boolean;
   emailAppealNotifications: boolean;
+  bestBenefits?: {
+    userId: string | null;
+    status: string | null;
+    createdAt: string | null;
+    synced: boolean;
+  };
 }
 
 type TabKey = "notifications";
@@ -23,6 +29,12 @@ export default function SettingsPage() {
     pushSoundEnabled: true,
     emailBotNotifications: false,
     emailAppealNotifications: true,
+    bestBenefits: {
+      userId: null,
+      status: null,
+      createdAt: null,
+      synced: false,
+    },
   });
 
   useEffect(() => {
@@ -49,6 +61,12 @@ export default function SettingsPage() {
         pushSoundEnabled: data.pushSoundEnabled ?? true,
         emailBotNotifications: data.emailBotNotifications ?? false,
         emailAppealNotifications: data.emailAppealNotifications ?? true,
+        bestBenefits: data.bestBenefits || {
+          userId: null,
+          status: null,
+          createdAt: null,
+          synced: false,
+        },
       });
     } catch (error) {
       console.error("Ошибка загрузки настроек:", error);
@@ -261,6 +279,43 @@ export default function SettingsPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Best Benefits синхронизация */}
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+            <h3 className="text-base font-medium text-gray-900 dark:text-white mb-4 md:text-lg">
+              Best Benefits
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <label className="text-sm font-medium text-gray-900 dark:text-white">
+                    Статус синхронизации
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {settings.bestBenefits?.synced 
+                      ? "Ваш аккаунт синхронизирован с Best Benefits. Вы можете активировать скидки."
+                      : "Ваш аккаунт не синхронизирован с Best Benefits. Синхронизация произойдет автоматически после подтверждения email и заполнения профиля."}
+                  </p>
+                </div>
+                <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  settings.bestBenefits?.synced
+                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                    : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                }`}>
+                  {settings.bestBenefits?.synced ? "✓ Синхронизирован" : "Не синхронизирован"}
+                </div>
+              </div>
+              {settings.bestBenefits?.synced && settings.bestBenefits?.createdAt && (
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Дата синхронизации: {new Date(settings.bestBenefits.createdAt).toLocaleDateString("ru-RU", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </div>
+              )}
             </div>
           </div>
 

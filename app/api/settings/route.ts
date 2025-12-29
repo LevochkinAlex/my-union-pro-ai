@@ -25,6 +25,9 @@ export async function GET() {
           pushSoundEnabled: true,
           emailBotNotifications: true,
           emailAppealNotifications: true,
+          bestBenefitsUserId: true,
+          bestBenefitsStatus: true,
+          bestBenefitsCreatedAt: true,
         },
       });
 
@@ -57,6 +60,12 @@ export async function GET() {
         emailAppealNotifications: user.emailAppealNotifications !== null && user.emailAppealNotifications !== undefined 
           ? user.emailAppealNotifications 
           : true,
+        bestBenefits: {
+          userId: user.bestBenefitsUserId,
+          status: user.bestBenefitsStatus,
+          createdAt: user.bestBenefitsCreatedAt,
+          synced: !!user.bestBenefitsUserId,
+        },
       };
 
       return NextResponse.json(settings);
