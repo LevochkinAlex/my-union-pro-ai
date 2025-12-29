@@ -8,8 +8,7 @@
  */
 
 import 'dotenv/config';
-import { createDiscountPass } from '../lib/google-pay-passes';
-import { createLoyaltyClass } from '../lib/google-pay-passes';
+import { createDiscountPass, createLoyaltyClass } from '../lib/google-pay-passes.js';
 
 async function testGoogleWallet() {
   console.log('\n🧪 Тестирование интеграции Google Wallet...\n');
