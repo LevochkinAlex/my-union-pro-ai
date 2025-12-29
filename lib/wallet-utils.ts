@@ -104,51 +104,66 @@ async function downloadAsPDF(options: WalletDownloadOptions): Promise<void> {
     const a4Width = 210;
     const a4Height = 297;
     
-    // Рассчитываем размеры изображения, чтобы оно поместилось на A4
+    // Рассчитываем размеры изображения, чтобы оно поместилось на A4 с отступами
+    const margin = 10; // отступы по 10мм с каждой стороны
+    const maxWidth = a4Width - margin * 2;
+    const maxHeight = a4Height - margin * 2;
+    
     const imgAspectRatio = img.width / img.height;
-    const a4AspectRatio = a4Width / a4Height;
+    const maxAspectRatio = maxWidth / maxHeight;
     
-    let pdfWidth: number;
-    let pdfHeight: number;
+    let pdfImgWidth: number;
+    let pdfImgHeight: number;
     
-    if (imgAspectRatio > a4AspectRatio) {
-      // Изображение шире - используем всю ширину
-      pdfWidth = a4Width;
-      pdfHeight = a4Width / imgAspectRatio;
+    if (imgAspectRatio > maxAspectRatio) {
+      // Изображение шире - используем всю доступную ширину
+      pdfImgWidth = maxWidth;
+      pdfImgHeight = maxWidth / imgAspectRatio;
     } else {
-      // Изображение выше - используем всю высоту
-      pdfHeight = a4Height;
-      pdfWidth = a4Height * imgAspectRatio;
+      // Изображение выше - используем всю доступную высоту
+      pdfImgHeight = maxHeight;
+      pdfImgWidth = maxHeight * imgAspectRatio;
     }
 
-    // Создаем PDF с правильной ориентацией
+    // Центрируем изображение на странице
+    const x = (a4Width - pdfImgWidth) / 2;
+    const y = (a4Height - pdfImgHeight) / 2;
+
+    // Создаем PDF в портретной ориентации A4
     const pdf = new jsPDF({
-      orientation: pdfWidth > pdfHeight ? 'landscape' : 'portrait',
+      orientation: 'portrait',
       unit: 'mm',
-      format: [pdfWidth, pdfHeight],
+      format: 'a4',
     });
 
-    // Добавляем изображение на всю страницу
+    // Добавляем изображение с правильными размерами и центрированием
     pdf.addImage(
       options.imageDataUrl,
       'PNG',
-      0,
-      0,
-      pdfWidth,
-      pdfHeight
+      x,
+      y,
+      pdfImgWidth,
+      pdfImgHeight
     );
 
-    // Генерируем blob и открываем в новой вкладке
+    // Генерируем blob и скачиваем файл
     const pdfBlob = pdf.output('blob');
     const pdfUrl = URL.createObjectURL(pdfBlob);
-    window.open(pdfUrl, '_blank');
+    
+    // Скачиваем файл вместо открытия в новой вкладке
+    const a = document.createElement('a');
+    a.href = pdfUrl;
+    a.download = `discount-${options.discountId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 
     // Очищаем URL после загрузки
     setTimeout(() => URL.revokeObjectURL(pdfUrl), 1000);
   } catch (error) {
     console.error('Failed to generate PDF:', error);
-    // Fallback: открываем как изображение в новой вкладке
-    window.open(options.imageDataUrl, '_blank');
+    // Fallback: скачиваем как изображение
+    downloadImageFallback(options);
   }
 }
 
