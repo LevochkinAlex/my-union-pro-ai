@@ -96,10 +96,10 @@ async function checkAndFixActivation(email: string, discountId: number) {
         }
       );
 
-      const isActivatedInBB = bbActivated.some((item: any) => item.id === discountId);
+      const bbItem = bbActivated.find((item: any) => item.id === discountId);
+      const isActivatedInBB = !!bbItem;
       
       if (isActivatedInBB) {
-        const bbItem = bbActivated.find((item: any) => item.id === discountId);
         console.log(`✅ Скидка активирована в Best Benefits:`);
         console.log(`   ID: ${bbItem.id}`);
         console.log(`   Название: ${bbItem.name || 'N/A'}`);
@@ -113,12 +113,19 @@ async function checkAndFixActivation(email: string, discountId: number) {
         console.log(`❌ Скидка НЕ активирована в Best Benefits`);
       }
 
+      // Проверяем, есть ли активные промокоды
+      const hasActivePromoCode = bbItem && bbItem.codes?.some((c: any) => 
+        c.code && c.code !== 'Промокод деактивирован' && c.code.trim() !== ''
+      );
+
       // Если активирована в BB, но не в БД, или наоборот - синхронизируем
       if (isActivatedInBB && !dbActivation) {
         console.log(`\n🔧 Исправление: активация есть в BB, но нет в БД. Синхронизируем...`);
-        const bbItem = bbActivated.find((item: any) => item.id === discountId);
-        const promoCode = bbItem.codes?.[0]?.code || null;
-        const validUntil = bbItem.codes?.[0]?.end_date ? new Date(bbItem.codes[0].end_date) : null;
+        const activeCode = bbItem.codes?.find((c: any) => 
+          c.code && c.code !== 'Промокод деактивирован' && c.code.trim() !== ''
+        );
+        const promoCode = activeCode?.code || null;
+        const validUntil = activeCode?.end_date ? new Date(activeCode.end_date) : null;
 
         await saveDiscountActivation(user.id, {
           discountId: discountId,
@@ -157,7 +164,7 @@ async function checkAndFixActivation(email: string, discountId: number) {
         } else {
           console.error(`❌ Ошибка активации: ${activationResult.error || 'Неизвестная ошибка'}`);
         }
-      } else if (isActivatedInBB && !bbItem.codes?.some((c: any) => c.code && c.code !== 'Промокод деактивирован')) {
+      } else if (isActivatedInBB && !hasActivePromoCode) {
         // Скидка активирована, но все промокоды деактивированы - переактивируем
         console.log(`\n🔧 Исправление: скидка активирована, но все промокоды деактивированы. Переактивируем...`);
         
