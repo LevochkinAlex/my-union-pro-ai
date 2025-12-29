@@ -157,6 +157,34 @@ async function checkAndFixActivation(email: string, discountId: number) {
         } else {
           console.error(`❌ Ошибка активации: ${activationResult.error || 'Неизвестная ошибка'}`);
         }
+      } else if (isActivatedInBB && !bbItem.codes?.some((c: any) => c.code && c.code !== 'Промокод деактивирован')) {
+        // Скидка активирована, но все промокоды деактивированы - переактивируем
+        console.log(`\n🔧 Исправление: скидка активирована, но все промокоды деактивированы. Переактивируем...`);
+        
+        const activationResult = await safeActivateDiscount({
+          userId: user.id,
+          bestBenefitsUserId: user.bestBenefitsUserId,
+          discountId: discountId,
+          email: user.email,
+          password: password,
+        });
+
+        if (activationResult.success) {
+          console.log(`✅ Скидка успешно переактивирована в Best Benefits`);
+          console.log(`   Новый промокод: ${activationResult.promoCode || 'НЕТ'}`);
+          
+          // Обновляем в БД
+          if (activationResult.promoCode) {
+            await saveDiscountActivation(user.id, {
+              discountId: discountId,
+              promoCode: activationResult.promoCode,
+              validUntil: null, // Будет обновлено при следующей синхронизации
+            });
+            console.log(`✅ Активация обновлена в БД с новым промокодом`);
+          }
+        } else {
+          console.error(`❌ Ошибка переактивации: ${activationResult.error || 'Неизвестная ошибка'}`);
+        }
       } else {
         console.log(`\n✅ Активация синхронизирована между БД и Best Benefits`);
       }
