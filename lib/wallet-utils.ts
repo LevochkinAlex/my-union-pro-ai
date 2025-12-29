@@ -85,14 +85,14 @@ export async function handleWalletDownload(options: WalletDownloadOptions): Prom
 }
 
 /**
- * Конвертирует изображение в PDF и открывает в новой вкладке (для десктопа)
+ * Конвертирует изображение в PDF - просто вставляет картинку как есть
  */
 async function downloadAsPDF(options: WalletDownloadOptions): Promise<void> {
   try {
     // Динамически импортируем jsPDF
     const { default: jsPDF } = await import('jspdf');
 
-    // Загружаем изображение
+    // Загружаем изображение, чтобы узнать его размеры
     const img = new Image();
     await new Promise<void>((resolve, reject) => {
       img.onload = () => resolve();
@@ -100,57 +100,33 @@ async function downloadAsPDF(options: WalletDownloadOptions): Promise<void> {
       img.src = options.imageDataUrl;
     });
 
-    // Размеры A4 в мм
-    const a4Width = 210;
-    const a4Height = 297;
-    
-    // Рассчитываем размеры изображения, чтобы оно поместилось на A4 с отступами
-    const margin = 10; // отступы по 10мм с каждой стороны
-    const maxWidth = a4Width - margin * 2;
-    const maxHeight = a4Height - margin * 2;
-    
-    const imgAspectRatio = img.width / img.height;
-    const maxAspectRatio = maxWidth / maxHeight;
-    
-    let pdfImgWidth: number;
-    let pdfImgHeight: number;
-    
-    if (imgAspectRatio > maxAspectRatio) {
-      // Изображение шире - используем всю доступную ширину
-      pdfImgWidth = maxWidth;
-      pdfImgHeight = maxWidth / imgAspectRatio;
-    } else {
-      // Изображение выше - используем всю доступную высоту
-      pdfImgHeight = maxHeight;
-      pdfImgWidth = maxHeight * imgAspectRatio;
-    }
+    // Конвертируем пиксели в мм (при 96 DPI: 1px = 0.264583mm)
+    const pxToMm = 0.264583;
+    const imgWidthMm = img.width * pxToMm;
+    const imgHeightMm = img.height * pxToMm;
 
-    // Центрируем изображение на странице
-    const x = (a4Width - pdfImgWidth) / 2;
-    const y = (a4Height - pdfImgHeight) / 2;
-
-    // Создаем PDF в портретной ориентации A4
+    // Создаем PDF с размерами изображения
     const pdf = new jsPDF({
-      orientation: 'portrait',
+      orientation: imgWidthMm > imgHeightMm ? 'landscape' : 'portrait',
       unit: 'mm',
-      format: 'a4',
+      format: [imgWidthMm, imgHeightMm],
     });
 
-    // Добавляем изображение с правильными размерами и центрированием
+    // Просто вставляем изображение на всю страницу (0, 0) с реальными размерами
     pdf.addImage(
       options.imageDataUrl,
       'PNG',
-      x,
-      y,
-      pdfImgWidth,
-      pdfImgHeight
+      0,
+      0,
+      imgWidthMm,
+      imgHeightMm
     );
 
     // Генерируем blob и скачиваем файл
     const pdfBlob = pdf.output('blob');
     const pdfUrl = URL.createObjectURL(pdfBlob);
     
-    // Скачиваем файл вместо открытия в новой вкладке
+    // Скачиваем файл
     const a = document.createElement('a');
     a.href = pdfUrl;
     a.download = `discount-${options.discountId}.pdf`;
