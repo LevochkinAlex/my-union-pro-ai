@@ -144,8 +144,9 @@ async function fixAllUserDiscounts(email: string) {
           errorCount++;
         }
 
-        // Небольшая задержка между запросами, чтобы не перегружать API
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Задержка между запросами, чтобы не превысить rate limit (1 запрос в секунду)
+        // Используем 3 секунды для надежности
+        await new Promise(resolve => setTimeout(resolve, 3000));
       } catch (error: any) {
         console.error(`❌ Ошибка при исправлении скидки ${discountId}: ${error.message}`);
         errorCount++;
