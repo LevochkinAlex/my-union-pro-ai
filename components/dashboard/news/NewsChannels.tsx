@@ -23,16 +23,16 @@ function NewsChannelsComponent() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
         
-        try {
+      try {
           const response = await fetch("/api/news/channels", {
             signal: controller.signal,
             cache: 'no-cache',
           });
           clearTimeout(timeoutId);
           
-          if (response.ok) {
-            const data = await response.json();
-            setChannels(data.channels || []);
+        if (response.ok) {
+          const data = await response.json();
+          setChannels(data.channels || []);
           } else if (response.status >= 500 && retryCount < 2) {
             // Retry при ошибках сервера
             await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));

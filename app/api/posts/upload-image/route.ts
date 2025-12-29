@@ -80,11 +80,14 @@ export async function POST(request: NextRequest) {
 
     try {
       const fileKey = `posts/${fileName}`;
-      const vdsUrl = await uploadFileToVDS(fileKey, optimizedBuffer, optimizedMime);
-      if (vdsUrl) {
-        finalFilePath = vdsUrl;
-        returnUrl = vdsUrl; // Используем VDS URL напрямую
-        console.log(`[posts/upload-image] File uploaded to VDS: ${vdsUrl}`);
+      const vdsPath = await uploadFileToVDS(fileKey, optimizedBuffer, optimizedMime);
+      if (vdsPath) {
+        finalFilePath = vdsPath;
+        // Преобразуем путь в URL для API endpoint
+        // vdsPath будет типа /uploads/posts/filename.webp
+        // Преобразуем в /api/uploads/posts/filename.webp
+        returnUrl = vdsPath.replace(/^\/uploads\//, '/api/uploads/');
+        console.log(`[posts/upload-image] File uploaded to VDS: ${vdsPath} -> ${returnUrl}`);
       } else {
         throw new Error("VDS upload returned no URL");
       }

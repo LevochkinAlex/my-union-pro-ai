@@ -184,8 +184,10 @@ export async function PATCH(
               
               if (isVDSStorageConfigured()) {
                 try {
-                  coverImage = await uploadFileToVDS(fileKey, buffer, mimeType);
-                  console.log(`[posts] Cover image (data URL) uploaded to VDS: ${coverImage}`);
+                  const vdsPath = await uploadFileToVDS(fileKey, buffer, mimeType);
+                  // Преобразуем путь в URL для API endpoint
+                  coverImage = vdsPath.replace(/^\/uploads\//, '/api/uploads/');
+                  console.log(`[posts] Cover image (data URL) uploaded to VDS: ${vdsPath} -> ${coverImage}`);
                 } catch (vdsError) {
                   console.error(`[posts] VDS upload error for cover (data URL):`, vdsError);
                   throw new Error(`Не удалось загрузить обложку на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
@@ -233,8 +235,10 @@ export async function PATCH(
               
               if (isVDSStorageConfigured()) {
                 try {
-                  coverImage = await uploadFileToVDS(fileKey, finalBuffer, contentType);
-                  console.log(`[posts] Cover image uploaded to VDS: ${coverImage}`);
+                  const vdsPath = await uploadFileToVDS(fileKey, finalBuffer, contentType);
+                  // Преобразуем путь в URL для API endpoint
+                  coverImage = vdsPath.replace(/^\/uploads\//, '/api/uploads/');
+                  console.log(`[posts] Cover image uploaded to VDS: ${vdsPath} -> ${coverImage}`);
                 } catch (vdsError) {
                   console.error(`[posts] VDS upload error for cover:`, vdsError);
                   throw new Error(`Не удалось загрузить обложку на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
@@ -283,8 +287,10 @@ export async function PATCH(
 
           if (isVDSStorageConfigured()) {
             try {
-              coverImage = await uploadFileToVDS(fileKey, buffer, mimeType);
-              console.log(`[posts] Cover image uploaded to VDS: ${coverImage}`);
+              const vdsPath = await uploadFileToVDS(fileKey, buffer, mimeType);
+              // Преобразуем путь в URL для API endpoint
+              coverImage = vdsPath.replace(/^\/uploads\//, '/api/uploads/');
+              console.log(`[posts] Cover image uploaded to VDS: ${vdsPath} -> ${coverImage}`);
             } catch (vdsError) {
               console.error(`[posts] VDS upload error for cover:`, vdsError);
               throw new Error(`Не удалось загрузить обложку на сервер: ${vdsError instanceof Error ? vdsError.message : String(vdsError)}`);
@@ -436,26 +442,27 @@ export async function PATCH(
               
               if (isVDSStorageConfigured()) {
                 try {
-                  finalFilePath = await uploadFileToVDS(fileKey, imageBuffer, contentType);
-                  console.log(`[posts] Image uploaded to VDS: ${finalFilePath}`);
+                  const vdsPath = await uploadFileToVDS(fileKey, imageBuffer, contentType);
+                  // Преобразуем путь в URL для API endpoint
+                  finalFilePath = vdsPath.replace(/^\/uploads\//, '/api/uploads/');
+                  console.log(`[posts] Image uploaded to VDS: ${vdsPath} -> ${finalFilePath}`);
                 } catch (vdsError) {
                   console.error(`[posts] VDS upload error, using local:`, vdsError);
                   await mkdir(UPLOAD_DIR, { recursive: true });
                   const localFilePath = path.join(UPLOAD_DIR, fileName);
                   await writeFile(localFilePath, imageBuffer);
-                  finalFilePath = `/uploads/posts/${fileName}`;
+                  finalFilePath = `/api/uploads/posts/${fileName}`;
                 }
               } else {
                 await mkdir(UPLOAD_DIR, { recursive: true });
                 const localFilePath = path.join(UPLOAD_DIR, fileName);
                 await writeFile(localFilePath, imageBuffer);
-                finalFilePath = `/uploads/posts/${fileName}`;
+                finalFilePath = `/api/uploads/posts/${fileName}`;
               }
 
               // Сохраняем маппинг для замены
-              const apiPath = `/api/uploads/posts/${fileName}`;
-              imageMap.set(imageUrl, apiPath);
-              console.log(`[posts] Mapped image URL: ${imageUrl} -> ${apiPath}`);
+              imageMap.set(imageUrl, finalFilePath);
+              console.log(`[posts] Mapped image URL: ${imageUrl} -> ${finalFilePath}`);
             } catch (error) {
               console.error(`[posts] Error processing image ${imageUrl}:`, error);
               // Продолжаем обработку других изображений
@@ -586,10 +593,11 @@ export async function PATCH(
         if (isVDSStorageConfigured()) {
           try {
             const fileKey = `posts/${fileName}`;
-            const vdsUrl = await uploadFileToVDS(fileKey, buffer, mimeType);
-            if (vdsUrl) {
-              finalFilePath = vdsUrl;
-              console.log(`[posts/PATCH] File uploaded to VDS: ${vdsUrl}`);
+            const vdsPath = await uploadFileToVDS(fileKey, buffer, mimeType);
+            if (vdsPath) {
+              // Преобразуем путь в URL для API endpoint
+              finalFilePath = vdsPath.replace(/^\/uploads\//, '/api/uploads/');
+              console.log(`[posts/PATCH] File uploaded to VDS: ${vdsPath} -> ${finalFilePath}`);
             } else {
               throw new Error("VDS upload returned no URL");
             }

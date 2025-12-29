@@ -61,22 +61,22 @@ export async function GET() {
     // 2. Пользователь является председателем и имеет организацию (может работать в обоих режимах)
     if (isMember || (isPPOHead && user.ppoHeadOrganizationId)) {
       if (!availableModes.find(m => m.mode === "MEMBER")) {
-        availableModes.push({
-          mode: "MEMBER",
-          label: "Член профсоюза",
-        });
+      availableModes.push({
+        mode: "MEMBER",
+        label: "Член профсоюза",
+      });
       }
     }
 
     // Режим "Председатель ППО" доступен если пользователь является председателем
     if (isPPOHead) {
       if (!availableModes.find(m => m.mode === "PPO_HEAD")) {
-        availableModes.push({
-          mode: "PPO_HEAD",
-          label: "Председатель ППО",
-          organizationName: user.ppoHeadOrganization?.name,
-        });
-      }
+      availableModes.push({
+        mode: "PPO_HEAD",
+        label: "Председатель ППО",
+        organizationName: user.ppoHeadOrganization?.name,
+      });
+    }
     }
     
     // Дополнительная проверка: если пользователь имеет двойную роль,
@@ -197,21 +197,21 @@ export async function PUT(request: NextRequest) {
     // 2. Пользователь является председателем и имеет организацию (может работать в обоих режимах)
     if (isMember || (isPPOHead && updatedUser.ppoHeadOrganizationId)) {
       if (!availableModes.find(m => m.mode === "MEMBER")) {
-        availableModes.push({
-          mode: "MEMBER",
-          label: "Член профсоюза",
-        });
+      availableModes.push({
+        mode: "MEMBER",
+        label: "Член профсоюза",
+      });
       }
     }
 
     // Режим "Председатель ППО" доступен если пользователь является председателем
     if (isPPOHead) {
       if (!availableModes.find(m => m.mode === "PPO_HEAD")) {
-        availableModes.push({
-          mode: "PPO_HEAD",
-          label: "Председатель ППО",
-          organizationName: updatedUser.ppoHeadOrganization?.name,
-        });
+      availableModes.push({
+        mode: "PPO_HEAD",
+        label: "Председатель ППО",
+        organizationName: updatedUser.ppoHeadOrganization?.name,
+      });
       }
     }
     

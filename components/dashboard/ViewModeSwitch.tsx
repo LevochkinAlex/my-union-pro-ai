@@ -181,8 +181,8 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
         setIsOpen(false);
         // Небольшая задержка перед перезагрузкой, чтобы данные успели сохраниться
         setTimeout(() => {
-          // Полная перезагрузка страницы с очисткой кеша и принудительным обновлением сессии
-          window.location.replace("/dashboard?t=" + Date.now() + "&refresh=1");
+        // Полная перезагрузка страницы с очисткой кеша и принудительным обновлением сессии
+        window.location.replace("/dashboard?t=" + Date.now() + "&refresh=1");
         }, 100);
       } else {
         // Если переключение не удалось, перезагружаем данные

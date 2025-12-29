@@ -88,7 +88,7 @@ export default function NewsPage() {
         
         clearTimeout(timeoutId);
         
-        if (!response.ok) {
+      if (!response.ok) {
           // Если ошибка сервера, пробуем повторить запрос
           if (response.status >= 500 && retryCount < 3) {
             await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Экспоненциальная задержка
@@ -96,21 +96,21 @@ export default function NewsPage() {
             return loadNews(pageNum, retryCount + 1);
           }
           throw new Error(`Не удалось загрузить новости (${response.status})`);
-        }
+      }
         
-        const data = await response.json();
+      const data = await response.json();
         
         // Проверяем структуру ответа
         if (!data || !Array.isArray(data.news)) {
           throw new Error("Неверный формат данных");
         }
-        
-        if (pageNum === 1) {
-          setNews(data.news || []);
-        } else {
-          setNews((prev) => [...prev, ...(data.news || [])]);
-        }
-        
+      
+      if (pageNum === 1) {
+        setNews(data.news || []);
+      } else {
+        setNews((prev) => [...prev, ...(data.news || [])]);
+      }
+      
         setHasMore(data.pagination?.page < data.pagination?.totalPages);
         setError(""); // Очищаем ошибку при успешной загрузке
       } catch (fetchError: any) {

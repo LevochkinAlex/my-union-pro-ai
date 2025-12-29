@@ -55,7 +55,7 @@ export async function GET(
 
     const isOwner = ticket.userId === session.user.id;
     const isPPOHead = user?.role === "PPO_HEAD" && ticket.organizationId === user?.organizationId;
-    
+
     // Проверяем, является ли пользователь участником чата обращения
     let isChatParticipant = false;
     if (ticket.chatId) {

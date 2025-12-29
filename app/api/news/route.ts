@@ -30,8 +30,8 @@ export async function GET(request: NextRequest) {
     let cachedData;
     try {
       cachedData = await withCache(
-        cacheKey,
-        async () => {
+      cacheKey,
+      async () => {
         // Фильтруем новости ТОЛЬКО по организации пользователя
         // Каждая организация создает свой ареал - пользователи видят только новости своей организации
         const whereClause: any = {
@@ -112,10 +112,10 @@ export async function GET(request: NextRequest) {
             coverImage: n.coverImage, // Возвращаем coverImage как есть
           };
         });
-          return { news, total };
-        },
-        120 // 2 минуты
-      );
+        return { news, total };
+      },
+      120 // 2 минуты
+    );
     } catch (cacheError) {
       // Если ошибка кеша, пробуем загрузить данные напрямую
       console.error("[api/news] Cache error, loading directly:", cacheError);

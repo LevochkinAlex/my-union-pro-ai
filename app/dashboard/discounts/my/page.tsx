@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import type { DiscountItem } from "@/types/discounts";
 import Image from "next/image";
 import { generatePromoCard } from "@/lib/promo-card-generator";
+import { handleWalletDownload } from "@/lib/wallet-utils";
 
 export default function MyDiscountsPage() {
   const router = useRouter();
@@ -415,9 +416,16 @@ export default function MyDiscountsPage() {
 
       console.log("[handleDownloadPromoCard] Card generated:", { size: blob.size, type: blob.type });
 
-      // Открываем модалку с превью
-      setPromoCardData({ dataUrl, blob, discount });
-      setShowPromoCardModal(true);
+      // Используем новую логику Wallet для скачивания
+      await handleWalletDownload({
+        imageBlob: blob,
+        imageDataUrl: dataUrl,
+        discountId: discount.id,
+        discountTitle: discount.title,
+        promoCode: discount.promoCode,
+        userName: userName,
+        validUntil: discount.validUntil ? new Date(discount.validUntil) : undefined,
+      });
       
     } catch (error) {
       console.error("[handleDownloadPromoCard] Failed to generate promo card:", error);
@@ -427,35 +435,25 @@ export default function MyDiscountsPage() {
     }
   };
 
-  const handleDownloadFromModal = () => {
+  const handleDownloadFromModal = async () => {
     if (!promoCardData) return;
     
-    const url = URL.createObjectURL(promoCardData.blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `promo-card-${promoCardData.discount.id}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Используем новую логику Wallet для скачивания
+    await handleWalletDownload({
+      imageBlob: promoCardData.blob,
+      imageDataUrl: promoCardData.dataUrl,
+      discountId: promoCardData.discount.id,
+      discountTitle: promoCardData.discount.title,
+      promoCode: promoCardData.discount.promoCode,
+      validUntil: promoCardData.discount.validUntil ? new Date(promoCardData.discount.validUntil) : undefined,
+    });
   };
 
-  const handleAddToWallet = () => {
-    // Определяем платформу
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const isAndroid = /Android/.test(navigator.userAgent);
+  const handleAddToWallet = async () => {
+    if (!promoCardData) return;
     
-    if (isIOS) {
-      // Для iOS - добавление в Apple Wallet требует .pkpass файл
-      // Это сложный процесс, требующий серверного API
-      alert("Функция добавления в Apple Wallet будет доступна в ближайшее время");
-    } else if (isAndroid) {
-      // Для Android - Google Pay Passes API
-      alert("Функция добавления в Google Pay будет доступна в ближайшее время");
-    } else {
-      // Для десктопа - просто скачиваем
-      handleDownloadFromModal();
-    }
+    // Используем ту же логику, что и для скачивания
+    await handleDownloadFromModal();
   };
 
   const handleViewDiscount = (discountId: number) => {

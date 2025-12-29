@@ -36,6 +36,11 @@ const getPreviewUrl = (imageUrl: string, useCDN: boolean = true): string => {
     return imageUrl;
   }
   
+  // Если URL уже начинается с /api/uploads/, возвращаем как есть
+  if (imageUrl.startsWith("/api/uploads/")) {
+    return imageUrl;
+  }
+  
   // Для только что загруженных файлов (которые могут еще не быть на CDN)
   // лучше использовать API route вместо CDN для надежности
   // CDN используется для старых файлов, которые уже синхронизированы
@@ -710,9 +715,16 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
       if (coverImage) {
         // Нормализуем путь перед отправкой
         // Если это полный URL, извлекаем относительный путь
-        const coverImagePath = coverImage.startsWith('http') 
+        let coverImagePath = coverImage.startsWith('http') 
           ? coverImage.replace(window.location.origin, '')
           : coverImage;
+        
+        // Если это уже API URL (/api/uploads/...), преобразуем обратно в /uploads/...
+        // Сервер сам преобразует его обратно в /api/uploads/...
+        if (coverImagePath.startsWith('/api/uploads/')) {
+          coverImagePath = coverImagePath.replace('/api/uploads/', '/uploads/');
+        }
+        
         console.log('[CreatePost] Sending coverImage:', { 
           original: coverImage, 
           normalized: coverImagePath 

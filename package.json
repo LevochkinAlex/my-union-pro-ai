@@ -55,6 +55,7 @@
     "heic2any": "^0.0.4",
     "ioredis": "^5.4.1",
     "jsbarcode": "^3.12.1",
+    "jspdf": "^3.0.4",
     "jszip": "^3.10.1",
     "lucide-react": "^0.553.0",
     "mammoth": "^1.11.0",
@@ -87,6 +88,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^3.0.0",
+    "@types/jspdf": "^2.0.0",
     "@types/node": "^20",
     "@types/nodemailer": "^7.0.3",
     "@types/react": "^19",

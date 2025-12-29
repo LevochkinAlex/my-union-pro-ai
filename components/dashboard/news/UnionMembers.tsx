@@ -44,11 +44,11 @@ function UnionMembersComponent() {
         });
         clearTimeout(timeoutId);
         
-        if (response.ok) {
-          const data = await response.json();
-          setMembers(data.members || []);
-          setHasOrganization(data.hasOrganization !== false);
-          hasLoadedRef.current = true;
+      if (response.ok) {
+        const data = await response.json();
+        setMembers(data.members || []);
+        setHasOrganization(data.hasOrganization !== false);
+        hasLoadedRef.current = true;
         } else if (response.status >= 500 && retryCount < 2) {
           // Retry при ошибках сервера
           await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));

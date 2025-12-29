@@ -76,7 +76,7 @@ function UsersPageContent() {
     if (append) {
       setLoadingMore(true);
     } else {
-      setLoading(true);
+    setLoading(true);
     }
     isLoadingRef.current = true;
 

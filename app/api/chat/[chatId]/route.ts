@@ -616,25 +616,25 @@ async function sendNotifications(
       );
     } else {
       // Обычное уведомление о сообщении в чате
-      await Promise.all(
-        recipientIds.map((recipientId) =>
-          sendUserNotification({
-            userId: recipientId,
-            type: "chat_message",
-            title: isGroupChat 
-              ? `💬 ${chatName || "Групповой чат"}: ${senderName}`
-              : `💬 Новое сообщение от ${senderName}`,
-            body: messagePreview,
-            url: isGroupChat
-              ? `${baseUrl}/dashboard/chats/ppo-head?chatId=${chatId}`
-              : `${baseUrl}/dashboard/chat?chatId=${chatId}`,
-            senderName,
-          }).catch((err) => {
-            console.error(`[chat] Error sending notification to ${recipientId}:`, err?.message);
-            return { push: false, email: false };
-          })
-        )
-      );
+    await Promise.all(
+      recipientIds.map((recipientId) =>
+        sendUserNotification({
+          userId: recipientId,
+          type: "chat_message",
+          title: isGroupChat 
+            ? `💬 ${chatName || "Групповой чат"}: ${senderName}`
+            : `💬 Новое сообщение от ${senderName}`,
+          body: messagePreview,
+          url: isGroupChat
+            ? `${baseUrl}/dashboard/chats/ppo-head?chatId=${chatId}`
+            : `${baseUrl}/dashboard/chat?chatId=${chatId}`,
+          senderName,
+        }).catch((err) => {
+          console.error(`[chat] Error sending notification to ${recipientId}:`, err?.message);
+          return { push: false, email: false };
+        })
+      )
+    );
     }
   } catch (error: any) {
     console.error("[chat] Error sending notifications:", error?.message);
