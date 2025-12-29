@@ -40,11 +40,25 @@ const getServiceAccountCredentials = () => {
 async function getJWTClient(): Promise<JWT> {
   const credentials = getServiceAccountCredentials();
   
-  return new JWT({
+  const jwtClient = new JWT({
     email: credentials.client_email,
     key: credentials.private_key,
     scopes: ['https://www.googleapis.com/auth/wallet_object.issuer'],
   });
+
+  // Проверяем, что можем получить токен
+  try {
+    const token = await jwtClient.getAccessToken();
+    if (!token) {
+      throw new Error('Failed to get access token');
+    }
+    console.log('[Google Wallet] ✅ Access token получен успешно');
+  } catch (error: any) {
+    console.error('[Google Wallet] ❌ Ошибка получения access token:', error.message);
+    throw new Error(`Failed to authenticate: ${error.message}`);
+  }
+  
+  return jwtClient;
 }
 
 /**
@@ -78,11 +92,17 @@ export async function createLoyaltyClass(data: LoyaltyClassData): Promise<void> 
   };
 
   try {
+    const accessToken = await jwtClient.getAccessToken();
+    if (!accessToken) {
+      throw new Error('Failed to get access token from JWT client');
+    }
+
+    console.log(`[Google Wallet] Creating loyalty class: ${data.classId}`);
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${await jwtClient.getAccessToken()}`,
+        'Authorization': `Bearer ${accessToken}`,
       },
       body: JSON.stringify(loyaltyClass),
     });
@@ -422,8 +442,20 @@ export async function createDiscountPass(
   cardImageDataUrl?: string
 ): Promise<{ saveUrl: string; jwt: string }> {
   try {
+    console.log('[createDiscountPass] Starting with:', {
+      discountId,
+      discountTitle,
+      userId,
+      userName,
+      hasPromoCode: !!promoCode,
+      validUntil,
+      hasImageUrl: !!imageUrl,
+      hasCardImageDataUrl: !!cardImageDataUrl,
+    });
+
     // Создаем или получаем класс пропуска
     const classId = `discount_class_${discountId}`;
+    console.log('[createDiscountPass] Creating loyalty class:', classId);
     await createLoyaltyClass({
       classId,
       issuerName: 'MyUnion Pro',
@@ -434,9 +466,11 @@ export async function createDiscountPass(
         },
       },
     });
+    console.log('[createDiscountPass] Loyalty class created/updated');
 
     // Создаем объект пропуска
     const objectId = `discount_${discountId}_${userId}`;
+    console.log('[createDiscountPass] Creating loyalty object:', objectId);
     await createLoyaltyObject({
       objectId,
       classId,
@@ -448,10 +482,13 @@ export async function createDiscountPass(
       imageUrl,
       cardImageDataUrl,
     });
+    console.log('[createDiscountPass] Loyalty object created/updated');
 
     // Генерируем JWT для добавления
+    console.log('[createDiscountPass] Generating JWT...');
     const jwt = await generateSaveJWT(classId, objectId);
     const saveUrl = `https://pay.google.com/gp/v/save/${jwt}`;
+    console.log('[createDiscountPass] JWT generated, saveUrl:', saveUrl.substring(0, 100) + '...');
 
     return { saveUrl, jwt };
   } catch (error) {
