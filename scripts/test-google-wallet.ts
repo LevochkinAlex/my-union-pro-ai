@@ -22,15 +22,10 @@ async function testGoogleWallet() {
 
   console.log(`   GOOGLE_PAY_ISSUER_ID: ${issuerId ? '✅ Установлен' : '❌ НЕ УСТАНОВЛЕН'}`);
   console.log(`   SERVICE_ACCOUNT_EMAIL: ${serviceAccountEmail ? '✅ Установлен' : '❌ НЕ УСТАНОВЛЕН'}`);
-  console.log(`   FIREBASE_PRIVATE_KEY: ${privateKey ? '✅ Установлен' : '❌ НЕ УСТАНОВЛЕН'}`);
+  console.log(`   FIREBASE_PRIVATE_KEY: ${privateKey ? '✅ Установлен (из env)' : '⚠️  Используется fallback ключ'}`);
 
   if (!issuerId) {
     console.error('\n❌ GOOGLE_PAY_ISSUER_ID не установлен в .env.local');
-    process.exit(1);
-  }
-
-  if (!privateKey) {
-    console.error('\n❌ FIREBASE_PRIVATE_KEY не установлен в .env.local');
     process.exit(1);
   }
 
