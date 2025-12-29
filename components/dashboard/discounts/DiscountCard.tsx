@@ -74,14 +74,14 @@ export default function DiscountCard({
       onClick={handleCardClick}
       className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer dark:border-gray-700 dark:bg-gray-800">
       {/* Image/Header - оптимизировано с Next.js Image */}
-      <div className="relative w-full h-48 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800">
+      <div className="relative w-full h-48 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
         {discount.imageUrl && !imageError ? (
           <Image
             src={discount.imageUrl}
             alt={discount.title}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 300px"
-            className="object-cover"
+            className="object-contain"
             loading="lazy"
             quality={75}
             onError={() => setImageError(true)}
