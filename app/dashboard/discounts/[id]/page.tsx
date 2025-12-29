@@ -5,6 +5,9 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { DiscountItem, DiscountOption } from "@/types/discounts";
 import Image from "next/image";
 import QRCode from "qrcode";
+import { generatePromoCard } from "@/lib/promo-card-generator";
+import { handleWalletDownload } from "@/lib/wallet-utils";
+import { useSession } from "next-auth/react";
 
 // Санитизация и улучшение HTML описания для красивого отображения
 function sanitizeDescription(html: string): string {
@@ -127,6 +130,7 @@ function sanitizeDescription(html: string): string {
 }
 
 export default function DiscountDetailPage() {
+  const { data: session } = useSession();
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -445,113 +449,70 @@ export default function DiscountDetailPage() {
     try {
       const promoCode = activatedPromoCode || discount.promoCode;
       
-      // Создаем canvas
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      // Функция для проверки, что имя не является географическим названием
+      const isValidName = (name: string | null | undefined): boolean => {
+        if (!name) return false;
+        const geographicNames = [
+          "татарстан", "башкортостан", "чувашия", "удмуртия", "мордовия",
+          "москва", "петербург", "санкт", "новгород", "казань", "екатеринбург",
+          "отлично", "хорошо", "плохо", "да", "нет"
+        ];
+        const lowerName = name.toLowerCase().trim();
+        return !geographicNames.some(geo => lowerName.includes(geo));
+      };
       
-      canvas.width = 600;
-      canvas.height = 400;
+      // Получаем имя пользователя
+      let userName = "Пользователь";
       
-      // Фон с градиентом
-      const gradient = ctx.createLinearGradient(0, 0, 600, 400);
-      gradient.addColorStop(0, '#1e3a5f');
-      gradient.addColorStop(1, '#0f172a');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, 600, 400);
-      
-      // Добавляем blur эффект (симуляция)
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-      for (let i = 0; i < 5; i++) {
-        const x = Math.random() * 600;
-        const y = Math.random() * 400;
-        const r = 50 + Math.random() * 100;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      
-      // Логотип / Заголовок
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 24px system-ui, -apple-system, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(discount.title.substring(0, 35) + (discount.title.length > 35 ? '...' : ''), 300, 50);
-      
-      // Рамка для промокода
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-      ctx.lineWidth = 2;
-      ctx.roundRect(50, 90, 350, 100, 16);
-      ctx.fill();
-      ctx.stroke();
-      
-      // Промокод
-      if (promoCode && promoCode.trim().length > 0) {
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 36px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(promoCode, 225, 155);
+      // 1. Пробуем использовать имя из сессии
+      if (session?.user?.name && isValidName(session.user.name)) {
+        userName = session.user.name;
       } else {
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '18px system-ui, -apple-system, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Покажите эту карточку', 225, 145);
-        ctx.fillText('для получения скидки', 225, 170);
+        // 2. Пробуем получить из профиля
+        try {
+          const userResponse = await fetch("/api/profile");
+          if (userResponse.ok) {
+            const userData = await userResponse.json();
+            const firstName = userData.user?.firstName;
+            const lastName = userData.user?.lastName;
+            
+            // Проверяем валидность имени и фамилии
+            if (firstName && lastName && isValidName(firstName) && isValidName(lastName)) {
+              userName = `${firstName} ${lastName}`;
+            } else if (userData.user?.email) {
+              // Используем email как fallback
+              userName = userData.user.email.split("@")[0];
+            }
+          }
+        } catch (error) {
+          console.error("Failed to fetch user profile:", error);
+        }
       }
+
+      // Генерируем карточку используя новую функцию
+      const { blob, dataUrl } = await generatePromoCard({
+        promoCode: promoCode || undefined,
+        userName: userName,
+        discountName: discount.title,
+        discountDescription: discount.shortDescription,
+        imageUrl: discount.imageUrl ?? undefined,
+        validUntil: discount.validUntil ? new Date(discount.validUntil) : undefined,
+      });
+
+      // Используем новую логику Wallet для скачивания
+      await handleWalletDownload({
+        imageBlob: blob,
+        imageDataUrl: dataUrl,
+        discountId: discount.id,
+        discountTitle: discount.title,
+        promoCode: promoCode || undefined,
+        userName: userName,
+        validUntil: discount.validUntil ? new Date(discount.validUntil) : undefined,
+      });
       
-      // QR-код (если есть)
-      if (qrCodeUrl) {
-        const qrImg = new window.Image();
-        qrImg.crossOrigin = 'anonymous';
-        await new Promise<void>((resolve) => {
-          qrImg.onload = () => {
-            ctx.fillStyle = '#ffffff';
-            ctx.roundRect(430, 90, 120, 120, 8);
-            ctx.fill();
-            ctx.drawImage(qrImg, 435, 95, 110, 110);
-            resolve();
-          };
-          qrImg.onerror = () => resolve();
-          qrImg.src = qrCodeUrl;
-        });
-      }
-      
-      // Информация о скидке
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-      ctx.font = '14px system-ui, -apple-system, sans-serif';
-      ctx.textAlign = 'left';
-      
-      if (discount.discountValue) {
-        ctx.fillText(`Скидка: ${discount.discountValue}`, 50, 240);
-      }
-      
-      if (discount.validUntil) {
-        ctx.fillText(`Действует до: ${new Date(discount.validUntil).toLocaleDateString('ru-RU')}`, 50, 265);
-      }
-      
-      // Категория
-      if (discount.mainCategory) {
-        ctx.fillStyle = 'rgba(59, 130, 246, 0.8)';
-        ctx.roundRect(50, 290, ctx.measureText(discount.mainCategory.name).width + 20, 28, 14);
-        ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '12px system-ui, -apple-system, sans-serif';
-        ctx.fillText(discount.mainCategory.name, 60, 309);
-      }
-      
-      // Водяной знак
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-      ctx.font = '12px system-ui, -apple-system, sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText('MyUnion Pro', 580, 380);
-      
-      // Скачиваем
-      const link = document.createElement('a');
-      link.download = `promo-${discount.id}-${promoCode || 'card'}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
     } catch (error) {
       console.error("Failed to download promo card:", error);
+      alert(`Не удалось создать карточку: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
     } finally {
       setIsDownloading(false);
     }
