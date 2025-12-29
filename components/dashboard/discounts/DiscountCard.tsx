@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import clsx from "clsx";
 import type { DiscountItem } from "@/types/discounts";
 
@@ -74,20 +73,18 @@ export default function DiscountCard({
       onClick={handleCardClick}
       className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer dark:border-gray-700 dark:bg-gray-800">
       {/* Image/Header - оптимизировано с Next.js Image */}
-      <div className="relative w-full h-48 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+      <div className="relative w-full min-h-[192px] bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
         {discount.imageUrl && !imageError ? (
-          <Image
+          <img
             src={discount.imageUrl}
             alt={discount.title}
-            fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 300px"
-            className="object-contain"
+            className="w-full h-auto max-h-48 object-contain"
             loading="lazy"
-            quality={75}
+            decoding="async"
             onError={() => setImageError(true)}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 p-3 sm:p-6 text-center text-white dark:from-blue-600 dark:via-purple-600 dark:to-pink-600">
+          <div className="w-full min-h-[192px] flex items-center justify-center bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 p-3 sm:p-6 text-center text-white dark:from-blue-600 dark:via-purple-600 dark:to-pink-600">
             <div className="max-w-full px-2">
               <p className="text-xs sm:text-sm font-semibold uppercase tracking-wide opacity-80 truncate">Скидки BestBenefits</p>
               <p className="mt-1 sm:mt-2 text-sm sm:text-lg font-bold line-clamp-2">{discount.title}</p>
