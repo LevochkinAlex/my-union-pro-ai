@@ -245,12 +245,16 @@ function MessageItemComponent({
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
+  const [swipeX, setSwipeX] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Закрытие контекстного меню при клике вне
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setShowContextMenu(false);
       }
@@ -258,16 +262,85 @@ function MessageItemComponent({
     
     if (showContextMenu) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      document.addEventListener("touchstart", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+        document.removeEventListener("touchstart", handleClickOutside);
+      };
     }
   }, [showContextMenu]);
 
-  // Обработчик правого клика
+  // Long press для мобильных - открывает контекстное меню
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    
+    longPressTimerRef.current = setTimeout(() => {
+      // Вибрация на устройствах с поддержкой
+      if (navigator.vibrate) navigator.vibrate(50);
+      
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const x = Math.min(touch.clientX, window.innerWidth - 220);
+        const y = Math.min(touch.clientY - 50, window.innerHeight - 400);
+        setContextMenuPos({ x, y: Math.max(y, 50) });
+      }
+      setShowContextMenu(true);
+      touchStartRef.current = null;
+    }, 500);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
+    
+    // Если двигаемся больше по Y - отменяем свайп
+    if (deltaY > 30) {
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+      touchStartRef.current = null;
+      setSwipeX(0);
+      setIsSwiping(false);
+      return;
+    }
+    
+    // Отменяем long press если начали свайп
+    if (Math.abs(deltaX) > 10) {
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    }
+    
+    // Свайп вправо для ответа (только для чужих сообщений) или влево (для своих)
+    const maxSwipe = 80;
+    if ((!isOwn && deltaX > 0) || (isOwn && deltaX < 0)) {
+      const clampedX = Math.min(Math.abs(deltaX), maxSwipe) * (deltaX > 0 ? 1 : -1);
+      setSwipeX(clampedX);
+      setIsSwiping(true);
+    }
+  }, [isOwn]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+    
+    // Если свайп достаточный - вызываем ответ
+    if (Math.abs(swipeX) > 60 && onReply) {
+      if (navigator.vibrate) navigator.vibrate(30);
+      onReply(message);
+    }
+    
+    touchStartRef.current = null;
+    setSwipeX(0);
+    setIsSwiping(false);
+  }, [swipeX, onReply, message]);
+
+  // Обработчик правого клика (десктоп)
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const rect = containerRef.current?.getBoundingClientRect();
     if (rect) {
-      // Позиционируем меню относительно viewport
       const x = Math.min(e.clientX, window.innerWidth - 220);
       const y = Math.min(e.clientY, window.innerHeight - 350);
       setContextMenuPos({ x, y });
@@ -275,12 +348,13 @@ function MessageItemComponent({
     setShowContextMenu(true);
   }, []);
 
-  // Быстрая реакция по двойному клику
+  // Быстрая реакция по двойному клику/тапу
   const handleDoubleClick = useCallback(() => {
+    if (navigator.vibrate) navigator.vibrate(30);
     onReaction?.(message.id, "❤️");
   }, [message.id, onReaction]);
 
-  // Быстрая реакция кнопкой при наведении
+  // Быстрая реакция кнопкой при наведении (десктоп)
   const handleQuickReaction = useCallback(() => {
     onReaction?.(message.id, "❤️");
   }, [message.id, onReaction]);
@@ -313,13 +387,37 @@ function MessageItemComponent({
     <>
       <div
         ref={containerRef}
-        className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-2 px-2 sm:px-4 w-full min-w-0`}
+        className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-2 px-2 sm:px-4 w-full min-w-0 relative`}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onContextMenu={handleContextMenu}
         onDoubleClick={handleDoubleClick}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
       >
-        <div className={`flex items-end gap-2 max-w-[90%] sm:max-w-[85%] md:max-w-[70%] min-w-0 ${isOwn ? "flex-row-reverse" : ""}`}>
+        {/* Индикатор свайпа для ответа */}
+        {isSwiping && Math.abs(swipeX) > 20 && (
+          <div 
+            className={`absolute ${isOwn ? "right-full mr-2" : "left-full ml-2"} top-1/2 -translate-y-1/2 transition-opacity`}
+            style={{ opacity: Math.min(Math.abs(swipeX) / 60, 1) }}
+          >
+            <div className={`w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white shadow-lg ${Math.abs(swipeX) > 60 ? "scale-110" : ""} transition-transform`}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+              </svg>
+            </div>
+          </div>
+        )}
+        
+        <div 
+          className={`flex items-end gap-2 max-w-[90%] sm:max-w-[85%] md:max-w-[70%] min-w-0 ${isOwn ? "flex-row-reverse" : ""}`}
+          style={{ 
+            transform: isSwiping ? `translateX(${swipeX}px)` : undefined,
+            transition: isSwiping ? "none" : "transform 0.2s ease-out"
+          }}
+        >
           {/* Аватар для чужих сообщений */}
           {!isOwn && (
             <button 
@@ -388,11 +486,11 @@ function MessageItemComponent({
                 </div>
               </div>
 
-              {/* Кнопка быстрой реакции при наведении (вне overflow-hidden) */}
-              {isHovered && (
+              {/* Кнопка быстрой реакции при наведении (только десктоп) */}
+              {isHovered && !isSwiping && (
                 <button
                   onClick={handleQuickReaction}
-                  className={`absolute ${isOwn ? "-left-4" : "-right-4"} top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-200 dark:border-gray-600 hover:scale-110 transition-transform z-10`}
+                  className={`hidden sm:flex absolute ${isOwn ? "-left-4" : "-right-4"} top-1/2 -translate-y-1/2 w-8 h-8 items-center justify-center bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-200 dark:border-gray-600 hover:scale-110 transition-transform z-10`}
                   title="Поставить ❤️"
                 >
                   <span className="text-base">❤️</span>

@@ -131,28 +131,35 @@ function ChatMessagesComponent({
   }, [items.length]);
 
   // Скролл к низу при отправке нового сообщения текущим пользователем
-  const lastMessageRef = useRef<string | null>(null);
+  const lastMessageIdRef = useRef<string | null>(null);
+  const prevMessagesCountRef = useRef(0);
+  
   useEffect(() => {
     if (messages.length === 0 || !hasInitialized.current) return;
     
     const lastMessage = messages[messages.length - 1];
-    // Если это новое сообщение от текущего пользователя - скроллим вниз
-    if (lastMessage && lastMessage.id !== lastMessageRef.current && lastMessage.senderId === currentUserId) {
-      lastMessageRef.current = lastMessage.id;
-      // Скроллим с небольшой задержкой чтобы DOM обновился
-      setTimeout(() => {
+    const isNewMessage = messages.length > prevMessagesCountRef.current;
+    const isOwnMessage = lastMessage?.senderId === currentUserId;
+    const isReallyNew = lastMessage?.id !== lastMessageIdRef.current;
+    
+    // Скроллим если: новое сообщение от текущего пользователя ИЛИ пользователь был внизу
+    if (isReallyNew && isNewMessage && (isOwnMessage || atBottom)) {
+      // Используем requestAnimationFrame для плавности
+      requestAnimationFrame(() => {
         virtuosoRef.current?.scrollToIndex({
           index: items.length - 1,
           align: "end",
-          behavior: "smooth",
+          behavior: isOwnMessage ? "auto" : "smooth", // Мгновенно для своих, плавно для чужих
         });
-      }, 50);
+      });
     }
-    // Обновляем ref для отслеживания последнего сообщения
+    
+    // Обновляем refs
     if (lastMessage) {
-      lastMessageRef.current = lastMessage.id;
+      lastMessageIdRef.current = lastMessage.id;
     }
-  }, [messages, currentUserId, items.length]);
+    prevMessagesCountRef.current = messages.length;
+  }, [messages, currentUserId, items.length, atBottom]);
 
   // Автоскролл к низу при новых сообщениях (если пользователь был внизу)
   const handleFollowOutput = useCallback((isAtBottom: boolean) => {
@@ -228,9 +235,12 @@ function ChatMessagesComponent({
         atBottomStateChange={setAtBottom}
         startReached={handleStartReached}
         alignToBottom
-        increaseViewportBy={{ top: 400, bottom: 100 }}
+        overscan={{ main: 200, reverse: 200 }}
         className="h-full w-full"
-        style={{ overscrollBehavior: "contain" }}
+        style={{ 
+          overscrollBehavior: "contain",
+          WebkitOverflowScrolling: "touch",
+        }}
         components={{
           Header: () => (
             <>
