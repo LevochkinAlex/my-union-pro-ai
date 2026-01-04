@@ -144,12 +144,13 @@ messaging.onBackgroundMessage((payload) => {
   
   const notificationOptions = {
     body: notificationBody,
-    icon: payload.notification?.icon || payload.data?.icon || '/icon.png',
-    badge: '/icon.png',
+    icon: payload.notification?.icon || payload.data?.icon || '/icon-192x192.png',
+    badge: '/badge-96x96.png', // Монохромная иконка для статусбара Android
     tag: payload.data?.sessionId || 'chat-message',
     data: payload.data || {},
     requireInteraction: false,
     silent: !soundEnabled,
+    vibrate: soundEnabled ? [200, 100, 200] : undefined, // Вибрация для Android
     ...(soundEnabled && { sound: soundUrl }),
   };
 

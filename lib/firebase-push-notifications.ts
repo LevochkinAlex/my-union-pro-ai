@@ -332,12 +332,13 @@ export async function setupForegroundMessageHandler() {
       
       const notificationOptions: NotificationOptions = {
         body: payload.notification?.body || payload.data?.body || "Новое сообщение",
-        icon: payload.notification?.icon || payload.data?.icon || `${baseUrl}/icon.png`,
-        badge: `${baseUrl}/icon.png`,
+        icon: payload.notification?.icon || payload.data?.icon || `${baseUrl}/icon-192x192.png`,
+        badge: `${baseUrl}/badge-96x96.png`, // Монохромная иконка для статусбара
         tag: payload.data?.sessionId || "chat-message",
         data: payload.data || {},
         requireInteraction: false,
         silent: !finalSoundEnabled,
+        vibrate: finalSoundEnabled ? [200, 100, 200] : undefined,
         ...(finalSoundEnabled && { sound: soundUrl }),
       };
 
