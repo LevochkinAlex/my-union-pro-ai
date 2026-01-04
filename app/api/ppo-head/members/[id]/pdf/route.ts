@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma as db } from "@/lib/prisma";
 import PDFDocument from "pdfkit";
+import path from "path";
+import fs from "fs";
 
 // Маппинги для перевода статусов
 const MEMBERSHIP_STATUS_MAP: Record<string, string> = {
@@ -92,9 +94,21 @@ export async function GET(
     const chunks: Buffer[] = [];
     doc.on("data", (chunk) => chunks.push(chunk));
 
-    // Регистрируем шрифт для кириллицы
-    // PDFKit по умолчанию использует встроенные шрифты, которые поддерживают кириллицу
-    doc.font("Helvetica");
+    // Подключаем шрифты Roboto с поддержкой кириллицы
+    const fontsDir = path.join(process.cwd(), "public", "fonts");
+    const robotoRegularPath = path.join(fontsDir, "Roboto-Regular.ttf");
+    const robotoBoldPath = path.join(fontsDir, "Roboto-Bold.ttf");
+    
+    // Проверяем наличие шрифтов
+    if (fs.existsSync(robotoRegularPath) && fs.existsSync(robotoBoldPath)) {
+      doc.registerFont("Roboto", robotoRegularPath);
+      doc.registerFont("Roboto-Bold", robotoBoldPath);
+      doc.font("Roboto");
+    } else {
+      // Fallback на встроенный шрифт (без кириллицы)
+      console.warn("[PDF] Roboto fonts not found, using Helvetica fallback");
+      doc.font("Helvetica");
+    }
 
     const pageWidth = doc.page.width - 100;
     
@@ -116,11 +130,15 @@ export async function GET(
     }
     doc.moveDown(1);
 
+    // Определяем имена шрифтов на основе доступности
+    const fontRegular = fs.existsSync(robotoRegularPath) ? "Roboto" : "Helvetica";
+    const fontBold = fs.existsSync(robotoBoldPath) ? "Roboto-Bold" : "Helvetica-Bold";
+
     // Функция добавления секции
     const addSection = (title: string) => {
       doc.moveDown(0.5);
-      doc.fontSize(12).font("Helvetica-Bold").text(title);
-      doc.font("Helvetica").fontSize(10);
+      doc.fontSize(12).font(fontBold).text(title);
+      doc.font(fontRegular).fontSize(10);
       doc.moveDown(0.3);
     };
 
