@@ -66,7 +66,35 @@ interface MemberDetails extends Member {
   organization: { id: string; name: string } | null;
 }
 
-type DetailTab = "profile" | "work" | "family" | "education" | "documents";
+type DetailTab = "profile" | "work" | "family" | "education" | "membership" | "documents";
+
+// Маппинг типов документов
+const DOCUMENT_TYPE_MAP: Record<string, string> = {
+  MEMBERSHIP_APPLICATION: "Заявление о вступлении",
+  CONTRIBUTION_APPLICATION: "Заявление о взносах",
+  APPEAL: "Обращение",
+  OTHER: "Прочее",
+};
+
+// Маппинг статусов документов
+const DOCUMENT_STATUS_MAP: Record<string, string> = {
+  DRAFT: "Черновик",
+  GENERATED: "Сформирован",
+  SIGNED: "Подписан",
+  PENDING: "На проверке",
+  APPROVED: "Одобрен",
+  REJECTED: "Отклонен",
+};
+
+// Маппинг статусов членства
+const MEMBERSHIP_STATUS_MAP: Record<string, string> = {
+  PENDING: "Ожидает",
+  DOCUMENTS_PENDING: "Ожидает документов",
+  APPROVED: "Одобрен",
+  REJECTED: "Отклонён",
+  SUSPENDED: "Приостановлен",
+  EXCLUDED: "Исключён",
+};
 
 const MARITAL_STATUS_MAP: Record<string, string> = {
   SINGLE: "Не женат/Не замужем",
@@ -99,6 +127,17 @@ export default function MembersPage() {
   const [memberDetails, setMemberDetails] = useState<MemberDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailTab, setDetailTab] = useState<DetailTab>("profile");
+  
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  
+  // Sorting state
+  const [sortField, setSortField] = useState<"name" | "date" | "email">("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  
+  // Компактный режим
+  const [compactMode, setCompactMode] = useState(true);
 
   // Проверяем режим просмотра - страница только для председателей
   const isPPOHead = session?.user?.viewMode === "PPO_HEAD" || 
@@ -219,6 +258,156 @@ export default function MembersPage() {
     }
   };
 
+  // Сортировка членов
+  const sortedMembers = [...members].sort((a, b) => {
+    let comparison = 0;
+    switch (sortField) {
+      case "name":
+        const nameA = [a.lastName, a.firstName].filter(Boolean).join(" ").toLowerCase();
+        const nameB = [b.lastName, b.firstName].filter(Boolean).join(" ").toLowerCase();
+        comparison = nameA.localeCompare(nameB, "ru");
+        break;
+      case "email":
+        comparison = (a.email || "").localeCompare(b.email || "");
+        break;
+      case "date":
+      default:
+        comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        break;
+    }
+    return sortDirection === "asc" ? comparison : -comparison;
+  });
+
+  // Выбор всех/снятие выбора
+  const handleSelectAll = () => {
+    if (selectedIds.size === members.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(members.map(m => m.id)));
+    }
+  };
+
+  // Выбор одного члена
+  const handleSelectOne = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  // Bulk одобрение
+  const handleBulkApprove = async () => {
+    if (selectedIds.size === 0) return;
+    
+    setIsBulkProcessing(true);
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const id of selectedIds) {
+      try {
+        const response = await fetch(`/api/ppo-head/members/${id}/approve`, {
+          method: "POST",
+        });
+        if (response.ok) {
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      } catch {
+        errorCount++;
+      }
+    }
+    
+    setIsBulkProcessing(false);
+    setSelectedIds(new Set());
+    
+    if (successCount > 0) {
+      alertSuccess(`Одобрено ${successCount} членов`);
+      loadMembers();
+    }
+    if (errorCount > 0) {
+      alertError(`Ошибка при одобрении ${errorCount} членов`);
+    }
+  };
+
+  // Bulk исключение (для активных членов)
+  const handleBulkExclude = async () => {
+    if (selectedIds.size === 0) return;
+    
+    const confirmed = window.confirm(`Вы уверены, что хотите исключить ${selectedIds.size} членов?`);
+    if (!confirmed) return;
+    
+    setIsBulkProcessing(true);
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const id of selectedIds) {
+      try {
+        const response = await fetch(`/api/ppo-head/members/${id}/exclude`, {
+          method: "POST",
+        });
+        if (response.ok) {
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      } catch {
+        errorCount++;
+      }
+    }
+    
+    setIsBulkProcessing(false);
+    setSelectedIds(new Set());
+    
+    if (successCount > 0) {
+      alertSuccess(`Исключено ${successCount} членов`);
+      loadMembers();
+    }
+    if (errorCount > 0) {
+      alertError(`Ошибка при исключении ${errorCount} членов`);
+    }
+  };
+
+  // Исключение одного члена
+  const handleExclude = async (memberId: string) => {
+    const confirmed = window.confirm("Вы уверены, что хотите исключить этого члена профсоюза?");
+    if (!confirmed) return;
+    
+    try {
+      const response = await fetch(`/api/ppo-head/members/${memberId}/exclude`, {
+        method: "POST",
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Ошибка при исключении");
+      }
+      
+      alertSuccess("Член профсоюза исключён");
+      loadMembers();
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Не удалось исключить члена");
+    }
+  };
+
+  // Сортировка при клике на заголовок
+  const handleSort = (field: "name" | "date" | "email") => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  // Сброс выбранных при переключении табов
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [activeTab]);
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -285,6 +474,41 @@ export default function MembersPage() {
         </div>
       )}
 
+      {/* Bulk Actions Bar */}
+      {selectedIds.size > 0 && (
+        <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 flex items-center justify-between">
+          <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+            Выбрано: {selectedIds.size}
+          </span>
+          <div className="flex gap-2">
+            {activeTab === "validation" && (
+              <button
+                onClick={handleBulkApprove}
+                disabled={isBulkProcessing}
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {isBulkProcessing ? "Обработка..." : `✓ Одобрить (${selectedIds.size})`}
+              </button>
+            )}
+            {activeTab === "active" && (
+              <button
+                onClick={handleBulkExclude}
+                disabled={isBulkProcessing}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {isBulkProcessing ? "Обработка..." : `✕ Исключить (${selectedIds.size})`}
+              </button>
+            )}
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="rounded-lg bg-gray-200 dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+            >
+              Отменить
+            </button>
+          </div>
+        </div>
+      )}
+
       {members.length === 0 ? (
         <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-700 dark:bg-gray-800">
           <svg
@@ -310,43 +534,163 @@ export default function MembersPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {members.map((member) => (
-            <div
-              key={member.id}
-              className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    {[member.lastName, member.firstName, member.middleName]
-                      .filter(Boolean)
-                      .join(" ")}
-                  </h3>
-                  <div className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                    {member.email && (
-                      <p>
-                        <span className="font-medium">Email:</span> {member.email}
-                      </p>
-                    )}
-                    {member.phone && (
-                      <p>
-                        <span className="font-medium">Телефон:</span> {member.phone}
-                      </p>
-                    )}
-                    <p>
-                      <span className="font-medium">Дата подачи заявки:</span>{" "}
+        <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-gray-900/50">
+                <tr>
+                  <th className="w-12 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === members.length && members.length > 0}
+                      onChange={handleSelectAll}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </th>
+                  <th 
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                    onClick={() => handleSort("name")}
+                  >
+                    <div className="flex items-center gap-1">
+                      ФИО
+                      {sortField === "name" && (
+                        <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                    onClick={() => handleSort("email")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Контакты
+                      {sortField === "email" && (
+                        <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                    onClick={() => handleSort("date")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Дата
+                      {sortField === "date" && (
+                        <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Документы
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Действия
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {sortedMembers.map((member) => (
+                  <tr 
+                    key={member.id} 
+                    className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 ${
+                      selectedIds.has(member.id) ? "bg-blue-50 dark:bg-blue-900/20" : ""
+                    }`}
+                  >
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(member.id)}
+                        onChange={() => handleSelectOne(member.id)}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => openMemberDetails(member.id)}
+                        className="text-left hover:text-blue-600 dark:hover:text-blue-400"
+                      >
+                        <div className="font-medium text-gray-900 dark:text-white">
+                          {[member.lastName, member.firstName, member.middleName]
+                            .filter(Boolean)
+                            .join(" ") || "—"}
+                        </div>
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                      {member.email && <div>{member.email}</div>}
+                      {member.phone && <div className="text-xs">{member.phone}</div>}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
                       {new Date(member.createdAt).toLocaleDateString("ru-RU")}
-                    </p>
-                  </div>
-                  {member.documents && member.documents.length > 0 && (
-                    <div className="mt-4">
-                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Документы:
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {member.documents.map((doc) => (
-                          <Link
+                    </td>
+                    <td className="px-4 py-3">
+                      {member.documents && member.documents.length > 0 ? (
+                        <div className="flex gap-1">
+                          {member.documents.map((doc) => (
+                            <a
+                              key={doc.id}
+                              href={doc.signedFilePath ? `/api/documents/${doc.id}/download?signed=true` : `/api/documents/${doc.id}/download`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={DOCUMENT_TYPE_MAP[doc.type] || doc.type}
+                              className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs ${
+                                doc.status === "SIGNED" 
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300"
+                                  : "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
+                              }`}
+                            >
+                              📄 {doc.type === "MEMBERSHIP_APPLICATION" ? "Вступл." : doc.type === "CONTRIBUTION_APPLICATION" ? "Взносы" : "Док."}
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">Нет</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => openMemberDetails(member.id)}
+                          className="rounded bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                        >
+                          Подробнее
+                        </button>
+                        {activeTab === "validation" && (
+                          <>
+                            <button
+                              onClick={() => handleApprove(member.id)}
+                              className="rounded bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedMember(member);
+                                setShowRejectModal(true);
+                              }}
+                              className="rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700"
+                            >
+                              ✕
+                            </button>
+                          </>
+                        )}
+                        {activeTab === "active" && (
+                          <button
+                            onClick={() => handleExclude(member.id)}
+                            className="rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700"
+                          >
+                            Исключить
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
                             key={doc.id}
                             href={doc.filePath || "#"}
                             target="_blank"
@@ -562,6 +906,7 @@ export default function MembersPage() {
                           { key: "work", label: "Работа" },
                           { key: "family", label: "Семья" },
                           { key: "education", label: "Образование" },
+                          { key: "membership", label: "Членство" },
                           { key: "documents", label: `Документы (${memberDetails.documents?.length || 0})` },
                         ].map((tab) => (
                           <button
@@ -739,6 +1084,21 @@ export default function MembersPage() {
                       </div>
                     )}
 
+                    {detailTab === "membership" && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <InfoField label="Статус членства" value={MEMBERSHIP_STATUS_MAP[memberDetails.membershipStatus] || memberDetails.membershipStatus} />
+                          <InfoField label="Номер профсоюзного билета" value={memberDetails.unionCardNumber} />
+                          <InfoField label="Дата вступления" value={memberDetails.membershipJoinedAt ? new Date(memberDetails.membershipJoinedAt).toLocaleDateString("ru-RU") : null} />
+                          <InfoField label="Статус в профсоюзе" value={memberDetails.unionMembershipStatus} />
+                          <InfoField label="Организация" value={memberDetails.organization?.name} />
+                          <InfoField label="Best Benefits ID" value={memberDetails.bestBenefitsUserId} />
+                          <InfoField label="Best Benefits статус" value={memberDetails.bestBenefitsStatus} />
+                          <InfoField label="Email подтверждён" value={memberDetails.emailVerified ? new Date(memberDetails.emailVerified).toLocaleDateString("ru-RU") : "Нет"} />
+                        </div>
+                      </div>
+                    )}
+
                     {detailTab === "documents" && (
                       <div className="space-y-4">
                         {!memberDetails.documents || memberDetails.documents.length === 0 ? (
@@ -750,15 +1110,16 @@ export default function MembersPage() {
                                 <div>
                                   <h4 className="font-medium text-gray-900 dark:text-white">{doc.title}</h4>
                                   <div className="mt-1 flex flex-wrap gap-2">
-                                    <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                                      {doc.type}
+                                    <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                                      {DOCUMENT_TYPE_MAP[doc.type] || doc.type}
                                     </span>
                                     <span className={`rounded px-2 py-0.5 text-xs ${
-                                      doc.status === "SIGNED" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                                      doc.status === "SIGNED" || doc.status === "APPROVED" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
                                       doc.status === "PENDING" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" :
+                                      doc.status === "REJECTED" ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
                                       "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
                                     }`}>
-                                      {doc.status}
+                                      {DOCUMENT_STATUS_MAP[doc.status] || doc.status}
                                     </span>
                                   </div>
                                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -770,6 +1131,7 @@ export default function MembersPage() {
                                     <a
                                       href={`/api/documents/${doc.id}/download`}
                                       target="_blank"
+                                      rel="noopener noreferrer"
                                       className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
                                     >
                                       📄 Скачать
@@ -779,6 +1141,7 @@ export default function MembersPage() {
                                     <a
                                       href={`/api/documents/${doc.id}/download?signed=true`}
                                       target="_blank"
+                                      rel="noopener noreferrer"
                                       className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700"
                                     >
                                       ✓ Подписанный

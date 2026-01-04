@@ -25,6 +25,7 @@ enum MembershipStatus {
   APPROVED // Одобрен как член профсоюза
   REJECTED // Отклонен
   SUSPENDED // Приостановлен
+  EXCLUDED // Исключён из профсоюза
 }
 
 // Типы организаций
@@ -154,9 +155,11 @@ model User {
   bestBenefitsPassword  String? // Пароль для BestBenefits (зашифрован AES-256-GCM)
 
   // Профсоюзное членство
-  unionCardNumber       String?   @unique // Номер профсоюзной карточки (16-значный код формата XXXX XXXX XXXX XXXX)
-  membershipJoinedAt    DateTime? // Дата вступления в профсоюз (если принят вышестоящим органом)
-  unionMembershipStatus String?   @default("NOT_ACCEPTED") // Статус членства: ACCEPTED (принят на учет), NOT_ACCEPTED (не принят), REMOVED (снят с учета)
+  unionCardNumber            String?   @unique // Номер профсоюзной карточки (16-значный код формата XXXX XXXX XXXX XXXX)
+  membershipJoinedAt         DateTime? // Дата вступления в профсоюз (если принят вышестоящим органом)
+  membershipExcludedAt       DateTime? // Дата исключения из профсоюза
+  membershipExclusionReason  String?   @db.Text // Причина исключения
+  unionMembershipStatus      String?   @default("NOT_ACCEPTED") // Статус членства: ACCEPTED (принят на учет), NOT_ACCEPTED (не принят), REMOVED (снят с учета)
 
   // История членства
   membershipHistory MembershipHistory[]
