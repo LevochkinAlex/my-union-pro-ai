@@ -89,6 +89,8 @@ export async function PUT(
       select: { type: true, createdById: true },
     });
 
+    console.log("[ppo-head/chats] PUT - chatId:", chatId, "chat:", chat, "chairmanId:", chairman.id);
+
     if (!chat) {
       return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
     }
@@ -97,7 +99,9 @@ export async function PUT(
       return NextResponse.json({ error: "Можно редактировать только группы" }, { status: 400 });
     }
 
-    if (chat.createdById !== chairman.id) {
+    // Проверяем права - создатель группы или председатель организации (если createdById не установлен)
+    const canEdit = chat.createdById === chairman.id || !chat.createdById;
+    if (!canEdit) {
       return NextResponse.json({ error: "Только создатель может редактировать" }, { status: 403 });
     }
 
@@ -168,8 +172,9 @@ export async function DELETE(
       );
     }
 
-    // Проверяем, что Председатель является создателем группы
-    if (chat.createdById !== chairman.id) {
+    // Проверяем права - создатель группы или председатель (если createdById не установлен)
+    const canDelete = chat.createdById === chairman.id || !chat.createdById;
+    if (!canDelete) {
       return NextResponse.json(
         { error: "Только создатель группы может её удалить" },
         { status: 403 }
