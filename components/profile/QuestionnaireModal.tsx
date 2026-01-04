@@ -45,6 +45,9 @@ interface Document {
   description?: string;
   fileName: string;
   status: string;
+  signedFilePath?: string | null;
+  verificationStatus?: string | null;
+  verificationMessage?: string | null;
 }
 
 export default function QuestionnaireModal({
@@ -1016,7 +1019,7 @@ export default function QuestionnaireModal({
                                 </>
                               )}
                             </button>
-                            {doc.status === "GENERATED" && (
+                            {(doc.status === "GENERATED" || doc.status === "SIGNED") && (
                               <label 
                                 className={`inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 sm:w-auto sm:px-4 ${
                                   uploadProgress[doc.id] !== undefined
@@ -1032,7 +1035,9 @@ export default function QuestionnaireModal({
                                 ) : (
                                   <>
                                     <Upload className="h-4 w-4 flex-shrink-0" />
-                                    <span className="whitespace-nowrap">Загрузить подписанный</span>
+                                    <span className="whitespace-nowrap">
+                                      {doc.signedFilePath ? "Заменить заявление" : "Прикрепить заявление"}
+                                    </span>
                                   </>
                                 )}
                                 <input
@@ -1050,6 +1055,32 @@ export default function QuestionnaireModal({
                                   }}
                                 />
                               </label>
+                            )}
+                            {/* Статус верификации */}
+                            {doc.verificationStatus && (
+                              <span 
+                                className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                  doc.verificationStatus === "VERIFYING" 
+                                    ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+                                    : doc.verificationStatus === "VERIFIED"
+                                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                      : doc.verificationStatus === "FAILED"
+                                        ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                                        : "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
+                                }`}
+                                title={doc.verificationMessage || undefined}
+                              >
+                                {doc.verificationStatus === "VERIFYING" && (
+                                  <svg className="h-3 w-3 animate-spin mr-1" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                )}
+                                {doc.verificationStatus === "VERIFYING" && "Проверяется..."}
+                                {doc.verificationStatus === "VERIFIED" && "✓ Проверено"}
+                                {doc.verificationStatus === "FAILED" && "✗ Ошибка"}
+                                {doc.verificationStatus === "NEEDS_REVIEW" && "На проверке"}
+                              </span>
                             )}
                           </div>
                         </div>

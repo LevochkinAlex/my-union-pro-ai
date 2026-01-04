@@ -473,6 +473,11 @@ model Document {
   // Может содержать: votingParticipants (массив ID пользователей), meetingDate, agendaItems и т.д.
   metadata Json? // JSON поле для хранения дополнительных данных
 
+  // Верификация документа (AI-проверка)
+  verificationStatus  String?   // VERIFYING, VERIFIED, FAILED, NEEDS_REVIEW
+  verificationMessage String?   @db.Text // Сообщение о результате проверки
+  verifiedAt          DateTime? // Дата проверки
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

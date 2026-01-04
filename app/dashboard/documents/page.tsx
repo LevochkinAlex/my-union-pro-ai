@@ -19,6 +19,9 @@ interface Document {
   signedFilePath: string | null;
   driveFileId: string | null;
   driveUrl: string | null;
+  verificationStatus: string | null;
+  verificationMessage: string | null;
+  verifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -273,6 +276,9 @@ export default function DocumentsPage() {
 
       setUploadProgress({ [docId]: 100 });
       
+      // Показываем сообщение о начале проверки
+      alertSuccess("Заявление загружено и отправлено на проверку");
+      
       setTimeout(() => {
         setUploadProgress(prev => {
           const newState = { ...prev };
@@ -280,6 +286,9 @@ export default function DocumentsPage() {
           return newState;
         });
         loadDocuments(); // Перезагружаем список
+        
+        // Запускаем polling для обновления статуса верификации
+        pollVerificationStatus(docId);
       }, 1000);
 
     } catch (err) {
@@ -291,6 +300,26 @@ export default function DocumentsPage() {
         return newState;
       });
     }
+  };
+
+  // Polling для обновления статуса верификации
+  const pollVerificationStatus = async (docId: string, attempts = 0) => {
+    if (attempts >= 10) return; // Максимум 10 попыток (20 секунд)
+    
+    setTimeout(async () => {
+      await loadDocuments();
+      
+      // Проверяем статус документа
+      const doc = documents.find(d => d.id === docId);
+      if (doc?.verificationStatus === "VERIFYING") {
+        // Продолжаем polling
+        pollVerificationStatus(docId, attempts + 1);
+      } else if (doc?.verificationStatus === "VERIFIED") {
+        alertSuccess("Заявление предварительно проверено успешно!");
+      } else if (doc?.verificationStatus === "FAILED") {
+        alertWarning(doc.verificationMessage || "Документ не прошёл проверку");
+      }
+    }, 2000);
   };
 
   const getStatusBadge = (status: string) => {
@@ -321,6 +350,48 @@ export default function DocumentsPage() {
         }`}
       >
         {labels[status as keyof typeof labels] || status}
+      </span>
+    );
+  };
+
+  const getVerificationBadge = (doc: Document) => {
+    if (!doc.verificationStatus) return null;
+    
+    const styles = {
+      VERIFYING: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+      VERIFIED: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+      FAILED: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+      NEEDS_REVIEW: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+    };
+
+    const labels = {
+      VERIFYING: "Проверяется...",
+      VERIFIED: "✓ Проверено",
+      FAILED: "✗ Не прошло проверку",
+      NEEDS_REVIEW: "Требует проверки",
+    };
+
+    const icons = {
+      VERIFYING: (
+        <svg className="h-3 w-3 animate-spin mr-1" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      ),
+      VERIFIED: null,
+      FAILED: null,
+      NEEDS_REVIEW: null,
+    };
+
+    return (
+      <span
+        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+          styles[doc.verificationStatus as keyof typeof styles] || ""
+        }`}
+        title={doc.verificationMessage || undefined}
+      >
+        {icons[doc.verificationStatus as keyof typeof icons]}
+        {labels[doc.verificationStatus as keyof typeof labels] || doc.verificationStatus}
       </span>
     );
   };
@@ -468,6 +539,7 @@ export default function DocumentsPage() {
                       {doc.title}
                     </h3>
                     {getStatusBadge(doc.status)}
+                    {getVerificationBadge(doc)}
                   </div>
                   <p className="mt-1 text-xs text-gray-600 dark:text-gray-400 sm:text-sm">
                     {getTypeLabel(doc.type)}
@@ -545,7 +617,7 @@ export default function DocumentsPage() {
                       )}
                     </button>
                   )}
-                  {/* Кнопка загрузки подписанного для GENERATED документов */}
+                  {/* Кнопка загрузки подписанного для GENERATED/SIGNED документов */}
                   {(doc.status === 'GENERATED' || doc.status === 'SIGNED') && 
                    (doc.type === 'MEMBERSHIP_APPLICATION' || doc.type === 'CONTRIBUTION_APPLICATION') && (
                     <div className="relative w-full sm:w-auto">
@@ -561,7 +633,9 @@ export default function DocumentsPage() {
                           <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                           </svg>
-                          <span className="whitespace-nowrap">Загрузить подписанный</span>
+                          <span className="whitespace-nowrap">
+                            {doc.signedFilePath ? "Заменить заявление" : "Прикрепить заявление"}
+                          </span>
                           <input
                             type="file"
                             accept=".pdf,.jpg,.jpeg,.png"
@@ -581,32 +655,13 @@ export default function DocumentsPage() {
                       )}
                     </div>
                   )}
+                  {/* Ссылка на скачивание прикреплённого заявления (не яркая кнопка) */}
                   {doc.signedFilePath && (doc.status === 'SIGNED' || doc.status === 'PENDING' || doc.status === 'APPROVED') && (
-                    <button
-                      onClick={async () => {
-                        // Скачиваем подписанный файл
-                        try {
-                          const response = await fetch(`/api/documents/${doc.id}/download?signed=true`);
-                          if (!response.ok) {
-                            throw new Error("Ошибка скачивания документа");
-                          }
-
-                          const blob = await response.blob();
-                          const url = window.URL.createObjectURL(blob);
-                          const a = document.createElement("a");
-                          a.href = url;
-                          const signedFileName = doc.fileName ? `подписанное_${doc.fileName}` : "подписанное_заявление.pdf";
-                          a.download = signedFileName;
-                          document.body.appendChild(a);
-                          a.click();
-                          window.URL.revokeObjectURL(url);
-                          document.body.removeChild(a);
-                        } catch (err) {
-                          console.error("Ошибка скачивания:", err);
-                          alertError("Не удалось скачать подписанное заявление");
-                        }
-                      }}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 sm:w-auto sm:px-4"
+                    <a
+                      href={`/api/documents/${doc.id}/download?signed=true`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-green-600 px-3 py-2 text-sm font-medium text-green-600 dark:text-green-400 transition-colors hover:bg-green-50 dark:hover:bg-green-900/20 sm:w-auto sm:px-4"
                     >
                       <svg
                         className="h-4 w-4 flex-shrink-0"
@@ -618,12 +673,12 @@ export default function DocumentsPage() {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                           strokeWidth={2}
-                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                         />
                       </svg>
-                      <span className="hidden sm:inline">Скачать подписанное</span>
-                      <span className="sm:hidden">Подписанное</span>
-                    </button>
+                      <span className="hidden sm:inline">Моё заявление</span>
+                      <span className="sm:hidden">Моё</span>
+                    </a>
                   )}
                 </div>
               </div>

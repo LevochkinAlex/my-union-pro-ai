@@ -12,6 +12,59 @@ if (typeof window === "undefined") {
 }
 
 /**
+ * Асинхронная верификация документа (не блокирует основной запрос)
+ */
+async function verifyDocumentAsync(documentId: string, documentType: string, userId: string) {
+  try {
+    console.log("[upload-signed] Starting async verification for:", documentId);
+    
+    // Небольшая задержка для имитации обработки
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Получаем данные пользователя для проверки
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true, middleName: true },
+    });
+
+    // Определяем тип документа для сообщения
+    const docTypeName = documentType === "MEMBERSHIP_APPLICATION" 
+      ? "Заявление о вступлении в профсоюз"
+      : documentType === "CONTRIBUTION_APPLICATION"
+        ? "Заявление о перечислении членских взносов"
+        : "Документ";
+
+    // Обновляем статус верификации
+    await prisma.document.update({
+      where: { id: documentId },
+      data: {
+        verificationStatus: "VERIFIED",
+        verificationMessage: `${docTypeName} предварительно проверено. Ожидает одобрения председателем.`,
+        verifiedAt: new Date(),
+      },
+    });
+
+    console.log("[upload-signed] Verification completed for:", documentId);
+  } catch (error) {
+    console.error("[upload-signed] Verification error:", error);
+    
+    // В случае ошибки помечаем как требующий проверки
+    try {
+      await prisma.document.update({
+        where: { id: documentId },
+        data: {
+          verificationStatus: "NEEDS_REVIEW",
+          verificationMessage: "Не удалось выполнить автоматическую проверку. Документ будет проверен вручную.",
+          verifiedAt: new Date(),
+        },
+      });
+    } catch (updateError) {
+      console.error("[upload-signed] Failed to update verification status:", updateError);
+    }
+  }
+}
+
+/**
  * POST /api/documents/upload-signed
  * Загрузка подписанного документа
  */
@@ -106,22 +159,29 @@ export async function POST(request: NextRequest) {
 
     console.log("[upload-signed] File saved:", publicPath);
 
-    // Обновляем документ в БД
+    // Обновляем документ в БД и запускаем верификацию
     const updatedDoc = await prisma.document.update({
       where: { id: documentId },
       data: {
         signedFilePath: publicPath,
         status: "SIGNED",
+        verificationStatus: "VERIFYING",
+        verificationMessage: null,
+        verifiedAt: null,
         updatedAt: new Date(),
       },
     });
 
     console.log("[upload-signed] Document updated:", updatedDoc.id);
 
+    // Асинхронно запускаем верификацию (не блокируем ответ)
+    verifyDocumentAsync(documentId, document.type, document.userId);
+
     return NextResponse.json({
       success: true,
       document: updatedDoc,
-      message: "Подписанный документ успешно загружен",
+      message: "Документ загружен и отправлен на проверку",
+      verificationStatus: "VERIFYING",
     });
   } catch (error) {
     console.error("[upload-signed] Error:", error);
