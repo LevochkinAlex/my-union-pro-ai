@@ -285,7 +285,10 @@ export async function GET(
     // Формируем имя файла
     const fileName = `anketa_${(member.lastName || "member").toLowerCase().replace(/[^a-zа-яё0-9]/gi, "_")}_${member.id.slice(0, 8)}.pdf`;
 
-    return new NextResponse(pdfBuffer, {
+    // Конвертируем Buffer в Uint8Array для NextResponse
+    const uint8Array = new Uint8Array(pdfBuffer);
+
+    return new NextResponse(uint8Array, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
