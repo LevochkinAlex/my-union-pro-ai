@@ -138,8 +138,45 @@ export async function GET(
       return NextResponse.json({ error: "Документ не найден" }, { status: 404 });
     }
 
-    // Проверяем права доступа (пользователь может скачать только свои документы)
-    if (document.userId !== session.user.id && session.user.role !== "SUPER_ADMIN") {
+    // Проверяем права доступа
+    let hasAccess = false;
+    
+    // Пользователь может скачать свои документы
+    if (document.userId === session.user.id) {
+      hasAccess = true;
+    }
+    
+    // Супер-админ имеет доступ ко всем документам
+    if (session.user.role === "SUPER_ADMIN") {
+      hasAccess = true;
+    }
+    
+    // Председатель ППО имеет доступ к документам членов своей организации
+    if (!hasAccess && (session.user.role === "PPO_HEAD" || (session.user as any).viewMode === "PPO_HEAD")) {
+      // Получаем информацию о председателе
+      const chairman = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { 
+          ppoHeadOrganizationId: true,
+          organizationId: true,
+        },
+      });
+      
+      // Получаем информацию о владельце документа
+      const documentOwner = await prisma.user.findUnique({
+        where: { id: document.userId },
+        select: { organizationId: true },
+      });
+      
+      const chairmanOrgId = chairman?.ppoHeadOrganizationId || chairman?.organizationId;
+      
+      if (chairmanOrgId && documentOwner?.organizationId === chairmanOrgId) {
+        hasAccess = true;
+        console.log("[documents/download] Chairman access granted for member document");
+      }
+    }
+    
+    if (!hasAccess) {
       return NextResponse.json({ error: "Доступ запрещен" }, { status: 403 });
     }
 
