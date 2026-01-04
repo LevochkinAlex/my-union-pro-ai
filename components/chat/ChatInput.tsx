@@ -209,7 +209,10 @@ function ChatInputComponent({
   }, [editingMessage, replyingTo, onCancelEdit, onCancelReply]);
 
   return (
-    <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0 p-2 md:p-3">
+    <div 
+      className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0 p-2 md:p-3"
+      style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}
+    >
       {/* Превью ответа/редактирования */}
       {(replyingTo || editingMessage) && (
         <div className="px-4 pt-3 pb-2">
@@ -269,16 +272,15 @@ function ChatInputComponent({
       {/* Поле ввода */}
       <div className="flex items-end gap-2 w-full">
         {/* Кнопка прикрепления файла с выпадающим меню */}
-        <div className="relative flex-shrink-0" ref={attachMenuRef}>
+        <div className="relative flex-shrink-0 self-end" ref={attachMenuRef}>
           <button
             onClick={() => setShowAttachMenu(!showAttachMenu)}
             disabled={disabled}
-            className={`p-2.5 rounded-full transition-colors disabled:opacity-50 flex flex-col justify-center items-center ${
+            className={`w-11 h-11 rounded-full transition-colors disabled:opacity-50 flex items-center justify-center ${
               showAttachMenu 
                 ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" 
                 : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
             }`}
-            style={{ borderRadius: "220px" }}
           >
             <svg className={`w-5 h-5 transition-transform ${showAttachMenu ? "rotate-45" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -337,7 +339,7 @@ function ChatInputComponent({
         />
 
         {/* Текстовое поле */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 self-end">
           <textarea
             ref={textareaRef}
             value={text}
@@ -346,7 +348,7 @@ function ChatInputComponent({
             placeholder="Введите сообщение..."
             disabled={disabled}
             rows={1}
-            className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-2xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 resize-none text-sm md:text-base disabled:opacity-50"
+            className="w-full h-11 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-full bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 resize-none text-sm md:text-base disabled:opacity-50"
             style={{ minHeight: "44px", maxHeight: "120px" }}
           />
         </div>
@@ -355,7 +357,7 @@ function ChatInputComponent({
         <button
           onClick={handleSubmit}
           disabled={disabled || (!text.trim() && !file)}
-          className="p-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+          className="w-11 h-11 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 self-end flex items-center justify-center"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
