@@ -206,7 +206,7 @@ function ChatMessagesComponent({
         alignToBottom
         increaseViewportBy={{ top: 400, bottom: 200 }}
         className="flex-1 w-full max-w-full min-w-0"
-        style={{ height: "100%", width: "100%", maxWidth: "100%", overflowX: "hidden" }}
+        style={{ height: "100%", width: "100%", maxWidth: "100%", overflowX: "hidden", overscrollBehavior: "contain" }}
         components={{
           Header: () => (
             <>
@@ -228,7 +228,7 @@ function ChatMessagesComponent({
             </>
           ),
           Footer: () => (
-            <div className="pb-4">
+            <div className="pb-20">
               {isBotTyping && <TypingIndicator />}
             </div>
           ),
