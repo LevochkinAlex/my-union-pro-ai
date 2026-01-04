@@ -35,9 +35,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!participantIds || !Array.isArray(participantIds) || participantIds.length === 0) {
+    if (!participantIds || !Array.isArray(participantIds)) {
       return NextResponse.json(
         { error: "Выберите хотя бы одного участника" },
+        { status: 400 }
+      );
+    }
+
+    // Фильтруем participantIds - убираем ID председателя (он добавится как админ) и дубликаты
+    const filteredParticipantIds = [...new Set(participantIds)].filter(
+      (id: string) => id !== chairman.id
+    );
+
+    // Группа должна иметь хотя бы одного участника помимо председателя
+    if (filteredParticipantIds.length === 0) {
+      return NextResponse.json(
+        { error: "Выберите хотя бы одного участника помимо себя" },
         { status: 400 }
       );
     }
@@ -45,13 +58,13 @@ export async function POST(request: NextRequest) {
     // Проверяем, что все участники принадлежат организации Председателя
     const members = await prisma.user.findMany({
       where: {
-        id: { in: participantIds },
+        id: { in: filteredParticipantIds },
         organizationId: chairman.organizationId!,
       },
       select: { id: true },
     });
 
-    if (members.length !== participantIds.length) {
+    if (members.length !== filteredParticipantIds.length) {
       return NextResponse.json(
         { error: "Некоторые участники не найдены или не принадлежат вашей организации" },
         { status: 400 }
@@ -75,8 +88,8 @@ export async function POST(request: NextRequest) {
               role: "admin",
               invitedById: null,
             },
-            // Добавляем остальных участников
-            ...participantIds.map((userId: string) => ({
+            // Добавляем остальных участников (без создателя - он уже добавлен как админ)
+            ...filteredParticipantIds.map((userId: string) => ({
               userId,
               role: "member",
               invitedById: chairman.id,
