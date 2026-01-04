@@ -93,10 +93,12 @@ function ChatPageContent() {
     onError: handleError,
   });
 
-  // Фильтруем только личные чаты (PRIVATE без ticketId)
-  // Организационные чаты (GROUP, с ticketId) показываются только в /dashboard/chats/ppo-head
+  // Фильтруем чаты для обычных пользователей:
+  // - Все PRIVATE чаты без ticketId (личные переписки)
+  // - Все GROUP чаты без ticketId (групповые чаты организации)
+  // Чаты с ticketId (обращения) показываются только в /dashboard/chats/ppo-head
   const personalChats = chats.filter((chat) => 
-    chat.type === "PRIVATE" && !chat.ticketId
+    !chat.ticketId
   );
 
   // Инициализация - loadChats только один раз при монтировании
@@ -474,13 +476,26 @@ function ForwardModal({
 
 // Заголовок чата
 function ChatHeader({ chat, onBack, onProfileClick }: { chat: Chat; onBack: () => void; onProfileClick?: (userId: string) => void }) {
+  const isGroup = chat.type === "GROUP";
+  
   const handleAvatarClick = () => {
-    if (onProfileClick && chat.otherUser?.id) {
+    // Для групп не переходим на профиль
+    if (!isGroup && onProfileClick && chat.otherUser?.id) {
       onProfileClick(chat.otherUser.id);
     }
   };
 
-  const isClickable = !!onProfileClick && !!chat.otherUser?.id;
+  const isClickable = !isGroup && !!onProfileClick && !!chat.otherUser?.id;
+  
+  // Определяем отображаемое имя и аватар
+  const displayName = isGroup ? (chat.name || "Группа") : getUserName(chat.otherUser);
+  const displayAvatar = isGroup ? chat.iconUrl : chat.otherUser?.avatarUrl;
+  const displayInitials = isGroup 
+    ? (chat.name?.[0]?.toUpperCase() || "Г")
+    : `${chat.otherUser?.firstName?.[0] || "?"}${chat.otherUser?.lastName?.[0] || ""}`;
+  const gradientClass = isGroup 
+    ? "from-green-500 to-teal-600" 
+    : "from-blue-500 to-purple-600";
 
   return (
     <div className="flex items-center gap-3 p-3 md:p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
@@ -500,15 +515,21 @@ function ChatHeader({ chat, onBack, onProfileClick }: { chat: Chat; onBack: () =
         className={`flex-shrink-0 ${isClickable ? "cursor-pointer hover:opacity-80 transition-opacity" : "cursor-default"}`}
         disabled={!isClickable}
       >
-        {chat.otherUser.avatarUrl ? (
+        {displayAvatar ? (
           <img
-            src={getFileUrl(chat.otherUser.avatarUrl)}
-            alt={getUserName(chat.otherUser)}
+            src={getFileUrl(displayAvatar)}
+            alt={displayName}
             className="w-10 h-10 rounded-full object-cover"
           />
+        ) : isGroup ? (
+          <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${gradientClass} flex items-center justify-center text-white`}>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
         ) : (
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-            {chat.otherUser.firstName?.[0] || "?"}{chat.otherUser.lastName?.[0] || ""}
+          <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${gradientClass} flex items-center justify-center text-white font-semibold`}>
+            {displayInitials}
           </div>
         )}
       </button>
@@ -520,9 +541,13 @@ function ChatHeader({ chat, onBack, onProfileClick }: { chat: Chat; onBack: () =
         disabled={!isClickable}
       >
         <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-          {getUserName(chat.otherUser)}
+          {displayName}
         </h3>
-        {chat.otherUser.phone && (
+        {isGroup ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+            {chat.participantsCount || chat._count?.participants || 0} участник{((chat.participantsCount || chat._count?.participants || 0) === 1) ? "" : ((chat.participantsCount || chat._count?.participants || 0) < 5 ? "а" : "ов")}
+          </p>
+        ) : chat.otherUser?.phone && (
           <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
             {chat.otherUser.phone}
           </p>

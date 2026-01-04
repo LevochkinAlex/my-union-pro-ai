@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getPPOHead, isMemberOfOrganization } from "@/lib/ppo-head-utils";
+import { sendPushNotification } from "@/lib/push-notifications";
 
 /**
  * POST /api/ppo-head/chats/groups
@@ -125,6 +126,36 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    // Отправляем push-уведомления добавленным участникам
+    const chairmanName = [chairman.lastName, chairman.firstName].filter(Boolean).join(" ") || "Председатель";
+    
+    // Создаем уведомления в БД и отправляем push для каждого участника (кроме создателя)
+    await Promise.all(
+      filteredParticipantIds.map(async (userId: string) => {
+        try {
+          // Создаем уведомление в БД
+          await prisma.notification.create({
+            data: {
+              userId,
+              type: "CHAT",
+              title: `Вас добавили в группу "${name.trim()}"`,
+              message: `${chairmanName} добавил вас в групповой чат`,
+              link: `/dashboard/chat?chatId=${chat.id}`,
+            },
+          });
+
+          // Отправляем push-уведомление
+          await sendPushNotification(userId, {
+            title: `Вас добавили в группу "${name.trim()}"`,
+            body: `${chairmanName} добавил вас в групповой чат`,
+            url: `/dashboard/chat?chatId=${chat.id}`,
+          });
+        } catch (notifyError) {
+          console.error(`[ppo-head/chats/groups] Failed to notify user ${userId}:`, notifyError);
+        }
+      })
+    );
 
     return NextResponse.json({ chat }, { status: 201 });
   } catch (error: any) {
