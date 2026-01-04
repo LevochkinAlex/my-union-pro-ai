@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     // Загружаем на VDS
     if (isVDSStorageConfigured()) {
-      const url = await uploadFileToVDS(optimized, finalFilename, "chat");
+      const url = await uploadFileToVDS(optimized.buffer, finalFilename, "chat");
       console.log("[upload-icon] Uploaded to VDS:", url);
       
       return NextResponse.json({ 
