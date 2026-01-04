@@ -606,7 +606,7 @@ export default function MembersPage() {
                     </td>
                     <td className="px-4 py-3">
                       <button
-                        onClick={() => openMemberDetails(member.id)}
+                        onClick={() => loadMemberDetails(member.id)}
                         className="text-left hover:text-blue-600 dark:hover:text-blue-400"
                       >
                         <div className="font-medium text-gray-900 dark:text-white">
@@ -650,7 +650,7 @@ export default function MembersPage() {
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => openMemberDetails(member.id)}
+                          onClick={() => loadMemberDetails(member.id)}
                           className="rounded bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                         >
                           Подробнее
