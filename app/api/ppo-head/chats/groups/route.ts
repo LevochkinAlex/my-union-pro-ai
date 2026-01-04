@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
       filteredParticipantIds.map(async (userId: string) => {
         try {
           // Создаем уведомление в БД
-          await prisma.notification.create({
+          await prisma.userNotification.create({
             data: {
               userId,
               type: "CHAT",
