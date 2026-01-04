@@ -280,7 +280,7 @@ function ChatPageContent() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100svh-8rem)] md:h-[calc(100vh-8rem)]">
+    <div className="flex flex-col h-full max-h-[calc(100vh-8rem)] overflow-hidden">
       <div className={`flex flex-1 min-h-0 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden`}>
       {/* Сайдбар со списком чатов */}
       <div className={`${showChatView ? "hidden md:flex" : "flex"} w-full md:w-1/3 border-r border-gray-200 dark:border-gray-700 flex-col`}>
@@ -295,7 +295,7 @@ function ChatPageContent() {
       </div>
 
       {/* Область чата */}
-      <div className={`${showChatView ? "flex" : "hidden md:flex"} flex-1 flex-col w-full h-full`}>
+      <div className={`${showChatView ? "flex" : "hidden md:flex"} flex-1 flex-col min-h-0 min-w-0 overflow-hidden`}>
         {selectedChat ? (
           <>
             {/* Заголовок чата */}
@@ -306,7 +306,7 @@ function ChatPageContent() {
             />
 
             {/* Сообщения */}
-            <div className="flex-1 flex flex-col overflow-hidden min-h-0 w-full">
+            <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
               <ChatMessages
                 chat={selectedChat}
                 messages={messages}
