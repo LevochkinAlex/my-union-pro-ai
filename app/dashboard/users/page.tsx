@@ -8,6 +8,7 @@ import PostFeed from "@/components/posts/PostFeed";
 import SearchForm from "@/components/dashboard/users/SearchForm";
 import UsersList from "@/components/dashboard/users/UsersList";
 import MobileDrawer from "@/components/dashboard/users/MobileDrawer";
+import { MembershipGate } from "@/components/MembershipGate";
 
 interface User {
   id: string;
@@ -27,18 +28,24 @@ interface User {
 }
 
 
-// Обертка для Suspense
+// Обертка для Suspense и проверки членства
 export default function UsersPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </div>
-      }
+    <MembershipGate
+      showBlur={true}
+      title="Профсеть для членов профсоюза"
+      description="Общайтесь с коллегами и находите единомышленников. Станьте членом профсоюза для доступа."
     >
-      <UsersPageContent />
-    </Suspense>
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          </div>
+        }
+      >
+        <UsersPageContent />
+      </Suspense>
+    </MembershipGate>
   );
 }
 

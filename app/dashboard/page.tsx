@@ -523,6 +523,7 @@ export default async function DashboardPage() {
         <div className="space-y-6 min-w-0">
 
           {/* Новые участники */}
+          <MembershipProtectedSection title="Коллеги для членов профсоюза">
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
             <div className="flex items-center justify-between gap-4 w-full">
               <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">
@@ -547,6 +548,7 @@ export default async function DashboardPage() {
               </p>
             )}
           </div>
+          </MembershipProtectedSection>
 
           {/* Быстрые действия */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">

@@ -19,9 +19,16 @@ export default function MembershipProtectedSection({
 }: MembershipProtectedSectionProps) {
   const { isApproved, isLoading } = useMembershipAccess();
 
-  // Если одобрен или загружается - показываем контент
-  if (isLoading || isApproved) {
+  // Если одобрен - показываем контент
+  if (isApproved) {
     return <>{children}</>;
+  }
+
+  // Если загружается - показываем скелетон
+  if (isLoading) {
+    return (
+      <div className="animate-pulse rounded-xl bg-gray-200 dark:bg-gray-700 h-48" />
+    );
   }
 
   // Блюр с замком
