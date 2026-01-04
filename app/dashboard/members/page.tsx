@@ -691,63 +691,6 @@ export default function MembersPage() {
           </div>
         </div>
       )}
-                            key={doc.id}
-                            href={doc.filePath || "#"}
-                            target="_blank"
-                            className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300"
-                          >
-                            <svg
-                              className="h-4 w-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                              />
-                            </svg>
-                            {doc.type}
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="ml-4 flex flex-col gap-2">
-                  <button
-                    onClick={() => loadMemberDetails(member.id)}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                  >
-                    Подробнее
-                  </button>
-                {activeTab === "validation" && (
-                    <>
-                    <button
-                      onClick={() => handleApprove(member.id)}
-                      className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-                    >
-                      Одобрить
-                    </button>
-                    <button
-                      onClick={() => {
-                          setSelectedMember(member);
-                          setShowRejectModal(true);
-                      }}
-                      className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-                    >
-                      Отклонить
-                    </button>
-                    </>
-                  )}
-                  </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Модалка отклонения */}
       {showRejectModal && selectedMember && (
