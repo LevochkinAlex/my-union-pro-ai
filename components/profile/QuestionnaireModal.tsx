@@ -44,6 +44,7 @@ interface Document {
   title: string;
   description?: string;
   fileName: string;
+  filePath?: string | null;
   status: string;
   signedFilePath?: string | null;
   verificationStatus?: string | null;
