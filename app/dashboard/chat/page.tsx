@@ -280,7 +280,7 @@ function ChatPageContent() {
   }
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 10rem)" }}>
+    <div className="flex flex-col h-full min-h-0 -mx-4 -my-8 sm:-mx-8 lg:-mx-12">
       <div className={`flex flex-1 min-h-0 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden`}>
       {/* Сайдбар со списком чатов */}
       <div className={`${showChatView ? "hidden md:flex" : "flex"} w-full md:w-1/3 border-r border-gray-200 dark:border-gray-700 flex-col`}>
