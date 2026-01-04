@@ -140,8 +140,8 @@ export async function POST(request: NextRequest) {
               userId,
               type: "CHAT",
               title: `Вас добавили в группу "${name.trim()}"`,
-              message: `${chairmanName} добавил вас в групповой чат`,
-              link: `/dashboard/chat?chatId=${chat.id}`,
+              body: `${chairmanName} добавил вас в групповой чат`,
+              url: `/dashboard/chat?chatId=${chat.id}`,
             },
           });
 
