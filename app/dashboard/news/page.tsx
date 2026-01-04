@@ -7,6 +7,7 @@ import NewsCardSkeleton from "@/components/dashboard/news/NewsCardSkeleton";
 import NewsChannels from "@/components/dashboard/news/NewsChannels";
 import UnionMembers from "@/components/dashboard/news/UnionMembers";
 import PPOHeadNewsPage from "./ppo-head/page";
+import { MembershipGate } from "@/components/MembershipGate";
 
 interface NewsPost {
   id: string;
@@ -245,6 +246,11 @@ export default function NewsPage() {
   };
 
   return (
+    <MembershipGate
+      showBlur={true}
+      title="Новости для членов профсоюза"
+      description="Будьте в курсе последних новостей и событий. Станьте членом профсоюза для доступа к ленте новостей."
+    >
     <div className="pb-8">
       {/* Макет с 2 колонками на широких экранах */}
       <div className="flex gap-6 max-w-full">
@@ -373,6 +379,7 @@ export default function NewsPage() {
         </aside>
       </div>
     </div>
+    </MembershipGate>
   );
 }
 

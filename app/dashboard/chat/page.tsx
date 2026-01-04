@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useChat } from "@/hooks/useChat";
 import { Chat, Message } from "@/types/chat";
 import { getUserName, getFileUrl } from "@/lib/chat-utils";
+import { MembershipGate } from "@/components/MembershipGate";
 
 // Lazy load компоненты для уменьшения initial bundle
 const ChatSidebar = dynamic(() => import("@/components/chat/ChatSidebar"), {
@@ -591,11 +592,17 @@ function MessagesSkeleton() {
   );
 }
 
-// Обёртка с Suspense
+// Обёртка с Suspense и проверкой членства
 export default function ChatPage() {
   return (
-    <Suspense fallback={<PageSkeleton />}>
-      <ChatPageContent />
-    </Suspense>
+    <MembershipGate
+      showBlur={true}
+      title="Чаты для членов профсоюза"
+      description="Общайтесь с коллегами и председателем. Станьте членом профсоюза для доступа к чатам."
+    >
+      <Suspense fallback={<PageSkeleton />}>
+        <ChatPageContent />
+      </Suspense>
+    </MembershipGate>
   );
 }

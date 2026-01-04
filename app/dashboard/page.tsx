@@ -10,6 +10,7 @@ import UserCard from "@/components/dashboard/users/UserCard";
 import PostsListClient from "@/components/posts/PostsListClient";
 import PPOHeadDashboard from "@/components/dashboard/PPOHeadDashboard";
 import { calculateProfileProgress } from "@/lib/profile-progress";
+import MembershipProtectedSection from "@/components/dashboard/MembershipProtectedSection";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -476,6 +477,7 @@ export default async function DashboardPage() {
           )}
 
           {/* Свежие новости */}
+          <MembershipProtectedSection title="Новости для членов профсоюза">
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
             <div className="flex items-center justify-between mb-4 md:justify-start gap-4 w-full md:w-auto">
               <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">
@@ -496,8 +498,10 @@ export default async function DashboardPage() {
               </p>
             )}
           </div>
+          </MembershipProtectedSection>
 
           {/* Скидки */}
+          <MembershipProtectedSection title="Скидки для членов профсоюза">
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
             <div className="flex items-center justify-between mb-4 md:justify-start gap-4 w-full md:w-auto">
               <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">
@@ -512,6 +516,7 @@ export default async function DashboardPage() {
             </div>
             <DiscountsPreview />
           </div>
+          </MembershipProtectedSection>
         </div>
 
         {/* Правая колонка: Сайдбар (1/3 ширины на lg+) */}

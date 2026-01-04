@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { fetchBestBenefitsDiscounts } from "@/lib/best-benefits";
 import { prisma } from "@/lib/prisma";
-import DiscountsClient from "@/components/dashboard/discounts/DiscountsClient";
+import DiscountsPageWrapper from "@/components/dashboard/DiscountsPageWrapper";
 import type { DiscountPreferenceResponse } from "@/types/discounts";
 
 export default async function DiscountsPage() {
@@ -146,7 +146,7 @@ export default async function DiscountsPage() {
         </p>
       </div>
 
-      <DiscountsClient
+      <DiscountsPageWrapper
         initialData={initialData}
         initialPreference={preferencePayload}
       />

@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PPOHeadAppealsPage from "./ppo-head/page";
+import { MembershipGate } from "@/components/MembershipGate";
 
 interface Ticket {
   id: string;
@@ -130,6 +131,11 @@ export default function AppealsPage() {
   }
 
   return (
+    <MembershipGate
+      showBlur={true}
+      title="Обращения для членов профсоюза"
+      description="Подавайте обращения и получайте помощь от профсоюза. Станьте членом для доступа."
+    >
     <div className="space-y-6 sm:space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex-1 min-w-0">
@@ -313,5 +319,6 @@ export default function AppealsPage() {
         </div>
       )}
     </div>
+    </MembershipGate>
   );
 }
