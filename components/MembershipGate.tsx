@@ -26,10 +26,10 @@ export function MembershipGate({
 }: MembershipGateProps) {
   const { status, isApproved, isLoading, message } = useMembershipAccess();
 
-  // Пока загружается - показываем полноэкранный лоадер
+  // Пока загружается - показываем лоадер в области контента
   if (isLoading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+      <div className="flex min-h-[60vh] items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
           <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
@@ -92,8 +92,8 @@ export function MembershipGate({
         </div>
       )}
 
-      {/* Оверлей с модалкой - фиксированный по центру экрана */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+      {/* Модалка - sticky вверху контента, не перекрывает меню */}
+      <div className="sticky top-4 z-40 mx-auto -mt-[50vh] flex justify-center">
         <div className="mx-4 max-w-md rounded-2xl bg-white p-8 shadow-2xl dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
           {/* Иконка */}
           <div className="mb-4 flex justify-center">
