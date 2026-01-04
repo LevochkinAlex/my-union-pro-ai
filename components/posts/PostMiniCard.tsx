@@ -57,10 +57,26 @@ function getInitials(firstName: string | null, lastName: string | null): string 
   return f + l || "?";
 }
 
-// Получение полного имени
-function getFullName(author: PostMiniCardProps["post"]["author"]): string {
-  const parts = [author.firstName, author.middleName, author.lastName].filter(Boolean);
-  return parts.join(" ") || "Пользователь";
+// Получение сокращённого имени для маленьких карточек: Фамилия И.О.
+function getShortName(author: PostMiniCardProps["post"]["author"]): string {
+  const lastName = author.lastName || "";
+  const firstInitial = author.firstName?.charAt(0)?.toUpperCase() || "";
+  const middleInitial = author.middleName?.charAt(0)?.toUpperCase() || "";
+  
+  if (!lastName && !firstInitial) return "Пользователь";
+  
+  // Формируем инициалы
+  let initials = "";
+  if (firstInitial) initials += firstInitial + ".";
+  if (middleInitial) initials += middleInitial + ".";
+  
+  // Если есть только имя без фамилии
+  if (!lastName) {
+    return author.firstName || "Пользователь";
+  }
+  
+  // Фамилия И.О.
+  return initials ? `${lastName} ${initials}` : lastName;
 }
 
 export default function PostMiniCard({ post }: PostMiniCardProps) {
@@ -70,7 +86,7 @@ export default function PostMiniCard({ post }: PostMiniCardProps) {
     setMounted(true);
   }, []);
   
-  const authorName = getFullName(post.author);
+  const authorName = getShortName(post.author);
   const plainText = getPlainText(post.content);
   // Показываем дату только после монтирования чтобы избежать hydration mismatch
   const formattedDate = mounted ? formatDate(post.createdAt) : "";
