@@ -42,8 +42,9 @@ export async function POST(request: NextRequest) {
 
     // Конвертируем HEIC если нужно
     if (filename.endsWith(".heic") || filename.endsWith(".heif")) {
-      buffer = await convertHeicToJpegServer(buffer);
-      filename = filename.replace(/\.heic$|\.heif$/i, ".jpg");
+      const converted = await convertHeicToJpegServer(buffer, filename, file.type);
+      buffer = converted.buffer;
+      filename = converted.fileName;
     }
 
     // Оптимизируем как аватар (квадрат 256px)
