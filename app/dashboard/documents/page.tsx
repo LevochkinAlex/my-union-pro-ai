@@ -435,7 +435,7 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="w-full max-w-full space-y-6 md:space-y-8">
+    <div className="w-full max-w-full space-y-6 md:space-y-8 pb-8 md:pb-12">
       <div className="mb-6 md:mb-8">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white md:text-3xl">Мои документы</h1>
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 md:text-base">
