@@ -3,7 +3,8 @@
  * Предотвращает частые запросы к API через кэширование
  */
 
-const SYNC_COOLDOWN_MS = 5 * 60 * 1000; // 5 минут
+// УМЕНЬШЕН cooldown: 2 минуты вместо 5
+const SYNC_COOLDOWN_MS = 2 * 60 * 1000;
 const STORAGE_KEY = "bb_last_sync";
 
 class SyncManager {
@@ -41,8 +42,11 @@ class SyncManager {
   async sync(force: boolean = false): Promise<{
     success: boolean;
     message: string;
-    synced?: number[];
+    synced?: number;
+    updated?: number;
+    expired?: number;
     cached?: boolean;
+    usedFallback?: boolean;
   }> {
     if (!this.shouldSync(force)) {
       const timeLeft = Math.ceil(
@@ -53,7 +57,7 @@ class SyncManager {
       );
       return {
         success: true,
-        message: `Синхронизация доступна через ${Math.ceil(timeLeft / 60)} минут`,
+        message: `Синхронизация доступна через ${timeLeft} сек.`,
         cached: true,
       };
     }
@@ -69,7 +73,8 @@ class SyncManager {
       });
 
       if (!response.ok) {
-        throw new Error(`Sync failed: ${response.status}`);
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || `Sync failed: ${response.status}`);
       }
 
       const result = await response.json();
@@ -86,6 +91,9 @@ class SyncManager {
         success: true,
         message: result.message || "Синхронизация завершена",
         synced: result.synced,
+        updated: result.updated,
+        expired: result.expired,
+        usedFallback: result.usedFallback,
       };
     } catch (error) {
       console.error("[SyncManager] ❌ Sync error:", error);
@@ -127,8 +135,14 @@ class SyncManager {
   get isCurrentlySyncing(): boolean {
     return this.isSyncing;
   }
+
+  /**
+   * Проверяет, можно ли синхронизировать сейчас
+   */
+  get canSync(): boolean {
+    return this.shouldSync(false);
+  }
 }
 
 // Singleton instance
 export const syncManager = new SyncManager();
-

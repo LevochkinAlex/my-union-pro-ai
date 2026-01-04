@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { fetchBestBenefitsDiscounts } from "@/lib/best-benefits";
 import type { DiscountSearchParams, DiscountOption } from "@/types/discounts";
 import { prisma } from "@/lib/prisma";
-import { getValidActivatedDiscounts } from "@/lib/discount-activation";
+import { getValidActivatedDiscounts, needsSync } from "@/lib/discount-activation";
 import { decryptPassword } from "@/lib/best-benefits-password";
 import { getUserBestBenefitsToken } from "@/lib/best-benefits-user-auth";
 
@@ -19,177 +19,50 @@ export async function GET(request: NextRequest) {
     await enrichParamsWithPreference(params, session.user.id);
     const payload = await fetchBestBenefitsDiscounts(params);
 
-    // Получаем активированные скидки из DiscountActivation (основной источник)
+    // ОСНОВНОЙ ИСТОЧНИК: получаем активированные скидки из DiscountActivation
     const activations = await getValidActivatedDiscounts(session.user.id);
-    const promoCodesMap = new Map<string, string>();
     
-    activations.forEach((activation) => {
+    // Создаём Map для быстрого доступа к промокодам
+    const promoCodesMap = new Map<string, string>();
+    const activatedIdsSet = new Set<string>();
+    
+    for (const activation of activations) {
+      const discountId = String(activation.discountId);
+      activatedIdsSet.add(discountId);
+      
       if (activation.promoCode) {
-        promoCodesMap.set(String(activation.discountId), activation.promoCode);
+        promoCodesMap.set(discountId, activation.promoCode);
       }
-    });
+    }
 
-    // Также проверяем DiscountPreference для обратной совместимости
-    const preferences = await prisma.discountPreference.findUnique({
-      where: { userId: session.user.id },
-    });
+    console.log(`[api/discounts] Found ${activations.length} activated discounts, ${promoCodesMap.size} with promo codes`);
 
-    // Обогащаем скидки промокодами из DiscountActivation
+    // Обогащаем скидки промокодами
     if (payload.discounts && payload.discounts.length > 0) {
-      const filters = (preferences?.filters as any) || {};
-      const claimed = Array.isArray(filters.claimed) ? filters.claimed : [];
-      
-      // Дополняем promoCodesMap из preferences (для обратной совместимости)
-      console.log(`[api/discounts] Processing ${claimed.length} claimed items for promo codes...`);
-      
-      claimed.forEach((item: any, index: number) => {
-        console.log(`[api/discounts] Processing claimed item ${index}:`, {
-          type: typeof item,
-          isObject: typeof item === 'object',
-          item: item,
-          hasId: !!item?.id,
-          hasPromoCode: !!item?.promoCode,
-        });
-        
-        let discountId: string | null = null;
-        let promoCode: string | null = null;
-        
-        if (typeof item === 'object' && item !== null && item.id) {
-          // Новый формат: объект с id и promoCode
-          discountId = String(item.id);
-          promoCode = item.promoCode 
-            ? (typeof item.promoCode === 'string' ? item.promoCode.trim() : String(item.promoCode).trim())
-            : null;
-        } else if (typeof item === 'number') {
-          // Старый формат: просто число (ID скидки)
-          discountId = String(item);
-          promoCode = null; // Промокода нет в старом формате
-          console.log(`[api/discounts] ⚠️ Old format detected for discount ${discountId}, no promo code in data`);
-        } else {
-          console.log(`[api/discounts] ⚠️ Skipping invalid claimed item ${index}:`, item);
-          return; // Пропускаем невалидный элемент
-        }
-        
-        if (discountId) {
-          if (promoCode && promoCode.length > 0 && promoCode.toLowerCase() !== 'null' && promoCode.toLowerCase() !== 'undefined') {
-            promoCodesMap.set(discountId, promoCode);
-            console.log(`[api/discounts] ✅ Mapped promo code for discount ${discountId}:`, promoCode);
-          } else {
-            console.log(`[api/discounts] ⚠️ No valid promo code for discount ${discountId} (will try to get from BestBenefits if needed)`);
-          }
-        }
-      });
-      
-      console.log(`[api/discounts] Total promo codes in map: ${promoCodesMap.size}`);
-      console.log(`[api/discounts] Promo codes map:`, Array.from(promoCodesMap.entries()));
-
-      // Добавляем промокоды к скидкам (промокоды из preferences имеют приоритет)
-      console.log(`[api/discounts] Enriching ${payload.discounts?.length || 0} discounts with promo codes...`);
-      
-      // Создаем Set для быстрой проверки, какие скидки получены
-      // Используем DiscountActivation как основной источник
-      const claimedIdsSet = new Set<string>();
-      activations.forEach((activation) => {
-        claimedIdsSet.add(String(activation.discountId));
-      });
-      
-      // Дополняем из preferences для обратной совместимости
-      claimed.forEach((item: any) => {
-        if (typeof item === 'object' && item !== null && item.id) {
-          claimedIdsSet.add(String(item.id));
-        } else if (typeof item === 'number') {
-          claimedIdsSet.add(String(item));
-        }
-      });
-      
       payload.discounts = payload.discounts.map((discount: any) => {
-        const discountId = String(discount.id); // Нормализуем ID к строке для сравнения
+        const discountId = String(discount.id);
         const savedPromoCode = promoCodesMap.get(discountId);
-        const isClaimed = claimedIdsSet.has(discountId);
-        
-        // Промокод из API (если есть) - используется как fallback
-        const apiPromoCode = discount.promoCode || discount.promo_code || null;
-        
-        // Находим claimed item в исходном массиве для более точной проверки
-        const claimedItem = claimed.find((item: any) => {
-          if (typeof item === 'object' && item !== null && item.id) {
-            return String(item.id) === discountId;
-          } else if (typeof item === 'number') {
-            return String(item) === discountId;
-          }
-          return false;
-        });
-        
-        // Извлекаем промокод из claimedItem напрямую (на случай если он не попал в map)
-        let promoCodeFromItem: string | null = null;
-        if (claimedItem && typeof claimedItem === 'object' && claimedItem.promoCode) {
-          const code = typeof claimedItem.promoCode === 'string' 
-            ? claimedItem.promoCode.trim() 
-            : String(claimedItem.promoCode).trim();
-          if (code && code.length > 0 && code.toLowerCase() !== 'null' && code.toLowerCase() !== 'undefined') {
-            promoCodeFromItem = code;
-          }
-        }
-        
-        // Приоритет: preferences > claimedItem > API
-        let finalPromoCode: string | null | undefined = undefined;
+        const isClaimed = activatedIdsSet.has(discountId);
         
         if (savedPromoCode) {
-          // Промокод из preferences всегда имеет приоритет
-          finalPromoCode = savedPromoCode;
-          console.log(`[api/discounts] ✅ Enriching discount ${discountId} (${discount.title}) with saved promo code from map:`, savedPromoCode);
-        } else if (promoCodeFromItem) {
-          // Используем промокод из claimedItem напрямую
-          finalPromoCode = promoCodeFromItem;
-          console.log(`[api/discounts] ✅ Enriching discount ${discountId} (${discount.title}) with promo code from claimed item:`, promoCodeFromItem);
-        } else if (apiPromoCode && apiPromoCode.trim().length > 0 && apiPromoCode.toLowerCase() !== 'null' && apiPromoCode.toLowerCase() !== 'undefined') {
-          // Используем промокод из API, если он есть
-          finalPromoCode = apiPromoCode.trim();
-          console.log(`[api/discounts] ✅ Using promo code from API for discount ${discountId} (${discount.title}):`, finalPromoCode);
+          return {
+            ...discount,
+            promoCode: savedPromoCode,
+            isClaimed: true,
+          };
         } else if (isClaimed) {
-          // Скидка получена, но промокода нет ни в preferences, ни в API
-          console.log(`[api/discounts] ⚠️ Discount ${discountId} (${discount.title}) is claimed but has no promo code. User should sync with BestBenefits.`, {
-            hasSavedPromoCode: !!savedPromoCode,
-            hasPromoCodeFromItem: !!promoCodeFromItem,
-            hasApiPromoCode: !!apiPromoCode,
-            claimedItem: claimedItem
-          });
-          finalPromoCode = undefined; // Явно undefined для claimed без промокода
-        } else {
-          console.log(`[api/discounts] ℹ️ Discount ${discountId} (${discount.title}) is not claimed`);
-        }
-        
-        // Если нашли промокод - добавляем его
-        if (finalPromoCode !== undefined) {
+          // Скидка активирована, но промокода нет
           return {
             ...discount,
-            promoCode: finalPromoCode || undefined,
+            isClaimed: true,
           };
         }
         
-        return discount;
-      });
-      
-      console.log(`[api/discounts] Final discounts with promo codes:`, payload.discounts.map((d: any) => ({
-        id: d.id,
-        title: d.title,
-        promoCode: d.promoCode,
-      })));
-    } else if (payload.discounts && payload.discounts.length > 0) {
-      // Если preferences нет, но есть промокоды в API - используем их
-      payload.discounts = payload.discounts.map((discount: any) => {
-        const apiPromoCode = discount.promoCode || discount.promo_code || null;
-        if (apiPromoCode && apiPromoCode.trim().length > 0) {
-          return {
-            ...discount,
-            promoCode: apiPromoCode.trim(),
-          };
-        }
         return discount;
       });
     }
 
-    // Обогащаем описания из локальной БД (для скидок без описания из BestBenefits)
+    // Обогащаем описания из локальной БД
     if (payload.discounts && payload.discounts.length > 0) {
       const discountIds = payload.discounts.map((d: any) => d.id);
       const localDiscounts = await prisma.discount.findMany({
@@ -202,7 +75,6 @@ export async function GET(request: NextRequest) {
       payload.discounts = payload.discounts.map((discount: any) => {
         const localData = localDataMap.get(discount.id);
         if (localData) {
-          // Обогащаем описанием из локальной БД если в API его нет
           return {
             ...discount,
             description: discount.description || localData.description || null,
@@ -213,12 +85,10 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Обогащаем скидки options если запрашивается одна скидка (для детальной страницы)
-    // Options приходят только с персональным токеном пользователя
+    // Обогащаем скидки options если запрашивается одна скидка
     if (payload.discounts && payload.discounts.length === 1 && params.ids) {
       const discount = payload.discounts[0];
       
-      // Если options нет или пустой - пробуем получить с персональным токеном
       if (!discount.options || discount.options.length === 0) {
         try {
           const user = await prisma.user.findUnique({
@@ -230,7 +100,6 @@ export async function GET(request: NextRequest) {
             const password = decryptPassword(user.bestBenefitsPassword);
             const userToken = await getUserBestBenefitsToken(user.bestBenefitsUserId, password);
             
-            // Запрашиваем скидку с персональным токеном
             const response = await fetch(`https://bestbenefits.ru/api/products/${discount.id}`, {
               headers: {
                 "Accept": "application/json",
@@ -248,10 +117,6 @@ export async function GET(request: NextRequest) {
                   name: opt.name,
                 }));
                 
-                console.log(`[api/discounts] Enriched discount ${discount.id} with ${options.length} options from personal token:`,
-                  options.map(o => `${o.id}: ${o.name}`).join(', ')
-                );
-                
                 payload.discounts[0] = {
                   ...discount,
                   options,
@@ -260,12 +125,22 @@ export async function GET(request: NextRequest) {
             }
           }
         } catch (error) {
-          console.warn("[api/discounts] Failed to enrich options with personal token:", error);
+          console.warn("[api/discounts] Failed to enrich options:", error);
         }
       }
     }
 
-    return NextResponse.json(payload, {
+    // Добавляем метаданные о синхронизации
+    const syncNeeded = await needsSync(session.user.id, 10);
+    
+    return NextResponse.json({
+      ...payload,
+      meta: {
+        ...payload.meta,
+        syncNeeded,
+        activatedCount: activations.length,
+      }
+    }, {
       status: 200,
       headers: {
         "Cache-Control": "private, max-age=30",
@@ -274,11 +149,10 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("[api/discounts] Failed to load discounts:", error);
     
-    // Если это таймаут, возвращаем специфичную ошибку
     if (error?.message?.includes("timeout") || error?.message?.includes("aborted")) {
       return NextResponse.json(
         { error: "Превышено время ожидания ответа от сервера скидок. Попробуйте позже." },
-        { status: 504 } // Gateway Timeout
+        { status: 504 }
       );
     }
     
@@ -352,21 +226,29 @@ async function enrichParamsWithPreference(params: DiscountSearchParams, userId: 
   }
 
   try {
-    const preference = await (prisma as any).discountPreference?.findUnique({
-      where: { userId },
-    });
-    const filters = preference?.filters as any;
-    if (!filters) {
+    // Для view="claimed" используем DiscountActivation
+    if (params.view === "claimed") {
+      const activations = await getValidActivatedDiscounts(userId);
+      const ids = activations.map(a => a.discountId);
+      if (ids.length > 0) {
+        params.ids = ids.join(",");
+      }
       return;
     }
-    const list: number[] | undefined =
-      params.view === "favorites" ? filters?.favorites : filters?.claimed;
-    if (list?.length) {
-      params.ids = list.join(",");
+    
+    // Для view="favorites" используем DiscountPreference
+    if (params.view === "favorites") {
+      const preference = await prisma.discountPreference.findUnique({
+        where: { userId },
+      });
+      const filters = preference?.filters as any;
+      const favorites = filters?.favorites;
+      
+      if (Array.isArray(favorites) && favorites.length > 0) {
+        params.ids = favorites.join(",");
+      }
     }
-    // Если список пустой, не устанавливаем params.ids - вернется пустой результат
   } catch (error) {
     console.warn("[api/discounts] Failed to load preference filters:", error);
   }
 }
-

@@ -151,10 +151,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Синхронизировано ${syncResult.synced} скидок, удалено ${syncResult.expired} устаревших`,
+      message: syncResult.usedFallback 
+        ? "Использованы кэшированные данные (API недоступен)"
+        : `Синхронизировано ${syncResult.synced} новых, обновлено ${syncResult.updated} скидок`,
       synced: syncResult.synced,
+      updated: syncResult.updated,
       expired: syncResult.expired,
       total: finalActivations.length,
+      usedFallback: syncResult.usedFallback,
       errors: syncResult.errors.length > 0 ? syncResult.errors : undefined,
     });
   } catch (error) {

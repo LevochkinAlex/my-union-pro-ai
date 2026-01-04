@@ -10,6 +10,7 @@ import type {
   DiscountCategory,
 } from "@/types/discounts";
 import { requestPushPermission, syncPushSubscription } from "@/lib/firebase-push-notifications";
+import { useAutoSyncDiscounts } from "@/hooks/useAutoSyncDiscounts";
 import clsx from "clsx";
 
 interface DiscountsClientProps {
@@ -106,7 +107,6 @@ export default function DiscountsClient({
       typeof item === 'object' && item.id ? item.id : item
     ).filter(Boolean);
   });
-  const [isSyncing, setIsSyncing] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [searchInput, setSearchInput] = useState(filters.search); // Локальное состояние для поля ввода
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -115,6 +115,32 @@ export default function DiscountsClient({
   useEffect(() => {
     setSearchInput(filters.search);
   }, [filters.search]);
+
+  // Автоматическая синхронизация с BestBenefits
+  const { isSyncing: isAutoSyncing, forceSync } = useAutoSyncDiscounts({
+    autoSyncOnMount: true,
+    syncOnFocus: true,
+    onSyncComplete: async (result) => {
+      console.log("[DiscountsClient] ✅ Auto-sync completed:", result);
+      
+      // Обновляем список claimed после успешной синхронизации
+      try {
+        const prefsResponse = await fetch("/api/discounts/preferences");
+        if (prefsResponse.ok) {
+          const prefsData = await prefsResponse.json();
+          const claimedItems = (prefsData.filters?.claimed || [])
+            .map((item: any) => (typeof item === 'object' ? item.id : item))
+            .filter(Boolean);
+          setClaimed(claimedItems);
+        }
+      } catch (error) {
+        console.warn("[DiscountsClient] Failed to update claimed after sync:", error);
+      }
+    },
+    onSyncError: (error) => {
+      console.warn("[DiscountsClient] ❌ Auto-sync error:", error);
+    },
+  });
 
   const hasActiveFilters = useMemo(() => {
     return (
@@ -131,41 +157,6 @@ export default function DiscountsClient({
     if (typeof window === "undefined") return;
     setGeoSupport("geolocation" in navigator);
   }, []);
-
-  // Синхронизация активированных скидок с BestBenefits при загрузке
-  useEffect(() => {
-    const syncWithBestBenefits = async () => {
-      if (isSyncing) return;
-      
-      setIsSyncing(true);
-      try {
-        // Используем менеджер синхронизации с кэшированием
-        const { syncManager } = await import("@/lib/sync-manager");
-        const result = await syncManager.sync(); // Не форсируем, используем кэш
-        
-        if (result.success && !result.cached) {
-          console.log("[DiscountsClient] Synced with BestBenefits:", result);
-          
-          // Reload preferences to get updated claimed discounts
-          const prefsResponse = await fetch("/api/discounts/preferences");
-          if (prefsResponse.ok) {
-            const prefsData = await prefsResponse.json();
-            const claimedItems = (prefsData.filters?.claimed || [])
-              .map((item: any) => (typeof item === 'object' ? item.id : item));
-            setClaimed(claimedItems);
-          }
-        } else if (result.cached) {
-          console.log("[DiscountsClient] ⏭️ Using cached sync result");
-        }
-      } catch (error) {
-        console.warn("[DiscountsClient] Failed to sync with BestBenefits:", error);
-      } finally {
-        setIsSyncing(false);
-      }
-    };
-    
-    syncWithBestBenefits();
-  }, []); // Run once on mount
 
   const fetchDiscounts = useCallback(
     async (nextFilters: FilterState = filters, listOverride?: { favorites?: number[]; claimed?: number[] }, append = false) => {

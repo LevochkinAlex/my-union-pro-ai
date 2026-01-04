@@ -1,17 +1,17 @@
 /**
  * Утилиты для работы с активированными скидками
  * 
+ * ОСНОВНОЙ ИСТОЧНИК ДАННЫХ: таблица DiscountActivation
+ * 
  * Обеспечивает:
  * - Сохранение промокодов в нашей БД (даже если BestBenefits очистит базу)
  * - Проверку срока действия скидок
  * - Автоматическое удаление устаревших скидок
- * - Синхронизацию с BestBenefits
+ * - Синхронизацию с BestBenefits с fallback на кэш
  */
 
 import { prisma } from "@/lib/prisma";
 import { getUserActivatedDiscounts } from "@/lib/best-benefits-activation";
-import { decryptPassword } from "@/lib/best-benefits-password";
-import type { DiscountItem } from "@/types/discounts";
 
 export interface DiscountActivationData {
   discountId: number;
@@ -21,7 +21,8 @@ export interface DiscountActivationData {
 }
 
 /**
- * Получить активированные скидки пользователя из нашей БД
+ * Получить активированные скидки пользователя из нашей БД (КЭША)
+ * Используется как fallback при ошибках API
  */
 export async function getUserActivatedDiscountsFromDB(
   userId: string
@@ -73,10 +74,10 @@ export async function saveDiscountActivation(
       syncedFromBB: false,
     },
     update: {
-      // Обновляем промокод только если он валидный и не пустой
+      // ВАЖНО: Всегда обновляем промокод если он валидный
       promoCode: data.promoCode && data.promoCode.trim().length > 0
         ? data.promoCode.trim()
-        : undefined, // Не обновляем, если промокод невалидный
+        : undefined,
       validUntil,
       lastSyncedAt: new Date(),
     },
@@ -85,7 +86,11 @@ export async function saveDiscountActivation(
 
 /**
  * Синхронизировать активированные скидки с BestBenefits
- * Сохраняет промокоды в нашу БД, даже если BestBenefits очистит базу
+ * 
+ * УЛУЧШЕННАЯ ЛОГИКА:
+ * - ВСЕГДА обновляет промокоды из BB (они могут меняться!)
+ * - При ошибке API использует данные из локальной БД (fallback)
+ * - Помечает скидки как устаревшие если их нет в BB
  */
 export async function syncDiscountsWithBestBenefits(
   userId: string,
@@ -94,32 +99,71 @@ export async function syncDiscountsWithBestBenefits(
 ): Promise<{
   synced: number;
   expired: number;
+  updated: number;
   errors: string[];
+  usedFallback: boolean;
 }> {
   const errors: string[] = [];
   let synced = 0;
   let expired = 0;
+  let updated = 0;
+  let usedFallback = false;
 
   try {
+    console.log(`[discount-activation] Syncing discounts for user ${userId}...`);
+    
     // Получаем активированные скидки из BestBenefits
     const bbActivated = await getUserActivatedDiscounts(
       bestBenefitsUserId,
       bestBenefitsPassword,
       {
-        timeout: 20000,
+        timeout: 25000, // Увеличен таймаут
         retries: 3,
       }
     );
 
-    // Получаем информацию о скидках для проверки сроков действия
-    // Пока сохраняем то, что получили из BestBenefits
-    // В будущем можно добавить запрос к /api/products для получения validUntil
+    console.log(`[discount-activation] Got ${bbActivated.length} discounts from BB`);
+
+    // Если BB вернул пустой массив - это может быть ошибка API
+    // Проверяем, есть ли у нас локальные данные
+    if (bbActivated.length === 0) {
+      const localActivations = await prisma.discountActivation.count({
+        where: { userId },
+      });
+      
+      if (localActivations > 0) {
+        console.warn(`[discount-activation] ⚠️ BB returned 0 discounts but we have ${localActivations} locally. Keeping local data.`);
+        usedFallback = true;
+        return { synced: 0, expired: 0, updated: 0, errors: [], usedFallback };
+      }
+    }
 
     const now = new Date();
+    const bbDiscountIds = new Set(bbActivated.map(d => d.id));
 
     // Сохраняем каждую активированную скидку в нашу БД
     for (const bbItem of bbActivated) {
       try {
+        // Получаем текущую запись
+        const existing = await prisma.discountActivation.findUnique({
+          where: {
+            userId_discountId: {
+              userId,
+              discountId: bbItem.id,
+            },
+          },
+        });
+
+        const newPromoCode = bbItem.promoCode?.trim() || null;
+        const existingPromoCode = existing?.promoCode?.trim() || null;
+        
+        // Проверяем, изменился ли промокод
+        const promoCodeChanged = newPromoCode !== existingPromoCode;
+        
+        if (promoCodeChanged && newPromoCode) {
+          console.log(`[discount-activation] 🔄 Promo code changed for discount ${bbItem.id}: "${existingPromoCode}" → "${newPromoCode}"`);
+        }
+
         await prisma.discountActivation.upsert({
           where: {
             userId_discountId: {
@@ -130,42 +174,82 @@ export async function syncDiscountsWithBestBenefits(
           create: {
             userId,
             discountId: bbItem.id,
-            promoCode: bbItem.promoCode || null,
-            validUntil: null, // Будет обновлено при следующей синхронизации с информацией о скидке
+            promoCode: newPromoCode,
+            validUntil: null,
             activatedAt: new Date(),
             syncedFromBB: true,
             lastSyncedAt: new Date(),
           },
           update: {
-            // Обновляем промокод из BestBenefits, но сохраняем локальный, если BestBenefits вернул null
-            promoCode: bbItem.promoCode && bbItem.promoCode.trim().length > 0
-              ? bbItem.promoCode.trim()
-              : undefined, // Не обновляем, если BestBenefits вернул пустой промокод
+            // ВАЖНО: ВСЕГДА обновляем промокод из BB (они могут выдать новый!)
+            // Только если BB вернул валидный промокод
+            ...(newPromoCode ? { promoCode: newPromoCode } : {}),
             syncedFromBB: true,
             lastSyncedAt: new Date(),
           },
         });
-        synced++;
+        
+        if (existing) {
+          if (promoCodeChanged) {
+            updated++;
+          }
+        } else {
+          synced++;
+        }
       } catch (error: any) {
         errors.push(`Failed to save discount ${bbItem.id}: ${error.message}`);
       }
     }
 
-    // Удаляем устаревшие скидки (validUntil < now)
+    // Помечаем скидки, которых больше нет в BB (но НЕ удаляем - вдруг это временный сбой API)
+    // Удаляем только если они не обновлялись более 7 дней
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    
+    const staleDiscounts = await prisma.discountActivation.findMany({
+      where: {
+        userId,
+        discountId: { notIn: Array.from(bbDiscountIds) },
+        lastSyncedAt: { lt: sevenDaysAgo },
+      },
+    });
+
+    if (staleDiscounts.length > 0) {
+      console.log(`[discount-activation] Removing ${staleDiscounts.length} stale discounts (not in BB for 7+ days)`);
+      
+      await prisma.discountActivation.deleteMany({
+        where: {
+          userId,
+          discountId: { in: staleDiscounts.map(d => d.discountId) },
+        },
+      });
+      
+      expired = staleDiscounts.length;
+    }
+
+    // Удаляем скидки с истёкшим сроком действия
     const expiredResult = await prisma.discountActivation.deleteMany({
       where: {
         userId,
-        validUntil: {
-          lt: now,
-        },
+        validUntil: { lt: now },
       },
     });
-    expired = expiredResult.count;
+    expired += expiredResult.count;
+
+    console.log(`[discount-activation] ✅ Sync complete: ${synced} new, ${updated} updated, ${expired} expired`);
+
   } catch (error: any) {
+    console.error(`[discount-activation] ❌ Sync failed:`, error);
     errors.push(`Sync failed: ${error.message}`);
+    
+    // FALLBACK: при ошибке API возвращаем данные из локальной БД
+    const localCount = await prisma.discountActivation.count({ where: { userId } });
+    if (localCount > 0) {
+      console.log(`[discount-activation] 📦 Using fallback: ${localCount} discounts from local DB`);
+      usedFallback = true;
+    }
   }
 
-  return { synced, expired, errors };
+  return { synced, expired, updated, errors, usedFallback };
 }
 
 /**
@@ -184,38 +268,27 @@ export async function updateDiscountValidity(
   // Если срок истек, удаляем скидку
   if (validUntilDate < now) {
     await prisma.discountActivation.deleteMany({
-      where: {
-        userId,
-        discountId,
-      },
+      where: { userId, discountId },
     });
     return;
   }
 
   // Обновляем срок действия
   await prisma.discountActivation.updateMany({
-    where: {
-      userId,
-      discountId,
-    },
-    data: {
-      validUntil: validUntilDate,
-    },
+    where: { userId, discountId },
+    data: { validUntil: validUntilDate },
   });
 }
 
 /**
  * Удалить устаревшие скидки для всех пользователей
- * Можно запускать по расписанию (например, раз в день)
  */
 export async function cleanupExpiredDiscounts(): Promise<number> {
   const now = new Date();
 
   const result = await prisma.discountActivation.deleteMany({
     where: {
-      validUntil: {
-        lt: now,
-      },
+      validUntil: { lt: now },
     },
   });
 
@@ -224,12 +297,14 @@ export async function cleanupExpiredDiscounts(): Promise<number> {
 
 /**
  * Получить активированные скидки пользователя с проверкой срока действия
+ * ОСНОВНОЙ МЕТОД для получения скидок пользователя
  */
 export async function getValidActivatedDiscounts(
   userId: string
 ): Promise<Array<{
   discountId: number;
   promoCode: string | null;
+  lastSyncedAt: Date | null;
 }>> {
   const now = new Date();
 
@@ -244,7 +319,9 @@ export async function getValidActivatedDiscounts(
     select: {
       discountId: true,
       promoCode: true,
+      lastSyncedAt: true,
     },
+    orderBy: { activatedAt: "desc" },
   });
 
   return activations;
@@ -291,11 +368,35 @@ export async function getDiscountPromoCode(
         { validUntil: { gte: now } },
       ],
     },
-    select: {
-      promoCode: true,
-    },
+    select: { promoCode: true },
   });
 
   return activation?.promoCode || null;
 }
 
+/**
+ * Получить время последней синхронизации
+ */
+export async function getLastSyncTime(userId: string): Promise<Date | null> {
+  const latest = await prisma.discountActivation.findFirst({
+    where: { userId },
+    orderBy: { lastSyncedAt: "desc" },
+    select: { lastSyncedAt: true },
+  });
+
+  return latest?.lastSyncedAt || null;
+}
+
+/**
+ * Проверить, нужна ли синхронизация (прошло > N минут)
+ */
+export async function needsSync(userId: string, minutesThreshold: number = 10): Promise<boolean> {
+  const lastSync = await getLastSyncTime(userId);
+  
+  if (!lastSync) return true;
+  
+  const timeSinceSync = Date.now() - lastSync.getTime();
+  const thresholdMs = minutesThreshold * 60 * 1000;
+  
+  return timeSinceSync >= thresholdMs;
+}

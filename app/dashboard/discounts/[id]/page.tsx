@@ -163,6 +163,53 @@ export default function DiscountDetailPage() {
     loadPreferences();
   }, [discountId]);
 
+  // Запрашиваем СВЕЖИЙ промокод при открытии страницы активированной скидки
+  // (Вкусвилл и др. генерируют новый промокод при каждом запросе)
+  useEffect(() => {
+    const refreshPromoCode = async () => {
+      if (!isClaimed || !discountId) return;
+      
+      console.log(`[DiscountDetail] 🔄 Refreshing promo code for discount ${discountId}...`);
+      
+      try {
+        const response = await fetch("/api/discounts/refresh-promo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ discountId: Number(discountId) }),
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log("[DiscountDetail] 📥 Fresh promo result:", result);
+          
+          if (result.promoCode && result.promoCode.trim().length > 0) {
+            const freshCode = result.promoCode.trim();
+            
+            // Обновляем только если промокод изменился
+            if (freshCode !== activatedPromoCode) {
+              console.log(`[DiscountDetail] ✅ Updated promo code: "${activatedPromoCode}" → "${freshCode}"`);
+              setActivatedPromoCode(freshCode);
+              
+              // Также обновляем в объекте скидки
+              if (discount) {
+                setDiscount({
+                  ...discount,
+                  promoCode: freshCode,
+                });
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn("[DiscountDetail] Failed to refresh promo code:", error);
+      }
+    };
+
+    // Небольшая задержка чтобы не блокировать первоначальную загрузку
+    const timeoutId = setTimeout(refreshPromoCode, 500);
+    return () => clearTimeout(timeoutId);
+  }, [isClaimed, discountId]);
+
   // Обновляем промокод после загрузки discount
   useEffect(() => {
     if (discount && isClaimed) {
