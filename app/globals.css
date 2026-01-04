@@ -240,3 +240,15 @@ select:not([class*="appearance-none"]) {
 div.relative > select[class*="appearance-none"] {
   padding-right: 3rem !important;
 }
+
+/* Chat scroll - prevent bounce on iOS */
+.chat-messages-container {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+/* Virtuoso scroller - prevent bounce */
+[data-virtuoso-scroller="true"] {
+  overscroll-behavior: contain !important;
+}

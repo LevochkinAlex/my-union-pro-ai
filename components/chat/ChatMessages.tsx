@@ -211,13 +211,7 @@ function ChatMessagesComponent({
   }
 
   return (
-    <div 
-      className="h-full w-full overflow-hidden"
-      style={{ 
-        touchAction: "pan-y",
-        overscrollBehavior: "none",
-      }}
-    >
+    <div className="h-full w-full overflow-hidden chat-messages-container">
       <Virtuoso
         key={chat.id}
         ref={virtuosoRef}
@@ -229,11 +223,7 @@ function ChatMessagesComponent({
         atBottomStateChange={setAtBottom}
         atBottomThreshold={50}
         startReached={handleStartReached}
-        className="h-full w-full [&>div]:!overflow-anchor-none"
-        style={{ 
-          overscrollBehavior: "none",
-          WebkitOverflowScrolling: "auto",
-        }}
+        className="h-full w-full"
         components={{
           Header: () => (
             <>
@@ -255,7 +245,7 @@ function ChatMessagesComponent({
             </>
           ),
           Footer: () => (
-            <div className="py-2">
+            <div className="h-6">
               {isBotTyping && <TypingIndicator />}
             </div>
           ),
