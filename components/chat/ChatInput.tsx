@@ -345,7 +345,7 @@ function ChatInputComponent({
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Введите сообщение... (поддерживается **жирный**, *курсив*, - списки)"
+            placeholder="Введите сообщение..."
             disabled={disabled}
             rows={1}
             className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-2xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm md:text-base disabled:opacity-50"
