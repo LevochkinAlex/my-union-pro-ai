@@ -280,10 +280,13 @@ function ChatPageContent() {
   }
 
   return (
-    <div className="fixed inset-0 top-16 md:top-0 md:left-64 right-0 bottom-0 flex flex-col p-4 sm:p-6 lg:p-8 bg-gray-50 dark:bg-gray-900">
-      <div className={`flex flex-1 min-h-0 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden`}>
+    <div 
+      className="fixed inset-0 top-16 md:top-0 md:left-64 right-0 bottom-0 flex flex-col p-4 sm:p-6 lg:p-8 bg-gray-50 dark:bg-gray-900"
+      style={{ overscrollBehavior: "none" }}
+    >
+      <div className="flex flex-1 min-h-0 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
       {/* Сайдбар со списком чатов */}
-      <div className={`${showChatView ? "hidden md:flex" : "flex"} w-full md:w-1/3 border-r border-gray-200 dark:border-gray-700 flex-col`}>
+      <div className={`${showChatView ? "hidden md:flex" : "flex"} w-full md:w-1/3 border-r border-gray-200 dark:border-gray-700 flex-col overflow-hidden`}>
         <ChatSidebar
           chats={personalChats}
           selectedChat={selectedChat}
@@ -306,7 +309,7 @@ function ChatPageContent() {
             />
 
             {/* Сообщения */}
-            <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
+            <div className="flex-1 min-h-0 min-w-0 overflow-hidden" style={{ overscrollBehavior: "none" }}>
               <ChatMessages
                 chat={selectedChat}
                 messages={messages}

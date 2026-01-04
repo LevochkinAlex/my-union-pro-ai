@@ -99,12 +99,9 @@ function ChatMessagesComponent({
   // Обновляем firstItemIndex при добавлении старых сообщений (prepend)
   useEffect(() => {
     if (items.length > prevMessagesLength.current && prevMessagesLength.current > 0 && hasInitialized.current) {
-      // Проверяем, это prepend (старые сообщения) или append (новые)
-      // При prepend первое сообщение меняется, при append - нет
       const addedCount = items.length - prevMessagesLength.current;
       
-      // Если загружались старые сообщения, уменьшаем firstItemIndex
-      // чтобы Virtuoso сохранил позицию скролла
+      // Только при загрузке старых сообщений уменьшаем firstItemIndex
       if (loadingOlder) {
         setFirstItemIndex(prev => prev - addedCount);
       }
@@ -115,56 +112,47 @@ function ChatMessagesComponent({
   // Начальный скролл к концу при загрузке чата
   useEffect(() => {
     if (!hasInitialized.current && items.length > 0 && virtuosoRef.current) {
-      // Небольшая задержка для рендера
       const timeoutId = setTimeout(() => {
-        if (virtuosoRef.current) {
-          virtuosoRef.current.scrollToIndex({
-            index: items.length - 1,
-            align: "end",
-            behavior: "auto",
-          });
-          hasInitialized.current = true;
-        }
-      }, 100);
+        virtuosoRef.current?.scrollToIndex({
+          index: items.length - 1,
+          align: "end",
+          behavior: "auto",
+        });
+        hasInitialized.current = true;
+      }, 50);
       return () => clearTimeout(timeoutId);
     }
   }, [items.length]);
 
-  // Скролл к низу при отправке нового сообщения текущим пользователем
+  // Скролл к новым сообщениям
   const lastMessageIdRef = useRef<string | null>(null);
-  const prevMessagesCountRef = useRef(0);
   
   useEffect(() => {
-    if (messages.length === 0 || !hasInitialized.current) return;
+    if (!hasInitialized.current || messages.length === 0) return;
     
     const lastMessage = messages[messages.length - 1];
-    const isNewMessage = messages.length > prevMessagesCountRef.current;
-    const isOwnMessage = lastMessage?.senderId === currentUserId;
-    const isReallyNew = lastMessage?.id !== lastMessageIdRef.current;
+    if (!lastMessage || lastMessage.id === lastMessageIdRef.current) return;
     
-    // Скроллим если: новое сообщение от текущего пользователя ИЛИ пользователь был внизу
-    if (isReallyNew && isNewMessage && (isOwnMessage || atBottom)) {
-      // Используем requestAnimationFrame для плавности
-      requestAnimationFrame(() => {
-        virtuosoRef.current?.scrollToIndex({
-          index: items.length - 1,
-          align: "end",
-          behavior: isOwnMessage ? "auto" : "smooth", // Мгновенно для своих, плавно для чужих
-        });
+    const isOwnMessage = lastMessage.senderId === currentUserId;
+    
+    // Для своих сообщений - всегда скроллим
+    // Для чужих - только если были внизу
+    if (isOwnMessage || atBottom) {
+      virtuosoRef.current?.scrollToIndex({
+        index: items.length - 1,
+        align: "end",
+        behavior: "auto",
       });
     }
     
-    // Обновляем refs
-    if (lastMessage) {
-      lastMessageIdRef.current = lastMessage.id;
-    }
-    prevMessagesCountRef.current = messages.length;
-  }, [messages, currentUserId, items.length, atBottom]);
+    lastMessageIdRef.current = lastMessage.id;
+  }, [messages.length, currentUserId, items.length, atBottom]);
 
-  // Автоскролл к низу при новых сообщениях (если пользователь был внизу)
-  const handleFollowOutput = useCallback((isAtBottom: boolean) => {
-    return isAtBottom ? "smooth" : false;
-  }, []);
+  // followOutput для Virtuoso - автоскролл при добавлении сообщений
+  const handleFollowOutput = useCallback(() => {
+    // Всегда скроллим если пользователь внизу
+    return atBottom ? "auto" : false;
+  }, [atBottom]);
 
   // Загрузка старых сообщений при скролле вверх
   const handleStartReached = useCallback(() => {
@@ -223,7 +211,13 @@ function ChatMessagesComponent({
   }
 
   return (
-    <div className="h-full w-full overflow-hidden">
+    <div 
+      className="h-full w-full overflow-hidden"
+      style={{ 
+        touchAction: "pan-y",
+        overscrollBehavior: "none",
+      }}
+    >
       <Virtuoso
         key={chat.id}
         ref={virtuosoRef}
@@ -233,13 +227,12 @@ function ChatMessagesComponent({
         itemContent={itemContent}
         followOutput={handleFollowOutput}
         atBottomStateChange={setAtBottom}
+        atBottomThreshold={50}
         startReached={handleStartReached}
-        alignToBottom
-        overscan={{ main: 200, reverse: 200 }}
-        className="h-full w-full"
+        className="h-full w-full [&>div]:!overflow-anchor-none"
         style={{ 
-          overscrollBehavior: "contain",
-          WebkitOverflowScrolling: "touch",
+          overscrollBehavior: "none",
+          WebkitOverflowScrolling: "auto",
         }}
         components={{
           Header: () => (
@@ -262,7 +255,7 @@ function ChatMessagesComponent({
             </>
           ),
           Footer: () => (
-            <div className="pb-4">
+            <div className="py-2">
               {isBotTyping && <TypingIndicator />}
             </div>
           ),
