@@ -217,11 +217,14 @@ export default function QuestionnaireModal({
 
       // Определяем начальный шаг на основе заполненности данных
       if (loadedData) {
+        // Проверяем все обязательные поля, которые требует API /api/documents/generate
         const isProfileComplete = !!(
           loadedData.firstName &&
           loadedData.lastName &&
           loadedData.phone &&
           loadedData.dateOfBirth &&
+          loadedData.address &&
+          loadedData.workplace &&
           loadedData.organizationId &&
           loadedData.jobTitle
         );
