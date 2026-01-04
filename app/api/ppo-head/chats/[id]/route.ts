@@ -86,7 +86,14 @@ export async function PUT(
 
     const chat = await prisma.chat.findUnique({
       where: { id: chatId },
-      select: { type: true, createdById: true },
+      select: { 
+        type: true, 
+        createdById: true,
+        participants: {
+          where: { userId: chairman.id },
+          select: { role: true }
+        }
+      },
     });
 
     console.log("[ppo-head/chats] PUT - chatId:", chatId, "chat:", chat, "chairmanId:", chairman.id);
@@ -99,10 +106,20 @@ export async function PUT(
       return NextResponse.json({ error: "Можно редактировать только группы" }, { status: 400 });
     }
 
-    // Проверяем права - создатель группы или председатель организации (если createdById не установлен)
-    const canEdit = chat.createdById === chairman.id || !chat.createdById;
+    // Проверяем права:
+    // 1. Создатель группы
+    // 2. Старые группы без createdById
+    // 3. Председатель - участник группы (admin или member)
+    const isCreator = chat.createdById === chairman.id;
+    const isLegacyGroup = !chat.createdById;
+    const isParticipant = chat.participants.length > 0;
+    const isAdmin = chat.participants.some(p => p.role === "admin");
+    
+    const canEdit = isCreator || isLegacyGroup || isParticipant;
+    console.log("[ppo-head/chats] PUT - canEdit:", canEdit, "isCreator:", isCreator, "isLegacyGroup:", isLegacyGroup, "isParticipant:", isParticipant, "isAdmin:", isAdmin);
+    
     if (!canEdit) {
-      return NextResponse.json({ error: "Только создатель может редактировать" }, { status: 403 });
+      return NextResponse.json({ error: "Нет прав на редактирование этой группы" }, { status: 403 });
     }
 
     const updatedChat = await prisma.chat.update({
@@ -155,6 +172,10 @@ export async function DELETE(
       select: {
         type: true,
         createdById: true,
+        participants: {
+          where: { userId: chairman.id },
+          select: { role: true }
+        }
       },
     });
 
@@ -172,11 +193,18 @@ export async function DELETE(
       );
     }
 
-    // Проверяем права - создатель группы или председатель (если createdById не установлен)
-    const canDelete = chat.createdById === chairman.id || !chat.createdById;
+    // Проверяем права:
+    // 1. Создатель группы
+    // 2. Старые группы без createdById
+    // 3. Председатель является админом группы
+    const isCreator = chat.createdById === chairman.id;
+    const isLegacyGroup = !chat.createdById;
+    const isAdmin = chat.participants.some(p => p.role === "admin");
+    
+    const canDelete = isCreator || isLegacyGroup || isAdmin;
     if (!canDelete) {
       return NextResponse.json(
-        { error: "Только создатель группы может её удалить" },
+        { error: "Только создатель или админ группы может её удалить" },
         { status: 403 }
       );
     }
