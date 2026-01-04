@@ -84,6 +84,30 @@ const DOCUMENT_STATUS_MAP: Record<string, string> = {
   PENDING: "На проверке",
   APPROVED: "Одобрен",
   REJECTED: "Отклонен",
+  VERIFYING: "Проверяется",
+  VERIFIED: "Проверен",
+  NEEDS_REVIEW: "Требует внимания",
+  FAILED: "Не прошёл проверку",
+};
+
+// Функция для получения информативного статуса документа
+const getDocumentStatusInfo = (doc: Document) => {
+  const hasFile = !!doc.filePath;
+  const hasSigned = !!doc.signedFilePath;
+  
+  if (hasSigned) {
+    return { text: "✓ Подписан пользователем", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" };
+  }
+  if (hasFile && doc.status === "GENERATED") {
+    return { text: "⏳ Ожидает подписи пользователя", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" };
+  }
+  if (doc.status === "APPROVED") {
+    return { text: "✓ Одобрен", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" };
+  }
+  if (doc.status === "REJECTED") {
+    return { text: "✕ Отклонён", color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" };
+  }
+  return { text: DOCUMENT_STATUS_MAP[doc.status] || doc.status, color: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200" };
 };
 
 // Маппинг статусов членства
@@ -1242,53 +1266,72 @@ export default function MembersPage() {
                         {!memberDetails.documents || memberDetails.documents.length === 0 ? (
                           <p className="text-gray-500 dark:text-gray-400 text-center py-8">Документов нет</p>
                         ) : (
-                          memberDetails.documents.map((doc) => (
-                            <div key={doc.id} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-                              <div className="flex items-start justify-between">
-                                <div>
-                                  <h4 className="font-medium text-gray-900 dark:text-white">{doc.title}</h4>
-                                  <div className="mt-1 flex flex-wrap gap-2">
-                                    <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                                      {DOCUMENT_TYPE_MAP[doc.type] || doc.type}
-                                    </span>
-                                    <span className={`rounded px-2 py-0.5 text-xs ${
-                                      doc.status === "SIGNED" || doc.status === "APPROVED" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
-                                      doc.status === "PENDING" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" :
-                                      doc.status === "REJECTED" ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
-                                      "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
-                                    }`}>
-                                      {DOCUMENT_STATUS_MAP[doc.status] || doc.status}
-                                    </span>
+                          memberDetails.documents.map((doc) => {
+                            const statusInfo = getDocumentStatusInfo(doc);
+                            return (
+                              <div key={doc.id} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex-1 min-w-0">
+                                    <h4 className="font-medium text-gray-900 dark:text-white">{doc.title}</h4>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                                        {DOCUMENT_TYPE_MAP[doc.type] || doc.type}
+                                      </span>
+                                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusInfo.color}`}>
+                                        {statusInfo.text}
+                                      </span>
+                                    </div>
+                                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                      Создан: {new Date(doc.createdAt).toLocaleString("ru-RU")}
+                                    </p>
+                                    
+                                    {/* Дополнительная информация о статусе */}
+                                    {!doc.signedFilePath && doc.filePath && (
+                                      <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                                        ⚠️ Документ сформирован, но пользователь ещё не загрузил подписанную версию
+                                      </p>
+                                    )}
                                   </div>
-                                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                    Создан: {new Date(doc.createdAt).toLocaleString("ru-RU")}
-                                  </p>
-                                </div>
-                                <div className="flex gap-2">
-                                  {doc.filePath && (
-                                    <a
-                                      href={`/api/documents/${doc.id}/download`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
-                                    >
-                                      📄 Скачать
-                                    </a>
-                                  )}
-                                  {doc.signedFilePath && (
-                                    <a
-                                      href={`/api/documents/${doc.id}/download?signed=true`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700"
-                                    >
-                                      ✓ Подписанный
-                                    </a>
-                                  )}
+                                  
+                                  <div className="flex flex-col gap-2 shrink-0">
+                                    {doc.filePath && (
+                                      <a
+                                        href={`/api/documents/${doc.id}/download`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
+                                        title="Скачать сформированный документ"
+                                      >
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        Шаблон
+                                      </a>
+                                    )}
+                                    {doc.signedFilePath && (
+                                      <a
+                                        href={`/api/documents/${doc.id}/download?signed=true`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700"
+                                        title="Скачать подписанный документ от пользователя"
+                                      >
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        Подписанный
+                                      </a>
+                                    )}
+                                    {!doc.filePath && !doc.signedFilePath && (
+                                      <span className="text-xs text-gray-400 dark:text-gray-500 italic">
+                                        Файлы отсутствуют
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))
+                            );
+                          })
                         )}
                       </div>
                     )}
