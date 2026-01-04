@@ -1060,43 +1060,45 @@ export default function QuestionnaireModal({
                   </div>
                 ))}
 
-              {!isExistingMember && documents.filter(
-                (doc) =>
-                  doc.type === "MEMBERSHIP_APPLICATION" ||
-                  doc.type === "CONTRIBUTION_APPLICATION"
-              ).length === 0 ? (
-                <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-900/40 dark:bg-blue-900/20">
-                  <p className="mb-4 text-gray-700 dark:text-gray-300">
-                    Нажмите кнопку ниже, чтобы сформировать документы для вступления в профсоюз.
-                  </p>
-                  <button
-                    onClick={handleGenerateDocuments}
-                    disabled={isGenerating}
-                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isGenerating ? (
-                      <>
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                        Формирование...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="h-4 w-4" />
-                        Сформировать документы
-                      </>
-                    )}
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Показываем только заявления (MEMBERSHIP_APPLICATION, CONTRIBUTION_APPLICATION) */}
-                  {documents
-                    .filter(
-                      (doc) =>
-                        doc.type === "MEMBERSHIP_APPLICATION" ||
-                        doc.type === "CONTRIBUTION_APPLICATION"
-                    )
-                    .map((doc) => (
+              {/* Блок с документами показываем только если НЕ действующий член */}
+              {!isExistingMember && (
+                documents.filter(
+                  (doc) =>
+                    doc.type === "MEMBERSHIP_APPLICATION" ||
+                    doc.type === "CONTRIBUTION_APPLICATION"
+                ).length === 0 ? (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-900/40 dark:bg-blue-900/20">
+                    <p className="mb-4 text-gray-700 dark:text-gray-300">
+                      Нажмите кнопку ниже, чтобы сформировать документы для вступления в профсоюз.
+                    </p>
+                    <button
+                      onClick={handleGenerateDocuments}
+                      disabled={isGenerating}
+                      className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isGenerating ? (
+                        <>
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                          Формирование...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-4 w-4" />
+                          Сформировать документы
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Показываем только заявления (MEMBERSHIP_APPLICATION, CONTRIBUTION_APPLICATION) */}
+                    {documents
+                      .filter(
+                        (doc) =>
+                          doc.type === "MEMBERSHIP_APPLICATION" ||
+                          doc.type === "CONTRIBUTION_APPLICATION"
+                      )
+                      .map((doc) => (
                       <div
                         key={doc.id}
                         className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 sm:p-4"
@@ -1241,7 +1243,8 @@ export default function QuestionnaireModal({
                       </button>
                     </div>
                   )}
-                </div>
+                  </div>
+                )
               )}
             </div>
           )}
