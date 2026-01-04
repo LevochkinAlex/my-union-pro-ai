@@ -59,7 +59,8 @@ export async function POST(request: NextRequest) {
 
     // Загружаем на VDS
     if (isVDSStorageConfigured()) {
-      const url = await uploadFileToVDS(optimized.buffer, finalFilename, "chat");
+      const fileKey = `chat/${finalFilename}`;
+      const url = await uploadFileToVDS(fileKey, optimized.buffer, "image/webp");
       console.log("[upload-icon] Uploaded to VDS:", url);
       
       return NextResponse.json({ 
