@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
-import { optimizeWithPreset, getMimeType } from "@/lib/image-processor";
-import { convertHeicToJpegServer } from "@/lib/heic-converter";
+import { optimizeWithPreset } from "@/lib/image-optimizer";
+import { convertHeicToJpegServer } from "@/lib/heic-convert-server";
 import crypto from "crypto";
 
 export async function POST(request: NextRequest) {
