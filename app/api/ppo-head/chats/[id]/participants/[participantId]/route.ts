@@ -101,14 +101,14 @@ export async function PUT(
       return NextResponse.json({ error: "Только создатель может назначать админов" }, { status: 403 });
     }
 
-    // Обновляем роль участника
+    // Обновляем роль участника (роли: "admin", "member")
     await prisma.chatParticipant.updateMany({
       where: {
         chatId,
         userId: participantId,
       },
       data: {
-        role: role === "admin" ? "ADMIN" : "MEMBER",
+        role: role === "admin" ? "admin" : "member",
       },
     });
 

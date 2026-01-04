@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import { useToast } from "@/components/ui/Toast";
 import { useChat } from "@/hooks/useChat";
 import { Chat, Message } from "@/types/chat";
-import { getUserName, getFileUrl } from "@/lib/chat-utils";
+import { getUserName, getFileUrl, getInitials } from "@/lib/chat-utils";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 import GroupIconUpload from "@/components/chat/GroupIconUpload";
 
@@ -772,7 +772,7 @@ function PPOHeadChatsContent() {
                     const user = participant.user;
                     const fullName = [user?.lastName, user?.firstName, user?.middleName].filter(Boolean).join(" ") || "Неизвестный";
                     const isCreator = editingChat.createdById === user?.id;
-                    const isAdmin = participant.role === "ADMIN";
+                    const isAdmin = participant.role === "admin" || participant.role === "ADMIN";
                     
                     return (
                       <div key={participant.id || user?.id} className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700">
@@ -781,7 +781,7 @@ function PPOHeadChatsContent() {
                             <img src={getFileUrl(user.avatarUrl)} alt="" className="w-8 h-8 rounded-full object-cover" />
                           ) : (
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold">
-                              {user?.firstName?.[0] || "?"}{user?.lastName?.[0] || ""}
+                              {getInitials(user)}
                             </div>
                           )}
                           <div>
@@ -1093,7 +1093,7 @@ function PersonalChatItem({
         <img src={getFileUrl(avatar)} alt="" className="w-12 h-12 rounded-full object-cover" />
       ) : (
         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-          {chat.otherUser?.firstName?.[0] || "?"}{chat.otherUser?.lastName?.[0] || ""}
+          {getInitials(chat.otherUser)}
         </div>
       )}
       <div className="flex-1 min-w-0">
@@ -1173,7 +1173,7 @@ function OrgChatItem({
     }
     return (
       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-        {chat.otherUser?.firstName?.[0] || "?"}{chat.otherUser?.lastName?.[0] || ""}
+        {getInitials(chat.otherUser)}
       </div>
     );
   };
@@ -1344,7 +1344,7 @@ function OrgChatHeader({
           <img src={getFileUrl(chat.otherUser.avatarUrl)} alt="" className="w-10 h-10 rounded-full object-cover" />
         ) : (
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-            {chat.otherUser?.firstName?.[0] || "?"}{chat.otherUser?.lastName?.[0] || ""}
+            {getInitials(chat.otherUser)}
           </div>
         )}
       </button>
@@ -1540,7 +1540,7 @@ function ForwardModal({
                   />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
-                    {chat.otherUser?.firstName?.[0] || "?"}{chat.otherUser?.lastName?.[0] || ""}
+                    {getInitials(chat.otherUser)}
                   </div>
                 )}
                 <div className="flex-1 min-w-0 text-left">
