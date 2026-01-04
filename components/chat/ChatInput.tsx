@@ -210,8 +210,8 @@ function ChatInputComponent({
 
   return (
     <div 
-      className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0 pb-4"
-      style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom, 1rem))" }}
+      className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0"
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
       {/* Превью ответа/редактирования */}
       {(replyingTo || editingMessage) && (
