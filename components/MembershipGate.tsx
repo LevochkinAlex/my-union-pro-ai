@@ -76,15 +76,15 @@ export function MembershipGate({
           title: "Заполните анкету",
           description: "Для доступа к этому разделу необходимо заполнить профиль и подать заявку на вступление в профсоюз.",
           buttonText: "Заполнить анкету",
-          buttonLink: "/dashboard/profile",
+          buttonLink: "/dashboard?openQuestionnaire=true",
         };
       case "pending":
         return {
           icon: icons.clock,
           title: "Заявка на рассмотрении",
           description: "Ваша заявка находится на рассмотрении у председателя профсоюзной организации. Дождитесь одобрения для получения полного доступа.",
-          buttonText: "Перейти в профиль",
-          buttonLink: "/dashboard/profile",
+          buttonText: "На главную",
+          buttonLink: "/dashboard",
         };
       case "rejected":
         return {
@@ -99,8 +99,8 @@ export function MembershipGate({
           icon: icons.lock,
           title: title,
           description: description || message,
-          buttonText: "Перейти в профиль",
-          buttonLink: "/dashboard/profile",
+          buttonText: "На главную",
+          buttonLink: "/dashboard",
         };
     }
   };
@@ -183,7 +183,7 @@ export function MembershipBlurCard({
       {/* Оверлей с иконкой замка */}
       <div className="absolute inset-0 flex items-center justify-center">
         <Link
-          href="/dashboard/profile"
+          href="/dashboard?openQuestionnaire=true"
           className="flex flex-col items-center gap-2 rounded-xl bg-white/90 dark:bg-gray-800/90 px-4 py-3 shadow-lg backdrop-blur-sm transition hover:scale-105"
         >
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600">

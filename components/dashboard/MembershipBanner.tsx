@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import QuestionnaireModal from "@/components/profile/QuestionnaireModal";
@@ -23,9 +23,19 @@ export default function MembershipBanner({
   hasAwards: initialHasAwards = false,
 }: MembershipBannerProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, update: updateSession } = useSession();
   const [isVisible, setIsVisible] = useState(true);
   const [isQuestionnaireOpen, setIsQuestionnaireOpen] = useState(false);
+
+  // Автоматически открыть модалку анкеты если есть параметр в URL
+  useEffect(() => {
+    if (searchParams.get("openQuestionnaire") === "true") {
+      setIsQuestionnaireOpen(true);
+      // Убираем параметр из URL без перезагрузки
+      router.replace("/dashboard", { scroll: false });
+    }
+  }, [searchParams, router]);
   
   // Локальное состояние для обновления данных
   const [profileProgress, setProfileProgress] = useState(initialProfileProgress);
