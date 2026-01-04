@@ -145,6 +145,7 @@ export default function QuestionnaireModal({
 
       console.log("[QuestionnaireModal] Profile response status:", profileRes.status, profileRes.ok);
 
+      let loadedData: FormData | null = null;
       if (profileRes.ok) {
         const profileData = await profileRes.json();
         console.log("[QuestionnaireModal] Full profile data from API:", profileData);
@@ -158,7 +159,7 @@ export default function QuestionnaireModal({
           phone: profileData.user?.phone,
           email: profileData.user?.email,
         });
-        const loadedData = {
+        loadedData = {
           firstName: profileData.user?.firstName || "",
           lastName: profileData.user?.lastName || "",
           middleName: profileData.user?.middleName || "",
@@ -200,16 +201,56 @@ export default function QuestionnaireModal({
         console.error("[QuestionnaireModal] Failed to load dictionaries:", dictionariesRes.status);
       }
 
+      let loadedDocs: Document[] = [];
       if (documentsRes.ok) {
         const documentsData = await documentsRes.json();
         console.log("[QuestionnaireModal] Loaded documents:", documentsData.documents?.length || 0);
-        setDocuments(documentsData.documents || []);
+        loadedDocs = documentsData.documents || [];
+        setDocuments(loadedDocs);
       } else {
         console.error("[QuestionnaireModal] Failed to load documents:", documentsRes.status, documentsRes.statusText);
         const errorText = await documentsRes.text();
         console.error("[QuestionnaireModal] Documents error response:", errorText);
         // Устанавливаем пустой массив, чтобы не было ошибок в UI
         setDocuments([]);
+      }
+
+      // Определяем начальный шаг на основе заполненности данных
+      if (loadedData) {
+        const isProfileComplete = !!(
+          loadedData.firstName &&
+          loadedData.lastName &&
+          loadedData.phone &&
+          loadedData.dateOfBirth &&
+          loadedData.organizationId &&
+          loadedData.jobTitle
+        );
+
+        // Проверяем наличие документов
+        const hasDocuments = loadedDocs.length > 0;
+        
+        // Проверяем подписаны ли документы
+        const allDocsSigned = loadedDocs.length > 0 && 
+          loadedDocs.every((doc: Document) => doc.signedFilePath);
+
+        // Определяем шаг
+        let initialStep = 1;
+        if (allDocsSigned) {
+          initialStep = 4; // Всё готово
+        } else if (hasDocuments) {
+          initialStep = 3; // Документы сгенерированы, нужно подписать
+        } else if (isProfileComplete) {
+          initialStep = 2; // Профиль заполнен, сверка данных
+        }
+        
+        setCurrentStep(initialStep);
+        
+        console.log("[QuestionnaireModal] Determined initial step:", {
+          isProfileComplete,
+          hasDocuments,
+          allDocsSigned,
+          initialStep
+        });
       }
     } catch (error) {
       console.error("[QuestionnaireModal] Error loading data:", error);
