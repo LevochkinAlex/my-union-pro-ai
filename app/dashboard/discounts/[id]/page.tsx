@@ -164,11 +164,11 @@ export default function DiscountDetailPage() {
   }, [discountId]);
 
   // Запрашиваем СВЕЖИЙ промокод при открытии страницы активированной скидки
-  // (Вкусвилл и др. генерируют новый промокод при каждом запросе)
+  // (Вкусвилл, ВТБ и др. могут генерировать новый промокод или обновлять срок действия)
   useEffect(() => {
+    if (!isClaimed || !discountId) return;
+
     const refreshPromoCode = async () => {
-      if (!isClaimed || !discountId) return;
-      
       console.log(`[DiscountDetail] 🔄 Refreshing promo code for discount ${discountId}...`);
       
       try {
@@ -198,6 +198,8 @@ export default function DiscountDetailPage() {
                 });
               }
             }
+          } else if (result.warning) {
+            console.warn(`[DiscountDetail] ⚠️ ${result.warning}`);
           }
         }
       } catch (error) {
@@ -205,10 +207,17 @@ export default function DiscountDetailPage() {
       }
     };
 
-    // Небольшая задержка чтобы не блокировать первоначальную загрузку
+    // Обновляем сразу при открытии страницы
     const timeoutId = setTimeout(refreshPromoCode, 500);
-    return () => clearTimeout(timeoutId);
-  }, [isClaimed, discountId]);
+    
+    // Также обновляем каждые 5 минут для актуальности (на случай если промокод обновляется)
+    const intervalId = setInterval(refreshPromoCode, 5 * 60 * 1000);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      clearInterval(intervalId);
+    };
+  }, [isClaimed, discountId, activatedPromoCode, discount]);
 
   // Обновляем промокод после загрузки discount
   useEffect(() => {

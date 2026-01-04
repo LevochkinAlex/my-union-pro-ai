@@ -182,11 +182,39 @@ export async function POST(request: NextRequest) {
 
     console.log(`[refresh-promo] Fresh promo code: ${freshPromoCode || 'not found'}`);
 
+    // Извлекаем end_date из активного кода для обновления validUntil
+    let validUntilDate: Date | null = null;
+    if (bbDiscount.codes && Array.isArray(bbDiscount.codes) && bbDiscount.codes.length > 0) {
+      const activeCode = bbDiscount.codes.find((c: any) => {
+        const code = c?.code || c?.promo_code || c?.promoCode;
+        return code && code.trim() === freshPromoCode;
+      });
+      if (activeCode) {
+        const endDate = activeCode?.end_date || activeCode?.endDate || activeCode?.end_date_time;
+        if (endDate) {
+          try {
+            const parsedDate = new Date(endDate);
+            if (!isNaN(parsedDate.getTime())) {
+              const now = new Date();
+              if (parsedDate.getTime() >= now.getTime()) {
+                validUntilDate = parsedDate;
+                console.log(`[refresh-promo] ✅ Promo code valid until ${validUntilDate.toISOString()}`);
+              } else {
+                console.log(`[refresh-promo] ⚠️ Promo code expired on ${parsedDate.toISOString()}`);
+              }
+            }
+          } catch (error) {
+            console.warn(`[refresh-promo] Failed to parse end_date:`, error);
+          }
+        }
+      }
+    }
+
     // Если нашли новый промокод - обновляем в БД
     if (freshPromoCode && freshPromoCode.trim().length > 0) {
       const trimmedCode = freshPromoCode.trim();
       
-      // Проверяем, изменился ли промокод
+      // Проверяем, изменился ли промокод или срок действия
       const existing = await prisma.discountActivation.findUnique({
         where: {
           userId_discountId: {
@@ -194,11 +222,14 @@ export async function POST(request: NextRequest) {
             discountId: discountIdNum,
           },
         },
-        select: { promoCode: true },
+        select: { promoCode: true, validUntil: true },
       });
 
-      if (existing?.promoCode !== trimmedCode) {
-        console.log(`[refresh-promo] 🔄 Promo code changed: "${existing?.promoCode}" → "${trimmedCode}"`);
+      const promoCodeChanged = existing?.promoCode !== trimmedCode;
+      const validUntilChanged = validUntilDate && existing?.validUntil?.getTime() !== validUntilDate.getTime();
+
+      if (promoCodeChanged || validUntilChanged) {
+        console.log(`[refresh-promo] 🔄 Updating: promoCode="${existing?.promoCode}" → "${trimmedCode}", validUntil="${existing?.validUntil?.toISOString()}" → "${validUntilDate?.toISOString()}"`);
         
         await prisma.discountActivation.update({
           where: {
@@ -209,6 +240,7 @@ export async function POST(request: NextRequest) {
           },
           data: {
             promoCode: trimmedCode,
+            ...(validUntilDate ? { validUntil: validUntilDate } : {}),
             lastSyncedAt: new Date(),
           },
         });
@@ -217,7 +249,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         promoCode: trimmedCode,
         source: "api",
-        updated: existing?.promoCode !== trimmedCode,
+        updated: promoCodeChanged || validUntilChanged,
+        validUntil: validUntilDate?.toISOString() || null,
       });
     }
 

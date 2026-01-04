@@ -164,6 +164,35 @@ export async function syncDiscountsWithBestBenefits(
           console.log(`[discount-activation] 🔄 Promo code changed for discount ${bbItem.id}: "${existingPromoCode}" → "${newPromoCode}"`);
         }
 
+        // Парсим validUntil из BestBenefits (если есть)
+        let validUntilDate: Date | null = null;
+        if (bbItem.validUntil) {
+          try {
+            const parsedDate = new Date(bbItem.validUntil);
+            if (!isNaN(parsedDate.getTime())) {
+              // Проверяем, не истек ли промокод
+              const now = new Date();
+              if (parsedDate.getTime() >= now.getTime()) {
+                validUntilDate = parsedDate;
+                console.log(`[discount-activation] ✅ Promo code valid until ${validUntilDate.toISOString()}`);
+              } else {
+                console.log(`[discount-activation] ⚠️ Promo code expired on ${parsedDate.toISOString()}, will be removed`);
+                // Промокод истек - удаляем его
+                await prisma.discountActivation.deleteMany({
+                  where: {
+                    userId,
+                    discountId: bbItem.id,
+                  },
+                });
+                expired++;
+                continue; // Пропускаем эту скидку
+              }
+            }
+          } catch (error) {
+            console.warn(`[discount-activation] Failed to parse validUntil for discount ${bbItem.id}:`, error);
+          }
+        }
+
         await prisma.discountActivation.upsert({
           where: {
             userId_discountId: {
@@ -175,7 +204,7 @@ export async function syncDiscountsWithBestBenefits(
             userId,
             discountId: bbItem.id,
             promoCode: newPromoCode,
-            validUntil: null,
+            validUntil: validUntilDate,
             activatedAt: new Date(),
             syncedFromBB: true,
             lastSyncedAt: new Date(),
@@ -184,6 +213,7 @@ export async function syncDiscountsWithBestBenefits(
             // ВАЖНО: ВСЕГДА обновляем промокод из BB (они могут выдать новый!)
             // Только если BB вернул валидный промокод
             ...(newPromoCode ? { promoCode: newPromoCode } : {}),
+            ...(validUntilDate ? { validUntil: validUntilDate } : {}),
             syncedFromBB: true,
             lastSyncedAt: new Date(),
           },
@@ -298,6 +328,7 @@ export async function cleanupExpiredDiscounts(): Promise<number> {
 /**
  * Получить активированные скидки пользователя с проверкой срока действия
  * ОСНОВНОЙ МЕТОД для получения скидок пользователя
+ * Автоматически удаляет истекшие промокоды
  */
 export async function getValidActivatedDiscounts(
   userId: string
@@ -308,6 +339,19 @@ export async function getValidActivatedDiscounts(
 }>> {
   const now = new Date();
 
+  // Сначала удаляем все истекшие промокоды
+  const expiredResult = await prisma.discountActivation.deleteMany({
+    where: {
+      userId,
+      validUntil: { lt: now },
+    },
+  });
+
+  if (expiredResult.count > 0) {
+    console.log(`[discount-activation] 🗑️ Removed ${expiredResult.count} expired promo codes for user ${userId}`);
+  }
+
+  // Затем получаем только валидные
   const activations = await prisma.discountActivation.findMany({
     where: {
       userId,

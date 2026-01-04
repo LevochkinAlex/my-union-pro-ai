@@ -244,7 +244,7 @@ export async function getUserActivatedDiscounts(
     timeout?: number; // Timeout в миллисекундах (по умолчанию 15 секунд)
     retries?: number; // Количество попыток (по умолчанию 2)
   }
-): Promise<Array<{ id: number; promoCode?: string }>> {
+): Promise<Array<{ id: number; promoCode?: string; validUntil?: string }>> {
   const timeout = options?.timeout ?? 15000; // 15 секунд по умолчанию
   const retries = options?.retries ?? 2;
 
@@ -508,9 +508,22 @@ export async function getUserActivatedDiscounts(
         raw: JSON.stringify(p, null, 2)
       });
       
+      // Извлекаем end_date из активного кода для сохранения validUntil
+      let validUntil: string | undefined = undefined;
+      if (p.codes && Array.isArray(p.codes) && p.codes.length > 0) {
+        const activeCode = p.codes.find((c: any) => {
+          const code = c?.code || c?.promo_code || c?.promoCode;
+          return code && code.trim() === promoCode;
+        });
+        if (activeCode) {
+          validUntil = activeCode?.end_date || activeCode?.endDate || activeCode?.end_date_time;
+        }
+      }
+
       return {
         id: id ? parseInt(String(id)) : null,
         promoCode: promoCode?.trim() || undefined,
+        validUntil: validUntil || undefined,
       };
     }).filter((p: any) => p.id !== null);
     
