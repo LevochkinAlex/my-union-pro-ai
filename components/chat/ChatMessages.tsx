@@ -228,7 +228,7 @@ function ChatMessagesComponent({
             </>
           ),
           Footer: () => (
-            <div className="pb-2">
+            <div className="pb-4">
               {isBotTyping && <TypingIndicator />}
             </div>
           ),
