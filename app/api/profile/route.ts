@@ -466,6 +466,16 @@ export async function PUT(request: NextRequest) {
       updateData.profileLastModified = new Date();
     }
 
+    // Обработка статуса действующего члена (документы на бумаге у председателя)
+    if (body.isExistingMember !== undefined) {
+      updateData.isExistingMember = body.isExistingMember;
+    }
+    
+    // Обновление статуса членства (если передан)
+    if (body.membershipStatus !== undefined) {
+      updateData.membershipStatus = body.membershipStatus;
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
       data: updateData,

@@ -160,6 +160,7 @@ model User {
   membershipExcludedAt       DateTime? // Дата исключения из профсоюза
   membershipExclusionReason  String?   @db.Text // Причина исключения
   unionMembershipStatus      String?   @default("NOT_ACCEPTED") // Статус членства: ACCEPTED (принят на учет), NOT_ACCEPTED (не принят), REMOVED (снят с учета)
+  isExistingMember           Boolean   @default(false) // Уже действующий член (документы на бумаге у председателя)
 
   // История членства
   membershipHistory MembershipHistory[]

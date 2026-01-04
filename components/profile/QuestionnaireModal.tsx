@@ -87,6 +87,7 @@ export default function QuestionnaireModal({
   const [documents, setDocuments] = useState<Document[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [isChangePhoneModalOpen, setIsChangePhoneModalOpen] = useState(false);
+  const [isExistingMember, setIsExistingMember] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -567,10 +568,26 @@ export default function QuestionnaireModal({
     }
   };
 
-  const handleComplete = () => {
-    showAlert({ message: "Анкета успешно заполнена", type: "success" });
-    onComplete?.();
-    onClose();
+  const handleComplete = async () => {
+    try {
+      // Если пользователь - действующий член, сохраняем это в профиле
+      if (isExistingMember) {
+        await fetch("/api/profile", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            isExistingMember: true,
+            membershipStatus: "DOCUMENTS_PENDING" // Отправляем на валидацию председателю
+          }),
+        });
+      }
+      showAlert({ message: "Анкета успешно заполнена", type: "success" });
+      onComplete?.();
+      onClose();
+    } catch (error) {
+      console.error("Error completing questionnaire:", error);
+      showAlert({ message: "Ошибка при сохранении", type: "error" });
+    }
   };
 
   const canProceedToStep2 = () => {
@@ -911,8 +928,54 @@ export default function QuestionnaireModal({
                 Генерация и загрузка документов
               </h3>
 
-              {/* Показываем устав (системный документ) */}
-              {documents
+              {/* Опция для действующих членов профсоюза */}
+              <div className={`rounded-lg border p-4 transition-all ${
+                isExistingMember 
+                  ? "border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-900/20" 
+                  : "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800"
+              }`}>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isExistingMember}
+                    onChange={(e) => setIsExistingMember(e.target.checked)}
+                    className="mt-1 h-5 w-5 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                  />
+                  <div className="flex-1">
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      Я уже действующий член профсоюза
+                    </span>
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                      Выберите эту опцию, если у вас уже есть заявления на бумажном носителе, 
+                      которые находятся у председателя. В этом случае загрузка документов не требуется.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {isExistingMember && (
+                <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900/40 dark:bg-green-900/20">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <svg className="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-medium text-green-800 dark:text-green-200">
+                        Загрузка документов пропущена
+                      </p>
+                      <p className="mt-1 text-sm text-green-700 dark:text-green-300">
+                        Ваша заявка будет направлена председателю для подтверждения членства. 
+                        Председатель проверит наличие ваших документов и примет решение.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Показываем устав (системный документ) - всегда видно */}
+              {!isExistingMember && documents
                 .filter(
                   (doc) =>
                     doc.id === "charter-system" ||
@@ -947,7 +1010,7 @@ export default function QuestionnaireModal({
                   </div>
                 ))}
 
-              {documents.filter(
+              {!isExistingMember && documents.filter(
                 (doc) =>
                   doc.type === "MEMBERSHIP_APPLICATION" ||
                   doc.type === "CONTRIBUTION_APPLICATION"
@@ -1216,22 +1279,24 @@ export default function QuestionnaireModal({
               <button
                 onClick={() => setCurrentStep(4)}
                 disabled={
-                  documents.filter(
-                    (doc) =>
-                      doc.type === "MEMBERSHIP_APPLICATION" ||
-                      doc.type === "CONTRIBUTION_APPLICATION"
-                  ).length === 0 ||
-                  documents
-                    .filter(
+                  !isExistingMember && (
+                    documents.filter(
                       (doc) =>
                         doc.type === "MEMBERSHIP_APPLICATION" ||
                         doc.type === "CONTRIBUTION_APPLICATION"
-                    )
-                    .some((doc) => doc.status === "GENERATED")
+                    ).length === 0 ||
+                    documents
+                      .filter(
+                        (doc) =>
+                          doc.type === "MEMBERSHIP_APPLICATION" ||
+                          doc.type === "CONTRIBUTION_APPLICATION"
+                      )
+                      .some((doc) => doc.status === "GENERATED")
+                  )
                 }
                 className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Далее
+                {isExistingMember ? "Подтвердить" : "Далее"}
                 <Check className="h-4 w-4" />
               </button>
             )}
