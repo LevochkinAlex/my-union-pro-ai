@@ -389,7 +389,13 @@ export default function QuestionnaireModal({
       console.log("[QuestionnaireModal] Ответ сервера:", { status: response.status, ok: response.ok, data });
 
       if (!response.ok) {
-        const errorMessage = data.details || data.error || "Ошибка при генерации документов";
+        // Формируем понятное сообщение с указанием недостающих полей
+        let errorMessage = data.error || "Ошибка при генерации документов";
+        if (data.missingFields && data.missingFields.length > 0) {
+          errorMessage = `Не заполнены обязательные поля: ${data.missingFields.join(", ")}. Вернитесь на шаг 1 и заполните их.`;
+          // Переключаем на первый шаг для заполнения
+          setCurrentStep(1);
+        }
         console.error("[QuestionnaireModal] Ошибка генерации:", errorMessage);
         throw new Error(errorMessage);
       }
