@@ -5,6 +5,119 @@ import { prisma } from "@/lib/prisma";
 import { getPPOHead } from "@/lib/ppo-head-utils";
 
 /**
+ * GET /api/ppo-head/chats/[id]
+ * Получить детали группового чата с участниками
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } | Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    const chairman = await getPPOHead(session.user.id);
+    if (!chairman) {
+      return NextResponse.json({ error: "Доступ запрещен" }, { status: 403 });
+    }
+
+    const resolvedParams = await Promise.resolve(params);
+    const chatId = resolvedParams.id;
+
+    const chat = await prisma.chat.findUnique({
+      where: { id: chatId },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                avatarUrl: true,
+                phone: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!chat) {
+      return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
+    }
+
+    return NextResponse.json({ chat });
+  } catch (error: any) {
+    console.error("[ppo-head/chats] GET error:", error);
+    return NextResponse.json({ error: "Ошибка загрузки" }, { status: 500 });
+  }
+}
+
+/**
+ * PUT /api/ppo-head/chats/[id]
+ * Обновить групповой чат (название, описание, иконка)
+ */
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } | Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    const chairman = await getPPOHead(session.user.id);
+    if (!chairman) {
+      return NextResponse.json({ error: "Доступ запрещен" }, { status: 403 });
+    }
+
+    const resolvedParams = await Promise.resolve(params);
+    const chatId = resolvedParams.id;
+
+    const body = await request.json();
+    const { name, description, iconUrl } = body;
+
+    const chat = await prisma.chat.findUnique({
+      where: { id: chatId },
+      select: { type: true, createdById: true },
+    });
+
+    if (!chat) {
+      return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
+    }
+
+    if (chat.type !== "GROUP") {
+      return NextResponse.json({ error: "Можно редактировать только группы" }, { status: 400 });
+    }
+
+    if (chat.createdById !== chairman.id) {
+      return NextResponse.json({ error: "Только создатель может редактировать" }, { status: 403 });
+    }
+
+    const updatedChat = await prisma.chat.update({
+      where: { id: chatId },
+      data: {
+        name: name?.trim() || undefined,
+        description: description?.trim() || null,
+        iconUrl: iconUrl !== undefined ? iconUrl : undefined,
+      },
+    });
+
+    return NextResponse.json({ success: true, chat: updatedChat });
+  } catch (error: any) {
+    console.error("[ppo-head/chats] PUT error:", error);
+    return NextResponse.json({ error: "Ошибка обновления" }, { status: 500 });
+  }
+}
+
+/**
  * DELETE /api/ppo-head/chats/[id]
  * Удалить групповой чат
  */

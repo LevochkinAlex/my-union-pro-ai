@@ -9,7 +9,7 @@ import { useChat } from "@/hooks/useChat";
 import { Chat, Message } from "@/types/chat";
 import { getUserName, getFileUrl } from "@/lib/chat-utils";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
-import ImageUploadWithCrop from "@/components/admin/ImageUploadWithCrop";
+import GroupIconUpload from "@/components/chat/GroupIconUpload";
 
 // Lazy load компоненты
 const ChatMessages = dynamic(() => import("@/components/chat/ChatMessages"), {
@@ -73,6 +73,8 @@ function PPOHeadChatsContent() {
   // Модалки для создания/управления группами
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showEditGroupModal, setShowEditGroupModal] = useState(false);
+  const [editingChat, setEditingChat] = useState<Chat | null>(null);
   const [inviteChat, setInviteChat] = useState<Chat | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [groupName, setGroupName] = useState("");
@@ -81,6 +83,7 @@ function PPOHeadChatsContent() {
   const [isPublic, setIsPublic] = useState(true);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
+  const [groupParticipants, setGroupParticipants] = useState<any[]>([]);
 
   // Состояние для пересылки сообщений
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
@@ -340,6 +343,102 @@ function PPOHeadChatsContent() {
     }
   };
 
+  // Открыть редактирование группы
+  const handleEditGroup = async (chat: Chat) => {
+    setEditingChat(chat);
+    setGroupName(chat.name || "");
+    setGroupDescription(chat.description || "");
+    setGroupIcon(chat.iconUrl || null);
+    setShowEditGroupModal(true);
+
+    // Загружаем участников
+    try {
+      const response = await fetch(`/api/ppo-head/chats/${chat.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setGroupParticipants(data.chat?.participants || []);
+      }
+    } catch (error) {
+      console.error("Ошибка загрузки участников:", error);
+    }
+  };
+
+  // Сохранить изменения группы
+  const handleSaveGroup = async () => {
+    if (!editingChat) return;
+
+    try {
+      setCreating(true);
+      const response = await fetch(`/api/ppo-head/chats/${editingChat.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: groupName.trim(),
+          description: groupDescription.trim() || null,
+          iconUrl: groupIcon,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Ошибка сохранения");
+      }
+
+      alertSuccess("Группа обновлена!");
+      setShowEditGroupModal(false);
+      setEditingChat(null);
+      loadChats();
+    } catch (error) {
+      alertError("Не удалось сохранить изменения");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Удалить участника из группы
+  const handleRemoveParticipant = async (participantId: string) => {
+    if (!editingChat) return;
+    
+    const confirmed = await confirm("Удалить участника из группы?", "Подтвердите");
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/ppo-head/chats/${editingChat.id}/participants/${participantId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Ошибка");
+      
+      setGroupParticipants(prev => prev.filter(p => p.user?.id !== participantId));
+      alertSuccess("Участник удалён");
+    } catch {
+      alertError("Не удалось удалить участника");
+    }
+  };
+
+  // Назначить/снять админа
+  const handleToggleAdmin = async (participantId: string, currentRole: string) => {
+    if (!editingChat) return;
+
+    const newRole = currentRole === "ADMIN" ? "member" : "admin";
+    
+    try {
+      const response = await fetch(`/api/ppo-head/chats/${editingChat.id}/participants/${participantId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      });
+      if (!response.ok) throw new Error("Ошибка");
+      
+      setGroupParticipants(prev => prev.map(p => 
+        p.user?.id === participantId 
+          ? { ...p, role: newRole === "admin" ? "ADMIN" : "MEMBER" }
+          : p
+      ));
+      alertSuccess(newRole === "admin" ? "Назначен админом" : "Роль снята");
+    } catch {
+      alertError("Не удалось изменить роль");
+    }
+  };
+
   const toggleMemberSelection = (memberId: string) => {
     setSelectedMembers((prev) =>
       prev.includes(memberId)
@@ -433,6 +532,7 @@ function PPOHeadChatsContent() {
                 setInviteChat(chat);
                 setShowInviteModal(true);
               }}
+              onEdit={handleEditGroup}
               onDelete={handleDeleteGroup}
             />
           ) : (
@@ -457,6 +557,7 @@ function PPOHeadChatsContent() {
                   setInviteChat(selectedChat);
                   setShowInviteModal(true);
                 }}
+                onEdit={() => handleEditGroup(selectedChat)}
                 onDelete={() => handleDeleteGroup(selectedChat.id)}
                 onProfileClick={handleProfileClick}
               />
@@ -559,7 +660,7 @@ function PPOHeadChatsContent() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Иконка группы
                 </label>
-                <ImageUploadWithCrop value={groupIcon} onChange={setGroupIcon} label="" />
+                <GroupIconUpload value={groupIcon} onChange={setGroupIcon} />
               </div>
               <div className="flex items-center">
                 <input
@@ -613,6 +714,137 @@ function PPOHeadChatsContent() {
                     setGroupDescription("");
                     setGroupIcon(null);
                     setSelectedMembers([]);
+                  }}
+                  className="flex-1 rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка редактирования группы */}
+      {showEditGroupModal && editingChat && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+              Редактировать группу
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Название группы
+                </label>
+                <input
+                  type="text"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Описание
+                </label>
+                <textarea
+                  value={groupDescription}
+                  onChange={(e) => setGroupDescription(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  rows={2}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Иконка группы
+                </label>
+                <GroupIconUpload value={groupIcon} onChange={setGroupIcon} />
+              </div>
+
+              {/* Участники */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Участники ({groupParticipants.length})
+                </label>
+                <div className="max-h-48 overflow-y-auto rounded-md border border-gray-300 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-700">
+                  {groupParticipants.map((participant) => {
+                    const user = participant.user;
+                    const fullName = [user?.lastName, user?.firstName, user?.middleName].filter(Boolean).join(" ") || "Неизвестный";
+                    const isCreator = editingChat.createdById === user?.id;
+                    const isAdmin = participant.role === "ADMIN";
+                    
+                    return (
+                      <div key={participant.id || user?.id} className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <div className="flex items-center gap-2">
+                          {user?.avatarUrl ? (
+                            <img src={getFileUrl(user.avatarUrl)} alt="" className="w-8 h-8 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold">
+                              {user?.firstName?.[0] || "?"}{user?.lastName?.[0] || ""}
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-sm text-gray-900 dark:text-white">{fullName}</p>
+                            <div className="flex gap-1">
+                              {isCreator && (
+                                <span className="text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 px-1.5 py-0.5 rounded">
+                                  Создатель
+                                </span>
+                              )}
+                              {isAdmin && !isCreator && (
+                                <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 px-1.5 py-0.5 rounded">
+                                  Админ
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        {!isCreator && (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => handleToggleAdmin(user?.id, participant.role)}
+                              className={`p-1.5 rounded text-xs ${
+                                isAdmin 
+                                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" 
+                                  : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+                              } hover:opacity-80`}
+                              title={isAdmin ? "Снять админа" : "Назначить админом"}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleRemoveParticipant(user?.id)}
+                              className="p-1.5 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                              title="Удалить из группы"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={handleSaveGroup}
+                  disabled={creating || !groupName.trim()}
+                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {creating ? "Сохранение..." : "Сохранить"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowEditGroupModal(false);
+                    setEditingChat(null);
+                    setGroupParticipants([]);
                   }}
                   className="flex-1 rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
                 >
@@ -687,6 +919,7 @@ function OrgChatSidebar({
   currentUserId,
   onSelectChat,
   onInvite,
+  onEdit,
   onDelete,
 }: {
   chats: Chat[];
@@ -695,6 +928,7 @@ function OrgChatSidebar({
   currentUserId: string | null;
   onSelectChat: (chat: Chat) => void;
   onInvite: (chat: Chat) => void;
+  onEdit?: (chat: Chat) => void;
   onDelete: (chatId: string) => void;
 }) {
   if (loading) {
@@ -749,6 +983,7 @@ function OrgChatSidebar({
             currentUserId={currentUserId}
             onClick={() => onSelectChat(chat)}
             onInvite={() => onInvite(chat)}
+            onEdit={() => onEdit?.(chat)}
             onDelete={() => onDelete(chat.id)}
           />
         ))}
@@ -883,6 +1118,7 @@ function OrgChatItem({
   currentUserId,
   onClick,
   onInvite,
+  onEdit,
   onDelete,
 }: {
   chat: Chat;
@@ -890,6 +1126,7 @@ function OrgChatItem({
   currentUserId: string | null;
   onClick: () => void;
   onInvite: () => void;
+  onEdit?: () => void;
   onDelete: () => void;
 }) {
   const [showMenu, setShowMenu] = useState(false);
@@ -981,15 +1218,31 @@ function OrgChatItem({
             </svg>
           </button>
           {showMenu && (
-            <div className="absolute right-0 top-8 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-10">
+            <div className="absolute right-0 top-8 w-44 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-10">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu(false);
+                  onEdit?.();
+                }}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Редактировать
+              </button>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowMenu(false);
                   onInvite();
                 }}
-                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
+                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
               >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
                 Пригласить
               </button>
               <button
@@ -998,8 +1251,11 @@ function OrgChatItem({
                   setShowMenu(false);
                   onDelete();
                 }}
-                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-red-600"
+                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-red-600 flex items-center gap-2"
               >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
                 Удалить группу
               </button>
             </div>
@@ -1015,12 +1271,14 @@ function OrgChatHeader({
   chat,
   onBack,
   onInvite,
+  onEdit,
   onDelete,
   onProfileClick,
 }: {
   chat: Chat;
   onBack: () => void;
   onInvite: () => void;
+  onEdit?: () => void;
   onDelete: () => void;
   onProfileClick?: (userId: string) => void;
 }) {
@@ -1114,6 +1372,18 @@ function OrgChatHeader({
           </button>
           {showMenu && (
             <div className="absolute right-0 top-12 w-44 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-10">
+              <button
+                onClick={() => {
+                  setShowMenu(false);
+                  onEdit?.();
+                }}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Редактировать
+              </button>
               <button
                 onClick={() => {
                   setShowMenu(false);
