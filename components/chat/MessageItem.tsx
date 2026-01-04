@@ -3,6 +3,8 @@
 import { memo, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Message, ChatUser } from "@/types/chat";
 import { getUserName, getInitials, formatTime, getFileUrl, formatFileSize } from "@/lib/chat-utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 // URL регулярное выражение для детекции ссылок
 const URL_REGEX = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/gi;
@@ -712,7 +714,7 @@ const Attachments = memo(function Attachments({
   );
 });
 
-// Компонент для контента сообщения с ссылками и их превью
+// Компонент для контента сообщения с ссылками, Markdown и превью
 const MessageContent = memo(function MessageContent({
   content,
   isOwn,
@@ -722,6 +724,11 @@ const MessageContent = memo(function MessageContent({
 }) {
   const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  
+  // Проверяем, содержит ли сообщение markdown-разметку
+  const hasMarkdown = useMemo(() => {
+    return /(\*\*|__|##|- |\d\. |```|\[.*\]\(.*\))/.test(content);
+  }, [content]);
   
   // Находим первый URL в сообщении
   const firstUrl = useMemo(() => {
@@ -755,8 +762,10 @@ const MessageContent = memo(function MessageContent({
     return () => { isCancelled = true; };
   }, [firstUrl]);
 
-  // Разбиваем текст на части (текст и ссылки)
+  // Разбиваем текст на части (текст и ссылки) - только для обычного текста без markdown
   const parts = useMemo(() => {
+    if (hasMarkdown) return null; // Для markdown используем ReactMarkdown
+    
     const result: { type: 'text' | 'link'; content: string }[] = [];
     let lastIndex = 0;
     
@@ -777,29 +786,45 @@ const MessageContent = memo(function MessageContent({
     }
     
     return result;
-  }, [content]);
+  }, [content, hasMarkdown]);
 
   return (
     <div className="min-w-0">
-      <p className="whitespace-pre-wrap break-words break-all text-sm md:text-base overflow-wrap-anywhere">
-        {parts.map((part, i) => 
-          part.type === 'link' ? (
-            <a
-              key={i}
-              href={part.content}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`underline hover:no-underline break-all ${
-                isOwn ? "text-blue-100 hover:text-white" : "text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
-              }`}
-            >
-              {part.content}
-            </a>
-          ) : (
-            <span key={i} className="break-words">{part.content}</span>
-          )
-        )}
-      </p>
+      {hasMarkdown ? (
+        // Рендерим Markdown для сообщений с разметкой (обычно от AI)
+        <div 
+          className={`prose prose-sm max-w-none ${
+            isOwn ? "prose-invert" : "dark:prose-invert"
+          } prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-strong:font-semibold prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline`}
+          style={{ wordBreak: "normal", overflowWrap: "break-word", hyphens: "auto" }}
+        >
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {content}
+          </ReactMarkdown>
+        </div>
+      ) : (
+        // Обычный текст с детекцией ссылок
+        <p className="whitespace-pre-wrap text-sm md:text-base" style={{ wordBreak: "normal", overflowWrap: "break-word", hyphens: "auto" }}>
+          {parts?.map((part, i) => 
+            part.type === 'link' ? (
+              <a
+                key={i}
+                href={part.content}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`underline hover:no-underline ${
+                  isOwn ? "text-blue-100 hover:text-white" : "text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                }`}
+                style={{ wordBreak: "break-all" }}
+              >
+                {part.content}
+              </a>
+            ) : (
+              <span key={i}>{part.content}</span>
+            )
+          )}
+        </p>
+      )}
       
       {/* Превью ссылки */}
       {linkPreview && (linkPreview.title || linkPreview.image) && (
