@@ -116,8 +116,8 @@ export function MembershipGate({
         </div>
       )}
 
-      {/* Модалка - sticky вверху контента, не перекрывает меню */}
-      <div className="sticky top-4 z-40 mx-auto -mt-[50vh] flex justify-center">
+      {/* Модалка - абсолютно позиционирована поверх контента */}
+      <div className="absolute inset-0 flex items-start justify-center pt-20">
         <div className="mx-4 max-w-md rounded-2xl bg-white p-8 shadow-2xl dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
           {/* Иконка */}
           <div className="mb-4 flex justify-center">
