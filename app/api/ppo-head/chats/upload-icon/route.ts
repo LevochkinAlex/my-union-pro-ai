@@ -37,18 +37,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let buffer = Buffer.from(await file.arrayBuffer());
+    const initialBuffer = Buffer.from(await file.arrayBuffer());
     let filename = file.name.toLowerCase();
 
     // Конвертируем HEIC если нужно
+    let imageBuffer: Buffer;
     if (filename.endsWith(".heic") || filename.endsWith(".heif")) {
-      const converted = await convertHeicToJpegServer(buffer, filename, file.type);
-      buffer = converted.buffer;
+      const converted = await convertHeicToJpegServer(initialBuffer, filename, file.type);
+      imageBuffer = converted.buffer;
       filename = converted.fileName;
+    } else {
+      imageBuffer = initialBuffer;
     }
 
     // Оптимизируем как аватар (квадрат 256px)
-    const optimized = await optimizeWithPreset(buffer, "avatar");
+    const optimized = await optimizeWithPreset(imageBuffer, "avatar");
 
     // Генерируем уникальное имя
     const hash = crypto.randomBytes(8).toString("hex");
