@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import { useToast } from "@/components/ui/Toast";
 import { useChat } from "@/hooks/useChat";
 import { Chat, Message } from "@/types/chat";
-import { getUserName, getFileUrl, getInitials } from "@/lib/chat-utils";
+import { getUserName, getFileUrl, getInitials, getNameInitials } from "@/lib/chat-utils";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 import GroupIconUpload from "@/components/chat/GroupIconUpload";
 

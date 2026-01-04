@@ -55,6 +55,31 @@ export function getInitials(user: ChatUser | any | null | undefined): string {
 }
 
 /**
+ * Получить инициалы из названия (для групп и каналов)
+ * Берёт первые буквы первых двух слов, или первые 2 буквы если слово одно
+ */
+export function getNameInitials(name: string | null | undefined): string {
+  if (!name || !name.trim()) return "Г";
+  
+  const words = name.trim().split(/\s+/).filter(w => w.length > 0);
+  
+  if (words.length >= 2) {
+    // Берём первые буквы первых двух слов
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  
+  if (words.length === 1) {
+    const word = words[0];
+    // Берём первые 2 буквы или 1 если слово короткое
+    return word.length >= 2 
+      ? (word[0] + word[1]).toUpperCase() 
+      : word[0].toUpperCase();
+  }
+  
+  return "Г";
+}
+
+/**
  * Форматировать время сообщения
  */
 export function formatTime(dateString: string | Date): string {

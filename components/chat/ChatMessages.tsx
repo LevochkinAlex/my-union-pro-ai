@@ -4,7 +4,7 @@ import { memo, useRef, useEffect, useCallback, useState } from "react";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { Message, Chat } from "@/types/chat";
 import { MessageItem } from "./MessageItem";
-import { formatMessageDate } from "@/lib/chat-utils";
+import { formatMessageDate, getNameInitials, getInitials, getUserName } from "@/lib/chat-utils";
 
 // Большое начальное значение для firstItemIndex (для поддержки prepend)
 const START_INDEX = 100000;
@@ -250,15 +250,23 @@ const LoadingState = memo(function LoadingState() {
 });
 
 const EmptyState = memo(function EmptyState({ chat }: { chat: Chat }) {
+  // Для групп - название и инициалы от названия
+  // Для личных чатов - имя пользователя и его инициалы
+  const isGroup = chat.type === "GROUP";
+  const name = isGroup ? (chat.name || "Группа") : getUserName(chat.otherUser);
+  const initials = isGroup ? getNameInitials(chat.name) : getInitials(chat.otherUser);
+  const gradientClass = isGroup 
+    ? "from-green-500 to-teal-600" 
+    : "from-blue-500 to-purple-600";
+
   return (
     <div className="flex-1 flex items-center justify-center">
       <div className="text-center p-6">
-        <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-semibold">
-          {chat.otherUser.firstName?.[0] || "?"}
-          {chat.otherUser.lastName?.[0] || ""}
+        <div className={`w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br ${gradientClass} flex items-center justify-center text-white text-2xl font-semibold`}>
+          {initials}
         </div>
         <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">
-          {[chat.otherUser.lastName, chat.otherUser.firstName].filter(Boolean).join(" ")}
+          {name}
         </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400">
           Начните переписку!
