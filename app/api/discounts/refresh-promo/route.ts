@@ -69,8 +69,8 @@ export async function POST(request: NextRequest) {
     console.log(`[refresh-promo] Fetching fresh promo code for discount ${discountId}...`);
 
     // Запрашиваем СВЕЖИЙ промокод из BestBenefits
-    // Используем эндпоинт активированных скидок
-    const response = await fetch(`https://bestbenefits.ru/api/users/${user.bestBenefitsUserId}/products`, {
+    // ✅ Правильный эндпоинт: GET /api/received (согласно документации BB API)
+    const response = await fetch(`https://bestbenefits.ru/api/received`, {
       method: "GET",
       headers: {
         "Accept": "application/json",
@@ -100,11 +100,20 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
-    console.log(`[refresh-promo] Got ${data.data?.length || 0} activated discounts from BB`);
+    
+    // Парсим ответ - может быть data.data или просто data
+    let activatedProducts: any[] = [];
+    if (data.data && Array.isArray(data.data)) {
+      activatedProducts = data.data;
+    } else if (Array.isArray(data)) {
+      activatedProducts = data;
+    }
+    
+    console.log(`[refresh-promo] Got ${activatedProducts.length} activated discounts from BB`);
 
     // Ищем нужную скидку в ответе
     const discountIdNum = Number(discountId);
-    const bbDiscount = data.data?.find((d: any) => d.id === discountIdNum);
+    const bbDiscount = activatedProducts.find((d: any) => d.id === discountIdNum);
 
     if (!bbDiscount) {
       console.log(`[refresh-promo] Discount ${discountId} not found in activated list`);
@@ -128,17 +137,47 @@ export async function POST(request: NextRequest) {
     }
 
     // Извлекаем промокод из ответа
+    // Формат /api/received: { codes: [{ code: "ABC123", end_date: "..." }] }
     let freshPromoCode: string | null = null;
 
-    // Пробуем разные варианты структуры ответа
-    if (bbDiscount.promoCode && typeof bbDiscount.promoCode === 'string') {
-      freshPromoCode = bbDiscount.promoCode;
-    } else if (bbDiscount.promo_code && typeof bbDiscount.promo_code === 'string') {
-      freshPromoCode = bbDiscount.promo_code;
-    } else if (bbDiscount.code && typeof bbDiscount.code === 'string') {
-      freshPromoCode = bbDiscount.code;
-    } else if (bbDiscount.promocode && typeof bbDiscount.promocode === 'string') {
-      freshPromoCode = bbDiscount.promocode;
+    // 1. Проверяем массив codes (основной формат /api/received)
+    if (bbDiscount.codes && Array.isArray(bbDiscount.codes) && bbDiscount.codes.length > 0) {
+      const now = new Date();
+      
+      // Ищем первый активный (неистёкший) промокод
+      for (const codeObj of bbDiscount.codes) {
+        const code = codeObj?.code || codeObj?.promo_code || codeObj?.promoCode;
+        const endDate = codeObj?.end_date || codeObj?.endDate;
+        
+        if (!code || typeof code !== 'string' || code.trim().length === 0) continue;
+        if (code === 'Промокод деактивирован' || code.toLowerCase() === 'deactivated') continue;
+        
+        // Проверяем срок действия
+        if (endDate) {
+          try {
+            const expDate = new Date(endDate);
+            if (!isNaN(expDate.getTime()) && expDate.getTime() < now.getTime()) {
+              console.log(`[refresh-promo] ⚠️ Code ${code} expired on ${endDate}`);
+              continue; // Пропускаем истёкший
+            }
+          } catch {}
+        }
+        
+        freshPromoCode = code.trim();
+        console.log(`[refresh-promo] ✅ Found valid code: ${freshPromoCode}`);
+        break;
+      }
+    }
+    
+    // 2. Fallback на прямые поля (альтернативные форматы)
+    if (!freshPromoCode) {
+      if (bbDiscount.promoCode && typeof bbDiscount.promoCode === 'string') {
+        freshPromoCode = bbDiscount.promoCode;
+      } else if (bbDiscount.promo_code && typeof bbDiscount.promo_code === 'string') {
+        freshPromoCode = bbDiscount.promo_code;
+      } else if (bbDiscount.code && typeof bbDiscount.code === 'string') {
+        freshPromoCode = bbDiscount.code;
+      }
     }
 
     console.log(`[refresh-promo] Fresh promo code: ${freshPromoCode || 'not found'}`);
