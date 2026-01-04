@@ -338,8 +338,6 @@ export async function setupForegroundMessageHandler() {
         data: payload.data || {},
         requireInteraction: false,
         silent: !finalSoundEnabled,
-        vibrate: finalSoundEnabled ? [200, 100, 200] : undefined,
-        ...(finalSoundEnabled && { sound: soundUrl }),
       };
 
       try {
