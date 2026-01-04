@@ -26,11 +26,14 @@ export function MembershipGate({
 }: MembershipGateProps) {
   const { status, isApproved, isLoading, message } = useMembershipAccess();
 
-  // Пока загружается - показываем скелетон
+  // Пока загружается - показываем полноэкранный лоадер
   if (isLoading) {
     return (
-      <div className="animate-pulse">
-        <div className="h-64 rounded-xl bg-gray-200 dark:bg-gray-700" />
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+          <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
+        </div>
       </div>
     );
   }
