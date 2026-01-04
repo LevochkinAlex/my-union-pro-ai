@@ -280,7 +280,7 @@ function ChatPageContent() {
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0 -mx-4 -my-8 sm:-mx-8 lg:-mx-12">
+    <div className="fixed inset-0 top-16 md:top-0 md:left-64 right-0 bottom-0 flex flex-col p-4 sm:p-6 lg:p-8 bg-gray-50 dark:bg-gray-900">
       <div className={`flex flex-1 min-h-0 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden`}>
       {/* Сайдбар со списком чатов */}
       <div className={`${showChatView ? "hidden md:flex" : "flex"} w-full md:w-1/3 border-r border-gray-200 dark:border-gray-700 flex-col`}>
