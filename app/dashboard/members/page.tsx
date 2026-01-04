@@ -66,7 +66,7 @@ interface MemberDetails extends Member {
   organization: { id: string; name: string } | null;
 }
 
-type DetailTab = "profile" | "work" | "family" | "education" | "membership" | "documents";
+type DetailTab = "profile" | "work" | "family" | "education" | "awards" | "membership" | "documents";
 
 // Маппинг типов документов
 const DOCUMENT_TYPE_MAP: Record<string, string> = {
@@ -89,11 +89,28 @@ const DOCUMENT_STATUS_MAP: Record<string, string> = {
 // Маппинг статусов членства
 const MEMBERSHIP_STATUS_MAP: Record<string, string> = {
   PENDING: "Ожидает",
+  PENDING_VERIFICATION: "Ожидает проверки",
+  PROFILE_INCOMPLETE: "Профиль не заполнен",
   DOCUMENTS_PENDING: "Ожидает документов",
   APPROVED: "Одобрен",
   REJECTED: "Отклонён",
   SUSPENDED: "Приостановлен",
   EXCLUDED: "Исключён",
+};
+
+// Маппинг статуса в профсоюзе
+const UNION_MEMBERSHIP_STATUS_MAP: Record<string, string> = {
+  ACCEPTED: "Принят на учёт",
+  NOT_ACCEPTED: "Не принят",
+  REMOVED: "Снят с учёта",
+};
+
+// Маппинг Best Benefits статуса
+const BEST_BENEFITS_STATUS_MAP: Record<string, string> = {
+  success: "Синхронизирован",
+  pending: "Ожидает",
+  error: "Ошибка",
+  not_synced: "Не синхронизирован",
 };
 
 const MARITAL_STATUS_MAP: Record<string, string> = {
@@ -127,6 +144,7 @@ export default function MembersPage() {
   const [memberDetails, setMemberDetails] = useState<MemberDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailTab, setDetailTab] = useState<DetailTab>("profile");
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -255,6 +273,149 @@ export default function MembersPage() {
       return JSON.parse(field);
     } catch {
       return null;
+    }
+  };
+
+  // Генерация PDF анкеты члена профсоюза
+  const handleDownloadPdf = async () => {
+    if (!memberDetails) return;
+    
+    setIsGeneratingPdf(true);
+    try {
+      const { jsPDF } = await import("jspdf");
+      
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 15;
+      let y = 20;
+      const lineHeight = 7;
+      
+      // Заголовок
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text("АНКЕТА ЧЛЕНА ПРОФСОЮЗА", pageWidth / 2, y, { align: "center" });
+      y += 15;
+      
+      // ФИО
+      doc.setFontSize(14);
+      const fullName = [memberDetails.lastName, memberDetails.firstName, memberDetails.middleName].filter(Boolean).join(" ");
+      doc.text(fullName || "ФИО не указано", pageWidth / 2, y, { align: "center" });
+      y += 10;
+      
+      // Статус
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      const statusText = `Статус: ${MEMBERSHIP_STATUS_MAP[memberDetails.membershipStatus] || memberDetails.membershipStatus}`;
+      doc.text(statusText, pageWidth / 2, y, { align: "center" });
+      y += 15;
+      
+      // Функция добавления секции
+      const addSection = (title: string) => {
+        if (y > 260) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text(title, margin, y);
+        y += 8;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+      };
+      
+      // Функция добавления поля
+      const addField = (label: string, value: string | null | undefined) => {
+        if (!value) return;
+        if (y > 275) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(`${label}: ${value}`, margin, y);
+        y += lineHeight;
+      };
+      
+      // ЛИЧНЫЕ ДАННЫЕ
+      addSection("ЛИЧНЫЕ ДАННЫЕ");
+      addField("Email", memberDetails.email);
+      addField("Телефон", memberDetails.phone);
+      addField("Дата рождения", memberDetails.dateOfBirth ? new Date(memberDetails.dateOfBirth).toLocaleDateString("ru-RU") : null);
+      addField("Адрес", memberDetails.address);
+      addField("Город для скидок", memberDetails.preferredDiscountCity);
+      y += 5;
+      
+      // РАБОТА
+      addSection("РАБОТА");
+      addField("Организация (Профсоюз)", memberDetails.organization?.name);
+      addField("Статус занятости", memberDetails.employmentStatus ? EMPLOYMENT_STATUS_MAP[memberDetails.employmentStatus] : null);
+      addField("Место работы", memberDetails.workplace);
+      addField("ИНН работодателя", memberDetails.workplaceInn);
+      addField("Должность", memberDetails.jobTitle);
+      addField("Профессия", memberDetails.profession);
+      addField("Руководитель", memberDetails.directorName);
+      addField("Должность руководителя", memberDetails.directorPosition);
+      y += 5;
+      
+      // СЕМЬЯ
+      addSection("СЕМЬЯ");
+      addField("Семейное положение", memberDetails.maritalStatus ? MARITAL_STATUS_MAP[memberDetails.maritalStatus] : null);
+      addField("Информация о супруге", memberDetails.spouseInfo);
+      addField("Есть дети", memberDetails.hasChildren === true ? "Да" : memberDetails.hasChildren === false ? "Нет" : null);
+      addField("О детях", memberDetails.childrenInfo);
+      y += 5;
+      
+      // ОБРАЗОВАНИЕ
+      addSection("ОБРАЗОВАНИЕ");
+      addField("Образование", memberDetails.education);
+      
+      const educations = parseJsonField(memberDetails.educations);
+      if (educations && educations.length > 0) {
+        educations.forEach((edu: any) => {
+          addField("Учебное заведение", `${edu.institution} (${edu.level}, ${edu.specialty}, ${edu.year})`);
+        });
+      }
+      
+      // НАГРАДЫ
+      const awards = parseJsonField(memberDetails.awards);
+      if (awards && awards.length > 0) {
+        y += 5;
+        addSection("НАГРАДЫ");
+        awards.forEach((a: any) => {
+          addField(a.type || "Награда", `${a.description} (${a.year})`);
+        });
+      }
+      y += 5;
+      
+      // ЧЛЕНСТВО
+      addSection("ЧЛЕНСТВО В ПРОФСОЮЗЕ");
+      addField("Статус членства", MEMBERSHIP_STATUS_MAP[memberDetails.membershipStatus] || memberDetails.membershipStatus);
+      addField("Номер профсоюзного билета", memberDetails.unionCardNumber);
+      addField("Дата вступления", memberDetails.membershipJoinedAt ? new Date(memberDetails.membershipJoinedAt).toLocaleDateString("ru-RU") : null);
+      addField("Статус в профсоюзе", memberDetails.unionMembershipStatus ? UNION_MEMBERSHIP_STATUS_MAP[memberDetails.unionMembershipStatus] : null);
+      
+      // О СЕБЕ
+      if (memberDetails.aboutMe || memberDetails.hobbies) {
+        y += 5;
+        addSection("О СЕБЕ");
+        addField("О себе", memberDetails.aboutMe);
+        addField("Хобби", memberDetails.hobbies);
+      }
+      
+      // Дата генерации
+      y += 10;
+      doc.setFontSize(8);
+      doc.setTextColor(128);
+      doc.text(`Сформировано: ${new Date().toLocaleString("ru-RU")}`, margin, y);
+      
+      // Скачиваем
+      const fileName = `anketa_${(memberDetails.lastName || "member").toLowerCase()}_${memberDetails.id.slice(0, 8)}.pdf`;
+      doc.save(fileName);
+      
+      alertSuccess("Анкета успешно скачана");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alertError("Ошибка при генерации PDF");
+    } finally {
+      setIsGeneratingPdf(false);
     }
   };
 
@@ -756,17 +917,43 @@ export default function MembersPage() {
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                   Карточка члена профсоюза
                 </h2>
-                <button
-                  onClick={() => {
-                    setShowDetailModal(false);
-                    setMemberDetails(null);
-                  }}
-                  className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
-                >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-2">
+                  {memberDetails && (
+                    <button
+                      onClick={handleDownloadPdf}
+                      disabled={isGeneratingPdf}
+                      className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {isGeneratingPdf ? (
+                        <>
+                          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Генерация...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          Скачать PDF
+                        </>
+                      )}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setShowDetailModal(false);
+                      setMemberDetails(null);
+                    }}
+                    className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
 
               {/* Body */}
@@ -803,9 +990,11 @@ export default function MembersPage() {
                               ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
                               : memberDetails.membershipStatus === "DOCUMENTS_PENDING"
                               ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                              : memberDetails.membershipStatus === "EXCLUDED" || memberDetails.membershipStatus === "REJECTED"
+                              ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
                               : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
                           }`}>
-                            {memberDetails.membershipStatus}
+                            {MEMBERSHIP_STATUS_MAP[memberDetails.membershipStatus] || memberDetails.membershipStatus}
                           </span>
                           {memberDetails.unionCardNumber && (
                             <span className="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
@@ -849,6 +1038,7 @@ export default function MembersPage() {
                           { key: "work", label: "Работа" },
                           { key: "family", label: "Семья" },
                           { key: "education", label: "Образование" },
+                          { key: "awards", label: "Награды" },
                           { key: "membership", label: "Членство" },
                           { key: "documents", label: `Документы (${memberDetails.documents?.length || 0})` },
                         ].map((tab) => (
@@ -993,32 +1183,6 @@ export default function MembersPage() {
                           );
                         })()}
 
-                        {(() => {
-                          const awards = parseJsonField(memberDetails.awards);
-                          return awards && awards.length > 0 && (
-                            <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
-                              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Награды</h4>
-                              <div className="space-y-3">
-                                {awards.map((a: any, i: number) => (
-                                  <div key={i} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-                                    <div className="flex items-center gap-2">
-                                      <span className={`rounded px-2 py-0.5 text-xs ${
-                                        a.type === "государственная" ? "bg-yellow-100 text-yellow-800" :
-                                        a.type === "ведомственная" ? "bg-blue-100 text-blue-800" :
-                                        "bg-green-100 text-green-800"
-                                      }`}>
-                                        {a.type}
-                                      </span>
-                                      <span className="text-sm text-gray-500">{a.year}</span>
-                                    </div>
-                                    <p className="mt-1 text-gray-900 dark:text-white">{a.description}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })()}
-
                         {memberDetails.additionalInfo && (
                           <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
                             <InfoField label="Дополнительная информация" value={memberDetails.additionalInfo} />
@@ -1027,16 +1191,47 @@ export default function MembersPage() {
                       </div>
                     )}
 
+                    {detailTab === "awards" && (
+                      <div className="space-y-4">
+                        {(() => {
+                          const awards = parseJsonField(memberDetails.awards);
+                          return awards && awards.length > 0 ? (
+                            <div className="space-y-3">
+                              {awards.map((a: any, i: number) => (
+                                <div key={i} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-2xl">🏆</span>
+                                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${
+                                      a.type === "государственная" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" :
+                                      a.type === "ведомственная" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
+                                      a.type === "профсоюзная" ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" :
+                                      "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                    }`}>
+                                      {a.type || "Награда"}
+                                    </span>
+                                    {a.year && <span className="text-sm text-gray-500 dark:text-gray-400">{a.year} г.</span>}
+                                  </div>
+                                  <p className="text-gray-900 dark:text-white">{a.description}</p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 dark:text-gray-400 text-center py-8">Наград нет</p>
+                          );
+                        })()}
+                      </div>
+                    )}
+
                     {detailTab === "membership" && (
                       <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <InfoField label="Статус членства" value={MEMBERSHIP_STATUS_MAP[memberDetails.membershipStatus] || memberDetails.membershipStatus} />
-                          <InfoField label="Номер профсоюзного билета" value={memberDetails.unionCardNumber} />
-                          <InfoField label="Дата вступления" value={memberDetails.membershipJoinedAt ? new Date(memberDetails.membershipJoinedAt).toLocaleDateString("ru-RU") : null} />
-                          <InfoField label="Статус в профсоюзе" value={memberDetails.unionMembershipStatus} />
-                          <InfoField label="Организация" value={memberDetails.organization?.name} />
-                          <InfoField label="Best Benefits ID" value={memberDetails.bestBenefitsUserId} />
-                          <InfoField label="Best Benefits статус" value={memberDetails.bestBenefitsStatus} />
+                          {memberDetails.unionCardNumber && <InfoField label="Номер профсоюзного билета" value={memberDetails.unionCardNumber} />}
+                          {memberDetails.membershipJoinedAt && <InfoField label="Дата вступления" value={new Date(memberDetails.membershipJoinedAt).toLocaleDateString("ru-RU")} />}
+                          {memberDetails.unionMembershipStatus && <InfoField label="Статус в профсоюзе" value={UNION_MEMBERSHIP_STATUS_MAP[memberDetails.unionMembershipStatus] || memberDetails.unionMembershipStatus} />}
+                          {memberDetails.organization?.name && <InfoField label="Организация" value={memberDetails.organization.name} />}
+                          {memberDetails.bestBenefitsUserId && <InfoField label="Best Benefits ID" value={memberDetails.bestBenefitsUserId} />}
+                          {memberDetails.bestBenefitsStatus && <InfoField label="Best Benefits статус" value={BEST_BENEFITS_STATUS_MAP[memberDetails.bestBenefitsStatus] || memberDetails.bestBenefitsStatus} />}
                           <InfoField label="Email подтверждён" value={memberDetails.emailVerified ? new Date(memberDetails.emailVerified).toLocaleDateString("ru-RU") : "Нет"} />
                         </div>
                       </div>
@@ -1108,8 +1303,13 @@ export default function MembersPage() {
   );
 }
 
-// Helper component for info fields
-function InfoField({ label, value, className = "" }: { label: string; value: string | null | undefined; className?: string }) {
+// Helper component for info fields - не показывает поле если значение пустое
+function InfoField({ label, value, className = "", showEmpty = false }: { label: string; value: string | null | undefined; className?: string; showEmpty?: boolean }) {
+  // Если значение пустое и не нужно показывать пустые поля - возвращаем null
+  if (!value && !showEmpty) {
+    return null;
+  }
+  
   return (
     <div className={className}>
       <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">{label}</label>
