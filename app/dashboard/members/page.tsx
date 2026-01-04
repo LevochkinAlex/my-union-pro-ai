@@ -300,144 +300,34 @@ export default function MembersPage() {
     }
   };
 
-  // Генерация PDF анкеты члена профсоюза
+  // Генерация PDF анкеты члена профсоюза через серверный API
   const handleDownloadPdf = async () => {
     if (!memberDetails) return;
     
     setIsGeneratingPdf(true);
     try {
-      const { jsPDF } = await import("jspdf");
+      const response = await fetch(`/api/ppo-head/members/${memberDetails.id}/pdf`);
       
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const margin = 15;
-      let y = 20;
-      const lineHeight = 7;
-      
-      // Заголовок
-      doc.setFontSize(18);
-      doc.setFont("helvetica", "bold");
-      doc.text("АНКЕТА ЧЛЕНА ПРОФСОЮЗА", pageWidth / 2, y, { align: "center" });
-      y += 15;
-      
-      // ФИО
-      doc.setFontSize(14);
-      const fullName = [memberDetails.lastName, memberDetails.firstName, memberDetails.middleName].filter(Boolean).join(" ");
-      doc.text(fullName || "ФИО не указано", pageWidth / 2, y, { align: "center" });
-      y += 10;
-      
-      // Статус
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      const statusText = `Статус: ${MEMBERSHIP_STATUS_MAP[memberDetails.membershipStatus] || memberDetails.membershipStatus}`;
-      doc.text(statusText, pageWidth / 2, y, { align: "center" });
-      y += 15;
-      
-      // Функция добавления секции
-      const addSection = (title: string) => {
-        if (y > 260) {
-          doc.addPage();
-          y = 20;
-        }
-        doc.setFontSize(12);
-        doc.setFont("helvetica", "bold");
-        doc.text(title, margin, y);
-        y += 8;
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-      };
-      
-      // Функция добавления поля
-      const addField = (label: string, value: string | null | undefined) => {
-        if (!value) return;
-        if (y > 275) {
-          doc.addPage();
-          y = 20;
-        }
-        doc.text(`${label}: ${value}`, margin, y);
-        y += lineHeight;
-      };
-      
-      // ЛИЧНЫЕ ДАННЫЕ
-      addSection("ЛИЧНЫЕ ДАННЫЕ");
-      addField("Email", memberDetails.email);
-      addField("Телефон", memberDetails.phone);
-      addField("Дата рождения", memberDetails.dateOfBirth ? new Date(memberDetails.dateOfBirth).toLocaleDateString("ru-RU") : null);
-      addField("Адрес", memberDetails.address);
-      addField("Город для скидок", memberDetails.preferredDiscountCity);
-      y += 5;
-      
-      // РАБОТА
-      addSection("РАБОТА");
-      addField("Организация (Профсоюз)", memberDetails.organization?.name);
-      addField("Статус занятости", memberDetails.employmentStatus ? EMPLOYMENT_STATUS_MAP[memberDetails.employmentStatus] : null);
-      addField("Место работы", memberDetails.workplace);
-      addField("ИНН работодателя", memberDetails.workplaceInn);
-      addField("Должность", memberDetails.jobTitle);
-      addField("Профессия", memberDetails.profession);
-      addField("Руководитель", memberDetails.directorName);
-      addField("Должность руководителя", memberDetails.directorPosition);
-      y += 5;
-      
-      // СЕМЬЯ
-      addSection("СЕМЬЯ");
-      addField("Семейное положение", memberDetails.maritalStatus ? MARITAL_STATUS_MAP[memberDetails.maritalStatus] : null);
-      addField("Информация о супруге", memberDetails.spouseInfo);
-      addField("Есть дети", memberDetails.hasChildren === true ? "Да" : memberDetails.hasChildren === false ? "Нет" : null);
-      addField("О детях", memberDetails.childrenInfo);
-      y += 5;
-      
-      // ОБРАЗОВАНИЕ
-      addSection("ОБРАЗОВАНИЕ");
-      addField("Образование", memberDetails.education);
-      
-      const educations = parseJsonField(memberDetails.educations);
-      if (educations && educations.length > 0) {
-        educations.forEach((edu: any) => {
-          addField("Учебное заведение", `${edu.institution} (${edu.level}, ${edu.specialty}, ${edu.year})`);
-        });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: "Ошибка сервера" }));
+        throw new Error(error.error || "Ошибка при генерации PDF");
       }
       
-      // НАГРАДЫ
-      const awards = parseJsonField(memberDetails.awards);
-      if (awards && awards.length > 0) {
-        y += 5;
-        addSection("НАГРАДЫ");
-        awards.forEach((a: any) => {
-          addField(a.type || "Награда", `${a.description} (${a.year})`);
-        });
-      }
-      y += 5;
-      
-      // ЧЛЕНСТВО
-      addSection("ЧЛЕНСТВО В ПРОФСОЮЗЕ");
-      addField("Статус членства", MEMBERSHIP_STATUS_MAP[memberDetails.membershipStatus] || memberDetails.membershipStatus);
-      addField("Номер профсоюзного билета", memberDetails.unionCardNumber);
-      addField("Дата вступления", memberDetails.membershipJoinedAt ? new Date(memberDetails.membershipJoinedAt).toLocaleDateString("ru-RU") : null);
-      addField("Статус в профсоюзе", memberDetails.unionMembershipStatus ? UNION_MEMBERSHIP_STATUS_MAP[memberDetails.unionMembershipStatus] : null);
-      
-      // О СЕБЕ
-      if (memberDetails.aboutMe || memberDetails.hobbies) {
-        y += 5;
-        addSection("О СЕБЕ");
-        addField("О себе", memberDetails.aboutMe);
-        addField("Хобби", memberDetails.hobbies);
-      }
-      
-      // Дата генерации
-      y += 10;
-      doc.setFontSize(8);
-      doc.setTextColor(128);
-      doc.text(`Сформировано: ${new Date().toLocaleString("ru-RU")}`, margin, y);
-      
-      // Скачиваем
-      const fileName = `anketa_${(memberDetails.lastName || "member").toLowerCase()}_${memberDetails.id.slice(0, 8)}.pdf`;
-      doc.save(fileName);
+      // Получаем blob и скачиваем
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `anketa_${(memberDetails.lastName || "member").toLowerCase().replace(/[^a-zа-яё0-9]/gi, "_")}_${memberDetails.id.slice(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
       
       alertSuccess("Анкета успешно скачана");
     } catch (error) {
       console.error("Error generating PDF:", error);
-      alertError("Ошибка при генерации PDF");
+      alertError(error instanceof Error ? error.message : "Ошибка при генерации PDF");
     } finally {
       setIsGeneratingPdf(false);
     }
