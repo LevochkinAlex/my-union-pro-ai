@@ -210,7 +210,7 @@ function ChatInputComponent({
 
   return (
     <div 
-      className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0 pb-4 md:pb-0"
+      className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0"
     >
       {/* Превью ответа/редактирования */}
       {(replyingTo || editingMessage) && (

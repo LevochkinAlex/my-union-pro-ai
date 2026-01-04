@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import { useToast } from "@/components/ui/Toast";
 import { useChat } from "@/hooks/useChat";
+import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { Chat, Message } from "@/types/chat";
 import { getUserName, getFileUrl } from "@/lib/chat-utils";
 import { MembershipGate } from "@/components/MembershipGate";
@@ -66,6 +67,9 @@ function ChatPageContent() {
     messageId: null,
   });
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
+  
+  // Используем хук для корректной работы с виртуальной клавиатурой
+  const { viewportHeight } = useViewportHeight();
 
   // Используем кастомный хук для логики чата
   const {
@@ -278,8 +282,17 @@ function ChatPageContent() {
     return <PageSkeleton />;
   }
 
+  // Вычисляем высоту контейнера: используем viewportHeight если доступен, иначе CSS fallback
+  // На мобильных вычитаем 128px (header + отступы), на десктопе 128px
+  const containerHeight = viewportHeight 
+    ? `${viewportHeight - 128}px` 
+    : "calc(100dvh - 8rem)";
+
   return (
-    <div className="flex flex-col h-[calc(100dvh-12rem)] md:h-[calc(100vh-8rem)]">
+    <div 
+      className="flex flex-col"
+      style={{ height: containerHeight }}
+    >
       <div className={`flex flex-1 min-h-0 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden`}>
       {/* Сайдбар со списком чатов */}
       <div className={`${showChatView ? "hidden md:flex" : "flex"} w-full md:w-1/3 border-r border-gray-200 dark:border-gray-700 flex-col`}>
