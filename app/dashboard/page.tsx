@@ -588,7 +588,7 @@ export default async function DashboardPage() {
                   />
                 </svg>
                 <span className="text-sm text-gray-700 dark:text-gray-300">
-                  Чат с AI-помощником
+                  Мои чаты
                 </span>
               </Link>
               <Link
