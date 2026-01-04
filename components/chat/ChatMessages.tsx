@@ -130,6 +130,30 @@ function ChatMessagesComponent({
     }
   }, [items.length]);
 
+  // Скролл к низу при отправке нового сообщения текущим пользователем
+  const lastMessageRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (messages.length === 0 || !hasInitialized.current) return;
+    
+    const lastMessage = messages[messages.length - 1];
+    // Если это новое сообщение от текущего пользователя - скроллим вниз
+    if (lastMessage && lastMessage.id !== lastMessageRef.current && lastMessage.senderId === currentUserId) {
+      lastMessageRef.current = lastMessage.id;
+      // Скроллим с небольшой задержкой чтобы DOM обновился
+      setTimeout(() => {
+        virtuosoRef.current?.scrollToIndex({
+          index: items.length - 1,
+          align: "end",
+          behavior: "smooth",
+        });
+      }, 50);
+    }
+    // Обновляем ref для отслеживания последнего сообщения
+    if (lastMessage) {
+      lastMessageRef.current = lastMessage.id;
+    }
+  }, [messages, currentUserId, items.length]);
+
   // Автоскролл к низу при новых сообщениях (если пользователь был внизу)
   const handleFollowOutput = useCallback((isAtBottom: boolean) => {
     return isAtBottom ? "smooth" : false;
