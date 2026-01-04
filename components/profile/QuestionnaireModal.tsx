@@ -229,19 +229,32 @@ export default function QuestionnaireModal({
           loadedData.jobTitle
         );
 
-        // Проверяем наличие документов
-        const hasDocuments = loadedDocs.length > 0;
+        // Проверяем наличие ЗАЯВЛЕНИЙ (не всех документов!)
+        const applicationDocs = loadedDocs.filter(
+          (doc: Document) =>
+            doc.type === "MEMBERSHIP_APPLICATION" ||
+            doc.type === "CONTRIBUTION_APPLICATION"
+        );
         
-        // Проверяем подписаны ли документы
-        const allDocsSigned = loadedDocs.length > 0 && 
-          loadedDocs.every((doc: Document) => doc.signedFilePath);
+        // Документы сгенерированы если есть хотя бы одно заявление с filePath
+        const hasGeneratedApplications = applicationDocs.some(
+          (doc: Document) => doc.filePath
+        );
+        
+        // Проверяем подписаны ли ОБА заявления
+        const membershipApp = applicationDocs.find((doc: Document) => doc.type === "MEMBERSHIP_APPLICATION");
+        const contributionApp = applicationDocs.find((doc: Document) => doc.type === "CONTRIBUTION_APPLICATION");
+        const allApplicationsSigned = !!(
+          membershipApp?.signedFilePath && 
+          contributionApp?.signedFilePath
+        );
 
         // Определяем шаг
         let initialStep = 1;
-        if (allDocsSigned) {
-          initialStep = 4; // Всё готово
-        } else if (hasDocuments) {
-          initialStep = 3; // Документы сгенерированы, нужно подписать
+        if (allApplicationsSigned) {
+          initialStep = 4; // Всё готово - оба заявления подписаны
+        } else if (hasGeneratedApplications) {
+          initialStep = 3; // Заявления сгенерированы, нужно подписать
         } else if (isProfileComplete) {
           initialStep = 2; // Профиль заполнен, сверка данных
         }
@@ -250,8 +263,13 @@ export default function QuestionnaireModal({
         
         console.log("[QuestionnaireModal] Determined initial step:", {
           isProfileComplete,
-          hasDocuments,
-          allDocsSigned,
+          hasGeneratedApplications,
+          allApplicationsSigned,
+          applicationDocs: applicationDocs.map((d: Document) => ({ 
+            type: d.type, 
+            filePath: !!d.filePath, 
+            signedFilePath: !!d.signedFilePath 
+          })),
           initialStep
         });
       }
