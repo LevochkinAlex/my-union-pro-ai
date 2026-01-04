@@ -81,7 +81,7 @@ export function MembershipGate({
   const info = getStatusInfo();
 
   return (
-    <div className="relative">
+    <div className="relative min-h-[60vh]">
       {/* Заблюренный контент */}
       {showBlur && (
         <div className="pointer-events-none select-none blur-md opacity-50">
@@ -89,8 +89,8 @@ export function MembershipGate({
         </div>
       )}
 
-      {/* Оверлей с модалкой */}
-      <div className={`${showBlur ? "absolute inset-0" : ""} flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-xl`}>
+      {/* Оверлей с модалкой - фиксированный по центру экрана */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
         <div className="mx-4 max-w-md rounded-2xl bg-white p-8 shadow-2xl dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
           {/* Иконка */}
           <div className="mb-4 flex justify-center">
