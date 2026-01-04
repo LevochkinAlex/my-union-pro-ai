@@ -259,12 +259,23 @@ const EmptyState = memo(function EmptyState({ chat }: { chat: Chat }) {
     ? "from-green-500 to-teal-600" 
     : "from-blue-500 to-purple-600";
 
+  // Проверяем наличие аватарки (для групп - iconUrl, для личных - otherUser.avatarUrl)
+  const avatarUrl = isGroup ? chat.iconUrl : chat.otherUser?.avatarUrl;
+
   return (
     <div className="flex-1 flex items-center justify-center">
       <div className="text-center p-6">
-        <div className={`w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br ${gradientClass} flex items-center justify-center text-white text-2xl font-semibold`}>
-          {initials}
-        </div>
+        {avatarUrl ? (
+          <img 
+            src={avatarUrl} 
+            alt={name} 
+            className="w-20 h-20 mx-auto mb-4 rounded-full object-cover"
+          />
+        ) : (
+          <div className={`w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br ${gradientClass} flex items-center justify-center text-white text-2xl font-semibold`}>
+            {initials}
+          </div>
+        )}
         <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">
           {name}
         </h3>
