@@ -3,11 +3,9 @@
 import { useReveal } from "@/hooks/use-reveal"
 import { MagneticButton } from "@/components/landing/magnetic-button"
 import { Users, FileText, MessageSquare, Shield, Bell } from "lucide-react"
-import { useRouter } from "next/navigation"
 
 export function DemoSection() {
   const { ref, isVisible } = useReveal(0.3)
-  const router = useRouter()
 
   const demoFeatures = [
     {
@@ -74,10 +72,10 @@ export function DemoSection() {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <MagneticButton variant="primary" onClick={() => router.push("/login")}>
+              <MagneticButton variant="primary" onClick={() => window.open("https://myunion.pro", "_blank")}>
                 Открыть платформу
               </MagneticButton>
-              <MagneticButton variant="secondary" onClick={() => router.push("/register")}>
+              <MagneticButton variant="secondary" onClick={() => window.open("https://myunion.pro/login", "_blank")}>
                 Тестовый доступ
               </MagneticButton>
             </div>

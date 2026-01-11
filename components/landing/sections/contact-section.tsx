@@ -200,15 +200,13 @@ export function ContactSection() {
                 }`}
                 style={{ transitionDelay: "600ms" }}
               >
-                <MagneticButton 
-                  variant="primary" 
-                  size="lg" 
-                  className="w-full" 
-                  disabled={isSubmitting}
+                <button
                   type="submit"
+                  disabled={isSubmitting}
+                  className="relative overflow-hidden rounded-full font-medium transition-all duration-300 ease-out will-change-transform bg-foreground/95 text-background hover:bg-foreground backdrop-blur-md hover:scale-[1.02] active:scale-[0.98] px-8 py-3.5 text-base w-full disabled:opacity-50"
                 >
                   {isSubmitting ? "Отправка..." : "Отправить заявку"}
-                </MagneticButton>
+                </button>
                 {submitSuccess && (
                   <p className="mt-3 text-center font-mono text-sm text-foreground/80">Заявка успешно отправлена!</p>
                 )}

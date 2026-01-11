@@ -12,10 +12,8 @@ import { ChatWidget } from "@/components/landing/chat-widget"
 import { MagneticButton } from "@/components/landing/magnetic-button"
 import { useRef, useEffect, useState } from "react"
 import Image from "next/image"
-import { useRouter } from "next/navigation"
 
-export default function LandingPage() {
-  const router = useRouter()
+export default function Home() {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [currentSection, setCurrentSection] = useState(0)
   const [isLoaded, setIsLoaded] = useState(false)
@@ -180,7 +178,7 @@ export default function LandingPage() {
   }, [currentSection])
 
   return (
-    <main className="landing-page relative h-screen w-full overflow-hidden bg-[oklch(0.1_0.02_220)]">
+    <main className="relative h-screen w-full overflow-hidden bg-background">
       <CustomCursor />
       <GrainOverlay />
 
@@ -230,12 +228,12 @@ export default function LandingPage() {
               key={item}
               onClick={() => scrollToSection(index)}
               className={`group relative font-sans text-sm font-medium transition-colors ${
-                currentSection === index ? "text-white" : "text-white/80 hover:text-white"
+                currentSection === index ? "text-foreground" : "text-foreground/80 hover:text-foreground"
               }`}
             >
               {item}
               <span
-                className={`absolute -bottom-1 left-0 h-px bg-white transition-all duration-300 ${
+                className={`absolute -bottom-1 left-0 h-px bg-foreground transition-all duration-300 ${
                   currentSection === index ? "w-full" : "w-0 group-hover:w-full"
                 }`}
               />
@@ -243,7 +241,7 @@ export default function LandingPage() {
           ))}
         </div>
 
-        <MagneticButton variant="secondary" onClick={() => router.push("/login")}>
+        <MagneticButton variant="secondary" onClick={() => window.location.href = "/login"}>
           Войти
         </MagneticButton>
       </nav>
@@ -259,19 +257,19 @@ export default function LandingPage() {
         {/* Hero Section */}
         <section className="flex min-h-screen w-screen shrink-0 flex-col justify-end px-6 pb-16 pt-24 md:px-12 md:pb-24">
           <div className="max-w-3xl">
-            <div className="mb-4 inline-block animate-in fade-in slide-in-from-bottom-4 rounded-full border border-white/20 bg-white/15 px-4 py-1.5 backdrop-blur-md duration-700">
-              <p className="font-mono text-xs text-white/90">AI-Powered Platform v1.7.1</p>
+            <div className="mb-4 inline-block animate-in fade-in slide-in-from-bottom-4 rounded-full border border-foreground/20 bg-foreground/15 px-4 py-1.5 backdrop-blur-md duration-700">
+              <p className="font-mono text-xs text-foreground/90">AI-Powered Platform v1.6.1</p>
             </div>
-            <h1 className="mb-6 animate-in fade-in slide-in-from-bottom-8 font-sans text-5xl font-light leading-[1.1] tracking-tight text-white duration-1000 md:text-6xl lg:text-7xl">
+            <h1 className="mb-6 animate-in fade-in slide-in-from-bottom-8 font-sans text-5xl font-light leading-[1.1] tracking-tight text-foreground duration-1000 md:text-6xl lg:text-7xl">
               <span className="text-balance">
                 Единая панель
                 <br />
                 управления
                 <br />
-                <span className="text-white/60">профсоюзом</span>
+                <span className="text-foreground/60">профсоюзом</span>
               </span>
             </h1>
-            <p className="mb-8 max-w-xl animate-in fade-in slide-in-from-bottom-4 text-lg leading-relaxed text-white/90 duration-1000 delay-200 md:text-xl">
+            <p className="mb-8 max-w-xl animate-in fade-in slide-in-from-bottom-4 text-lg leading-relaxed text-foreground/90 duration-1000 delay-200 md:text-xl">
               <span className="text-pretty">
                 Современная платформа с AI-ассистентом для автоматизации документооборота, управления членами и
                 обработки обращений. До 80% автоматизации рутинных задач.
@@ -289,25 +287,25 @@ export default function LandingPage() {
             {/* Stats */}
             <div className="mt-12 flex animate-in fade-in slide-in-from-bottom-4 flex-wrap gap-8 duration-1000 delay-500 md:gap-12">
               <div>
-                <div className="text-3xl font-light text-white md:text-4xl">50K+</div>
-                <div className="font-mono text-xs text-white/60">Пользователей</div>
+                <div className="text-3xl font-light text-foreground md:text-4xl">50K+</div>
+                <div className="font-mono text-xs text-foreground/60">Пользователей</div>
               </div>
               <div>
-                <div className="text-3xl font-light text-white md:text-4xl">80%</div>
-                <div className="font-mono text-xs text-white/60">AI-автоматизация</div>
+                <div className="text-3xl font-light text-foreground md:text-4xl">80%</div>
+                <div className="font-mono text-xs text-foreground/60">AI-автоматизация</div>
               </div>
               <div>
-                <div className="text-3xl font-light text-white md:text-4xl">-90%</div>
-                <div className="font-mono text-xs text-white/60">Время обработки</div>
+                <div className="text-3xl font-light text-foreground md:text-4xl">-90%</div>
+                <div className="font-mono text-xs text-foreground/60">Время обработки</div>
               </div>
             </div>
           </div>
 
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-in fade-in duration-1000 delay-500">
             <div className="flex items-center gap-2">
-              <p className="font-mono text-xs text-white/80">Прокрутите для изучения</p>
-              <div className="flex h-6 w-12 items-center justify-center rounded-full border border-white/20 bg-white/15 backdrop-blur-md">
-                <div className="h-2 w-2 animate-pulse rounded-full bg-white/80" />
+              <p className="font-mono text-xs text-foreground/80">Прокрутите для изучения</p>
+              <div className="flex h-6 w-12 items-center justify-center rounded-full border border-foreground/20 bg-foreground/15 backdrop-blur-md">
+                <div className="h-2 w-2 animate-pulse rounded-full bg-foreground/80" />
               </div>
             </div>
           </div>
@@ -324,20 +322,8 @@ export default function LandingPage() {
       <ChatWidget />
 
       <style jsx global>{`
-        .landing-page div::-webkit-scrollbar {
+        div::-webkit-scrollbar {
           display: none;
-        }
-        .landing-page * {
-          cursor: auto;
-        }
-        @media (min-width: 768px) {
-          .landing-page * {
-            cursor: none;
-          }
-        }
-        .landing-page {
-          --foreground: oklch(0.98 0 0);
-          --background: oklch(0.1 0.02 220);
         }
       `}</style>
     </main>

@@ -4,6 +4,7 @@ import { useReveal } from "@/hooks/use-reveal"
 import { useState } from "react"
 import { MagneticButton } from "@/components/landing/magnetic-button"
 import { Check, Calculator } from "lucide-react"
+import { Slider } from "@/components/ui/slider"
 
 // Pricing data based on the spreadsheet
 const pricingTiers = [
@@ -106,14 +107,13 @@ export function PricingSection() {
                 <label className="font-mono text-xs text-foreground/60">Количество пользователей</label>
                 <span className="font-mono text-lg text-foreground">{userCount}</span>
               </div>
-              <input
-                type="range"
-                value={userCount}
-                onChange={(e) => setUserCount(Number(e.target.value))}
+              <Slider
+                value={[userCount]}
+                onValueChange={(value) => setUserCount(value[0])}
                 min={50}
                 max={3600}
                 step={50}
-                className="w-full h-2 bg-foreground/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-foreground"
+                className="py-4"
               />
               <div className="mt-1 flex justify-between font-mono text-xs text-foreground/40">
                 <span>50</span>
