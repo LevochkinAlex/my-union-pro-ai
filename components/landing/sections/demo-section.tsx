@@ -3,9 +3,11 @@
 import { useReveal } from "@/hooks/use-reveal"
 import { MagneticButton } from "@/components/landing/magnetic-button"
 import { Users, FileText, MessageSquare, Shield, Bell } from "lucide-react"
+import { useEffect, useRef } from "react"
 
 export function DemoSection() {
   const { ref, isVisible } = useReveal(0.3)
+  const videoContainerRef = useRef<HTMLDivElement>(null)
 
   const demoFeatures = [
     {
@@ -35,6 +37,33 @@ export function DemoSection() {
     },
   ]
 
+  // Handle wheel events on video container to prevent iframe from blocking scroll
+  useEffect(() => {
+    const container = videoContainerRef.current
+    if (!container) return
+
+    const handleWheel = (e: WheelEvent) => {
+      // Prevent iframe from blocking scroll by passing wheel events to scroll container
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        const scrollContainer = document.querySelector('[data-scroll-container]') as HTMLElement
+        if (scrollContainer) {
+          e.preventDefault()
+          e.stopPropagation()
+          scrollContainer.scrollBy({
+            left: e.deltaY,
+            behavior: "instant",
+          })
+        }
+      }
+    }
+
+    container.addEventListener("wheel", handleWheel, { passive: false, capture: true })
+
+    return () => {
+      container.removeEventListener("wheel", handleWheel, { capture: true } as any)
+    }
+  }, [])
+
   return (
     <section
       ref={ref}
@@ -54,6 +83,7 @@ export function DemoSection() {
 
         <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
           <div
+            ref={videoContainerRef}
             className={`relative transition-all duration-700 ${
               isVisible ? "translate-x-0 opacity-100" : "-translate-x-16 opacity-0"
             }`}
