@@ -10,8 +10,18 @@ const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL;
 const useCDN = !!cdnUrl;
 
 export const metadata: Metadata = {
-  title: "MyUnion — единая панель управления профсоюзом",
-  description: "Управляйте документами, участниками и уведомлениями в одном месте",
+  title: "MyUnion Pro — единая панель управления профсоюзом",
+  description: "Современная AI-платформа для управления профсоюзом. Автоматизация документооборота, управление членами, обработка обращений. До 80% автоматизации рутинных задач.",
+  keywords: ["профсоюз", "управление профсоюзом", "AI", "автоматизация", "документооборот", "MyUnion"],
+  authors: [{ name: "MyUnion Pro" }],
+  openGraph: {
+    title: "MyUnion Pro — единая панель управления профсоюзом",
+    description: "Современная AI-платформа для управления профсоюзом",
+    url: "https://myunion.pro",
+    siteName: "MyUnion Pro",
+    locale: "ru_RU",
+    type: "website",
+  },
   icons: {
     icon: [
       { url: getIconUrl("/favicon.ico", useCDN), sizes: "any" },

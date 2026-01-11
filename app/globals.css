@@ -1,7 +1,48 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 @theme {
   --color-scheme: light dark;
+}
+
+/* Landing page styles */
+.landing-page {
+  --foreground: oklch(0.98 0 0);
+  --background: oklch(0.1 0.02 220);
+  --card: oklch(0.13 0.02 220);
+  --card-foreground: oklch(0.98 0 0);
+  --popover: oklch(0.13 0.02 220);
+  --popover-foreground: oklch(0.98 0 0);
+  --primary: oklch(0.6 0.18 220);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.22 0.02 220);
+  --secondary-foreground: oklch(0.98 0 0);
+  --muted: oklch(0.22 0.02 220);
+  --muted-foreground: oklch(0.65 0 0);
+  --accent: oklch(0.65 0.15 160);
+  --accent-foreground: oklch(0.98 0 0);
+  --border: oklch(0.25 0.02 220);
+  --input: oklch(0.25 0.02 220);
+  --ring: oklch(0.6 0.18 220);
+}
+
+.landing-page [data-scroll-container] {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+.landing-page section {
+  transform: translateZ(0);
+  will-change: transform;
+  contain: layout style paint;
+}
+
+.landing-page button {
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 @variant dark (&:where(.dark, .dark *));
