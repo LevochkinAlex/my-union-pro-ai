@@ -64,21 +64,21 @@ export async function GET(request: NextRequest) {
             {
               name: {
                 startsWith: query,
-                mode: "insensitive",
+                mode: "insensitive" as const,
               },
             },
             // Содержит запрос в названии
             {
               name: {
                 contains: query,
-                mode: "insensitive",
+                mode: "insensitive" as const,
               },
             },
             // Содержит запрос в полном пути
             {
               fullPath: {
                 contains: query,
-                mode: "insensitive",
+                mode: "insensitive" as const,
               },
             },
             // Поиск по отдельным словам (если запрос состоит из нескольких слов)
@@ -88,13 +88,13 @@ export async function GET(request: NextRequest) {
                   {
                     name: {
                       contains: word,
-                      mode: "insensitive",
+                      mode: "insensitive" as const,
                     },
                   },
                   {
                     fullPath: {
                       contains: word,
-                      mode: "insensitive",
+                      mode: "insensitive" as const,
                     },
                   },
                 ],
