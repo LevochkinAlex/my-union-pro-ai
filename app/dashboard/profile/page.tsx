@@ -1242,6 +1242,11 @@ export default function ProfilePage() {
                 }}
                 required
               />
+              {profileData.organizationId && profileData.workplace && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  💡 Место работы должно соответствовать организации профсоюза, в которую вы хотите вступить
+                </p>
+              )}
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">

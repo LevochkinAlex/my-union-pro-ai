@@ -81,7 +81,8 @@ export default function WorkplaceSearch({
       return;
     }
 
-    if (!query || query.length < 2) {
+    // Уменьшили минимальную длину запроса для более быстрого поиска
+    if (!query || query.length < 1) {
       setSuggestions([]);
       setIsOpen(false);
       return;

@@ -70,17 +70,23 @@ export default function OrganizationAutocomplete({
       return;
     }
 
-    // Фильтруем опции только если пользователь начал вводить текст
-    if (displayValue.trim().length >= 2) {
+    // Фильтруем опции только если пользователь начал вводить текст (уменьшили до 1 символа для более быстрого поиска)
+    if (displayValue.trim().length >= 1) {
       const query = displayValue.toLowerCase();
 
       // Улучшенный поиск: точное совпадение в начале, затем вхождение в середине
+      // Также ищем по отдельным словам для лучшего поиска
       const exact: Organization[] = [];
       const startsWith: Organization[] = [];
       const contains: Organization[] = [];
+      const wordMatch: Organization[] = [];
+      const partialWordMatch: Organization[] = [];
+
+      const queryWords = query.split(/\s+/).filter(w => w.length > 1); // Уменьшили минимальную длину слова до 1
 
       options.forEach((org) => {
         const displayName = (org.fullPath || org.indentedName || org.name).toLowerCase();
+        const nameWords = displayName.split(/\s+/);
 
         if (displayName === query) {
           exact.push(org);
@@ -88,11 +94,27 @@ export default function OrganizationAutocomplete({
           startsWith.push(org);
         } else if (displayName.includes(query)) {
           contains.push(org);
+        } else if (queryWords.length > 0) {
+          // Поиск по отдельным словам - если все слова запроса есть в названии
+          const allWordsMatch = queryWords.every(qw => 
+            nameWords.some(nw => nw.startsWith(qw) || nw.includes(qw))
+          );
+          if (allWordsMatch && !contains.includes(org)) {
+            wordMatch.push(org);
+          } else if (queryWords.length > 1) {
+            // Частичное совпадение - если хотя бы половина слов найдена
+            const matchedWords = queryWords.filter(qw => 
+              nameWords.some(nw => nw.startsWith(qw) || nw.includes(qw))
+            );
+            if (matchedWords.length >= Math.ceil(queryWords.length / 2) && !wordMatch.includes(org) && !contains.includes(org)) {
+              partialWordMatch.push(org);
+            }
+          }
         }
       });
 
-      // Объединяем результаты: сначала точные, потом начинающиеся с запроса, потом содержащие
-      const filtered = [...exact, ...startsWith, ...contains].slice(0, 10); // Топ-10 результатов
+      // Объединяем результаты: сначала точные, потом начинающиеся с запроса, потом содержащие, потом по словам, потом частичные
+      const filtered = [...exact, ...startsWith, ...contains, ...wordMatch, ...partialWordMatch].slice(0, 30); // Топ-30 результатов
 
       setFilteredOptions(filtered);
       // Открываем dropdown ТОЛЬКО если пользователь вводит текст

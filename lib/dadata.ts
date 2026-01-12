@@ -460,8 +460,10 @@ export async function searchCompanies(query: string, count: number = 10): Promis
       },
       body: JSON.stringify({ 
         query: query.trim(), 
-        count,
-        status: ["ACTIVE"] // Только активные компании
+        count: Math.max(count, 20), // Увеличиваем количество результатов для лучшего поиска
+        status: ["ACTIVE"], // Только активные компании
+        // Добавляем поиск по частичным совпадениям
+        type: "LEGAL" // Юридические лица (включая НКО и профсоюзы)
       }),
     });
 
