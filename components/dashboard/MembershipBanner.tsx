@@ -91,7 +91,7 @@ export default function MembershipBanner({
           const isCorrectType = doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION";
           if (!isCorrectType) return false;
           
-          if (doc.status === "PENDING" || doc.status === "APPROVED") {
+          if (doc.status === "PENDING_REVIEW" || doc.status === "PENDING_APPROVAL" || doc.status === "PENDING_SIGNATURE" || doc.status === "COMPLETED") {
             return true;
           }
           

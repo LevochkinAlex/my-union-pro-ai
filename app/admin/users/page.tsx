@@ -13,7 +13,7 @@ export default async function AdminUsers() {
             in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
           },
           status: {
-            in: ["SIGNED", "PENDING"],
+            in: ["SIGNED", "PENDING_REVIEW", "PENDING_APPROVAL", "PENDING_SIGNATURE", "DRAFT"],
           },
         },
       },

@@ -200,7 +200,7 @@ export default function AdminUserDetailsPage() {
   }
 
   const pendingDocuments = user.documents.filter(
-    (doc) => doc.status === "SIGNED" || doc.status === "PENDING"
+    (doc) => doc.status === "SIGNED" || doc.status === "PENDING_REVIEW" || doc.status === "PENDING_APPROVAL" || doc.status === "PENDING_SIGNATURE"
   );
   const canValidate = pendingDocuments.length > 0 && 
     (user.membershipStatus === "DOCUMENTS_PENDING" || 
@@ -525,7 +525,8 @@ export default function AdminUserDetailsPage() {
                         </span>
                         <span className={`rounded px-2 py-0.5 text-xs ${
                           doc.status === "SIGNED" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
-                          doc.status === "PENDING" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" :
+                          doc.status === "PENDING_REVIEW" || doc.status === "PENDING_APPROVAL" || doc.status === "PENDING_SIGNATURE" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" :
+                          doc.status === "DRAFT" ? "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200" :
                           "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
                         }`}>
                           {doc.status}

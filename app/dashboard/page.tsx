@@ -384,8 +384,8 @@ export default async function DashboardPage() {
     // Проверяем, что есть подписанные документы (отправленные на проверку)
     hasDocuments = currentUser.documents.some(
       (doc) => {
-        // Если статус PENDING или APPROVED - документ точно отправлен
-        if (doc.status === "PENDING" || doc.status === "APPROVED") {
+        // Если статус ожидания или завершён - документ точно отправлен
+        if (doc.status === "PENDING_REVIEW" || doc.status === "PENDING_APPROVAL" || doc.status === "PENDING_SIGNATURE" || doc.status === "COMPLETED") {
           return true;
         }
         
