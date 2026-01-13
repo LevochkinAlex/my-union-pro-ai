@@ -282,7 +282,7 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
       <button
         onClick={() => effectiveOtherMode && handleSwitch(effectiveOtherMode.mode)}
         disabled={isSwitching || isLoading || !effectiveOtherMode}
-        className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+        className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
         title={effectiveOtherMode ? `Переключить на: ${effectiveOtherMode.label}` : "Загрузка..."}
       >
         {isSwitching ? (

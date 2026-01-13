@@ -66,7 +66,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
         </div>
 
         {/* Navigation */}
-        <nav className={`flex-1 py-2 space-y-1 overflow-y-auto ${isCollapsed ? "px-2" : "px-3"}`}>
+        <nav className={`flex-1 py-2 space-y-1 overflow-y-auto ${isCollapsed ? "px-1 flex flex-col items-center" : "px-3"}`}>
           {/* View Mode Switch - в начале меню для пользователей с двойной ролью */}
           {!isAdmin && (
             <ViewModeSwitch collapsed={isCollapsed} />
@@ -115,14 +115,14 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                       }
                     }}
                     disabled={isNavigating}
-                    className={`flex w-full items-center gap-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    className={`flex items-center gap-2.5 rounded-lg text-sm font-medium transition-colors ${
                       isMainItemActive
                         ? "bg-blue-600 text-white shadow-sm"
                         : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                     } ${
                       isCollapsed
-                        ? "h-9 w-9 justify-center"
-                        : "px-2.5 py-2"
+                        ? "h-10 w-10 justify-center"
+                        : "w-full px-2.5 py-2"
                     }`}
                     title={isCollapsed ? item.label : undefined}
                   >
@@ -158,8 +158,8 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                         : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                     } ${
                       isCollapsed
-                        ? "h-9 w-9 justify-center"
-                        : "px-2.5 py-2"
+                        ? "h-10 w-10 justify-center"
+                        : "w-full px-2.5 py-2"
                     } ${isNavigating ? "pointer-events-none opacity-70" : ""}`}
                     title={isCollapsed ? item.label : undefined}
                   >
@@ -221,12 +221,12 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
             )}
 
             {/* Actions row */}
-            <div className={`${isCollapsed ? "px-2 py-2" : "px-3 py-2"} ${!isCollapsed ? "border-t border-gray-200 dark:border-gray-700" : ""}`}>
-              <div className={`flex items-center ${isCollapsed ? "flex-col gap-2" : "justify-between gap-1"}`}>
+            <div className={`${isCollapsed ? "px-1 py-3" : "px-3 py-2"} ${!isCollapsed ? "border-t border-gray-200 dark:border-gray-700" : ""}`}>
+              <div className={`flex items-center ${isCollapsed ? "flex-col gap-3 justify-center" : "justify-between gap-1"}`}>
                 {/* Account icon */}
                 <Link
                   href={isAdmin ? "/admin/users" : "/dashboard/profile"}
-                  className="flex h-8 w-8 items-center justify-center rounded-full overflow-hidden bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  className="flex h-9 w-9 items-center justify-center rounded-full overflow-hidden bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
                   title="Профиль"
                 >
                   {avatarUrl ? (
@@ -255,7 +255,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                 {/* Collapse button */}
                 <button
                   onClick={() => setIsCollapsed(!isCollapsed)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
                   title={isCollapsed ? "Развернуть" : "Свернуть"}
                 >
                   <svg
@@ -276,7 +276,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                 {/* Sign out */}
                 <button
                   onClick={() => signOut({ callbackUrl: "/login" })}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
                   title="Выйти"
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
