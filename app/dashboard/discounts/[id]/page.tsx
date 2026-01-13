@@ -356,16 +356,9 @@ export default function DiscountDetailPage() {
       optionsCount: discount.options?.length || 0,
     });
     
-    // Если есть варианты (options) и скидка ещё не активирована, показываем модальное окно выбора
-    if (!isClaimed && hasOptions) {
+    // Если есть варианты (options), показываем модальное окно выбора
+    if (hasOptions) {
       console.log("🎁 Showing options modal with", discount.options!.length, "options");
-      setShowOptionsModal(true);
-      return;
-    }
-    
-    // Если уже активирована, НО промокода нет И есть options - даём переактивировать с выбором варианта
-    if (isClaimed && !hasPromoCode && hasOptions) {
-      console.log("🔄 Already claimed but no promo code and has options - showing options for re-activation");
       setShowOptionsModal(true);
       return;
     }
@@ -378,6 +371,23 @@ export default function DiscountDetailPage() {
     }
     
     // Если нет вариантов, активируем основную скидку
+    await activateDiscount(discount.id);
+  };
+
+  // Функция для получения нового промокода (даже если скидка уже активирована)
+  const handleGetNewPromoCode = async () => {
+    if (!discount) return;
+    
+    console.log("🔄 Getting NEW promo code for discount:", discount.id);
+    
+    // Если есть варианты - показываем выбор
+    if (discount.options && discount.options.length > 0) {
+      setShowPromoModal(false);
+      setShowOptionsModal(true);
+      return;
+    }
+    
+    // Иначе активируем заново для получения нового промокода
     await activateDiscount(discount.id);
   };
 
@@ -970,8 +980,9 @@ export default function DiscountDetailPage() {
               ) : null;
             })()}
 
-            {/* Action Button */}
-            <div className="mt-6 sm:mt-8">
+            {/* Action Buttons */}
+            <div className="mt-6 sm:mt-8 space-y-3">
+              {/* Основная кнопка */}
               <button
                 onClick={handleClaim}
                 className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-base font-semibold text-white shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:ring-offset-gray-800 sm:px-6 sm:py-4 sm:text-lg ${
@@ -982,7 +993,7 @@ export default function DiscountDetailPage() {
               >
                 {isClaimed ? (
                   <>
-                    <span>Открыть</span>
+                    <span>Открыть промокод</span>
                     <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
                       <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
                       <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
@@ -990,26 +1001,40 @@ export default function DiscountDetailPage() {
                   </>
                 ) : discount.options && discount.options.length > 0 ? (
                   <>
-                    <span>Выбрать</span>
+                    <span>Выбрать вариант</span>
                     <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clipRule="evenodd" />
                     </svg>
                   </>
                 ) : (
                   <>
-                    <span>Получить</span>
+                    <span>Получить промокод</span>
                     <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clipRule="evenodd" />
                     </svg>
                   </>
                 )}
               </button>
-              <p className="mt-2 text-center text-xs text-gray-500 dark:text-gray-400 sm:mt-3 sm:text-sm">
+
+              {/* Кнопка "Получить новый" для уже активированных скидок */}
+              {isClaimed && (
+                <button
+                  onClick={handleGetNewPromoCode}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-blue-600 bg-transparent px-4 py-3 text-base font-semibold text-blue-600 transition hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20 dark:ring-offset-gray-800 sm:px-6 sm:py-4 sm:text-lg"
+                >
+                  <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                  </svg>
+                  <span>Получить новый промокод</span>
+                </button>
+              )}
+
+              <p className="text-center text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
                 {isClaimed
-                  ? "Скидка уже активирована. Нажмите чтобы открыть."
+                  ? "Нажмите «Получить новый» для генерации нового промокода"
                   : discount.options && discount.options.length > 0
                     ? `Доступно ${discount.options.length} ${discount.options.length === 1 ? 'вариант' : discount.options.length < 5 ? 'варианта' : 'вариантов'} скидки`
-                    : "При нажатии скидка будет активирована"}
+                    : "При нажатии будет сгенерирован промокод"}
               </p>
             </div>
           </div>
@@ -1174,11 +1199,22 @@ export default function DiscountDetailPage() {
               </div>
 
               {/* Дополнительные кнопки под карточкой */}
-              <div className="mt-4 flex justify-center gap-3">
+              <div className="mt-4 flex flex-col sm:flex-row justify-center gap-3">
+                {/* Кнопка получить новый промокод */}
+                <button
+                  onClick={handleGetNewPromoCode}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-600"
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                  </svg>
+                  Получить новый промокод
+                </button>
+
                 {discount.partnerUrl && (
                   <button
                     onClick={handleOpenPartner}
-                    className="flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-600"
+                    className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-600"
                   >
                     <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                       <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
