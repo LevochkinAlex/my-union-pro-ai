@@ -8,7 +8,36 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { checkUserPermissions } from "@/lib/staff-permissions";
+
+/**
+ * Получить организацию пользователя (как Председатель или сотрудник)
+ */
+async function getUserOrganization(userId: string): Promise<string | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      isPPOHead: true,
+      ppoHeadOrganizationId: true,
+      viewMode: true,
+    },
+  });
+
+  // Если пользователь - Председатель в режиме PPO_HEAD
+  if (user?.isPPOHead && user.ppoHeadOrganizationId && user.viewMode === "PPO_HEAD") {
+    return user.ppoHeadOrganizationId;
+  }
+
+  // Проверяем, является ли сотрудником
+  const staffPosition = await prisma.organizationStaff.findFirst({
+    where: {
+      userId,
+      status: "ACTIVE",
+    },
+    select: { organizationId: true },
+  });
+
+  return staffPosition?.organizationId || null;
+}
 
 // GET - список отчётов организации
 export async function GET(request: NextRequest) {
@@ -19,15 +48,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const permissions = await checkUserPermissions(session.user.id, "reports_view");
+    const organizationId = await getUserOrganization(session.user.id);
     
-    if (!permissions.hasAccess) {
-      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
-    }
-
-    const organizationId = permissions.organizationId;
     if (!organizationId) {
-      return NextResponse.json({ error: "Организация не найдена" }, { status: 404 });
+      return NextResponse.json({ reports: [] });
     }
 
     const { searchParams } = new URL(request.url);
@@ -121,13 +145,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const permissions = await checkUserPermissions(session.user.id, "reports_create");
+    const organizationId = await getUserOrganization(session.user.id);
     
-    if (!permissions.hasAccess) {
-      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
-    }
-
-    const organizationId = permissions.organizationId;
     if (!organizationId) {
       return NextResponse.json({ error: "Организация не найдена" }, { status: 404 });
     }
