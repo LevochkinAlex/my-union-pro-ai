@@ -82,8 +82,21 @@ export default async function DashboardPage() {
 
   // Если пользователь в режиме Председателя ППО, показываем специальный дашборд
   if (showPPOHeadDashboard && ppoOrganization) {
+    // Дата начала года для расчёта роста
+    const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+    
     // Получаем статистику для Председателя
-    const [pendingAppeals, pendingMembers, activeMembers, totalNews, totalDocuments, recentAppeals, recentMembers] = await Promise.all([
+    const [
+      pendingAppeals, 
+      pendingMembers, 
+      activeMembers, 
+      totalNews, 
+      totalDocuments, 
+      recentAppeals, 
+      recentMembers,
+      organization,
+      membersAtYearStart
+    ] = await Promise.all([
       // Количество новых обращений
       prisma.ticket.count({
         where: {
@@ -166,7 +179,29 @@ export default async function DashboardPage() {
           createdAt: true,
         },
       }),
+      // Данные организации (для totalEmployees)
+      prisma.organization.findUnique({
+        where: { id: ppoOrganization.id },
+        select: { totalEmployees: true },
+      }),
+      // Количество членов на начало года (для расчёта роста)
+      prisma.user.count({
+        where: {
+          organizationId: ppoOrganization.id,
+          membershipStatus: "APPROVED",
+          createdAt: { lt: startOfYear },
+        },
+      }),
     ]);
+
+    // Расчёт показателей
+    const totalEmployees = organization?.totalEmployees || 0;
+    const membershipPercent = totalEmployees > 0 
+      ? Math.round((activeMembers / totalEmployees) * 100) 
+      : 0;
+    const growthYTD = membersAtYearStart > 0 
+      ? Math.round(((activeMembers - membersAtYearStart) / membersAtYearStart) * 100) 
+      : (activeMembers > 0 ? 100 : 0);
 
     const userName = userRole.firstName || session.user?.name || "Председатель";
 
@@ -180,6 +215,9 @@ export default async function DashboardPage() {
           activeMembers,
           totalNews,
           totalDocuments,
+          totalEmployees,
+          membershipPercent,
+          growthYTD,
         }}
         recentAppeals={recentAppeals.map((a) => ({
           ...a,

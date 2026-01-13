@@ -11,6 +11,10 @@ interface PPOHeadDashboardProps {
     activeMembers: number;
     totalNews: number;
     totalDocuments: number;
+    // Новые поля для карточек как в референсе
+    totalEmployees: number;
+    membershipPercent: number;
+    growthYTD: number;
   };
   recentAppeals: Array<{
     id: string;
@@ -58,7 +62,76 @@ export default function PPOHeadDashboard({
         </p>
       </div>
 
-      {/* Статистика */}
+      {/* Основные показатели организации (как в референсе) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Работников */}
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-blue-100 font-medium">Работников</p>
+              <p className="text-3xl font-bold mt-1">{stats.totalEmployees}</p>
+            </div>
+            <div className="p-3 bg-white/20 rounded-lg">
+              <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Членов ППО */}
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-green-100 font-medium">Членов ППО</p>
+              <p className="text-3xl font-bold mt-1">{stats.activeMembers}</p>
+            </div>
+            <div className="p-3 bg-white/20 rounded-lg">
+              <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Процент членов ППО */}
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-purple-100 font-medium">Процент членов ППО</p>
+              <p className="text-3xl font-bold mt-1">{stats.membershipPercent}%</p>
+            </div>
+            <div className="p-3 bg-white/20 rounded-lg">
+              <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Рост к началу года */}
+        <div className={`bg-gradient-to-br ${stats.growthYTD >= 0 ? 'from-emerald-500 to-emerald-600' : 'from-red-500 to-red-600'} rounded-xl shadow-lg p-6 text-white`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-white/80 font-medium">Рост к началу года</p>
+              <p className="text-3xl font-bold mt-1">
+                {stats.growthYTD > 0 ? '+' : ''}{stats.growthYTD}%
+              </p>
+            </div>
+            <div className="p-3 bg-white/20 rounded-lg">
+              <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {stats.growthYTD >= 0 ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                )}
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Операционная статистика */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Link
           href="/dashboard/appeals"

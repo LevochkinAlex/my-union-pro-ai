@@ -4,6 +4,15 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { OrganizationType } from "@prisma/client";
 
+interface TimeSeriesData {
+  period: string;
+  month: string;
+  year: number;
+  totalMembers: number;
+  totalEmployees: number;
+  membershipPercent: number;
+}
+
 interface Stats {
   level: "PPO" | "MPO" | "RPO";
   organization: {
@@ -14,6 +23,8 @@ interface Stats {
   stats: {
     totalOrganizations: number;
     totalMembers: number;
+    totalEmployees: number;
+    membershipPercent: number;
     reports: {
       byStatus: Record<string, number>;
       total: number;
@@ -30,6 +41,7 @@ interface Stats {
       newTickets: number;
     };
   };
+  timeSeries: TimeSeriesData[];
   organizations: any[];
 }
 
@@ -136,6 +148,31 @@ export default function StatisticsPage() {
           color="from-orange-500 to-orange-600"
         />
       </div>
+
+      {/* Графики временных рядов */}
+      {stats.timeSeries && stats.timeSeries.length > 0 && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* График количества членов */}
+          <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
+            <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+              👥 Количество членов профсоюза
+            </h2>
+            <div className="h-64">
+              <AreaChart data={stats.timeSeries} dataKey="totalMembers" color="#3b82f6" />
+            </div>
+          </div>
+
+          {/* График процента членства */}
+          <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
+            <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+              📊 Процент членов ППО
+            </h2>
+            <div className="h-64">
+              <BarChart data={stats.timeSeries} dataKey="membershipPercent" color="#10b981" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Активность за 30 дней */}
       <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
@@ -356,4 +393,138 @@ function formatPeriod(period: string): string {
     "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
   ];
   return `${months[parseInt(month) - 1]} ${year}`;
+}
+
+// Компонент Area Chart (как в референсе)
+function AreaChart({
+  data,
+  dataKey,
+  color,
+}: {
+  data: TimeSeriesData[];
+  dataKey: keyof TimeSeriesData;
+  color: string;
+}) {
+  const maxValue = Math.max(...data.map((d) => Number(d[dataKey]) || 0));
+  const minValue = Math.min(...data.map((d) => Number(d[dataKey]) || 0));
+  const range = maxValue - minValue || 1;
+
+  // SVG path для area chart
+  const width = 100;
+  const height = 100;
+  const padding = 5;
+  
+  const points = data.map((d, i) => {
+    const x = padding + ((width - 2 * padding) * i) / (data.length - 1);
+    const y = height - padding - ((Number(d[dataKey]) - minValue) / range) * (height - 2 * padding);
+    return { x, y, value: d[dataKey], month: d.month };
+  });
+
+  const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+  const areaPath = `${linePath} L ${points[points.length - 1].x} ${height - padding} L ${points[0].x} ${height - padding} Z`;
+
+  return (
+    <div className="relative h-full w-full">
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" preserveAspectRatio="none">
+        {/* Градиент для заливки */}
+        <defs>
+          <linearGradient id={`gradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.05" />
+          </linearGradient>
+        </defs>
+        
+        {/* Горизонтальные линии сетки */}
+        {[0, 25, 50, 75, 100].map((pct) => (
+          <line
+            key={pct}
+            x1={padding}
+            x2={width - padding}
+            y1={height - padding - (pct / 100) * (height - 2 * padding)}
+            y2={height - padding - (pct / 100) * (height - 2 * padding)}
+            stroke="currentColor"
+            strokeOpacity="0.1"
+            strokeWidth="0.5"
+          />
+        ))}
+
+        {/* Заливка */}
+        <path d={areaPath} fill={`url(#gradient-${dataKey})`} />
+        
+        {/* Линия */}
+        <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        
+        {/* Точки */}
+        {points.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r="2" fill={color} />
+        ))}
+      </svg>
+      
+      {/* Подписи по оси X */}
+      <div className="absolute bottom-0 left-0 right-0 flex justify-between px-1 text-[10px] text-gray-500 dark:text-gray-400">
+        {data.filter((_, i) => i % 2 === 0 || i === data.length - 1).map((d, i) => (
+          <span key={i}>{d.month}</span>
+        ))}
+      </div>
+      
+      {/* Текущее значение */}
+      <div className="absolute right-0 top-0 rounded-lg bg-white/80 px-2 py-1 text-sm font-bold dark:bg-gray-800/80" style={{ color }}>
+        {data[data.length - 1]?.[dataKey]}
+      </div>
+    </div>
+  );
+}
+
+// Компонент Bar Chart (как в референсе)
+function BarChart({
+  data,
+  dataKey,
+  color,
+}: {
+  data: TimeSeriesData[];
+  dataKey: keyof TimeSeriesData;
+  color: string;
+}) {
+  const maxValue = Math.max(...data.map((d) => Number(d[dataKey]) || 0), 100);
+  
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex flex-1 items-end justify-between gap-1 px-1">
+        {data.map((d, i) => {
+          const value = Number(d[dataKey]) || 0;
+          const height = (value / maxValue) * 100;
+          
+          return (
+            <div key={i} className="group relative flex flex-1 flex-col items-center">
+              <div
+                className="w-full min-w-[8px] max-w-[24px] rounded-t-sm transition-all duration-300 group-hover:opacity-80"
+                style={{
+                  height: `${height}%`,
+                  backgroundColor: color,
+                  minHeight: value > 0 ? "4px" : "0",
+                }}
+              />
+              
+              {/* Tooltip */}
+              <div className="pointer-events-none absolute bottom-full mb-2 hidden rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block dark:bg-gray-700">
+                {value}%
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      
+      {/* Подписи по оси X */}
+      <div className="mt-2 flex justify-between px-1 text-[10px] text-gray-500 dark:text-gray-400">
+        {data.filter((_, i) => i % 2 === 0 || i === data.length - 1).map((d, i) => (
+          <span key={i} className="text-center">{d.month}</span>
+        ))}
+      </div>
+      
+      {/* Текущее значение */}
+      <div className="mt-2 text-center text-lg font-bold" style={{ color }}>
+        {data[data.length - 1]?.[dataKey]}%
+      </div>
+    </div>
+  );
 }

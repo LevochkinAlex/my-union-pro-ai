@@ -97,6 +97,7 @@ export default async function DashboardLayout({
         </svg>
       ),
       subItems: [
+        { href: "/dashboard/documents/meetings", label: "Заседания профкома" },
         { href: "/dashboard/documents/journal", label: "Журнал документов" },
         { href: "/dashboard/documents/ppo-head", label: "Создать документ" },
         { href: "/dashboard/documents", label: "Все документы" },
@@ -232,7 +233,7 @@ export default async function DashboardLayout({
     });
 
     menuItems.push({
-      href: "/dashboard/reports",
+      href: "/dashboard/reports/org-head",
       label: "Отчётность",
       icon: (
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -240,8 +241,8 @@ export default async function DashboardLayout({
         </svg>
       ),
       subItems: [
-        { href: "/dashboard/reports", label: "Список отчётов" },
-        { href: "/dashboard/reports/statistics", label: "Статистика" },
+        { href: "/dashboard/reports/org-head", label: "Отчёты организаций" },
+        { href: "/dashboard/statistics", label: "Статистика и графики" },
       ],
     });
 

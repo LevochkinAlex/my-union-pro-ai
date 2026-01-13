@@ -119,6 +119,59 @@ export async function GET(request: NextRequest) {
       }),
     };
 
+    // Временные ряды (последние 12 месяцев)
+    // Данные по количеству членов и проценту членства по месяцам
+    const timeSeriesData: Array<{
+      period: string;
+      month: string;
+      year: number;
+      totalMembers: number;
+      totalEmployees: number;
+      membershipPercent: number;
+    }> = [];
+
+    // Получаем общее количество работников из организаций
+    const orgsWithEmployees = await prisma.organization.findMany({
+      where: { id: { in: allOrgIds } },
+      select: { totalEmployees: true },
+    });
+    const currentTotalEmployees = orgsWithEmployees.reduce((sum, o) => sum + (o.totalEmployees || 0), 0);
+
+    // Генерируем данные для последних 12 месяцев
+    const monthNames = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
+    
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date();
+      date.setMonth(date.getMonth() - i);
+      const year = date.getFullYear();
+      const month = date.getMonth(); // 0-11
+      
+      // Считаем членов, которые были активны на конец месяца
+      const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
+      
+      const membersCount = await prisma.user.count({
+        where: {
+          organizationId: { in: allOrgIds },
+          membershipStatus: "APPROVED",
+          createdAt: { lte: endOfMonth },
+        },
+      });
+
+      // Для упрощения используем текущее количество работников 
+      // (в реальной системе нужно хранить историю)
+      const employeesCount = currentTotalEmployees;
+      const percent = employeesCount > 0 ? Math.round((membersCount / employeesCount) * 100) : 0;
+
+      timeSeriesData.push({
+        period: `${year}-${String(month + 1).padStart(2, "0")}`,
+        month: monthNames[month],
+        year,
+        totalMembers: membersCount,
+        totalEmployees: employeesCount,
+        membershipPercent: percent,
+      });
+    }
+
     // Формируем иерархию организаций
     const buildHierarchy = (parentId: string | null): any[] => {
       return organizations
@@ -141,6 +194,8 @@ export async function GET(request: NextRequest) {
       stats: {
         totalOrganizations: allOrgIds.length,
         totalMembers,
+        totalEmployees: currentTotalEmployees,
+        membershipPercent: currentTotalEmployees > 0 ? Math.round((totalMembers / currentTotalEmployees) * 100) : 0,
         reports: {
           byStatus: reportStats.reduce((acc, s) => {
             acc[s.status] = s._count.status;
@@ -164,6 +219,7 @@ export async function GET(request: NextRequest) {
         })),
         recentActivity,
       },
+      timeSeries: timeSeriesData,
       organizations: organizations.map((o) => ({
         id: o.id,
         name: o.name,
