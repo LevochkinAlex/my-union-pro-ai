@@ -62,7 +62,7 @@ export async function POST(
             in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
           },
           status: {
-            in: ["SIGNED", "PENDING"],
+            in: ["SIGNED", "PENDING_REVIEW", "PENDING_APPROVAL", "PENDING_SIGNATURE", "GENERATED"],
           },
         },
         data: {
@@ -77,7 +77,7 @@ export async function POST(
             in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
           },
           status: {
-            in: ["SIGNED", "PENDING"],
+            in: ["SIGNED", "PENDING_REVIEW", "PENDING_APPROVAL", "PENDING_SIGNATURE", "GENERATED"],
           },
         },
         data: {
