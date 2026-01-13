@@ -68,7 +68,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (period) {
-      where.period = period;
+      // period в формате "YYYY-MM" или "YYYY"
+      const [yearStr, monthStr] = period.split("-");
+      where.periodYear = parseInt(yearStr);
+      if (monthStr) {
+        where.periodMonth = parseInt(monthStr);
+      }
     }
 
     // Получаем отчёты
@@ -90,23 +95,10 @@ export async function GET(request: NextRequest) {
             code: true,
           },
         },
-        submittedBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        approvedBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
       },
       orderBy: [
-        { period: "desc" },
+        { periodYear: "desc" },
+        { periodMonth: "desc" },
         { createdAt: "desc" },
       ],
     });
