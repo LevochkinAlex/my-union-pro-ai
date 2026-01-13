@@ -180,7 +180,7 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
             
             {/* Join Date */}
             <div className="pt-1">
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
                 Присоединился {new Date(user.createdAt).toLocaleDateString("ru-RU", {
                   day: "numeric",
                   month: "short",

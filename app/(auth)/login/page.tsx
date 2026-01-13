@@ -715,7 +715,7 @@ function LoginForm() {
                     <button
                       type="button"
                       disabled
-                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 font-medium rounded-lg cursor-not-allowed border border-gray-300 dark:border-gray-700"
+                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-gray-200 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-medium rounded-lg cursor-not-allowed border border-gray-300 dark:border-gray-700"
                     >
                       <Image
                         src="/max-messenger-sign-logo.svg"
@@ -731,7 +731,7 @@ function LoginForm() {
                     <button
                       type="button"
                       disabled
-                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 font-medium rounded-lg cursor-not-allowed border border-gray-300 dark:border-gray-700"
+                      className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-gray-200 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-medium rounded-lg cursor-not-allowed border border-gray-300 dark:border-gray-700"
                     >
                       <svg className="w-6 h-6" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M0 23.04C0 12.1788 0 6.74826 3.37413 3.37413C6.74826 0 12.1788 0 23.04 0H24.96C35.8212 0 41.2517 0 44.6259 3.37413C48 6.74826 48 12.1788 48 23.04V24.96C48 35.8212 48 41.2517 44.6259 44.6259C41.2517 48 35.8212 48 24.96 48H23.04C12.1788 48 6.74826 48 3.37413 44.6259C0 41.2517 0 35.8212 0 24.96V23.04Z" fill="#0077FF"/>
