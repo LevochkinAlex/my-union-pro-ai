@@ -116,11 +116,10 @@ export async function POST(
         data: updateData,
       });
 
-      // Обновляем организацию - связываем с председателем
+      // Обновляем организацию - указываем ФИО и должность председателя
       await prisma.organization.update({
         where: { id },
         data: {
-          chairmanId: existingUserId,
           chairmanName: [lastName, firstName, middleName].filter(Boolean).join(" "),
           chairmanJobTitle: jobTitle || null,
         },
@@ -184,11 +183,10 @@ export async function POST(
         data: updateData,
       });
 
-      // Обновляем организацию
+      // Обновляем организацию - указываем ФИО и должность председателя
       await prisma.organization.update({
         where: { id },
         data: {
-          chairmanId: updatedUser.id,
           chairmanName: [lastName, firstName, middleName].filter(Boolean).join(" "),
           chairmanJobTitle: jobTitle || null,
         },
@@ -252,11 +250,10 @@ export async function POST(
       },
     });
 
-    // Обновляем организацию - связываем с председателем
+    // Обновляем организацию - указываем ФИО и должность председателя
     await prisma.organization.update({
       where: { id },
       data: {
-        chairmanId: newUser.id,
         chairmanName: [lastName, firstName, middleName].filter(Boolean).join(" "),
         chairmanJobTitle: jobTitle || null,
       },

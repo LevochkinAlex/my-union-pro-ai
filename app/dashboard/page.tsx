@@ -9,6 +9,7 @@ import MembershipBanner from "@/components/dashboard/MembershipBanner";
 import UserCard from "@/components/dashboard/users/UserCard";
 import PostsListClient from "@/components/posts/PostsListClient";
 import PPOHeadDashboard from "@/components/dashboard/PPOHeadDashboard";
+import OrgHeadDashboard from "@/components/dashboard/OrgHeadDashboard";
 import { calculateProfileProgress } from "@/lib/profile-progress";
 import MembershipProtectedSection from "@/components/dashboard/MembershipProtectedSection";
 
@@ -38,7 +39,11 @@ export default async function DashboardPage() {
       lastName: true,
       viewMode: true,
       isPPOHead: true,
+      isMPOHead: true,
+      isRPOHead: true,
       ppoHeadOrganizationId: true,
+      mpoHeadOrganizationId: true,
+      rpoHeadOrganizationId: true,
       organization: {
         select: {
           id: true,
@@ -59,9 +64,23 @@ export default async function DashboardPage() {
     userRole?.viewMode === "PPO_HEAD" || 
     (userRole?.role === "PPO_HEAD" && !userRole?.isPPOHead);
   
+  // Определяем показывать ли дашборд МПО/РПО руководителя
+  const showOrgHeadDashboard = 
+    userRole?.viewMode === "MPO_HEAD" || 
+    userRole?.viewMode === "RPO_HEAD";
+  
   const ppoOrganization = userRole?.ppoHeadOrganization || userRole?.organization;
 
-  // Если пользователь в режиме Председателя, показываем специальный дашборд
+  // Если пользователь в режиме руководителя МПО/РПО, показываем специальный дашборд
+  if (showOrgHeadDashboard) {
+    return (
+      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+        <OrgHeadDashboard />
+      </div>
+    );
+  }
+
+  // Если пользователь в режиме Председателя ППО, показываем специальный дашборд
   if (showPPOHeadDashboard && ppoOrganization) {
     // Получаем статистику для Председателя
     const [pendingAppeals, pendingMembers, activeMembers, totalNews, totalDocuments, recentAppeals, recentMembers] = await Promise.all([

@@ -68,11 +68,24 @@ model User {
   role             UserRole         @default(PENDING_MEMBER)
   membershipStatus MembershipStatus @default(PENDING_VERIFICATION)
 
-  // Двойная роль: Член профсоюза + Председатель ППО
-  isPPOHead              Boolean  @default(false) // Флаг что пользователь также является председателем ППО
-  ppoHeadOrganizationId  String?  @unique // ID организации где пользователь является председателем
+  // Двойная роль: Член профсоюза + Руководитель организации
+  // Первичная профсоюзная организация (ППО)
+  isPPOHead              Boolean  @default(false) // Флаг что пользователь является председателем ППО
+  ppoHeadOrganizationId  String?  @unique // ID ППО где пользователь является председателем
   ppoHeadOrganization    Organization? @relation("PPOHeadOrganization", fields: [ppoHeadOrganizationId], references: [id])
-  viewMode               String   @default("MEMBER") // Текущий режим просмотра: MEMBER или PPO_HEAD
+  
+  // Местная организация (МПО)
+  isMPOHead              Boolean  @default(false) // Флаг что пользователь является председателем МПО
+  mpoHeadOrganizationId  String?  @unique // ID МПО где пользователь является председателем
+  mpoHeadOrganization    Organization? @relation("MPOHeadOrganization", fields: [mpoHeadOrganizationId], references: [id])
+  
+  // Региональная организация (РПО)
+  isRPOHead              Boolean  @default(false) // Флаг что пользователь является председателем РПО
+  rpoHeadOrganizationId  String?  @unique // ID РПО где пользователь является председателем
+  rpoHeadOrganization    Organization? @relation("RPOHeadOrganization", fields: [rpoHeadOrganizationId], references: [id])
+  
+  // Текущий режим просмотра: MEMBER, PPO_HEAD, MPO_HEAD, RPO_HEAD
+  viewMode               String   @default("MEMBER")
 
   // Персональные данные
   firstName   String?
@@ -418,11 +431,14 @@ model Organization {
   phone   String?
   email   String?
 
-  // Председатель
-  chairmanId       String?  @unique // ID пользователя-председателя (связь с User)
-  chairman         User?    @relation("PPOHeadOrganization")
+  // Председатель (общие поля)
   chairmanName     String? // ФИО председателя (дублируется для отображения)
   chairmanJobTitle String? // Должность председателя (из справочника должностей)
+  
+  // Связь с председателем по типу организации
+  ppoChairman      User?    @relation("PPOHeadOrganization")   // Для ППО
+  mpoChairman      User?    @relation("MPOHeadOrganization")   // Для МПО
+  rpoChairman      User?    @relation("RPOHeadOrganization")   // Для РПО
 
   // Члены
   members User[]
