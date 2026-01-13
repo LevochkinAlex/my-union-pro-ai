@@ -275,14 +275,16 @@ function UsersPageContent() {
         </div>
 
         {/* Правая колонка: Лента постов */}
-        <div className="space-y-4 lg:space-y-6 order-first lg:order-last h-fit">
+        <div className="space-y-4 lg:space-y-6 order-first lg:order-last h-fit flex flex-col items-center">
           {/* Форма создания поста */}
           {session && (
-            <CreatePost onPostCreated={handlePostCreated} compact={true} />
+            <div className="w-full max-w-[680px]">
+              <CreatePost onPostCreated={handlePostCreated} compact={true} />
+            </div>
           )}
 
           {/* Лента постов */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6">
+          <div className="w-full max-w-[680px]">
             <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Свежие посты
             </h2>
