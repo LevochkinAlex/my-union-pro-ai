@@ -219,7 +219,7 @@ export async function POST(request: NextRequest) {
       try {
         await sendUserNotification({
           userId: targetUser.id,
-          type: "system",
+          type: "staff_added",
           title: "Вы назначены сотрудником",
           body: `Вы добавлены как "${role.name}" в организацию "${organization?.name || ""}". Новые возможности доступны в вашем личном кабинете.`,
           url: `/dashboard`,
@@ -291,7 +291,7 @@ export async function POST(request: NextRequest) {
         try {
           await sendUserNotification({
             userId: existingUser.id,
-            type: "system",
+            type: "staff_added",
             title: "Вы назначены сотрудником",
             body: `Вы добавлены как "${role.name}" в организацию "${organization?.name || ""}".`,
             url: `/dashboard`,

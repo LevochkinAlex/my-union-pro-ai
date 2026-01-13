@@ -12,7 +12,9 @@ export type NotificationType =
   | "ticket_rated" // Оценка обращения
   | "document_regeneration_required" // Требуется перегенерация документов
   | "news_published" // Опубликована новость
-  | "mass_notification"; // Массовое уведомление
+  | "mass_notification" // Массовое уведомление
+  | "staff_added" // Назначен сотрудником
+  | "report_status_changed"; // Изменён статус отчёта
 
 interface NotificationData {
   userId: string; // Кому отправить
