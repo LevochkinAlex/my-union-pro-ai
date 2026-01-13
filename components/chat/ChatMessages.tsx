@@ -135,16 +135,20 @@ function ChatMessagesComponent({
     
     const isOwnMessage = lastMessage.senderId === currentUserId;
     
-    // Для своих сообщений - всегда скроллим с небольшой задержкой
+    // Для своих сообщений - всегда скроллим
     // Для чужих - только если были внизу
     if (isOwnMessage || atBottom) {
-      // Задержка для гарантии что DOM обновился
+      // Двойной скролл: сначала к элементу, потом к самому низу
       setTimeout(() => {
         virtuosoRef.current?.scrollToIndex({
           index: items.length - 1,
           align: "end",
-          behavior: "smooth",
+          behavior: "auto",
         });
+        // Дополнительный скролл к самому низу через 100мс
+        setTimeout(() => {
+          virtuosoRef.current?.scrollBy({ top: 1000 });
+        }, 100);
       }, 50);
     }
     
@@ -248,7 +252,7 @@ function ChatMessagesComponent({
             </>
           ),
           Footer: () => (
-            <div className="pb-4">
+            <div className="pb-8 min-h-[32px]">
               {isBotTyping && <TypingIndicator />}
             </div>
           ),
