@@ -50,7 +50,7 @@ export function DemoSection() {
           e.preventDefault()
           e.stopPropagation()
           scrollContainer.scrollBy({
-            left: e.deltaY,
+            top: e.deltaY,
             behavior: "instant",
           })
         }
@@ -67,7 +67,7 @@ export function DemoSection() {
   return (
     <section
       ref={ref}
-      className="flex h-screen w-screen shrink-0 snap-start items-center px-6 pt-20 md:px-12 md:pt-0 lg:px-16"
+      className="flex min-h-screen w-full shrink-0 snap-start items-center px-4 py-20 sm:px-6 md:px-12 md:py-24 lg:px-16"
     >
       <div className="mx-auto w-full max-w-7xl">
         <div
@@ -75,10 +75,10 @@ export function DemoSection() {
             isVisible ? "translate-y-0 opacity-100" : "-translate-y-12 opacity-0"
           }`}
         >
-          <h2 className="mb-2 font-sans text-4xl font-light tracking-tight text-foreground md:text-5xl lg:text-6xl">
+          <h2 className="mb-2 font-sans text-3xl font-light tracking-tight text-foreground sm:text-4xl md:text-5xl lg:text-6xl">
             Демо платформы
           </h2>
-          <p className="font-mono text-sm text-foreground/60 md:text-base">/ Попробуйте прямо сейчас</p>
+          <p className="font-mono text-xs text-foreground/60 sm:text-sm md:text-base">/ Попробуйте прямо сейчас</p>
         </div>
 
         <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
@@ -101,7 +101,7 @@ export function DemoSection() {
               />
             </div>
 
-            <div className="mt-6 flex flex-wrap gap-3">
+            <div className="mt-4 flex flex-col gap-3 sm:mt-6 sm:flex-row sm:flex-wrap">
               <MagneticButton variant="primary" onClick={() => window.open("https://myunion.pro", "_blank")}>
                 Открыть платформу
               </MagneticButton>

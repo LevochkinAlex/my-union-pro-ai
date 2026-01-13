@@ -36,7 +36,7 @@ export function ContactSection() {
   return (
     <section
       ref={ref}
-      className="flex h-screen w-screen shrink-0 snap-start items-center px-4 pt-20 md:px-12 md:pt-0 lg:px-16"
+      className="flex min-h-screen w-full shrink-0 snap-start items-center px-4 py-20 sm:px-6 md:px-12 md:py-24 lg:px-16"
     >
       <div className="mx-auto w-full max-w-7xl">
         <div className="grid gap-8 md:grid-cols-[1.2fr_1fr] md:gap-16 lg:gap-24">
@@ -46,11 +46,11 @@ export function ContactSection() {
                 isVisible ? "translate-x-0 opacity-100" : "-translate-x-12 opacity-0"
               }`}
             >
-              <h2 className="mb-2 font-sans text-4xl font-light leading-[1.05] tracking-tight text-foreground md:mb-3 md:text-6xl lg:text-7xl">
+              <h2 className="mb-2 font-sans text-3xl font-light leading-[1.05] tracking-tight text-foreground sm:text-4xl sm:mb-3 md:text-5xl lg:text-6xl xl:text-7xl">
                 Свяжитесь
                 <br />с нами
               </h2>
-              <p className="font-mono text-xs text-foreground/60 md:text-base">/ Обсудим ваш проект</p>
+              <p className="font-mono text-xs text-foreground/60 sm:text-sm md:text-base">/ Обсудим ваш проект</p>
             </div>
 
             <div className="space-y-4 md:space-y-6">

@@ -17,8 +17,7 @@ export default function Home() {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [currentSection, setCurrentSection] = useState(0)
   const [isLoaded, setIsLoaded] = useState(false)
-  const touchStartY = useRef(0)
-  const touchStartX = useRef(0)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const shaderContainerRef = useRef<HTMLDivElement>(null)
   const scrollThrottleRef = useRef<number | undefined>(undefined)
 
@@ -56,89 +55,18 @@ export default function Home() {
 
   const scrollToSection = (index: number) => {
     if (scrollContainerRef.current) {
-      const sectionWidth = scrollContainerRef.current.offsetWidth
+      const sectionHeight = scrollContainerRef.current.offsetHeight
       scrollContainerRef.current.scrollTo({
-        left: sectionWidth * index,
+        top: sectionHeight * index,
         behavior: "smooth",
       })
       setCurrentSection(index)
     }
   }
 
-  useEffect(() => {
-    const handleTouchStart = (e: TouchEvent) => {
-      touchStartY.current = e.touches[0].clientY
-      touchStartX.current = e.touches[0].clientX
-    }
+  // Удаляем обработчики touch для горизонтального скролла - используем стандартный вертикальный скролл
 
-    const handleTouchMove = (e: TouchEvent) => {
-      if (Math.abs(e.touches[0].clientY - touchStartY.current) > 10) {
-        e.preventDefault()
-      }
-    }
-
-    const handleTouchEnd = (e: TouchEvent) => {
-      const touchEndY = e.changedTouches[0].clientY
-      const touchEndX = e.changedTouches[0].clientX
-      const deltaY = touchStartY.current - touchEndY
-      const deltaX = touchStartX.current - touchEndX
-
-      if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 50) {
-        if (deltaY > 0 && currentSection < 5) {
-          scrollToSection(currentSection + 1)
-        } else if (deltaY < 0 && currentSection > 0) {
-          scrollToSection(currentSection - 1)
-        }
-      }
-    }
-
-    const container = scrollContainerRef.current
-    if (container) {
-      container.addEventListener("touchstart", handleTouchStart, { passive: true })
-      container.addEventListener("touchmove", handleTouchMove, { passive: false })
-      container.addEventListener("touchend", handleTouchEnd, { passive: true })
-    }
-
-    return () => {
-      if (container) {
-        container.removeEventListener("touchstart", handleTouchStart)
-        container.removeEventListener("touchmove", handleTouchMove)
-        container.removeEventListener("touchend", handleTouchEnd)
-      }
-    }
-  }, [currentSection])
-
-  useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        e.preventDefault()
-
-        if (!scrollContainerRef.current) return
-
-        scrollContainerRef.current.scrollBy({
-          left: e.deltaY,
-          behavior: "instant",
-        })
-
-        const sectionWidth = scrollContainerRef.current.offsetWidth
-        const newSection = Math.round(scrollContainerRef.current.scrollLeft / sectionWidth)
-        if (newSection !== currentSection) {
-          setCurrentSection(newSection)
-        }
-      }
-    }
-
-    const container = scrollContainerRef.current
-    if (container) {
-      container.addEventListener("wheel", handleWheel, { passive: false })
-    }
-
-    return () => {
-      if (container) {
-        container.removeEventListener("wheel", handleWheel)
-      }
-    }
-  }, [currentSection])
+  // Удаляем обработчик wheel для горизонтального скролла - используем стандартный вертикальный скролл
 
   useEffect(() => {
     const handleScroll = () => {
@@ -150,9 +78,9 @@ export default function Home() {
           return
         }
 
-        const sectionWidth = scrollContainerRef.current.offsetWidth
-        const scrollLeft = scrollContainerRef.current.scrollLeft
-        const newSection = Math.round(scrollLeft / sectionWidth)
+        const sectionHeight = scrollContainerRef.current.offsetHeight
+        const scrollTop = scrollContainerRef.current.scrollTop
+        const newSection = Math.round(scrollTop / sectionHeight)
 
         if (newSection !== currentSection && newSection >= 0 && newSection <= 5) {
           setCurrentSection(newSection)
@@ -178,7 +106,7 @@ export default function Home() {
   }, [currentSection])
 
   return (
-    <main className="relative h-screen w-full overflow-hidden bg-background">
+    <main className="relative min-h-screen w-full bg-background">
       <CustomCursor />
       <GrainOverlay />
 
@@ -211,7 +139,7 @@ export default function Home() {
 
       {/* Navigation */}
       <nav
-        className={`fixed left-0 right-0 top-0 z-50 flex items-center justify-between px-6 py-6 transition-opacity duration-700 md:px-12 ${
+        className={`fixed left-0 right-0 top-0 z-50 flex items-center justify-between bg-background/80 backdrop-blur-md px-4 py-4 transition-opacity duration-700 sm:px-6 sm:py-6 md:px-12 ${
           isLoaded ? "opacity-100" : "opacity-0"
         }`}
       >
@@ -219,15 +147,16 @@ export default function Home() {
           onClick={() => scrollToSection(0)}
           className="flex items-center gap-2 transition-transform hover:scale-105"
         >
-          <Image src="/logo-dark.svg" alt="MyUnion Pro" width={140} height={40} className="h-10 w-auto" priority />
+          <Image src="/logo-dark.svg" alt="MyUnion Pro" width={140} height={40} className="h-8 w-auto sm:h-10" priority />
         </button>
 
-        <div className="hidden items-center gap-6 md:flex lg:gap-8">
+        {/* Desktop Navigation */}
+        <div className="hidden items-center gap-4 md:flex lg:gap-8">
           {sections.map((item, index) => (
             <button
               key={item}
               onClick={() => scrollToSection(index)}
-              className={`group relative font-sans text-sm font-medium transition-colors ${
+              className={`group relative font-sans text-xs font-medium transition-colors sm:text-sm ${
                 currentSection === index ? "text-foreground" : "text-foreground/80 hover:text-foreground"
               }`}
             >
@@ -241,26 +170,86 @@ export default function Home() {
           ))}
         </div>
 
-        <MagneticButton variant="secondary" onClick={() => window.location.href = "/login"}>
-          Войти
-        </MagneticButton>
+        {/* Mobile Menu Button */}
+        <div className="flex items-center gap-3 md:hidden">
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-foreground/20 bg-foreground/10 transition-colors hover:bg-foreground/20"
+            aria-label="Меню"
+          >
+            <svg
+              className={`h-5 w-5 text-foreground transition-transform ${isMobileMenuOpen ? "rotate-90" : ""}`}
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              {isMobileMenuOpen ? (
+                <path d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              )}
+            </svg>
+          </button>
+          <MagneticButton variant="secondary" size="sm" onClick={() => window.location.href = "/login"}>
+            Войти
+          </MagneticButton>
+        </div>
+
+        {/* Desktop Login Button */}
+        <div className="hidden md:block">
+          <MagneticButton variant="secondary" onClick={() => window.location.href = "/login"}>
+            Войти
+          </MagneticButton>
+        </div>
       </nav>
+
+      {/* Mobile Menu */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-x-0 top-[73px] z-40 border-t border-foreground/10 bg-background/95 backdrop-blur-md md:hidden">
+          <div className="flex flex-col px-4 py-4">
+            {sections.map((item, index) => (
+              <button
+                key={item}
+                onClick={() => {
+                  scrollToSection(index)
+                  setIsMobileMenuOpen(false)
+                }}
+                className={`px-4 py-3 text-left font-sans text-base font-medium transition-colors ${
+                  currentSection === index
+                    ? "text-foreground border-l-2 border-foreground"
+                    : "text-foreground/70 hover:text-foreground"
+                }`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div
         ref={scrollContainerRef}
         data-scroll-container
-        className={`relative z-10 flex h-screen overflow-x-auto overflow-y-hidden transition-opacity duration-700 ${
+        className={`relative z-10 overflow-y-auto overflow-x-hidden transition-opacity duration-700 ${
           isLoaded ? "opacity-100" : "opacity-0"
         }`}
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        style={{ 
+          scrollbarWidth: "none", 
+          msOverflowStyle: "none",
+          height: "100vh",
+          scrollBehavior: "smooth"
+        }}
       >
         {/* Hero Section */}
-        <section className="flex min-h-screen w-screen shrink-0 flex-col justify-end px-6 pb-16 pt-24 md:px-12 md:pb-24">
+        <section className="flex min-h-screen w-full shrink-0 flex-col justify-end px-4 pb-16 pt-20 sm:px-6 sm:pt-24 md:px-12 md:pb-24">
           <div className="max-w-3xl">
             <div className="mb-4 inline-block animate-in fade-in slide-in-from-bottom-4 rounded-full border border-foreground/20 bg-foreground/15 px-4 py-1.5 backdrop-blur-md duration-700">
               <p className="font-mono text-xs text-foreground/90">AI-Powered Platform v1.6.1</p>
             </div>
-            <h1 className="mb-6 animate-in fade-in slide-in-from-bottom-8 font-sans text-5xl font-light leading-[1.1] tracking-tight text-foreground duration-1000 md:text-6xl lg:text-7xl">
+            <h1 className="mb-4 animate-in fade-in slide-in-from-bottom-8 font-sans text-3xl font-light leading-[1.1] tracking-tight text-foreground duration-1000 sm:mb-6 sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl">
               <span className="text-balance">
                 Единая панель
                 <br />
@@ -269,13 +258,13 @@ export default function Home() {
                 <span className="text-foreground/60">профсоюзом</span>
               </span>
             </h1>
-            <p className="mb-8 max-w-xl animate-in fade-in slide-in-from-bottom-4 text-lg leading-relaxed text-foreground/90 duration-1000 delay-200 md:text-xl">
+            <p className="mb-6 max-w-xl animate-in fade-in slide-in-from-bottom-4 text-base leading-relaxed text-foreground/90 duration-1000 delay-200 sm:mb-8 sm:text-lg md:text-xl">
               <span className="text-pretty">
                 Современная платформа с AI-ассистентом для автоматизации документооборота, управления членами и
                 обработки обращений. До 80% автоматизации рутинных задач.
               </span>
             </p>
-            <div className="flex animate-in fade-in slide-in-from-bottom-4 flex-col gap-4 duration-1000 delay-300 sm:flex-row sm:items-center">
+            <div className="flex animate-in fade-in slide-in-from-bottom-4 flex-col gap-3 duration-1000 delay-300 sm:flex-row sm:items-center sm:gap-4">
               <MagneticButton size="lg" variant="primary" onClick={() => scrollToSection(1)}>
                 Смотреть демо
               </MagneticButton>
@@ -285,25 +274,25 @@ export default function Home() {
             </div>
 
             {/* Stats */}
-            <div className="mt-12 flex animate-in fade-in slide-in-from-bottom-4 flex-wrap gap-8 duration-1000 delay-500 md:gap-12">
+            <div className="mt-8 flex animate-in fade-in slide-in-from-bottom-4 flex-wrap gap-6 duration-1000 delay-500 sm:mt-12 sm:gap-8 md:gap-12">
               <div>
-                <div className="text-3xl font-light text-foreground md:text-4xl">50K+</div>
+                <div className="text-2xl font-light text-foreground sm:text-3xl md:text-4xl">50K+</div>
                 <div className="font-mono text-xs text-foreground/60">Пользователей</div>
               </div>
               <div>
-                <div className="text-3xl font-light text-foreground md:text-4xl">80%</div>
+                <div className="text-2xl font-light text-foreground sm:text-3xl md:text-4xl">80%</div>
                 <div className="font-mono text-xs text-foreground/60">AI-автоматизация</div>
               </div>
               <div>
-                <div className="text-3xl font-light text-foreground md:text-4xl">-90%</div>
+                <div className="text-2xl font-light text-foreground sm:text-3xl md:text-4xl">-90%</div>
                 <div className="font-mono text-xs text-foreground/60">Время обработки</div>
               </div>
             </div>
           </div>
 
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-in fade-in duration-1000 delay-500">
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 animate-in fade-in duration-1000 delay-500 sm:bottom-8">
             <div className="flex items-center gap-2">
-              <p className="font-mono text-xs text-foreground/80">Прокрутите для изучения</p>
+              <p className="hidden font-mono text-xs text-foreground/80 sm:block">Прокрутите для изучения</p>
               <div className="flex h-6 w-12 items-center justify-center rounded-full border border-foreground/20 bg-foreground/15 backdrop-blur-md">
                 <div className="h-2 w-2 animate-pulse rounded-full bg-foreground/80" />
               </div>
@@ -322,7 +311,7 @@ export default function Home() {
       <ChatWidget />
 
       <style jsx global>{`
-        div::-webkit-scrollbar {
+        [data-scroll-container]::-webkit-scrollbar {
           display: none;
         }
       `}</style>

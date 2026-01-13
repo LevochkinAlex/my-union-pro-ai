@@ -58,7 +58,7 @@ export function PricingSection() {
   return (
     <section
       ref={ref}
-      className="flex h-screen w-screen shrink-0 snap-start items-center px-6 pt-20 md:px-12 md:pt-0 lg:px-16"
+      className="flex min-h-screen w-full shrink-0 snap-start items-center px-4 py-20 sm:px-6 md:px-12 md:py-24 lg:px-16"
     >
       <div className="mx-auto w-full max-w-7xl">
         <div
@@ -66,13 +66,13 @@ export function PricingSection() {
             isVisible ? "translate-y-0 opacity-100" : "-translate-y-12 opacity-0"
           }`}
         >
-          <h2 className="mb-2 font-sans text-4xl font-light tracking-tight text-foreground md:text-5xl lg:text-6xl">
+          <h2 className="mb-2 font-sans text-3xl font-light tracking-tight text-foreground sm:text-4xl md:text-5xl lg:text-6xl">
             Тарифы и лицензии
           </h2>
-          <p className="font-mono text-sm text-foreground/60 md:text-base">/ Конструктор цены</p>
+          <p className="font-mono text-xs text-foreground/60 sm:text-sm md:text-base">/ Конструктор цены</p>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
+        <div className="grid gap-6 md:gap-8 lg:grid-cols-2 lg:gap-12">
           {/* Calculator */}
           <div
             className={`space-y-6 transition-all duration-700 ${
@@ -164,10 +164,10 @@ export function PricingSection() {
               </div>
 
               <div className="mb-6">
-                <div className="text-5xl font-light text-foreground md:text-6xl">
+                <div className="text-4xl font-light text-foreground sm:text-5xl md:text-6xl">
                   {finalPrice.toLocaleString("ru-RU")} ₽
                 </div>
-                <div className="mt-2 font-mono text-sm text-foreground/60">
+                <div className="mt-2 font-mono text-xs text-foreground/60 sm:text-sm">
                   {billingPeriod === "monthly" ? "в месяц" : "в год"}
                 </div>
               </div>

@@ -69,7 +69,7 @@ export function RoadmapSection() {
   return (
     <section
       ref={ref}
-      className="flex h-screen w-screen shrink-0 snap-start items-center px-6 pt-20 md:px-12 md:pt-0 lg:px-16"
+      className="flex min-h-screen w-full shrink-0 snap-start items-center px-4 py-20 sm:px-6 md:px-12 md:py-24 lg:px-16"
     >
       <div className="mx-auto w-full max-w-7xl">
         <div
@@ -77,10 +77,10 @@ export function RoadmapSection() {
             isVisible ? "translate-y-0 opacity-100" : "-translate-y-12 opacity-0"
           }`}
         >
-          <h2 className="mb-2 font-sans text-4xl font-light tracking-tight text-foreground md:text-5xl lg:text-6xl">
+          <h2 className="mb-2 font-sans text-3xl font-light tracking-tight text-foreground sm:text-4xl md:text-5xl lg:text-6xl">
             Дорожная карта
           </h2>
-          <p className="font-mono text-sm text-foreground/60 md:text-base">/ Развитие до 2027 года</p>
+          <p className="font-mono text-xs text-foreground/60 sm:text-sm md:text-base">/ Развитие до 2027 года</p>
         </div>
 
         {/* Timeline */}
@@ -88,7 +88,7 @@ export function RoadmapSection() {
           {/* Timeline Line */}
           <div className="absolute left-0 top-0 hidden h-1 w-full bg-foreground/10 md:block" />
 
-          <div className="grid gap-4 md:grid-cols-5 md:gap-6">
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 md:gap-6">
             {roadmapItems.map((item, i) => (
               <div
                 key={i}
