@@ -3,108 +3,212 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ============================================
+   DESIGN SYSTEM - Light Theme (default)
+   ============================================ */
 :root {
-  --background: oklch(0.1 0.02 220);
-  --foreground: oklch(0.98 0 0);
-  --card: oklch(0.13 0.02 220);
-  --card-foreground: oklch(0.98 0 0);
-  --popover: oklch(0.13 0.02 220);
-  --popover-foreground: oklch(0.98 0 0);
-  --primary: oklch(0.6 0.18 220);
-  --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.22 0.02 220);
-  --secondary-foreground: oklch(0.98 0 0);
-  --muted: oklch(0.22 0.02 220);
-  --muted-foreground: oklch(0.65 0 0);
-  --accent: oklch(0.65 0.15 160);
-  --accent-foreground: oklch(0.98 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.25 0.02 220);
-  --input: oklch(0.25 0.02 220);
-  --ring: oklch(0.6 0.18 220);
-  --chart-1: oklch(0.6 0.18 220);
-  --chart-2: oklch(0.65 0.15 160);
-  --chart-3: oklch(0.6 0.15 280);
-  --chart-4: oklch(0.7 0.2 30);
-  --chart-5: oklch(0.55 0.18 200);
+  /* Base colors - LIGHT THEME */
+  --background: #ffffff;
+  --foreground: #111827;
+  
+  /* Card/Panel backgrounds */
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --card-hover: #f9fafb;
+  
+  /* Popover/Dropdown */
+  --popover: #ffffff;
+  --popover-foreground: #111827;
+  
+  /* Primary (blue) */
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --primary-hover: #1d4ed8;
+  
+  /* Secondary (gray) */
+  --secondary: #f3f4f6;
+  --secondary-foreground: #374151;
+  --secondary-hover: #e5e7eb;
+  
+  /* Muted (subtle backgrounds) */
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  
+  /* Accent (teal/green) */
+  --accent: #10b981;
+  --accent-foreground: #ffffff;
+  
+  /* Destructive (red) */
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  
+  /* Borders and inputs */
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --input-background: #ffffff;
+  --ring: #2563eb;
+  
+  /* UI component specific */
+  --badge: #e5e7eb;
+  --badge-foreground: #374151;
+  --button-disabled: #e5e7eb;
+  --button-disabled-foreground: #9ca3af;
+  
+  /* Charts */
+  --chart-1: #2563eb;
+  --chart-2: #10b981;
+  --chart-3: #8b5cf6;
+  --chart-4: #f59e0b;
+  --chart-5: #06b6d4;
+  
+  /* Radius */
   --radius: 0.75rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  
+  /* Sidebar - light theme */
+  --sidebar: #f9fafb;
+  --sidebar-foreground: #111827;
+  --sidebar-primary: #2563eb;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e5e7eb;
+  --sidebar-accent-foreground: #111827;
+  --sidebar-border: #e5e7eb;
+  --sidebar-ring: #2563eb;
 }
 
+/* ============================================
+   DESIGN SYSTEM - Dark Theme
+   ============================================ */
 .dark {
-  --background: oklch(0.1 0.02 220);
-  --foreground: oklch(0.98 0 0);
-  --card: oklch(0.13 0.02 220);
-  --card-foreground: oklch(0.98 0 0);
-  --popover: oklch(0.13 0.02 220);
-  --popover-foreground: oklch(0.98 0 0);
-  --primary: oklch(0.6 0.18 220);
-  --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.22 0.02 220);
-  --secondary-foreground: oklch(0.98 0 0);
-  --muted: oklch(0.22 0.02 220);
-  --muted-foreground: oklch(0.65 0 0);
-  --accent: oklch(0.65 0.15 160);
-  --accent-foreground: oklch(0.98 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.25 0.02 220);
-  --input: oklch(0.25 0.02 220);
-  --ring: oklch(0.6 0.18 220);
-  --chart-1: oklch(0.6 0.18 220);
-  --chart-2: oklch(0.65 0.15 160);
-  --chart-3: oklch(0.6 0.15 280);
-  --chart-4: oklch(0.7 0.2 30);
-  --chart-5: oklch(0.55 0.18 200);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  /* Base colors - DARK THEME */
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  
+  /* Card/Panel backgrounds */
+  --card: #1e293b;
+  --card-foreground: #f8fafc;
+  --card-hover: #334155;
+  
+  /* Popover/Dropdown */
+  --popover: #1e293b;
+  --popover-foreground: #f8fafc;
+  
+  /* Primary (blue) */
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --primary-hover: #2563eb;
+  
+  /* Secondary (gray) */
+  --secondary: #334155;
+  --secondary-foreground: #e2e8f0;
+  --secondary-hover: #475569;
+  
+  /* Muted (subtle backgrounds) */
+  --muted: #334155;
+  --muted-foreground: #94a3b8;
+  
+  /* Accent (teal/green) */
+  --accent: #10b981;
+  --accent-foreground: #ffffff;
+  
+  /* Destructive (red) */
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  
+  /* Borders and inputs */
+  --border: #334155;
+  --input: #334155;
+  --input-background: #1e293b;
+  --ring: #3b82f6;
+  
+  /* UI component specific */
+  --badge: #334155;
+  --badge-foreground: #e2e8f0;
+  --button-disabled: #1e293b;
+  --button-disabled-foreground: #64748b;
+  
+  /* Charts */
+  --chart-1: #3b82f6;
+  --chart-2: #10b981;
+  --chart-3: #a78bfa;
+  --chart-4: #fbbf24;
+  --chart-5: #22d3ee;
+  
+  /* Sidebar - dark theme */
+  --sidebar: #1e293b;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #334155;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: #334155;
+  --sidebar-ring: #3b82f6;
 }
 
 @theme inline {
   --font-sans: "Inter", "Inter Fallback", sans-serif;
   --font-mono: "JetBrains Mono", "JetBrains Mono Fallback", monospace;
+  
+  /* Base colors */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  
+  /* Card */
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-card-hover: var(--card-hover);
+  
+  /* Popover */
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
+  
+  /* Primary */
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  
+  /* Secondary */
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary-hover: var(--secondary-hover);
+  
+  /* Muted */
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  
+  /* Accent */
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  
+  /* Destructive */
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  
+  /* Border and Input */
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-input-background: var(--input-background);
   --color-ring: var(--ring);
+  
+  /* UI Components */
+  --color-badge: var(--badge);
+  --color-badge-foreground: var(--badge-foreground);
+  --color-button-disabled: var(--button-disabled);
+  --color-button-disabled-foreground: var(--button-disabled-foreground);
+  
+  /* Charts */
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  
+  /* Radius */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  
+  /* Sidebar */
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -122,358 +226,102 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Typography defaults using design tokens */
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--foreground);
+  }
+  
+  p, li, td, th {
+    color: var(--foreground);
+  }
+  
+  label {
+    color: var(--foreground);
+  }
+  
+  /* Form elements */
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    color: var(--foreground);
+    background-color: var(--input-background);
+  }
+  
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--muted-foreground);
+  }
 }
 
 @variant dark (&:where(.dark, .dark *));
 
-/* Prose styles for light theme - fix text color */
+/* ============================================
+   PROSE STYLES - Uses design tokens
+   ============================================ */
 .prose {
-  --tw-prose-body: #374151;
-  --tw-prose-headings: #111827;
-  --tw-prose-links: #2563eb;
-  --tw-prose-bold: #111827;
-  --tw-prose-counters: #6b7280;
-  --tw-prose-bullets: #6b7280;
+  --tw-prose-body: var(--foreground);
+  --tw-prose-headings: var(--foreground);
+  --tw-prose-links: var(--primary);
+  --tw-prose-bold: var(--foreground);
+  --tw-prose-counters: var(--muted-foreground);
+  --tw-prose-bullets: var(--muted-foreground);
   color: var(--tw-prose-body);
 }
 
 .prose p,
 .prose li,
-.prose span {
-  color: #374151;
-}
-
+.prose span,
 .prose strong {
-  color: #111827;
+  color: var(--foreground);
 }
 
-.dark .prose {
-  --tw-prose-body: #e5e7eb;
-  --tw-prose-headings: #f9fafb;
-  --tw-prose-links: #60a5fa;
-  --tw-prose-bold: #f9fafb;
-  --tw-prose-counters: #9ca3af;
-  --tw-prose-bullets: #9ca3af;
-  color: var(--tw-prose-body);
-}
-
-.dark .prose p,
-.dark .prose li,
-.dark .prose span {
-  color: #e5e7eb;
-}
-
-.dark .prose strong {
-  color: #f9fafb;
-}
-
-/* ============================================
-   LIGHT THEME TEXT COLOR FIXES
-   Fix light text on light background
-   ============================================ */
-
-/* Form labels - ensure dark text in light theme */
-label {
-  color: #374151;
-}
-
-.dark label {
-  color: #e5e7eb;
-}
-
-/* Input fields - text color */
-input:not([type="checkbox"]):not([type="radio"]),
-textarea,
-select {
-  color: #111827;
-}
-
-.dark input:not([type="checkbox"]):not([type="radio"]),
-.dark textarea,
-.dark select {
-  color: #f9fafb;
-}
-
-/* Placeholder text */
-input::placeholder,
-textarea::placeholder {
-  color: #9ca3af;
-}
-
-.dark input::placeholder,
-.dark textarea::placeholder {
-  color: #6b7280;
-}
-
-/* Card and panel headings */
-h1, h2, h3, h4, h5, h6 {
-  color: #111827;
-}
-
-.dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {
-  color: #f9fafb;
-}
-
-/* General text in cards and panels */
-p {
-  color: #374151;
-}
-
-.dark p {
-  color: #e5e7eb;
-}
-
-/* Table cells */
-td, th {
-  color: #374151;
-}
-
-.dark td, .dark th {
-  color: #e5e7eb;
-}
-
-/* Override Tailwind gray text classes in light mode to ensure readability */
-.text-gray-300:not(.dark *) {
-  color: #6b7280 !important;
-}
-
-.text-gray-400:not(.dark *) {
-  color: #6b7280 !important;
-}
-
-.text-gray-500:not(.dark *) {
-  color: #4b5563 !important;
-}
-
-/* Fix button text on badges */
-.bg-blue-100, .bg-green-100, .bg-yellow-100, .bg-red-100, .bg-purple-100, .bg-gray-100 {
-  color: inherit;
-}
-
-/* TinyMCE editor fix for light theme */
+/* TinyMCE editor */
 .tox-tinymce {
-  color: #111827;
+  color: var(--foreground);
 }
 
 .tox .tox-edit-area__iframe {
-  background-color: #ffffff;
+  background-color: var(--background);
 }
 
-/* Variable chips/badges should have readable text */
-[class*="bg-blue-"][class*="text-blue-"],
-[class*="bg-green-"][class*="text-green-"],
-[class*="bg-purple-"][class*="text-purple-"],
-[class*="bg-gray-"][class*="text-gray-"] {
-  font-weight: 500;
-}
-
-/* Base styles for article and news content */
+/* ============================================
+   ARTICLE/NEWS CONTENT - Uses design tokens
+   ============================================ */
 .article-content,
 .news-content {
-  --tw-prose-headings: #111827;
-  color: #374151;
+  color: var(--foreground);
 }
 
-/* Article content styles (same as news-content) */
-.article-content h1,
-.news-content h1 {
-  font-size: 2rem;
-  font-weight: bold;
-  margin-top: 1.5rem;
-  margin-bottom: 1rem;
-  color: var(--tw-prose-headings);
-}
+.article-content h1, .news-content h1 { font-size: 2rem; font-weight: bold; margin: 1.5rem 0 1rem; color: var(--foreground); }
+.article-content h2, .news-content h2 { font-size: 1.5rem; font-weight: bold; margin: 1.25rem 0 0.75rem; color: var(--foreground); }
+.article-content h3, .news-content h3 { font-size: 1.25rem; font-weight: 600; margin: 1rem 0 0.5rem; color: var(--foreground); }
+.article-content h4, .article-content h5, .article-content h6,
+.news-content h4, .news-content h5, .news-content h6 { font-size: 1.125rem; font-weight: 600; margin: 0.75rem 0 0.5rem; color: var(--foreground); }
 
-.article-content h2,
-.news-content h2 {
-  font-size: 1.5rem;
-  font-weight: bold;
-  margin-top: 1.25rem;
-  margin-bottom: 0.75rem;
-  color: var(--tw-prose-headings);
-}
+.article-content p, .news-content p { margin-bottom: 1rem; line-height: 1.75; color: var(--foreground); }
+.article-content li, .news-content li { margin-bottom: 0.5rem; line-height: 1.75; color: var(--foreground); }
+.article-content strong, .news-content strong { font-weight: 600; color: var(--foreground); }
+.article-content em, .news-content em { font-style: italic; }
 
-.article-content h3,
-.news-content h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-top: 1rem;
-  margin-bottom: 0.5rem;
-  color: var(--tw-prose-headings);
-}
+.article-content ul, .article-content ol, .news-content ul, .news-content ol { margin: 0.5rem 0 1rem; padding-left: 1.5rem; }
+.article-content ul, .news-content ul { list-style-type: disc; }
+.news-content ol { list-style-type: decimal; }
 
-.article-content h4,
-.article-content h5,
-.article-content h6,
-.news-content h4,
-.news-content h5,
-.news-content h6 {
-  font-size: 1.125rem;
-  font-weight: 600;
-  margin-top: 0.75rem;
-  margin-bottom: 0.5rem;
-  color: var(--tw-prose-headings);
-}
+.article-content a, .news-content a { color: var(--primary); text-decoration: underline; }
+.article-content a:hover, .news-content a:hover { color: var(--primary-hover); }
 
-.article-content p,
-.news-content p {
-  margin-bottom: 1rem;
-  line-height: 1.75;
-  color: #374151;
-}
+.news-content blockquote { border-left: 4px solid var(--border); padding-left: 1rem; margin: 1rem 0; font-style: italic; color: var(--muted-foreground); }
 
-.article-content ul,
-.article-content ol,
-.news-content ul,
-.news-content ol {
-  margin-top: 0.5rem;
-  margin-bottom: 1rem;
-  padding-left: 1.5rem;
-}
+.article-content pre, .news-content pre { background-color: var(--muted); padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin: 1rem 0; }
+.news-content code { background-color: var(--muted); padding: 0.125rem 0.25rem; border-radius: 0.25rem; font-family: monospace; font-size: 0.875rem; }
+.article-content pre code, .news-content pre code { background-color: transparent; padding: 0; }
 
-.article-content ul,
-.news-content ul {
-  list-style-type: disc;
-}
+.article-content img, .news-content img { max-width: 100%; height: auto; border-radius: 0.5rem; margin: 1rem 0; }
 
-.news-content ol {
-  list-style-type: decimal;
-}
-
-.article-content li,
-.news-content li {
-  margin-bottom: 0.5rem;
-  line-height: 1.75;
-}
-
-.article-content a,
-.news-content a {
-  color: #3b82f6;
-  text-decoration: underline;
-}
-
-.article-content a:hover,
-.news-content a:hover {
-  color: #2563eb;
-}
-
-.article-content strong,
-.news-content strong {
-  font-weight: 600;
-}
-
-.article-content em,
-.news-content em {
-  font-style: italic;
-}
-
-.news-content blockquote {
-  border-left: 4px solid #e5e7eb;
-  padding-left: 1rem;
-  margin: 1rem 0;
-  font-style: italic;
-  color: #6b7280;
-}
-
-.article-content pre,
-.news-content pre {
-  background-color: #f3f4f6;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  overflow-x: auto;
-  margin: 1rem 0;
-}
-
-.news-content code {
-  background-color: #f3f4f6;
-  padding: 0.125rem 0.25rem;
-  border-radius: 0.25rem;
-  font-family: monospace;
-  font-size: 0.875rem;
-}
-
-.article-content pre code,
-.news-content pre code {
-  background-color: transparent;
-  padding: 0;
-}
-
-.article-content img,
-.news-content img {
-  max-width: 100%;
-  height: auto;
-  border-radius: 0.5rem;
-  margin: 1rem 0;
-}
-
-.article-content table,
-.news-content table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1rem 0;
-}
-
-.article-content th,
-.article-content td,
-.news-content th,
-.news-content td {
-  border: 1px solid #e5e7eb;
-  padding: 0.5rem;
-  text-align: left;
-}
-
-.news-content th {
-  background-color: #f3f4f6;
-  font-weight: 600;
-}
-
-/* Dark mode */
-.dark .article-content,
-.dark .news-content {
-  --tw-prose-headings: #f9fafb;
-  color: #e5e7eb;
-}
-
-.dark .article-content p,
-.dark .news-content p {
-  color: #e5e7eb;
-}
-
-.dark .article-content blockquote,
-.dark .news-content blockquote {
-  border-left-color: #374151;
-  color: #9ca3af;
-}
-
-.dark .article-content pre,
-.dark .article-content code,
-.dark .news-content pre,
-.dark .news-content code {
-  background-color: #1f2937;
-}
-
-.dark .article-content th,
-.dark .article-content td,
-.dark .news-content th,
-.dark .news-content td {
-  border-color: #374151;
-}
-
-.dark .article-content th,
-.dark .news-content th {
-  background-color: #1f2937;
-}
-
-/* Article/news content lists in light mode */
-.article-content li,
-.news-content li {
-  color: #374151;
-}
-
-.dark .article-content li,
-.dark .news-content li {
-  color: #e5e7eb;
-}
+.article-content table, .news-content table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+.article-content th, .article-content td, .news-content th, .news-content td { border: 1px solid var(--border); padding: 0.5rem; text-align: left; color: var(--foreground); }
+.news-content th { background-color: var(--muted); font-weight: 600; }
 
 /* Global select styles - fix chevron icon spacing */
 /* Apply to all select elements that don't already have custom styling */
@@ -508,47 +356,23 @@ div.relative > select[class*="appearance-none"] {
 }
 
 /* ====================================
-   Light theme button contrast fixes
+   UTILITY CLASSES using design tokens
    ==================================== */
 
-/* Make bg-gray-100 buttons more visible in light theme */
-body:not(.dark) button.bg-gray-100,
-body:not(.dark) a.bg-gray-100,
-body:not(.dark) [role="button"].bg-gray-100 {
-  background-color: #e5e7eb !important; /* gray-200 */
+/* Semantic badge classes */
+.badge {
+  background-color: var(--badge);
+  color: var(--badge-foreground);
 }
 
-body:not(.dark) button.bg-gray-100:hover,
-body:not(.dark) a.bg-gray-100:hover,
-body:not(.dark) [role="button"].bg-gray-100:hover {
-  background-color: #d1d5db !important; /* gray-300 */
+/* Disabled button styling */
+button:disabled {
+  background-color: var(--button-disabled);
+  color: var(--button-disabled-foreground);
+  cursor: not-allowed;
 }
 
-/* Ensure hover states on buttons are visible */
-body:not(.dark) button.hover\:bg-gray-100:hover,
-body:not(.dark) a.hover\:bg-gray-100:hover {
-  background-color: #e5e7eb !important; /* gray-200 */
-}
-
-/* Fix disabled button states */
-body:not(.dark) button:disabled {
-  opacity: 0.6;
-}
-
-/* Improve tab/toggle button contrast */
-body:not(.dark) [role="tablist"] button:not([aria-selected="true"]),
-body:not(.dark) .tab-inactive {
-  background-color: #e5e7eb !important;
-  color: #374151 !important;
-}
-
-/* Fix white background buttons in light theme - add visible contrast */
-body:not(.dark) button.bg-white:not(:disabled),
-body:not(.dark) a.bg-white {
-  background-color: #f3f4f6 !important; /* gray-100 */
-}
-
-body:not(.dark) button.bg-white:hover:not(:disabled),
-body:not(.dark) a.bg-white:hover {
-  background-color: #e5e7eb !important; /* gray-200 */
+/* Card hover effect */
+.card-hover:hover {
+  background-color: var(--card-hover);
 }
