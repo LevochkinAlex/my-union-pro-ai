@@ -126,6 +126,13 @@
 
 @variant dark (&:where(.dark, .dark *));
 
+/* Base styles for article and news content */
+.article-content,
+.news-content {
+  --tw-prose-headings: #111827;
+  color: #374151;
+}
+
 /* Article content styles (same as news-content) */
 .article-content h1,
 .news-content h1 {
@@ -171,6 +178,7 @@
 .news-content p {
   margin-bottom: 1rem;
   line-height: 1.75;
+  color: #374151;
 }
 
 .article-content ul,
@@ -281,7 +289,12 @@
 /* Dark mode */
 .dark .article-content,
 .dark .news-content {
-  --tw-prose-headings: #f3f4f6;
+  --tw-prose-headings: #f9fafb;
+  color: #e5e7eb;
+}
+
+.dark .article-content p,
+.dark .news-content p {
   color: #e5e7eb;
 }
 
@@ -310,35 +323,15 @@
   background-color: #1f2937;
 }
 
-/* Article content specific styles */
-.article-content {
-  color: #1f2937;
+/* Article/news content lists in light mode */
+.article-content li,
+.news-content li {
+  color: #374151;
 }
 
-.article-content p {
-  color: inherit;
-}
-
-.article-content h1,
-.article-content h2,
-.article-content h3,
-.article-content h4,
-.article-content h5,
-.article-content h6 {
-  color: #111827;
-}
-
-.dark .article-content {
+.dark .article-content li,
+.dark .news-content li {
   color: #e5e7eb;
-}
-
-.dark .article-content h1,
-.dark .article-content h2,
-.dark .article-content h3,
-.dark .article-content h4,
-.dark .article-content h5,
-.dark .article-content h6 {
-  color: #f3f4f6;
 }
 
 /* Global select styles - fix chevron icon spacing */
