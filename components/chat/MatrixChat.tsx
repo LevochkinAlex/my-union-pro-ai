@@ -58,7 +58,7 @@ export default function MatrixChat() {
   const [searchResults, setSearchResults] = useState<Array<{userId: string; displayName: string; avatarUrl?: string}>>([]);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [connected, setConnected] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -110,9 +110,8 @@ export default function MatrixChat() {
 
   // Sync with Matrix server
   const sync = useCallback(async (initialSync = false) => {
-    if (!credentials || syncing) return;
+    if (!credentials) return;
     
-    setSyncing(true);
     try {
       const params = new URLSearchParams({
         timeout: initialSync ? '0' : '30000',
@@ -137,6 +136,7 @@ export default function MatrixChat() {
       if (!data) return;
 
       syncTokenRef.current = data.next_batch;
+      setConnected(true);
 
       // Process rooms
       const joinedRooms = data.rooms?.join || {};
@@ -213,11 +213,10 @@ export default function MatrixChat() {
     } catch (err: unknown) {
       if (err instanceof Error && err.name !== 'AbortError') {
         console.error('Sync error:', err);
+        setConnected(false);
       }
-    } finally {
-      setSyncing(false);
     }
-  }, [credentials, matrixFetch, selectedRoomId, syncing]);
+  }, [credentials, matrixFetch, selectedRoomId]);
 
   // Start sync loop
   useEffect(() => {
@@ -431,8 +430,8 @@ export default function MatrixChat() {
             </button>
           </div>
           <div className="mt-2 flex items-center gap-2 text-sm text-blue-100">
-            <div className={`w-2 h-2 rounded-full ${syncing ? 'bg-yellow-400' : 'bg-green-400'}`}></div>
-            {syncing ? 'Синхронизация...' : 'Подключено'}
+            <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`}></div>
+            {connected ? 'Подключено' : 'Подключение...'}
           </div>
         </div>
 
