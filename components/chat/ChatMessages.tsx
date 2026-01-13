@@ -133,7 +133,9 @@ function ChatMessagesComponent({
     const lastMessage = messages[messages.length - 1];
     if (!lastMessage || lastMessage.id === lastMessageIdRef.current) return;
     
-    const isOwnMessage = lastMessage.senderId === currentUserId;
+    // Для pending сообщений считаем их своими
+    const isPending = (lastMessage as any)._isPending;
+    const isOwnMessage = isPending || lastMessage.senderId === currentUserId;
     
     // Для своих сообщений - всегда скроллим
     // Для чужих - только если были внизу
@@ -183,11 +185,15 @@ function ChatMessagesComponent({
       const distanceFromEnd = lastIndex - realIndex;
       const isOldMessage = distanceFromEnd > 15;
       
+      // Для pending (оптимистичных) сообщений isOwn всегда true
+      const isPending = (item.message as any)._isPending;
+      const isOwn = isPending || item.message.senderId === currentUserId;
+      
       return (
         <MessageItem
           message={item.message}
           currentUserId={currentUserId}
-          isOwn={item.message.senderId === currentUserId}
+          isOwn={isOwn}
           isOldMessage={isOldMessage}
           showSenderName={isGroupChat}
           onReply={onReply}
