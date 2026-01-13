@@ -103,6 +103,7 @@ export default function PostDetailClient({ post, session }: PostDetailClientProp
   const [commentText, setCommentText] = useState("");
   const [loadingComments, setLoadingComments] = useState(false);
   const [sendingComment, setSendingComment] = useState(false);
+  const [showAllCommentsModal, setShowAllCommentsModal] = useState(false);
 
   const getUserName = (user: any) => {
     const parts = [user.firstName, user.middleName, user.lastName].filter(Boolean);
@@ -402,20 +403,58 @@ export default function PostDetailClient({ post, session }: PostDetailClientProp
             {/* Комментарии */}
             {showComments && (
               <div className="mt-6 space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                {comments.map((comment) => (
+                {/* Форма комментария - ВСЕГДА СВЕРХУ */}
+                {session && (
+                  <div className="flex flex-col sm:flex-row gap-2 pb-4 border-b border-gray-200 dark:border-gray-700">
+                    <textarea
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          sendComment();
+                        }
+                      }}
+                      placeholder="Написать комментарий..."
+                      rows={2}
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    />
+                    <button
+                      onClick={sendComment}
+                      disabled={!commentText.trim() || sendingComment}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap sm:self-end"
+                    >
+                      {sendingComment ? "Отправка..." : "Отправить"}
+                    </button>
+                  </div>
+                )}
+                {!session && (
+                  <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                    <button
+                      onClick={() => router.push("/auth/signin")}
+                      className="text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      Войдите
+                    </button>
+                    {" "}чтобы оставить комментарий
+                  </div>
+                )}
+
+                {/* Список комментариев - показываем только 5 */}
+                {comments.slice(0, 5).map((comment) => (
                   <div key={comment.id} className="flex gap-3">
                     {comment.user.avatarUrl ? (
                       <img
                         src={comment.user.avatarUrl}
                         alt={getUserName(comment.user)}
-                        className="w-10 h-10 rounded-full object-cover"
+                        className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
                         {getInitials(comment.user)}
                       </div>
                     )}
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm text-gray-900 dark:text-white">
                         {getUserName(comment.user)}
                       </p>
@@ -429,42 +468,98 @@ export default function PostDetailClient({ post, session }: PostDetailClientProp
                   </div>
                 ))}
 
-                {/* Форма комментария */}
-                {session && (
-                  <div className="flex gap-2 pt-2">
-                    <input
-                      type="text"
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          sendComment();
-                        }
-                      }}
-                      placeholder="Написать комментарий..."
-                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                {/* Кнопка "Показать все" если больше 5 комментариев */}
+                {comments.length > 5 && (
+                  <button
+                    onClick={() => setShowAllCommentsModal(true)}
+                    className="w-full rounded-lg border border-gray-300 bg-gray-100 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  >
+                    Показать все комментарии ({comments.length})
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Модальное окно со всеми комментариями */}
+            {showAllCommentsModal && (
+              <div 
+                className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm"
+                onClick={(e) => e.target === e.currentTarget && setShowAllCommentsModal(false)}
+              >
+                <div className="w-full max-w-2xl max-h-[90vh] sm:max-h-[80vh] bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col overflow-hidden">
+                  {/* Заголовок */}
+                  <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Комментарии ({comments.length})
+                    </h3>
                     <button
-                      onClick={sendComment}
-                      disabled={!commentText.trim() || sendingComment}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      onClick={() => setShowAllCommentsModal(false)}
+                      className="p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors"
                     >
-                      {sendingComment ? "Отправка..." : "Отправить"}
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   </div>
-                )}
-                {!session && (
-                  <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
-                    <button
-                      onClick={() => router.push("/auth/signin")}
-                      className="text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      Войдите
-                    </button>
-                    {" "}чтобы оставить комментарий
+
+                  {/* Форма ввода в модалке */}
+                  {session && (
+                    <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <textarea
+                          value={commentText}
+                          onChange={(e) => setCommentText(e.target.value)}
+                          onKeyPress={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              sendComment();
+                            }
+                          }}
+                          placeholder="Написать комментарий..."
+                          rows={2}
+                          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                        />
+                        <button
+                          onClick={sendComment}
+                          disabled={!commentText.trim() || sendingComment}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap sm:self-end"
+                        >
+                          {sendingComment ? "Отправка..." : "Отправить"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Скроллируемый список комментариев */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {comments.map((comment) => (
+                      <div key={comment.id} className="flex gap-3">
+                        {comment.user.avatarUrl ? (
+                          <img
+                            src={comment.user.avatarUrl}
+                            alt={getUserName(comment.user)}
+                            className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                            {getInitials(comment.user)}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm text-gray-900 dark:text-white">
+                            {getUserName(comment.user)}
+                          </p>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                            {comment.content}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {formatTime(comment.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                )}
+                </div>
               </div>
             )}
           </div>

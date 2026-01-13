@@ -25,6 +25,8 @@ interface NewsCommentsProps {
   newsId: string;
 }
 
+const VISIBLE_COMMENTS_LIMIT = 5;
+
 export default function NewsComments({ newsId }: NewsCommentsProps) {
   const { data: session } = useSession();
   const { showToast } = useToast();
@@ -35,8 +37,9 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
   const [replyContent, setReplyContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [currentUserAvatarUrl, setCurrentUserAvatarUrl] = useState<string | null>(null);
+  const [showAllModal, setShowAllModal] = useState(false);
 
-  // Загружаем avatarUrl текущего пользователя из профиля (не хранится в session)
+  // Загружаем avatarUrl текущего пользователя из профиля
   useEffect(() => {
     if (session?.user?.id) {
       fetch("/api/profile")
@@ -53,6 +56,21 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
   useEffect(() => {
     loadComments();
   }, [newsId]);
+
+  // Закрытие модалки по Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowAllModal(false);
+    };
+    if (showAllModal) {
+      document.addEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "hidden";
+    }
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [showAllModal]);
 
   const loadComments = async () => {
     try {
@@ -78,17 +96,11 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
       setSubmitting(true);
       const response = await fetch(`/api/news/${newsId}/comments`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content: newComment.trim(),
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: newComment.trim() }),
       });
 
-      if (!response.ok) {
-        throw new Error("Не удалось отправить комментарий");
-      }
+      if (!response.ok) throw new Error("Не удалось отправить комментарий");
 
       const comment = await response.json();
       setComments([comment, ...comments]);
@@ -108,18 +120,11 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
       setSubmitting(true);
       const response = await fetch(`/api/news/${newsId}/comments`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content: replyContent.trim(),
-          parentId,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: replyContent.trim(), parentId }),
       });
 
-      if (!response.ok) {
-        throw new Error("Не удалось отправить ответ");
-      }
+      if (!response.ok) throw new Error("Не удалось отправить ответ");
 
       const reply = await response.json();
       setComments(
@@ -146,62 +151,38 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
     const diffHours = Math.floor(diffMinutes / 60);
     const diffDays = Math.floor(diffHours / 24);
 
-    if (diffMinutes < 60) {
-      return `${diffMinutes || 1} мин назад`;
-    }
-    if (diffHours < 24) {
-      return `${diffHours} ч назад`;
-    }
-    if (diffDays < 7) {
-      return `${diffDays} дн назад`;
-    }
-    return date.toLocaleDateString("ru-RU", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
+    if (diffMinutes < 60) return `${diffMinutes || 1} мин назад`;
+    if (diffHours < 24) return `${diffHours} ч назад`;
+    if (diffDays < 7) return `${diffDays} дн назад`;
+    return date.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
   };
 
   const userName = (user: Comment["user"]) => {
-    if (user.firstName && user.lastName) {
-      return `${user.firstName} ${user.lastName}`;
-    }
+    if (user.firstName && user.lastName) return `${user.firstName} ${user.lastName}`;
     return user.email;
   };
 
-  // Компонент аватара с поддержкой CDN и base64
   const Avatar = ({ user, size = 8 }: { user: Comment["user"]; size?: number }) => {
     const name = userName(user);
     const pixelSize = size === 8 ? 32 : 24;
     const sizeStyle = { width: pixelSize, height: pixelSize };
     
     if (user.avatarUrl) {
-      // Используем обычный img тег для всех URL (CDN, Yandex, base64)
-      // Next Image требует настройки remotePatterns для каждого домена
       return (
-        <div 
-          className="rounded-full overflow-hidden flex-shrink-0"
-          style={sizeStyle}
-        >
+        <div className="rounded-full overflow-hidden flex-shrink-0" style={sizeStyle}>
           <img
             src={user.avatarUrl}
             alt={name}
             className="h-full w-full object-cover"
             loading="lazy"
-            onError={(e) => {
-              // При ошибке загрузки скрываем изображение
-              (e.target as HTMLImageElement).style.display = 'none';
-            }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
         </div>
       );
     }
     
-    // Фолбэк - круг с первой буквой
     const textSize = size === 8 ? 'text-sm' : 'text-xs';
-    const bgColor = size === 8 
-      ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
-      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400';
+    const bgColor = 'bg-blue-200 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
     
     return (
       <div 
@@ -210,6 +191,131 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
       >
         {name.charAt(0).toUpperCase()}
       </div>
+    );
+  };
+
+  const CommentItem = ({ comment, isReply = false }: { comment: Comment; isReply?: boolean }) => (
+    <div className={`flex gap-3 ${isReply ? "" : ""}`}>
+      <Avatar user={comment.user} size={isReply ? 6 : 8} />
+      <div className="flex-1 min-w-0">
+        <div className={`rounded-lg bg-gray-100 dark:bg-gray-700/50 ${isReply ? "p-2" : "p-3"}`}>
+          <div className="mb-1 flex items-center gap-2">
+            <span className={`${isReply ? "text-xs" : "text-sm"} font-semibold text-gray-900 dark:text-white`}>
+              {userName(comment.user)}
+            </span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {formatDate(comment.createdAt)}
+            </span>
+          </div>
+          <p className={`${isReply ? "text-xs" : "text-sm"} text-gray-700 dark:text-gray-300 whitespace-pre-wrap`}>
+            {comment.content}
+          </p>
+        </div>
+        {!isReply && (
+          <div className="mt-1">
+            {replyingTo === comment.id ? (
+              <div className="mt-2 space-y-2">
+                <textarea
+                  value={replyContent}
+                  onChange={(e) => setReplyContent(e.target.value)}
+                  placeholder="Написать ответ..."
+                  rows={2}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleSubmitReply(comment.id)}
+                    disabled={submitting || !replyContent.trim()}
+                    className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    Отправить
+                  </button>
+                  <button
+                    onClick={() => { setReplyingTo(null); setReplyContent(""); }}
+                    className="rounded-lg border border-gray-300 bg-gray-200 px-3 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                  >
+                    Отмена
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setReplyingTo(comment.id)}
+                className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
+              >
+                Ответить
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const CommentsList = ({ items, showAll = false }: { items: Comment[]; showAll?: boolean }) => {
+    const visibleComments = showAll ? items : items.slice(0, VISIBLE_COMMENTS_LIMIT);
+    
+    return (
+      <div className="space-y-4">
+        {visibleComments.map((comment) => (
+          <div key={comment.id} className="space-y-3">
+            <CommentItem comment={comment} />
+            {comment.replies.length > 0 && (
+              <div className="ml-11 space-y-3 border-l-2 border-gray-200 pl-4 dark:border-gray-700">
+                {comment.replies.map((reply) => (
+                  <CommentItem key={reply.id} comment={reply} isReply />
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const CommentForm = () => {
+    if (!session?.user?.id) {
+      return (
+        <div className="rounded-lg border border-gray-200 bg-gray-100 p-4 text-center text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+          Войдите, чтобы оставить комментарий
+        </div>
+      );
+    }
+
+    return (
+      <form onSubmit={handleSubmitComment}>
+        <div className="flex gap-3">
+          <Avatar 
+            user={{
+              id: session.user.id,
+              firstName: session.user.firstName,
+              lastName: session.user.lastName,
+              email: session.user.email || "",
+              avatarUrl: currentUserAvatarUrl,
+            }} 
+            size={8} 
+          />
+          <div className="flex-1">
+            <textarea
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder="Написать комментарий..."
+              rows={2}
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+              required
+            />
+            <div className="mt-2 flex justify-end">
+              <button
+                type="submit"
+                disabled={submitting || !newComment.trim()}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? "Отправка..." : "Отправить"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </form>
     );
   };
 
@@ -222,144 +328,69 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
   }
 
   return (
-    <div className="p-4 sm:p-6">
-      {/* Comment Form */}
-      {session?.user?.id ? (
-        <form onSubmit={handleSubmitComment} className="mb-6">
-          <div className="flex gap-3">
-            <Avatar 
-              user={{
-                id: session.user.id,
-                firstName: session.user.firstName,
-                lastName: session.user.lastName,
-                email: session.user.email || "",
-                avatarUrl: currentUserAvatarUrl,
-              }} 
-              size={8} 
-            />
-            <div className="flex-1">
-              <textarea
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Написать комментарий..."
-                rows={3}
-                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
-                required
-              />
-              <div className="mt-2 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={submitting || !newComment.trim()}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {submitting ? "Отправка..." : "Отправить"}
-                </button>
-              </div>
+    <>
+      <div className="p-4 sm:p-6">
+        {/* Форма ввода - ВСЕГДА СВЕРХУ */}
+        <div className="mb-6">
+          <CommentForm />
+        </div>
+
+        {/* Список комментариев */}
+        {comments.length === 0 ? (
+          <div className="text-center text-sm text-gray-500 dark:text-gray-400">
+            Комментариев пока нет. Будьте первым!
+          </div>
+        ) : (
+          <>
+            <CommentsList items={comments} />
+            
+            {/* Кнопка "Показать все" если больше 5 комментариев */}
+            {comments.length > VISIBLE_COMMENTS_LIMIT && (
+              <button
+                onClick={() => setShowAllModal(true)}
+                className="mt-4 w-full rounded-lg border border-gray-300 bg-gray-100 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              >
+                Показать все комментарии ({comments.length})
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Модальное окно со всеми комментариями */}
+      {showAllModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={(e) => e.target === e.currentTarget && setShowAllModal(false)}
+        >
+          <div className="w-full max-w-2xl max-h-[90vh] sm:max-h-[80vh] bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+            {/* Заголовок */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Комментарии ({comments.length})
+              </h3>
+              <button
+                onClick={() => setShowAllModal(false)}
+                className="p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Форма ввода в модалке */}
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+              <CommentForm />
+            </div>
+
+            {/* Скроллируемый список комментариев */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <CommentsList items={comments} showAll />
             </div>
           </div>
-        </form>
-      ) : (
-        <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4 text-center text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-          Войдите, чтобы оставить комментарий
         </div>
       )}
-
-      {/* Comments List */}
-      {comments.length === 0 ? (
-        <div className="text-center text-sm text-gray-500 dark:text-gray-400">
-          Комментариев пока нет. Будьте первым!
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {comments.map((comment) => (
-            <div key={comment.id} className="space-y-3">
-              <div className="flex gap-3">
-                <Avatar user={comment.user} size={8} />
-                <div className="flex-1 min-w-0">
-                  <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                    <div className="mb-1 flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {userName(comment.user)}
-                      </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {formatDate(comment.createdAt)}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                      {comment.content}
-                    </p>
-                  </div>
-                  <div className="mt-1">
-                    {replyingTo === comment.id ? (
-                      <div className="mt-2 space-y-2">
-                        <textarea
-                          value={replyContent}
-                          onChange={(e) => setReplyContent(e.target.value)}
-                          placeholder="Написать ответ..."
-                          rows={2}
-                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleSubmitReply(comment.id)}
-                            disabled={submitting || !replyContent.trim()}
-                            className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
-                          >
-                            Отправить
-                          </button>
-                          <button
-                            onClick={() => {
-                              setReplyingTo(null);
-                              setReplyContent("");
-                            }}
-                            className="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
-                          >
-                            Отмена
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setReplyingTo(comment.id)}
-                        className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                      >
-                        Ответить
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Replies */}
-              {comment.replies.length > 0 && (
-                <div className="ml-11 space-y-3 border-l-2 border-gray-200 pl-4 dark:border-gray-700">
-                  {comment.replies.map((reply) => (
-                    <div key={reply.id} className="flex gap-3">
-                      <Avatar user={reply.user} size={6} />
-                      <div className="flex-1 min-w-0">
-                        <div className="rounded-lg bg-gray-50 p-2 dark:bg-gray-900">
-                          <div className="mb-1 flex items-center gap-2">
-                            <span className="text-xs font-semibold text-gray-900 dark:text-white">
-                              {userName(reply.user)}
-                            </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                              {formatDate(reply.createdAt)}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                            {reply.content}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    </>
   );
 }
-
