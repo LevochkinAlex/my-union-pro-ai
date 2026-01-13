@@ -2,7 +2,15 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
+// Simple Avatar component
+function Avatar({ className, children }: { className?: string; children: React.ReactNode }) {
+  return <div className={`rounded-full overflow-hidden flex items-center justify-center ${className || ''}`}>{children}</div>;
+}
+
+function AvatarFallback({ className, children }: { className?: string; children: React.ReactNode }) {
+  return <div className={`w-full h-full flex items-center justify-center ${className || ''}`}>{children}</div>;
+}
 
 interface MatrixCredentials {
   userId: string;
