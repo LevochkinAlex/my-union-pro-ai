@@ -3,11 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DiscountCard from "./DiscountCard";
 import CityFilter from "./CityFilter";
-import CategoryFilter from "./CategoryFilter";
 import type {
   DiscountPreferenceResponse,
   DiscountSearchResult,
-  DiscountCategory,
 } from "@/types/discounts";
 import { requestPushPermission, syncPushSubscription } from "@/lib/firebase-push-notifications";
 import { useAutoSyncDiscounts } from "@/hooks/useAutoSyncDiscounts";
@@ -810,14 +808,7 @@ export default function DiscountsClient({
           }
         />
 
-        {/* Row 2: Categories Dropdown */}
-        {(data.categories || []).length > 0 && (
-          <CategoryFilter
-            categories={data.categories || []}
-            selectedIds={filters.categoryIds}
-            onChange={(categoryIds) => updateFilters({ categoryIds, page: 1 })}
-          />
-        )}
+        {/* Categories removed - simplified UI */}
 
         {/* Row 3: Actions */}
         <div className="flex flex-wrap items-center gap-3">
