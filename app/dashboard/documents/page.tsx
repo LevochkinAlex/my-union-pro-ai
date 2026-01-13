@@ -589,7 +589,7 @@ export default function DocumentsPage() {
                     <button
                       onClick={() => handleRegenerateSingleDocument(doc.id, doc.type)}
                       disabled={regeneratingDocId === doc.id}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 sm:w-auto sm:px-4"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-400 bg-gray-100 px-3 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 sm:w-auto sm:px-4"
                     >
                       {regeneratingDocId === doc.id ? (
                         <>
