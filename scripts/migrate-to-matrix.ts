@@ -81,7 +81,28 @@ async function createMatrixUser(username: string, displayName: string): Promise<
   }
 }
 
-// Helper: Create Matrix room
+// Helper: Force join user to room via Admin API
+async function forceJoinRoom(roomId: string, userId: string): Promise<boolean> {
+  if (!ADMIN_TOKEN) return false;
+  
+  try {
+    const url = `${MATRIX_SERVER}/_synapse/admin/v1/join/${encodeURIComponent(roomId)}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${ADMIN_TOKEN}`,
+      },
+      body: JSON.stringify({ user_id: userId }),
+    });
+    
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Helper: Create Matrix room and force join members
 async function createMatrixRoom(
   accessToken: string,
   name: string,
@@ -102,7 +123,6 @@ async function createMatrixRoom(
         topic: isDirect ? undefined : topic,
         preset: isDirect ? 'trusted_private_chat' : 'private_chat',
         is_direct: isDirect,
-        invite: inviteUserIds,
         creation_content: {
           'm.federate': false, // Не федерируем
         },
@@ -116,7 +136,17 @@ async function createMatrixRoom(
     }
 
     const data = await response.json();
-    return data.room_id;
+    const roomId = data.room_id;
+    
+    // Force join all invited users via Admin API
+    for (const userId of inviteUserIds) {
+      const joined = await forceJoinRoom(roomId, userId);
+      if (!joined) {
+        console.log(`    Warning: Could not force join ${userId} to room`);
+      }
+    }
+    
+    return roomId;
   } catch (err) {
     console.error(`Error creating room ${name}:`, err);
     return null;

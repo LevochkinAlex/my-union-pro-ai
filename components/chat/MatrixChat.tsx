@@ -143,8 +143,21 @@ export default function MatrixChat() {
       const roomList: MatrixRoom[] = [];
 
       for (const [roomId, roomData] of Object.entries(joinedRooms)) {
+        interface MemberContent { 
+          displayname?: string; 
+          avatar_url?: string; 
+          is_direct?: boolean;
+          membership?: string;
+        }
+        interface StateEvent { 
+          type: string; 
+          state_key?: string;
+          sender?: string;
+          content: { name?: string } & MemberContent;
+        }
+        
         const rd = roomData as {
-          state?: { events?: Array<{ type: string; content: { name?: string; is_direct?: boolean } }> };
+          state?: { events?: StateEvent[] };
           timeline?: { events?: Array<{ type: string; content: { body?: string }; origin_server_ts?: number }> };
           unread_notifications?: { notification_count?: number };
           ephemeral?: { events?: Array<{ type: string; content: { user_ids?: string[] } }> };
@@ -154,12 +167,40 @@ export default function MatrixChat() {
         const nameEvent = stateEvents.find(e => e.type === 'm.room.name');
         const isDirect = stateEvents.some(e => e.type === 'm.room.member' && e.content?.is_direct);
         
+        // For DM chats, find the other member's name and avatar
+        let roomName = nameEvent?.content?.name;
+        let roomAvatar: string | undefined;
+        
+        if (!roomName || isDirect) {
+          // Find other members (not the current user)
+          const memberEvents = stateEvents.filter(
+            e => e.type === 'm.room.member' && 
+                 e.state_key !== credentials.userId &&
+                 e.content?.membership === 'join'
+          );
+          
+          if (memberEvents.length > 0) {
+            const otherMember = memberEvents[0];
+            roomName = otherMember.content?.displayname || 
+                       otherMember.state_key?.split(':')[0].replace('@', '') || 
+                       'Собеседник';
+            roomAvatar = otherMember.content?.avatar_url;
+          } else {
+            // If no other members found, try to get from timeline
+            const memberNames = stateEvents
+              .filter(e => e.type === 'm.room.member' && e.state_key !== credentials.userId)
+              .map(e => e.content?.displayname || e.state_key?.split(':')[0].replace('@', ''));
+            roomName = memberNames[0] || 'Чат';
+          }
+        }
+        
         const timelineEvents = rd.timeline?.events || [];
         const lastMsg = [...timelineEvents].reverse().find(e => e.type === 'm.room.message');
 
         roomList.push({
           roomId,
-          name: nameEvent?.content?.name || 'Чат',
+          name: roomName || 'Новый чат',
+          avatarUrl: roomAvatar,
           lastMessage: lastMsg?.content?.body,
           lastMessageTime: lastMsg?.origin_server_ts,
           unreadCount: rd.unread_notifications?.notification_count || 0,
@@ -453,40 +494,72 @@ export default function MatrixChat() {
               </button>
             </div>
           ) : (
-            rooms.map(room => (
-              <button
-                key={room.roomId}
-                onClick={() => handleSelectRoom(room.roomId)}
-                className={`w-full p-4 text-left transition-all hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                  selectedRoomId === room.roomId 
-                    ? 'bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-600' 
-                    : ''
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12 ring-2 ring-blue-100 dark:ring-blue-900">
-                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white font-semibold">
-                      {room.name.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-gray-900 dark:text-white truncate">
-                        {room.name}
-                      </span>
-                      {room.unreadCount > 0 && (
-                        <span className="ml-2 px-2 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full">
-                          {room.unreadCount > 99 ? '99+' : room.unreadCount}
-                        </span>
+            rooms.map(room => {
+              // Generate gradient color based on room name
+              const colors = [
+                'from-blue-500 to-blue-600',
+                'from-purple-500 to-purple-600', 
+                'from-green-500 to-green-600',
+                'from-orange-500 to-orange-600',
+                'from-pink-500 to-pink-600',
+                'from-cyan-500 to-cyan-600',
+                'from-indigo-500 to-indigo-600',
+                'from-teal-500 to-teal-600',
+              ];
+              const colorIndex = room.name.charCodeAt(0) % colors.length;
+              const gradientColor = colors[colorIndex];
+              
+              // Get initials
+              const initials = room.name
+                .split(' ')
+                .map(w => w.charAt(0))
+                .slice(0, 2)
+                .join('')
+                .toUpperCase() || '?';
+              
+              return (
+                <button
+                  key={room.roomId}
+                  onClick={() => handleSelectRoom(room.roomId)}
+                  className={`w-full p-4 text-left transition-all hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                    selectedRoomId === room.roomId 
+                      ? 'bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-600' 
+                      : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-12 w-12 ring-2 ring-gray-100 dark:ring-gray-700 flex-shrink-0">
+                      {room.avatarUrl ? (
+                        <img 
+                          src={room.avatarUrl.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/thumbnail/`)}
+                          alt={room.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <AvatarFallback className={`bg-gradient-to-br ${gradientColor} text-white font-semibold text-lg`}>
+                          {initials}
+                        </AvatarFallback>
                       )}
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-gray-900 dark:text-white truncate">
+                          {room.name}
+                        </span>
+                        {room.unreadCount > 0 && (
+                          <span className="ml-2 px-2 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full">
+                            {room.unreadCount > 99 ? '99+' : room.unreadCount}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                        {room.lastMessage || (room.isDirect ? 'Начните диалог' : 'Нет сообщений')}
+                      </p>
                     </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                      {room.lastMessage || 'Нет сообщений'}
-                    </p>
                   </div>
-                </div>
-              </button>
-            ))
+                </button>
+              );
+            })
           )}
         </div>
       </div>
@@ -515,10 +588,24 @@ export default function MatrixChat() {
                   </svg>
                 </button>
                 
-                <Avatar className="h-10 w-10">
-                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-                    {selectedRoom.name.charAt(0).toUpperCase()}
-                  </AvatarFallback>
+                <Avatar className="h-10 w-10 ring-2 ring-gray-100 dark:ring-gray-700">
+                  {selectedRoom.avatarUrl ? (
+                    <img 
+                      src={selectedRoom.avatarUrl.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/thumbnail/`)}
+                      alt={selectedRoom.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <AvatarFallback className={`bg-gradient-to-br ${
+                      ['from-blue-500 to-blue-600', 'from-purple-500 to-purple-600', 
+                       'from-green-500 to-green-600', 'from-orange-500 to-orange-600',
+                       'from-pink-500 to-pink-600', 'from-cyan-500 to-cyan-600'][
+                        selectedRoom.name.charCodeAt(0) % 6
+                      ]
+                    } text-white font-semibold`}>
+                      {selectedRoom.name.split(' ').map(w => w.charAt(0)).slice(0, 2).join('').toUpperCase()}
+                    </AvatarFallback>
+                  )}
                 </Avatar>
                 
                 <div className="flex-1 min-w-0">
