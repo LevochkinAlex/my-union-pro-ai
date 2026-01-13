@@ -250,8 +250,8 @@ const ChatItem = memo(function ChatItem({
   return (
     <button
       onClick={() => onSelect(chat)}
-      className={`w-full px-3 md:px-4 py-3 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700/50 transition-colors ${
-        isSelected ? "bg-blue-50 dark:bg-blue-900/20" : ""
+      className={`w-full px-3 md:px-4 py-3 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700/50 transition-colors ${
+        isSelected ? "bg-blue-100 dark:bg-blue-900/20" : "bg-white dark:bg-gray-800"
       }`}
     >
       {isAppealChat ? (

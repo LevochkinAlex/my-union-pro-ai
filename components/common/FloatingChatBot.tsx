@@ -464,18 +464,28 @@ export default function FloatingChatBot() {
                   <div
                     className={`max-w-[80%] rounded-2xl px-4 py-2 shadow-sm ${
                       message.role === "user"
-                        ? "bg-blue-600 text-white rounded-br-md"
-                        : "bg-gray-100 text-gray-900 dark:bg-gray-700 dark:text-gray-100 rounded-bl-md"
+                        ? "bg-blue-600 rounded-br-md"
+                        : "bg-gray-200 dark:bg-gray-700 rounded-bl-md"
                     }`}
                   >
-                    <div className={`text-sm leading-relaxed prose prose-sm max-w-none ${
-                      message.role === "user" 
-                        ? "prose-invert" 
-                        : "dark:prose-invert"
-                    } prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-strong:font-semibold`}
+                    <div 
+                      className={`text-sm leading-relaxed ${
+                        message.role === "user" 
+                          ? "text-white" 
+                          : "text-gray-900 dark:text-gray-100"
+                      }`}
                       style={{ wordBreak: "normal", overflowWrap: "break-word", hyphens: "auto" }}
                     >
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          p: ({children}) => <p className="my-1">{children}</p>,
+                          ul: ({children}) => <ul className="my-1 list-disc pl-4">{children}</ul>,
+                          ol: ({children}) => <ol className="my-1 list-decimal pl-4">{children}</ol>,
+                          li: ({children}) => <li className="my-0.5">{children}</li>,
+                          strong: ({children}) => <strong className="font-semibold">{children}</strong>,
+                        }}
+                      >
                         {message.content}
                       </ReactMarkdown>
                     </div>

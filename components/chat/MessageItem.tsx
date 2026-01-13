@@ -457,7 +457,7 @@ function MessageItemComponent({
                 className={`px-3 sm:px-4 py-2 rounded-2xl min-w-0 max-w-full w-full overflow-hidden ${
                   isOwn
                     ? "bg-blue-500 text-white rounded-br-md"
-                    : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md"
+                    : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md"
                 }`}
               >
                 {/* Вложения */}
