@@ -113,20 +113,21 @@ export async function GET(request: NextRequest) {
     // Статистика по организациям (для МПО/РПО)
     let orgStats: any[] = [];
     if (orgHead.level !== "PPO") {
-      orgStats = await prisma.report.groupBy({
+      const rawOrgStats = await prisma.report.groupBy({
         by: ["organizationId"],
         where: { organizationId: { in: organizationIds } },
-        _count: { organizationId: true },
+        _count: true,
       });
 
       // Добавляем названия организаций
       const orgs = await prisma.organization.findMany({
-        where: { id: { in: orgStats.map((s) => s.organizationId) } },
+        where: { id: { in: rawOrgStats.map((s) => s.organizationId) } },
         select: { id: true, name: true, type: true },
       });
 
-      orgStats = orgStats.map((s) => ({
-        ...s,
+      orgStats = rawOrgStats.map((s) => ({
+        organizationId: s.organizationId,
+        count: s._count,
         organization: orgs.find((o) => o.id === s.organizationId),
       }));
     }
