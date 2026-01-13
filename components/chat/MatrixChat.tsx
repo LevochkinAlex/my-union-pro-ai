@@ -179,9 +179,10 @@ export default function MatrixChat() {
 
         // Update messages for selected room
         if (roomId === selectedRoomId && !initialSync) {
-          const newMsgs = timelineEvents
+          type TimelineEvent = { type: string; event_id: string; sender: string; content: { body?: string }; origin_server_ts: number };
+          const newMsgs = (timelineEvents as TimelineEvent[])
             .filter(e => e.type === 'm.room.message')
-            .map((e: { event_id: string; sender: string; content: { body?: string }; origin_server_ts: number }) => ({
+            .map(e => ({
               eventId: e.event_id,
               sender: e.sender,
               senderName: e.sender.split(':')[0].replace('@', ''),
