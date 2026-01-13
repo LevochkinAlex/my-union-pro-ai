@@ -214,7 +214,11 @@ export function useChat(options: UseChatOptions = {}) {
     return null;
   }, [chats, selectChat, options.onError]);
 
-  // Отправка сообщения с оптимистичным обновлением
+  // Отправка сообщения - простая и надежная стратегия
+  // 1. Показываем sending=true (кнопка отправки меняется на спиннер)
+  // 2. Отправляем на сервер
+  // 3. Добавляем реальное сообщение в список
+  // 4. Скроллим вниз
   const sendMessage = useCallback(async (
     content: string,
     file?: File,
@@ -222,39 +226,9 @@ export function useChat(options: UseChatOptions = {}) {
   ): Promise<boolean> => {
     if (!selectedChat) return false;
 
-    // Оптимистичное добавление сообщения СРАЗУ
-    const tempId = `temp-${Date.now()}`;
-    const optimisticMessage: Message = {
-      id: tempId,
-      chatId: selectedChat.id,
-      senderId: "current-user", // Будет заменено реальным ID
-      content: content,
-      createdAt: new Date(),
-      sender: null as any, // Будет заменено
-      attachments: [],
-      reactions: {},
-      replyToId: replyToId || null,
-      replyTo: null,
-      forwardedFromId: null,
-      forwardedFrom: null,
-      editedAt: null,
-      deletedAt: null,
-      _isPending: true, // Флаг для отображения статуса отправки
-    } as any;
-
-    // Добавляем сообщение сразу в UI
-    setMessages(prev => [...prev, optimisticMessage]);
-    
-    // Обновляем чат сразу
-    setChats(prev => prev.map(chat => 
-      chat.id === selectedChat.id
-        ? { ...chat, lastMessage: content || "[Файл]", lastMessageAt: new Date() }
-        : chat
-    ));
-
     setSending(true);
     
-    // Проверяем, это чат с ботом (для показа typing индикатора)
+    // Проверяем, это чат с ботом
     const isBotChat = selectedChat.otherUser?.firstName === "AI Ассистент" || 
                       selectedChat.otherUser?.lastName === "AI Ассистент" ||
                       selectedChat.name?.includes("AI");
@@ -273,11 +247,6 @@ export function useChat(options: UseChatOptions = {}) {
           body: formData,
         });
       } else {
-        // Показываем индикатор "бот печатает" для AI чатов
-        if (isBotChat) {
-          setIsBotTyping(true);
-        }
-        
         response = await fetch(`/api/chat/${selectedChat.id}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -289,30 +258,42 @@ export function useChat(options: UseChatOptions = {}) {
         const data = await response.json();
         const newMessage = data.message;
         
-        // Заменяем оптимистичное сообщение реальным
-        setMessages(prev => prev.map(msg => 
-          msg.id === tempId ? newMessage : msg
+        // Добавляем сообщение в список (с проверкой на дубликат)
+        setMessages(prev => {
+          const exists = prev.some(m => m.id === newMessage.id);
+          if (exists) return prev;
+          return [...prev, newMessage];
+        });
+        
+        // Обновляем превью чата
+        setChats(prev => prev.map(chat => 
+          chat.id === selectedChat.id
+            ? { ...chat, lastMessage: content || "[Файл]", lastMessageAt: new Date() }
+            : chat
         ));
         
-        // Если есть ответ бота, добавляем его тоже
-        if (data.botMessage) {
-          setMessages(prev => [...prev, data.botMessage]);
+        // Для AI чатов показываем индикатор печатания и ждем ответ бота
+        if (isBotChat && data.botMessage) {
+          setIsBotTyping(true);
+          // Небольшая задержка для эффекта "печатания"
+          await new Promise(r => setTimeout(r, 300));
+          setMessages(prev => {
+            const exists = prev.some(m => m.id === data.botMessage.id);
+            if (exists) return prev;
+            return [...prev, data.botMessage];
+          });
+          setIsBotTyping(false);
         }
         
         return true;
       } else {
-        // Удаляем оптимистичное сообщение при ошибке
-        setMessages(prev => prev.filter(msg => msg.id !== tempId));
         options.onError?.("Ошибка отправки сообщения");
       }
     } catch (error) {
       console.error("[useChat] Error sending message:", error);
-      // Удаляем оптимистичное сообщение при ошибке
-      setMessages(prev => prev.filter(msg => msg.id !== tempId));
       options.onError?.("Ошибка отправки сообщения");
     } finally {
       setSending(false);
-      setIsBotTyping(false);
     }
     return false;
   }, [selectedChat, options.onError]);
