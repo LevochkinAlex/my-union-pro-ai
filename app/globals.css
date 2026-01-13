@@ -126,6 +126,47 @@
 
 @variant dark (&:where(.dark, .dark *));
 
+/* Prose styles for light theme - fix text color */
+.prose {
+  --tw-prose-body: #374151;
+  --tw-prose-headings: #111827;
+  --tw-prose-links: #2563eb;
+  --tw-prose-bold: #111827;
+  --tw-prose-counters: #6b7280;
+  --tw-prose-bullets: #6b7280;
+  color: var(--tw-prose-body);
+}
+
+.prose p,
+.prose li,
+.prose span {
+  color: #374151;
+}
+
+.prose strong {
+  color: #111827;
+}
+
+.dark .prose {
+  --tw-prose-body: #e5e7eb;
+  --tw-prose-headings: #f9fafb;
+  --tw-prose-links: #60a5fa;
+  --tw-prose-bold: #f9fafb;
+  --tw-prose-counters: #9ca3af;
+  --tw-prose-bullets: #9ca3af;
+  color: var(--tw-prose-body);
+}
+
+.dark .prose p,
+.dark .prose li,
+.dark .prose span {
+  color: #e5e7eb;
+}
+
+.dark .prose strong {
+  color: #f9fafb;
+}
+
 /* Base styles for article and news content */
 .article-content,
 .news-content {
