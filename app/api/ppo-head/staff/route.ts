@@ -1,7 +1,7 @@
 /**
  * API для управления сотрудниками организации
  * GET /api/ppo-head/staff - список сотрудников
- * POST /api/ppo-head/staff - добавление сотрудника (приглашение)
+ * POST /api/ppo-head/staff - добавление сотрудника
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -9,17 +9,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { randomBytes } from "crypto";
-import bcrypt from "bcryptjs";
-
-// Генерация временного пароля
-function generateTempPassword(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  let password = "";
-  for (let i = 0; i < 10; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return password;
-}
+import { sendUserNotification } from "@/lib/notifications";
 
 // Генерация токена приглашения
 function generateInviteToken(): string {
@@ -202,16 +192,13 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const inviteToken = generateInviteToken();
-
+      // Пользователь уже в системе - сразу добавляем как активного сотрудника
       const staff = await prisma.organizationStaff.create({
         data: {
           userId,
           organizationId: user.ppoHeadOrganizationId,
           roleId,
-          status: "PENDING",
-          inviteToken,
-          inviteExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 дней
+          status: "ACTIVE", // Сразу активный, т.к. пользователь уже в системе
         },
         include: {
           user: {
@@ -228,73 +215,123 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // TODO: Отправить уведомление пользователю
-      // await sendStaffInviteNotification(targetUser.email, {
-      //   organizationName: organization?.name,
-      //   roleName: role.name,
-      //   inviteToken,
-      // });
+      // Отправляем уведомление пользователю
+      try {
+        await sendUserNotification(
+          targetUser.id,
+          "staff_added",
+          "Вы назначены сотрудником",
+          `Вы добавлены как "${role.name}" в организацию "${organization?.name || ""}". Новые возможности доступны в вашем личном кабинете.`,
+          `/dashboard/staff`
+        );
+      } catch (notifError) {
+        console.error("[API] Failed to send notification:", notifError);
+      }
 
       return NextResponse.json(
         {
           staff,
-          message: `Приглашение отправлено пользователю ${targetUser.firstName} ${targetUser.lastName}`,
+          message: `${targetUser.firstName || ""} ${targetUser.lastName || ""} добавлен как сотрудник`,
+          isExistingUser: true,
         },
         { status: 201 }
       );
     }
 
-    // Вариант 2: Приглашаем нового пользователя по email
+    // Вариант 2: Добавляем по email
     if (email) {
       // Проверяем, существует ли пользователь с таким email
-      let targetUser = await prisma.user.findUnique({
+      const existingUser = await prisma.user.findUnique({
         where: { email },
-        select: { id: true },
+        select: { id: true, firstName: true, lastName: true },
       });
 
-      const tempPassword = generateTempPassword();
-      const inviteToken = generateInviteToken();
-
-      // Если пользователя нет, создаем его
-      if (!targetUser) {
-        targetUser = await prisma.user.create({
-          data: {
-            email,
-            password: await bcrypt.hash(tempPassword, 10),
-            role: "MEMBER",
-            membershipStatus: "PROFILE_INCOMPLETE",
-            emailVerified: new Date(), // Считаем email подтвержденным через приглашение
+      // Если пользователь уже есть - добавляем как активного сотрудника
+      if (existingUser) {
+        // Проверяем что не является уже сотрудником
+        const existingStaff = await prisma.organizationStaff.findUnique({
+          where: {
+            userId_organizationId: {
+              userId: existingUser.id,
+              organizationId: user.ppoHeadOrganizationId,
+            },
           },
-          select: { id: true },
         });
-      }
 
-      // Проверяем что пользователь не является уже сотрудником
-      const existingStaff = await prisma.organizationStaff.findUnique({
-        where: {
-          userId_organizationId: {
-            userId: targetUser.id,
+        if (existingStaff) {
+          return NextResponse.json(
+            { error: "Этот пользователь уже является сотрудником организации" },
+            { status: 400 }
+          );
+        }
+
+        const staff = await prisma.organizationStaff.create({
+          data: {
+            userId: existingUser.id,
             organizationId: user.ppoHeadOrganizationId,
+            roleId,
+            status: "ACTIVE",
           },
-        },
-      });
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+            role: {
+              select: { name: true },
+            },
+          },
+        });
 
-      if (existingStaff) {
+        // Отправляем уведомление
+        try {
+          await sendUserNotification(
+            existingUser.id,
+            "staff_added",
+            "Вы назначены сотрудником",
+            `Вы добавлены как "${role.name}" в организацию "${organization?.name || ""}".`,
+            `/dashboard/staff`
+          );
+        } catch (notifError) {
+          console.error("[API] Failed to send notification:", notifError);
+        }
+
         return NextResponse.json(
-          { error: "Пользователь уже является сотрудником организации" },
-          { status: 400 }
+          {
+            staff,
+            message: `${existingUser.firstName || ""} ${existingUser.lastName || ""} добавлен как сотрудник`,
+            isExistingUser: true,
+          },
+          { status: 201 }
         );
       }
 
+      // Пользователя нет - создаем приглашение (новый пользователь)
+      const inviteToken = generateInviteToken();
+
+      // Создаем нового пользователя БЕЗ пароля (вход по OTP)
+      const newUser = await prisma.user.create({
+        data: {
+          email,
+          role: "MEMBER",
+          membershipStatus: "PROFILE_INCOMPLETE",
+          emailVerified: new Date(),
+        },
+        select: { id: true },
+      });
+
       const staff = await prisma.organizationStaff.create({
         data: {
-          userId: targetUser.id,
+          userId: newUser.id,
           organizationId: user.ppoHeadOrganizationId,
           roleId,
           status: "PENDING",
           inviteToken,
           inviteExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          tempPassword: await bcrypt.hash(tempPassword, 10),
         },
         include: {
           user: {
@@ -324,19 +361,18 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // TODO: Отправить email с приглашением и временным паролем
-      // await sendStaffInviteEmail(email, {
-      //   organizationName: organization?.name,
-      //   roleName: role.name,
-      //   tempPassword,
-      //   inviteLink: `${process.env.NEXTAUTH_URL}/auth/staff-invite/${inviteToken}`,
-      // });
+      // TODO: Отправить email с приглашением
+      // Вход по одноразовому коду, поэтому просто ссылка на вход
+      const inviteLink = `${process.env.NEXTAUTH_URL || "https://myunion.pro"}/login?email=${encodeURIComponent(email)}&invite=1`;
+      
+      console.log(`[Staff] Приглашение для ${email}: ${inviteLink}`);
 
       return NextResponse.json(
         {
           staff,
-          tempPassword, // Возвращаем для отображения Председателю (один раз)
           message: `Приглашение отправлено на ${email}`,
+          isExistingUser: false,
+          inviteLink, // Для отладки (убрать в продакшене)
         },
         { status: 201 }
       );
