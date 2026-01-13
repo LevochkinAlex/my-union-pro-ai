@@ -261,11 +261,8 @@ export default function PostDetailClient({ post, session }: PostDetailClientProp
           <div className="p-4 sm:p-6 md:p-8">
             {post.postType === "article" ? (
               <div
-                className="article-content prose prose-lg dark:prose-invert max-w-none"
+                className="article-content prose prose-lg dark:prose-invert max-w-none text-gray-800 dark:text-gray-200"
                 dangerouslySetInnerHTML={{ __html: post.content }}
-                style={{
-                  color: 'inherit',
-                }}
               />
             ) : (
               <p className="text-gray-900 dark:text-white whitespace-pre-wrap break-words">

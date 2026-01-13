@@ -185,7 +185,17 @@ export default function SimpleRichTextEditor({
         </svg>
       ),
       label: "Очистить форматирование",
-      action: () => executeCommand("removeFormat"),
+      action: () => {
+        // Если ничего не выделено - выделяем весь текст
+        const selection = window.getSelection();
+        if (selection && selection.isCollapsed && editorRef.current) {
+          const range = document.createRange();
+          range.selectNodeContents(editorRef.current);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+        executeCommand("removeFormat");
+      },
     },
     {
       type: "separator"
