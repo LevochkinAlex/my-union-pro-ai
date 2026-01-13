@@ -490,7 +490,7 @@ async function exportToPDF(report: any): Promise<NextResponse> {
     report.periodMonth ? `_${report.periodMonth}` : ""
   }.pdf`;
 
-  return new NextResponse(pdfBuffer, {
+  return new NextResponse(new Uint8Array(pdfBuffer), {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
