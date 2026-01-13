@@ -521,7 +521,7 @@ export async function PUT(request: NextRequest) {
       where: {
         userId: session.user.id,
         type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
-        status: { in: ["GENERATED", "SIGNED", "PENDING", "APPROVED"] },
+        status: { in: ["GENERATED", "SIGNED", "PENDING_REVIEW", "PENDING_APPROVAL", "PENDING_SIGNATURE", "COMPLETED"] },
       },
     }) > 0;
 

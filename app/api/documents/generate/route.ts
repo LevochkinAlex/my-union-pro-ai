@@ -173,8 +173,8 @@ export async function POST(request: NextRequest) {
       if (existingMembership && doc.id === existingMembership.id) return false;
       if (existingDues && doc.id === existingDues.id) return false;
       // Удаляем только документы со статусом GENERATED или DRAFT (не подписанные)
-      // НЕ удаляем документы со статусом PENDING, APPROVED, или SIGNED с signedFilePath
-      if (doc.status === "PENDING" || doc.status === "APPROVED") return false;
+      // НЕ удаляем документы в workflow или завершённые
+      if (doc.status === "PENDING_REVIEW" || doc.status === "PENDING_APPROVAL" || doc.status === "PENDING_SIGNATURE" || doc.status === "COMPLETED") return false;
       if (doc.status === "SIGNED" && doc.signedFilePath) return false;
       return doc.status === "GENERATED" || doc.status === "DRAFT";
     });
