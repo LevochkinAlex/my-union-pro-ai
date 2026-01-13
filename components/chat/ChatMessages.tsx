@@ -9,6 +9,11 @@ import { formatMessageDate, getNameInitials, getInitials, getUserName } from "@/
 // Большое начальное значение для firstItemIndex (для поддержки prepend)
 const START_INDEX = 100000;
 
+interface TypingUser {
+  userId: string;
+  userName: string;
+}
+
 interface ChatMessagesProps {
   chat: Chat;
   messages: Message[];
@@ -17,6 +22,7 @@ interface ChatMessagesProps {
   loadingOlder: boolean;
   hasMore: boolean;
   isBotTyping?: boolean;
+  typingUsers?: TypingUser[];
   onLoadMore: () => void;
   onReply: (message: Message) => void;
   onEdit: (message: Message) => void;
@@ -62,6 +68,7 @@ function ChatMessagesComponent({
   loadingOlder,
   hasMore,
   isBotTyping,
+  typingUsers = [],
   onLoadMore,
   onReply,
   onEdit,
@@ -246,7 +253,9 @@ function ChatMessagesComponent({
           ),
           Footer: () => (
             <div className="h-6">
-              {isBotTyping && <TypingIndicator />}
+              {(isBotTyping || typingUsers.length > 0) && (
+                <TypingIndicator users={typingUsers} />
+              )}
             </div>
           ),
         }}
@@ -304,15 +313,22 @@ const EmptyState = memo(function EmptyState({ chat }: { chat: Chat }) {
   );
 });
 
-const TypingIndicator = memo(function TypingIndicator() {
+const TypingIndicator = memo(function TypingIndicator({ users = [] }: { users?: TypingUser[] }) {
+  const typingText = users.length > 0 
+    ? users.length === 1 
+      ? `${users[0].userName} печатает`
+      : `${users.map(u => u.userName).join(", ")} печатают`
+    : "печатает";
+
   return (
     <div className="flex justify-start mb-2 px-4">
-      <div className="px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 rounded-bl-md">
+      <div className="px-4 py-2 rounded-2xl bg-gray-100 dark:bg-gray-700 rounded-bl-md flex items-center gap-2">
         <div className="flex items-center gap-1">
           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
         </div>
+        <span className="text-xs text-gray-500 dark:text-gray-400">{typingText}...</span>
       </div>
     </div>
   );

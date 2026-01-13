@@ -126,11 +126,14 @@ export function ChatPageBase({
     sending,
     hasMore,
     isBotTyping,
+    typingUsers,
+    isConnected,
     loadChats,
     loadOlderMessages,
     selectChat,
     createOrOpenChat,
     sendMessage,
+    sendTyping,
     editMessage,
     deleteMessage,
     toggleReaction,
@@ -369,6 +372,7 @@ export function ChatPageBase({
                   loadingOlder={loadingOlder}
                   hasMore={hasMore}
                   isBotTyping={isBotTyping}
+                  typingUsers={typingUsers}
                   onLoadMore={loadOlderMessages}
                   onReply={handleReply}
                   onEdit={handleEdit}
@@ -389,6 +393,7 @@ export function ChatPageBase({
                 onSend={handleSendMessage}
                 onCancelReply={() => setReplyingTo(null)}
                 onCancelEdit={() => setEditingMessage(null)}
+                onTyping={sendTyping}
               />
             </>
           ) : (

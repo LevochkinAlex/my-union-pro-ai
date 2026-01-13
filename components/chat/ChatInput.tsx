@@ -11,6 +11,7 @@ interface ChatInputProps {
   onSend: (content: string, file?: File) => void;
   onCancelReply: () => void;
   onCancelEdit: () => void;
+  onTyping?: () => void;
 }
 
 // Иконки для типов файлов
@@ -86,6 +87,7 @@ function ChatInputComponent({
   onSend,
   onCancelReply,
   onCancelEdit,
+  onTyping,
 }: ChatInputProps) {
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -95,6 +97,12 @@ function ChatInputComponent({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
+
+  // Отправляем typing при вводе текста
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setText(e.target.value);
+    onTyping?.();
+  };
 
   // Инициализация текста при редактировании
   useEffect(() => {
@@ -342,7 +350,7 @@ function ChatInputComponent({
           <textarea
             ref={textareaRef}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={handleTextChange}
             onKeyDown={handleKeyDown}
             placeholder="Введите сообщение..."
             disabled={disabled}

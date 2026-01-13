@@ -1,13 +1,21 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { io, Socket } from "socket.io-client";
 import { Chat, Message } from "@/types/chat";
+
+interface TypingUser {
+  userId: string;
+  userName: string;
+}
 
 interface UseChatOptions {
   onError?: (error: string) => void;
 }
 
 export function useChat(options: UseChatOptions = {}) {
+  const { data: session } = useSession();
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -17,15 +25,118 @@ export function useChat(options: UseChatOptions = {}) {
   const [sending, setSending] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [oldestMessageId, setOldestMessageId] = useState<string | null>(null);
-  const [isBotTyping, setIsBotTyping] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  const [isConnected, setIsConnected] = useState(false);
   
+  const socketRef = useRef<Socket | null>(null);
   const messagesRef = useRef<Message[]>([]);
-  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const selectedChatRef = useRef<Chat | null>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Синхронизация ref с messages
+  // Синхронизация refs
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    selectedChatRef.current = selectedChat;
+  }, [selectedChat]);
+
+  // Инициализация WebSocket
+  useEffect(() => {
+    if (!session?.user) return;
+
+    const token = (session as any)?.accessToken;
+    if (!token) {
+      console.warn("[useChat] No access token, using polling mode");
+      return;
+    }
+
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 
+      (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:3005` : "");
+
+    console.log("[useChat] Connecting to socket:", socketUrl);
+
+    const socket = io(socketUrl, {
+      auth: { token },
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+    });
+
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      console.log("[useChat] ✅ Socket connected");
+      setIsConnected(true);
+      
+      // Переподключаемся к текущему чату
+      if (selectedChatRef.current) {
+        socket.emit("chat:join", selectedChatRef.current.id);
+      }
+    });
+
+    socket.on("disconnect", () => {
+      console.log("[useChat] ❌ Socket disconnected");
+      setIsConnected(false);
+    });
+
+    socket.on("connect_error", (error) => {
+      console.error("[useChat] Socket error:", error.message);
+    });
+
+    // Новое сообщение
+    socket.on("message:new", (message: Message) => {
+      console.log("[useChat] 📨 New message via socket");
+      
+      // Добавляем только если это для текущего чата и сообщение ещё не существует
+      setMessages(prev => {
+        if (prev.some(m => m.id === message.id)) return prev;
+        return [...prev, message];
+      });
+
+      // Обновляем превью чата
+      setChats(prev => prev.map(chat =>
+        chat.id === message.chatId
+          ? { ...chat, lastMessage: message.content || "[Файл]", lastMessageAt: new Date() }
+          : chat
+      ));
+    });
+
+    // Сообщение обновлено
+    socket.on("message:updated", (message: Message) => {
+      setMessages(prev => prev.map(m => m.id === message.id ? message : m));
+    });
+
+    // Сообщение удалено
+    socket.on("message:deleted", ({ messageId }) => {
+      setMessages(prev => prev.map(m =>
+        m.id === messageId ? { ...m, deletedAt: new Date().toISOString() } : m
+      ));
+    });
+
+    // Typing индикаторы
+    socket.on("typing:start", ({ chatId, userId, userName }) => {
+      if (chatId === selectedChatRef.current?.id) {
+        setTypingUsers(prev => {
+          if (prev.some(u => u.userId === userId)) return prev;
+          return [...prev, { userId, userName }];
+        });
+      }
+    });
+
+    socket.on("typing:stop", ({ chatId, userId }) => {
+      if (chatId === selectedChatRef.current?.id) {
+        setTypingUsers(prev => prev.filter(u => u.userId !== userId));
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [session]);
 
   // Загрузка списка чатов
   const loadChats = useCallback(async () => {
@@ -41,63 +152,36 @@ export function useChat(options: UseChatOptions = {}) {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [options]);
 
-  // Загрузка сообщений чата
-  const loadMessages = useCallback(async (chatId: string, silent = false) => {
-    if (!silent) {
-      setLoadingMessages(true);
-    }
-
+  // Загрузка сообщений чата (HTTP - для первоначальной загрузки)
+  const loadMessages = useCallback(async (chatId: string) => {
+    setLoadingMessages(true);
     try {
-      // При silent-запросе (polling) запрашиваем только последние 5 сообщений
-      // Для первой загрузки используем 20 сообщений
-      const url = silent 
-        ? `/api/chat/${chatId}?limit=5&t=${Date.now()}`
-        : `/api/chat/${chatId}?limit=20&t=${Date.now()}`;
-      const response = await fetch(url);
+      const response = await fetch(`/api/chat/${chatId}?limit=50&t=${Date.now()}`);
       if (response.ok) {
         const data = await response.json();
-        const newMessages = data.messages || [];
-        
-        if (silent) {
-          // При фоновом обновлении добавляем только новые сообщения
-          setMessages(prev => {
-            const existingIds = new Set(prev.map(m => m.id));
-            const newOnly = newMessages.filter((m: Message) => !existingIds.has(m.id));
-            return newOnly.length > 0 ? [...prev, ...newOnly] : prev;
-          });
-        } else {
-          setMessages(newMessages);
-          // Пометим сообщения как прочитанные при первой загрузке (не при polling)
-          try {
-            await fetch(`/api/chat/${chatId}/read`, { method: "POST" });
-            // Обновляем только счетчик непрочитанных в текущем чате БЕЗ перезагрузки всего списка
-            // Это предотвращает изменение порядка чатов
-            setChats(prev => prev.map(chat => 
-              chat.id === chatId ? { ...chat, unreadCount: 0 } : chat
-            ));
-          } catch (error) {
-            console.error("[useChat] Error marking as read:", error);
-          }
-        }
-        
+        setMessages(data.messages || []);
         setHasMore(data.pagination?.hasMore || false);
         setOldestMessageId(data.pagination?.oldestMessageId || null);
+
+        // Помечаем как прочитанные
+        try {
+          await fetch(`/api/chat/${chatId}/read`, { method: "POST" });
+          setChats(prev => prev.map(chat =>
+            chat.id === chatId ? { ...chat, unreadCount: 0 } : chat
+          ));
+        } catch (e) {
+          console.error("[useChat] Error marking as read:", e);
+        }
       }
     } catch (error) {
       console.error("[useChat] Error loading messages:", error);
-      if (!silent) {
-        options.onError?.("Ошибка загрузки сообщений");
-      }
+      options.onError?.("Ошибка загрузки сообщений");
     } finally {
-      if (!silent) {
-        setLoadingMessages(false);
-      }
+      setLoadingMessages(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadChats]);
+  }, [options]);
 
   // Загрузка старых сообщений
   const loadOlderMessages = useCallback(async () => {
@@ -105,30 +189,19 @@ export function useChat(options: UseChatOptions = {}) {
 
     setLoadingOlder(true);
     try {
-      // Сохраняем текущий первый индекс перед загрузкой
-      const currentFirstMessageId = messagesRef.current[0]?.id;
-      
       const response = await fetch(
         `/api/chat/${selectedChat.id}?limit=50&cursor=${oldestMessageId}&direction=older&t=${Date.now()}`
       );
-      
+
       if (response.ok) {
         const data = await response.json();
         const olderMessages = data.messages || [];
-        
+
         if (olderMessages.length > 0) {
-          // Добавляем старые сообщения в начало
-          setMessages(prev => {
-            const newMessages = [...olderMessages, ...prev];
-            // Сохраняем информацию о первом сообщении для восстановления позиции
-            return newMessages;
-          });
-          
+          setMessages(prev => [...olderMessages, ...prev]);
           setHasMore(data.pagination?.hasMore || false);
           setOldestMessageId(data.pagination?.oldestMessageId || null);
-          
-          // Возвращаем информацию о количестве загруженных сообщений для восстановления позиции
-          return { loadedCount: olderMessages.length, firstMessageId: currentFirstMessageId };
+          return { loadedCount: olderMessages.length };
         } else {
           setHasMore(false);
         }
@@ -140,54 +213,37 @@ export function useChat(options: UseChatOptions = {}) {
     }
   }, [selectedChat, oldestMessageId, loadingOlder]);
 
-  // Хранение позиций скролла для каждого чата
-  const scrollPositionsRef = useRef<Map<string, number>>(new Map());
-
-  // Сохранение позиции скролла
-  const saveScrollPosition = useCallback((chatId: string, position: number) => {
-    scrollPositionsRef.current.set(chatId, position);
-  }, []);
-
-  // Получение сохраненной позиции скролла
-  const getScrollPosition = useCallback((chatId: string): number | null => {
-    return scrollPositionsRef.current.get(chatId) ?? null;
-  }, []);
-
   // Выбор чата
   const selectChat = useCallback((chat: Chat | null) => {
-    // Очищаем интервал обновления предыдущего чата
-    if (refreshIntervalRef.current) {
-      clearInterval(refreshIntervalRef.current);
-      refreshIntervalRef.current = null;
+    // Покидаем предыдущий чат
+    if (selectedChatRef.current && socketRef.current) {
+      socketRef.current.emit("chat:leave", selectedChatRef.current.id);
     }
 
     setSelectedChat(chat);
     setMessages([]);
     setHasMore(false);
     setOldestMessageId(null);
-    setIsBotTyping(false);
+    setTypingUsers([]);
 
     if (chat) {
+      // Присоединяемся к новому чату через сокет
+      if (socketRef.current?.connected) {
+        socketRef.current.emit("chat:join", chat.id);
+      }
       loadMessages(chat.id);
-      
-      // Автообновление каждые 10 секунд (было 5)
-      refreshIntervalRef.current = setInterval(() => {
-        loadMessages(chat.id, true);
-      }, 10000);
     }
   }, [loadMessages]);
 
   // Создание или открытие чата
   const createOrOpenChat = useCallback(async (userId: string): Promise<Chat | null> => {
     try {
-      // Сначала проверяем существующие чаты
-      const existingChat = chats.find(c => c.otherUser.id === userId);
+      const existingChat = chats.find(c => c.otherUser?.id === userId);
       if (existingChat) {
         selectChat(existingChat);
         return existingChat;
       }
 
-      // Создаём новый чат
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -197,13 +253,12 @@ export function useChat(options: UseChatOptions = {}) {
       if (response.ok) {
         const data = await response.json();
         const newChat = data.chat;
-        
-        // Добавляем чат в список
+
         setChats(prev => {
           const exists = prev.some(c => c.id === newChat.id);
           return exists ? prev : [newChat, ...prev];
         });
-        
+
         selectChat(newChat);
         return newChat;
       }
@@ -212,7 +267,7 @@ export function useChat(options: UseChatOptions = {}) {
       options.onError?.("Ошибка создания чата");
     }
     return null;
-  }, [chats, selectChat, options.onError]);
+  }, [chats, selectChat, options]);
 
   // Отправка сообщения
   const sendMessage = useCallback(async (
@@ -223,45 +278,66 @@ export function useChat(options: UseChatOptions = {}) {
     if (!selectedChat) return false;
 
     setSending(true);
-    try {
-      let response;
 
+    try {
+      // Для файлов используем HTTP
       if (file) {
-        // Отправка с файлом
         const formData = new FormData();
         formData.append("content", content);
         formData.append("file", file);
         if (replyToId) formData.append("replyToId", replyToId);
 
-        response = await fetch(`/api/chat/${selectedChat.id}/attachments`, {
+        const response = await fetch(`/api/chat/${selectedChat.id}/attachments`, {
           method: "POST",
           body: formData,
         });
-      } else {
-        // Текстовое сообщение
-        response = await fetch(`/api/chat/${selectedChat.id}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content, replyToId }),
-        });
-      }
 
-      if (response.ok) {
-        const data = await response.json();
-        const newMessage = data.message;
-        
-        // Добавляем сообщение в список
-        setMessages(prev => [...prev, newMessage]);
-        
-        // Обновляем последнее сообщение в чате БЕЗ изменения порядка
-        // НЕ перемещаем чат наверх при отправке сообщения
-        setChats(prev => prev.map(chat => 
-          chat.id === selectedChat.id
-            ? { ...chat, lastMessage: content || "[Файл]", lastMessageAt: new Date() }
-            : chat
-        ));
-        
-        return true;
+        if (response.ok) {
+          const data = await response.json();
+          // Сообщение придёт через сокет, но для надёжности добавим сразу
+          setMessages(prev => {
+            if (prev.some(m => m.id === data.message.id)) return prev;
+            return [...prev, data.message];
+          });
+          return true;
+        }
+      } else {
+        // Для текста можно использовать сокет (быстрее) или HTTP
+        if (socketRef.current?.connected) {
+          // Отправка через WebSocket
+          return new Promise((resolve) => {
+            socketRef.current!.emit(
+              "message:send" as any,
+              { chatId: selectedChat.id, content, replyToId },
+              (response: any) => {
+                setSending(false);
+                if (response.success) {
+                  // Сообщение придёт через событие message:new
+                  resolve(true);
+                } else {
+                  options.onError?.(response.error || "Ошибка отправки");
+                  resolve(false);
+                }
+              }
+            );
+          });
+        } else {
+          // Fallback на HTTP
+          const response = await fetch(`/api/chat/${selectedChat.id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content, replyToId }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            setMessages(prev => {
+              if (prev.some(m => m.id === data.message.id)) return prev;
+              return [...prev, data.message];
+            });
+            return true;
+          }
+        }
       }
     } catch (error) {
       console.error("[useChat] Error sending message:", error);
@@ -270,7 +346,24 @@ export function useChat(options: UseChatOptions = {}) {
       setSending(false);
     }
     return false;
-  }, [selectedChat, options.onError]);
+  }, [selectedChat, options]);
+
+  // Индикатор печатания
+  const sendTyping = useCallback(() => {
+    if (!selectedChat || !socketRef.current?.connected) return;
+
+    socketRef.current.emit("typing:start", selectedChat.id);
+
+    // Автоматически останавливаем через 2 сек после последнего вызова
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      if (selectedChatRef.current && socketRef.current?.connected) {
+        socketRef.current.emit("typing:stop", selectedChatRef.current.id);
+      }
+    }, 2000);
+  }, [selectedChat]);
 
   // Редактирование сообщения
   const editMessage = useCallback(async (
@@ -293,10 +386,10 @@ export function useChat(options: UseChatOptions = {}) {
       }
     } catch (error) {
       console.error("[useChat] Error editing message:", error);
-      options.onError?.("Ошибка редактирования сообщения");
+      options.onError?.("Ошибка редактирования");
     }
     return false;
-  }, [selectedChat, options.onError]);
+  }, [selectedChat, options]);
 
   // Удаление сообщения
   const deleteMessage = useCallback(async (messageId: string): Promise<boolean> => {
@@ -308,17 +401,17 @@ export function useChat(options: UseChatOptions = {}) {
       });
 
       if (response.ok) {
-        setMessages(prev => prev.map(m => 
+        setMessages(prev => prev.map(m =>
           m.id === messageId ? { ...m, deletedAt: new Date().toISOString() } : m
         ));
         return true;
       }
     } catch (error) {
       console.error("[useChat] Error deleting message:", error);
-      options.onError?.("Ошибка удаления сообщения");
+      options.onError?.("Ошибка удаления");
     }
     return false;
-  }, [selectedChat, options.onError]);
+  }, [selectedChat, options]);
 
   // Реакция на сообщение
   const toggleReaction = useCallback(async (
@@ -336,24 +429,17 @@ export function useChat(options: UseChatOptions = {}) {
 
       if (response.ok) {
         const data = await response.json();
-        // Обновляем реакции в локальном состоянии сразу после ответа API
-        setMessages(prev => prev.map(m => 
-          m.id === messageId 
-            ? { ...m, reactions: data.reactions } 
-            : m
+        setMessages(prev => prev.map(m =>
+          m.id === messageId ? { ...m, reactions: data.reactions } : m
         ));
         return true;
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("[useChat] Error toggling reaction:", response.status, errorData);
-        options.onError?.("Ошибка при добавлении реакции");
       }
     } catch (error) {
       console.error("[useChat] Error toggling reaction:", error);
-      options.onError?.("Ошибка при добавлении реакции");
+      options.onError?.("Ошибка реакции");
     }
     return false;
-  }, [selectedChat, options.onError]);
+  }, [selectedChat, options]);
 
   // Пересылка сообщения
   const forwardMessage = useCallback(async (
@@ -368,21 +454,30 @@ export function useChat(options: UseChatOptions = {}) {
       });
 
       if (response.ok) {
-        await loadChats(); // Обновляем список чатов
+        await loadChats();
         return true;
       }
     } catch (error) {
-      console.error("[useChat] Error forwarding message:", error);
-      options.onError?.("Ошибка пересылки сообщения");
+      console.error("[useChat] Error forwarding:", error);
+      options.onError?.("Ошибка пересылки");
     }
     return false;
-  }, [loadChats, options.onError]);
+  }, [loadChats, options]);
 
-  // Очистка при размонтировании
+  // Хранение позиций скролла
+  const scrollPositionsRef = useRef<Map<string, number>>(new Map());
+  const saveScrollPosition = useCallback((chatId: string, position: number) => {
+    scrollPositionsRef.current.set(chatId, position);
+  }, []);
+  const getScrollPosition = useCallback((chatId: string): number | null => {
+    return scrollPositionsRef.current.get(chatId) ?? null;
+  }, []);
+
+  // Очистка
   useEffect(() => {
     return () => {
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
       }
     };
   }, []);
@@ -397,8 +492,10 @@ export function useChat(options: UseChatOptions = {}) {
     loadingOlder,
     sending,
     hasMore,
-    isBotTyping,
-    
+    typingUsers,
+    isConnected,
+    isBotTyping: typingUsers.length > 0,
+
     // Действия
     loadChats,
     loadMessages,
@@ -406,14 +503,14 @@ export function useChat(options: UseChatOptions = {}) {
     selectChat,
     createOrOpenChat,
     sendMessage,
+    sendTyping,
     editMessage,
     deleteMessage,
     toggleReaction,
     forwardMessage,
-    
+
     // Скролл
     saveScrollPosition,
     getScrollPosition,
   };
 }
-

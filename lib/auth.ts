@@ -724,6 +724,15 @@ export const authOptions: NextAuthOptions = {
         } else {
           (session.user as any).isImpersonating = undefined;
         }
+        
+        // Добавляем accessToken для WebSocket аутентификации
+        // Используем JWT токен из NextAuth
+        (session as any).accessToken = token.sub ? 
+          require('jsonwebtoken').sign(
+            { sub: token.id, name: `${token.firstName || ''} ${token.lastName || ''}`.trim() },
+            process.env.NEXTAUTH_SECRET || '',
+            { expiresIn: '7d' }
+          ) : undefined;
       }
       return session;
     },

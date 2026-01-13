@@ -26,7 +26,9 @@
     "load-documents": "dotenv -e .env.local -- node scripts/load-appeal-bot-documents.mjs",
     "reset-user": "dotenv -e .env.local -- tsx scripts/reset-user-data.ts",
     "generate-icons": "node scripts/generate-icons.mjs",
-    "sync:promo-codes": "dotenv -e .env.local -- tsx scripts/sync-all-users-promo-codes.ts"
+    "sync:promo-codes": "dotenv -e .env.local -- tsx scripts/sync-all-users-promo-codes.ts",
+    "socket": "dotenv -e .env.local -- tsx server/socket-server.ts",
+    "socket:prod": "node dist/server/socket-server.js"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.65",
@@ -86,6 +88,8 @@
     "remark-gfm": "^4.0.1",
     "shaders": "^2.2.41",
     "sharp": "^0.34.5",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
     "sonner": "^2.0.7",
     "strip-ansi": "^7.1.0",
     "tailwind-merge": "^3.4.0",
