@@ -137,28 +137,45 @@ function ChatMessagesComponent({
     }
   }, [items.length]);
 
-  // Отслеживаем последнее сообщение для определения "своего"
+  // Отслеживаем последнее сообщение для скролла
   const lastMessageIdRef = useRef<string | null>(null);
+  const lastMessagesLengthRef = useRef(0);
   
-  // followOutput для Virtuoso - автоскролл при добавлении сообщений
-  // Это единственное место где управляем скроллом к новым сообщениям
-  const handleFollowOutput = useCallback((isAtBottom: boolean) => {
-    const lastMessage = messages[messages.length - 1];
-    const isNewMessage = lastMessage && lastMessage.id !== lastMessageIdRef.current;
+  // Принудительный скролл при новых сообщениях
+  useEffect(() => {
+    if (!hasInitialized.current || messages.length === 0) return;
     
-    if (isNewMessage) {
-      lastMessageIdRef.current = lastMessage.id;
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage) return;
+    
+    // Новое сообщение?
+    const isNew = messages.length > lastMessagesLengthRef.current || 
+                  lastMessage.id !== lastMessageIdRef.current;
+    
+    if (isNew) {
       const isOwnMessage = lastMessage.senderId === currentUserId;
       
-      // Для своих сообщений - всегда скроллим
-      if (isOwnMessage) {
-        return "smooth";
+      // Для своих - ВСЕГДА скроллим, для чужих - если внизу
+      if (isOwnMessage || atBottomRef.current) {
+        // Задержка для DOM обновления
+        setTimeout(() => {
+          virtuosoRef.current?.scrollToIndex({
+            index: items.length - 1,
+            align: "end",
+            behavior: isOwnMessage ? "smooth" : "auto",
+          });
+        }, 50);
       }
+      
+      lastMessageIdRef.current = lastMessage.id;
+      lastMessagesLengthRef.current = messages.length;
     }
-    
-    // Для чужих - только если внизу
-    return isAtBottom ? "auto" : false;
-  }, [messages, currentUserId]);
+  }, [messages, currentUserId, items.length]);
+  
+  // followOutput для Virtuoso - бекап автоскролл
+  const handleFollowOutput = useCallback(() => {
+    return atBottomRef.current ? "auto" : false;
+  }, []);
 
   // Загрузка старых сообщений при скролле вверх
   const handleStartReached = useCallback(() => {
@@ -251,7 +268,7 @@ function ChatMessagesComponent({
             </>
           ),
           Footer: () => (
-            <div className="h-6">
+            <div className="h-20 pb-4">
               {(isBotTyping || typingUsers.length > 0) && (
                 <TypingIndicator users={typingUsers} />
               )}
