@@ -142,8 +142,19 @@ model User {
   organizationName String? // Название организации (если она не в базе МойСоюз, но найдена в Минюсте)
   organization     Organization? @relation(fields: [organizationId], references: [id])
 
-  // Заявления
+  // Документы пользователя
   documents Document[]
+  
+  // Документооборот: назначенные документы
+  assignedDocuments  Document[] @relation("DocumentAssignedTo")
+  approvedDocuments  Document[] @relation("DocumentApprovedBy")
+  signedDocuments    Document[] @relation("DocumentSignedBy")
+  
+  // История изменений статусов документов
+  documentStatusChanges DocumentStatusHistory[] @relation("DocumentStatusChangedBy")
+  
+  // Согласования документов
+  documentApprovals DocumentApproval[] @relation("DocumentApprovalUser")
 
   // Email верификация
   emailVerified       DateTime?
@@ -419,6 +430,9 @@ model Organization {
   // Документы организации
   documents Document[]
   
+  // Журналы регистрации документов
+  documentRegistries DocumentRegistry[]
+  
   // Обращения (тикеты) организации
   tickets Ticket[] @relation("OrganizationTickets")
   
@@ -465,22 +479,50 @@ enum DocumentType {
   OTHER // Прочее
 }
 
-// Статусы документов
+// Категории документов (для журнала)
+enum DocumentCategory {
+  INCOMING // Входящий документ
+  OUTGOING // Исходящий документ
+  INTERNAL // Внутренний документ
+  DRAFT // Черновик
+}
+
+// Статусы документов (workflow)
 enum DocumentStatus {
   DRAFT // Черновик
-  GENERATED // Сгенерирован
+  PENDING_REVIEW // На рассмотрении
+  PENDING_APPROVAL // На согласовании
+  PENDING_SIGNATURE // На подписи
   SIGNED // Подписан
-  PENDING // Ожидает проверки
-  APPROVED // Одобрен
-  REJECTED // Отклонен
+  REGISTERED // Зарегистрирован
+  SENT // Отправлен
+  RECEIVED // Получен
+  COMPLETED // Исполнен
+  REJECTED // Отклонён
   ARCHIVED // В архиве
 }
 
-// Документ (заявления, обращения)
+// Приоритет документа
+enum DocumentPriority {
+  LOW // Низкий
+  NORMAL // Обычный
+  HIGH // Высокий
+  URGENT // Срочный
+}
+
+// Документ (заявления, обращения, документооборот)
 model Document {
-  id     String         @id @default(cuid())
-  type   DocumentType
-  status DocumentStatus @default(GENERATED)
+  id       String           @id @default(cuid())
+  type     DocumentType
+  status   DocumentStatus   @default(DRAFT)
+  category DocumentCategory @default(INTERNAL)
+  priority DocumentPriority @default(NORMAL)
+
+  // Регистрация
+  regNumber String?   // Регистрационный номер
+  regDate   DateTime? // Дата регистрации
+  dueDate   DateTime? // Срок исполнения
+  isUrgent  Boolean   @default(false)
 
   // Содержимое
   title       String
@@ -498,7 +540,17 @@ model Document {
   driveFileId String? @unique // ID файла в Google Drive
   driveUrl    String? // Публичная ссылка на файл
 
-  // Владелец
+  // Отправитель (для входящих документов)
+  senderName         String? // ФИО отправителя
+  senderOrganization String? // Организация отправителя
+  senderRegNumber    String? // Исходящий номер отправителя
+  senderDate         DateTime? // Дата исходящего документа
+
+  // Получатель (для исходящих документов)
+  recipientName         String? // ФИО получателя
+  recipientOrganization String? // Организация получателя
+
+  // Владелец/Создатель документа
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -510,17 +562,43 @@ model Document {
   templateId String?
   template   DocumentTemplate? @relation("DocumentFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
 
+  // Workflow: Назначен на исполнение
+  assignedToId String?
+  assignedTo   User?     @relation("DocumentAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedAt   DateTime?
+  executionNotes String? @db.Text // Примечания для исполнителя
+
+  // Workflow: Согласование
+  approvedById String?
+  approvedBy   User?     @relation("DocumentApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt   DateTime?
+
+  // Workflow: Подписание
+  signedById String?
+  signedBy   User?     @relation("DocumentSignedBy", fields: [signedById], references: [id], onDelete: SetNull)
+  signedAt   DateTime?
+
+  // Связь с родительским документом (для ответов)
+  parentDocumentId String?
+  parentDocument   Document?  @relation("DocumentResponses", fields: [parentDocumentId], references: [id], onDelete: SetNull)
+  responses        Document[] @relation("DocumentResponses")
+
   // Комментарий при отклонении
   rejectionReason String? @db.Text
 
   // Метаданные документа (JSON) - для документов профкома
-  // Может содержать: votingParticipants (массив ID пользователей), meetingDate, agendaItems и т.д.
-  metadata Json? // JSON поле для хранения дополнительных данных
+  metadata Json?
 
   // Верификация документа (AI-проверка)
   verificationStatus  String?   // VERIFYING, VERIFIED, FAILED, NEEDS_REVIEW
-  verificationMessage String?   @db.Text // Сообщение о результате проверки
-  verifiedAt          DateTime? // Дата проверки
+  verificationMessage String?   @db.Text
+  verifiedAt          DateTime?
+
+  // История статусов
+  statusHistory DocumentStatusHistory[]
+  
+  // Цепочка согласований
+  approvals DocumentApproval[]
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -530,7 +608,62 @@ model Document {
   @@index([organizationId])
   @@index([status])
   @@index([type])
+  @@index([category])
+  @@index([regNumber])
+  @@index([regDate])
+  @@index([assignedToId])
+  @@index([parentDocumentId])
+  @@index([priority])
   @@index([driveFileId])
+}
+
+// История статусов документа
+model DocumentStatusHistory {
+  id             String         @id @default(cuid())
+  documentId     String
+  document       Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  status         DocumentStatus
+  previousStatus DocumentStatus?
+  changedById    String?
+  changedBy      User?          @relation("DocumentStatusChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
+  comment        String?        @db.Text
+  changedAt      DateTime       @default(now())
+
+  @@index([documentId])
+  @@index([changedById])
+}
+
+// Цепочка согласований документа
+model DocumentApproval {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation("DocumentApprovalUser", fields: [userId], references: [id], onDelete: Cascade)
+  order      Int      @default(1) // Порядок согласования
+  status     String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  comment    String?  @db.Text
+  approvedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  @@unique([documentId, userId])
+  @@index([documentId])
+  @@index([userId])
+}
+
+// Журнал регистрации документов (для автонумерации)
+model DocumentRegistry {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  year           Int
+  category       DocumentCategory
+  lastNumber     Int              @default(0)
+  prefix         String?          // Префикс номера (например, "ВХ", "ИСХ", "ВН")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([organizationId, year, category])
 }
 
 // Шаблоны документов для конструктора

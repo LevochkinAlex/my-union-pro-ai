@@ -9,6 +9,8 @@ export type Permission =
   | "documents_view"
   | "documents_create"
   | "documents_edit"
+  | "documents_approve"  // Согласование документов
+  | "documents_sign"     // Подписание документов
   | "discounts_view"
   | "discounts_manage"
   | "members_view"
@@ -131,6 +133,8 @@ function getAllPermissions(): Record<string, boolean> {
     documents_view: true,
     documents_create: true,
     documents_edit: true,
+    documents_approve: true,
+    documents_sign: true,
     discounts_view: true,
     discounts_manage: true,
     members_view: true,

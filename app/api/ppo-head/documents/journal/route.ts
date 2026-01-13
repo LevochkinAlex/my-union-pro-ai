@@ -2,16 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { DocumentType, DocumentCategory, DocumentStatus, Prisma } from "@prisma/client";
+import { DocumentCategory, DocumentStatus, DocumentType, Prisma } from "@prisma/client";
 import { getPPOHead } from "@/lib/ppo-head-utils";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 
 /**
- * GET /api/ppo-head/documents
- * Получить журнал документов организации с фильтрами
+ * GET /api/ppo-head/documents/journal
+ * Журнал документов организации с фильтрами
  * 
  * Query параметры:
- * - category: INCOMING | OUTGOING | INTERNAL | DRAFT
+ * - category: INCOMING | OUTGOING | INTERNAL | DRAFT (журнал)
  * - status: статус документа
  * - type: тип документа
  * - search: поиск по названию и номеру
@@ -84,12 +84,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (from || to) {
-      where.regDate = {};
+      where.createdAt = {};
       if (from) {
-        where.regDate.gte = new Date(from);
+        where.createdAt.gte = new Date(from);
       }
       if (to) {
-        where.regDate.lte = new Date(to);
+        where.createdAt.lte = new Date(to);
       }
     }
 
@@ -126,7 +126,6 @@ export async function GET(request: NextRequest) {
         },
         orderBy: [
           { isUrgent: "desc" },
-          { priority: "desc" },
           { createdAt: "desc" },
         ],
         skip: (page - 1) * limit,
@@ -155,11 +154,29 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Статистика по статусам (для текущей категории)
+    // Статистика по статусам
     const statusStats = await prisma.document.groupBy({
       by: ["status"],
       where: category ? { organizationId, category } : { organizationId },
       _count: { status: true },
+    });
+
+    // Количество ожидающих моих действий
+    const pendingMyAction = await prisma.document.count({
+      where: {
+        organizationId,
+        OR: [
+          { assignedToId: session.user.id, status: { in: ["PENDING_REVIEW", "PENDING_APPROVAL"] } },
+          {
+            approvals: {
+              some: {
+                userId: session.user.id,
+                status: "PENDING",
+              },
+            },
+          },
+        ],
+      },
     });
 
     return NextResponse.json({
@@ -176,13 +193,14 @@ export async function GET(request: NextRequest) {
           acc[s.status] = s._count.status;
           return acc;
         }, {} as Record<string, number>),
+        pendingMyAction,
       },
     });
   } catch (error: any) {
-    console.error("[ppo-head/documents] GET error:", error);
+    console.error("[ppo-head/documents/journal] GET error:", error);
     return NextResponse.json(
       {
-        error: "Ошибка при получении документов",
+        error: "Ошибка при получении журнала документов",
         details: process.env.NODE_ENV === "development" ? error.message : undefined,
       },
       { status: 500 }
@@ -191,8 +209,8 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/ppo-head/documents
- * Создать входящий документ (регистрация)
+ * POST /api/ppo-head/documents/journal
+ * Зарегистрировать входящий документ
  */
 export async function POST(request: NextRequest) {
   try {
@@ -226,7 +244,6 @@ export async function POST(request: NextRequest) {
       description,
       category,
       type,
-      priority,
       isUrgent,
       dueDate,
       senderName,
@@ -247,10 +264,10 @@ export async function POST(request: NextRequest) {
       data: {
         title,
         description,
-        category: category || "INTERNAL",
+        category: category || "INCOMING",
         type: type || "OTHER",
         status: "DRAFT",
-        priority: priority || "NORMAL",
+        priority: "NORMAL",
         isUrgent: isUrgent || false,
         dueDate: dueDate ? new Date(dueDate) : null,
         senderName,
@@ -278,7 +295,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ document }, { status: 201 });
   } catch (error: any) {
-    console.error("[ppo-head/documents] POST error:", error);
+    console.error("[ppo-head/documents/journal] POST error:", error);
     return NextResponse.json(
       {
         error: "Ошибка при создании документа",
