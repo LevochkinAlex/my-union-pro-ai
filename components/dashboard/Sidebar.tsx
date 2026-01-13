@@ -130,10 +130,10 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                       }
                     }}
                     disabled={isNavigating}
-                    className={`flex items-center gap-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    className={`flex items-center gap-2.5 rounded-lg text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                       isMainItemActive
                         ? "bg-blue-600 text-white shadow-sm"
-                        : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                        : "text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
                     } ${
                       isCollapsed
                         ? "h-10 w-10 justify-center"
@@ -167,10 +167,10 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                       setIsNavigating(true);
                       setTimeout(() => setIsNavigating(false), 500);
                     }}
-                    className={`flex items-center gap-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    className={`flex items-center gap-2.5 rounded-lg text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                       isActive
                         ? "bg-blue-600 text-white shadow-sm"
-                        : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                        : "text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
                     } ${
                       isCollapsed
                         ? "h-10 w-10 justify-center"
@@ -207,10 +207,10 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                             setIsNavigating(true);
                             setTimeout(() => setIsNavigating(false), 500);
                           }}
-                          className={`block rounded-md px-2.5 py-1.5 text-sm transition-colors ${
+                          className={`block rounded-md px-2.5 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                             subIsActive
-                              ? "bg-blue-50 font-medium text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
-                              : "text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-700/50"
+                              ? "bg-blue-100 font-medium text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                              : "text-gray-600 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-700/50"
                           } ${isNavigating ? "pointer-events-none opacity-70" : ""}`}
                         >
                           {subItem.label}
