@@ -452,10 +452,15 @@ export default function CreatePost({ onPostCreated, compact = false }: CreatePos
         videoId = match[1];
         embedUrl = `https://vk.com/video_ext.php?oid=${videoId.split("_")[0]}&id=${videoId.split("_")[1]}`;
       }
+    } else if (url.match(/\.(mp4|webm|ogg|mov)(\?|$)/i)) {
+      // Прямые ссылки на видео файлы (mp4, webm и т.д.)
+      videoType = "direct";
+      videoId = url.split("/").pop()?.split("?")[0] || "video";
+      embedUrl = url;
     }
 
     if (!embedUrl) {
-      showToast("Неподдерживаемый формат видео. Используйте YouTube, Rutube или VK", "error");
+      showToast("Неподдерживаемый формат видео. Используйте YouTube, Rutube, VK или прямую ссылку на видео", "error");
       return;
     }
 

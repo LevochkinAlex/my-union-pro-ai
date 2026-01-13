@@ -32,23 +32,35 @@ function CoverMedia({ post, getFileUrl }: { post: any; getFileUrl: (path: string
       // Ignore parsing errors
     }
     
-    if (vm && vm.videoType && vm.videoId) {
+    if (vm && vm.videoType && (vm.videoId || vm.embedUrl)) {
       const embedUrl = vm.embedUrl || (
         vm.videoType === "youtube" ? `https://www.youtube.com/embed/${vm.videoId}` :
         vm.videoType === "rutube" ? `https://rutube.ru/play/embed/${vm.videoId}` :
         vm.videoType === "vk" ? `https://vk.com/video_ext.php?oid=${vm.videoId.split("_")[0]}&id=${vm.videoId.split("_")[1]}` : ""
       );
       
+      const isDirectVideo = vm.videoType === "direct" || embedUrl.match(/\.(mp4|webm|ogg|mov)(\?|$)/i);
+      
       if (embedUrl) {
         return (
           <div className="w-full">
             <div className="relative w-full" style={{ paddingBottom: "56.25%", height: 0, overflow: "hidden" }}>
-              <iframe
-                src={embedUrl}
-                className="absolute top-0 left-0 w-full h-full"
-                allowFullScreen
-                title="Обложка-видео"
-              />
+              {isDirectVideo ? (
+                <video
+                  src={embedUrl}
+                  className="absolute top-0 left-0 w-full h-full object-contain bg-black"
+                  controls
+                  playsInline
+                  title="Обложка-видео"
+                />
+              ) : (
+                <iframe
+                  src={embedUrl}
+                  className="absolute top-0 left-0 w-full h-full"
+                  allowFullScreen
+                  title="Обложка-видео"
+                />
+              )}
             </div>
           </div>
         );
@@ -333,11 +345,20 @@ export default function PostDetailClient({ post, session }: PostDetailClientProp
             {post.postType !== "article" && post.videoMetadata && post.videoMetadata.embedUrl && (
               <div className="mt-6">
                 <div className="relative" style={{ paddingBottom: "56.25%", height: 0, overflow: "hidden" }}>
-                  <iframe
-                    src={post.videoMetadata.embedUrl}
-                    className="absolute top-0 left-0 w-full h-full rounded-lg"
-                    allowFullScreen
-                  />
+                  {post.videoMetadata.videoType === "direct" || post.videoMetadata.embedUrl.match(/\.(mp4|webm|ogg|mov)(\?|$)/i) ? (
+                    <video
+                      src={post.videoMetadata.embedUrl}
+                      className="absolute top-0 left-0 w-full h-full rounded-lg object-contain bg-black"
+                      controls
+                      playsInline
+                    />
+                  ) : (
+                    <iframe
+                      src={post.videoMetadata.embedUrl}
+                      className="absolute top-0 left-0 w-full h-full rounded-lg"
+                      allowFullScreen
+                    />
+                  )}
                 </div>
               </div>
             )}
