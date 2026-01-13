@@ -324,9 +324,9 @@ export async function POST(request: NextRequest) {
         ],
       });
       
-      // Если нашли документ, но он уже подписан и отправлен (PENDING/APPROVED), 
+      // Если нашли документ, но он уже в workflow или завершён, 
       // не обновляем его, а создаем новый или ищем GENERATED
-      if (existingDoc && (existingDoc.status === "PENDING" || existingDoc.status === "APPROVED")) {
+      if (existingDoc && (existingDoc.status === "PENDING_REVIEW" || existingDoc.status === "PENDING_APPROVAL" || existingDoc.status === "PENDING_SIGNATURE" || existingDoc.status === "COMPLETED")) {
         // Ищем документ со статусом GENERATED для обновления
         const generatedDoc = await prisma.document.findFirst({
           where: {
