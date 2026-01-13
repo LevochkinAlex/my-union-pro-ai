@@ -447,10 +447,25 @@ const FORM2_TEMPLATE = {
   ],
 };
 
+// Тип для шаблона отчёта
+interface TemplateData {
+  code: string;
+  name: string;
+  description: string;
+  periodicity: "MONTHLY" | "QUARTERLY" | "SEMI_ANNUAL" | "ANNUAL";
+  forOrganizationTypes: string[];
+  sections: Array<{
+    code: string;
+    title: string;
+    order: number;
+    fields: Array<Record<string, any>>;
+  }>;
+}
+
 /**
  * Создать шаблон отчёта с секциями и полями
  */
-async function seedReportTemplate(templateData: typeof FORM2_TEMPLATE): Promise<void> {
+async function seedReportTemplate(templateData: TemplateData): Promise<void> {
   console.log(`\n📋 Creating template: ${templateData.name}...`);
 
   // Создаём или обновляем шаблон
