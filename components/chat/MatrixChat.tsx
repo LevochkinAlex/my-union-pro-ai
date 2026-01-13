@@ -2,351 +2,318 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
+import * as sdk from 'matrix-js-sdk';
+import {
+  initMatrixClient,
+  startMatrixSync,
+  stopMatrixClient,
+  getJoinedRooms,
+  getRoomMessages,
+  sendTextMessage,
+  createDirectRoom,
+  markRoomAsRead,
+  setTyping,
+  searchUsers,
+  MatrixRoomInfo,
+  MatrixMessageInfo,
+  MatrixCredentials,
+} from '@/lib/matrix-sdk-client';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
-interface MatrixCredentials {
-  userId: string;
-  accessToken: string;
-  serverUrl: string;
-}
+// MyUnion brand colors
+const BRAND = {
+  primary: '#2563eb', // blue-600
+  secondary: '#dc2626', // red-600
+  accent: '#3b82f6', // blue-500
+};
 
-interface MatrixRoom {
+interface TypingUser {
   roomId: string;
+  userId: string;
   name: string;
-  lastMessage?: string;
-  unreadCount: number;
-  avatarUrl?: string;
-  timestamp?: number;
-}
-
-interface MatrixMessage {
-  eventId: string;
-  sender: string;
-  senderName: string;
-  content: string;
-  timestamp: number;
-  type: 'text' | 'image' | 'file';
 }
 
 export default function MatrixChat() {
   const { data: session } = useSession();
   const [credentials, setCredentials] = useState<MatrixCredentials | null>(null);
-  const [rooms, setRooms] = useState<MatrixRoom[]>([]);
-  const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
-  const [messages, setMessages] = useState<MatrixMessage[]>([]);
+  const [syncState, setSyncState] = useState<string>('');
+  const [rooms, setRooms] = useState<MatrixRoomInfo[]>([]);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<MatrixMessageInfo[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const syncTokenRef = useRef<string | null>(null);
-  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [showNewChat, setShowNewChat] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{userId: string; displayName: string; avatarUrl?: string}>>([]);
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Authenticate with Matrix
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auth with Matrix
   useEffect(() => {
     async function authenticate() {
       if (!session?.user) return;
-      
+
       try {
-        const response = await fetch('/api/chat/matrix/auth', {
-          method: 'POST'
-        });
-        
+        const response = await fetch('/api/chat/matrix/auth', { method: 'POST' });
         if (response.ok) {
           const data = await response.json();
-          setCredentials(data);
+          setCredentials({
+            userId: data.userId,
+            accessToken: data.accessToken,
+            deviceId: data.deviceId || 'myunion-web',
+            homeserverUrl: data.serverUrl,
+          });
         } else {
           setError('Не удалось подключиться к чату');
         }
-      } catch (err) {
-        setError('Ошибка подключения к серверу чата');
+      } catch {
+        setError('Ошибка подключения');
       } finally {
         setLoading(false);
       }
     }
-    
     authenticate();
   }, [session]);
 
-  // Start sync when authenticated
+  // Initialize Matrix client
   useEffect(() => {
     if (!credentials) return;
 
-    async function initialSync() {
-      try {
-        const params = new URLSearchParams({ timeout: '0' });
-        const response = await fetch(
-          `${credentials.serverUrl}/_matrix/client/v3/sync?${params}`,
-          {
-            headers: { 'Authorization': `Bearer ${credentials.accessToken}` }
-          }
-        );
+    const client = initMatrixClient(credentials);
 
-        if (response.ok) {
-          const data = await response.json();
-          syncTokenRef.current = data.next_batch;
-          processRooms(data.rooms?.join || {});
+    // Listen for typing events
+    client.on(sdk.RoomMemberEvent.Typing, (event, member) => {
+      const roomId = event.getRoomId();
+      const userId = member.userId;
+      const isTyping = member.typing;
+
+      setTypingUsers(prev => {
+        if (isTyping && userId !== credentials.userId) {
+          const exists = prev.some(t => t.roomId === roomId && t.userId === userId);
+          if (!exists) {
+            return [...prev, { roomId, userId, name: member.name || userId.split(':')[0].replace('@', '') }];
+          }
+        } else {
+          return prev.filter(t => !(t.roomId === roomId && t.userId === userId));
         }
-      } catch (err) {
-        console.error('Initial sync failed:', err);
-      }
-    }
-
-    initialSync();
-
-    // Start long polling
-    const startLongPoll = async () => {
-      while (true) {
-        try {
-          if (!syncTokenRef.current) {
-            await new Promise(r => setTimeout(r, 1000));
-            continue;
-          }
-
-          const params = new URLSearchParams({
-            since: syncTokenRef.current,
-            timeout: '30000'
-          });
-
-          const response = await fetch(
-            `${credentials.serverUrl}/_matrix/client/v3/sync?${params}`,
-            {
-              headers: { 'Authorization': `Bearer ${credentials.accessToken}` }
-            }
-          );
-
-          if (response.ok) {
-            const data = await response.json();
-            syncTokenRef.current = data.next_batch;
-            
-            // Process new messages
-            if (data.rooms?.join) {
-              processRooms(data.rooms.join);
-              
-              // Update messages for selected room
-              if (selectedRoom && data.rooms.join[selectedRoom]) {
-                const roomData = data.rooms.join[selectedRoom];
-                const events = roomData.timeline?.events || [];
-                const newMessages = events
-                  .filter((e: { type: string }) => e.type === 'm.room.message')
-                  .map(eventToMessage);
-                
-                if (newMessages.length > 0) {
-                  setMessages(prev => [...prev, ...newMessages]);
-                }
-              }
-            }
-          }
-        } catch (err) {
-          console.error('Sync error:', err);
-          await new Promise(r => setTimeout(r, 5000));
-        }
-      }
-    };
-
-    startLongPoll();
-
-    return () => {
-      if (syncIntervalRef.current) {
-        clearInterval(syncIntervalRef.current);
-      }
-    };
-  }, [credentials, selectedRoom]);
-
-  const processRooms = (joinedRooms: Record<string, unknown>) => {
-    const roomList: MatrixRoom[] = Object.entries(joinedRooms).map(([roomId, data]: [string, unknown]) => {
-      const roomData = data as {
-        state?: { events?: Array<{ type: string; content: { name?: string; url?: string } }> };
-        timeline?: { events?: Array<{ type: string; content: { body?: string }; origin_server_ts?: number }> };
-        unread_notifications?: { notification_count?: number };
-      };
-      const stateEvents = roomData.state?.events || [];
-      const nameEvent = stateEvents.find(e => e.type === 'm.room.name');
-      const avatarEvent = stateEvents.find(e => e.type === 'm.room.avatar');
-      
-      const timelineEvents = roomData.timeline?.events || [];
-      const lastMessageEvent = timelineEvents
-        .filter(e => e.type === 'm.room.message')
-        .pop();
-
-      return {
-        roomId,
-        name: nameEvent?.content?.name || 'Чат',
-        lastMessage: lastMessageEvent?.content?.body,
-        unreadCount: roomData.unread_notifications?.notification_count || 0,
-        avatarUrl: avatarEvent?.content?.url,
-        timestamp: lastMessageEvent?.origin_server_ts
-      };
+        return prev;
+      });
     });
 
-    setRooms(roomList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
-  };
-
-  const eventToMessage = (event: {
-    event_id: string;
-    sender: string;
-    content: { body?: string; msgtype?: string };
-    origin_server_ts: number;
-  }): MatrixMessage => ({
-    eventId: event.event_id,
-    sender: event.sender,
-    senderName: event.sender.split(':')[0].replace('@', ''),
-    content: event.content.body || '',
-    timestamp: event.origin_server_ts,
-    type: event.content.msgtype === 'm.image' ? 'image' : 'text'
-  });
-
-  // Load room messages
-  const loadRoomMessages = useCallback(async (roomId: string) => {
-    if (!credentials) return;
-
-    try {
-      const params = new URLSearchParams({
-        dir: 'b',
-        limit: '50'
-      });
-
-      const response = await fetch(
-        `${credentials.serverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages?${params}`,
-        {
-          headers: { 'Authorization': `Bearer ${credentials.accessToken}` }
+    startMatrixSync(
+      (state) => {
+        setSyncState(state);
+        if (state === 'PREPARED' || state === 'SYNCING') {
+          setRooms(getJoinedRooms());
         }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const roomMessages = (data.chunk || [])
-          .filter((e: { type: string }) => e.type === 'm.room.message')
-          .map(eventToMessage)
-          .reverse();
-        
-        setMessages(roomMessages);
+      },
+      (event, room) => {
+        if (event.getType() === 'm.room.message' && room) {
+          // Update room list
+          setRooms(getJoinedRooms());
+          
+          // Update messages if in this room
+          if (room.roomId === selectedRoomId) {
+            setMessages(getRoomMessages(room.roomId));
+            scrollToBottom();
+          }
+        }
       }
-    } catch (err) {
-      console.error('Failed to load messages:', err);
+    );
+
+    return () => {
+      stopMatrixClient();
+    };
+  }, [credentials, selectedRoomId]);
+
+  // Load messages when room selected
+  useEffect(() => {
+    if (selectedRoomId && syncState === 'SYNCING') {
+      setMessages(getRoomMessages(selectedRoomId));
+      markRoomAsRead(selectedRoomId);
+      scrollToBottom();
+      setIsMobileMenuOpen(false);
     }
-  }, [credentials]);
+  }, [selectedRoomId, syncState]);
 
-  // Select room
-  const handleSelectRoom = (roomId: string) => {
-    setSelectedRoom(roomId);
-    setMessages([]);
-    loadRoomMessages(roomId);
-  };
+  // Search users
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setSearchResults([]);
+      return;
+    }
 
-  // Send message
-  const sendMessage = async () => {
-    if (!credentials || !selectedRoom || !newMessage.trim() || sending) return;
+    const timer = setTimeout(async () => {
+      const results = await searchUsers(searchTerm);
+      setSearchResults(results.filter(u => u.userId !== credentials?.userId));
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, credentials]);
+
+  const scrollToBottom = useCallback(() => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  }, []);
+
+  const handleSend = async () => {
+    if (!selectedRoomId || !newMessage.trim() || sending) return;
 
     setSending(true);
     try {
-      const txnId = `m${Date.now()}`;
-      const response = await fetch(
-        `${credentials.serverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(selectedRoom)}/send/m.room.message/${txnId}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${credentials.accessToken}`
-          },
-          body: JSON.stringify({
-            msgtype: 'm.text',
-            body: newMessage.trim()
-          })
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Add message locally
-        const newMsg: MatrixMessage = {
-          eventId: data.event_id,
-          sender: credentials.userId,
-          senderName: session?.user?.name || 'Вы',
-          content: newMessage.trim(),
-          timestamp: Date.now(),
-          type: 'text'
-        };
-        
-        setMessages(prev => [...prev, newMsg]);
-        setNewMessage('');
-        
-        // Scroll to bottom
-        setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
-      }
-    } catch (err) {
-      console.error('Failed to send message:', err);
+      await sendTextMessage(selectedRoomId, newMessage.trim());
+      setNewMessage('');
+      inputRef.current?.focus();
     } finally {
       setSending(false);
     }
   };
 
-  // Auto scroll
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  const handleTyping = () => {
+    if (!selectedRoomId) return;
+
+    setTyping(selectedRoomId, true);
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      setTyping(selectedRoomId, false);
+    }, 3000);
+  };
+
+  const handleStartChat = async (userId: string) => {
+    const roomId = await createDirectRoom(userId);
+    if (roomId) {
+      setSelectedRoomId(roomId);
+      setShowNewChat(false);
+      setSearchTerm('');
+    }
+  };
+
+  const selectedRoom = rooms.find(r => r.roomId === selectedRoomId);
+  const roomTypingUsers = typingUsers.filter(t => t.roomId === selectedRoomId);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+      <div className="flex items-center justify-center h-full bg-gradient-to-br from-blue-50 to-white dark:from-gray-900 dark:to-gray-800">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 relative">
+            <div className="absolute inset-0 rounded-full border-4 border-blue-200 dark:border-blue-800"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-t-blue-600 animate-spin"></div>
+          </div>
+          <p className="text-gray-600 dark:text-gray-400">Подключение к чату...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full text-red-500">
-        {error}
+      <div className="flex items-center justify-center h-full bg-gradient-to-br from-red-50 to-white dark:from-gray-900 dark:to-gray-800">
+        <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md">
+          <div className="w-16 h-16 mx-auto mb-4 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Ошибка подключения</h3>
+          <p className="text-gray-600 dark:text-gray-400">{error}</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex h-full bg-gray-50 dark:bg-gray-900">
-      {/* Sidebar - Room List */}
-      <div className="w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Чаты</h2>
+      {/* Sidebar */}
+      <div className={`
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+        md:translate-x-0 fixed md:relative z-20 w-80 h-full 
+        border-r border-gray-200 dark:border-gray-700 
+        bg-white dark:bg-gray-800 flex flex-col transition-transform
+      `}>
+        {/* Header */}
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-600 to-blue-700">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-white">Чаты</h2>
+            <button
+              onClick={() => setShowNewChat(true)}
+              className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+              title="Новый чат"
+            >
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          </div>
+          
+          {/* Sync status */}
+          <div className="mt-2 flex items-center gap-2 text-sm text-blue-100">
+            <div className={`w-2 h-2 rounded-full ${syncState === 'SYNCING' ? 'bg-green-400' : 'bg-yellow-400'}`}></div>
+            {syncState === 'SYNCING' ? 'Подключено' : 'Синхронизация...'}
+          </div>
         </div>
-        
+
+        {/* Room List */}
         <div className="flex-1 overflow-y-auto">
           {rooms.length === 0 ? (
-            <div className="p-4 text-center text-gray-500 dark:text-gray-400">
-              Нет активных чатов
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <p className="text-gray-500 dark:text-gray-400">Нет активных чатов</p>
+              <button
+                onClick={() => setShowNewChat(true)}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Начать чат
+              </button>
             </div>
           ) : (
             rooms.map(room => (
               <button
                 key={room.roomId}
-                onClick={() => handleSelectRoom(room.roomId)}
-                className={`w-full p-4 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
-                  selectedRoom === room.roomId ? 'bg-blue-50 dark:bg-blue-900/30' : ''
+                onClick={() => setSelectedRoomId(room.roomId)}
+                className={`w-full p-4 text-left transition-all hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                  selectedRoomId === room.roomId 
+                    ? 'bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-600' 
+                    : ''
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
-                    {room.name.charAt(0).toUpperCase()}
-                  </div>
+                  <Avatar className="h-12 w-12 ring-2 ring-blue-100 dark:ring-blue-900">
+                    {room.avatarUrl ? (
+                      <AvatarImage src={room.avatarUrl} />
+                    ) : null}
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white font-semibold">
+                      {room.name.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-gray-900 dark:text-white truncate">
+                      <span className="font-semibold text-gray-900 dark:text-white truncate">
                         {room.name}
                       </span>
                       {room.unreadCount > 0 && (
-                        <span className="ml-2 bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">
-                          {room.unreadCount}
+                        <span className="ml-2 px-2 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full">
+                          {room.unreadCount > 99 ? '99+' : room.unreadCount}
                         </span>
                       )}
                     </div>
-                    {room.lastMessage && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                        {room.lastMessage}
-                      </p>
-                    )}
+                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                      {room.lastMessage || 'Нет сообщений'}
+                    </p>
                   </div>
                 </div>
               </button>
@@ -355,86 +322,248 @@ export default function MatrixChat() {
         </div>
       </div>
 
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-10 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {selectedRoom ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-              <h3 className="font-semibold text-gray-900 dark:text-white">
-                {rooms.find(r => r.roomId === selectedRoom)?.name || 'Чат'}
-              </h3>
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+              <div className="flex items-center gap-3">
+                <button
+                  className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                  onClick={() => setIsMobileMenuOpen(true)}
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+                
+                <Avatar className="h-10 w-10">
+                  {selectedRoom.avatarUrl ? (
+                    <AvatarImage src={selectedRoom.avatarUrl} />
+                  ) : null}
+                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+                    {selectedRoom.name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+                    {selectedRoom.name}
+                  </h3>
+                  {roomTypingUsers.length > 0 ? (
+                    <p className="text-sm text-blue-600 dark:text-blue-400 animate-pulse">
+                      {roomTypingUsers.map(u => u.name).join(', ')} печатает...
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {selectedRoom.members.length} участников
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.map(msg => {
-                const isOwn = msg.sender === credentials?.userId;
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
+              {messages.map((msg, idx) => {
+                const showAvatar = idx === 0 || messages[idx - 1].sender !== msg.sender;
+                
                 return (
                   <div
                     key={msg.eventId}
-                    className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                    className={`flex items-end gap-2 ${msg.isOwn ? 'justify-end' : 'justify-start'}`}
                   >
+                    {!msg.isOwn && showAvatar && (
+                      <Avatar className="h-8 w-8 flex-shrink-0">
+                        {msg.senderAvatar ? (
+                          <AvatarImage src={msg.senderAvatar} />
+                        ) : null}
+                        <AvatarFallback className="bg-gray-300 dark:bg-gray-600 text-xs">
+                          {msg.senderName.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
+                    {!msg.isOwn && !showAvatar && <div className="w-8" />}
+                    
                     <div
-                      className={`max-w-[70%] rounded-2xl px-4 py-2 ${
-                        isOwn
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
+                      className={`max-w-[75%] rounded-2xl px-4 py-2 shadow-sm ${
+                        msg.isOwn
+                          ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-sm'
+                          : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-sm border border-gray-100 dark:border-gray-600'
                       }`}
                     >
-                      {!isOwn && (
-                        <div className="text-xs font-medium mb-1 text-gray-600 dark:text-gray-300">
+                      {!msg.isOwn && showAvatar && (
+                        <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">
                           {msg.senderName}
                         </div>
                       )}
                       <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                      <div className={`text-xs mt-1 ${isOwn ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'}`}>
-                        {new Date(msg.timestamp).toLocaleTimeString('ru-RU', {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
+                      <div className={`text-xs mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-400'}`}>
+                        {msg.timestamp.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
                   </div>
                 );
               })}
-              <div ref={messagesEndRef} />
+              <div ref={messagesEndRef} className="h-4" />
             </div>
 
             {/* Input */}
             <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                  placeholder="Введите сообщение..."
-                  className="flex-1 px-4 py-2 rounded-full border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="flex items-end gap-3">
+                <div className="flex-1 relative">
+                  <textarea
+                    ref={inputRef}
+                    value={newMessage}
+                    onChange={(e) => {
+                      setNewMessage(e.target.value);
+                      handleTyping();
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    placeholder="Введите сообщение..."
+                    rows={1}
+                    className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-600 
+                      bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white 
+                      resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                      placeholder:text-gray-400"
+                    style={{ minHeight: '48px', maxHeight: '150px' }}
+                  />
+                </div>
                 <button
-                  onClick={sendMessage}
+                  onClick={handleSend}
                   disabled={!newMessage.trim() || sending}
-                  className="px-6 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="p-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-full 
+                    hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed 
+                    transition-all shadow-lg hover:shadow-xl active:scale-95"
                 >
                   {sending ? (
-                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <svg className="animate-spin h-6 w-6" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
                   ) : (
-                    'Отправить'
+                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
                   )}
                 </button>
               </div>
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
-            Выберите чат для начала общения
+          <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-blue-50 to-white dark:from-gray-900 dark:to-gray-800">
+            <div className="text-center p-8">
+              <button
+                className="md:hidden mb-4 p-2 bg-blue-600 text-white rounded-lg"
+                onClick={() => setIsMobileMenuOpen(true)}
+              >
+                Открыть чаты
+              </button>
+              <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-xl">
+                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                MyUnion Чат
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-6">
+                Выберите чат или начните новый разговор
+              </p>
+              <button
+                onClick={() => setShowNewChat(true)}
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl 
+                  hover:from-blue-700 hover:to-blue-600 transition-all shadow-lg hover:shadow-xl font-semibold"
+              >
+                Начать чат
+              </button>
+            </div>
           </div>
         )}
       </div>
+
+      {/* New Chat Modal */}
+      {showNewChat && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-4 bg-gradient-to-r from-blue-600 to-blue-500 text-white">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Новый чат</h3>
+                <button 
+                  onClick={() => {
+                    setShowNewChat(false);
+                    setSearchTerm('');
+                  }}
+                  className="p-1 hover:bg-white/20 rounded-full"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-4">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Поиск пользователей..."
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 
+                  bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white
+                  focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="max-h-80 overflow-y-auto">
+              {searchResults.length === 0 ? (
+                <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+                  {searchTerm ? 'Пользователи не найдены' : 'Введите имя для поиска'}
+                </div>
+              ) : (
+                searchResults.map(user => (
+                  <button
+                    key={user.userId}
+                    onClick={() => handleStartChat(user.userId)}
+                    className="w-full p-4 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <Avatar className="h-12 w-12">
+                      {user.avatarUrl ? (
+                        <AvatarImage src={user.avatarUrl} />
+                      ) : null}
+                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+                        {user.displayName.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="text-left">
+                      <div className="font-semibold text-gray-900 dark:text-white">
+                        {user.displayName}
+                      </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {user.userId}
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
