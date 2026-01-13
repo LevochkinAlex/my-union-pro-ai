@@ -452,19 +452,19 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // Если оба документа загружены - обновляем статус на PENDING
+  // Если оба документа загружены - обновляем статус на PENDING_REVIEW
   if (membershipDoc && contributionDoc) {
     try {
-      // Обновляем статус документов на PENDING (отправлены на проверку)
+      // Обновляем статус документов на PENDING_REVIEW (отправлены на проверку)
       await prisma.document.updateMany({
         where: {
           userId: session.user.id,
           type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
           status: "SIGNED",
         },
-        data: { status: "PENDING" },
+        data: { status: "PENDING_REVIEW" },
       });
-      console.log("[upload] ✅ Documents status updated to PENDING");
+      console.log("[upload] ✅ Documents status updated to PENDING_REVIEW");
 
       // Обновляем статус пользователя на DOCUMENTS_PENDING (если еще не APPROVED или REJECTED)
       const currentUser = await prisma.user.findUnique({
