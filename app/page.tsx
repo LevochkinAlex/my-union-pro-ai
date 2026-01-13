@@ -193,7 +193,7 @@ export default function Home() {
               )}
             </svg>
           </button>
-          <MagneticButton variant="secondary" size="sm" onClick={() => window.location.href = "/login"}>
+          <MagneticButton variant="secondary" onClick={() => window.location.href = "/login"}>
             Войти
           </MagneticButton>
         </div>
