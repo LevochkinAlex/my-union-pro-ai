@@ -71,15 +71,21 @@ export async function POST(
             parentId: true,
           },
         },
-        submittedBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
       },
     });
+    
+    // Получаем данные автора отчёта отдельно
+    let submittedBy = null;
+    if (report?.filledByUserId) {
+      submittedBy = await prisma.user.findUnique({
+        where: { id: report.filledByUserId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+        },
+      });
+    }
 
     if (!report) {
       return NextResponse.json({ error: "Отчёт не найден" }, { status: 404 });
@@ -109,13 +115,15 @@ export async function POST(
       where: { id },
       data: {
         status: newStatus,
-        approvedById: action === "approve" ? session.user.id : null,
+        approvedByUserId: action === "approve" ? session.user.id : null,
         approvedAt: action === "approve" ? new Date() : null,
+        revisionReason: action === "reject" ? comment : null,
         // Сохраняем комментарий в истории статусов
         statusHistory: {
           create: {
-            status: newStatus,
-            changedById: session.user.id,
+            fromStatus: report.status,
+            toStatus: newStatus,
+            changedByUserId: session.user.id,
             comment: comment || null,
           },
         },
@@ -128,15 +136,16 @@ export async function POST(
     });
 
     // Уведомляем автора отчёта
-    if (report.submittedBy) {
+    if (submittedBy) {
       const userName = [session.user.firstName, session.user.lastName].filter(Boolean).join(" ") || "Руководитель";
       const actionText = action === "approve" ? "утверждён" : "отклонён";
+      const periodStr = `${report.periodMonth ? report.periodMonth + "/" : ""}${report.periodYear}`;
       
       await sendUserNotification({
-        userId: report.submittedBy.id,
+        userId: submittedBy.id,
         type: action === "approve" ? "report_approved" : "report_rejected",
         title: `Отчёт ${actionText}`,
-        body: `Ваш отчёт за ${report.period} был ${actionText} ${userName}.${comment ? ` Комментарий: ${comment}` : ""}`,
+        body: `Ваш отчёт за ${periodStr} был ${actionText} ${userName}.${comment ? ` Комментарий: ${comment}` : ""}`,
         data: {
           reportId: report.id,
           action,
