@@ -437,10 +437,10 @@ export default function PPOHeadNewsPage() {
 
   return (
     <div className="pb-8">
-      {/* Макет с 2 колонками */}
-      <div className="flex gap-6 max-w-full">
-        {/* Основная область */}
-        <div className="flex-1 space-y-6 min-w-0">
+      {/* Макет с 2 колонками: центрированная лента + сайдбар */}
+      <div className="flex gap-6 justify-center">
+        {/* Основная область - ограниченная ширина как в LinkedIn */}
+        <div className="w-full max-w-[680px] space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">

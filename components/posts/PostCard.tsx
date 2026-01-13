@@ -578,7 +578,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   };
 
   return (
-    <div ref={postCardRef} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+    <div ref={postCardRef} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 max-w-[680px] mx-auto">
       {/* Автор */}
       <div className="flex items-center justify-between mb-4">
         <Link href={`/dashboard/profile/${post.author.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">

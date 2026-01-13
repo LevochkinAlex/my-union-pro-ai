@@ -252,10 +252,10 @@ export default function NewsPage() {
       description="Будьте в курсе последних новостей и событий. Станьте членом профсоюза для доступа к ленте новостей."
     >
     <div className="pb-8">
-      {/* Макет с 2 колонками на широких экранах */}
-      <div className="flex gap-6 max-w-full">
-        {/* Основная лента новостей */}
-        <div className="flex-1 w-full">
+      {/* Макет с 2 колонками: центрированная лента + сайдбар */}
+      <div className="flex gap-6 justify-center">
+        {/* Основная лента новостей - ограниченная ширина как в LinkedIn */}
+        <div className="w-full max-w-[680px]">
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
               Новости

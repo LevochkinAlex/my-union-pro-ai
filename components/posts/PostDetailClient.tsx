@@ -199,7 +199,7 @@ export default function PostDetailClient({ post, session }: PostDetailClientProp
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 dark:bg-gray-900">
-      <div className="mx-auto max-w-4xl px-4 py-4 pb-20 sm:px-6 sm:py-8">
+      <div className="mx-auto max-w-[680px] px-4 py-4 pb-20 sm:px-6 sm:py-8">
         {/* Back Button */}
         <button
           onClick={() => router.back()}
