@@ -72,6 +72,8 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   const commentAreaTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const postCardRef = useRef<HTMLDivElement>(null);
   const hasIncrementedView = useRef(false);
+  const commentTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [currentUserAvatarUrl, setCurrentUserAvatarUrl] = useState<string | null>(null);
   
   const isOwnPost = session?.user?.id === post.author.id;
   const isArticle = post.postType === "article";
@@ -125,6 +127,33 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       setEditCoverImage((post as any).coverImage || null);
     }
   }, [(post as any).coverImage]);
+
+  // Загружаем avatarUrl текущего пользователя из профиля
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetch("/api/profile")
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => {
+          if (data?.user?.avatarUrl) {
+            setCurrentUserAvatarUrl(data.user.avatarUrl);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [session?.user?.id]);
+
+  // Автоматическая адаптация высоты textarea
+  const autoResizeTextarea = (textarea: HTMLTextAreaElement | null) => {
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+    }
+  };
+
+  // Обновляем высоту при изменении текста комментария
+  useEffect(() => {
+    autoResizeTextarea(commentTextareaRef.current);
+  }, [commentText]);
   
   // Для статей извлекаем текст из HTML, для обычных постов используем как есть
   const getPlainText = (html: string) => {
@@ -927,9 +956,9 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           >
             {/* Форма комментария - ВСЕГДА СВЕРХУ */}
             {session && (
-              <div className="space-y-2 pb-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="pb-4 border-b border-gray-200 dark:border-gray-700">
                 {replyToComment && (
-                  <div className="flex items-center justify-between px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm">
+                  <div className="flex items-center justify-between px-3 py-2 mb-3 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm">
                     <span className="text-gray-600 dark:text-gray-400">
                       Ответ для <strong>{getUserName(replyToComment.user)}</strong>
                     </span>
@@ -943,27 +972,51 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                     </button>
                   </div>
                 )}
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <textarea
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        sendComment();
-                      }
-                    }}
-                    placeholder={replyToComment ? "Написать ответ..." : "Написать комментарий..."}
-                    rows={2}
-                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-                  />
-                  <button
-                    onClick={sendComment}
-                    disabled={!commentText.trim() || sendingComment}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap sm:self-end"
-                  >
-                    Отправить
-                  </button>
+                <div className="flex gap-3">
+                  {/* Аватар текущего пользователя */}
+                  <div className="flex-shrink-0">
+                    {currentUserAvatarUrl ? (
+                      <img
+                        src={getFileUrl(currentUserAvatarUrl, "avatars")}
+                        alt="Аватар"
+                        className="w-10 h-10 rounded-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold">
+                        {session.user?.name?.charAt(0).toUpperCase() || session.user?.email?.charAt(0).toUpperCase() || "?"}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <textarea
+                      ref={commentTextareaRef}
+                      value={commentText}
+                      onChange={(e) => {
+                        setCommentText(e.target.value);
+                        autoResizeTextarea(e.target);
+                      }}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          sendComment();
+                        }
+                      }}
+                      placeholder={replyToComment ? "Написать ответ..." : "Написать комментарий..."}
+                      rows={1}
+                      style={{ minHeight: '44px', maxHeight: '200px' }}
+                      className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none overflow-hidden"
+                    />
+                    <div className="mt-2 flex justify-end">
+                      <button
+                        onClick={sendComment}
+                        disabled={!commentText.trim() || sendingComment}
+                        className="px-5 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                      >
+                        {sendingComment ? "Отправка..." : "Отправить"}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1169,7 +1222,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
             {session && (
               <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                 {replyToComment && (
-                  <div className="flex items-center justify-between px-3 py-2 mb-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm">
+                  <div className="flex items-center justify-between px-3 py-2 mb-3 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm">
                     <span className="text-gray-600 dark:text-gray-400">
                       Ответ для <strong>{getUserName(replyToComment.user)}</strong>
                     </span>
@@ -1183,27 +1236,50 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                     </button>
                   </div>
                 )}
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <textarea
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        sendComment();
-                      }
-                    }}
-                    placeholder={replyToComment ? "Написать ответ..." : "Написать комментарий..."}
-                    rows={2}
-                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-                  />
-                  <button
-                    onClick={sendComment}
-                    disabled={!commentText.trim() || sendingComment}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap sm:self-end"
-                  >
-                    Отправить
-                  </button>
+                <div className="flex gap-3">
+                  {/* Аватар текущего пользователя */}
+                  <div className="flex-shrink-0">
+                    {currentUserAvatarUrl ? (
+                      <img
+                        src={getFileUrl(currentUserAvatarUrl, "avatars")}
+                        alt="Аватар"
+                        className="w-10 h-10 rounded-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold">
+                        {session.user?.name?.charAt(0).toUpperCase() || session.user?.email?.charAt(0).toUpperCase() || "?"}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <textarea
+                      value={commentText}
+                      onChange={(e) => {
+                        setCommentText(e.target.value);
+                        autoResizeTextarea(e.target);
+                      }}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          sendComment();
+                        }
+                      }}
+                      placeholder={replyToComment ? "Написать ответ..." : "Написать комментарий..."}
+                      rows={1}
+                      style={{ minHeight: '44px', maxHeight: '200px' }}
+                      className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none overflow-hidden"
+                    />
+                    <div className="mt-2 flex justify-end">
+                      <button
+                        onClick={sendComment}
+                        disabled={!commentText.trim() || sendingComment}
+                        className="px-5 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                      >
+                        {sendingComment ? "Отправка..." : "Отправить"}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
