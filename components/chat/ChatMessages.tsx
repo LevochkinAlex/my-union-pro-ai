@@ -82,8 +82,14 @@ function ChatMessagesComponent({
   const isGroupChat = chat.type === "GROUP" || !!chat.ticketId;
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const prevChatId = useRef<string | null>(null);
-  const [atBottom, setAtBottom] = useState(true);
+  const atBottomRef = useRef(true);
+  const [, forceUpdate] = useState(0);
   const hasInitialized = useRef(false);
+  
+  // Обработчик изменения позиции скролла - не вызывает ререндер
+  const handleAtBottomStateChange = useCallback((isAtBottom: boolean) => {
+    atBottomRef.current = isAtBottom;
+  }, []);
   
   // Для prepend паттерна: отслеживаем firstItemIndex
   const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
@@ -96,7 +102,7 @@ function ChatMessagesComponent({
   useEffect(() => {
     if (prevChatId.current !== chat.id) {
       hasInitialized.current = false;
-      setAtBottom(true);
+      atBottomRef.current = true;
       setFirstItemIndex(START_INDEX);
       prevMessagesLength.current = 0;
     }
@@ -131,46 +137,28 @@ function ChatMessagesComponent({
     }
   }, [items.length]);
 
-  // Скролл к новым сообщениям
+  // Отслеживаем последнее сообщение для определения "своего"
   const lastMessageIdRef = useRef<string | null>(null);
-  const messagesCountRef = useRef(0);
   
-  useEffect(() => {
-    if (!hasInitialized.current || messages.length === 0) return;
-    
+  // followOutput для Virtuoso - автоскролл при добавлении сообщений
+  // Это единственное место где управляем скроллом к новым сообщениям
+  const handleFollowOutput = useCallback((isAtBottom: boolean) => {
     const lastMessage = messages[messages.length - 1];
-    if (!lastMessage) return;
+    const isNewMessage = lastMessage && lastMessage.id !== lastMessageIdRef.current;
     
-    // Проверяем добавилось ли новое сообщение
-    const isNewMessage = messages.length > messagesCountRef.current || 
-                         lastMessage.id !== lastMessageIdRef.current;
-    
-    if (!isNewMessage) return;
-    
-    const isOwnMessage = lastMessage.senderId === currentUserId;
-    
-    // Для своих сообщений - ВСЕГДА скроллим принудительно
-    // Для чужих - только если были внизу
-    if (isOwnMessage || atBottom) {
-      // Используем setTimeout для гарантии что DOM обновился
-      setTimeout(() => {
-        virtuosoRef.current?.scrollToIndex({
-          index: items.length - 1,
-          align: "end",
-          behavior: "smooth",
-        });
-      }, 100);
+    if (isNewMessage) {
+      lastMessageIdRef.current = lastMessage.id;
+      const isOwnMessage = lastMessage.senderId === currentUserId;
+      
+      // Для своих сообщений - всегда скроллим
+      if (isOwnMessage) {
+        return "smooth";
+      }
     }
     
-    lastMessageIdRef.current = lastMessage.id;
-    messagesCountRef.current = messages.length;
-  }, [messages, currentUserId, items.length, atBottom]);
-
-  // followOutput для Virtuoso - автоскролл при добавлении сообщений
-  const handleFollowOutput = useCallback(() => {
-    // Всегда скроллим если пользователь внизу
-    return atBottom ? "auto" : false;
-  }, [atBottom]);
+    // Для чужих - только если внизу
+    return isAtBottom ? "auto" : false;
+  }, [messages, currentUserId]);
 
   // Загрузка старых сообщений при скролле вверх
   const handleStartReached = useCallback(() => {
@@ -238,7 +226,7 @@ function ChatMessagesComponent({
         initialTopMostItemIndex={items.length - 1}
         itemContent={itemContent}
         followOutput={handleFollowOutput}
-        atBottomStateChange={setAtBottom}
+        atBottomStateChange={handleAtBottomStateChange}
         atBottomThreshold={50}
         startReached={handleStartReached}
         className="h-full w-full"
