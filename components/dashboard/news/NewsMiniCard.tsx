@@ -75,7 +75,7 @@ export default function NewsMiniCard({ post, priority = false }: NewsMiniCardPro
   const formattedDate = mounted ? formatDate(post.publishedAt) : "";
 
   return (
-    <Link href={`/dashboard/news?id=${post.id}`} className="block h-full">
+    <Link href={`/dashboard/news/${post.id}`} className="block h-full">
       <article className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden h-full hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-200 cursor-pointer flex flex-col">
         {/* Обложка - оптимизирована с Next.js Image */}
         {post.coverImage && !post.coverImage.startsWith("data:") && (

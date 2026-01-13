@@ -520,7 +520,7 @@ export default async function DashboardPage() {
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">
-                  Посты от подписок
+                  Публикации от коллег
                 </h2>
                 <Link
                   href="/dashboard/users"
