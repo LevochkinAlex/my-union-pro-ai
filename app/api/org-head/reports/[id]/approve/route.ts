@@ -147,10 +147,7 @@ export async function POST(
         type: action === "approve" ? "report_approved" : "report_rejected",
         title: `Отчёт ${actionText}`,
         body: `Ваш отчёт за ${periodStr} был ${actionText} ${userName}.${comment ? ` Комментарий: ${comment}` : ""}`,
-        data: {
-          reportId: report.id,
-          action,
-        },
+        url: `/dashboard/reports/${report.id}`,
       });
     }
 
