@@ -22,7 +22,8 @@ type WorkflowAction =
 
 // Матрица переходов статусов
 const STATUS_TRANSITIONS: Record<string, string[]> = {
-  DRAFT: ["PENDING_REVIEW", "PENDING_APPROVAL", "ARCHIVED"],
+  DRAFT: ["GENERATED", "PENDING_REVIEW", "PENDING_APPROVAL", "ARCHIVED"],
+  GENERATED: ["PENDING_REVIEW", "PENDING_APPROVAL", "PENDING_SIGNATURE", "SIGNED", "ARCHIVED"],
   PENDING_REVIEW: ["PENDING_APPROVAL", "REJECTED", "DRAFT"],
   PENDING_APPROVAL: ["PENDING_SIGNATURE", "APPROVED", "REJECTED", "DRAFT"],
   PENDING_SIGNATURE: ["SIGNED", "REJECTED", "PENDING_APPROVAL"],
@@ -441,6 +442,8 @@ function getAvailableActions(status: string): WorkflowAction[] {
   switch (status) {
     case "DRAFT":
       return ["submit_for_review", "submit_for_approval", "archive"];
+    case "GENERATED":
+      return ["submit_for_review", "submit_for_approval", "submit_for_signature", "sign", "archive"];
     case "PENDING_REVIEW":
       return ["submit_for_approval", "reject", "return_to_draft"];
     case "PENDING_APPROVAL":

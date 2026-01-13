@@ -16,6 +16,7 @@ ALTER TYPE "DocumentStatus" RENAME TO "DocumentStatus_old";
 -- Создаём новый enum с расширенными статусами
 CREATE TYPE "DocumentStatus" AS ENUM (
     'DRAFT',           -- Черновик
+    'GENERATED',       -- Сгенерирован (готов к подписи)
     'PENDING_REVIEW',  -- На рассмотрении
     'PENDING_APPROVAL',-- На согласовании
     'PENDING_SIGNATURE',-- На подписи
@@ -36,7 +37,7 @@ ALTER TABLE "Document" ALTER COLUMN "status" TYPE "DocumentStatus"
 USING (
     CASE status::text
         WHEN 'DRAFT' THEN 'DRAFT'::"DocumentStatus"
-        WHEN 'GENERATED' THEN 'REGISTERED'::"DocumentStatus"
+        WHEN 'GENERATED' THEN 'GENERATED'::"DocumentStatus"
         WHEN 'SIGNED' THEN 'SIGNED'::"DocumentStatus"
         WHEN 'PENDING' THEN 'PENDING_REVIEW'::"DocumentStatus"
         WHEN 'APPROVED' THEN 'COMPLETED'::"DocumentStatus"

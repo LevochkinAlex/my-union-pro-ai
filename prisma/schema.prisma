@@ -490,6 +490,7 @@ enum DocumentCategory {
 // Статусы документов (workflow)
 enum DocumentStatus {
   DRAFT // Черновик
+  GENERATED // Сгенерирован (готов к подписи)
   PENDING_REVIEW // На рассмотрении
   PENDING_APPROVAL // На согласовании
   PENDING_SIGNATURE // На подписи
