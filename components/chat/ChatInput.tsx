@@ -239,17 +239,17 @@ function ChatInputComponent({
 
       {/* Превью файла */}
       {file && (
-        <div className="px-4 pt-3 pb-2">
-          <div className="flex items-center gap-3 p-3 bg-gray-100 dark:bg-gray-700 rounded-xl">
+        <div className="px-2 md:px-4 pt-2 pb-1 md:pt-3 md:pb-2 max-w-full overflow-hidden">
+          <div className="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-gray-100 dark:bg-gray-700 rounded-xl max-w-full">
             {filePreview ? (
-              <img src={filePreview} alt="Preview" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
+              <img src={filePreview} alt="Preview" className="w-10 h-10 md:w-14 md:h-14 rounded-lg object-cover flex-shrink-0" />
             ) : (
-              <div className="w-14 h-14 bg-white dark:bg-gray-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
-                <FileTypeIcon mimeType={file.type} fileName={file.name} className="w-8 h-8" />
+              <div className="w-10 h-10 md:w-14 md:h-14 bg-white dark:bg-gray-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+                <FileTypeIcon mimeType={file.type} fileName={file.name} className="w-6 h-6 md:w-8 md:h-8" />
               </div>
             )}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{file.name}</p>
+            <div className="flex-1 min-w-0 overflow-hidden">
+              <p className="text-xs md:text-sm font-medium text-gray-900 dark:text-white truncate max-w-full">{file.name}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 {file.size < 1024 * 1024 
                   ? `${(file.size / 1024).toFixed(1)} КБ` 
@@ -258,9 +258,9 @@ function ChatInputComponent({
             </div>
             <button
               onClick={clearFile}
-              className="p-2 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
+              className="p-1.5 md:p-2 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors flex-shrink-0"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
