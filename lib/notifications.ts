@@ -14,7 +14,9 @@ export type NotificationType =
   | "news_published" // Опубликована новость
   | "mass_notification" // Массовое уведомление
   | "staff_added" // Назначен сотрудником
-  | "report_status_changed"; // Изменён статус отчёта
+  | "report_status_changed" // Изменён статус отчёта
+  | "report_approved" // Отчёт утверждён
+  | "report_rejected"; // Отчёт отклонён
 
 interface NotificationData {
   userId: string; // Кому отправить
