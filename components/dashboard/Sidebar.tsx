@@ -26,6 +26,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -211,9 +212,9 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
 
           {/* Bottom section - компактная версия */}
           <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
-            {/* Version */}
+            {/* Version - только в развернутом режиме */}
             {!isCollapsed && (
-              <div className="px-3 py-2">
+              <div className="px-3 py-1">
                 <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center">
                   v{process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0'}
                 </p>
@@ -221,74 +222,134 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
             )}
 
             {/* Actions row */}
-            <div className={`${isCollapsed ? "px-1 py-3" : "px-3 py-2"} ${!isCollapsed ? "border-t border-gray-200 dark:border-gray-700" : ""}`}>
-              <div className={`flex items-center ${isCollapsed ? "flex-col gap-3 justify-center" : "justify-between gap-1"}`}>
-                {/* Account icon */}
-                <Link
-                  href={isAdmin ? "/admin/users" : "/dashboard/profile"}
-                  className="flex h-9 w-9 items-center justify-center rounded-full overflow-hidden bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
-                  title="Профиль"
-                >
-                  {avatarUrl ? (
-                    <img 
-                      src={avatarUrl} 
-                      alt="Avatar" 
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                      decoding="async"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        const parent = e.currentTarget.parentElement;
-                        if (parent) {
-                          parent.innerHTML = `<span class="text-xs font-semibold">${userInitial}</span>`;
-                        }
-                      }}
-                    />
-                  ) : (
-                    <span className="text-xs font-semibold">{userInitial}</span>
-                  )}
-                </Link>
-
-                {/* Theme toggle */}
-                <ThemeToggle collapsed={isCollapsed} />
-
-                {/* Collapse button */}
-                <button
-                  onClick={() => setIsCollapsed(!isCollapsed)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
-                  title={isCollapsed ? "Развернуть" : "Свернуть"}
-                >
-                  <svg
-                    className={`h-4 w-4 transition-transform ${isCollapsed ? "" : "rotate-180"}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+            <div className={`${isCollapsed ? "px-1 py-2" : "px-3 py-2"}`}>
+              {isCollapsed ? (
+                /* Свернутый режим: кнопка разворачивания + меню "три точки" */
+                <div className="flex flex-col items-center gap-2">
+                  {/* Collapse button - всегда первый и видимый */}
+                  <button
+                    onClick={() => setIsCollapsed(false)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm hover:bg-blue-700 transition-colors"
+                    title="Развернуть меню"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </button>
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
 
-                {/* Sign out */}
-                <button
-                  onClick={() => signOut({ callbackUrl: "/login" })}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
-                  title="Выйти"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                    />
-                  </svg>
-                </button>
-              </div>
+                  {/* More menu button */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowMoreMenu(!showMoreMenu)}
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
+                      title="Ещё"
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                      </svg>
+                    </button>
+
+                    {/* Dropdown menu */}
+                    {showMoreMenu && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setShowMoreMenu(false)} />
+                        <div className="absolute left-full bottom-0 ml-2 z-50 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1">
+                          {/* Profile */}
+                          <Link
+                            href={isAdmin ? "/admin/users" : "/dashboard/profile"}
+                            onClick={() => setShowMoreMenu(false)}
+                            className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600">
+                              {avatarUrl ? (
+                                <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+                              ) : (
+                                <span className="text-xs font-semibold">{userInitial}</span>
+                              )}
+                            </div>
+                            <span>Профиль</span>
+                          </Link>
+                          
+                          {/* Theme toggle */}
+                          <div className="px-3 py-2 flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
+                            <ThemeToggle collapsed={false} />
+                          </div>
+                          
+                          <hr className="my-1 border-gray-200 dark:border-gray-700" />
+                          
+                          {/* Sign out */}
+                          <button
+                            onClick={() => {
+                              setShowMoreMenu(false);
+                              signOut({ callbackUrl: "/login" });
+                            }}
+                            className="flex w-full items-center gap-3 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                            </svg>
+                            <span>Выйти</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* Развернутый режим: все кнопки в ряд */
+                <div className="flex items-center justify-between gap-1">
+                  {/* Account icon */}
+                  <Link
+                    href={isAdmin ? "/admin/users" : "/dashboard/profile"}
+                    className="flex h-9 w-9 items-center justify-center rounded-full overflow-hidden bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
+                    title="Профиль"
+                  >
+                    {avatarUrl ? (
+                      <img 
+                        src={avatarUrl} 
+                        alt="Avatar" 
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const parent = e.currentTarget.parentElement;
+                          if (parent) {
+                            parent.innerHTML = `<span class="text-xs font-semibold">${userInitial}</span>`;
+                          }
+                        }}
+                      />
+                    ) : (
+                      <span className="text-xs font-semibold">{userInitial}</span>
+                    )}
+                  </Link>
+
+                  {/* Theme toggle */}
+                  <ThemeToggle collapsed={false} />
+
+                  {/* Collapse button */}
+                  <button
+                    onClick={() => setIsCollapsed(true)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
+                    title="Свернуть"
+                  >
+                    <svg className="h-4 w-4 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+
+                  {/* Sign out */}
+                  <button
+                    onClick={() => signOut({ callbackUrl: "/login" })}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
+                    title="Выйти"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
       </div>
