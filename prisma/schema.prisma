@@ -1298,6 +1298,9 @@ model Ticket {
 
   // 8-значный публичный ID для отслеживания (10000000-99999999)
   publicId String @unique @db.Char(8)
+  
+  // Matrix интеграция
+  matrixRoomId String? @unique // ID комнаты в Matrix для обращения
 
   userId String
   user   User   @relation("UserTickets", fields: [userId], references: [id], onDelete: Cascade)
@@ -1926,6 +1929,9 @@ model Chat {
 
   // Тип чата
   type ChatType @default(PRIVATE)
+  
+  // Matrix интеграция
+  matrixRoomId String? @unique // ID комнаты в Matrix
 
   // Участники чата (для личных чатов - два пользователя)
   participant1Id String?
