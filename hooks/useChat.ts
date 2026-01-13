@@ -214,11 +214,7 @@ export function useChat(options: UseChatOptions = {}) {
     return null;
   }, [chats, selectChat, options.onError]);
 
-  // Отправка сообщения - простая и надежная стратегия
-  // 1. Показываем sending=true (кнопка отправки меняется на спиннер)
-  // 2. Отправляем на сервер
-  // 3. Добавляем реальное сообщение в список
-  // 4. Скроллим вниз
+  // Отправка сообщения
   const sendMessage = useCallback(async (
     content: string,
     file?: File,
@@ -227,16 +223,11 @@ export function useChat(options: UseChatOptions = {}) {
     if (!selectedChat) return false;
 
     setSending(true);
-    
-    // Проверяем, это чат с ботом
-    const isBotChat = selectedChat.otherUser?.firstName === "AI Ассистент" || 
-                      selectedChat.otherUser?.lastName === "AI Ассистент" ||
-                      selectedChat.name?.includes("AI");
-    
     try {
       let response;
 
       if (file) {
+        // Отправка с файлом
         const formData = new FormData();
         formData.append("content", content);
         formData.append("file", file);
@@ -247,6 +238,7 @@ export function useChat(options: UseChatOptions = {}) {
           body: formData,
         });
       } else {
+        // Текстовое сообщение
         response = await fetch(`/api/chat/${selectedChat.id}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -258,36 +250,18 @@ export function useChat(options: UseChatOptions = {}) {
         const data = await response.json();
         const newMessage = data.message;
         
-        // Добавляем сообщение в список (с проверкой на дубликат)
-        setMessages(prev => {
-          const exists = prev.some(m => m.id === newMessage.id);
-          if (exists) return prev;
-          return [...prev, newMessage];
-        });
+        // Добавляем сообщение в список
+        setMessages(prev => [...prev, newMessage]);
         
-        // Обновляем превью чата
+        // Обновляем последнее сообщение в чате БЕЗ изменения порядка
+        // НЕ перемещаем чат наверх при отправке сообщения
         setChats(prev => prev.map(chat => 
           chat.id === selectedChat.id
             ? { ...chat, lastMessage: content || "[Файл]", lastMessageAt: new Date() }
             : chat
         ));
         
-        // Для AI чатов показываем индикатор печатания и ждем ответ бота
-        if (isBotChat && data.botMessage) {
-          setIsBotTyping(true);
-          // Небольшая задержка для эффекта "печатания"
-          await new Promise(r => setTimeout(r, 300));
-          setMessages(prev => {
-            const exists = prev.some(m => m.id === data.botMessage.id);
-            if (exists) return prev;
-            return [...prev, data.botMessage];
-          });
-          setIsBotTyping(false);
-        }
-        
         return true;
-      } else {
-        options.onError?.("Ошибка отправки сообщения");
       }
     } catch (error) {
       console.error("[useChat] Error sending message:", error);

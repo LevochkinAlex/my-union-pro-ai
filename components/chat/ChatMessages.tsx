@@ -138,23 +138,21 @@ function ChatMessagesComponent({
     // Для своих сообщений - всегда скроллим
     // Для чужих - только если были внизу
     if (isOwnMessage || atBottom) {
-      requestAnimationFrame(() => {
-        virtuosoRef.current?.scrollToIndex({
-          index: items.length - 1,
-          align: "end",
-          behavior: "auto",
-        });
+      virtuosoRef.current?.scrollToIndex({
+        index: items.length - 1,
+        align: "end",
+        behavior: "auto",
       });
     }
     
     lastMessageIdRef.current = lastMessage.id;
   }, [messages.length, currentUserId, items.length, atBottom]);
 
-  // followOutput для Virtuoso - для своих сообщений ВСЕГДА скроллим
-  const handleFollowOutput = useCallback((isAtBottom: boolean) => {
-    // Автоскролл при добавлении сообщений
-    return isAtBottom ? "auto" : false;
-  }, []);
+  // followOutput для Virtuoso - автоскролл при добавлении сообщений
+  const handleFollowOutput = useCallback(() => {
+    // Всегда скроллим если пользователь внизу
+    return atBottom ? "auto" : false;
+  }, [atBottom]);
 
   // Загрузка старых сообщений при скролле вверх
   const handleStartReached = useCallback(() => {
@@ -247,7 +245,7 @@ function ChatMessagesComponent({
             </>
           ),
           Footer: () => (
-            <div className="h-4">
+            <div className="h-6">
               {isBotTyping && <TypingIndicator />}
             </div>
           ),
