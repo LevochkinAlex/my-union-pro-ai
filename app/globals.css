@@ -167,6 +167,106 @@
   color: #f9fafb;
 }
 
+/* ============================================
+   LIGHT THEME TEXT COLOR FIXES
+   Fix light text on light background
+   ============================================ */
+
+/* Form labels - ensure dark text in light theme */
+label {
+  color: #374151;
+}
+
+.dark label {
+  color: #e5e7eb;
+}
+
+/* Input fields - text color */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  color: #111827;
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark textarea,
+.dark select {
+  color: #f9fafb;
+}
+
+/* Placeholder text */
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #6b7280;
+}
+
+/* Card and panel headings */
+h1, h2, h3, h4, h5, h6 {
+  color: #111827;
+}
+
+.dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {
+  color: #f9fafb;
+}
+
+/* General text in cards and panels */
+p {
+  color: #374151;
+}
+
+.dark p {
+  color: #e5e7eb;
+}
+
+/* Table cells */
+td, th {
+  color: #374151;
+}
+
+.dark td, .dark th {
+  color: #e5e7eb;
+}
+
+/* Override Tailwind gray text classes in light mode to ensure readability */
+.text-gray-300:not(.dark *) {
+  color: #6b7280 !important;
+}
+
+.text-gray-400:not(.dark *) {
+  color: #6b7280 !important;
+}
+
+.text-gray-500:not(.dark *) {
+  color: #4b5563 !important;
+}
+
+/* Fix button text on badges */
+.bg-blue-100, .bg-green-100, .bg-yellow-100, .bg-red-100, .bg-purple-100, .bg-gray-100 {
+  color: inherit;
+}
+
+/* TinyMCE editor fix for light theme */
+.tox-tinymce {
+  color: #111827;
+}
+
+.tox .tox-edit-area__iframe {
+  background-color: #ffffff;
+}
+
+/* Variable chips/badges should have readable text */
+[class*="bg-blue-"][class*="text-blue-"],
+[class*="bg-green-"][class*="text-green-"],
+[class*="bg-purple-"][class*="text-purple-"],
+[class*="bg-gray-"][class*="text-gray-"] {
+  font-weight: 500;
+}
+
 /* Base styles for article and news content */
 .article-content,
 .news-content {
