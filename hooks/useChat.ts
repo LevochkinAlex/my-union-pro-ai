@@ -90,18 +90,21 @@ export function useChat(options: UseChatOptions = {}) {
     socket.on("message:new", (message: Message) => {
       console.log("[useChat] 📨 New message via socket");
       
-      // Добавляем только если это для текущего чата и сообщение ещё не существует
+      // Добавляем только если сообщение ещё не существует
       setMessages(prev => {
         if (prev.some(m => m.id === message.id)) return prev;
         return [...prev, message];
       });
 
-      // Обновляем превью чата
-      setChats(prev => prev.map(chat =>
-        chat.id === message.chatId
-          ? { ...chat, lastMessage: message.content || "[Файл]", lastMessageAt: new Date() }
-          : chat
-      ));
+      // Обновляем превью текущего чата
+      const currentChatId = selectedChatRef.current?.id;
+      if (currentChatId) {
+        setChats(prev => prev.map(chat =>
+          chat.id === currentChatId
+            ? { ...chat, lastMessage: message.content || "[Файл]", lastMessageAt: new Date() }
+            : chat
+        ));
+      }
     });
 
     // Сообщение обновлено
