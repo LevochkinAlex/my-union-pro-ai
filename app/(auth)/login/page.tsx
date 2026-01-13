@@ -552,7 +552,7 @@ function LoginForm() {
                     }}
                     className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                       loginMethod === "sms"
-                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                        ? "bg-white text-gray-900 shadow-sm dark:bg-gray-600 dark:text-white"
                         : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                     }`}
                   >
@@ -568,7 +568,7 @@ function LoginForm() {
                     }}
                     className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                       loginMethod === "email"
-                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                        ? "bg-white text-gray-900 shadow-sm dark:bg-gray-600 dark:text-white"
                         : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                     }`}
                   >
