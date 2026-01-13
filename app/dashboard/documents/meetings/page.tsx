@@ -59,12 +59,12 @@ const MEETING_TYPE_LABELS: Record<string, string> = {
 };
 
 const MEETING_STATUS_COLORS: Record<string, string> = {
-  DRAFT: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300",
-  SCHEDULED: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-  IN_PROGRESS: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-  VOTING: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
-  COMPLETED: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-  CANCELLED: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+  DRAFT: "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
+  SCHEDULED: "bg-blue-200 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  IN_PROGRESS: "bg-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+  VOTING: "bg-purple-200 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
+  COMPLETED: "bg-green-200 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+  CANCELLED: "bg-red-200 text-red-800 dark:bg-red-900/30 dark:text-red-400",
 };
 
 export default function MeetingsPage() {
@@ -333,7 +333,7 @@ export default function MeetingsPage() {
               {formData.agendaItems.map((item, index) => (
                 <div key={index} className="rounded-md border border-gray-200 p-3 dark:border-gray-700">
                   <div className="flex items-start gap-3">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-200 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
                       {index + 1}
                     </span>
                     <div className="flex-1 space-y-2">
@@ -442,25 +442,25 @@ export default function MeetingsPage() {
                   {/* Статус документов */}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {meeting.agendaDocument ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-green-200 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
                         ✓ Повестка: {meeting.agendaDocument.regNumber}
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400">
                         ○ Повестка не сформирована
                       </span>
                     )}
                     {meeting.protocolDocument ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-green-200 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
                         ✓ Протокол: {meeting.protocolDocument.regNumber}
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400">
                         ○ Протокол не сформирован
                       </span>
                     )}
                     {meeting._count.resolutions > 0 && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-200 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
                         📜 {meeting._count.resolutions} постановлений
                       </span>
                     )}

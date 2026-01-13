@@ -392,7 +392,7 @@ export default function PPOHeadDocumentsPage() {
           >
             Документы организации
             {orgDocuments.length > 0 && (
-              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+              <span className="ml-2 rounded-full bg-blue-200 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
                 {orgDocuments.length}
               </span>
             )}
@@ -407,7 +407,7 @@ export default function PPOHeadDocumentsPage() {
           >
             Личные
             {personalDocuments.length > 0 && (
-              <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+              <span className="ml-2 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300">
                 {personalDocuments.length}
               </span>
             )}
@@ -770,15 +770,15 @@ export default function PPOHeadDocumentsPage() {
                       {doc.title}
                     </h3>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                      <span className="inline-flex items-center rounded-full bg-blue-200 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
                         {getDocumentTypeLabel(doc.type)}
                       </span>
                       <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
                         doc.status === "SIGNED" || doc.status === "APPROVED"
-                          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                          ? "bg-green-200 text-green-800 dark:bg-green-900/30 dark:text-green-400"
                           : doc.status === "REJECTED"
-                          ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                          : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                          ? "bg-red-200 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                          : "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
                       }`}>
                         {getDocumentStatusLabel(doc.status)}
                       </span>

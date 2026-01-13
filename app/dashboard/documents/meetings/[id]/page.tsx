@@ -283,9 +283,9 @@ export default function MeetingDetailPage({
           </p>
         </div>
         <span className={`rounded-full px-3 py-1 text-sm font-medium ${
-          meeting.status === "COMPLETED" ? "bg-green-100 text-green-800" :
-          meeting.status === "IN_PROGRESS" ? "bg-yellow-100 text-yellow-800" :
-          "bg-gray-100 text-gray-800"
+          meeting.status === "COMPLETED" ? "bg-green-200 text-green-800 dark:bg-green-900/30 dark:text-green-400" :
+          meeting.status === "IN_PROGRESS" ? "bg-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400" :
+          "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
         }`}>
           {MEETING_STATUS_LABELS[meeting.status]}
         </span>
@@ -486,7 +486,7 @@ export default function MeetingDetailPage({
                 className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
               >
                 <div className="flex items-start gap-3">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-200 text-sm font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
                     {item.orderNumber}
                   </span>
                   <div className="flex-1">

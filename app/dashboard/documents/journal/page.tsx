@@ -70,17 +70,17 @@ const STATUS_LABELS: Record<DocumentStatus, string> = {
 };
 
 const STATUS_COLORS: Record<DocumentStatus, string> = {
-  DRAFT: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300",
-  PENDING_REVIEW: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-  PENDING_APPROVAL: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
-  PENDING_SIGNATURE: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-  SIGNED: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-  REGISTERED: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
+  DRAFT: "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
+  PENDING_REVIEW: "bg-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+  PENDING_APPROVAL: "bg-orange-200 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+  PENDING_SIGNATURE: "bg-blue-200 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  SIGNED: "bg-green-200 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+  REGISTERED: "bg-purple-200 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
   SENT: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400",
   RECEIVED: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400",
-  COMPLETED: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
-  REJECTED: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-  ARCHIVED: "bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300",
+  COMPLETED: "bg-emerald-200 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
+  REJECTED: "bg-red-200 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+  ARCHIVED: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300",
 };
 
 export default function DocumentJournalPage() {
@@ -292,7 +292,7 @@ export default function DocumentJournalPage() {
         />
         <button
           onClick={handleSearch}
-          className="px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+          className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
         >
           Найти
         </button>
@@ -385,7 +385,7 @@ export default function DocumentJournalPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="px-2 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                    <span className="px-2 py-1 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                       {CATEGORY_LABELS[doc.category]}
                     </span>
                   </td>
@@ -428,16 +428,16 @@ export default function DocumentJournalPage() {
                           onClick={() => handleWorkflowAction(doc.id, act.action)}
                           className={`px-2 py-1 text-xs rounded ${
                             act.color === "green"
-                              ? "bg-green-100 text-green-700 hover:bg-green-200"
+                              ? "bg-green-200 text-green-700 hover:bg-green-300"
                               : act.color === "red"
-                              ? "bg-red-100 text-red-700 hover:bg-red-200"
+                              ? "bg-red-200 text-red-700 hover:bg-red-300"
                               : act.color === "blue"
-                              ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                              ? "bg-blue-200 text-blue-700 hover:bg-blue-300"
                               : act.color === "orange"
                               ? "bg-orange-100 text-orange-700 hover:bg-orange-200"
                               : act.color === "purple"
-                              ? "bg-purple-100 text-purple-700 hover:bg-purple-200"
-                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                              ? "bg-purple-200 text-purple-700 hover:bg-purple-300"
+                              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                           }`}
                         >
                           {act.label}
