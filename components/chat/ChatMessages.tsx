@@ -137,44 +137,46 @@ function ChatMessagesComponent({
     }
   }, [items.length]);
 
-  // Отслеживаем последнее сообщение для скролла
-  const lastMessageIdRef = useRef<string | null>(null);
-  const lastMessagesLengthRef = useRef(0);
+  // Скролл к новым сообщениям - только при изменении количества
+  const prevMessageCountRef = useRef(0);
+  const lastScrolledIdRef = useRef<string | null>(null);
   
-  // Принудительный скролл при новых сообщениях
   useEffect(() => {
-    if (!hasInitialized.current || messages.length === 0) return;
+    // Только когда количество сообщений увеличилось
+    if (messages.length <= prevMessageCountRef.current) {
+      prevMessageCountRef.current = messages.length;
+      return;
+    }
+    
+    if (!hasInitialized.current) {
+      prevMessageCountRef.current = messages.length;
+      return;
+    }
     
     const lastMessage = messages[messages.length - 1];
-    if (!lastMessage) return;
-    
-    // Новое сообщение?
-    const isNew = messages.length > lastMessagesLengthRef.current || 
-                  lastMessage.id !== lastMessageIdRef.current;
-    
-    if (isNew) {
-      const isOwnMessage = lastMessage.senderId === currentUserId;
-      
-      // Для своих - ВСЕГДА скроллим, для чужих - если внизу
-      if (isOwnMessage || atBottomRef.current) {
-        // Задержка для DOM обновления
-        setTimeout(() => {
-          virtuosoRef.current?.scrollToIndex({
-            index: items.length - 1,
-            align: "end",
-            behavior: isOwnMessage ? "smooth" : "auto",
-          });
-        }, 50);
-      }
-      
-      lastMessageIdRef.current = lastMessage.id;
-      lastMessagesLengthRef.current = messages.length;
+    if (!lastMessage || lastMessage.id === lastScrolledIdRef.current) {
+      prevMessageCountRef.current = messages.length;
+      return;
     }
-  }, [messages, currentUserId, items.length]);
+    
+    const isOwnMessage = lastMessage.senderId === currentUserId;
+    
+    // Скроллим только для своих сообщений или если внизу
+    if (isOwnMessage || atBottomRef.current) {
+      lastScrolledIdRef.current = lastMessage.id;
+      virtuosoRef.current?.scrollToIndex({
+        index: items.length - 1,
+        align: "end",
+        behavior: "auto",
+      });
+    }
+    
+    prevMessageCountRef.current = messages.length;
+  }, [messages.length, currentUserId, items.length]);
   
-  // followOutput для Virtuoso - бекап автоскролл
+  // followOutput - автоскролл Virtuoso
   const handleFollowOutput = useCallback(() => {
-    return atBottomRef.current ? "auto" : false;
+    return atBottomRef.current ? "smooth" : false;
   }, []);
 
   // Загрузка старых сообщений при скролле вверх
