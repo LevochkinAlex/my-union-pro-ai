@@ -66,7 +66,7 @@ export async function POST(
           },
         },
         data: {
-          status: "APPROVED",
+          status: "COMPLETED",
         },
       });
     } else if (status === "REJECTED") {
