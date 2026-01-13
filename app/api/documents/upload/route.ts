@@ -492,7 +492,7 @@ export async function POST(request: NextRequest) {
     where: {
       userId: session.user.id,
       type: "MEMBERSHIP_APPLICATION",
-      status: { in: ["SIGNED", "PENDING", "APPROVED"] },
+      status: { in: ["SIGNED", "PENDING_REVIEW", "PENDING_APPROVAL", "COMPLETED"] },
       signedFilePath: { not: null },
     },
   });
@@ -501,7 +501,7 @@ export async function POST(request: NextRequest) {
     where: {
       userId: session.user.id,
       type: "CONTRIBUTION_APPLICATION",
-      status: { in: ["SIGNED", "PENDING", "APPROVED"] },
+      status: { in: ["SIGNED", "PENDING_REVIEW", "PENDING_APPROVAL", "COMPLETED"] },
       signedFilePath: { not: null },
     },
   });
