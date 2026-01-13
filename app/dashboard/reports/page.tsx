@@ -65,6 +65,7 @@ export default function ReportsPage() {
   const [showNewReportModal, setShowNewReportModal] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [creating, setCreating] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterYear, setFilterYear] = useState<string>("all");
@@ -99,17 +100,32 @@ export default function ReportsPage() {
     fetchData();
   }, [fetchData]);
 
+  // Получить выбранный шаблон
+  const getSelectedTemplateData = () => {
+    return templates.find((t) => t.id === selectedTemplate);
+  };
+
+  // Нужен ли месяц для выбранного шаблона
+  const needsMonth = () => {
+    const template = getSelectedTemplateData();
+    return template && ["MONTHLY", "QUARTERLY"].includes(template.periodicity);
+  };
+
   const handleCreateReport = async () => {
     if (!selectedTemplate || !selectedYear) return;
 
     setCreating(true);
     try {
+      const template = getSelectedTemplateData();
+      const periodMonth = needsMonth() ? selectedMonth : undefined;
+
       const response = await fetch("/api/ppo-head/reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           templateId: selectedTemplate,
           periodYear: selectedYear,
+          periodMonth,
         }),
       });
 
@@ -412,21 +428,55 @@ export default function ReportsPage() {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Отчётный период (год)
-                </label>
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  {[2024, 2025, 2026].map((year) => (
-                    <option key={year} value={year}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
+              <div className={needsMonth() ? "grid grid-cols-2 gap-4" : ""}>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Год
+                  </label>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    {[2024, 2025, 2026].map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {needsMonth() && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Месяц
+                    </label>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      {[
+                        { value: 1, label: "Январь" },
+                        { value: 2, label: "Февраль" },
+                        { value: 3, label: "Март" },
+                        { value: 4, label: "Апрель" },
+                        { value: 5, label: "Май" },
+                        { value: 6, label: "Июнь" },
+                        { value: 7, label: "Июль" },
+                        { value: 8, label: "Август" },
+                        { value: 9, label: "Сентябрь" },
+                        { value: 10, label: "Октябрь" },
+                        { value: 11, label: "Ноябрь" },
+                        { value: 12, label: "Декабрь" },
+                      ].map((month) => (
+                        <option key={month.value} value={month.value}>
+                          {month.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
 

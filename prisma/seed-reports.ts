@@ -552,12 +552,7 @@ async function seedReportTemplate(templateData: typeof FORM2_TEMPLATE): Promise<
  * Главная функция seed
  */
 async function main(): Promise<void> {
-  console.log("🚀 Starting to seed report templates...\n");
-
-  // Создаём Форму 2
-  await seedReportTemplate(FORM2_TEMPLATE);
-
-  console.log("\n✅ All report templates have been seeded!");
+  await seedAllTemplates();
 }
 
 // Запуск
@@ -572,4 +567,209 @@ if (require.main === module) {
     });
 }
 
-export { seedReportTemplate, FORM2_TEMPLATE };
+// Структура ежемесячного отчёта
+const MONTHLY_REPORT_TEMPLATE = {
+  code: "monthly",
+  name: "Ежемесячный отчёт ППО",
+  description: "Ежемесячный отчёт о деятельности первичной профсоюзной организации",
+  periodicity: "MONTHLY" as const,
+  forOrganizationTypes: ["PRIMARY"],
+  sections: [
+    {
+      code: "section1",
+      title: "I. Общие показатели",
+      order: 1,
+      fields: [
+        {
+          code: "monthly_members_start",
+          name: "members_start",
+          title: "Численность членов профсоюза на начало месяца",
+          num: "1",
+          fieldType: "integer",
+          isRequired: true,
+          order: 1,
+        },
+        {
+          code: "monthly_members_joined",
+          name: "members_joined",
+          title: "Принято в члены профсоюза за месяц",
+          num: "2",
+          fieldType: "integer",
+          order: 2,
+        },
+        {
+          code: "monthly_members_left",
+          name: "members_left",
+          title: "Выбыло из членов профсоюза за месяц",
+          num: "3",
+          fieldType: "integer",
+          order: 3,
+        },
+        {
+          code: "monthly_members_end",
+          name: "members_end",
+          title: "Численность членов профсоюза на конец месяца",
+          num: "4",
+          fieldType: "integer",
+          isRequired: true,
+          formula: "monthly_members_start + monthly_members_joined - monthly_members_left",
+          help: "Рассчитывается автоматически",
+          order: 4,
+        },
+      ],
+    },
+    {
+      code: "section2",
+      title: "II. Членские взносы",
+      order: 2,
+      fields: [
+        {
+          code: "monthly_fees_planned",
+          name: "fees_planned",
+          title: "План по сбору членских взносов (руб.)",
+          num: "1",
+          fieldType: "decimal",
+          isRequired: true,
+          order: 1,
+        },
+        {
+          code: "monthly_fees_collected",
+          name: "fees_collected",
+          title: "Фактически собрано членских взносов (руб.)",
+          num: "2",
+          fieldType: "decimal",
+          isRequired: true,
+          order: 2,
+        },
+        {
+          code: "monthly_fees_percent",
+          name: "fees_percent",
+          title: "Процент выполнения плана (%)",
+          num: "3",
+          fieldType: "decimal",
+          formula: "(monthly_fees_collected / monthly_fees_planned) * 100",
+          help: "Рассчитывается автоматически",
+          order: 3,
+        },
+        {
+          code: "monthly_fees_debt",
+          name: "fees_debt",
+          title: "Задолженность по членским взносам (руб.)",
+          num: "4",
+          fieldType: "decimal",
+          order: 4,
+        },
+      ],
+    },
+    {
+      code: "section3",
+      title: "III. Проведённые мероприятия",
+      order: 3,
+      fields: [
+        {
+          code: "monthly_meetings_count",
+          name: "meetings_count",
+          title: "Количество заседаний профкома",
+          num: "1",
+          fieldType: "integer",
+          order: 1,
+        },
+        {
+          code: "monthly_events_count",
+          name: "events_count",
+          title: "Количество проведённых мероприятий",
+          num: "2",
+          fieldType: "integer",
+          order: 2,
+        },
+        {
+          code: "monthly_events_participants",
+          name: "events_participants",
+          title: "Количество участников мероприятий",
+          num: "3",
+          fieldType: "integer",
+          order: 3,
+        },
+        {
+          code: "monthly_appeals_received",
+          name: "appeals_received",
+          title: "Поступило обращений от членов профсоюза",
+          num: "4",
+          fieldType: "integer",
+          order: 4,
+        },
+        {
+          code: "monthly_appeals_resolved",
+          name: "appeals_resolved",
+          title: "Рассмотрено обращений",
+          num: "5",
+          fieldType: "integer",
+          order: 5,
+        },
+      ],
+    },
+    {
+      code: "section4",
+      title: "IV. Материальная помощь",
+      order: 4,
+      fields: [
+        {
+          code: "monthly_help_requests",
+          name: "help_requests",
+          title: "Количество заявлений на материальную помощь",
+          num: "1",
+          fieldType: "integer",
+          order: 1,
+        },
+        {
+          code: "monthly_help_approved",
+          name: "help_approved",
+          title: "Количество одобренных заявлений",
+          num: "2",
+          fieldType: "integer",
+          order: 2,
+        },
+        {
+          code: "monthly_help_amount",
+          name: "help_amount",
+          title: "Сумма выплаченной материальной помощи (руб.)",
+          num: "3",
+          fieldType: "decimal",
+          order: 3,
+        },
+      ],
+    },
+    {
+      code: "section5",
+      title: "V. Примечания",
+      order: 5,
+      fields: [
+        {
+          code: "monthly_notes",
+          name: "notes",
+          title: "Дополнительная информация",
+          fieldType: "text",
+          description: "Укажите важные события, проблемы, достижения за отчётный месяц",
+          order: 1,
+        },
+      ],
+    },
+  ],
+};
+
+/**
+ * Seed всех шаблонов
+ */
+async function seedAllTemplates(): Promise<void> {
+  console.log("🚀 Starting to seed all report templates...\n");
+
+  // Создаём Форму 2 (годовой)
+  await seedReportTemplate(FORM2_TEMPLATE);
+
+  // Создаём ежемесячный отчёт
+  await seedReportTemplate(MONTHLY_REPORT_TEMPLATE);
+
+  console.log("\n✅ All report templates have been seeded!");
+}
+
+export { seedReportTemplate, FORM2_TEMPLATE, MONTHLY_REPORT_TEMPLATE, seedAllTemplates };
