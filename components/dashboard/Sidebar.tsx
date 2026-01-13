@@ -25,6 +25,7 @@ interface SidebarProps {
 export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const [manuallyCollapsed, setManuallyCollapsed] = useState<string[]>([]); // Пункты, которые пользователь вручную свернул
   const [isNavigating, setIsNavigating] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const pathname = usePathname();
@@ -44,15 +45,20 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
     }
   }, [isCollapsed]);
 
+  // Сбрасываем manuallyCollapsed при смене страницы (если перешли на другую секцию)
+  useEffect(() => {
+    setManuallyCollapsed([]);
+  }, [pathname]);
+
   return (
     <aside
       className={`hidden md:flex md:flex-col md:fixed md:inset-y-0 transition-all duration-300 ${
         isCollapsed ? "md:w-16" : "md:w-64"
       }`}
     >
-      <div className="flex flex-col flex-grow border-r border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
-        {/* Logo */}
-        <div className="flex items-center flex-shrink-0 px-4 py-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex flex-col h-full border-r border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+        {/* Logo - фиксированный верх */}
+        <div className="flex-shrink-0 flex items-center px-4 py-4 border-b border-gray-200 dark:border-gray-700">
           <Link
             href={isAdmin ? "/admin/dashboard" : "/dashboard"}
             className={`flex items-center gap-2 ${isCollapsed ? "justify-center" : ""}`}
@@ -66,8 +72,8 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
           </Link>
         </div>
 
-        {/* Navigation */}
-        <nav className={`flex-1 py-2 space-y-1 overflow-y-auto ${isCollapsed ? "px-1 flex flex-col items-center" : "px-3"}`}>
+        {/* Navigation - скроллируемая область */}
+        <nav className={`flex-1 min-h-0 py-2 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 ${isCollapsed ? "px-1 flex flex-col items-center" : "px-3"}`}>
           {/* View Mode Switch - в начале меню для пользователей с двойной ролью */}
           {!isAdmin && (
             <ViewModeSwitch collapsed={isCollapsed} />
@@ -90,8 +96,9 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
             // Show as active if main item is active OR any sub-item is active
             const isActive = isMainItemActive || isSubItemActive;
             
-            // Auto-expand if any sub-item is active
-            const isExpanded = expandedItems.includes(item.href) || isSubItemActive;
+            // Auto-expand if any sub-item is active, but respect manual collapse
+            const isAutoExpanded = isSubItemActive && !manuallyCollapsed.includes(item.href);
+            const isExpanded = expandedItems.includes(item.href) || isAutoExpanded;
 
             return (
               <div key={item.href}>
@@ -108,11 +115,18 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                         setTimeout(() => setIsNavigating(false), 500);
                       } else {
                         // If expanded, toggle submenu
-                        setExpandedItems(prev =>
-                          prev.includes(item.href)
-                            ? prev.filter(h => h !== item.href)
-                            : [...prev, item.href]
-                        );
+                        if (isExpanded) {
+                          // Сворачиваем
+                          setExpandedItems(prev => prev.filter(h => h !== item.href));
+                          // Запоминаем что пользователь вручную свернул
+                          if (isSubItemActive) {
+                            setManuallyCollapsed(prev => [...prev, item.href]);
+                          }
+                        } else {
+                          // Разворачиваем
+                          setExpandedItems(prev => [...prev, item.href]);
+                          setManuallyCollapsed(prev => prev.filter(h => h !== item.href));
+                        }
                       }
                     }}
                     disabled={isNavigating}
