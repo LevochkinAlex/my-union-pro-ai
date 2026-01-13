@@ -217,13 +217,13 @@ export async function POST(request: NextRequest) {
 
       // Отправляем уведомление пользователю
       try {
-        await sendUserNotification(
-          targetUser.id,
-          "staff_added",
-          "Вы назначены сотрудником",
-          `Вы добавлены как "${role.name}" в организацию "${organization?.name || ""}". Новые возможности доступны в вашем личном кабинете.`,
-          `/dashboard/staff`
-        );
+        await sendUserNotification({
+          userId: targetUser.id,
+          type: "system",
+          title: "Вы назначены сотрудником",
+          body: `Вы добавлены как "${role.name}" в организацию "${organization?.name || ""}". Новые возможности доступны в вашем личном кабинете.`,
+          url: `/dashboard`,
+        });
       } catch (notifError) {
         console.error("[API] Failed to send notification:", notifError);
       }
@@ -289,13 +289,13 @@ export async function POST(request: NextRequest) {
 
         // Отправляем уведомление
         try {
-          await sendUserNotification(
-            existingUser.id,
-            "staff_added",
-            "Вы назначены сотрудником",
-            `Вы добавлены как "${role.name}" в организацию "${organization?.name || ""}".`,
-            `/dashboard/staff`
-          );
+          await sendUserNotification({
+            userId: existingUser.id,
+            type: "system",
+            title: "Вы назначены сотрудником",
+            body: `Вы добавлены как "${role.name}" в организацию "${organization?.name || ""}".`,
+            url: `/dashboard`,
+          });
         } catch (notifError) {
           console.error("[API] Failed to send notification:", notifError);
         }
