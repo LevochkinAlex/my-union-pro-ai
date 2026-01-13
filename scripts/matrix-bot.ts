@@ -1,18 +1,7 @@
 /**
  * MyUnion AI Bot for Matrix
- * Connects to Matrix server and responds to messages using AI
+ * Simple bot using fetch API (no SDK dependencies)
  */
-
-import {
-  MatrixClient,
-  SimpleFsStorageProvider,
-  AutojoinRoomsMixin,
-  RichConsoleLogger,
-  LogService,
-} from 'matrix-bot-sdk';
-
-// Configure logging
-LogService.setLogger(new RichConsoleLogger());
 
 const MATRIX_HOMESERVER = process.env.MATRIX_SERVER_URL || 'https://matrix.myunion.pro';
 const BOT_ACCESS_TOKEN = process.env.MATRIX_BOT_TOKEN;
@@ -26,9 +15,10 @@ interface ConversationMessage {
 }
 
 // Store conversations per room
-const conversations: Map<string, ConversationMessage[]> = new Map();
+const conversations = new Map<string, ConversationMessage[]>();
+let syncToken: string | null = null;
 
-// System prompt for the bot
+// System prompt
 const SYSTEM_PROMPT = `Ты — AI-ассистент профсоюзной системы MyUnion Pro.
 
 Твои задачи:
@@ -43,12 +33,30 @@ const SYSTEM_PROMPT = `Ты — AI-ассистент профсоюзной с�
 - Отвечай кратко и по существу
 - Используй русский язык
 - Если не знаешь ответ, честно скажи об этом
-- При сложных юридических вопросах рекомендуй обратиться к председателю
 
 Ты НЕ должен:
 - Давать юридические советы
 - Обсуждать политические темы
 - Делиться личными данными пользователей`;
+
+async function matrixFetch(endpoint: string, options: RequestInit = {}): Promise<unknown> {
+  const url = `${MATRIX_HOMESERVER}/_matrix/client/v3${endpoint}`;
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${BOT_ACCESS_TOKEN}`,
+      ...options.headers,
+    },
+  });
+  
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Matrix API error: ${response.status} ${text}`);
+  }
+  
+  return response.json();
+}
 
 async function callAI(messages: ConversationMessage[]): Promise<string> {
   if (!OPENAI_API_KEY) {
@@ -66,7 +74,7 @@ async function callAI(messages: ConversationMessage[]): Promise<string> {
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          ...messages.slice(-10), // Keep last 10 messages for context
+          ...messages.slice(-10),
         ],
         max_tokens: 1000,
         temperature: 0.7,
@@ -78,7 +86,7 @@ async function callAI(messages: ConversationMessage[]): Promise<string> {
       return 'Извините, произошла ошибка. Попробуйте позже.';
     }
 
-    const data = await response.json();
+    const data = await response.json() as { choices: Array<{ message: { content: string } }> };
     return data.choices[0]?.message?.content || 'Извините, не могу ответить на этот вопрос.';
   } catch (error) {
     console.error('AI call error:', error);
@@ -86,23 +94,84 @@ async function callAI(messages: ConversationMessage[]): Promise<string> {
   }
 }
 
-async function handleMessage(
-  client: MatrixClient,
-  roomId: string,
-  event: {
-    type: string;
-    sender: string;
-    content: { body?: string; msgtype?: string };
-    event_id: string;
+async function sendMessage(roomId: string, text: string): Promise<void> {
+  const txnId = `m${Date.now()}`;
+  await matrixFetch(`/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      msgtype: 'm.text',
+      body: text,
+    }),
+  });
+}
+
+async function setTyping(roomId: string, typing: boolean): Promise<void> {
+  try {
+    await matrixFetch(`/rooms/${encodeURIComponent(roomId)}/typing/${encodeURIComponent(BOT_USER_ID)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ typing, timeout: typing ? 30000 : 0 }),
+    });
+  } catch {
+    // Ignore typing errors
   }
-) {
+}
+
+async function joinRoom(roomId: string): Promise<void> {
+  try {
+    await matrixFetch(`/rooms/${encodeURIComponent(roomId)}/join`, {
+      method: 'POST',
+      body: '{}',
+    });
+    console.log(`Joined room ${roomId}`);
+    
+    // Send welcome message
+    setTimeout(() => {
+      sendMessage(roomId,
+        `👋 Привет! Я ${BOT_NAME} — ваш AI-помощник по вопросам профсоюза.\n\n` +
+        `Я могу помочь с:\n` +
+        `• Вопросами о членстве и взносах\n` +
+        `• Информацией о правах и льготах\n` +
+        `• Заполнением документов\n` +
+        `• Скидками для членов профсоюза\n\n` +
+        `Просто напишите свой вопрос!`
+      );
+    }, 1000);
+  } catch (error) {
+    console.error(`Failed to join room ${roomId}:`, error);
+  }
+}
+
+interface MatrixEvent {
+  type: string;
+  sender?: string;
+  content?: {
+    body?: string;
+    msgtype?: string;
+    membership?: string;
+  };
+  room_id?: string;
+}
+
+interface SyncResponse {
+  next_batch: string;
+  rooms?: {
+    join?: Record<string, {
+      timeline?: { events?: MatrixEvent[] };
+    }>;
+    invite?: Record<string, {
+      invite_state?: { events?: MatrixEvent[] };
+    }>;
+  };
+}
+
+async function handleMessage(roomId: string, event: MatrixEvent): Promise<void> {
   // Ignore our own messages
   if (event.sender === BOT_USER_ID) return;
   
   // Only respond to text messages
-  if (event.type !== 'm.room.message' || event.content.msgtype !== 'm.text') return;
+  if (event.type !== 'm.room.message' || event.content?.msgtype !== 'm.text') return;
   
-  const messageText = event.content.body?.trim();
+  const messageText = event.content?.body?.trim();
   if (!messageText) return;
 
   console.log(`[${roomId}] ${event.sender}: ${messageText}`);
@@ -118,7 +187,7 @@ async function handleMessage(
   conversation.push({ role: 'user', content: messageText });
 
   // Send typing indicator
-  await client.setTyping(roomId, true, 30000);
+  await setTyping(roomId, true);
 
   try {
     // Get AI response
@@ -133,81 +202,76 @@ async function handleMessage(
     }
 
     // Stop typing and send response
-    await client.setTyping(roomId, false);
-    await client.sendText(roomId, response);
+    await setTyping(roomId, false);
+    await sendMessage(roomId, response);
 
   } catch (error) {
     console.error('Error handling message:', error);
-    await client.setTyping(roomId, false);
-    await client.sendText(roomId, 'Извините, произошла ошибка. Попробуйте ещё раз.');
+    await setTyping(roomId, false);
+    await sendMessage(roomId, 'Извините, произошла ошибка. Попробуйте ещё раз.');
   }
 }
 
-async function handleInvite(client: MatrixClient, roomId: string, event: { sender: string }) {
-  console.log(`Invited to ${roomId} by ${event.sender}`);
+async function sync(): Promise<void> {
+  const params = new URLSearchParams({
+    timeout: syncToken ? '30000' : '0',
+  });
   
-  try {
-    await client.joinRoom(roomId);
-    console.log(`Joined room ${roomId}`);
-    
-    // Send welcome message
-    setTimeout(async () => {
-      await client.sendText(
-        roomId,
-        `👋 Привет! Я ${BOT_NAME} — ваш AI-помощник по вопросам профсоюза.\n\n` +
-        `Я могу помочь с:\n` +
-        `• Вопросами о членстве и взносах\n` +
-        `• Информацией о правах и льготах\n` +
-        `• Заполнением документов\n` +
-        `• Скидками для членов профсоюза\n\n` +
-        `Просто напишите свой вопрос!`
-      );
-    }, 1000);
-  } catch (error) {
-    console.error(`Failed to join ${roomId}:`, error);
+  if (syncToken) {
+    params.set('since', syncToken);
+  }
+
+  const data = await matrixFetch(`/sync?${params}`) as SyncResponse;
+  syncToken = data.next_batch;
+
+  // Handle invites
+  const invites = data.rooms?.invite || {};
+  for (const roomId of Object.keys(invites)) {
+    console.log(`Invited to room ${roomId}`);
+    await joinRoom(roomId);
+  }
+
+  // Handle messages
+  const joined = data.rooms?.join || {};
+  for (const [roomId, roomData] of Object.entries(joined)) {
+    const events = roomData.timeline?.events || [];
+    for (const event of events) {
+      if (event.type === 'm.room.message') {
+        await handleMessage(roomId, event);
+      }
+    }
   }
 }
 
-async function main() {
+async function main(): Promise<void> {
   if (!BOT_ACCESS_TOKEN) {
-    console.error('MATRIX_BOT_TOKEN not set. Please register the bot first.');
-    console.log('\nTo register the bot, run:');
-    console.log('docker exec synapse register_new_matrix_user -u myunion_bot -p <password> -c /data/homeserver.yaml http://localhost:8008');
-    console.log('\nThen login to get access token:');
-    console.log('curl -X POST "https://matrix.myunion.pro/_matrix/client/v3/login" -d \'{"type":"m.login.password","user":"myunion_bot","password":"<password>"}\'');
+    console.error('MATRIX_BOT_TOKEN not set!');
     process.exit(1);
   }
 
-  // Storage for bot state
-  const storage = new SimpleFsStorageProvider('bot-storage.json');
-
-  // Create client
-  const client = new MatrixClient(MATRIX_HOMESERVER, BOT_ACCESS_TOKEN, storage);
-
-  // Auto-join rooms on invite
-  AutojoinRoomsMixin.setupOnClient(client);
-
-  // Handle messages
-  client.on('room.message', (roomId: string, event: Parameters<typeof handleMessage>[2]) => {
-    handleMessage(client, roomId, event);
-  });
-
-  // Handle invites
-  client.on('room.invite', (roomId: string, event: Parameters<typeof handleInvite>[2]) => {
-    handleInvite(client, roomId, event);
-  });
-
-  // Start the client
   console.log(`Starting ${BOT_NAME}...`);
-  await client.start();
-  console.log(`${BOT_NAME} is running!`);
-
-  // Set bot profile
+  
+  // Set bot display name
   try {
-    await client.setDisplayName(BOT_NAME);
+    await matrixFetch(`/profile/${encodeURIComponent(BOT_USER_ID)}/displayname`, {
+      method: 'PUT',
+      body: JSON.stringify({ displayname: BOT_NAME }),
+    });
     console.log('Bot display name set');
   } catch (e) {
     console.warn('Could not set display name:', e);
+  }
+
+  console.log(`${BOT_NAME} is running! Waiting for messages...`);
+
+  // Sync loop
+  while (true) {
+    try {
+      await sync();
+    } catch (error) {
+      console.error('Sync error:', error);
+      await new Promise(r => setTimeout(r, 5000));
+    }
   }
 }
 
