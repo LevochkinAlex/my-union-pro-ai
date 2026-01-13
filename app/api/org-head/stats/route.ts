@@ -66,13 +66,16 @@ export async function GET(request: NextRequest) {
 
     // Текущий период (для проверки сданных отчётов)
     const now = new Date();
-    const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    const currentPeriod = `${currentYear}-${String(currentMonth).padStart(2, "0")}`;
 
     // Организации без отчёта за текущий период
     const orgsWithReport = await prisma.report.findMany({
       where: {
         organizationId: { in: allOrgIds },
-        period: currentPeriod,
+        periodYear: currentYear,
+        periodMonth: currentMonth,
       },
       select: { organizationId: true },
       distinct: ["organizationId"],
