@@ -109,7 +109,8 @@ export async function POST(
     }
 
     // Обновляем статус отчёта
-    const newStatus = action === "approve" ? "APPROVED" : "REJECTED";
+    // REVISION = отклонён на доработку, APPROVED = согласован
+    const newStatus = action === "approve" ? "APPROVED" : "REVISION";
     
     const updatedReport = await prisma.report.update({
       where: { id },
