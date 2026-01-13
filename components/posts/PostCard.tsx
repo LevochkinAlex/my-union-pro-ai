@@ -73,6 +73,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   const postCardRef = useRef<HTMLDivElement>(null);
   const hasIncrementedView = useRef(false);
   const commentTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const modalCommentFormRef = useRef<HTMLDivElement>(null);
   const [currentUserAvatarUrl, setCurrentUserAvatarUrl] = useState<string | null>(null);
   
   const isOwnPost = session?.user?.id === post.author.id;
@@ -154,6 +155,15 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   useEffect(() => {
     autoResizeTextarea(commentTextareaRef.current);
   }, [commentText]);
+
+  // Автоскролл к форме ответа в модалке при выборе комментария для ответа
+  useEffect(() => {
+    if (replyToComment && showAllCommentsModal && modalCommentFormRef.current) {
+      setTimeout(() => {
+        modalCommentFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [replyToComment, showAllCommentsModal]);
   
   // Для статей извлекаем текст из HTML, для обычных постов используем как есть
   const getPlainText = (html: string) => {
@@ -1220,7 +1230,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
 
             {/* Форма ввода в модалке */}
             {session && (
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+              <div ref={modalCommentFormRef} className="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                 {replyToComment && (
                   <div className="flex items-center justify-between px-3 py-2 mb-3 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm">
                     <span className="text-gray-600 dark:text-gray-400">

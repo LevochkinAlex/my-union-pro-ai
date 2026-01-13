@@ -39,6 +39,16 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
   const [currentUserAvatarUrl, setCurrentUserAvatarUrl] = useState<string | null>(null);
   const [showAllModal, setShowAllModal] = useState(false);
   const commentTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const replyFormRef = useRef<HTMLDivElement>(null);
+
+  // Автоскролл к форме ответа при её появлении
+  useEffect(() => {
+    if (replyingTo && replyFormRef.current) {
+      setTimeout(() => {
+        replyFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  }, [replyingTo]);
 
   // Автоматическая адаптация высоты textarea
   const autoResizeTextarea = (textarea: HTMLTextAreaElement | null) => {
@@ -228,12 +238,13 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
         {!isReply && (
           <div className="mt-1">
             {replyingTo === comment.id ? (
-              <div className="mt-2 space-y-2">
+              <div ref={replyFormRef} className="mt-2 space-y-2">
                 <textarea
                   value={replyContent}
                   onChange={(e) => setReplyContent(e.target.value)}
                   placeholder="Написать ответ..."
                   rows={2}
+                  autoFocus
                   className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                 />
                 <div className="flex gap-2">
