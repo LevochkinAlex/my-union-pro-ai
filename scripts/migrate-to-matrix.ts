@@ -169,7 +169,9 @@ async function migrateUsers(): Promise<Map<string, MatrixCredentials>> {
     },
     select: {
       id: true,
-      name: true,
+      firstName: true,
+      lastName: true,
+      middleName: true,
       email: true,
       phone: true,
     },
@@ -185,7 +187,7 @@ async function migrateUsers(): Promise<Map<string, MatrixCredentials>> {
         ? `phone_${user.phone.replace(/\D/g, '')}`
         : `user_${user.id.substring(0, 8)}`;
     
-    const displayName = user.name || username;
+    const displayName = [user.lastName, user.firstName, user.middleName].filter(Boolean).join(' ') || username;
     
     console.log(`  Creating Matrix user: ${username} (${displayName})`);
     
@@ -237,6 +239,12 @@ async function migrateUsers(): Promise<Map<string, MatrixCredentials>> {
   return userCredentials;
 }
 
+// Helper: Get user display name
+function getUserDisplayName(user: { firstName?: string | null; lastName?: string | null } | null): string {
+  if (!user) return 'Unknown';
+  return [user.lastName, user.firstName].filter(Boolean).join(' ') || 'Unknown';
+}
+
 // Migrate private chats
 async function migratePrivateChats(userCredentials: Map<string, MatrixCredentials>) {
   console.log('\n💬 Migrating private chats...');
@@ -247,12 +255,12 @@ async function migratePrivateChats(userCredentials: Map<string, MatrixCredential
       matrixRoomId: null,
     },
     include: {
-      participant1: { select: { id: true, name: true } },
-      participant2: { select: { id: true, name: true } },
+      participant1: { select: { id: true, firstName: true, lastName: true } },
+      participant2: { select: { id: true, firstName: true, lastName: true } },
       messages: {
         orderBy: { createdAt: 'asc' },
         include: {
-          sender: { select: { id: true, name: true } },
+          sender: { select: { id: true } },
         },
       },
     },
@@ -271,7 +279,7 @@ async function migratePrivateChats(userCredentials: Map<string, MatrixCredential
       continue;
     }
 
-    console.log(`  Creating DM room: ${chat.participant1?.name} <-> ${chat.participant2?.name}`);
+    console.log(`  Creating DM room: ${getUserDisplayName(chat.participant1)} <-> ${getUserDisplayName(chat.participant2)}`);
     
     // Создаем комнату от имени participant1
     const roomId = await createMatrixRoom(
@@ -326,16 +334,16 @@ async function migrateGroupChats(userCredentials: Map<string, MatrixCredentials>
       matrixRoomId: null,
     },
     include: {
-      createdBy: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, firstName: true, lastName: true } },
       participants: {
         include: {
-          user: { select: { id: true, name: true } },
+          user: { select: { id: true } },
         },
       },
       messages: {
         orderBy: { createdAt: 'asc' },
         include: {
-          sender: { select: { id: true, name: true } },
+          sender: { select: { id: true } },
         },
       },
     },
@@ -424,11 +432,11 @@ async function migrateTickets(userCredentials: Map<string, MatrixCredentials>) {
       matrixRoomId: null,
     },
     include: {
-      user: { select: { id: true, name: true } },
+      user: { select: { id: true, firstName: true, lastName: true } },
       comments: {
         orderBy: { createdAt: 'asc' },
         include: {
-          user: { select: { id: true, name: true } },
+          user: { select: { id: true, firstName: true, lastName: true } },
         },
       },
     },
