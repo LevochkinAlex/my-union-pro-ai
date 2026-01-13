@@ -133,27 +133,38 @@ function ChatMessagesComponent({
 
   // Скролл к новым сообщениям
   const lastMessageIdRef = useRef<string | null>(null);
+  const messagesCountRef = useRef(0);
   
   useEffect(() => {
     if (!hasInitialized.current || messages.length === 0) return;
     
     const lastMessage = messages[messages.length - 1];
-    if (!lastMessage || lastMessage.id === lastMessageIdRef.current) return;
+    if (!lastMessage) return;
+    
+    // Проверяем добавилось ли новое сообщение
+    const isNewMessage = messages.length > messagesCountRef.current || 
+                         lastMessage.id !== lastMessageIdRef.current;
+    
+    if (!isNewMessage) return;
     
     const isOwnMessage = lastMessage.senderId === currentUserId;
     
-    // Для своих сообщений - всегда скроллим
+    // Для своих сообщений - ВСЕГДА скроллим принудительно
     // Для чужих - только если были внизу
     if (isOwnMessage || atBottom) {
-      virtuosoRef.current?.scrollToIndex({
-        index: items.length - 1,
-        align: "end",
-        behavior: "auto",
-      });
+      // Используем setTimeout для гарантии что DOM обновился
+      setTimeout(() => {
+        virtuosoRef.current?.scrollToIndex({
+          index: items.length - 1,
+          align: "end",
+          behavior: "smooth",
+        });
+      }, 100);
     }
     
     lastMessageIdRef.current = lastMessage.id;
-  }, [messages.length, currentUserId, items.length, atBottom]);
+    messagesCountRef.current = messages.length;
+  }, [messages, currentUserId, items.length, atBottom]);
 
   // followOutput для Virtuoso - автоскролл при добавлении сообщений
   const handleFollowOutput = useCallback(() => {
