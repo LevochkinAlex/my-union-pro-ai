@@ -28,6 +28,9 @@ CREATE TYPE "DocumentStatus" AS ENUM (
     'ARCHIVED'         -- В архиве
 );
 
+-- Убираем default перед изменением типа
+ALTER TABLE "Document" ALTER COLUMN "status" DROP DEFAULT;
+
 -- Конвертируем существующие данные
 ALTER TABLE "Document" ALTER COLUMN "status" TYPE "DocumentStatus" 
 USING (
@@ -42,6 +45,9 @@ USING (
         ELSE 'DRAFT'::"DocumentStatus"
     END
 );
+
+-- Возвращаем default значение
+ALTER TABLE "Document" ALTER COLUMN "status" SET DEFAULT 'DRAFT'::"DocumentStatus";
 
 -- Удаляем старый тип
 DROP TYPE "DocumentStatus_old";
