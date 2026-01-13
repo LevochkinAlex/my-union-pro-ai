@@ -1187,16 +1187,17 @@ export default function DiscountDetailPage() {
                   </div>
                 </div>
 
-                {/* Кнопка закрытия */}
-                <button
-                  onClick={() => setShowPromoModal(false)}
-                  className="absolute right-3 top-3 rounded-full bg-black/30 p-1.5 text-white/80 backdrop-blur-sm transition hover:bg-black/50 hover:text-white"
-                >
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
               </div>
+
+              {/* Кнопка закрытия - вынесена за пределы карточки */}
+              <button
+                onClick={() => setShowPromoModal(false)}
+                className="absolute -right-3 -top-3 rounded-full bg-white p-2 text-gray-600 shadow-lg transition hover:bg-gray-100 hover:text-gray-900 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:hover:text-white"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
 
               {/* Дополнительные кнопки под карточкой */}
               <div className="mt-4 flex flex-col sm:flex-row justify-center gap-3">
