@@ -43,6 +43,23 @@ enum StaffStatus {
   INACTIVE // Деактивирован
 }
 
+// Статус отчёта
+enum ReportStatus {
+  DRAFT // Черновик
+  SUBMITTED // Отправлен на согласование
+  REVISION // На доработке (отклонён)
+  APPROVED // Согласован вышестоящей организацией
+  CONFIRMED // Утверждён (финальный статус)
+}
+
+// Периодичность отчёта
+enum ReportPeriodicity {
+  MONTHLY // Ежемесячный
+  QUARTERLY // Квартальный
+  SEMI_ANNUAL // Полугодовой
+  ANNUAL // Годовой
+}
+
 // Пользователь
 model User {
   id               String           @id @default(cuid())
@@ -419,6 +436,9 @@ model Organization {
 
   // Приглашения сотрудников
   staffInvitations StaffInvitation[] @relation("OrganizationStaffInvitations")
+
+  // Отчёты организации
+  reports Report[] @relation("OrganizationReports")
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -1926,4 +1946,175 @@ model StaffInvitation {
   @@index([token])
   @@index([email])
   @@index([status])
+}
+
+// ==========================================
+// СИСТЕМА ОТЧЁТНОСТИ ПРОФСОЮЗОВ
+// ==========================================
+
+// Шаблон отчёта (Форма 2, Форма 7 и т.д.)
+model ReportTemplate {
+  id          String            @id @default(cuid())
+  code        String            @unique // "form2", "form7" и т.д.
+  name        String // "Статистическая отчётность ППО"
+  description String?           @db.Text
+  periodicity ReportPeriodicity @default(ANNUAL)
+
+  // Для каких типов организаций доступен
+  forOrganizationTypes Json? // ["PRIMARY", "LOCAL", "REGIONAL"]
+
+  // Секции шаблона
+  sections ReportTemplateSection[]
+
+  // Отчёты созданные по этому шаблону
+  reports Report[]
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+  @@index([isActive])
+}
+
+// Секция шаблона отчёта (I. Общие сведения, II. Профсоюзное членство)
+model ReportTemplateSection {
+  id         String         @id @default(cuid())
+  templateId String
+  template   ReportTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  code  String // "section1", "section2"
+  title String // "I. Общие сведения"
+  order Int    @default(0) // Порядок отображения
+
+  // Поля в секции
+  fields ReportTemplateField[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([templateId, code])
+  @@index([templateId])
+  @@index([order])
+}
+
+// Поле шаблона отчёта
+model ReportTemplateField {
+  id        String                @id @default(cuid())
+  sectionId String
+  section   ReportTemplateSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  code        String // "f2_form1_title", "f2_form2_field1"
+  name        String // Системное имя поля
+  title       String // "Наименование профсоюза"
+  num         String? // "1", "1.1", "2" (номер строки)
+  description String? @db.Text // Подсказка к полю
+  help        String? // Краткая справка
+
+  // Тип поля
+  fieldType String @default("string") // "string", "integer", "decimal", "date", "select", "multiselect", "text"
+
+  // Настройки
+  isRequired    Boolean @default(false)
+  isMultiple    Boolean @default(false) // Несколько столбцов (начало года, конец года, женщины)
+  columnsCount  Int     @default(1) // Количество столбцов для ввода
+  columnHeaders Json? // ["На начало года", "На конец года", "Из них женщины"]
+
+  // Для select/multiselect
+  options Json? // [{value: "1", label: "Да"}, {value: "0", label: "Нет"}]
+
+  // Валидация
+  minValue Int? // Минимальное значение (для integer)
+  maxValue Int? // Максимальное значение
+  pattern  String? // Regex для валидации
+
+  // Автозаполнение из профиля организации
+  autoFillFrom String? // "organization.name", "organization.chairman", etc.
+
+  // Формула для автоматического расчёта
+  formula String? // "f2_form2_field7 + f2_form2_field8" - сумма других полей
+
+  order Int @default(0) // Порядок отображения
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sectionId, code])
+  @@index([sectionId])
+  @@index([order])
+}
+
+// Отчёт (заполненный экземпляр шаблона)
+model Report {
+  id             String         @id @default(cuid())
+  templateId     String
+  template       ReportTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  organizationId String
+  organization   Organization   @relation("OrganizationReports", fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Период отчёта
+  periodYear  Int // 2024, 2025
+  periodMonth Int? // 1-12 (для месячных/квартальных)
+
+  // Статус и workflow
+  status ReportStatus @default(DRAFT)
+
+  // Данные отчёта (JSON с заполненными полями)
+  // Формат: { "f2_form1_title": "Название", "f2_form2_field1": [100, 120, 50], ... }
+  data Json?
+
+  // История изменений статуса
+  statusHistory ReportStatusHistory[]
+
+  // Подчинённые отчёты (от дочерних организаций)
+  childReports Report[] @relation("ReportHierarchy")
+  parentReport Report?  @relation("ReportHierarchy", fields: [parentReportId], references: [id], onDelete: SetNull)
+  parentReportId String?
+
+  // Причина отклонения (revision)
+  revisionReason String? @db.Text
+
+  // Кто заполнил и когда отправил
+  filledByUserId String?
+  submittedAt    DateTime?
+
+  // Кто согласовал/утвердил
+  approvedByUserId  String?
+  approvedAt        DateTime?
+  confirmedByUserId String?
+  confirmedAt       DateTime?
+
+  // Срок сдачи
+  deadline DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([templateId, organizationId, periodYear, periodMonth])
+  @@index([templateId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([periodYear])
+  @@index([deadline])
+}
+
+// История изменения статуса отчёта
+model ReportStatusHistory {
+  id       String @id @default(cuid())
+  reportId String
+  report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  fromStatus ReportStatus?
+  toStatus   ReportStatus
+
+  // Кто изменил
+  changedByUserId String
+
+  // Комментарий (например, причина отклонения)
+  comment String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([reportId])
+  @@index([createdAt])
 }
