@@ -2,33 +2,35 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import * as sdk from 'matrix-js-sdk';
-import {
-  initMatrixClient,
-  startMatrixSync,
-  stopMatrixClient,
-  getJoinedRooms,
-  getRoomMessages,
-  sendTextMessage,
-  createDirectRoom,
-  markRoomAsRead,
-  setTyping,
-  searchUsers,
-  MatrixRoomInfo,
-  MatrixMessageInfo,
-  MatrixCredentials,
-} from '@/lib/matrix-sdk-client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
-// MyUnion brand colors
-const BRAND = {
-  primary: '#2563eb', // blue-600
-  secondary: '#dc2626', // red-600
-  accent: '#3b82f6', // blue-500
-};
+interface MatrixCredentials {
+  userId: string;
+  accessToken: string;
+  serverUrl: string;
+}
+
+interface MatrixRoom {
+  roomId: string;
+  name: string;
+  avatarUrl?: string;
+  lastMessage?: string;
+  lastMessageTime?: number;
+  unreadCount: number;
+  isDirect: boolean;
+}
+
+interface MatrixMessage {
+  eventId: string;
+  sender: string;
+  senderName: string;
+  senderAvatar?: string;
+  content: string;
+  timestamp: number;
+  isOwn: boolean;
+}
 
 interface TypingUser {
-  roomId: string;
   userId: string;
   name: string;
 }
@@ -36,10 +38,9 @@ interface TypingUser {
 export default function MatrixChat() {
   const { data: session } = useSession();
   const [credentials, setCredentials] = useState<MatrixCredentials | null>(null);
-  const [syncState, setSyncState] = useState<string>('');
-  const [rooms, setRooms] = useState<MatrixRoomInfo[]>([]);
+  const [rooms, setRooms] = useState<MatrixRoom[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<MatrixMessageInfo[]>([]);
+  const [messages, setMessages] = useState<MatrixMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -49,10 +50,12 @@ export default function MatrixChat() {
   const [searchResults, setSearchResults] = useState<Array<{userId: string; displayName: string; avatarUrl?: string}>>([]);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const syncTokenRef = useRef<string | null>(null);
+  const syncAbortRef = useRef<AbortController | null>(null);
 
   // Auth with Matrix
   useEffect(() => {
@@ -63,12 +66,7 @@ export default function MatrixChat() {
         const response = await fetch('/api/chat/matrix/auth', { method: 'POST' });
         if (response.ok) {
           const data = await response.json();
-          setCredentials({
-            userId: data.userId,
-            accessToken: data.accessToken,
-            deviceId: data.deviceId || 'myunion-web',
-            homeserverUrl: data.serverUrl,
-          });
+          setCredentials(data);
         } else {
           setError('Не удалось подключиться к чату');
         }
@@ -81,81 +79,286 @@ export default function MatrixChat() {
     authenticate();
   }, [session]);
 
-  // Initialize Matrix client
-  useEffect(() => {
-    if (!credentials) return;
-
-    const client = initMatrixClient(credentials);
-
-    // Listen for typing events
-    client.on(sdk.RoomMemberEvent.Typing, (event, member) => {
-      const roomId = event.getRoomId();
-      const userId = member.userId;
-      const isTyping = member.typing;
-
-      setTypingUsers(prev => {
-        if (isTyping && userId !== credentials.userId) {
-          const exists = prev.some(t => t.roomId === roomId && t.userId === userId);
-          if (!exists) {
-            return [...prev, { roomId, userId, name: member.name || userId.split(':')[0].replace('@', '') }];
-          }
-        } else {
-          return prev.filter(t => !(t.roomId === roomId && t.userId === userId));
-        }
-        return prev;
-      });
-    });
-
-    startMatrixSync(
-      (state) => {
-        setSyncState(state);
-        if (state === 'PREPARED' || state === 'SYNCING') {
-          setRooms(getJoinedRooms());
-        }
+  // Matrix API helpers
+  const matrixFetch = useCallback(async (
+    endpoint: string, 
+    options: RequestInit = {}
+  ) => {
+    if (!credentials) return null;
+    
+    const url = `${credentials.serverUrl}/_matrix/client/v3${endpoint}`;
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${credentials.accessToken}`,
+        ...options.headers,
       },
-      (event, room) => {
-        if (event.getType() === 'm.room.message' && room) {
-          // Update room list
-          setRooms(getJoinedRooms());
-          
-          // Update messages if in this room
-          if (room.roomId === selectedRoomId) {
-            setMessages(getRoomMessages(room.roomId));
+    });
+    
+    if (!response.ok) return null;
+    return response.json();
+  }, [credentials]);
+
+  // Sync with Matrix server
+  const sync = useCallback(async (initialSync = false) => {
+    if (!credentials || syncing) return;
+    
+    setSyncing(true);
+    try {
+      const params = new URLSearchParams({
+        timeout: initialSync ? '0' : '30000',
+        filter: JSON.stringify({
+          room: {
+            timeline: { limit: 50 },
+            state: { lazy_load_members: true },
+          },
+        }),
+      });
+      
+      if (syncTokenRef.current) {
+        params.set('since', syncTokenRef.current);
+      }
+
+      syncAbortRef.current = new AbortController();
+      
+      const data = await matrixFetch(`/sync?${params}`, {
+        signal: syncAbortRef.current.signal,
+      });
+
+      if (!data) return;
+
+      syncTokenRef.current = data.next_batch;
+
+      // Process rooms
+      const joinedRooms = data.rooms?.join || {};
+      const roomList: MatrixRoom[] = [];
+
+      for (const [roomId, roomData] of Object.entries(joinedRooms)) {
+        const rd = roomData as {
+          state?: { events?: Array<{ type: string; content: { name?: string; is_direct?: boolean } }> };
+          timeline?: { events?: Array<{ type: string; content: { body?: string }; origin_server_ts?: number }> };
+          unread_notifications?: { notification_count?: number };
+          ephemeral?: { events?: Array<{ type: string; content: { user_ids?: string[] } }> };
+        };
+        
+        const stateEvents = rd.state?.events || [];
+        const nameEvent = stateEvents.find(e => e.type === 'm.room.name');
+        const isDirect = stateEvents.some(e => e.type === 'm.room.member' && e.content?.is_direct);
+        
+        const timelineEvents = rd.timeline?.events || [];
+        const lastMsg = [...timelineEvents].reverse().find(e => e.type === 'm.room.message');
+
+        roomList.push({
+          roomId,
+          name: nameEvent?.content?.name || 'Чат',
+          lastMessage: lastMsg?.content?.body,
+          lastMessageTime: lastMsg?.origin_server_ts,
+          unreadCount: rd.unread_notifications?.notification_count || 0,
+          isDirect,
+        });
+
+        // Handle typing indicators
+        const typingEvent = rd.ephemeral?.events?.find(e => e.type === 'm.typing');
+        if (typingEvent && roomId === selectedRoomId) {
+          const typingUserIds = typingEvent.content?.user_ids || [];
+          setTypingUsers(
+            typingUserIds
+              .filter(id => id !== credentials.userId)
+              .map(id => ({ userId: id, name: id.split(':')[0].replace('@', '') }))
+          );
+        }
+
+        // Update messages for selected room
+        if (roomId === selectedRoomId && !initialSync) {
+          const newMsgs = timelineEvents
+            .filter(e => e.type === 'm.room.message')
+            .map((e: { event_id: string; sender: string; content: { body?: string }; origin_server_ts: number }) => ({
+              eventId: e.event_id,
+              sender: e.sender,
+              senderName: e.sender.split(':')[0].replace('@', ''),
+              content: e.content.body || '',
+              timestamp: e.origin_server_ts,
+              isOwn: e.sender === credentials.userId,
+            }));
+
+          if (newMsgs.length > 0) {
+            setMessages(prev => {
+              const existing = new Set(prev.map(m => m.eventId));
+              const unique = newMsgs.filter((m: MatrixMessage) => !existing.has(m.eventId));
+              return [...prev, ...unique].sort((a, b) => a.timestamp - b.timestamp);
+            });
             scrollToBottom();
           }
         }
       }
-    );
+
+      if (initialSync || roomList.length > 0) {
+        setRooms(prev => {
+          const updated = new Map(prev.map(r => [r.roomId, r]));
+          roomList.forEach(r => updated.set(r.roomId, r));
+          return Array.from(updated.values()).sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
+        });
+      }
+
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        console.error('Sync error:', err);
+      }
+    } finally {
+      setSyncing(false);
+    }
+  }, [credentials, matrixFetch, selectedRoomId, syncing]);
+
+  // Start sync loop
+  useEffect(() => {
+    if (!credentials) return;
+
+    let running = true;
+    
+    const syncLoop = async () => {
+      // Initial sync
+      await sync(true);
+      
+      // Long poll loop
+      while (running) {
+        await sync(false);
+        await new Promise(r => setTimeout(r, 1000)); // Small delay between syncs
+      }
+    };
+
+    syncLoop();
 
     return () => {
-      stopMatrixClient();
+      running = false;
+      syncAbortRef.current?.abort();
     };
-  }, [credentials, selectedRoomId]);
+  }, [credentials, sync]);
 
-  // Load messages when room selected
-  useEffect(() => {
-    if (selectedRoomId && syncState === 'SYNCING') {
-      setMessages(getRoomMessages(selectedRoomId));
-      markRoomAsRead(selectedRoomId);
-      scrollToBottom();
-      setIsMobileMenuOpen(false);
+  // Load room messages
+  const loadRoomMessages = useCallback(async (roomId: string) => {
+    const data = await matrixFetch(`/rooms/${encodeURIComponent(roomId)}/messages?dir=b&limit=50`);
+    if (!data) return;
+
+    const msgs = (data.chunk || [])
+      .filter((e: { type: string }) => e.type === 'm.room.message')
+      .map((e: { event_id: string; sender: string; content: { body?: string }; origin_server_ts: number }) => ({
+        eventId: e.event_id,
+        sender: e.sender,
+        senderName: e.sender.split(':')[0].replace('@', ''),
+        content: e.content.body || '',
+        timestamp: e.origin_server_ts,
+        isOwn: e.sender === credentials?.userId,
+      }))
+      .reverse();
+
+    setMessages(msgs);
+    scrollToBottom();
+  }, [credentials, matrixFetch]);
+
+  // Select room
+  const handleSelectRoom = (roomId: string) => {
+    setSelectedRoomId(roomId);
+    setMessages([]);
+    setTypingUsers([]);
+    loadRoomMessages(roomId);
+    setIsMobileMenuOpen(false);
+  };
+
+  // Send message
+  const handleSend = async () => {
+    if (!selectedRoomId || !newMessage.trim() || sending || !credentials) return;
+
+    setSending(true);
+    const content = newMessage.trim();
+    setNewMessage('');
+
+    try {
+      const txnId = `m${Date.now()}`;
+      const data = await matrixFetch(
+        `/rooms/${encodeURIComponent(selectedRoomId)}/send/m.room.message/${txnId}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ msgtype: 'm.text', body: content }),
+        }
+      );
+
+      if (data?.event_id) {
+        setMessages(prev => [...prev, {
+          eventId: data.event_id,
+          sender: credentials.userId,
+          senderName: session?.user?.name || 'Вы',
+          content,
+          timestamp: Date.now(),
+          isOwn: true,
+        }]);
+        scrollToBottom();
+      }
+    } catch (err) {
+      console.error('Send error:', err);
+      setNewMessage(content); // Restore message on error
+    } finally {
+      setSending(false);
+      inputRef.current?.focus();
     }
-  }, [selectedRoomId, syncState]);
+  };
+
+  // Send typing indicator
+  const handleTyping = async () => {
+    if (!selectedRoomId || !credentials) return;
+    await matrixFetch(`/rooms/${encodeURIComponent(selectedRoomId)}/typing/${encodeURIComponent(credentials.userId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ typing: true, timeout: 10000 }),
+    });
+  };
 
   // Search users
   useEffect(() => {
-    if (!searchTerm.trim()) {
+    if (!searchTerm.trim() || !credentials) {
       setSearchResults([]);
       return;
     }
 
     const timer = setTimeout(async () => {
-      const results = await searchUsers(searchTerm);
-      setSearchResults(results.filter(u => u.userId !== credentials?.userId));
+      const data = await matrixFetch(`/user_directory/search`, {
+        method: 'POST',
+        body: JSON.stringify({ search_term: searchTerm, limit: 20 }),
+      });
+      
+      if (data?.results) {
+        setSearchResults(
+          data.results
+            .filter((u: { user_id: string }) => u.user_id !== credentials.userId)
+            .map((u: { user_id: string; display_name?: string; avatar_url?: string }) => ({
+              userId: u.user_id,
+              displayName: u.display_name || u.user_id.split(':')[0].replace('@', ''),
+              avatarUrl: u.avatar_url,
+            }))
+        );
+      }
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, credentials]);
+  }, [searchTerm, credentials, matrixFetch]);
+
+  // Start chat with user
+  const handleStartChat = async (userId: string) => {
+    const data = await matrixFetch('/createRoom', {
+      method: 'POST',
+      body: JSON.stringify({
+        preset: 'trusted_private_chat',
+        is_direct: true,
+        invite: [userId],
+      }),
+    });
+
+    if (data?.room_id) {
+      setSelectedRoomId(data.room_id);
+      setShowNewChat(false);
+      setSearchTerm('');
+      await sync(true);
+    }
+  };
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -163,44 +366,7 @@ export default function MatrixChat() {
     }, 100);
   }, []);
 
-  const handleSend = async () => {
-    if (!selectedRoomId || !newMessage.trim() || sending) return;
-
-    setSending(true);
-    try {
-      await sendTextMessage(selectedRoomId, newMessage.trim());
-      setNewMessage('');
-      inputRef.current?.focus();
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleTyping = () => {
-    if (!selectedRoomId) return;
-
-    setTyping(selectedRoomId, true);
-
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    typingTimeoutRef.current = setTimeout(() => {
-      setTyping(selectedRoomId, false);
-    }, 3000);
-  };
-
-  const handleStartChat = async (userId: string) => {
-    const roomId = await createDirectRoom(userId);
-    if (roomId) {
-      setSelectedRoomId(roomId);
-      setShowNewChat(false);
-      setSearchTerm('');
-    }
-  };
-
   const selectedRoom = rooms.find(r => r.roomId === selectedRoomId);
-  const roomTypingUsers = typingUsers.filter(t => t.roomId === selectedRoomId);
 
   if (loading) {
     return (
@@ -255,11 +421,9 @@ export default function MatrixChat() {
               </svg>
             </button>
           </div>
-          
-          {/* Sync status */}
           <div className="mt-2 flex items-center gap-2 text-sm text-blue-100">
-            <div className={`w-2 h-2 rounded-full ${syncState === 'SYNCING' ? 'bg-green-400' : 'bg-yellow-400'}`}></div>
-            {syncState === 'SYNCING' ? 'Подключено' : 'Синхронизация...'}
+            <div className={`w-2 h-2 rounded-full ${syncing ? 'bg-yellow-400' : 'bg-green-400'}`}></div>
+            {syncing ? 'Синхронизация...' : 'Подключено'}
           </div>
         </div>
 
@@ -284,7 +448,7 @@ export default function MatrixChat() {
             rooms.map(room => (
               <button
                 key={room.roomId}
-                onClick={() => setSelectedRoomId(room.roomId)}
+                onClick={() => handleSelectRoom(room.roomId)}
                 className={`w-full p-4 text-left transition-all hover:bg-gray-100 dark:hover:bg-gray-700 ${
                   selectedRoomId === room.roomId 
                     ? 'bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-600' 
@@ -293,9 +457,6 @@ export default function MatrixChat() {
               >
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12 ring-2 ring-blue-100 dark:ring-blue-900">
-                    {room.avatarUrl ? (
-                      <AvatarImage src={room.avatarUrl} />
-                    ) : null}
                     <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white font-semibold">
                       {room.name.charAt(0).toUpperCase()}
                     </AvatarFallback>
@@ -347,9 +508,6 @@ export default function MatrixChat() {
                 </button>
                 
                 <Avatar className="h-10 w-10">
-                  {selectedRoom.avatarUrl ? (
-                    <AvatarImage src={selectedRoom.avatarUrl} />
-                  ) : null}
                   <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
                     {selectedRoom.name.charAt(0).toUpperCase()}
                   </AvatarFallback>
@@ -359,13 +517,13 @@ export default function MatrixChat() {
                   <h3 className="font-semibold text-gray-900 dark:text-white truncate">
                     {selectedRoom.name}
                   </h3>
-                  {roomTypingUsers.length > 0 ? (
+                  {typingUsers.length > 0 ? (
                     <p className="text-sm text-blue-600 dark:text-blue-400 animate-pulse">
-                      {roomTypingUsers.map(u => u.name).join(', ')} печатает...
+                      {typingUsers.map(u => u.name).join(', ')} печатает...
                     </p>
                   ) : (
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {selectedRoom.members.length} участников
+                      {selectedRoom.isDirect ? 'Личный чат' : 'Групповой чат'}
                     </p>
                   )}
                 </div>
@@ -384,9 +542,6 @@ export default function MatrixChat() {
                   >
                     {!msg.isOwn && showAvatar && (
                       <Avatar className="h-8 w-8 flex-shrink-0">
-                        {msg.senderAvatar ? (
-                          <AvatarImage src={msg.senderAvatar} />
-                        ) : null}
                         <AvatarFallback className="bg-gray-300 dark:bg-gray-600 text-xs">
                           {msg.senderName.charAt(0).toUpperCase()}
                         </AvatarFallback>
@@ -408,7 +563,7 @@ export default function MatrixChat() {
                       )}
                       <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                       <div className={`text-xs mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-400'}`}>
-                        {msg.timestamp.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(msg.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
                   </div>
@@ -542,9 +697,6 @@ export default function MatrixChat() {
                     className="w-full p-4 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
                     <Avatar className="h-12 w-12">
-                      {user.avatarUrl ? (
-                        <AvatarImage src={user.avatarUrl} />
-                      ) : null}
                       <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
                         {user.displayName.charAt(0).toUpperCase()}
                       </AvatarFallback>
