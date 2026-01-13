@@ -31,8 +31,16 @@ enum MembershipStatus {
 // Типы организаций
 enum OrganizationType {
   PRIMARY // Первичная профсоюзная организация (ППО)
+  LOCAL // Местная организация
   REGIONAL // Региональное отделение
   FEDERAL // Федерация
+}
+
+// Статус сотрудника организации
+enum StaffStatus {
+  PENDING // Приглашение отправлено
+  ACTIVE // Принято, активен
+  INACTIVE // Деактивирован
 }
 
 // Пользователь
@@ -220,6 +228,9 @@ model User {
   // Email PIN-коды для валидации email
   emailPinCodes EmailPinCode[] @relation("EmailPinCodes")
 
+  // Сотрудник организации (роли: Заместитель, Бухгалтер и т.д.)
+  staffPositions OrganizationStaff[] @relation("UserStaffPositions")
+
   @@index([email])
   @@index([phone])
   @@index([organizationId])
@@ -399,6 +410,15 @@ model Organization {
 
   // История членства
   membershipHistory MembershipHistory[]
+
+  // Роли сотрудников организации
+  staffRoles StaffRole[] @relation("OrganizationStaffRoles")
+
+  // Сотрудники организации
+  staffMembers OrganizationStaff[] @relation("OrganizationStaffMembers")
+
+  // Приглашения сотрудников
+  staffInvitations StaffInvitation[] @relation("OrganizationStaffInvitations")
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -1803,4 +1823,107 @@ model SyncLog {
   @@index([source])
   @@index([status])
   @@index([createdAt])
+}
+
+// Роли сотрудников организации (Заместитель, Бухгалтер, Секретарь и т.д.)
+model StaffRole {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation("OrganizationStaffRoles", fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Название роли (должность)
+  name        String // "Заместитель председателя", "Бухгалтер", "Секретарь", etc.
+  description String? @db.Text // Описание роли
+
+  // Права доступа (JSON объект с чекбоксами)
+  // Пример: { "documents": true, "discounts": true, "members_view": true, "members_edit": false, "appeals": true, "chats": true, "news": true, "reports": false }
+  permissions Json
+
+  // Системная роль (предустановленная, нельзя удалить)
+  isSystem Boolean @default(false)
+
+  // Активна ли роль
+  isActive Boolean @default(true)
+
+  // Сотрудники с этой ролью
+  staff OrganizationStaff[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name]) // Уникальное название роли в рамках организации
+  @@index([organizationId])
+  @@index([isActive])
+}
+
+// Сотрудники организации (связь пользователь-организация-роль)
+model OrganizationStaff {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation("UserStaffPositions", fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation("OrganizationStaffMembers", fields: [organizationId], references: [id], onDelete: Cascade)
+  roleId         String
+  role           StaffRole    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  // Статус сотрудника
+  status StaffStatus @default(PENDING)
+
+  // Приглашение
+  inviteToken   String?   @unique // Токен для принятия приглашения
+  inviteExpires DateTime? // Срок действия токена
+  invitedAt     DateTime  @default(now())
+  acceptedAt    DateTime? // Когда принял приглашение
+
+  // Временный пароль (для первого входа)
+  tempPassword String? // Хеш временного пароля
+
+  // Заметки (например, причина деактивации)
+  notes String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, organizationId]) // Один пользователь может быть сотрудником организации только один раз
+  @@index([userId])
+  @@index([organizationId])
+  @@index([roleId])
+  @@index([status])
+  @@index([inviteToken])
+}
+
+// Приглашения сотрудников (для отслеживания истории)
+model StaffInvitation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation("OrganizationStaffInvitations", fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Кого приглашаем
+  email String // Email приглашаемого
+  phone String? // Телефон приглашаемого (опционально)
+  
+  // Роль которую назначаем
+  roleId String
+  
+  // Токен приглашения
+  token     String   @unique
+  expiresAt DateTime
+
+  // Статус
+  status String @default("pending") // "pending", "accepted", "expired", "cancelled"
+
+  // Результат
+  acceptedByUserId String? // ID пользователя который принял приглашение
+  acceptedAt       DateTime?
+
+  // Кто отправил приглашение
+  invitedByUserId String
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([token])
+  @@index([email])
+  @@index([status])
 }
