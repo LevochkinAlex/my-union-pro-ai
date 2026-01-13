@@ -506,3 +506,49 @@ div.relative > select[class*="appearance-none"] {
 [data-virtuoso-scroller="true"] {
   overscroll-behavior: contain !important;
 }
+
+/* ====================================
+   Light theme button contrast fixes
+   ==================================== */
+
+/* Make bg-gray-100 buttons more visible in light theme */
+body:not(.dark) button.bg-gray-100,
+body:not(.dark) a.bg-gray-100,
+body:not(.dark) [role="button"].bg-gray-100 {
+  background-color: #e5e7eb !important; /* gray-200 */
+}
+
+body:not(.dark) button.bg-gray-100:hover,
+body:not(.dark) a.bg-gray-100:hover,
+body:not(.dark) [role="button"].bg-gray-100:hover {
+  background-color: #d1d5db !important; /* gray-300 */
+}
+
+/* Ensure hover states on buttons are visible */
+body:not(.dark) button.hover\:bg-gray-100:hover,
+body:not(.dark) a.hover\:bg-gray-100:hover {
+  background-color: #e5e7eb !important; /* gray-200 */
+}
+
+/* Fix disabled button states */
+body:not(.dark) button:disabled {
+  opacity: 0.6;
+}
+
+/* Improve tab/toggle button contrast */
+body:not(.dark) [role="tablist"] button:not([aria-selected="true"]),
+body:not(.dark) .tab-inactive {
+  background-color: #e5e7eb !important;
+  color: #374151 !important;
+}
+
+/* Fix white background buttons in light theme - add visible contrast */
+body:not(.dark) button.bg-white:not(:disabled),
+body:not(.dark) a.bg-white {
+  background-color: #f3f4f6 !important; /* gray-100 */
+}
+
+body:not(.dark) button.bg-white:hover:not(:disabled),
+body:not(.dark) a.bg-white:hover {
+  background-color: #e5e7eb !important; /* gray-200 */
+}
