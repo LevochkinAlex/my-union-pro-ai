@@ -28,6 +28,30 @@ interface MatrixRoom {
   isDirect: boolean;
 }
 
+interface MessageReaction {
+  key: string;
+  users: string[];
+  count: number;
+}
+
+interface MessageAttachment {
+  type: 'image' | 'file' | 'video' | 'audio';
+  url: string;
+  name: string;
+  size?: number;
+  mimeType?: string;
+  thumbnailUrl?: string;
+  width?: number;
+  height?: number;
+}
+
+interface ReplyInfo {
+  eventId: string;
+  sender: string;
+  senderName: string;
+  content: string;
+}
+
 interface MatrixMessage {
   eventId: string;
   sender: string;
@@ -36,6 +60,10 @@ interface MatrixMessage {
   content: string;
   timestamp: number;
   isOwn: boolean;
+  msgtype: 'm.text' | 'm.image' | 'm.file' | 'm.video' | 'm.audio';
+  reactions?: MessageReaction[];
+  replyTo?: ReplyInfo;
+  attachment?: MessageAttachment;
 }
 
 interface TypingUser {
@@ -59,6 +87,12 @@ export default function MatrixChat() {
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [replyTo, setReplyTo] = useState<MatrixMessage | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [showReactions, setShowReactions] = useState<string | null>(null);
+  const [forwardMessage, setForwardMessage] = useState<MatrixMessage | null>(null);
+  const [showForwardModal, setShowForwardModal] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -384,22 +418,125 @@ export default function MatrixChat() {
     };
   }, [credentials, sync]);
 
-  // Load room messages
+  // Load room messages with reactions, replies, and attachments
   const loadRoomMessages = useCallback(async (roomId: string) => {
     const data = await matrixFetch(`/rooms/${encodeURIComponent(roomId)}/messages?dir=b&limit=50`);
     if (!data) return;
 
-    const msgs = (data.chunk || [])
-      .filter((e: { type: string }) => e.type === 'm.room.message')
-      .map((e: { event_id: string; sender: string; content: { body?: string }; origin_server_ts: number }) => ({
+    // First pass: collect all messages
+    const messageEvents = (data.chunk || []).filter((e: { type: string }) => e.type === 'm.room.message');
+    
+    // Second pass: collect reactions
+    const reactionEvents = (data.chunk || []).filter((e: { type: string }) => e.type === 'm.reaction');
+    const reactionsMap = new Map<string, MessageReaction[]>();
+    
+    for (const event of reactionEvents) {
+      const relatesTo = event.content?.['m.relates_to'];
+      if (relatesTo?.rel_type === 'm.annotation') {
+        const targetId = relatesTo.event_id;
+        const key = relatesTo.key;
+        
+        if (!reactionsMap.has(targetId)) {
+          reactionsMap.set(targetId, []);
+        }
+        
+        const reactions = reactionsMap.get(targetId)!;
+        const existing = reactions.find(r => r.key === key);
+        if (existing) {
+          existing.count++;
+          existing.users.push(event.sender);
+        } else {
+          reactions.push({ key, count: 1, users: [event.sender] });
+        }
+      }
+    }
+
+    // Build messages map for replies
+    const messagesById = new Map<string, { sender: string; content: string }>();
+    for (const e of messageEvents) {
+      messagesById.set(e.event_id, {
+        sender: e.sender,
+        content: e.content?.body || ''
+      });
+    }
+
+    const msgs: MatrixMessage[] = messageEvents.map((e: any) => {
+      const msgtype = e.content?.msgtype || 'm.text';
+      let attachment: MessageAttachment | undefined;
+      
+      // Handle attachments
+      if (msgtype === 'm.image' && e.content?.url) {
+        attachment = {
+          type: 'image',
+          url: e.content.url.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/download/`),
+          thumbnailUrl: e.content.info?.thumbnail_url?.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/thumbnail/`) + '?width=400&height=400',
+          name: e.content.body || 'image',
+          mimeType: e.content.info?.mimetype,
+          width: e.content.info?.w,
+          height: e.content.info?.h,
+          size: e.content.info?.size
+        };
+      } else if (msgtype === 'm.file' && e.content?.url) {
+        attachment = {
+          type: 'file',
+          url: e.content.url.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/download/`),
+          name: e.content.body || 'file',
+          mimeType: e.content.info?.mimetype,
+          size: e.content.info?.size
+        };
+      } else if (msgtype === 'm.video' && e.content?.url) {
+        attachment = {
+          type: 'video',
+          url: e.content.url.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/download/`),
+          thumbnailUrl: e.content.info?.thumbnail_url?.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/thumbnail/`),
+          name: e.content.body || 'video',
+          mimeType: e.content.info?.mimetype,
+          width: e.content.info?.w,
+          height: e.content.info?.h,
+          size: e.content.info?.size
+        };
+      } else if (msgtype === 'm.audio' && e.content?.url) {
+        attachment = {
+          type: 'audio',
+          url: e.content.url.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/download/`),
+          name: e.content.body || 'audio',
+          mimeType: e.content.info?.mimetype,
+          size: e.content.info?.size
+        };
+      }
+      
+      // Handle reply
+      let replyTo: ReplyInfo | undefined;
+      const relatesTo = e.content?.['m.relates_to'];
+      if (relatesTo?.['m.in_reply_to']?.event_id) {
+        const replyEventId = relatesTo['m.in_reply_to'].event_id;
+        const replyMsg = messagesById.get(replyEventId);
+        if (replyMsg) {
+          replyTo = {
+            eventId: replyEventId,
+            sender: replyMsg.sender,
+            senderName: replyMsg.sender.split(':')[0].replace('@', ''),
+            content: replyMsg.content.slice(0, 100)
+          };
+        }
+      }
+      
+      // Get display name
+      const senderName = e.sender.includes('myunion_bot') ? 'МойСоюз Помощник' : e.sender.split(':')[0].replace('@', '');
+      
+      return {
         eventId: e.event_id,
         sender: e.sender,
-        senderName: e.sender.split(':')[0].replace('@', ''),
-        content: e.content.body || '',
+        senderName,
+        content: e.content?.body || '',
         timestamp: e.origin_server_ts,
         isOwn: e.sender === credentials?.userId,
-      }))
-      .reverse();
+        msgtype: msgtype as MatrixMessage['msgtype'],
+        reactions: reactionsMap.get(e.event_id),
+        replyTo,
+        attachment
+      };
+    }).reverse();
 
     setMessages(msgs);
     scrollToBottom();
@@ -414,21 +551,43 @@ export default function MatrixChat() {
     setIsMobileMenuOpen(false);
   };
 
-  // Send message
+  // Send message (with reply support)
   const handleSend = async () => {
     if (!selectedRoomId || !newMessage.trim() || sending || !credentials) return;
 
     setSending(true);
     const content = newMessage.trim();
     setNewMessage('');
+    const currentReplyTo = replyTo;
+    setReplyTo(null);
 
     try {
       const txnId = `m${Date.now()}`;
+      
+      // Build message content
+      const messageContent: Record<string, unknown> = {
+        msgtype: 'm.text',
+        body: content
+      };
+      
+      // Add reply reference if replying
+      if (currentReplyTo) {
+        messageContent['m.relates_to'] = {
+          'm.in_reply_to': {
+            event_id: currentReplyTo.eventId
+          }
+        };
+        // Include fallback for clients that don't support rich replies
+        messageContent.body = `> <${currentReplyTo.sender}> ${currentReplyTo.content.slice(0, 50)}...\n\n${content}`;
+        messageContent['format'] = 'org.matrix.custom.html';
+        messageContent['formatted_body'] = `<mx-reply><blockquote><a href="#">In reply to</a> <a href="#">${currentReplyTo.senderName}</a><br>${currentReplyTo.content.slice(0, 100)}</blockquote></mx-reply>${content}`;
+      }
+      
       const data = await matrixFetch(
         `/rooms/${encodeURIComponent(selectedRoomId)}/send/m.room.message/${txnId}`,
         {
           method: 'PUT',
-          body: JSON.stringify({ msgtype: 'm.text', body: content }),
+          body: JSON.stringify(messageContent),
         }
       );
 
@@ -440,15 +599,188 @@ export default function MatrixChat() {
           content,
           timestamp: Date.now(),
           isOwn: true,
+          msgtype: 'm.text',
+          replyTo: currentReplyTo ? {
+            eventId: currentReplyTo.eventId,
+            sender: currentReplyTo.sender,
+            senderName: currentReplyTo.senderName,
+            content: currentReplyTo.content
+          } : undefined
         }]);
         scrollToBottom();
       }
     } catch (err) {
       console.error('Send error:', err);
-      setNewMessage(content); // Restore message on error
+      setNewMessage(content);
+      setReplyTo(currentReplyTo);
     } finally {
       setSending(false);
       inputRef.current?.focus();
+    }
+  };
+
+  // Send reaction
+  const handleReaction = async (eventId: string, emoji: string) => {
+    if (!selectedRoomId || !credentials) return;
+    setShowReactions(null);
+    
+    try {
+      const txnId = `r${Date.now()}`;
+      await matrixFetch(
+        `/rooms/${encodeURIComponent(selectedRoomId)}/send/m.reaction/${txnId}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            'm.relates_to': {
+              rel_type: 'm.annotation',
+              event_id: eventId,
+              key: emoji
+            }
+          }),
+        }
+      );
+      
+      // Optimistically update UI
+      setMessages(prev => prev.map(msg => {
+        if (msg.eventId === eventId) {
+          const reactions = msg.reactions || [];
+          const existing = reactions.find(r => r.key === emoji);
+          if (existing) {
+            existing.count++;
+            existing.users.push(credentials.userId);
+          } else {
+            reactions.push({ key: emoji, count: 1, users: [credentials.userId] });
+          }
+          return { ...msg, reactions };
+        }
+        return msg;
+      }));
+    } catch (err) {
+      console.error('Reaction error:', err);
+    }
+  };
+
+  // Upload and send file
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedRoomId || !credentials) return;
+    
+    setUploading(true);
+    
+    try {
+      // Upload file to Matrix media repo
+      const uploadUrl = `${credentials.serverUrl}/_matrix/media/v3/upload?filename=${encodeURIComponent(file.name)}`;
+      const uploadResp = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${credentials.accessToken}`,
+          'Content-Type': file.type
+        },
+        body: file
+      });
+      
+      if (!uploadResp.ok) throw new Error('Upload failed');
+      
+      const { content_uri } = await uploadResp.json();
+      
+      // Determine message type
+      let msgtype = 'm.file';
+      if (file.type.startsWith('image/')) msgtype = 'm.image';
+      else if (file.type.startsWith('video/')) msgtype = 'm.video';
+      else if (file.type.startsWith('audio/')) msgtype = 'm.audio';
+      
+      // Send message with attachment
+      const txnId = `f${Date.now()}`;
+      const messageContent: Record<string, unknown> = {
+        msgtype,
+        body: file.name,
+        url: content_uri,
+        info: {
+          mimetype: file.type,
+          size: file.size
+        }
+      };
+      
+      // For images, try to get dimensions
+      if (msgtype === 'm.image') {
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        await new Promise(resolve => img.onload = resolve);
+        (messageContent.info as Record<string, unknown>).w = img.width;
+        (messageContent.info as Record<string, unknown>).h = img.height;
+        URL.revokeObjectURL(img.src);
+      }
+      
+      const data = await matrixFetch(
+        `/rooms/${encodeURIComponent(selectedRoomId)}/send/m.room.message/${txnId}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(messageContent),
+        }
+      );
+      
+      if (data?.event_id) {
+        setMessages(prev => [...prev, {
+          eventId: data.event_id,
+          sender: credentials.userId,
+          senderName: session?.user?.name || 'Вы',
+          content: file.name,
+          timestamp: Date.now(),
+          isOwn: true,
+          msgtype: msgtype as MatrixMessage['msgtype'],
+          attachment: {
+            type: msgtype.replace('m.', '') as MessageAttachment['type'],
+            url: content_uri.replace('mxc://', `${credentials.serverUrl}/_matrix/media/v3/download/`),
+            name: file.name,
+            mimeType: file.type,
+            size: file.size
+          }
+        }]);
+        scrollToBottom();
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // Forward message to another room
+  const handleForward = async (targetRoomId: string) => {
+    if (!forwardMessage || !credentials) return;
+    
+    try {
+      const txnId = `fw${Date.now()}`;
+      const messageContent: Record<string, unknown> = {
+        msgtype: forwardMessage.msgtype || 'm.text',
+        body: forwardMessage.content
+      };
+      
+      // If forwarding an attachment, include it
+      if (forwardMessage.attachment) {
+        messageContent.url = forwardMessage.attachment.url.replace(
+          `${credentials.serverUrl}/_matrix/media/v3/download/`,
+          'mxc://'
+        );
+        messageContent.info = {
+          mimetype: forwardMessage.attachment.mimeType,
+          size: forwardMessage.attachment.size
+        };
+      }
+      
+      await matrixFetch(
+        `/rooms/${encodeURIComponent(targetRoomId)}/send/m.room.message/${txnId}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(messageContent),
+        }
+      );
+      
+      setForwardMessage(null);
+      setShowForwardModal(false);
+    } catch (err) {
+      console.error('Forward error:', err);
     }
   };
 
@@ -729,11 +1061,12 @@ export default function MatrixChat() {
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
               {messages.map((msg, idx) => {
                 const showAvatar = idx === 0 || messages[idx - 1].sender !== msg.sender;
+                const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉', '🙏', '👎'];
                 
                 return (
                   <div
                     key={msg.eventId}
-                    className={`flex items-end gap-2 ${msg.isOwn ? 'justify-end' : 'justify-start'}`}
+                    className={`flex items-end gap-2 group ${msg.isOwn ? 'justify-end' : 'justify-start'}`}
                   >
                     {!msg.isOwn && showAvatar && (
                       <Avatar className="h-8 w-8 flex-shrink-0">
@@ -744,22 +1077,153 @@ export default function MatrixChat() {
                     )}
                     {!msg.isOwn && !showAvatar && <div className="w-8" />}
                     
-                    <div
-                      className={`max-w-[75%] rounded-2xl px-4 py-2 shadow-sm ${
-                        msg.isOwn
-                          ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-sm'
-                          : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-sm border border-gray-100 dark:border-gray-600'
-                      }`}
-                    >
-                      {!msg.isOwn && showAvatar && (
-                        <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">
-                          {msg.senderName}
+                    <div className="relative">
+                      {/* Action buttons (visible on hover) */}
+                      <div className={`absolute ${msg.isOwn ? 'left-0 -translate-x-full pr-2' : 'right-0 translate-x-full pl-2'} top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1`}>
+                        <button
+                          onClick={() => setReplyTo(msg)}
+                          className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300"
+                          title="Ответить"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => setShowReactions(showReactions === msg.eventId ? null : msg.eventId)}
+                          className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300"
+                          title="Реакция"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => { setForwardMessage(msg); setShowForwardModal(true); }}
+                          className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300"
+                          title="Переслать"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+                          </svg>
+                        </button>
+                      </div>
+                      
+                      {/* Reaction picker */}
+                      {showReactions === msg.eventId && (
+                        <div className={`absolute ${msg.isOwn ? 'right-0' : 'left-0'} bottom-full mb-2 bg-white dark:bg-gray-800 rounded-full shadow-lg px-2 py-1 flex gap-1 z-10`}>
+                          {REACTION_EMOJIS.map(emoji => (
+                            <button
+                              key={emoji}
+                              onClick={() => handleReaction(msg.eventId, emoji)}
+                              className="text-xl hover:scale-125 transition-transform p-1"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
                         </div>
                       )}
-                      <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                      <div className={`text-xs mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-400'}`}>
-                        {new Date(msg.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                      
+                      {/* Message bubble */}
+                      <div
+                        className={`max-w-[280px] sm:max-w-[380px] rounded-2xl px-4 py-2 shadow-sm ${
+                          msg.isOwn
+                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-sm'
+                            : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-sm border border-gray-100 dark:border-gray-600'
+                        }`}
+                      >
+                        {!msg.isOwn && showAvatar && (
+                          <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">
+                            {msg.senderName}
+                          </div>
+                        )}
+                        
+                        {/* Reply preview */}
+                        {msg.replyTo && (
+                          <div className={`text-xs mb-2 p-2 rounded-lg ${
+                            msg.isOwn ? 'bg-blue-700/50' : 'bg-gray-100 dark:bg-gray-600'
+                          }`}>
+                            <div className="font-semibold opacity-75">{msg.replyTo.senderName}</div>
+                            <div className="truncate opacity-75">{msg.replyTo.content}</div>
+                          </div>
+                        )}
+                        
+                        {/* Attachment */}
+                        {msg.attachment && (
+                          <div className="mb-2">
+                            {msg.attachment.type === 'image' && (
+                              <img
+                                src={msg.attachment.thumbnailUrl || msg.attachment.url}
+                                alt={msg.attachment.name}
+                                className="rounded-lg max-w-full cursor-pointer"
+                                onClick={() => window.open(msg.attachment?.url, '_blank')}
+                              />
+                            )}
+                            {msg.attachment.type === 'video' && (
+                              <video
+                                src={msg.attachment.url}
+                                controls
+                                className="rounded-lg max-w-full"
+                                poster={msg.attachment.thumbnailUrl}
+                              />
+                            )}
+                            {msg.attachment.type === 'audio' && (
+                              <audio src={msg.attachment.url} controls className="w-full" />
+                            )}
+                            {msg.attachment.type === 'file' && (
+                              <a
+                                href={msg.attachment.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`flex items-center gap-2 p-2 rounded-lg ${
+                                  msg.isOwn ? 'bg-blue-700/50 hover:bg-blue-700/70' : 'bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500'
+                                }`}
+                              >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                </svg>
+                                <div className="flex-1 min-w-0">
+                                  <div className="truncate text-sm font-medium">{msg.attachment.name}</div>
+                                  {msg.attachment.size && (
+                                    <div className="text-xs opacity-75">
+                                      {(msg.attachment.size / 1024 / 1024).toFixed(2)} МБ
+                                    </div>
+                                  )}
+                                </div>
+                              </a>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Text content (hide if only attachment without text) */}
+                        {(!msg.attachment || msg.content !== msg.attachment.name) && (
+                          <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                        )}
+                        
+                        <div className={`text-xs mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-400'}`}>
+                          {new Date(msg.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
                       </div>
+                      
+                      {/* Reactions display */}
+                      {msg.reactions && msg.reactions.length > 0 && (
+                        <div className={`flex flex-wrap gap-1 mt-1 ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
+                          {msg.reactions.map(reaction => (
+                            <button
+                              key={reaction.key}
+                              onClick={() => handleReaction(msg.eventId, reaction.key)}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-sm ${
+                                reaction.users.includes(credentials?.userId || '')
+                                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                              }`}
+                            >
+                              <span>{reaction.key}</span>
+                              <span className="text-xs">{reaction.count}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -769,7 +1233,58 @@ export default function MatrixChat() {
 
             {/* Input */}
             <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+              {/* Reply preview */}
+              {replyTo && (
+                <div className="mb-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-blue-600 dark:text-blue-400 font-semibold">
+                      Ответ для {replyTo.senderName}
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-300 truncate">
+                      {replyTo.content}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setReplyTo(null)}
+                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                  >
+                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              
               <div className="flex items-end gap-3">
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar"
+                />
+                
+                {/* Attach button */}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="p-3 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 
+                    hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                  title="Прикрепить файл"
+                >
+                  {uploading ? (
+                    <svg className="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                  )}
+                </button>
+                
                 <div className="flex-1 relative">
                   <textarea
                     ref={inputRef}
@@ -784,7 +1299,7 @@ export default function MatrixChat() {
                         handleSend();
                       }
                     }}
-                    placeholder="Введите сообщение..."
+                    placeholder={replyTo ? "Написать ответ..." : "Введите сообщение..."}
                     rows={1}
                     className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-600 
                       bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white 
@@ -904,6 +1419,96 @@ export default function MatrixChat() {
                         {user.userId}
                       </div>
                     </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Forward Message Modal */}
+      {showForwardModal && forwardMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-4 bg-gradient-to-r from-blue-600 to-blue-500 text-white">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Переслать сообщение</h3>
+                <button 
+                  onClick={() => {
+                    setShowForwardModal(false);
+                    setForwardMessage(null);
+                  }}
+                  className="p-1 hover:bg-white/20 rounded-full"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            {/* Message preview */}
+            <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-600">
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Сообщение от {forwardMessage.senderName}:</div>
+              <div className="text-sm text-gray-700 dark:text-gray-200 truncate">
+                {forwardMessage.attachment ? (
+                  <span className="flex items-center gap-1">
+                    {forwardMessage.attachment.type === 'image' && '🖼️ Изображение'}
+                    {forwardMessage.attachment.type === 'video' && '🎬 Видео'}
+                    {forwardMessage.attachment.type === 'audio' && '🎵 Аудио'}
+                    {forwardMessage.attachment.type === 'file' && `📎 ${forwardMessage.attachment.name}`}
+                  </span>
+                ) : (
+                  forwardMessage.content
+                )}
+              </div>
+            </div>
+
+            <div className="max-h-80 overflow-y-auto">
+              <div className="p-2 text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">
+                Выберите чат
+              </div>
+              {rooms.filter(r => r.roomId !== selectedRoomId).length === 0 ? (
+                <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+                  Нет доступных чатов для пересылки
+                </div>
+              ) : (
+                rooms.filter(r => r.roomId !== selectedRoomId).map(room => (
+                  <button
+                    key={room.roomId}
+                    onClick={() => handleForward(room.roomId)}
+                    className="w-full p-4 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <Avatar className="h-10 w-10">
+                      {room.avatarUrl ? (
+                        <img 
+                          src={room.avatarUrl.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/thumbnail/`)}
+                          alt={room.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <AvatarFallback className={`bg-gradient-to-br ${
+                          ['from-blue-500 to-blue-600', 'from-purple-500 to-purple-600', 
+                           'from-green-500 to-green-600', 'from-orange-500 to-orange-600'][
+                            room.name.charCodeAt(0) % 4
+                          ]
+                        } text-white`}>
+                          {room.name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      )}
+                    </Avatar>
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="font-semibold text-gray-900 dark:text-white truncate">
+                        {room.name}
+                      </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {room.isDirect ? 'Личный чат' : 'Групповой чат'}
+                      </div>
+                    </div>
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </button>
                 ))
               )}
