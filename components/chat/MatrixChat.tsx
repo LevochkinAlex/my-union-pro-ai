@@ -459,6 +459,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
         if (!roomName) {
           if (isBotRoom) {
             roomName = 'МойСоюз Помощник';
+            roomAvatar = '/icon.png';
           } else if (activeMembers.length === 1) {
             roomName = 'Новый чат';
           } else if (isDirect) {
@@ -466,6 +467,11 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
           } else {
             roomName = 'Групповой чат';
           }
+        }
+        
+        // Always set bot avatar if it's a bot room
+        if (isBotRoom && !roomAvatar) {
+          roomAvatar = '/icon.png';
         }
         
         const timelineEvents = rd.timeline?.events || [];
@@ -629,6 +635,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                 
                 if (isBotRoom) {
                   name = 'МойСоюз Помощник';
+                  avatar = '/icon.png';
                 } else if (otherMember) {
                   name = otherMember.content?.displayname || '';
                   avatar = otherMember.content?.avatar_url || '';
@@ -872,6 +879,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
       
       if (isBotRoom) {
         name = 'МойСоюз Помощник';
+        avatar = '/icon.png';
       } else if (otherMember) {
         name = otherMember.content?.displayname || '';
         avatar = otherMember.content?.avatar_url || '';

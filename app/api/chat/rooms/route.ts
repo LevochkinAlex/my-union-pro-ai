@@ -87,7 +87,12 @@ export async function GET() {
         
         // Determine avatar URL
         let avatarUrl: string | null = null;
-        if (isDirect && otherParticipant?.avatarUrl) {
+        const isBot = otherParticipant?.matrixUserId?.includes('myunion_bot') || 
+                      otherParticipant?.matrixUserId?.includes('ai_assistant');
+        
+        if (isBot) {
+          avatarUrl = '/icon.png';
+        } else if (isDirect && otherParticipant?.avatarUrl) {
           avatarUrl = otherParticipant.avatarUrl;
         } else if (chat.type === 'GROUP' && chat.iconUrl) {
           avatarUrl = chat.iconUrl;
