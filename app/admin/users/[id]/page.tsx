@@ -79,7 +79,36 @@ interface UserData {
   }>;
 }
 
-type TabKey = "profile" | "work" | "family" | "education" | "documents" | "membership";
+type TabKey = "profile" | "work" | "family" | "education" | "documents" | "membership" | "knowledge";
+
+interface KnowledgeChunk {
+  id: string;
+  type: string;
+  content: string;
+  source: string;
+  relatedEntityType?: string;
+  relatedEntityId?: string;
+  tokens?: number;
+  createdAt: string;
+}
+
+interface KnowledgeBase {
+  id: string;
+  userId: string;
+  chunks: KnowledgeChunk[];
+  chunksCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const KNOWLEDGE_TYPE_MAP: Record<string, string> = {
+  PROFILE_DATA: "Данные профиля",
+  INTERACTION: "Взаимодействие с ИИ",
+  DOCUMENT_CONTENT: "Документы",
+  PREFERENCE: "Предпочтения",
+  HISTORY: "История",
+  NOTE: "Заметки",
+};
 
 const MARITAL_STATUS_MAP: Record<string, string> = {
   SINGLE: "Не женат/Не замужем",
@@ -107,6 +136,12 @@ export default function AdminUserDetailsPage() {
   const [validationComment, setValidationComment] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
   const [deleting, setDeleting] = useState(false);
+  // Knowledge base state
+  const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeBase | null>(null);
+  const [knowledgeLoading, setKnowledgeLoading] = useState(false);
+  const [newChunkType, setNewChunkType] = useState("NOTE");
+  const [newChunkContent, setNewChunkContent] = useState("");
+  const [addingChunk, setAddingChunk] = useState(false);
 
   const loadUser = useCallback(async () => {
     if (!userId) return;
@@ -128,6 +163,81 @@ export default function AdminUserDetailsPage() {
   useEffect(() => {
     loadUser();
   }, [loadUser]);
+
+  // Load knowledge base when tab is selected
+  const loadKnowledgeBase = useCallback(async () => {
+    if (!userId) return;
+    setKnowledgeLoading(true);
+    try {
+      const response = await fetch(`/api/admin/users/${userId}/knowledge`);
+      if (response.ok) {
+        const data = await response.json();
+        setKnowledgeBase(data);
+      }
+    } catch (err) {
+      console.error("Failed to load knowledge base:", err);
+    } finally {
+      setKnowledgeLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (activeTab === "knowledge") {
+      loadKnowledgeBase();
+    }
+  }, [activeTab, loadKnowledgeBase]);
+
+  const handleSyncProfile = async () => {
+    if (!userId) return;
+    try {
+      const response = await fetch(`/api/admin/users/${userId}/knowledge`, {
+        method: "PUT",
+      });
+      if (response.ok) {
+        alert("Профиль синхронизирован с базой знаний");
+        loadKnowledgeBase();
+      }
+    } catch (err) {
+      alert("Ошибка синхронизации");
+    }
+  };
+
+  const handleAddChunk = async () => {
+    if (!userId || !newChunkContent.trim()) return;
+    setAddingChunk(true);
+    try {
+      const response = await fetch(`/api/admin/users/${userId}/knowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: newChunkType,
+          content: newChunkContent,
+        }),
+      });
+      if (response.ok) {
+        setNewChunkContent("");
+        loadKnowledgeBase();
+      }
+    } catch (err) {
+      alert("Ошибка добавления");
+    } finally {
+      setAddingChunk(false);
+    }
+  };
+
+  const handleDeleteChunk = async (chunkId: string) => {
+    if (!confirm("Удалить этот фрагмент?")) return;
+    try {
+      const response = await fetch(`/api/admin/users/${userId}/knowledge?chunkId=${chunkId}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        loadKnowledgeBase();
+      }
+    } catch (err) {
+      alert("Ошибка удаления");
+    }
+  };
 
   const handleDelete = async () => {
     if (!confirm(`Вы уверены, что хотите удалить пользователя ${user?.email}?\n\nЭто действие нельзя отменить. Все связанные данные (документы, сообщения, обращения и т.д.) также будут удалены.`)) {
@@ -324,6 +434,7 @@ export default function AdminUserDetailsPage() {
             { key: "education", label: "Образование" },
             { key: "documents", label: `Документы (${user.documents.length})` },
             { key: "membership", label: "Членство" },
+            { key: "knowledge", label: "База знаний" },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -595,6 +706,113 @@ export default function AdminUserDetailsPage() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Tab: База знаний */}
+      {activeTab === "knowledge" && (
+        <div className="space-y-6">
+          {/* Действия */}
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleSyncProfile}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Синхронизировать профиль
+            </button>
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              {knowledgeBase ? `${knowledgeBase.chunksCount} фрагментов` : "Загрузка..."}
+            </span>
+          </div>
+
+          {/* Добавить фрагмент */}
+          <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Добавить информацию</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Тип</label>
+                <select
+                  value={newChunkType}
+                  onChange={(e) => setNewChunkType(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="NOTE">Заметка</option>
+                  <option value="PREFERENCE">Предпочтение</option>
+                  <option value="HISTORY">История</option>
+                  <option value="PROFILE_DATA">Данные профиля</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Содержание</label>
+                <textarea
+                  value={newChunkContent}
+                  onChange={(e) => setNewChunkContent(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="Введите информацию о пользователе..."
+                />
+              </div>
+              <button
+                onClick={handleAddChunk}
+                disabled={addingChunk || !newChunkContent.trim()}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                {addingChunk ? "Добавление..." : "Добавить"}
+              </button>
+            </div>
+          </div>
+
+          {/* Список фрагментов */}
+          <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Фрагменты базы знаний</h3>
+            {knowledgeLoading ? (
+              <p className="text-gray-500 dark:text-gray-400">Загрузка...</p>
+            ) : knowledgeBase?.chunks.length === 0 ? (
+              <p className="text-gray-500 dark:text-gray-400">База знаний пуста. Нажмите &quot;Синхронизировать профиль&quot; для заполнения.</p>
+            ) : (
+              <div className="space-y-4">
+                {knowledgeBase?.chunks.map((chunk) => (
+                  <div
+                    key={chunk.id}
+                    className="rounded-lg border border-gray-200 dark:border-gray-700 p-4"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-0.5 text-xs font-medium rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            {KNOWLEDGE_TYPE_MAP[chunk.type] || chunk.type}
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {chunk.source}
+                          </span>
+                          {chunk.tokens && (
+                            <span className="text-xs text-gray-400">
+                              {chunk.tokens} токенов
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
+                          {chunk.content}
+                        </p>
+                        <p className="mt-2 text-xs text-gray-400">
+                          {new Date(chunk.createdAt).toLocaleString("ru-RU")}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteChunk(chunk.id)}
+                        className="ml-4 p-1 text-red-500 hover:text-red-700"
+                        title="Удалить"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

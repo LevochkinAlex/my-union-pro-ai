@@ -4,7 +4,7 @@ import { sendWelcomeEmail } from "@/lib/email";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { encryptPassword } from "@/lib/best-benefits-password";
-import { getOrCreateUserKnowledgeBase } from "@/lib/user-knowledge-base";
+import { getOrCreateUserKnowledgeBase, saveUserProfileToKnowledgeBase } from "@/lib/user-knowledge-base";
 import fs from "fs";
 import path from "path";
 
@@ -70,10 +70,12 @@ export async function POST(request: NextRequest) {
     // Удалено: создание ChatSession и ChatMessage - больше не используется
     // Чат-бот теперь работает без сессий, просто как помощник на всех страницах
 
-    // Создаем базу знаний для пользователя
+    // Создаем базу знаний для пользователя и сохраняем начальные данные
     try {
       await getOrCreateUserKnowledgeBase(updatedUser.id);
-      console.log("[register] ✅ База знаний пользователя создана");
+      // Сохраняем начальные данные профиля (email) в базу знаний
+      await saveUserProfileToKnowledgeBase(updatedUser);
+      console.log("[register] ✅ База знаний пользователя создана и заполнена начальными данными");
     } catch (kbError) {
       console.error("[register] ⚠️ Ошибка при создании базы знаний:", kbError);
       // Не блокируем регистрацию при ошибке создания базы знаний

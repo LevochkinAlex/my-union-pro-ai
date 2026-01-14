@@ -23,6 +23,7 @@ interface UserProfile {
   position?: string;
   membershipStatus?: string;
   interests?: string[];
+  knowledgeContent?: string; // Данные из базы знаний
 }
 
 // Store conversations per room
@@ -102,7 +103,7 @@ const BASE_SYSTEM_PROMPT = `Ты — AI-ассистент профсоюзно�
 - Не обсуждай политику
 - Не собирай личные данные — направляй в раздел Профиль`;
 
-// Function to get user profile from DB
+// Function to get user profile from DB with knowledge base
 async function getUserProfile(matrixUserId: string): Promise<UserProfile | null> {
   // Check cache first
   if (userProfiles.has(matrixUserId)) {
@@ -113,24 +114,61 @@ async function getUserProfile(matrixUserId: string): Promise<UserProfile | null>
     const user = await prisma.user.findFirst({
       where: { matrixUserId },
       select: {
+        id: true,
         firstName: true,
         lastName: true,
         middleName: true,
         position: true,
+        jobTitle: true,
         membershipStatus: true,
+        hobbies: true,
+        aboutMe: true,
         organization: {
           select: { name: true, shortName: true }
+        },
+        userKnowledgeBase: {
+          include: {
+            chunks: {
+              orderBy: { createdAt: 'desc' },
+              take: 10 // Берем последние 10 фрагментов
+            }
+          }
         }
       }
     });
 
     if (!user) return null;
 
+    // Собираем контент из базы знаний
+    let knowledgeContent = '';
+    if (user.userKnowledgeBase?.chunks) {
+      const chunks = user.userKnowledgeBase.chunks;
+      const profileChunks = chunks.filter(c => c.type === 'PROFILE_DATA');
+      const noteChunks = chunks.filter(c => c.type === 'NOTE');
+      const historyChunks = chunks.filter(c => c.type === 'HISTORY');
+      const preferenceChunks = chunks.filter(c => c.type === 'PREFERENCE');
+      
+      if (profileChunks.length > 0) {
+        knowledgeContent += '\n--- ДАННЫЕ ПРОФИЛЯ ---\n' + profileChunks[0].content;
+      }
+      if (noteChunks.length > 0) {
+        knowledgeContent += '\n\n--- ЗАМЕТКИ АДМИНИСТРАТОРА ---\n' + noteChunks.map(c => c.content).join('\n');
+      }
+      if (preferenceChunks.length > 0) {
+        knowledgeContent += '\n\n--- ПРЕДПОЧТЕНИЯ ---\n' + preferenceChunks.map(c => c.content).join('\n');
+      }
+      if (historyChunks.length > 0) {
+        knowledgeContent += '\n\n--- ИСТОРИЯ ---\n' + historyChunks.slice(0, 3).map(c => c.content).join('\n');
+      }
+    }
+
     const profile: UserProfile = {
       name: [user.firstName, user.middleName].filter(Boolean).join(' ') || 'Пользователь',
       organization: user.organization?.shortName || user.organization?.name,
-      position: user.position || undefined,
+      position: user.jobTitle || user.position || undefined,
       membershipStatus: user.membershipStatus || undefined,
+      interests: user.hobbies ? [user.hobbies] : undefined,
+      knowledgeContent: knowledgeContent || undefined,
     };
 
     // Cache the profile
@@ -142,12 +180,12 @@ async function getUserProfile(matrixUserId: string): Promise<UserProfile | null>
   }
 }
 
-// Build personalized system prompt
+// Build personalized system prompt with knowledge base
 function buildSystemPrompt(profile: UserProfile | null): string {
   if (!profile) return BASE_SYSTEM_PROMPT;
 
   let prompt = BASE_SYSTEM_PROMPT + '\n\n';
-  prompt += '--- ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ ---\n';
+  prompt += '=== ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ (БАЗА ЗНАНИЙ) ===\n';
   prompt += `Имя: ${profile.name}\n`;
   
   if (profile.organization) {
@@ -162,8 +200,20 @@ function buildSystemPrompt(profile: UserProfile | null): string {
                        profile.membershipStatus === 'INACTIVE' ? 'Неактивный' : profile.membershipStatus;
     prompt += `Статус: ${statusText}\n`;
   }
+  if (profile.interests && profile.interests.length > 0) {
+    prompt += `Интересы/Хобби: ${profile.interests.join(', ')}\n`;
+  }
   
-  prompt += '\nОбращайся к пользователю по имени и учитывай его статус в ответах.';
+  // Добавляем данные из базы знаний
+  if (profile.knowledgeContent) {
+    prompt += profile.knowledgeContent;
+  }
+  
+  prompt += '\n\n=== ВАЖНО ===\n';
+  prompt += '- Обращайся к пользователю по имени\n';
+  prompt += '- Учитывай всю информацию из базы знаний в ответах\n';
+  prompt += '- Если есть заметки администратора — учитывай их\n';
+  prompt += '- Персонализируй ответы на основе профиля и предпочтений';
   
   return prompt;
 }
