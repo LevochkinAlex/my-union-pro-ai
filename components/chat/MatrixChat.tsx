@@ -270,69 +270,70 @@ export default function MatrixChat() {
         const stateEvents = rd.state?.events || [];
         const nameEvent = stateEvents.find(e => e.type === 'm.room.name');
         
-        // Count room members to determine if it's a direct chat
-        const memberEvents = stateEvents.filter(e => 
-          e.type === 'm.room.member' && 
-          (e.content?.membership === 'join' || e.content?.membership === 'invite')
+        // Get all member events
+        const allMemberEvents = stateEvents.filter(e => e.type === 'm.room.member');
+        
+        // Count joined/invited members
+        const activeMembers = allMemberEvents.filter(e => 
+          e.content?.membership === 'join' || e.content?.membership === 'invite'
         );
-        // A direct chat has exactly 2 members (including current user)
-        const isDirect = memberEvents.length === 2;
+        
+        // Check if this is a bot room
+        const isBotRoom = allMemberEvents.some(
+          e => e.state_key?.includes('myunion_bot')
+        );
+        
+        // Find other members (not the current user)
+        const otherMembers = allMemberEvents.filter(
+          e => e.state_key !== credentials.userId && 
+               (e.content?.membership === 'join' || e.content?.membership === 'invite')
+        );
+        
+        // Determine if this is a direct chat (2 participants)
+        // or check account_data for m.direct
+        const isDirect = activeMembers.length <= 2 && !nameEvent?.content?.name;
         
         // Get room name - priority: explicit name > other member name > fallback
         let roomName = nameEvent?.content?.name;
         let roomAvatar: string | undefined;
         
-        // Get all member events (already filtered above for isDirect)
-        const allMemberEvents = stateEvents.filter(e => e.type === 'm.room.member');
-        
-        // Check if this is a bot room (contains @myunion_bot)
-        const isBotRoom = allMemberEvents.some(
-          e => e.state_key?.includes('myunion_bot')
-        );
-        
         // For rooms without explicit name, determine name from members
-        if (!roomName) {
-          // Find other members (not the current user) who have joined or invited
-          const otherMembers = allMemberEvents.filter(
-            e => e.state_key !== credentials.userId && 
-                 (e.content?.membership === 'join' || e.content?.membership === 'invite')
-          );
+        if (!roomName && otherMembers.length > 0) {
+          const otherMember = otherMembers[0];
           
-          if (otherMembers.length > 0) {
-            const otherMember = otherMembers[0];
+          // Check if it's the bot
+          if (otherMember.state_key?.includes('myunion_bot')) {
+            roomName = 'МойСоюз Помощник';
+          } else if (otherMember.state_key?.includes('ai_assistant')) {
+            roomName = 'AI Помощник';
+          } else {
+            // Get display name from member event
+            roomName = otherMember.content?.displayname;
+            roomAvatar = otherMember.content?.avatar_url;
             
-            // Check if it's the bot
-            if (otherMember.state_key?.includes('myunion_bot')) {
-              roomName = 'МойСоюз Помощник';
-            } else if (otherMember.state_key?.includes('ai_assistant')) {
-              roomName = 'AI Помощник';
-            } else {
-              // Get display name from member event
-              roomName = otherMember.content?.displayname;
-              
-              if (!roomName && otherMember.state_key) {
-                // Extract username from Matrix ID: @username:domain -> username
-                const username = otherMember.state_key.split(':')[0].replace('@', '');
-                // Make it more readable
-                if (username.startsWith('myunion_')) {
-                  // For system-generated usernames, try to show something meaningful
-                  roomName = 'Пользователь';
-                } else {
-                  roomName = username.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                }
+            // If no display name, try to create readable name from Matrix ID
+            if (!roomName && otherMember.state_key) {
+              const username = otherMember.state_key.split(':')[0].replace('@', '');
+              if (username.startsWith('myunion_')) {
+                roomName = 'Пользователь';
+              } else {
+                roomName = username.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
               }
             }
-            
-            roomAvatar = otherMember.content?.avatar_url;
-          } else if (memberEvents.length === 1) {
-            // Only current user in room
-            roomName = 'Новый чат';
           }
         }
         
-        // Ultimate fallback
+        // Fallback names based on room type
         if (!roomName) {
-          roomName = isBotRoom ? 'МойСоюз Помощник' : (isDirect ? 'Личный чат' : 'Чат');
+          if (isBotRoom) {
+            roomName = 'МойСоюз Помощник';
+          } else if (activeMembers.length === 1) {
+            roomName = 'Новый чат';
+          } else if (isDirect) {
+            roomName = 'Личный чат';
+          } else {
+            roomName = 'Групповой чат';
+          }
         }
         
         const timelineEvents = rd.timeline?.events || [];
@@ -436,6 +437,54 @@ export default function MatrixChat() {
           roomList.forEach(r => updated.set(r.roomId, r));
           return Array.from(updated.values()).sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
         });
+        
+        // For rooms with generic names, fetch member info asynchronously
+        if (initialSync) {
+          roomList.forEach(async (room) => {
+            if (room.name === 'Чат' || room.name === 'Групповой чат' || room.name === 'Личный чат' || !room.avatarUrl) {
+              try {
+                const membersData = await matrixFetch(`/rooms/${encodeURIComponent(room.roomId)}/members`);
+                if (!membersData?.chunk) return;
+                
+                const members = membersData.chunk.filter((m: any) => 
+                  m.content?.membership === 'join' || m.content?.membership === 'invite'
+                );
+                
+                const otherMember = members.find((m: any) => m.state_key !== credentials.userId);
+                const isBotRoom = members.some((m: any) => m.state_key?.includes('myunion_bot'));
+                
+                let name = room.name;
+                let avatar = room.avatarUrl;
+                
+                if (isBotRoom) {
+                  name = 'МойСоюз Помощник';
+                } else if (otherMember) {
+                  name = otherMember.content?.displayname || '';
+                  avatar = otherMember.content?.avatar_url || '';
+                  
+                  if (!name && otherMember.state_key) {
+                    const username = otherMember.state_key.split(':')[0].replace('@', '');
+                    if (username.startsWith('myunion_')) {
+                      name = 'Пользователь';
+                    } else {
+                      name = username.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    }
+                  }
+                }
+                
+                if (name && name !== room.name) {
+                  setRooms(prev => prev.map(r => 
+                    r.roomId === room.roomId 
+                      ? { ...r, name: name || r.name, avatarUrl: avatar || r.avatarUrl, isDirect: members.length <= 2 }
+                      : r
+                  ));
+                }
+              } catch (err) {
+                console.error('Failed to fetch room members for', room.roomId, err);
+              }
+            }
+          });
+        }
       }
 
     } catch (err: unknown) {
@@ -596,12 +645,77 @@ export default function MatrixChat() {
   }, [credentials, matrixFetch]);
 
   // Select room
-  const handleSelectRoom = (roomId: string) => {
+  // Fetch room members to get proper names
+  const fetchRoomMembers = useCallback(async (roomId: string) => {
+    if (!credentials) return null;
+    
+    try {
+      const data = await matrixFetch(`/rooms/${encodeURIComponent(roomId)}/members`);
+      if (!data?.chunk) return null;
+      
+      const members = data.chunk.filter((m: any) => 
+        m.content?.membership === 'join' || m.content?.membership === 'invite'
+      );
+      
+      // Find other member (not current user)
+      const otherMember = members.find((m: any) => m.state_key !== credentials.userId);
+      const isBotRoom = members.some((m: any) => m.state_key?.includes('myunion_bot'));
+      
+      let name = '';
+      let avatar = '';
+      
+      if (isBotRoom) {
+        name = 'МойСоюз Помощник';
+      } else if (otherMember) {
+        name = otherMember.content?.displayname || '';
+        avatar = otherMember.content?.avatar_url || '';
+        
+        if (!name && otherMember.state_key) {
+          const username = otherMember.state_key.split(':')[0].replace('@', '');
+          if (username.startsWith('myunion_')) {
+            name = 'Пользователь';
+          } else {
+            name = username.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          }
+        }
+      }
+      
+      return {
+        name: name || 'Личный чат',
+        avatarUrl: avatar,
+        isDirect: members.length <= 2,
+        memberCount: members.length
+      };
+    } catch (err) {
+      console.error('Failed to fetch room members:', err);
+      return null;
+    }
+  }, [credentials, matrixFetch]);
+
+  const handleSelectRoom = async (roomId: string) => {
     setSelectedRoomId(roomId);
     setMessages([]);
     setTypingUsers([]);
-    loadRoomMessages(roomId);
     setIsMobileMenuOpen(false);
+    
+    // Load messages
+    loadRoomMessages(roomId);
+    
+    // Fetch room members to update room info
+    const memberInfo = await fetchRoomMembers(roomId);
+    if (memberInfo) {
+      setRooms(prev => prev.map(r => {
+        if (r.roomId === roomId && (!r.name || r.name === 'Чат' || r.name === 'Групповой чат' || r.name === 'Личный чат')) {
+          return {
+            ...r,
+            name: memberInfo.name,
+            avatarUrl: memberInfo.avatarUrl || r.avatarUrl,
+            isDirect: memberInfo.isDirect
+          };
+        }
+        return r;
+      }));
+    }
   };
 
   // Send message (with reply support)
