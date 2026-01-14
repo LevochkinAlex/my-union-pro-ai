@@ -133,7 +133,6 @@ async function main() {
             firstName: 'МойСоюз',
             lastName: 'Помощник',
             matrixUserId: BOT_USER_ID,
-            role: 'USER',
           }
         });
         console.log(`  → Created bot user in DB`);
