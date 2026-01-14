@@ -282,18 +282,18 @@ export default function MatrixChat() {
         let roomName = nameEvent?.content?.name;
         let roomAvatar: string | undefined;
         
-        // Get all member events
-        const memberEvents = stateEvents.filter(e => e.type === 'm.room.member');
+        // Get all member events (already filtered above for isDirect)
+        const allMemberEvents = stateEvents.filter(e => e.type === 'm.room.member');
         
         // Check if this is a bot room (contains @myunion_bot)
-        const isBotRoom = memberEvents.some(
+        const isBotRoom = allMemberEvents.some(
           e => e.state_key?.includes('myunion_bot')
         );
         
         // For rooms without explicit name, determine name from members
         if (!roomName) {
           // Find other members (not the current user) who have joined or invited
-          const otherMembers = memberEvents.filter(
+          const otherMembers = allMemberEvents.filter(
             e => e.state_key !== credentials.userId && 
                  (e.content?.membership === 'join' || e.content?.membership === 'invite')
           );
