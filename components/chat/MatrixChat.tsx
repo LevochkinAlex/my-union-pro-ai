@@ -105,6 +105,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<Array<{userId: string; displayName: string; avatarUrl?: string}>>([]);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  const [dbRoomInfoLoaded, setDbRoomInfoLoaded] = useState(false);
   // Group creation state (for PPO Head)
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
@@ -137,10 +138,10 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
           const data = await response.json();
           setCredentials(data);
           
-          // Ensure user has a chat with AI bot
+          // Load room info from our DB FIRST
+          await loadDbRoomInfo();
+          // Then ensure user has a chat with AI bot
           ensureBotChat(data);
-          // Load room info from our DB
-          loadDbRoomInfo();
         } else {
           setError('Не удалось подключиться к чату');
         }
@@ -169,6 +170,8 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
       }
     } catch (err) {
       console.error('Failed to load room info from DB:', err);
+    } finally {
+      setDbRoomInfoLoaded(true);
     }
   }, []);
 
@@ -637,6 +640,8 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   // Start sync loop
   useEffect(() => {
     if (!credentials) return;
+    // Wait for dbRoomInfo to load before starting sync
+    if (!dbRoomInfoLoaded) return;
 
     let running = true;
     
@@ -657,7 +662,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
       running = false;
       syncAbortRef.current?.abort();
     };
-  }, [credentials, sync]);
+  }, [credentials, sync, dbRoomInfoLoaded]);
 
   // Load room messages with reactions, replies, and attachments
   const loadRoomMessages = useCallback(async (roomId: string) => {
