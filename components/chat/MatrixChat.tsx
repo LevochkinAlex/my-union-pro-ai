@@ -122,6 +122,20 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   const [forwardMessage, setForwardMessage] = useState<MatrixMessage | null>(null);
   const [showForwardModal, setShowForwardModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Group editing state
+  const [showEditGroup, setShowEditGroup] = useState(false);
+  const [editGroupName, setEditGroupName] = useState('');
+  const [editGroupDescription, setEditGroupDescription] = useState('');
+  const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteSearch, setInviteSearch] = useState('');
+  const [inviteResults, setInviteResults] = useState<Array<{id: string; firstName: string; lastName: string; avatarUrl?: string; matrixUserId?: string}>>([]);
+  const [selectedInvites, setSelectedInvites] = useState<string[]>([]);
+  const [groupParticipants, setGroupParticipants] = useState<Array<{id: string; firstName: string; lastName: string; avatarUrl?: string; role: string}>>([]);
+  
+  // Chat tabs state (for PPO Head)
+  const [chatTab, setChatTab] = useState<'work' | 'personal'>('work');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -1239,6 +1253,159 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  // Get current chat DB ID (for API calls)
+  const getCurrentChatDbId = useCallback(() => {
+    if (!selectedRoomId) return null;
+    const dbInfo = dbRoomInfo.get(selectedRoomId);
+    // dbInfo may contain chatId from our DB
+    // For now, we need to look it up from rooms endpoint
+    return null; // Will fetch from API when needed
+  }, [selectedRoomId, dbRoomInfo]);
+
+  // Load group participants
+  const loadGroupParticipants = useCallback(async (chatId: string) => {
+    try {
+      const response = await fetch(`/api/ppo-head/chats/${chatId}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.chat?.participants) {
+          setGroupParticipants(data.chat.participants.map((p: any) => ({
+            id: p.user?.id,
+            odId: p.user?.odId,
+            firstName: p.user?.firstName || '',
+            lastName: p.user?.lastName || '',
+            avatarUrl: p.user?.avatarUrl,
+            role: p.role || 'member'
+          })));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load group participants:', err);
+    }
+  }, []);
+
+  // Edit group
+  const handleEditGroup = useCallback(async (chatId: string) => {
+    if (!editGroupName.trim()) return;
+    
+    try {
+      const response = await fetch(`/api/ppo-head/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editGroupName.trim(),
+          description: editGroupDescription.trim() || null,
+        }),
+      });
+      
+      if (response.ok) {
+        // Update local room name
+        setRooms(prev => prev.map(r => 
+          r.roomId === selectedRoomId ? { ...r, name: editGroupName.trim() } : r
+        ));
+        setShowEditGroup(false);
+        setShowGroupSettings(false);
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Ошибка редактирования');
+      }
+    } catch (err) {
+      console.error('Failed to edit group:', err);
+    }
+  }, [editGroupName, editGroupDescription, selectedRoomId]);
+
+  // Delete group
+  const handleDeleteGroup = useCallback(async (chatId: string) => {
+    if (!confirm('Удалить групповой чат? Это действие нельзя отменить.')) return;
+    
+    try {
+      const response = await fetch(`/api/ppo-head/chats/${chatId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        setRooms(prev => prev.filter(r => r.roomId !== selectedRoomId));
+        setSelectedRoomId(null);
+        setShowGroupSettings(false);
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Ошибка удаления');
+      }
+    } catch (err) {
+      console.error('Failed to delete group:', err);
+    }
+  }, [selectedRoomId]);
+
+  // Invite to group
+  const handleInviteToGroup = useCallback(async (chatId: string) => {
+    if (selectedInvites.length === 0) return;
+    
+    try {
+      const response = await fetch(`/api/ppo-head/chats/${chatId}/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantIds: selectedInvites }),
+      });
+      
+      if (response.ok) {
+        setShowInviteModal(false);
+        setSelectedInvites([]);
+        setInviteSearch('');
+        // Reload participants
+        loadGroupParticipants(chatId);
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Ошибка приглашения');
+      }
+    } catch (err) {
+      console.error('Failed to invite:', err);
+    }
+  }, [selectedInvites, loadGroupParticipants]);
+
+  // Remove participant from group
+  const handleRemoveParticipant = useCallback(async (chatId: string, participantUserId: string) => {
+    if (!confirm('Удалить участника из группы?')) return;
+    
+    try {
+      const response = await fetch(`/api/ppo-head/chats/${chatId}/participants/${participantUserId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        setGroupParticipants(prev => prev.filter(p => p.id !== participantUserId));
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Ошибка удаления');
+      }
+    } catch (err) {
+      console.error('Failed to remove participant:', err);
+    }
+  }, []);
+
+  // Search for users to invite
+  useEffect(() => {
+    if (!inviteSearch.trim() || !showInviteModal) {
+      setInviteResults([]);
+      return;
+    }
+    
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/chat/users/search?q=${encodeURIComponent(inviteSearch)}`);
+        const data = await response.json();
+        if (data?.users) {
+          // Filter out already participating users
+          const participantIds = groupParticipants.map(p => p.id);
+          setInviteResults(data.users.filter((u: any) => !participantIds.includes(u.id)));
+        }
+      } catch (err) {
+        console.error('Invite search error:', err);
+      }
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [inviteSearch, showInviteModal, groupParticipants]);
+
   // Start chat with user
   const handleStartChat = async (userId: string) => {
     const data = await matrixFetch('/createRoom', {
@@ -1338,6 +1505,48 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
           </div>
         </div>
 
+        {/* Chat Tabs (for PPO Head) */}
+        {isPPOHead && (
+          <div className="flex border-b border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => setChatTab('work')}
+              className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
+                chatTab === 'work'
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              Рабочие
+              {rooms.filter(r => !r.isDirect).reduce((sum, r) => sum + r.unreadCount, 0) > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                  {rooms.filter(r => !r.isDirect).reduce((sum, r) => sum + r.unreadCount, 0)}
+                </span>
+              )}
+              {chatTab === 'work' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400" />
+              )}
+            </button>
+            <button
+              onClick={() => setChatTab('personal')}
+              className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
+                chatTab === 'personal'
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              Личные
+              {rooms.filter(r => r.isDirect).reduce((sum, r) => sum + r.unreadCount, 0) > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                  {rooms.filter(r => r.isDirect).reduce((sum, r) => sum + r.unreadCount, 0)}
+                </span>
+              )}
+              {chatTab === 'personal' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400" />
+              )}
+            </button>
+          </div>
+        )}
+
         {/* Room List */}
         <div className="flex-1 overflow-y-auto">
           {rooms.length === 0 ? (
@@ -1356,7 +1565,14 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
               </button>
             </div>
           ) : (
-            rooms.map(room => {
+            rooms
+              .filter(room => {
+                // Filter by tab for PPO Head
+                if (!isPPOHead) return true;
+                if (chatTab === 'work') return !room.isDirect;
+                return room.isDirect;
+              })
+              .map(room => {
               // Generate gradient color based on room name
               const colors = [
                 'from-blue-500 to-blue-600',
@@ -1486,6 +1702,36 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                     </p>
                   )}
                 </div>
+                
+                {/* Group settings button (for PPO Head and group chats) */}
+                {isPPOHead && !selectedRoom.isDirect && (
+                  <button
+                    onClick={() => {
+                      setShowGroupSettings(true);
+                      setEditGroupName(selectedRoom.name);
+                      setEditGroupDescription('');
+                      // Load participants - need to get chatId from dbRoomInfo
+                      const dbInfo = dbRoomInfo.get(selectedRoom.roomId);
+                      if (dbInfo) {
+                        // Fetch chat details by matrix room ID
+                        fetch(`/api/chat/rooms/by-matrix-id?roomId=${encodeURIComponent(selectedRoom.roomId)}`)
+                          .then(r => r.json())
+                          .then(data => {
+                            if (data.chatId) {
+                              loadGroupParticipants(data.chatId);
+                            }
+                          })
+                          .catch(() => {});
+                      }
+                    }}
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    title="Настройки группы"
+                  >
+                    <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -2130,6 +2376,246 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                   disabled:cursor-not-allowed transition-all"
               >
                 {creatingGroup ? 'Создание...' : 'Создать группу'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Group Settings Modal */}
+      {showGroupSettings && selectedRoom && !selectedRoom.isDirect && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-4 bg-gradient-to-r from-purple-600 to-purple-500 text-white">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Настройки группы</h3>
+                <button 
+                  onClick={() => setShowGroupSettings(false)}
+                  className="p-1 hover:bg-white/20 rounded-full"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              {/* Edit Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Название группы
+                </label>
+                <input
+                  type="text"
+                  value={editGroupName}
+                  onChange={(e) => setEditGroupName(e.target.value)}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 
+                    bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Описание (опционально)
+                </label>
+                <textarea
+                  value={editGroupDescription}
+                  onChange={(e) => setEditGroupDescription(e.target.value)}
+                  rows={2}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 
+                    bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                />
+              </div>
+
+              {/* Participants */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Участники ({groupParticipants.length})
+                  </label>
+                  <button
+                    onClick={() => setShowInviteModal(true)}
+                    className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                  >
+                    + Добавить
+                  </button>
+                </div>
+                <div className="max-h-40 overflow-y-auto space-y-2">
+                  {groupParticipants.map(p => (
+                    <div key={p.id} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                      <Avatar className="h-8 w-8">
+                        {p.avatarUrl ? (
+                          <img src={p.avatarUrl} alt="" className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                          <AvatarFallback className="bg-blue-500 text-white text-xs">
+                            {(p.firstName?.[0] || '').toUpperCase()}
+                          </AvatarFallback>
+                        )}
+                      </Avatar>
+                      <span className="flex-1 text-sm text-gray-900 dark:text-white">
+                        {p.firstName} {p.lastName}
+                      </span>
+                      {p.role === 'admin' && (
+                        <span className="text-xs text-purple-600 dark:text-purple-400">Админ</span>
+                      )}
+                      {p.role !== 'admin' && (
+                        <button
+                          onClick={() => {
+                            const dbInfo = dbRoomInfo.get(selectedRoom.roomId);
+                            fetch(`/api/chat/rooms/by-matrix-id?roomId=${encodeURIComponent(selectedRoom.roomId)}`)
+                              .then(r => r.json())
+                              .then(data => {
+                                if (data.chatId) handleRemoveParticipant(data.chatId, p.id);
+                              });
+                          }}
+                          className="text-xs text-red-500 hover:text-red-600"
+                        >
+                          Удалить
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex gap-2">
+              <button
+                onClick={() => {
+                  fetch(`/api/chat/rooms/by-matrix-id?roomId=${encodeURIComponent(selectedRoom.roomId)}`)
+                    .then(r => r.json())
+                    .then(data => {
+                      if (data.chatId) handleDeleteGroup(data.chatId);
+                    });
+                }}
+                className="px-4 py-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400"
+              >
+                Удалить
+              </button>
+              <div className="flex-1" />
+              <button
+                onClick={() => setShowGroupSettings(false)}
+                className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => {
+                  fetch(`/api/chat/rooms/by-matrix-id?roomId=${encodeURIComponent(selectedRoom.roomId)}`)
+                    .then(r => r.json())
+                    .then(data => {
+                      if (data.chatId) handleEditGroup(data.chatId);
+                    });
+                }}
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-purple-500 text-white hover:from-purple-700 hover:to-purple-600"
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite to Group Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
+          <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-4 bg-gradient-to-r from-blue-600 to-blue-500 text-white">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Добавить участников</h3>
+                <button 
+                  onClick={() => {
+                    setShowInviteModal(false);
+                    setInviteSearch('');
+                    setSelectedInvites([]);
+                  }}
+                  className="p-1 hover:bg-white/20 rounded-full"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-4">
+              <input
+                type="text"
+                value={inviteSearch}
+                onChange={(e) => setInviteSearch(e.target.value)}
+                placeholder="Поиск участников..."
+                className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 
+                  bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+            </div>
+
+            <div className="max-h-60 overflow-y-auto px-4">
+              {inviteResults.length === 0 ? (
+                <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                  {inviteSearch ? 'Не найдено' : 'Введите имя для поиска'}
+                </div>
+              ) : (
+                inviteResults.map(user => (
+                  <label
+                    key={user.id}
+                    className="flex items-center gap-3 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedInvites.includes(user.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedInvites(prev => [...prev, user.id]);
+                        } else {
+                          setSelectedInvites(prev => prev.filter(id => id !== user.id));
+                        }
+                      }}
+                      className="w-4 h-4 text-blue-600 rounded"
+                    />
+                    <Avatar className="h-8 w-8">
+                      {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt="" className="w-full h-full object-cover rounded-full" />
+                      ) : (
+                        <AvatarFallback className="bg-blue-500 text-white text-xs">
+                          {(user.firstName?.[0] || '').toUpperCase()}
+                        </AvatarFallback>
+                      )}
+                    </Avatar>
+                    <span className="text-sm text-gray-900 dark:text-white">
+                      {user.firstName} {user.lastName}
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex gap-2">
+              <button
+                onClick={() => {
+                  setShowInviteModal(false);
+                  setInviteSearch('');
+                  setSelectedInvites([]);
+                }}
+                className="flex-1 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => {
+                  if (selectedRoom) {
+                    fetch(`/api/chat/rooms/by-matrix-id?roomId=${encodeURIComponent(selectedRoom.roomId)}`)
+                      .then(r => r.json())
+                      .then(data => {
+                        if (data.chatId) handleInviteToGroup(data.chatId);
+                      });
+                  }
+                }}
+                disabled={selectedInvites.length === 0}
+                className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 
+                  text-white hover:from-blue-700 hover:to-blue-600 disabled:opacity-50"
+              >
+                Добавить ({selectedInvites.length})
               </button>
             </div>
           </div>
