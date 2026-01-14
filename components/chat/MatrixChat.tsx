@@ -86,7 +86,11 @@ interface TypingUser {
   name: string;
 }
 
-export default function MatrixChat() {
+interface MatrixChatProps {
+  isPPOHead?: boolean;
+}
+
+export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   const { data: session } = useSession();
   const [credentials, setCredentials] = useState<MatrixCredentials | null>(null);
   const [rooms, setRooms] = useState<MatrixRoom[]>([]);
@@ -101,6 +105,13 @@ export default function MatrixChat() {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<Array<{userId: string; displayName: string; avatarUrl?: string}>>([]);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  // Group creation state (for PPO Head)
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [groupDescription, setGroupDescription] = useState('');
+  const [orgMembers, setOrgMembers] = useState<Array<{id: string; firstName: string; lastName: string; avatarUrl?: string; matrixUserId?: string}>>([]);
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [creatingGroup, setCreatingGroup] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [connected, setConnected] = useState(false);
   const [replyTo, setReplyTo] = useState<MatrixMessage | null>(null);
@@ -160,6 +171,72 @@ export default function MatrixChat() {
       console.error('Failed to load room info from DB:', err);
     }
   }, []);
+
+  // Load organization members for group creation (PPO Head only)
+  const loadOrgMembers = useCallback(async () => {
+    if (!isPPOHead) return;
+    try {
+      const resp = await fetch('/api/ppo-head/members?status=approved');
+      if (resp.ok) {
+        const data = await resp.json();
+        setOrgMembers(data.members || []);
+      }
+    } catch (err) {
+      console.error('Failed to load org members:', err);
+    }
+  }, [isPPOHead]);
+
+  // Create group chat (PPO Head only)
+  const handleCreateGroup = useCallback(async () => {
+    if (!credentials || !groupName.trim() || selectedMembers.length === 0) return;
+    
+    setCreatingGroup(true);
+    try {
+      // Create group via our API (which creates in DB and Matrix)
+      const resp = await fetch('/api/ppo-head/chats/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: groupName.trim(),
+          description: groupDescription.trim() || null,
+          participantIds: selectedMembers
+        })
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.error || 'Ошибка создания группы');
+      }
+
+      const data = await resp.json();
+      
+      // Refresh rooms
+      await loadDbRoomInfo();
+      
+      // Reset form
+      setShowCreateGroup(false);
+      setGroupName('');
+      setGroupDescription('');
+      setSelectedMembers([]);
+      
+      // Select new room if it has matrixRoomId
+      if (data.chat?.matrixRoomId) {
+        setSelectedRoomId(data.chat.matrixRoomId);
+      }
+    } catch (err) {
+      console.error('Failed to create group:', err);
+      setError(err instanceof Error ? err.message : 'Ошибка создания группы');
+    } finally {
+      setCreatingGroup(false);
+    }
+  }, [credentials, groupName, groupDescription, selectedMembers, loadDbRoomInfo]);
+
+  // Load org members when showing create group modal
+  useEffect(() => {
+    if (showCreateGroup && isPPOHead) {
+      loadOrgMembers();
+    }
+  }, [showCreateGroup, isPPOHead, loadOrgMembers]);
 
   // Ensure user has a DM chat with AI bot
   const ensureBotChat = useCallback(async (creds: MatrixCredentials) => {
@@ -1101,15 +1178,28 @@ export default function MatrixChat() {
         <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-600 to-blue-700">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-white">Чаты</h2>
-            <button
-              onClick={() => setShowNewChat(true)}
-              className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
-              title="Новый чат"
-            >
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-2">
+              {isPPOHead && (
+                <button
+                  onClick={() => setShowCreateGroup(true)}
+                  className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+                  title="Создать группу"
+                >
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+              )}
+              <button
+                onClick={() => setShowNewChat(true)}
+                className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+                title="Новый чат"
+              >
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+            </div>
           </div>
           <div className="mt-2 flex items-center gap-2 text-sm text-blue-100">
             <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`}></div>
@@ -1724,6 +1814,139 @@ export default function MatrixChat() {
                   </button>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Group Modal (PPO Head only) */}
+      {showCreateGroup && isPPOHead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-4 bg-gradient-to-r from-green-600 to-teal-600 text-white">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Создать группу</h3>
+                <button 
+                  onClick={() => {
+                    setShowCreateGroup(false);
+                    setGroupName('');
+                    setGroupDescription('');
+                    setSelectedMembers([]);
+                  }}
+                  className="p-1 hover:bg-white/20 rounded-full"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Название группы *
+                </label>
+                <input
+                  type="text"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  placeholder="Например: Профком 2025"
+                  className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 
+                    bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white
+                    focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Описание
+                </label>
+                <textarea
+                  value={groupDescription}
+                  onChange={(e) => setGroupDescription(e.target.value)}
+                  placeholder="Краткое описание группы..."
+                  rows={2}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 
+                    bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white
+                    focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Участники * ({selectedMembers.length} выбрано)
+                </label>
+                <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-600">
+                  {orgMembers.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                      Загрузка участников...
+                    </div>
+                  ) : (
+                    orgMembers.map(member => {
+                      const fullName = [member.lastName, member.firstName].filter(Boolean).join(' ') || 'Пользователь';
+                      const isSelected = selectedMembers.includes(member.id);
+                      return (
+                        <label 
+                          key={member.id} 
+                          className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+                            isSelected ? 'bg-green-50 dark:bg-green-900/20' : ''
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {
+                              setSelectedMembers(prev => 
+                                isSelected 
+                                  ? prev.filter(id => id !== member.id)
+                                  : [...prev, member.id]
+                              );
+                            }}
+                            className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                          />
+                          {member.avatarUrl ? (
+                            <img 
+                              src={member.avatarUrl} 
+                              alt="" 
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold">
+                              {fullName.charAt(0)}
+                            </div>
+                          )}
+                          <span className="text-sm text-gray-900 dark:text-white">{fullName}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowCreateGroup(false);
+                  setGroupName('');
+                  setGroupDescription('');
+                  setSelectedMembers([]);
+                }}
+                className="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 
+                  text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleCreateGroup}
+                disabled={creatingGroup || !groupName.trim() || selectedMembers.length === 0}
+                className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-teal-600 
+                  text-white hover:from-green-700 hover:to-teal-700 disabled:opacity-50 
+                  disabled:cursor-not-allowed transition-all"
+              >
+                {creatingGroup ? 'Создание...' : 'Создать группу'}
+              </button>
             </div>
           </div>
         </div>
