@@ -140,6 +140,12 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   
   // Chat tabs state (for PPO Head)
   const [chatTab, setChatTab] = useState<'work' | 'personal'>('work');
+  
+  // Ticket close state
+  const [showCloseTicket, setShowCloseTicket] = useState(false);
+  const [ticketRating, setTicketRating] = useState(5);
+  const [ticketComment, setTicketComment] = useState('');
+  const [closingTicket, setClosingTicket] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -1454,6 +1460,66 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
     }
   }, [selectedRoomId]);
 
+  // Close ticket with rating
+  const handleCloseTicket = useCallback(async () => {
+    if (!selectedRoomId) return;
+    setClosingTicket(true);
+    
+    try {
+      // Get ticket ID from room info
+      const roomInfo = dbRoomInfo.get(selectedRoomId);
+      const ticketNumber = roomInfo?.displayName?.match(/#(\d+)/)?.[1];
+      
+      if (!ticketNumber) {
+        alert('Не удалось определить номер обращения');
+        return;
+      }
+      
+      const response = await fetch(`/api/tickets/${ticketNumber}/close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rating: ticketRating,
+          comment: ticketComment.trim() || null,
+        }),
+      });
+      
+      if (response.ok) {
+        // Send system message to chat
+        if (credentials) {
+          const txnId = `close_${Date.now()}`;
+          await fetch(
+            `${credentials.serverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(selectedRoomId)}/send/m.room.message/${txnId}`,
+            {
+              method: 'PUT',
+              headers: {
+                'Authorization': `Bearer ${credentials.accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                msgtype: 'm.text',
+                body: `✅ Обращение закрыто.\nОценка: ${'⭐'.repeat(ticketRating)}\n${ticketComment ? `Комментарий: ${ticketComment}` : ''}`,
+              }),
+            }
+          );
+        }
+        
+        setShowCloseTicket(false);
+        setTicketRating(5);
+        setTicketComment('');
+        alert('Обращение успешно закрыто!');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Ошибка закрытия обращения');
+      }
+    } catch (err) {
+      console.error('Failed to close ticket:', err);
+      alert('Ошибка закрытия обращения');
+    } finally {
+      setClosingTicket(false);
+    }
+  }, [selectedRoomId, ticketRating, ticketComment, credentials, dbRoomInfo]);
+
   // Invite to group
   const handleInviteToGroup = useCallback(async (chatId: string) => {
     if (selectedInvites.length === 0) return;
@@ -1823,6 +1889,19 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                   )}
                 </div>
                 
+                {/* Close ticket button (for ticket creator) */}
+                {selectedRoom.isTicket && !isPPOHead && (
+                  <button
+                    onClick={() => setShowCloseTicket(true)}
+                    className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors flex items-center gap-1.5"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Закрыть
+                  </button>
+                )}
+                
                 {/* Group settings button (for PPO Head and group chats or tickets) */}
                 {isPPOHead && (!selectedRoom.isDirect || selectedRoom.isTicket) && (
                   <button
@@ -2018,13 +2097,13 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                                   href={msg.attachment.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="hidden flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+                                  className="hidden flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 max-w-[280px]"
                                 >
-                                  <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <svg className="w-8 h-8 flex-shrink-0 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                   </svg>
-                                  <div>
-                                    <div className="font-medium text-gray-900 dark:text-white">{msg.attachment.name}</div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-medium text-gray-900 dark:text-white truncate">{msg.attachment.name}</div>
                                     <div className="text-sm text-gray-500">Нажмите для просмотра</div>
                                   </div>
                                 </a>
@@ -2810,6 +2889,103 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                   text-white hover:from-blue-700 hover:to-blue-600 disabled:opacity-50"
               >
                 Добавить ({selectedInvites.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Close Ticket Modal */}
+      {showCloseTicket && selectedRoom?.isTicket && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
+          <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-4 bg-gradient-to-r from-green-600 to-green-500 text-white">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Закрыть обращение</h3>
+                <button 
+                  onClick={() => setShowCloseTicket(false)}
+                  className="p-1 hover:bg-white/20 rounded-full"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {/* Rating */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Оцените качество обслуживания
+                </label>
+                <div className="flex justify-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      onClick={() => setTicketRating(star)}
+                      className={`text-4xl transition-transform hover:scale-110 ${
+                        star <= ticketRating ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'
+                      }`}
+                    >
+                      ⭐
+                    </button>
+                  ))}
+                </div>
+                <p className="text-center mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  {ticketRating === 1 && 'Очень плохо'}
+                  {ticketRating === 2 && 'Плохо'}
+                  {ticketRating === 3 && 'Удовлетворительно'}
+                  {ticketRating === 4 && 'Хорошо'}
+                  {ticketRating === 5 && 'Отлично!'}
+                </p>
+              </div>
+              
+              {/* Comment */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Комментарий (необязательно)
+                </label>
+                <textarea
+                  value={ticketComment}
+                  onChange={(e) => setTicketComment(e.target.value)}
+                  rows={3}
+                  placeholder="Напишите, что понравилось или что можно улучшить..."
+                  className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 
+                    bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none
+                    focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex gap-3">
+              <button
+                onClick={() => setShowCloseTicket(false)}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 
+                  dark:bg-gray-700 dark:text-gray-300 font-medium"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleCloseTicket}
+                disabled={closingTicket}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-r from-green-600 to-green-500 
+                  text-white hover:from-green-700 hover:to-green-600 disabled:opacity-50 font-medium
+                  flex items-center justify-center gap-2"
+              >
+                {closingTicket ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Закрытие...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Закрыть обращение
+                  </>
+                )}
               </button>
             </div>
           </div>
