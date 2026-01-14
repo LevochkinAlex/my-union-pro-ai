@@ -204,7 +204,6 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
             const room = rooms.find(r => r.roomId === data.chat.matrixRoomId);
             if (room) {
               setSelectedRoomId(data.chat.matrixRoomId);
-              setIsMobileMenuOpen(false);
             }
           }
         }
@@ -985,7 +984,6 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
     setSelectedRoomId(roomId);
     setMessages([]);
     setTypingUsers([]);
-    setIsMobileMenuOpen(false);
     
     // Clear unread count immediately for better UX
     setRooms(prev => prev.map(r => 
@@ -1681,55 +1679,53 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
 
   return (
     <div className="flex h-full bg-gray-50 dark:bg-gray-900">
-      {/* Sidebar */}
+      {/* Chat List - full width on mobile, sidebar on desktop */}
       <div className={`
-        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
-        md:translate-x-0 fixed md:relative z-20 w-80 h-full 
+        ${selectedRoomId ? 'hidden md:flex' : 'flex'}
+        w-full md:w-80 h-full flex-col
         border-r border-gray-200 dark:border-gray-700 
-        bg-white dark:bg-gray-800 flex flex-col transition-transform
+        bg-white dark:bg-gray-800
       `}>
-        {/* Header */}
-        <div className="p-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`} />
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Чаты</h2>
-            </div>
-            {/* + Button with dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowNewChatMenu(!showNewChatMenu)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-              >
-                <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              </button>
-              {showNewChatMenu && (
-                <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+        {/* Header with logo and + button */}
+        <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`} />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Чаты</h2>
+          </div>
+          {/* + Button with dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowNewChatMenu(!showNewChatMenu)}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+            >
+              <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+            {showNewChatMenu && (
+              <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+                <button
+                  onClick={() => { setShowNewChat(true); setShowNewChatMenu(false); }}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  Написать
+                </button>
+                {isPPOHead && (
                   <button
-                    onClick={() => { setShowNewChat(true); setShowNewChatMenu(false); }}
+                    onClick={() => { setShowCreateGroup(true); setShowNewChatMenu(false); }}
                     className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                    Написать
+                    Создать группу
                   </button>
-                  {isPPOHead && (
-                    <button
-                      onClick={() => { setShowCreateGroup(true); setShowNewChatMenu(false); }}
-                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      Создать группу
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1875,27 +1871,20 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
         </div>
       </div>
 
-      {/* Mobile Menu Overlay */}
-      {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-10 md:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
-
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main Chat Area - hidden on mobile when no chat selected */}
+      <div className={`${selectedRoomId ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0`}>
         {selectedRoom ? (
           <>
             {/* Chat Header */}
             <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
               <div className="flex items-center gap-3">
+                {/* Back button on mobile */}
                 <button
                   className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                  onClick={() => setIsMobileMenuOpen(true)}
+                  onClick={() => setSelectedRoomId(null)}
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  <svg className="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
                 
