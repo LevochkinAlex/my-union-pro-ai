@@ -128,12 +128,15 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   const [showEditGroup, setShowEditGroup] = useState(false);
   const [editGroupName, setEditGroupName] = useState('');
   const [editGroupDescription, setEditGroupDescription] = useState('');
+  const [editGroupIcon, setEditGroupIcon] = useState<string | null>(null);
+  const [uploadingGroupIcon, setUploadingGroupIcon] = useState(false);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteSearch, setInviteSearch] = useState('');
   const [inviteResults, setInviteResults] = useState<Array<{id: string; firstName: string; lastName: string; avatarUrl?: string; matrixUserId?: string}>>([]);
   const [selectedInvites, setSelectedInvites] = useState<string[]>([]);
   const [groupParticipants, setGroupParticipants] = useState<Array<{id: string; firstName: string; lastName: string; avatarUrl?: string; role: string}>>([]);
+  const groupIconInputRef = useRef<HTMLInputElement>(null);
   
   // Chat tabs state (for PPO Head)
   const [chatTab, setChatTab] = useState<'work' | 'personal'>('work');
@@ -1328,6 +1331,73 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
     }
   }, []);
 
+  // Upload group icon
+  const handleGroupIconUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setUploadingGroupIcon(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setEditGroupIcon(data.url);
+      } else {
+        alert('Ошибка загрузки изображения');
+      }
+    } catch (err) {
+      console.error('Failed to upload icon:', err);
+    } finally {
+      setUploadingGroupIcon(false);
+    }
+  }, []);
+
+  // Clear chat history
+  const handleClearHistory = useCallback(async () => {
+    if (!selectedRoomId || !credentials) return;
+    if (!confirm('Очистить историю чата? Это действие нельзя отменить.')) return;
+    
+    try {
+      // Redact all messages in the Matrix room
+      const messagesResp = await fetch(
+        `${credentials.serverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(selectedRoomId)}/messages?dir=b&limit=500`,
+        { headers: { 'Authorization': `Bearer ${credentials.accessToken}` } }
+      );
+      const messagesData = await messagesResp.json();
+      
+      const messageEvents = (messagesData.chunk || []).filter((e: any) => e.type === 'm.room.message');
+      
+      for (const event of messageEvents) {
+        const txnId = `redact_${Date.now()}_${Math.random()}`;
+        await fetch(
+          `${credentials.serverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(selectedRoomId)}/redact/${encodeURIComponent(event.event_id)}/${txnId}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${credentials.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ reason: 'Cleared by admin' }),
+          }
+        );
+      }
+      
+      // Clear local messages
+      setMessages([]);
+      alert('История очищена');
+    } catch (err) {
+      console.error('Failed to clear history:', err);
+      alert('Ошибка очистки истории');
+    }
+  }, [selectedRoomId, credentials]);
+
   // Edit group
   const handleEditGroup = useCallback(async (chatId: string) => {
     if (!editGroupName.trim()) return;
@@ -1339,16 +1409,18 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
         body: JSON.stringify({
           name: editGroupName.trim(),
           description: editGroupDescription.trim() || null,
+          iconUrl: editGroupIcon,
         }),
       });
       
       if (response.ok) {
-        // Update local room name
+        // Update local room name and avatar
         setRooms(prev => prev.map(r => 
-          r.roomId === selectedRoomId ? { ...r, name: editGroupName.trim() } : r
+          r.roomId === selectedRoomId ? { ...r, name: editGroupName.trim(), avatarUrl: editGroupIcon || r.avatarUrl } : r
         ));
         setShowEditGroup(false);
         setShowGroupSettings(false);
+        setEditGroupIcon(null);
       } else {
         const data = await response.json();
         alert(data.error || 'Ошибка редактирования');
@@ -1356,7 +1428,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
     } catch (err) {
       console.error('Failed to edit group:', err);
     }
-  }, [editGroupName, editGroupDescription, selectedRoomId]);
+  }, [editGroupName, editGroupDescription, editGroupIcon, selectedRoomId]);
 
   // Delete group
   const handleDeleteGroup = useCallback(async (chatId: string) => {
@@ -1749,8 +1821,8 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                   )}
                 </div>
                 
-                {/* Group settings button (for PPO Head and group chats) */}
-                {isPPOHead && !selectedRoom.isDirect && (
+                {/* Group settings button (for PPO Head and group chats or tickets) */}
+                {isPPOHead && (!selectedRoom.isDirect || selectedRoom.isTicket) && (
                   <button
                     onClick={() => {
                       setShowGroupSettings(true);
@@ -2457,7 +2529,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
       )}
 
       {/* Group Settings Modal */}
-      {showGroupSettings && selectedRoom && !selectedRoom.isDirect && (
+      {showGroupSettings && selectedRoom && (!selectedRoom.isDirect || selectedRoom.isTicket) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
             <div className="p-4 bg-gradient-to-r from-purple-600 to-purple-500 text-white">
@@ -2474,7 +2546,44 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
               </div>
             </div>
             
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
+              {/* Avatar */}
+              <div className="flex items-center gap-4">
+                <div 
+                  onClick={() => groupIconInputRef.current?.click()}
+                  className="relative w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden"
+                >
+                  {(editGroupIcon || selectedRoom?.avatarUrl) ? (
+                    <img 
+                      src={editGroupIcon || selectedRoom?.avatarUrl} 
+                      alt="" 
+                      className="w-full h-full object-cover" 
+                    />
+                  ) : (
+                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  )}
+                  {uploadingGroupIcon && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
+                <input
+                  ref={groupIconInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleGroupIconUpload}
+                  className="hidden"
+                />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Аватар группы</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Нажмите чтобы изменить</p>
+                </div>
+              </div>
+
               {/* Edit Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -2554,7 +2663,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
               </div>
             </div>
 
-            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex gap-2">
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex flex-wrap gap-2">
               <button
                 onClick={() => {
                   fetch(`/api/chat/rooms/by-matrix-id?roomId=${encodeURIComponent(selectedRoom.roomId)}`)
@@ -2563,13 +2672,22 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                       if (data.chatId) handleDeleteGroup(data.chatId);
                     });
                 }}
-                className="px-4 py-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400"
+                className="px-3 py-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 text-sm"
               >
-                Удалить
+                🗑 Удалить
+              </button>
+              <button
+                onClick={handleClearHistory}
+                className="px-3 py-2 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-400 text-sm"
+              >
+                🧹 Очистить
               </button>
               <div className="flex-1" />
               <button
-                onClick={() => setShowGroupSettings(false)}
+                onClick={() => {
+                  setShowGroupSettings(false);
+                  setEditGroupIcon(null);
+                }}
                 className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
               >
                 Отмена
