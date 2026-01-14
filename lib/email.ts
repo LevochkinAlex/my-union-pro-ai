@@ -33,18 +33,41 @@ function createEmailTransport() {
 }
 
 /**
+ * Проверяет, включен ли режим разработки
+ */
+function isDevMode(): boolean {
+  return process.env.NODE_ENV === "development" || process.env.DEV_EMAIL_MODE === "true";
+}
+
+/**
+ * Проверяет, настроен ли SMTP
+ */
+function isSmtpConfigured(): boolean {
+  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD);
+}
+
+/**
  * Универсальная функция для отправки email
+ * В режиме разработки просто логирует email в консоль без реальной отправки
  */
 export async function sendEmail(options: SendEmailOptions): Promise<void> {
-  try {
-    console.log("[Email] Готово к отправке:");
+  console.log("[Email] Готово к отправке:");
+  console.log("  To:", options.to);
+  console.log("  Subject:", options.subject);
+
+  // В режиме разработки или если SMTP не настроен - просто логируем
+  if (isDevMode() || !isSmtpConfigured()) {
+    console.log("\n" + "=".repeat(60));
+    console.log("📧 [DEV MODE] Email не отправлен (SMTP не настроен)");
+    console.log("=".repeat(60));
     console.log("  To:", options.to);
     console.log("  Subject:", options.subject);
+    console.log("  Text:", options.text?.substring(0, 200) + "...");
+    console.log("=".repeat(60) + "\n");
+    return; // Не выбрасываем ошибку в dev режиме
+  }
 
-    if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
-      throw new Error("SMTP настройки не установлены");
-    }
-
+  try {
     const transporter = createEmailTransport();
     
     // Проверяем подключение
@@ -81,19 +104,37 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
 
 /**
  * Отправляет Magic Link на email для авторизации
+ * В режиме разработки выводит ссылку в консоль вместо отправки
  */
 export async function sendMagicLinkEmail(
   email: string,
   magicLink: string,
   isNewUser: boolean,
   firstName?: string
-): Promise<SendEmailResult> {
-  try {
-    // TODO: Интеграция с email сервисом (SendGrid, Mailgun, или SMTP)
-    // Пока просто логируем
+): Promise<SendEmailResult & { devMode?: boolean; magicLink?: string }> {
+  const name = firstName ? `, ${firstName}` : "";
+  const subject = isNewUser ? "Добро пожаловать в МойСоюз!" : "Вход в МойСоюз";
+  
+  // В режиме разработки или если SMTP не настроен - выводим ссылку в консоль
+  if (isDevMode() || !isSmtpConfigured()) {
+    console.log("\n" + "🔗".repeat(30));
+    console.log("🚀 [DEV MODE] MAGIC LINK ДЛЯ АВТОРИЗАЦИИ:");
+    console.log("🔗".repeat(30));
+    console.log("📧 Email:", email);
+    console.log("👤 New User:", isNewUser);
+    console.log("🔐 Magic Link:");
+    console.log("\n  👉 " + magicLink + "\n");
+    console.log("🔗".repeat(30) + "\n");
     
-    const name = firstName ? `, ${firstName}` : "";
-    const subject = isNewUser ? "Добро пожаловать в МойСоюз!" : "Вход в МойСоюз";
+    return {
+      success: true,
+      messageId: "dev-mode-" + Date.now(),
+      devMode: true,
+      magicLink: magicLink, // Возвращаем ссылку для показа на фронте
+    };
+  }
+
+  try {
     
     const htmlContent = `
 <!DOCTYPE html>

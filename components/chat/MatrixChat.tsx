@@ -354,22 +354,68 @@ export default function MatrixChat() {
 
         // Update messages for selected room
         if (roomId === selectedRoomId && !initialSync) {
-          type TimelineEvent = { type: string; event_id: string; sender: string; content: { body?: string }; origin_server_ts: number };
-          const newMsgs = (timelineEvents as TimelineEvent[])
+          type TimelineEvent = { type: string; event_id: string; sender: string; content: { body?: string; msgtype?: string; url?: string; info?: any; 'm.relates_to'?: any }; origin_server_ts: number };
+          const newMsgs: MatrixMessage[] = (timelineEvents as TimelineEvent[])
             .filter(e => e.type === 'm.room.message')
-            .map(e => ({
-              eventId: e.event_id,
-              sender: e.sender,
-              senderName: e.sender.split(':')[0].replace('@', ''),
-              content: e.content.body || '',
-              timestamp: e.origin_server_ts,
-              isOwn: e.sender === credentials.userId,
-            }));
+            .map(e => {
+              const msgtype = (e.content?.msgtype || 'm.text') as MatrixMessage['msgtype'];
+              let attachment: MessageAttachment | undefined;
+              
+              // Handle attachments
+              if (msgtype === 'm.image' && e.content?.url) {
+                attachment = {
+                  type: 'image',
+                  url: e.content.url.replace('mxc://', `${credentials.serverUrl}/_matrix/media/v3/download/`),
+                  name: e.content.body || 'image',
+                  mimeType: e.content.info?.mimetype,
+                  width: e.content.info?.w,
+                  height: e.content.info?.h,
+                  size: e.content.info?.size
+                };
+              } else if (msgtype === 'm.file' && e.content?.url) {
+                attachment = {
+                  type: 'file',
+                  url: e.content.url.replace('mxc://', `${credentials.serverUrl}/_matrix/media/v3/download/`),
+                  name: e.content.body || 'file',
+                  mimeType: e.content.info?.mimetype,
+                  size: e.content.info?.size
+                };
+              } else if (msgtype === 'm.video' && e.content?.url) {
+                attachment = {
+                  type: 'video',
+                  url: e.content.url.replace('mxc://', `${credentials.serverUrl}/_matrix/media/v3/download/`),
+                  name: e.content.body || 'video',
+                  mimeType: e.content.info?.mimetype,
+                  size: e.content.info?.size
+                };
+              } else if (msgtype === 'm.audio' && e.content?.url) {
+                attachment = {
+                  type: 'audio',
+                  url: e.content.url.replace('mxc://', `${credentials.serverUrl}/_matrix/media/v3/download/`),
+                  name: e.content.body || 'audio',
+                  mimeType: e.content.info?.mimetype,
+                  size: e.content.info?.size
+                };
+              }
+              
+              const senderName = e.sender.includes('myunion_bot') ? 'МойСоюз Помощник' : e.sender.split(':')[0].replace('@', '');
+              
+              return {
+                eventId: e.event_id,
+                sender: e.sender,
+                senderName,
+                content: e.content?.body || '',
+                timestamp: e.origin_server_ts,
+                isOwn: e.sender === credentials.userId,
+                msgtype,
+                attachment
+              };
+            });
 
           if (newMsgs.length > 0) {
             setMessages(prev => {
               const existing = new Set(prev.map(m => m.eventId));
-              const unique = newMsgs.filter((m: MatrixMessage) => !existing.has(m.eventId));
+              const unique = newMsgs.filter(m => !existing.has(m.eventId));
               return [...prev, ...unique].sort((a, b) => a.timestamp - b.timestamp);
             });
             scrollToBottom();
