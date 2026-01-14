@@ -23,11 +23,18 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
   const [isSwitching, setIsSwitching] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Загружаем сохраненные данные из localStorage
+  // Wait for client-side mount to avoid hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Загружаем сохраненные данные из localStorage (only on client)
   const loadStoredData = () => {
+    if (typeof window === 'undefined') return null;
     try {
       const stored = localStorage.getItem('viewModeData');
       if (stored) {
@@ -196,6 +203,11 @@ export default function ViewModeSwitch({ collapsed = false }: ViewModeSwitchProp
       setIsSwitching(false);
     }
   };
+
+  // Don't render anything until mounted (to avoid hydration mismatch with localStorage)
+  if (!mounted) {
+    return null;
+  }
 
   // Показываем переключатель если:
   // 1. Есть более одного режима (основное условие)
