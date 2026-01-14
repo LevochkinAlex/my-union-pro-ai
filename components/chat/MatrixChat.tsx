@@ -807,6 +807,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
 
     setMessages(msgs);
     scrollToBottom();
+    return msgs;
   }, [credentials, matrixFetch, dbRoomInfo]);
 
   // Select room
@@ -857,14 +858,45 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
     }
   }, [credentials, matrixFetch]);
 
+  // Mark room as read - send read receipt to Matrix
+  const markRoomAsRead = useCallback(async (roomId: string, eventId?: string) => {
+    if (!credentials || !eventId) return;
+    
+    try {
+      // Send read receipt
+      await matrixFetch(`/rooms/${encodeURIComponent(roomId)}/receipt/m.read/${encodeURIComponent(eventId)}`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      
+      // Update local unread count
+      setRooms(prev => prev.map(r => 
+        r.roomId === roomId ? { ...r, unreadCount: 0 } : r
+      ));
+    } catch (err) {
+      console.error('Failed to mark room as read:', err);
+    }
+  }, [credentials, matrixFetch]);
+
   const handleSelectRoom = async (roomId: string) => {
     setSelectedRoomId(roomId);
     setMessages([]);
     setTypingUsers([]);
     setIsMobileMenuOpen(false);
     
+    // Clear unread count immediately for better UX
+    setRooms(prev => prev.map(r => 
+      r.roomId === roomId ? { ...r, unreadCount: 0 } : r
+    ));
+    
     // Load messages
-    loadRoomMessages(roomId);
+    const msgs = await loadRoomMessages(roomId);
+    
+    // Mark the last message as read
+    if (msgs && msgs.length > 0) {
+      const lastEventId = msgs[msgs.length - 1].eventId;
+      markRoomAsRead(roomId, lastEventId);
+    }
     
     // Fetch room members to update room info
     const memberInfo = await fetchRoomMembers(roomId);
@@ -945,6 +977,13 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
           } : undefined
         }]);
         scrollToBottom();
+        
+        // Send push notification to other participants
+        fetch('/api/chat/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId: selectedRoomId, message: content }),
+        }).catch(() => {}); // Ignore errors silently
       }
     } catch (err) {
       console.error('Send error:', err);

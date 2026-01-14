@@ -29,7 +29,48 @@ interface UserProfile {
 const conversations = new Map<string, ConversationMessage[]>();
 // Cache user profiles
 const userProfiles = new Map<string, UserProfile>();
+// Cache matrix to user id mapping
+const matrixToUserId = new Map<string, string>();
 let syncToken: string | null = null;
+
+// Send push notification to user
+async function sendPushToUser(matrixUserId: string, title: string, body: string): Promise<void> {
+  try {
+    // Get user ID from cache or DB
+    let userId = matrixToUserId.get(matrixUserId);
+    
+    if (!userId) {
+      const user = await prisma.user.findFirst({
+        where: { matrixUserId },
+        select: { id: true }
+      });
+      if (user) {
+        userId = user.id;
+        matrixToUserId.set(matrixUserId, userId);
+      }
+    }
+    
+    if (!userId) return;
+    
+    // Send push via API
+    const baseUrl = process.env.NEXTAUTH_URL || 'https://myunion.pro';
+    await fetch(`${baseUrl}/api/push/send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Internal-Token': process.env.INTERNAL_API_TOKEN || '',
+      },
+      body: JSON.stringify({
+        userId,
+        title,
+        message: body,
+        data: { url: '/dashboard/chat' },
+      }),
+    });
+  } catch (err) {
+    // Silently ignore push errors
+  }
+}
 
 // Base system prompt
 const BASE_SYSTEM_PROMPT = `Ты — AI-ассистент профсоюзной системы MyUnion Pro. Ты дружелюбный и полезный помощник.
@@ -294,6 +335,9 @@ async function handleMessage(roomId: string, event: MatrixEvent): Promise<void> 
     // Stop typing and send response
     await setTyping(roomId, false);
     await sendMessage(roomId, response);
+    
+    // Send push notification to user
+    await sendPushToUser(senderMatrixId, 'МойСоюз Помощник', response.slice(0, 100));
 
   } catch (error) {
     console.error('Error handling message:', error);
