@@ -108,20 +108,8 @@ async function main() {
       p => p.user?.matrixUserId?.includes('myunion_bot') || p.user?.matrixUserId?.includes('ai_assistant')
     );
 
-    if (existingChat && isAIChat) {
-      console.log(`  → Existing AI chat found, will reset`);
-      
-      // Delete old chat record
-      await prisma.chatParticipant.deleteMany({
-        where: { chatId: existingChat.id }
-      });
-      await prisma.message.deleteMany({
-        where: { chatId: existingChat.id }
-      });
-      await prisma.chat.delete({
-        where: { id: existingChat.id }
-      });
-      console.log(`  → Deleted old chat record`);
+    if (existingChat) {
+      console.log(`  → Existing chat found (AI: ${isAIChat}), will update matrixRoomId`);
     }
 
     // Create new Matrix room with bot
@@ -151,21 +139,29 @@ async function main() {
         console.log(`  → Created bot user in DB`);
       }
 
-      // Create new chat record
-      const newChat = await prisma.chat.create({
-        data: {
-          type: 'PRIVATE',
-          matrixRoomId: newRoomId,
-          participants: {
-            create: [
-              { userId: user.id, role: 'member' },
-              { userId: botUser.id, role: 'admin' },
-            ]
+      if (existingChat) {
+        // Update existing chat with new room
+        await prisma.chat.update({
+          where: { id: existingChat.id },
+          data: { matrixRoomId: newRoomId }
+        });
+        console.log(`  ✓ Updated AI chat: ${existingChat.id}\n`);
+      } else {
+        // Create new chat record
+        const newChat = await prisma.chat.create({
+          data: {
+            type: 'PRIVATE',
+            matrixRoomId: newRoomId,
+            participants: {
+              create: [
+                { userId: user.id, role: 'member' },
+                { userId: botUser.id, role: 'admin' },
+              ]
+            }
           }
-        }
-      });
-      
-      console.log(`  ✓ Created new AI chat: ${newChat.id}\n`);
+        });
+        console.log(`  ✓ Created new AI chat: ${newChat.id}\n`);
+      }
       success++;
     } else {
       failed++;
