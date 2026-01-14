@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
+import GroupIconUpload from './GroupIconUpload';
 
 // Simple Avatar component
 function Avatar({ className, children }: { className?: string; children: React.ReactNode }) {
@@ -133,14 +134,12 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   const [editGroupName, setEditGroupName] = useState('');
   const [editGroupDescription, setEditGroupDescription] = useState('');
   const [editGroupIcon, setEditGroupIcon] = useState<string | null>(null);
-  const [uploadingGroupIcon, setUploadingGroupIcon] = useState(false);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteSearch, setInviteSearch] = useState('');
   const [inviteResults, setInviteResults] = useState<Array<{id: string; firstName: string; lastName: string; avatarUrl?: string; matrixUserId?: string}>>([]);
   const [selectedInvites, setSelectedInvites] = useState<string[]>([]);
   const [groupParticipants, setGroupParticipants] = useState<Array<{id: string; firstName: string; lastName: string; avatarUrl?: string; role: string}>>([]);
-  const groupIconInputRef = useRef<HTMLInputElement>(null);
   
   // Chat tabs state (for PPO Head)
   const [chatTab, setChatTab] = useState<'work' | 'personal'>('work');
@@ -1369,34 +1368,6 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
       }
     } catch (err) {
       console.error('Failed to load group participants:', err);
-    }
-  }, []);
-
-  // Upload group icon
-  const handleGroupIconUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setUploadingGroupIcon(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setEditGroupIcon(data.url);
-      } else {
-        alert('Ошибка загрузки изображения');
-      }
-    } catch (err) {
-      console.error('Failed to upload icon:', err);
-    } finally {
-      setUploadingGroupIcon(false);
     }
   }, []);
 
@@ -2661,41 +2632,15 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
             </div>
             
             <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
-              {/* Avatar */}
-              <div className="flex items-center gap-4">
-                <div 
-                  onClick={() => groupIconInputRef.current?.click()}
-                  className="relative w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden"
-                >
-                  {(editGroupIcon || selectedRoom?.avatarUrl) ? (
-                    <img 
-                      src={editGroupIcon || selectedRoom?.avatarUrl} 
-                      alt="" 
-                      className="w-full h-full object-cover" 
-                    />
-                  ) : (
-                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  )}
-                  {uploadingGroupIcon && (
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                      <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    </div>
-                  )}
-                </div>
-                <input
-                  ref={groupIconInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleGroupIconUpload}
-                  className="hidden"
+              {/* Avatar with Crop */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Аватар группы
+                </label>
+                <GroupIconUpload
+                  value={editGroupIcon || selectedRoom?.avatarUrl || null}
+                  onChange={(url) => setEditGroupIcon(url)}
                 />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Аватар группы</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Нажмите чтобы изменить</p>
-                </div>
               </div>
 
               {/* Edit Name */}
