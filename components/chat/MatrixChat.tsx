@@ -104,7 +104,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   const [error, setError] = useState<string | null>(null);
   const [showNewChat, setShowNewChat] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState<Array<{userId: string; displayName: string; avatarUrl?: string}>>([]);
+  const [searchResults, setSearchResults] = useState<Array<{userId: string; displayName: string; avatarUrl?: string; position?: string; organization?: string}>>([]);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [dbRoomInfoLoaded, setDbRoomInfoLoaded] = useState(false);
   // Group creation state (for PPO Head)
@@ -1168,34 +1168,37 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
     });
   };
 
-  // Search users
+  // Search users from our DB
   useEffect(() => {
-    if (!searchTerm.trim() || !credentials) {
+    if (!searchTerm.trim()) {
       setSearchResults([]);
       return;
     }
 
     const timer = setTimeout(async () => {
-      const data = await matrixFetch(`/user_directory/search`, {
-        method: 'POST',
-        body: JSON.stringify({ search_term: searchTerm, limit: 20 }),
-      });
-      
-      if (data?.results) {
-        setSearchResults(
-          data.results
-            .filter((u: { user_id: string }) => u.user_id !== credentials.userId)
-            .map((u: { user_id: string; display_name?: string; avatar_url?: string }) => ({
-              userId: u.user_id,
-              displayName: u.display_name || u.user_id.split(':')[0].replace('@', ''),
-              avatarUrl: u.avatar_url,
+      try {
+        const response = await fetch(`/api/chat/users/search?q=${encodeURIComponent(searchTerm)}`);
+        const data = await response.json();
+        
+        if (data?.users) {
+          setSearchResults(
+            data.users.map((u: { matrixUserId: string; displayName: string; avatarUrl?: string; position?: string; organization?: string }) => ({
+              userId: u.matrixUserId,
+              displayName: u.displayName,
+              avatarUrl: u.avatarUrl,
+              position: u.position,
+              organization: u.organization,
             }))
-        );
+          );
+        }
+      } catch (err) {
+        console.error('User search error:', err);
+        setSearchResults([]);
       }
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, credentials, matrixFetch]);
+  }, [searchTerm]);
 
   // Start chat with user
   const handleStartChat = async (userId: string) => {
@@ -1844,18 +1847,29 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                     onClick={() => handleStartChat(user.userId)}
                     className="w-full p-4 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
-                    <Avatar className="h-12 w-12">
-                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-                        {user.displayName.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="text-left">
-                      <div className="font-semibold text-gray-900 dark:text-white">
+                    {user.avatarUrl ? (
+                      <Avatar className="h-12 w-12">
+                        <AvatarImage src={user.avatarUrl} alt={user.displayName} />
+                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+                          {user.displayName.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : (
+                      <Avatar className="h-12 w-12">
+                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+                          {user.displayName.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="font-semibold text-gray-900 dark:text-white truncate">
                         {user.displayName}
                       </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {user.userId}
-                      </div>
+                      {(user.position || user.organization) && (
+                        <div className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                          {[user.position, user.organization].filter(Boolean).join(' • ')}
+                        </div>
+                      )}
                     </div>
                   </button>
                 ))
