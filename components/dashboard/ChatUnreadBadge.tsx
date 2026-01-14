@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 
@@ -8,9 +8,16 @@ export default function ChatUnreadBadge() {
   const { data: session } = useSession();
   const [unreadCount, setUnreadCount] = useState(0);
   const pathname = usePathname();
+  const syncTokenRef = useRef<string | null>(null);
 
-  const fetchUnreadCount = useCallback(async () => {
+  const fetchUnreadCount = useCallback(async (resetToZero = false) => {
     if (!session?.user?.id) return;
+    
+    // If requested to reset, set to 0 immediately
+    if (resetToZero) {
+      setUnreadCount(0);
+      return;
+    }
     
     try {
       // Get Matrix credentials
@@ -19,15 +26,25 @@ export default function ChatUnreadBadge() {
       
       const { accessToken, serverUrl } = await authResp.json();
       
-      // Get sync data with limited filter
-      const syncResp = await fetch(
-        `${serverUrl}/_matrix/client/v3/sync?timeout=0&filter={"room":{"timeline":{"limit":1}}}`,
-        { headers: { 'Authorization': `Bearer ${accessToken}` } }
-      );
+      // Build sync URL - use since token for incremental sync if available
+      let syncUrl = `${serverUrl}/_matrix/client/v3/sync?timeout=0&filter={"room":{"timeline":{"limit":1}}}`;
+      if (syncTokenRef.current) {
+        syncUrl += `&since=${encodeURIComponent(syncTokenRef.current)}`;
+      }
+      
+      const syncResp = await fetch(syncUrl, { 
+        headers: { 'Authorization': `Bearer ${accessToken}` } 
+      });
       
       if (!syncResp.ok) return;
       
       const data = await syncResp.json();
+      
+      // Save next_batch token for incremental syncs
+      if (data.next_batch) {
+        syncTokenRef.current = data.next_batch;
+      }
+      
       const rooms = data.rooms?.join || {};
       
       let total = 0;
@@ -48,23 +65,33 @@ export default function ChatUnreadBadge() {
 
     fetchUnreadCount();
     
-    // Refresh every 10 seconds
-    const interval = setInterval(fetchUnreadCount, 10000);
+    // Refresh every 30 seconds (less frequent since we use incremental sync)
+    const interval = setInterval(() => fetchUnreadCount(), 30000);
     return () => clearInterval(interval);
   }, [session, fetchUnreadCount]);
 
-  // Refresh when navigating away from chat (user might have read messages)
+  // Reset badge when user is on chat page (they're reading messages)
   useEffect(() => {
-    if (!pathname?.includes('/chat')) {
-      // Small delay to allow read receipts to sync
-      const timeout = setTimeout(fetchUnreadCount, 1000);
+    if (pathname?.includes('/chat')) {
+      // User is viewing chats - reset badge after a short delay
+      const timeout = setTimeout(() => setUnreadCount(0), 2000);
       return () => clearTimeout(timeout);
     }
-  }, [pathname, fetchUnreadCount]);
+  }, [pathname]);
 
   // Listen for custom event from chat to refresh badge
   useEffect(() => {
-    const handleRefresh = () => fetchUnreadCount();
+    const handleRefresh = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      // If event has detail with count, use it; otherwise reset to 0
+      if (customEvent.detail?.count !== undefined) {
+        setUnreadCount(customEvent.detail.count);
+      } else {
+        // Reset to 0 immediately, then fetch fresh data after delay
+        setUnreadCount(0);
+        setTimeout(() => fetchUnreadCount(), 3000);
+      }
+    };
     window.addEventListener('chat-messages-read', handleRefresh);
     return () => window.removeEventListener('chat-messages-read', handleRefresh);
   }, [fetchUnreadCount]);

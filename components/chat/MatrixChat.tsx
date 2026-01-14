@@ -998,15 +998,24 @@ export default function MatrixChat() {
         body: JSON.stringify({}),
       });
       
-      // Update local unread count
-      setRooms(prev => prev.map(r => 
-        r.roomId === roomId ? { ...r, unreadCount: 0 } : r
-      ));
-      
-      // Notify sidebar badge to refresh
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('chat-messages-read'));
-      }
+      // Update local unread count and calculate total
+      setRooms(prev => {
+        const updated = prev.map(r => 
+          r.roomId === roomId ? { ...r, unreadCount: 0 } : r
+        );
+        
+        // Calculate new total unread count
+        const totalUnread = updated.reduce((sum, r) => sum + r.unreadCount, 0);
+        
+        // Notify sidebar badge with exact count
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('chat-messages-read', { 
+            detail: { count: totalUnread } 
+          }));
+        }
+        
+        return updated;
+      });
     } catch (err) {
       console.error('Failed to mark room as read:', err);
     }
@@ -1017,10 +1026,22 @@ export default function MatrixChat() {
     setMessages([]);
     setTypingUsers([]);
     
-    // Clear unread count immediately for better UX
-    setRooms(prev => prev.map(r => 
-      r.roomId === roomId ? { ...r, unreadCount: 0 } : r
-    ));
+    // Clear unread count immediately for better UX and update sidebar badge
+    setRooms(prev => {
+      const updated = prev.map(r => 
+        r.roomId === roomId ? { ...r, unreadCount: 0 } : r
+      );
+      
+      // Calculate new total and notify sidebar
+      const totalUnread = updated.reduce((sum, r) => sum + r.unreadCount, 0);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('chat-messages-read', { 
+          detail: { count: totalUnread } 
+        }));
+      }
+      
+      return updated;
+    });
     
     // Load messages
     const msgs = await loadRoomMessages(roomId);
