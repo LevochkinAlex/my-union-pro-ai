@@ -113,6 +113,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   const [searchResults, setSearchResults] = useState<Array<{userId: string; displayName: string; avatarUrl?: string; position?: string; organization?: string}>>([]);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [dbRoomInfoLoaded, setDbRoomInfoLoaded] = useState(false);
+  const [viewMode, setViewMode] = useState<string>('MEMBER');
   // New chat menu dropdown
   const [showNewChatMenu, setShowNewChatMenu] = useState(false);
   // Group creation state (for PPO Head)
@@ -162,12 +163,23 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   const syncTokenRef = useRef<string | null>(null);
   const syncAbortRef = useRef<AbortController | null>(null);
 
-  // Auth with Matrix
+  // Auth with Matrix and load viewMode
   useEffect(() => {
     async function authenticate() {
       if (!session?.user) return;
 
       try {
+        // Load user viewMode
+        const userResp = await fetch('/api/profile');
+        if (userResp.ok) {
+          const userData = await userResp.json();
+          setViewMode(userData.viewMode || 'MEMBER');
+          // If in MEMBER mode, default to personal tab
+          if (userData.viewMode === 'MEMBER' || !userData.viewMode) {
+            setChatTab('personal');
+          }
+        }
+
         const response = await fetch('/api/chat/matrix/auth', { method: 'POST' });
         if (response.ok) {
           const data = await response.json();
@@ -1713,65 +1725,67 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                   </svg>
                   Написать
                 </button>
-                {isPPOHead && (
-                  <button
-                    onClick={() => { setShowCreateGroup(true); setShowNewChatMenu(false); }}
-                    className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    Создать группу
-                  </button>
-                )}
+                  {isPPOHead && viewMode !== 'MEMBER' && (
+                    <button
+                      onClick={() => { setShowCreateGroup(true); setShowNewChatMenu(false); }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      Создать группу
+                    </button>
+                  )}
               </div>
             )}
           </div>
         </div>
 
-        {/* Chat Tabs - Telegram style */}
-        <div className="flex bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-          <button
-            onClick={() => setChatTab('work')}
-            className={`flex-1 py-2.5 text-sm font-medium transition-colors relative ${
-              chatTab === 'work'
-                ? 'text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800'
-                : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            <span className="flex items-center justify-center gap-1.5">
-              Рабочие
-              {rooms.filter(r => !r.isDirect || r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0) > 0 && (
-                <span className="min-w-[18px] h-[18px] px-1 text-[11px] bg-blue-600 text-white rounded-full flex items-center justify-center">
-                  {rooms.filter(r => !r.isDirect || r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0)}
-                </span>
+        {/* Chat Tabs - only show for staff/head modes, not for regular members */}
+        {viewMode !== 'MEMBER' && (
+          <div className="flex bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => setChatTab('work')}
+              className={`flex-1 py-2.5 text-sm font-medium transition-colors relative ${
+                chatTab === 'work'
+                  ? 'text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800'
+                  : 'text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              <span className="flex items-center justify-center gap-1.5">
+                Рабочие
+                {rooms.filter(r => !r.isDirect || r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0) > 0 && (
+                  <span className="min-w-[18px] h-[18px] px-1 text-[11px] bg-blue-600 text-white rounded-full flex items-center justify-center">
+                    {rooms.filter(r => !r.isDirect || r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0)}
+                  </span>
+                )}
+              </span>
+              {chatTab === 'work' && (
+                <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-blue-600 rounded-full" />
               )}
-            </span>
-            {chatTab === 'work' && (
-              <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-blue-600 rounded-full" />
-            )}
-          </button>
-          <button
-            onClick={() => setChatTab('personal')}
-            className={`flex-1 py-2.5 text-sm font-medium transition-colors relative ${
-              chatTab === 'personal'
-                ? 'text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800'
-                : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            <span className="flex items-center justify-center gap-1.5">
-              Личные
-              {rooms.filter(r => r.isDirect && !r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0) > 0 && (
-                <span className="min-w-[18px] h-[18px] px-1 text-[11px] bg-blue-600 text-white rounded-full flex items-center justify-center">
-                  {rooms.filter(r => r.isDirect && !r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0)}
-                </span>
+            </button>
+            <button
+              onClick={() => setChatTab('personal')}
+              className={`flex-1 py-2.5 text-sm font-medium transition-colors relative ${
+                chatTab === 'personal'
+                  ? 'text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800'
+                  : 'text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              <span className="flex items-center justify-center gap-1.5">
+                Личные
+                {rooms.filter(r => r.isDirect && !r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0) > 0 && (
+                  <span className="min-w-[18px] h-[18px] px-1 text-[11px] bg-blue-600 text-white rounded-full flex items-center justify-center">
+                    {rooms.filter(r => r.isDirect && !r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0)}
+                  </span>
+                )}
+              </span>
+              {chatTab === 'personal' && (
+                <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-blue-600 rounded-full" />
               )}
-            </span>
-            {chatTab === 'personal' && (
-              <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-blue-600 rounded-full" />
-            )}
-          </button>
-        </div>
+            </button>
+          </div>
+        )}
 
         {/* Room List */}
         <div className="flex-1 overflow-y-auto">
@@ -1793,7 +1807,11 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
           ) : (
             rooms
               .filter(room => {
-                // Filter by tab - Telegram style
+                // For regular members (MEMBER mode) - only show personal chats
+                if (viewMode === 'MEMBER') {
+                  return room.isDirect && !room.isTicket;
+                }
+                // Filter by tab - Telegram style (for staff/head modes)
                 // Рабочие = групповые ИЛИ обращения
                 if (chatTab === 'work') return !room.isDirect || room.isTicket;
                 // Личные = личные И НЕ обращения
