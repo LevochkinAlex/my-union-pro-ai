@@ -28,6 +28,21 @@ interface MatrixRoom {
   isDirect: boolean;
 }
 
+interface DbRoomInfo {
+  matrixRoomId: string;
+  displayName: string;
+  avatarUrl?: string;
+  isDirect: boolean;
+  participantCount: number;
+  participants: Array<{
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    avatarUrl?: string;
+    matrixUserId?: string;
+  }>;
+}
+
 interface MessageReaction {
   key: string;
   users: string[];
@@ -75,6 +90,7 @@ export default function MatrixChat() {
   const { data: session } = useSession();
   const [credentials, setCredentials] = useState<MatrixCredentials | null>(null);
   const [rooms, setRooms] = useState<MatrixRoom[]>([]);
+  const [dbRoomInfo, setDbRoomInfo] = useState<Map<string, DbRoomInfo>>(new Map());
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [messages, setMessages] = useState<MatrixMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -112,6 +128,8 @@ export default function MatrixChat() {
           
           // Ensure user has a chat with AI bot
           ensureBotChat(data);
+          // Load room info from our DB
+          loadDbRoomInfo();
         } else {
           setError('Не удалось подключиться к чату');
         }
@@ -123,6 +141,25 @@ export default function MatrixChat() {
     }
     authenticate();
   }, [session]);
+
+  // Load room info from our database (proper names, avatars)
+  const loadDbRoomInfo = useCallback(async () => {
+    try {
+      const resp = await fetch('/api/chat/rooms');
+      if (resp.ok) {
+        const data = await resp.json();
+        const infoMap = new Map<string, DbRoomInfo>();
+        for (const room of data.rooms || []) {
+          if (room.matrixRoomId) {
+            infoMap.set(room.matrixRoomId, room);
+          }
+        }
+        setDbRoomInfo(infoMap);
+      }
+    } catch (err) {
+      console.error('Failed to load room info from DB:', err);
+    }
+  }, []);
 
   // Ensure user has a DM chat with AI bot
   const ensureBotChat = useCallback(async (creds: MatrixCredentials) => {
@@ -289,27 +326,27 @@ export default function MatrixChat() {
                (e.content?.membership === 'join' || e.content?.membership === 'invite')
         );
         
-        // Determine if this is a direct chat (2 participants)
-        // or check account_data for m.direct
-        const isDirect = activeMembers.length <= 2 && !nameEvent?.content?.name;
+        // Check if we have DB info for this room (preferred source)
+        const dbInfo = dbRoomInfo.get(roomId);
         
-        // Get room name - priority: explicit name > other member name > fallback
-        let roomName = nameEvent?.content?.name;
-        let roomAvatar: string | undefined;
+        // Determine if this is a direct chat
+        const isDirect = dbInfo?.isDirect ?? (activeMembers.length <= 2 && !nameEvent?.content?.name);
         
-        // For rooms without explicit name, determine name from members
+        // Get room name - priority: DB info > explicit name > member name > fallback
+        let roomName = dbInfo?.displayName || nameEvent?.content?.name;
+        let roomAvatar: string | undefined = dbInfo?.avatarUrl;
+        
+        // For rooms without name from DB, try to determine from Matrix data
         if (!roomName && otherMembers.length > 0) {
           const otherMember = otherMembers[0];
           
           // Check if it's the bot
-          if (otherMember.state_key?.includes('myunion_bot')) {
+          if (otherMember.state_key?.includes('myunion_bot') || otherMember.state_key?.includes('ai_assistant')) {
             roomName = 'МойСоюз Помощник';
-          } else if (otherMember.state_key?.includes('ai_assistant')) {
-            roomName = 'AI Помощник';
           } else {
             // Get display name from member event
             roomName = otherMember.content?.displayname;
-            roomAvatar = otherMember.content?.avatar_url;
+            if (!roomAvatar) roomAvatar = otherMember.content?.avatar_url;
             
             // If no display name, try to create readable name from Matrix ID
             if (!roomName && otherMember.state_key) {
@@ -493,7 +530,7 @@ export default function MatrixChat() {
         setConnected(false);
       }
     }
-  }, [credentials, matrixFetch, selectedRoomId]);
+  }, [credentials, matrixFetch, selectedRoomId, dbRoomInfo]);
 
   // Start sync loop
   useEffect(() => {
