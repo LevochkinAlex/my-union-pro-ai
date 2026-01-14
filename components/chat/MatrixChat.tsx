@@ -113,6 +113,8 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   const [searchResults, setSearchResults] = useState<Array<{userId: string; displayName: string; avatarUrl?: string; position?: string; organization?: string}>>([]);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [dbRoomInfoLoaded, setDbRoomInfoLoaded] = useState(false);
+  // New chat menu dropdown
+  const [showNewChatMenu, setShowNewChatMenu] = useState(false);
   // Group creation state (for PPO Head)
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
@@ -127,6 +129,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   const [showReactions, setShowReactions] = useState<string | null>(null);
   const [forwardMessage, setForwardMessage] = useState<MatrixMessage | null>(null);
   const [showForwardModal, setShowForwardModal] = useState(false);
+  const [messageMenu, setMessageMenu] = useState<string | null>(null); // eventId of message with open menu
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Group editing state
@@ -1174,6 +1177,28 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
     }
   };
 
+  // Delete message (redact in Matrix)
+  const handleDeleteMessage = async (eventId: string) => {
+    if (!selectedRoomId || !credentials) return;
+    setMessageMenu(null);
+    
+    if (!confirm('Удалить сообщение?')) return;
+    
+    try {
+      const txnId = `redact_${Date.now()}`;
+      await matrixFetch(
+        `/rooms/${encodeURIComponent(selectedRoomId)}/redact/${encodeURIComponent(eventId)}/${txnId}`,
+        { method: 'PUT', body: JSON.stringify({ reason: 'Deleted by sender' }) }
+      );
+      
+      // Remove from UI
+      setMessages(prev => prev.filter(m => m.eventId !== eventId));
+    } catch (err) {
+      console.error('Delete message error:', err);
+      alert('Не удалось удалить сообщение');
+    }
+  };
+
   // Upload and send file
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1664,79 +1689,93 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
         bg-white dark:bg-gray-800 flex flex-col transition-transform
       `}>
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-600 to-blue-700">
+        <div className="p-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white">Чаты</h2>
             <div className="flex items-center gap-2">
-              {isPPOHead && (
-                <button
-                  onClick={() => setShowCreateGroup(true)}
-                  className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
-                  title="Создать группу"
-                >
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </button>
-              )}
+              <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`} />
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Чаты</h2>
+            </div>
+            {/* + Button with dropdown */}
+            <div className="relative">
               <button
-                onClick={() => setShowNewChat(true)}
-                className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
-                title="Новый чат"
+                onClick={() => setShowNewChatMenu(!showNewChatMenu)}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
               >
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
               </button>
+              {showNewChatMenu && (
+                <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+                  <button
+                    onClick={() => { setShowNewChat(true); setShowNewChatMenu(false); }}
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    Написать
+                  </button>
+                  {isPPOHead && (
+                    <button
+                      onClick={() => { setShowCreateGroup(true); setShowNewChatMenu(false); }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      Создать группу
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
-          <div className="mt-2 flex items-center gap-2 text-sm text-blue-100">
-            <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`}></div>
-            {connected ? 'Подключено' : 'Подключение...'}
           </div>
         </div>
 
-        {/* Chat Tabs (for PPO Head) */}
-        {isPPOHead && (
-          <div className="flex border-b border-gray-200 dark:border-gray-700">
-            <button
-              onClick={() => setChatTab('work')}
-              className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
-                chatTab === 'work'
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
+        {/* Chat Tabs - Telegram style */}
+        <div className="flex bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => setChatTab('work')}
+            className={`flex-1 py-2.5 text-sm font-medium transition-colors relative ${
+              chatTab === 'work'
+                ? 'text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800'
+                : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            <span className="flex items-center justify-center gap-1.5">
               Рабочие
               {rooms.filter(r => !r.isDirect || r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0) > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                <span className="min-w-[18px] h-[18px] px-1 text-[11px] bg-blue-600 text-white rounded-full flex items-center justify-center">
                   {rooms.filter(r => !r.isDirect || r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0)}
                 </span>
               )}
-              {chatTab === 'work' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400" />
-              )}
-            </button>
-            <button
-              onClick={() => setChatTab('personal')}
-              className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
-                chatTab === 'personal'
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
+            </span>
+            {chatTab === 'work' && (
+              <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-blue-600 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setChatTab('personal')}
+            className={`flex-1 py-2.5 text-sm font-medium transition-colors relative ${
+              chatTab === 'personal'
+                ? 'text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800'
+                : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            <span className="flex items-center justify-center gap-1.5">
               Личные
               {rooms.filter(r => r.isDirect && !r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0) > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                <span className="min-w-[18px] h-[18px] px-1 text-[11px] bg-blue-600 text-white rounded-full flex items-center justify-center">
                   {rooms.filter(r => r.isDirect && !r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0)}
                 </span>
               )}
-              {chatTab === 'personal' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400" />
-              )}
-            </button>
-          </div>
-        )}
+            </span>
+            {chatTab === 'personal' && (
+              <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-blue-600 rounded-full" />
+            )}
+          </button>
+        </div>
 
         {/* Room List */}
         <div className="flex-1 overflow-y-auto">
@@ -1758,8 +1797,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
           ) : (
             rooms
               .filter(room => {
-                // Filter by tab for PPO Head
-                if (!isPPOHead) return true;
+                // Filter by tab - Telegram style
                 // Рабочие = групповые ИЛИ обращения
                 if (chatTab === 'work') return !room.isDirect || room.isTicket;
                 // Личные = личные И НЕ обращения
@@ -2020,40 +2058,53 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                     {!msg.isOwn && !showAvatar && <div className="w-8" />}
                     
                     <div className="relative">
-                      {/* Action buttons (visible on hover) */}
-                      <div className={`absolute ${msg.isOwn ? 'left-0 -translate-x-full pr-2' : 'right-0 translate-x-full pl-2'} top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1`}>
-                        <button
-                          onClick={() => setReplyTo(msg)}
-                          className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300"
-                          title="Ответить"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => setShowReactions(showReactions === msg.eventId ? null : msg.eventId)}
-                          className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300"
-                          title="Реакция"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => { setForwardMessage(msg); setShowForwardModal(true); }}
-                          className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300"
-                          title="Переслать"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
-                          </svg>
-                        </button>
+                      {/* Action buttons - compact style */}
+                      <div className={`absolute ${msg.isOwn ? 'left-0 -translate-x-full pr-1' : 'right-0 translate-x-full pl-1'} top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity`}>
+                        <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-100 dark:border-gray-700">
+                          <button
+                            onClick={() => setReplyTo(msg)}
+                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-l-lg text-gray-500 dark:text-gray-400"
+                            title="Ответить"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => setShowReactions(showReactions === msg.eventId ? null : msg.eventId)}
+                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
+                            title="Реакция"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => { setForwardMessage(msg); setShowForwardModal(true); }}
+                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
+                            title="Переслать"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+                            </svg>
+                          </button>
+                          {msg.isOwn && (
+                            <button
+                              onClick={() => handleDeleteMessage(msg.eventId)}
+                              className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-r-lg text-gray-500 dark:text-gray-400 hover:text-red-500"
+                              title="Удалить"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                       </div>
                       
                       {/* Reaction picker */}
                       {showReactions === msg.eventId && (
-                        <div className={`absolute ${msg.isOwn ? 'right-0' : 'left-0'} bottom-full mb-2 bg-white dark:bg-gray-800 rounded-full shadow-lg px-2 py-1 flex gap-1 z-10`}>
+                        <div className={`absolute ${msg.isOwn ? 'right-0' : 'left-0'} bottom-full mb-2 bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 px-2 py-1 flex gap-1 z-10`}>
                           {REACTION_EMOJIS.map(emoji => (
                             <button
                               key={emoji}
