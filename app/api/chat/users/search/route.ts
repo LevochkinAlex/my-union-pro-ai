@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
         matrixUserId: true,
         position: true,
         organization: {
-          select: { shortName: true }
+          select: { name: true }
         }
       },
       take: 20,
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
       displayName: [u.firstName, u.lastName].filter(Boolean).join(' ') || 'Пользователь',
       avatarUrl: u.avatarUrl,
       position: u.position,
-      organization: u.organization?.shortName,
+      organization: u.organization?.name,
     }));
 
     return NextResponse.json({ users: results });
