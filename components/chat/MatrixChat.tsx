@@ -47,6 +47,7 @@ interface MessageReaction {
   key: string;
   users: string[];
   count: number;
+  eventIds?: Map<string, string>; // userId -> reactionEventId for redaction
 }
 
 interface MessageAttachment {
@@ -689,10 +690,16 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
         const reactions = reactionsMap.get(targetId)!;
         const existing = reactions.find(r => r.key === key);
         if (existing) {
-          existing.count++;
-          existing.users.push(event.sender);
+          if (!existing.users.includes(event.sender)) {
+            existing.count++;
+            existing.users.push(event.sender);
+            if (!existing.eventIds) existing.eventIds = new Map();
+            existing.eventIds.set(event.sender, event.event_id);
+          }
         } else {
-          reactions.push({ key, count: 1, users: [event.sender] });
+          const eventIds = new Map<string, string>();
+          eventIds.set(event.sender, event.event_id);
+          reactions.push({ key, count: 1, users: [event.sender], eventIds });
         }
       }
     }
@@ -954,37 +961,75 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
     if (!selectedRoomId || !credentials) return;
     setShowReactions(null);
     
+    // Check if user already reacted with this emoji
+    const msg = messages.find(m => m.eventId === eventId);
+    const existingReaction = msg?.reactions?.find(r => r.key === emoji);
+    const userAlreadyReacted = existingReaction?.users.includes(credentials.userId);
+    
     try {
-      const txnId = `r${Date.now()}`;
-      await matrixFetch(
-        `/rooms/${encodeURIComponent(selectedRoomId)}/send/m.reaction/${txnId}`,
-        {
-          method: 'PUT',
-          body: JSON.stringify({
-            'm.relates_to': {
-              rel_type: 'm.annotation',
-              event_id: eventId,
-              key: emoji
-            }
-          }),
-        }
-      );
-      
-      // Optimistically update UI
-      setMessages(prev => prev.map(msg => {
-        if (msg.eventId === eventId) {
-          const reactions = msg.reactions || [];
-          const existing = reactions.find(r => r.key === emoji);
-          if (existing) {
-            existing.count++;
-            existing.users.push(credentials.userId);
-          } else {
-            reactions.push({ key: emoji, count: 1, users: [credentials.userId] });
+      if (userAlreadyReacted && existingReaction?.eventIds?.get(credentials.userId)) {
+        // Remove existing reaction via redaction
+        const reactionEventId = existingReaction.eventIds.get(credentials.userId);
+        await matrixFetch(
+          `/rooms/${encodeURIComponent(selectedRoomId)}/redact/${encodeURIComponent(reactionEventId!)}/${Date.now()}`,
+          { method: 'PUT', body: JSON.stringify({ reason: 'User toggled reaction' }) }
+        );
+        
+        // Update UI - remove reaction
+        setMessages(prev => prev.map(m => {
+          if (m.eventId === eventId) {
+            const reactions = (m.reactions || []).map(r => {
+              if (r.key === emoji) {
+                const newUsers = r.users.filter(u => u !== credentials.userId);
+                const newEventIds = new Map(r.eventIds);
+                newEventIds.delete(credentials.userId);
+                return { ...r, users: newUsers, count: Math.max(0, r.count - 1), eventIds: newEventIds };
+              }
+              return r;
+            }).filter(r => r.count > 0);
+            return { ...m, reactions };
           }
-          return { ...msg, reactions };
-        }
-        return msg;
-      }));
+          return m;
+        }));
+      } else {
+        // Add new reaction
+        const txnId = `r${Date.now()}`;
+        const result = await matrixFetch(
+          `/rooms/${encodeURIComponent(selectedRoomId)}/send/m.reaction/${txnId}`,
+          {
+            method: 'PUT',
+            body: JSON.stringify({
+              'm.relates_to': {
+                rel_type: 'm.annotation',
+                event_id: eventId,
+                key: emoji
+              }
+            }),
+          }
+        );
+        
+        // Optimistically update UI
+        setMessages(prev => prev.map(m => {
+          if (m.eventId === eventId) {
+            const reactions = [...(m.reactions || [])];
+            const existing = reactions.find(r => r.key === emoji);
+            if (existing) {
+              if (!existing.users.includes(credentials.userId)) {
+                existing.count++;
+                existing.users.push(credentials.userId);
+                if (!existing.eventIds) existing.eventIds = new Map();
+                existing.eventIds.set(credentials.userId, result?.event_id);
+              }
+            } else {
+              const eventIds = new Map<string, string>();
+              eventIds.set(credentials.userId, result?.event_id);
+              reactions.push({ key: emoji, count: 1, users: [credentials.userId], eventIds });
+            }
+            return { ...m, reactions };
+          }
+          return m;
+        }));
+      }
     } catch (err) {
       console.error('Reaction error:', err);
     }
