@@ -987,6 +987,11 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
       setRooms(prev => prev.map(r => 
         r.roomId === roomId ? { ...r, unreadCount: 0 } : r
       ));
+      
+      // Notify sidebar badge to refresh
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('chat-messages-read'));
+      }
     } catch (err) {
       console.error('Failed to mark room as read:', err);
     }
