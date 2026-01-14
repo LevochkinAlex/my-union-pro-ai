@@ -2749,13 +2749,13 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                 }}
                 className="px-3 py-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 text-sm"
               >
-                🗑 Удалить
+                Удалить
               </button>
               <button
                 onClick={() => setShowClearChatModal(true)}
                 className="px-3 py-2 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-400 text-sm"
               >
-                🧹 Очистить
+                Очистить
               </button>
               <div className="flex-1" />
               <button
