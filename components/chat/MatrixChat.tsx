@@ -75,6 +75,9 @@ export default function MatrixChat() {
         if (response.ok) {
           const data = await response.json();
           setCredentials(data);
+          
+          // Ensure user has a chat with AI bot
+          ensureBotChat(data);
         } else {
           setError('Не удалось подключиться к чату');
         }
@@ -86,6 +89,70 @@ export default function MatrixChat() {
     }
     authenticate();
   }, [session]);
+
+  // Ensure user has a DM chat with AI bot
+  const ensureBotChat = useCallback(async (creds: MatrixCredentials) => {
+    const BOT_USER_ID = '@myunion_bot:matrix.myunion.pro';
+    
+    try {
+      // Check if DM with bot exists by looking at account data
+      const accountDataResp = await fetch(
+        `${creds.serverUrl}/_matrix/client/v3/user/${encodeURIComponent(creds.userId)}/account_data/m.direct`,
+        { headers: { 'Authorization': `Bearer ${creds.accessToken}` } }
+      );
+      
+      let hasBotRoom = false;
+      if (accountDataResp.ok) {
+        const directRooms = await accountDataResp.json();
+        hasBotRoom = directRooms[BOT_USER_ID]?.length > 0;
+      }
+      
+      if (!hasBotRoom) {
+        // Create DM room with bot
+        const createResp = await fetch(
+          `${creds.serverUrl}/_matrix/client/v3/createRoom`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${creds.accessToken}`
+            },
+            body: JSON.stringify({
+              preset: 'trusted_private_chat',
+              is_direct: true,
+              invite: [BOT_USER_ID],
+              initial_state: [{
+                type: 'm.room.name',
+                content: { name: 'МойСоюз Помощник' }
+              }]
+            })
+          }
+        );
+        
+        if (createResp.ok) {
+          const room = await createResp.json();
+          
+          // Update m.direct account data
+          const newDirectRooms = { [BOT_USER_ID]: [room.room_id] };
+          await fetch(
+            `${creds.serverUrl}/_matrix/client/v3/user/${encodeURIComponent(creds.userId)}/account_data/m.direct`,
+            {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${creds.accessToken}`
+              },
+              body: JSON.stringify(newDirectRooms)
+            }
+          );
+          
+          console.log('Created bot chat room:', room.room_id);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to ensure bot chat:', err);
+    }
+  }, []);
 
   // Matrix API helpers
   const matrixFetch = useCallback(async (
