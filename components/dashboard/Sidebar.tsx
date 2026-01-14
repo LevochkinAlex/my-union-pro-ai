@@ -8,6 +8,7 @@ import { LogoIcon } from "@/components/Logo";
 import { signOut } from "next-auth/react";
 import ViewModeSwitch from "./ViewModeSwitch";
 import ChatUnreadBadge from "./ChatUnreadBadge";
+import NotificationUnreadBadge from "./NotificationUnreadBadge";
 
 interface NavItem {
   href: string;
@@ -145,6 +146,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                     <span className="flex-shrink-0 relative">
                       {item.icon}
                       {(item.href === '/dashboard/chat' || item.href === '/dashboard/chats/ppo-head') && <ChatUnreadBadge />}
+                      {item.href === '/dashboard/notifications' && <NotificationUnreadBadge />}
                     </span>
                     {!isCollapsed && (
                       <>
@@ -185,6 +187,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                     <span className="flex-shrink-0 relative">
                       {item.icon}
                       {(item.href === '/dashboard/chat' || item.href === '/dashboard/chats/ppo-head') && <ChatUnreadBadge />}
+                      {item.href === '/dashboard/notifications' && <NotificationUnreadBadge />}
                     </span>
                     {!isCollapsed && <span>{item.label}</span>}
                   </Link>
