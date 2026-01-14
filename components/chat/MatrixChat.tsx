@@ -36,6 +36,7 @@ interface DbRoomInfo {
   displayName: string;
   avatarUrl?: string;
   isDirect: boolean;
+  isTicket?: boolean;
   participantCount: number;
   participants: Array<{
     id: string;
@@ -206,7 +207,7 @@ export default function MatrixChat() {
 
   // Handle chatId from URL (e.g., from appeals page)
   useEffect(() => {
-    if (!urlChatId || urlChatHandled || rooms.length === 0) return;
+    if (!urlChatId || urlChatHandled || rooms.length === 0 || !dbRoomInfoLoaded) return;
     
     async function openChatFromUrl() {
       try {
@@ -218,7 +219,16 @@ export default function MatrixChat() {
             // Find the room in our loaded rooms
             const room = rooms.find(r => r.roomId === data.chat.matrixRoomId);
             if (room) {
+              // If this is a ticket chat, switch to work tab
+              const roomInfo = dbRoomInfo.get(data.chat.matrixRoomId);
+              if (roomInfo?.isTicket || room.isTicket) {
+                setChatTab('work');
+              }
+              // Close mobile menu to show chat
+              setIsMobileMenuOpen(false);
               setSelectedRoomId(data.chat.matrixRoomId);
+            } else {
+              console.log('[MatrixChat] Room not found in loaded rooms:', data.chat.matrixRoomId);
             }
           }
         }
@@ -230,7 +240,7 @@ export default function MatrixChat() {
     }
     
     openChatFromUrl();
-  }, [urlChatId, urlChatHandled, rooms]);
+  }, [urlChatId, urlChatHandled, rooms, dbRoomInfo, dbRoomInfoLoaded]);
 
   // Load room info from our database (proper names, avatars)
   const loadDbRoomInfo = useCallback(async () => {
@@ -544,7 +554,8 @@ export default function MatrixChat() {
         // ONLY add rooms that exist in our database
         if (dbInfo) {
           const displayName = dbInfo.displayName || roomName || 'Чат';
-          const isTicketChat = displayName.startsWith('Обращение #');
+          // Use isTicket from API, fallback to name check for backwards compatibility
+          const isTicketChat = dbInfo.isTicket || displayName.startsWith('Обращение #');
           
           roomList.push({
             roomId,

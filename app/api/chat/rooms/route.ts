@@ -22,6 +22,9 @@ export async function GET() {
         name: true,
         iconUrl: true,
         matrixRoomId: true,
+        ticket: {
+          select: { id: true }
+        },
         participants: {
           include: {
             user: {
@@ -104,6 +107,7 @@ export async function GET() {
           avatarUrl,
           isDirect,
           isGroup: chat.type === 'GROUP',
+          isTicket: !!chat.ticket, // true if this chat is linked to a ticket
           participantCount: chat.participants.length,
           lastMessage: chat.messages[0]?.content,
           lastMessageTime: chat.messages[0]?.createdAt?.getTime(),
