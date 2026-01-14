@@ -130,6 +130,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   const [showReactions, setShowReactions] = useState<string | null>(null);
   const [forwardMessage, setForwardMessage] = useState<MatrixMessage | null>(null);
   const [showForwardModal, setShowForwardModal] = useState(false);
+  const [activeMessageId, setActiveMessageId] = useState<string | null>(null); // For mobile tap actions
   const [messageMenu, setMessageMenu] = useState<string | null>(null); // eventId of message with open menu
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -2005,7 +2006,16 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
+            <div 
+              className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800"
+              onClick={(e) => {
+                // Close action menu when clicking outside message bubbles
+                if ((e.target as HTMLElement).closest('[data-message-bubble]') === null) {
+                  setActiveMessageId(null);
+                  setShowReactions(null);
+                }
+              }}
+            >
               {/* Quick questions for AI chat */}
               {messages.length === 0 && (selectedRoom.name.includes('Помощник') || selectedRoom.name.includes('AI') || selectedRoom.name.includes('Бот')) && (
                 <div className="flex flex-col items-center justify-center h-full py-8">
@@ -2070,11 +2080,14 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                     {!msg.isOwn && !showAvatar && <div className="w-8" />}
                     
                     <div className="relative">
-                      {/* Action buttons - compact style */}
-                      <div className={`absolute ${msg.isOwn ? 'left-0 -translate-x-full pr-1' : 'right-0 translate-x-full pl-1'} top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity`}>
+                      {/* Action buttons - compact style, visible on hover (desktop) or tap (mobile) */}
+                      <div className={`absolute ${msg.isOwn ? 'left-0 -translate-x-full pr-1' : 'right-0 translate-x-full pl-1'} top-1/2 -translate-y-1/2 transition-opacity z-10
+                        ${activeMessageId === msg.eventId ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100 pointer-events-none md:pointer-events-auto'}
+                        ${activeMessageId === msg.eventId ? 'pointer-events-auto' : ''}`}
+                      >
                         <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-100 dark:border-gray-700">
                           <button
-                            onClick={() => setReplyTo(msg)}
+                            onClick={(e) => { e.stopPropagation(); setReplyTo(msg); setActiveMessageId(null); }}
                             className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-l-lg text-gray-500 dark:text-gray-400"
                             title="Ответить"
                           >
@@ -2083,7 +2096,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                             </svg>
                           </button>
                           <button
-                            onClick={() => setShowReactions(showReactions === msg.eventId ? null : msg.eventId)}
+                            onClick={(e) => { e.stopPropagation(); setShowReactions(showReactions === msg.eventId ? null : msg.eventId); }}
                             className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
                             title="Реакция"
                           >
@@ -2092,7 +2105,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                             </svg>
                           </button>
                           <button
-                            onClick={() => { setForwardMessage(msg); setShowForwardModal(true); }}
+                            onClick={(e) => { e.stopPropagation(); setForwardMessage(msg); setShowForwardModal(true); setActiveMessageId(null); }}
                             className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
                             title="Переслать"
                           >
@@ -2102,7 +2115,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                           </button>
                           {msg.isOwn && (
                             <button
-                              onClick={() => handleDeleteMessage(msg.eventId)}
+                              onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.eventId); setActiveMessageId(null); }}
                               className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-r-lg text-gray-500 dark:text-gray-400 hover:text-red-500"
                               title="Удалить"
                             >
@@ -2116,11 +2129,11 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                       
                       {/* Reaction picker */}
                       {showReactions === msg.eventId && (
-                        <div className={`absolute ${msg.isOwn ? 'right-0' : 'left-0'} bottom-full mb-2 bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 px-2 py-1 flex gap-1 z-10`}>
+                        <div className={`absolute ${msg.isOwn ? 'right-0' : 'left-0'} bottom-full mb-2 bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 px-2 py-1 flex gap-1 z-20`}>
                           {REACTION_EMOJIS.map(emoji => (
                             <button
                               key={emoji}
-                              onClick={() => handleReaction(msg.eventId, emoji)}
+                              onClick={(e) => { e.stopPropagation(); handleReaction(msg.eventId, emoji); setActiveMessageId(null); }}
                               className="text-xl hover:scale-125 transition-transform p-1"
                             >
                               {emoji}
@@ -2129,13 +2142,25 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                         </div>
                       )}
                       
-                      {/* Message bubble */}
+                      {/* Message bubble - tap to show actions on mobile */}
                       <div
-                        className={`max-w-[280px] sm:max-w-[380px] rounded-2xl px-4 py-2 shadow-sm ${
+                        data-message-bubble
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Toggle action menu on mobile tap
+                          if (activeMessageId === msg.eventId) {
+                            setActiveMessageId(null);
+                            setShowReactions(null);
+                          } else {
+                            setActiveMessageId(msg.eventId);
+                            setShowReactions(null);
+                          }
+                        }}
+                        className={`max-w-[280px] sm:max-w-[380px] rounded-2xl px-4 py-2 shadow-sm cursor-pointer select-none ${
                           msg.isOwn
                             ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-sm'
                             : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-sm border border-gray-100 dark:border-gray-600'
-                        }`}
+                        } ${activeMessageId === msg.eventId ? 'ring-2 ring-blue-400 ring-opacity-50' : ''}`}
                       >
                         {!msg.isOwn && showAvatar && (
                           <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">
