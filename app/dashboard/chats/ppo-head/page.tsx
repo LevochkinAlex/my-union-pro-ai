@@ -48,7 +48,7 @@ function PPOHeadChatsContent() {
   return (
     <div className="fixed inset-0 top-16 md:top-0 md:left-64 right-0 bottom-0">
       <Suspense fallback={<ChatSkeleton />}>
-        <MatrixChat isPPOHead={true} />
+        <MatrixChat />
       </Suspense>
     </div>
   );
