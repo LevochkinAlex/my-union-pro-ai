@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
 
 // Simple Avatar component
 function Avatar({ className, children }: { className?: string; children: React.ReactNode }) {
@@ -94,10 +95,13 @@ interface MatrixChatProps {
 
 export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
+  const urlChatId = searchParams.get('chatId');
   const [credentials, setCredentials] = useState<MatrixCredentials | null>(null);
   const [rooms, setRooms] = useState<MatrixRoom[]>([]);
   const [dbRoomInfo, setDbRoomInfo] = useState<Map<string, DbRoomInfo>>(new Map());
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [urlChatHandled, setUrlChatHandled] = useState(false);
   const [messages, setMessages] = useState<MatrixMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -178,6 +182,35 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
     }
     authenticate();
   }, [session]);
+
+  // Handle chatId from URL (e.g., from appeals page)
+  useEffect(() => {
+    if (!urlChatId || urlChatHandled || rooms.length === 0) return;
+    
+    async function openChatFromUrl() {
+      try {
+        // Find chat by ID and get its matrixRoomId
+        const response = await fetch(`/api/chat/${urlChatId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.chat?.matrixRoomId) {
+            // Find the room in our loaded rooms
+            const room = rooms.find(r => r.roomId === data.chat.matrixRoomId);
+            if (room) {
+              setSelectedRoomId(data.chat.matrixRoomId);
+              setIsMobileMenuOpen(false);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to open chat from URL:', err);
+      } finally {
+        setUrlChatHandled(true);
+      }
+    }
+    
+    openChatFromUrl();
+  }, [urlChatId, urlChatHandled, rooms]);
 
   // Load room info from our database (proper names, avatars)
   const loadDbRoomInfo = useCallback(async () => {
