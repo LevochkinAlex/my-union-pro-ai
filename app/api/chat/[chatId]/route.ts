@@ -70,6 +70,17 @@ export async function GET(
       }
     }
 
+    // Получаем информацию о чате с matrixRoomId
+    const chatInfo = await prisma.chat.findUnique({
+      where: { id: chatId },
+      select: {
+        id: true,
+        type: true,
+        name: true,
+        matrixRoomId: true,
+      },
+    });
+
     // Загружаем сообщения
     const messages = await Sentry.startSpan(
       {
@@ -246,6 +257,7 @@ export async function GET(
     
     return NextResponse.json({ 
       messages: messagesWithReactions,
+      chat: chatInfo,
       pagination: {
         hasMore,
         oldestMessageId,
