@@ -83,6 +83,8 @@ export async function GET() {
             organizationId: true,
             profileChangedAfterDocuments: true,
             profileLastModified: true,
+            viewMode: true,
+            isPPOHead: true,
             createdAt: true,
             updatedAt: true,
             organization: {
@@ -145,9 +147,14 @@ export async function GET() {
         organization: user.organization,
         profileChangedAfterDocuments: user.profileChangedAfterDocuments,
         profileLastModified: user.profileLastModified,
+        viewMode: user.viewMode, // Режим просмотра для председателей/сотрудников
+        isPPOHead: user.isPPOHead, // Флаг председателя ППО
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       },
+      // Дублируем viewMode и isPPOHead в корень ответа для удобства
+      viewMode: user.viewMode,
+      isPPOHead: user.isPPOHead,
     });
   } catch (error) {
     console.error("[profile] GET error:", error);
