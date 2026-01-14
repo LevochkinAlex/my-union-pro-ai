@@ -26,6 +26,7 @@ interface MatrixRoom {
   lastMessageTime?: number;
   unreadCount: number;
   isDirect: boolean;
+  isTicket?: boolean; // Обращения - всегда в рабочих чатах
 }
 
 interface DbRoomInfo {
@@ -479,14 +480,18 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
 
         // ONLY add rooms that exist in our database
         if (dbInfo) {
+          const displayName = dbInfo.displayName || roomName || 'Чат';
+          const isTicketChat = displayName.startsWith('Обращение #');
+          
           roomList.push({
             roomId,
-            name: dbInfo.displayName || roomName || 'Чат',
+            name: displayName,
             avatarUrl: dbInfo.avatarUrl || roomAvatar,
             lastMessage: lastMsg?.content?.body,
             lastMessageTime: lastMsg?.origin_server_ts,
             unreadCount: rd.unread_notifications?.notification_count || 0,
             isDirect: dbInfo.isDirect,
+            isTicket: isTicketChat, // Обращения всегда в Рабочих
           });
         }
 
@@ -1556,9 +1561,9 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
               }`}
             >
               Рабочие
-              {rooms.filter(r => !r.isDirect).reduce((sum, r) => sum + r.unreadCount, 0) > 0 && (
+              {rooms.filter(r => !r.isDirect || r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0) > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
-                  {rooms.filter(r => !r.isDirect).reduce((sum, r) => sum + r.unreadCount, 0)}
+                  {rooms.filter(r => !r.isDirect || r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0)}
                 </span>
               )}
               {chatTab === 'work' && (
@@ -1574,9 +1579,9 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
               }`}
             >
               Личные
-              {rooms.filter(r => r.isDirect).reduce((sum, r) => sum + r.unreadCount, 0) > 0 && (
+              {rooms.filter(r => r.isDirect && !r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0) > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
-                  {rooms.filter(r => r.isDirect).reduce((sum, r) => sum + r.unreadCount, 0)}
+                  {rooms.filter(r => r.isDirect && !r.isTicket).reduce((sum, r) => sum + r.unreadCount, 0)}
                 </span>
               )}
               {chatTab === 'personal' && (
@@ -1608,8 +1613,10 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
               .filter(room => {
                 // Filter by tab for PPO Head
                 if (!isPPOHead) return true;
-                if (chatTab === 'work') return !room.isDirect;
-                return room.isDirect;
+                // Рабочие = групповые ИЛИ обращения
+                if (chatTab === 'work') return !room.isDirect || room.isTicket;
+                // Личные = личные И НЕ обращения
+                return room.isDirect && !room.isTicket;
               })
               .map(room => {
               // Generate gradient color based on room name
