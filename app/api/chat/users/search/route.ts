@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
         lastName: true,
         avatarUrl: true,
         matrixUserId: true,
-        position: true,
+        jobTitle: true,
         organization: {
           select: { name: true }
         }
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       matrixUserId: u.matrixUserId,
       displayName: [u.firstName, u.lastName].filter(Boolean).join(' ') || 'Пользователь',
       avatarUrl: u.avatarUrl,
-      position: u.position,
+      position: u.jobTitle,
       organization: u.organization?.name,
     }));
 
