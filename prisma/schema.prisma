@@ -1958,6 +1958,10 @@ model Chat {
   // Кто прочитал последнее сообщение (для личных чатов)
   participant1ReadAt DateTime?
   participant2ReadAt DateTime?
+  
+  // Очищена история чата (для личных чатов)
+  participant1ClearedAt DateTime?
+  participant2ClearedAt DateTime?
 
   // Сообщения в чате
   messages ChatMessage[]
@@ -1995,6 +1999,9 @@ model ChatParticipant {
 
   // Прочитано ли последнее сообщение
   readAt DateTime?
+  
+  // Очищена история чата (сообщения до этой даты скрыты для пользователя)
+  clearedAt DateTime?
 
   // Timestamps
   joinedAt DateTime @default(now())

@@ -149,6 +149,10 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   const [ticketRating, setTicketRating] = useState(5);
   const [ticketComment, setTicketComment] = useState('');
   const [closingTicket, setClosingTicket] = useState(false);
+  
+  // Clear chat modal state
+  const [showClearChatModal, setShowClearChatModal] = useState(false);
+  const [clearingChat, setClearingChat] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -1371,44 +1375,43 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
     }
   }, []);
 
-  // Clear chat history
-  const handleClearHistory = useCallback(async () => {
-    if (!selectedRoomId || !credentials) return;
-    if (!confirm('Очистить историю чата? Это действие нельзя отменить.')) return;
+  // Clear chat history with mode selection
+  const handleClearChat = useCallback(async (mode: 'all' | 'me') => {
+    if (!selectedRoomId) return;
     
+    setClearingChat(true);
     try {
-      // Redact all messages in the Matrix room
-      const messagesResp = await fetch(
-        `${credentials.serverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(selectedRoomId)}/messages?dir=b&limit=500`,
-        { headers: { 'Authorization': `Bearer ${credentials.accessToken}` } }
-      );
-      const messagesData = await messagesResp.json();
+      // Get chatId from our DB
+      const dbChatResponse = await fetch(`/api/chat/rooms/by-matrix-id?roomId=${encodeURIComponent(selectedRoomId)}`);
+      const dbChatData = await dbChatResponse.json();
+      const chatId = dbChatData.chatId;
       
-      const messageEvents = (messagesData.chunk || []).filter((e: any) => e.type === 'm.room.message');
-      
-      for (const event of messageEvents) {
-        const txnId = `redact_${Date.now()}_${Math.random()}`;
-        await fetch(
-          `${credentials.serverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(selectedRoomId)}/redact/${encodeURIComponent(event.event_id)}/${txnId}`,
-          {
-            method: 'PUT',
-            headers: {
-              'Authorization': `Bearer ${credentials.accessToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ reason: 'Cleared by admin' }),
-          }
-        );
+      if (!chatId) {
+        alert('Чат не найден в базе данных');
+        return;
       }
       
-      // Clear local messages
-      setMessages([]);
-      alert('История очищена');
+      const response = await fetch(`/api/chat/${chatId}/clear`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      
+      if (response.ok) {
+        setMessages([]);
+        setShowClearChatModal(false);
+        alert(mode === 'all' ? 'История удалена у всех участников' : 'История удалена только у вас');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Ошибка очистки чата');
+      }
     } catch (err) {
-      console.error('Failed to clear history:', err);
-      alert('Ошибка очистки истории');
+      console.error('Failed to clear chat:', err);
+      alert('Ошибка очистки чата');
+    } finally {
+      setClearingChat(false);
     }
-  }, [selectedRoomId, credentials]);
+  }, [selectedRoomId]);
 
   // Edit group
   const handleEditGroup = useCallback(async (chatId: string) => {
@@ -1903,6 +1906,19 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     Закрыть
+                  </button>
+                )}
+                
+                {/* Clear chat button (for all personal chats) */}
+                {selectedRoom.isDirect && !selectedRoom.isTicket && (
+                  <button
+                    onClick={() => setShowClearChatModal(true)}
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    title="Очистить чат"
+                  >
+                    <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
                   </button>
                 )}
                 
@@ -2736,7 +2752,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                 🗑 Удалить
               </button>
               <button
-                onClick={handleClearHistory}
+                onClick={() => setShowClearChatModal(true)}
                 className="px-3 py-2 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-400 text-sm"
               >
                 🧹 Очистить
@@ -2965,6 +2981,81 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Chat Modal */}
+      {showClearChatModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
+          <div className="w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-4 bg-gradient-to-r from-orange-500 to-orange-400 text-white">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Очистить чат</h3>
+                <button 
+                  onClick={() => setShowClearChatModal(false)}
+                  className="p-1 hover:bg-white/20 rounded-full"
+                  disabled={clearingChat}
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-4 space-y-3">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Выберите как удалить историю сообщений:
+              </p>
+              
+              <button
+                onClick={() => handleClearChat('me')}
+                disabled={clearingChat}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 
+                  bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600
+                  text-left transition-colors disabled:opacity-50"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-white">Только у меня</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">История останется у собеседника</div>
+                  </div>
+                </div>
+              </button>
+              
+              <button
+                onClick={() => handleClearChat('all')}
+                disabled={clearingChat}
+                className="w-full px-4 py-3 rounded-xl border border-red-200 dark:border-red-900/50 
+                  bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30
+                  text-left transition-colors disabled:opacity-50"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="font-medium text-red-600 dark:text-red-400">У всех участников</div>
+                    <div className="text-xs text-red-500 dark:text-red-400/70">Сообщения будут удалены навсегда</div>
+                  </div>
+                </div>
+              </button>
+              
+              {clearingChat && (
+                <div className="flex items-center justify-center py-2">
+                  <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="ml-2 text-sm text-gray-500">Удаление...</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
