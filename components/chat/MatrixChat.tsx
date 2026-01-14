@@ -269,7 +269,14 @@ export default function MatrixChat() {
         
         const stateEvents = rd.state?.events || [];
         const nameEvent = stateEvents.find(e => e.type === 'm.room.name');
-        const isDirect = stateEvents.some(e => e.type === 'm.room.member' && e.content?.is_direct);
+        
+        // Count room members to determine if it's a direct chat
+        const memberEvents = stateEvents.filter(e => 
+          e.type === 'm.room.member' && 
+          (e.content?.membership === 'join' || e.content?.membership === 'invite')
+        );
+        // A direct chat has exactly 2 members (including current user)
+        const isDirect = memberEvents.length === 2;
         
         // Get room name - priority: explicit name > other member name > fallback
         let roomName = nameEvent?.content?.name;
@@ -606,6 +613,11 @@ export default function MatrixChat() {
     setNewMessage('');
     const currentReplyTo = replyTo;
     setReplyTo(null);
+    
+    // Reset textarea height
+    if (inputRef.current) {
+      inputRef.current.style.height = '48px';
+    }
 
     try {
       const txnId = `m${Date.now()}`;
@@ -1301,7 +1313,7 @@ export default function MatrixChat() {
                 </div>
               )}
               
-              <div className="flex items-end gap-3">
+              <div className="flex items-end gap-2">
                 {/* Hidden file input */}
                 <input
                   ref={fileInputRef}
@@ -1315,7 +1327,7 @@ export default function MatrixChat() {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="p-3 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 
+                  className="flex-shrink-0 h-12 w-12 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 
                     hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
                   title="Прикрепить файл"
                 >
@@ -1331,13 +1343,16 @@ export default function MatrixChat() {
                   )}
                 </button>
                 
-                <div className="flex-1 relative">
+                <div className="flex-1 min-w-0">
                   <textarea
                     ref={inputRef}
                     value={newMessage}
                     onChange={(e) => {
                       setNewMessage(e.target.value);
                       handleTyping();
+                      // Auto-resize textarea
+                      e.target.style.height = 'auto';
+                      e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px';
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
@@ -1350,14 +1365,14 @@ export default function MatrixChat() {
                     className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-600 
                       bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white 
                       resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                      placeholder:text-gray-400"
+                      placeholder:text-gray-400 overflow-y-auto"
                     style={{ minHeight: '48px', maxHeight: '150px' }}
                   />
                 </div>
                 <button
                   onClick={handleSend}
                   disabled={!newMessage.trim() || sending}
-                  className="p-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-full 
+                  className="flex-shrink-0 h-12 w-12 flex items-center justify-center bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-full 
                     hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed 
                     transition-all shadow-lg hover:shadow-xl active:scale-95"
                 >

@@ -94,11 +94,29 @@ export async function POST(request: NextRequest) {
 
     console.log("[Email Auth] Email успешно отправлен");
 
-    return NextResponse.json({
+    // В режиме разработки возвращаем magic link для удобства тестирования
+    const isDev = process.env.NODE_ENV === "development" || process.env.DEV_EMAIL_MODE === "true";
+    const response: {
+      success: boolean;
+      message: string;
+      isNewUser: boolean;
+      devMode?: boolean;
+      magicLink?: string;
+    } = {
       success: true,
-      message: "Письмо с ссылкой для входа отправлено на ваш email",
+      message: isDev 
+        ? "Режим разработки: используйте ссылку ниже для входа"
+        : "Письмо с ссылкой для входа отправлено на ваш email",
       isNewUser,
-    });
+    };
+
+    // Добавляем magic link только в dev режиме
+    if (isDev && (emailSent as { devMode?: boolean; magicLink?: string }).devMode) {
+      response.devMode = true;
+      response.magicLink = (emailSent as { magicLink?: string }).magicLink;
+    }
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error("[Email Auth] Ошибка:", error);
     return NextResponse.json(

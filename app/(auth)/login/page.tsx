@@ -49,6 +49,7 @@ function LoginForm() {
   const [showTelegramRecommendation, setShowTelegramRecommendation] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   const [hasTelegram, setHasTelegram] = useState(false);
+  const [devMagicLink, setDevMagicLink] = useState<string | null>(null);
 
   // Получаем callbackUrl из query параметров при монтировании
   useEffect(() => {
@@ -221,6 +222,11 @@ function LoginForm() {
           setError(data.error || "Ошибка при отправке письма");
           setLoading(false);
           return;
+        }
+
+        // Если в режиме разработки - сохраняем magic link для показа
+        if (data.devMode && data.magicLink) {
+          setDevMagicLink(data.magicLink);
         }
 
         // Показываем экран "Проверьте email"
@@ -587,12 +593,31 @@ function LoginForm() {
                     </svg>
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                    Проверьте вашу почту ✉️
+                    {devMagicLink ? "🔧 Режим разработки" : "Проверьте вашу почту ✉️"}
                   </h3>
                   <p className="text-gray-600 dark:text-gray-400 mb-4">
-                    Мы отправили ссылку для входа на<br/>
-                    <strong>{input}</strong>
+                    {devMagicLink ? (
+                      <>Email не отправлен (SMTP не настроен)<br/>Используйте ссылку ниже:</>
+                    ) : (
+                      <>Мы отправили ссылку для входа на<br/><strong>{input}</strong></>
+                    )}
                   </p>
+                  
+                  {/* Dev mode: показываем кликабельную magic link */}
+                  {devMagicLink && (
+                    <div className="mt-4 mb-6">
+                      <a
+                        href={devMagicLink}
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+                      >
+                        🔐 Войти сейчас
+                      </a>
+                      <p className="mt-3 text-xs text-gray-500 dark:text-gray-500 break-all">
+                        {devMagicLink}
+                      </p>
+                    </div>
+                  )}
+                  
                   <p className="text-sm text-gray-500 dark:text-gray-500">
                     Ссылка действительна 15 минут
                   </p>
@@ -603,6 +628,7 @@ function LoginForm() {
                     setStep("input");
                     setInput("");
                     setError("");
+                    setDevMagicLink(null);
                   }}
                   className="text-sm text-gray-600 hover:text-gray-700 dark:text-gray-400"
                 >
