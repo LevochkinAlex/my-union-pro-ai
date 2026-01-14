@@ -1449,6 +1449,47 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
+              {/* Quick questions for AI chat */}
+              {messages.length === 0 && (selectedRoom.name.includes('Помощник') || selectedRoom.name.includes('AI') || selectedRoom.name.includes('Бот')) && (
+                <div className="flex flex-col items-center justify-center h-full py-8">
+                  <div className="w-20 h-20 mb-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
+                    <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                    Привет! Я AI-помощник 👋
+                  </h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-center mb-6 max-w-sm">
+                    Я помогу вам с вопросами о профсоюзе, скидках, документах и членстве.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md">
+                    {[
+                      { icon: '📝', text: 'Как вступить в профсоюз?' },
+                      { icon: '💳', text: 'Какие есть скидки?' },
+                      { icon: '📋', text: 'Где найти мои документы?' },
+                      { icon: '✉️', text: 'Как создать обращение?' },
+                      { icon: '👤', text: 'Как заполнить профиль?' },
+                      { icon: '❓', text: 'Кто наш председатель?' },
+                    ].map((q, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setNewMessage(q.text);
+                          inputRef.current?.focus();
+                        }}
+                        className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-blue-50 dark:hover:bg-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-all text-left group"
+                      >
+                        <span className="text-xl">{q.icon}</span>
+                        <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                          {q.text}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {messages.map((msg, idx) => {
                 const showAvatar = idx === 0 || messages[idx - 1].sender !== msg.sender;
                 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉', '🙏', '👎'];

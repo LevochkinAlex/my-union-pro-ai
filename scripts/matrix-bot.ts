@@ -5,8 +5,8 @@
 
 const MATRIX_HOMESERVER = process.env.MATRIX_SERVER_URL || 'https://matrix.myunion.pro';
 const BOT_ACCESS_TOKEN = process.env.MATRIX_BOT_TOKEN;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const BOT_NAME = 'МойСоюз Бот';
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const BOT_NAME = 'МойСоюз Помощник';
 const BOT_USER_ID = '@myunion_bot:matrix.myunion.pro';
 
 interface ConversationMessage {
@@ -59,19 +59,22 @@ async function matrixFetch(endpoint: string, options: RequestInit = {}): Promise
 }
 
 async function callAI(messages: ConversationMessage[]): Promise<string> {
-  if (!OPENAI_API_KEY) {
+  if (!OPENROUTER_API_KEY) {
+    console.error('OPENROUTER_API_KEY not set!');
     return 'AI временно недоступен. Пожалуйста, обратитесь к председателю ППО.';
   }
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'HTTP-Referer': 'https://myunion.pro',
+        'X-Title': 'MyUnion Pro AI Assistant',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'openai/gpt-4o-mini',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           ...messages.slice(-10),
@@ -82,7 +85,8 @@ async function callAI(messages: ConversationMessage[]): Promise<string> {
     });
 
     if (!response.ok) {
-      console.error('OpenAI API error:', await response.text());
+      const errorText = await response.text();
+      console.error('OpenRouter API error:', response.status, errorText);
       return 'Извините, произошла ошибка. Попробуйте позже.';
     }
 
