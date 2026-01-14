@@ -171,27 +171,41 @@ export default function MatrixChat() {
         let roomName = nameEvent?.content?.name;
         let roomAvatar: string | undefined;
         
-        if (!roomName || isDirect) {
-          // Find other members (not the current user)
-          const memberEvents = stateEvents.filter(
-            e => e.type === 'm.room.member' && 
-                 e.state_key !== credentials.userId &&
-                 e.content?.membership === 'join'
+        // Get all member events
+        const memberEvents = stateEvents.filter(e => e.type === 'm.room.member');
+        
+        // For rooms without name (DM chats), show other member's name
+        if (!roomName) {
+          // Find other members (not the current user) who have joined
+          const otherMembers = memberEvents.filter(
+            e => e.state_key !== credentials.userId && 
+                 (e.content?.membership === 'join' || e.content?.membership === 'invite')
           );
           
-          if (memberEvents.length > 0) {
-            const otherMember = memberEvents[0];
-            roomName = otherMember.content?.displayname || 
-                       otherMember.state_key?.split(':')[0].replace('@', '') || 
-                       'Собеседник';
+          if (otherMembers.length > 0) {
+            // Get display name from member event or generate from user ID
+            const otherMember = otherMembers[0];
+            roomName = otherMember.content?.displayname;
+            
+            if (!roomName && otherMember.state_key) {
+              // Extract username from Matrix ID: @username:domain -> username
+              const username = otherMember.state_key.split(':')[0].replace('@', '');
+              // Convert snake_case to readable: myunion_abc123 -> MyUnion User
+              roomName = username.includes('myunion_') 
+                ? 'Пользователь' 
+                : username.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            }
+            
             roomAvatar = otherMember.content?.avatar_url;
-          } else {
-            // If no other members found, try to get from timeline
-            const memberNames = stateEvents
-              .filter(e => e.type === 'm.room.member' && e.state_key !== credentials.userId)
-              .map(e => e.content?.displayname || e.state_key?.split(':')[0].replace('@', ''));
-            roomName = memberNames[0] || 'Чат';
+          } else if (memberEvents.length === 1) {
+            // Only current user in room - might be waiting for invites
+            roomName = 'Новый чат';
           }
+        }
+        
+        // Ultimate fallback
+        if (!roomName) {
+          roomName = isDirect ? 'Личный чат' : 'Групповой чат';
         }
         
         const timelineEvents = rd.timeline?.events || [];
