@@ -504,11 +504,24 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
               const msgtype = (e.content?.msgtype || 'm.text') as MatrixMessage['msgtype'];
               let attachment: MessageAttachment | undefined;
               
+              // Helper to convert mxc:// to https://
+              const mxcToHttp = (mxcUrl: string, thumbnail = false) => {
+                if (!mxcUrl?.startsWith('mxc://')) return mxcUrl;
+                const parts = mxcUrl.replace('mxc://', '').split('/');
+                const server = parts[0];
+                const mediaId = parts.slice(1).join('/');
+                if (thumbnail) {
+                  return `${credentials.serverUrl}/_matrix/media/v3/thumbnail/${server}/${mediaId}?width=400&height=400&method=scale`;
+                }
+                return `${credentials.serverUrl}/_matrix/media/v3/download/${server}/${mediaId}`;
+              };
+              
               // Handle attachments
               if (msgtype === 'm.image' && e.content?.url) {
                 attachment = {
                   type: 'image',
-                  url: e.content.url.replace('mxc://', `${credentials.serverUrl}/_matrix/media/v3/download/`),
+                  url: mxcToHttp(e.content.url),
+                  thumbnailUrl: e.content.info?.thumbnail_url ? mxcToHttp(e.content.info.thumbnail_url, true) : mxcToHttp(e.content.url, true),
                   name: e.content.body || 'image',
                   mimeType: e.content.info?.mimetype,
                   width: e.content.info?.w,
@@ -518,7 +531,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
               } else if (msgtype === 'm.file' && e.content?.url) {
                 attachment = {
                   type: 'file',
-                  url: e.content.url.replace('mxc://', `${credentials.serverUrl}/_matrix/media/v3/download/`),
+                  url: mxcToHttp(e.content.url),
                   name: e.content.body || 'file',
                   mimeType: e.content.info?.mimetype,
                   size: e.content.info?.size
@@ -526,7 +539,8 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
               } else if (msgtype === 'm.video' && e.content?.url) {
                 attachment = {
                   type: 'video',
-                  url: e.content.url.replace('mxc://', `${credentials.serverUrl}/_matrix/media/v3/download/`),
+                  url: mxcToHttp(e.content.url),
+                  thumbnailUrl: e.content.info?.thumbnail_url ? mxcToHttp(e.content.info.thumbnail_url, true) : undefined,
                   name: e.content.body || 'video',
                   mimeType: e.content.info?.mimetype,
                   size: e.content.info?.size
@@ -534,7 +548,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
               } else if (msgtype === 'm.audio' && e.content?.url) {
                 attachment = {
                   type: 'audio',
-                  url: e.content.url.replace('mxc://', `${credentials.serverUrl}/_matrix/media/v3/download/`),
+                  url: mxcToHttp(e.content.url),
                   name: e.content.body || 'audio',
                   mimeType: e.content.info?.mimetype,
                   size: e.content.info?.size
@@ -731,12 +745,24 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
       const msgtype = e.content?.msgtype || 'm.text';
       let attachment: MessageAttachment | undefined;
       
+      // Helper to convert mxc:// to https://
+      const mxcToHttp = (mxcUrl: string, thumbnail = false) => {
+        if (!mxcUrl?.startsWith('mxc://')) return mxcUrl;
+        const parts = mxcUrl.replace('mxc://', '').split('/');
+        const server = parts[0];
+        const mediaId = parts.slice(1).join('/');
+        if (thumbnail) {
+          return `${credentials?.serverUrl}/_matrix/media/v3/thumbnail/${server}/${mediaId}?width=400&height=400&method=scale`;
+        }
+        return `${credentials?.serverUrl}/_matrix/media/v3/download/${server}/${mediaId}`;
+      };
+      
       // Handle attachments
       if (msgtype === 'm.image' && e.content?.url) {
         attachment = {
           type: 'image',
-          url: e.content.url.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/download/`),
-          thumbnailUrl: e.content.info?.thumbnail_url?.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/thumbnail/`) + '?width=400&height=400',
+          url: mxcToHttp(e.content.url),
+          thumbnailUrl: e.content.info?.thumbnail_url ? mxcToHttp(e.content.info.thumbnail_url, true) : mxcToHttp(e.content.url, true),
           name: e.content.body || 'image',
           mimeType: e.content.info?.mimetype,
           width: e.content.info?.w,
@@ -746,7 +772,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
       } else if (msgtype === 'm.file' && e.content?.url) {
         attachment = {
           type: 'file',
-          url: e.content.url.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/download/`),
+          url: mxcToHttp(e.content.url),
           name: e.content.body || 'file',
           mimeType: e.content.info?.mimetype,
           size: e.content.info?.size
@@ -754,8 +780,8 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
       } else if (msgtype === 'm.video' && e.content?.url) {
         attachment = {
           type: 'video',
-          url: e.content.url.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/download/`),
-          thumbnailUrl: e.content.info?.thumbnail_url?.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/thumbnail/`),
+          url: mxcToHttp(e.content.url),
+          thumbnailUrl: e.content.info?.thumbnail_url ? mxcToHttp(e.content.info.thumbnail_url, true) : undefined,
           name: e.content.body || 'video',
           mimeType: e.content.info?.mimetype,
           width: e.content.info?.w,
@@ -765,7 +791,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
       } else if (msgtype === 'm.audio' && e.content?.url) {
         attachment = {
           type: 'audio',
-          url: e.content.url.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/download/`),
+          url: mxcToHttp(e.content.url),
           name: e.content.body || 'audio',
           mimeType: e.content.info?.mimetype,
           size: e.content.info?.size
@@ -1111,10 +1137,15 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
       
       const { content_uri } = await uploadResp.json();
       
-      // Determine message type
+      // Determine message type (support iPhone formats)
       let msgtype = 'm.file';
-      if (file.type.startsWith('image/')) msgtype = 'm.image';
-      else if (file.type.startsWith('video/')) msgtype = 'm.video';
+      const fileName = file.name.toLowerCase();
+      const isHeic = fileName.endsWith('.heic') || fileName.endsWith('.heif');
+      const isImage = file.type.startsWith('image/') || isHeic;
+      const isVideo = file.type.startsWith('video/') || fileName.endsWith('.mov');
+      
+      if (isImage) msgtype = 'm.image';
+      else if (isVideo) msgtype = 'm.video';
       else if (file.type.startsWith('audio/')) msgtype = 'm.audio';
       
       // Send message with attachment
@@ -1875,12 +1906,40 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                         {msg.attachment && (
                           <div className="mb-2">
                             {msg.attachment.type === 'image' && (
-                              <img
-                                src={msg.attachment.thumbnailUrl || msg.attachment.url}
-                                alt={msg.attachment.name}
-                                className="rounded-lg max-w-full cursor-pointer"
-                                onClick={() => window.open(msg.attachment?.url, '_blank')}
-                              />
+                              <div className="relative">
+                                <img
+                                  src={msg.attachment.thumbnailUrl || msg.attachment.url}
+                                  alt={msg.attachment.name}
+                                  className="rounded-lg max-w-full max-h-80 cursor-pointer object-cover"
+                                  onClick={() => window.open(msg.attachment?.url, '_blank')}
+                                  onError={(e) => {
+                                    // Try original URL if thumbnail fails
+                                    const target = e.target as HTMLImageElement;
+                                    if (target.src !== msg.attachment?.url) {
+                                      target.src = msg.attachment?.url || '';
+                                    } else {
+                                      // Show fallback
+                                      target.style.display = 'none';
+                                      target.nextElementSibling?.classList.remove('hidden');
+                                    }
+                                  }}
+                                />
+                                {/* Fallback for unsupported formats (HEIC, etc) */}
+                                <a
+                                  href={msg.attachment.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="hidden flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+                                >
+                                  <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                  <div>
+                                    <div className="font-medium text-gray-900 dark:text-white">{msg.attachment.name}</div>
+                                    <div className="text-sm text-gray-500">Нажмите для просмотра</div>
+                                  </div>
+                                </a>
+                              </div>
                             )}
                             {msg.attachment.type === 'video' && (
                               <video
