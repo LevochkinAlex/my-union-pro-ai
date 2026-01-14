@@ -1847,20 +1847,15 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                     onClick={() => handleStartChat(user.userId)}
                     className="w-full p-4 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
-                    {user.avatarUrl ? (
-                      <Avatar className="h-12 w-12">
-                        <AvatarImage src={user.avatarUrl} alt={user.displayName} />
+                    <Avatar className="h-12 w-12">
+                      {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt={user.displayName} className="w-full h-full object-cover rounded-full" />
+                      ) : (
                         <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
                           {user.displayName.charAt(0).toUpperCase()}
                         </AvatarFallback>
-                      </Avatar>
-                    ) : (
-                      <Avatar className="h-12 w-12">
-                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-                          {user.displayName.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                    )}
+                      )}
+                    </Avatar>
                     <div className="text-left flex-1 min-w-0">
                       <div className="font-semibold text-gray-900 dark:text-white truncate">
                         {user.displayName}
