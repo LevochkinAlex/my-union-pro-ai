@@ -90,11 +90,7 @@ interface TypingUser {
   name: string;
 }
 
-interface MatrixChatProps {
-  isPPOHead?: boolean;
-}
-
-export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
+export default function MatrixChat() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const urlChatId = searchParams.get('chatId');
@@ -158,6 +154,12 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
   // Clear chat modal state
   const [showClearChatModal, setShowClearChatModal] = useState(false);
   const [clearingChat, setClearingChat] = useState(false);
+  
+  // Image preview modal state
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  
+  // Computed isPPOHead based on viewMode
+  const isPPOHead = viewMode === 'PPO_HEAD' || viewMode === 'EMPLOYEE';
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -251,9 +253,10 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
     }
   }, []);
 
-  // Load organization members for group creation (PPO Head only)
+  // Load organization members for group creation (PPO Head/Employee only)
   const loadOrgMembers = useCallback(async () => {
-    if (!isPPOHead) return;
+    // Check viewMode directly since isPPOHead may not be updated yet
+    if (viewMode !== 'PPO_HEAD' && viewMode !== 'EMPLOYEE') return;
     try {
       const resp = await fetch('/api/ppo-head/members?status=approved');
       if (resp.ok) {
@@ -263,7 +266,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
     } catch (err) {
       console.error('Failed to load org members:', err);
     }
-  }, [isPPOHead]);
+  }, [viewMode]);
 
   // Create group chat (PPO Head only)
   const handleCreateGroup = useCallback(async () => {
@@ -312,10 +315,10 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
 
   // Load org members when showing create group modal
   useEffect(() => {
-    if (showCreateGroup && isPPOHead) {
+    if (showCreateGroup && (viewMode === 'PPO_HEAD' || viewMode === 'EMPLOYEE')) {
       loadOrgMembers();
     }
-  }, [showCreateGroup, isPPOHead, loadOrgMembers]);
+  }, [showCreateGroup, viewMode, loadOrgMembers]);
 
   // Ensure user has a DM chat with AI bot
   const ensureBotChat = useCallback(async (creds: MatrixCredentials) => {
@@ -2187,7 +2190,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                                   src={msg.attachment.thumbnailUrl || msg.attachment.url}
                                   alt={msg.attachment.name}
                                   className="rounded-lg max-w-full max-h-80 cursor-pointer object-cover"
-                                  onClick={() => window.open(msg.attachment?.url, '_blank')}
+                                  onClick={(e) => { e.stopPropagation(); setPreviewImage(msg.attachment?.url || null); }}
                                   onError={(e) => {
                                     // Try original URL if thumbnail fails
                                     const target = e.target as HTMLImageElement;
@@ -3140,6 +3143,44 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90"
+          onClick={() => setPreviewImage(null)}
+        >
+          {/* Close button */}
+          <button
+            onClick={() => setPreviewImage(null)}
+            className="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition-colors"
+          >
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          
+          {/* Download button */}
+          <a
+            href={previewImage}
+            download
+            onClick={(e) => e.stopPropagation()}
+            className="absolute top-4 left-4 p-2 text-white/70 hover:text-white transition-colors"
+          >
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          </a>
+          
+          {/* Image */}
+          <img
+            src={previewImage}
+            alt="Preview"
+            className="max-w-[90vw] max-h-[90vh] object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>
