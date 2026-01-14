@@ -23,7 +23,7 @@ async function matrixFetch(endpoint: string, options: RequestInit = {}) {
   return response;
 }
 
-async function uploadFileToMatrix(filePath: string, mimeType: string, fileName: string) {
+async function uploadFileToMatrix(filePath: string, mimeType: string, fileName: string, accessToken: string) {
   // Read file
   const absolutePath = path.join(process.cwd(), 'public', filePath.replace(/^\//, ''));
   
@@ -34,10 +34,11 @@ async function uploadFileToMatrix(filePath: string, mimeType: string, fileName: 
   
   const fileBuffer = fs.readFileSync(absolutePath);
   
-  // Upload to Matrix
-  const response = await matrixFetch(`/upload?filename=${encodeURIComponent(fileName)}`, {
+  // Upload to Matrix media endpoint (v1 for authenticated uploads)
+  const response = await fetch(`${MATRIX_SERVER}/_matrix/media/v3/upload?filename=${encodeURIComponent(fileName)}`, {
     method: 'POST',
     headers: {
+      'Authorization': `Bearer ${accessToken}`,
       'Content-Type': mimeType,
     },
     body: fileBuffer,
@@ -134,7 +135,8 @@ async function main() {
       const contentUri = await uploadFileToMatrix(
         attachment.filePath,
         attachment.mimeType,
-        attachment.fileName
+        attachment.fileName,
+        accessToken
       );
       
       if (!contentUri) {
