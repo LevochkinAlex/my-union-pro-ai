@@ -1,8 +1,11 @@
 /**
  * MyUnion AI Bot for Matrix
- * Simple bot using fetch API (no SDK dependencies)
+ * Персонализированный бот с загрузкой профиля пользователя
  */
 
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 const MATRIX_HOMESERVER = process.env.MATRIX_SERVER_URL || 'https://matrix.myunion.pro';
 const BOT_ACCESS_TOKEN = process.env.MATRIX_BOT_TOKEN;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -14,30 +17,115 @@ interface ConversationMessage {
   content: string;
 }
 
+interface UserProfile {
+  name: string;
+  organization?: string;
+  position?: string;
+  membershipStatus?: string;
+  interests?: string[];
+}
+
 // Store conversations per room
 const conversations = new Map<string, ConversationMessage[]>();
+// Cache user profiles
+const userProfiles = new Map<string, UserProfile>();
 let syncToken: string | null = null;
 
-// System prompt
-const SYSTEM_PROMPT = `Ты — AI-ассистент профсоюзной системы MyUnion Pro.
+// Base system prompt
+const BASE_SYSTEM_PROMPT = `Ты — AI-ассистент профсоюзной системы MyUnion Pro. Ты дружелюбный и полезный помощник.
 
-Твои задачи:
+ТВОИ ЗАДАЧИ:
 - Помогать членам профсоюза с вопросами о членстве, взносах, документах
-- Объяснять права и обязанности членов профсоюза
+- Объяснять права и обязанности членов профсоюза  
 - Помогать с заполнением заявлений и документов
 - Отвечать на вопросы о скидках и льготах для членов профсоюза
 - Направлять к председателю ППО по сложным вопросам
+- Подсказывать где найти нужные разделы системы
 
-Правила общения:
-- Будь вежлив и профессионален
-- Отвечай кратко и по существу
-- Используй русский язык
-- Если не знаешь ответ, честно скажи об этом
+РАЗДЕЛЫ СИСТЕМЫ:
+- Профиль — заполнение данных, фото, документы автоматически генерируются
+- Документы — просмотр сгенерированных документов
+- Обращения — создание заявлений, жалоб, запросов к руководству
+- Новости — новости профсоюза
+- Скидки — партнёрские скидки для членов профсоюза
+- Чат — переписка с председателем и другими членами
 
-Ты НЕ должен:
-- Давать юридические советы
-- Обсуждать политические темы
-- Делиться личными данными пользователей`;
+ПРАВИЛА:
+- Обращайся к пользователю по имени если оно известно
+- Отвечай кратко и по существу (2-4 предложения)
+- Используй эмодзи для дружелюбности
+- Если не знаешь ответ — предложи обратиться к председателю
+
+НЕ ДЕЛАЙ:
+- Не давай юридических советов
+- Не обсуждай политику
+- Не собирай личные данные — направляй в раздел Профиль`;
+
+// Function to get user profile from DB
+async function getUserProfile(matrixUserId: string): Promise<UserProfile | null> {
+  // Check cache first
+  if (userProfiles.has(matrixUserId)) {
+    return userProfiles.get(matrixUserId)!;
+  }
+
+  try {
+    const user = await prisma.user.findFirst({
+      where: { matrixUserId },
+      select: {
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        position: true,
+        membershipStatus: true,
+        organization: {
+          select: { name: true, shortName: true }
+        }
+      }
+    });
+
+    if (!user) return null;
+
+    const profile: UserProfile = {
+      name: [user.firstName, user.middleName].filter(Boolean).join(' ') || 'Пользователь',
+      organization: user.organization?.shortName || user.organization?.name,
+      position: user.position || undefined,
+      membershipStatus: user.membershipStatus || undefined,
+    };
+
+    // Cache the profile
+    userProfiles.set(matrixUserId, profile);
+    return profile;
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    return null;
+  }
+}
+
+// Build personalized system prompt
+function buildSystemPrompt(profile: UserProfile | null): string {
+  if (!profile) return BASE_SYSTEM_PROMPT;
+
+  let prompt = BASE_SYSTEM_PROMPT + '\n\n';
+  prompt += '--- ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ ---\n';
+  prompt += `Имя: ${profile.name}\n`;
+  
+  if (profile.organization) {
+    prompt += `Организация: ${profile.organization}\n`;
+  }
+  if (profile.position) {
+    prompt += `Должность: ${profile.position}\n`;
+  }
+  if (profile.membershipStatus) {
+    const statusText = profile.membershipStatus === 'ACTIVE' ? 'Активный член профсоюза' :
+                       profile.membershipStatus === 'PENDING' ? 'Заявка на вступление' :
+                       profile.membershipStatus === 'INACTIVE' ? 'Неактивный' : profile.membershipStatus;
+    prompt += `Статус: ${statusText}\n`;
+  }
+  
+  prompt += '\nОбращайся к пользователю по имени и учитывай его статус в ответах.';
+  
+  return prompt;
+}
 
 async function matrixFetch(endpoint: string, options: RequestInit = {}): Promise<unknown> {
   const url = `${MATRIX_HOMESERVER}/_matrix/client/v3${endpoint}`;
@@ -58,11 +146,13 @@ async function matrixFetch(endpoint: string, options: RequestInit = {}): Promise
   return response.json();
 }
 
-async function callAI(messages: ConversationMessage[]): Promise<string> {
+async function callAI(messages: ConversationMessage[], profile: UserProfile | null): Promise<string> {
   if (!OPENROUTER_API_KEY) {
     console.error('OPENROUTER_API_KEY not set!');
     return 'AI временно недоступен. Пожалуйста, обратитесь к председателю ППО.';
   }
+
+  const systemPrompt = buildSystemPrompt(profile);
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -76,10 +166,10 @@ async function callAI(messages: ConversationMessage[]): Promise<string> {
       body: JSON.stringify({
         model: 'openai/gpt-4o-mini',
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt },
           ...messages.slice(-10),
         ],
-        max_tokens: 1000,
+        max_tokens: 500,
         temperature: 0.7,
       }),
     });
@@ -87,14 +177,14 @@ async function callAI(messages: ConversationMessage[]): Promise<string> {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('OpenRouter API error:', response.status, errorText);
-      return 'Извините, произошла ошибка. Попробуйте позже.';
+      return 'Извините, произошла ошибка. Попробуйте позже. 😔';
     }
 
     const data = await response.json() as { choices: Array<{ message: { content: string } }> };
     return data.choices[0]?.message?.content || 'Извините, не могу ответить на этот вопрос.';
   } catch (error) {
     console.error('AI call error:', error);
-    return 'Извините, произошла ошибка при обработке запроса.';
+    return 'Извините, произошла ошибка при обработке запроса. 😔';
   }
 }
 
@@ -128,18 +218,7 @@ async function joinRoom(roomId: string): Promise<void> {
     });
     console.log(`Joined room ${roomId}`);
     
-    // Send welcome message
-    setTimeout(() => {
-      sendMessage(roomId,
-        `👋 Привет! Я ${BOT_NAME} — ваш AI-помощник по вопросам профсоюза.\n\n` +
-        `Я могу помочь с:\n` +
-        `• Вопросами о членстве и взносах\n` +
-        `• Информацией о правах и льготах\n` +
-        `• Заполнением документов\n` +
-        `• Скидками для членов профсоюза\n\n` +
-        `Просто напишите свой вопрос!`
-      );
-    }, 1000);
+    // Don't send automatic welcome - wait for user's first message
   } catch (error) {
     console.error(`Failed to join room ${roomId}:`, error);
   }
@@ -178,9 +257,16 @@ async function handleMessage(roomId: string, event: MatrixEvent): Promise<void> 
   const messageText = event.content?.body?.trim();
   if (!messageText) return;
 
-  console.log(`[${roomId}] ${event.sender}: ${messageText}`);
+  const senderMatrixId = event.sender || '';
+  console.log(`[${roomId}] ${senderMatrixId}: ${messageText}`);
 
-  // Get or create conversation
+  // Get user profile for personalization
+  const userProfile = await getUserProfile(senderMatrixId);
+  if (userProfile) {
+    console.log(`  -> User: ${userProfile.name}, Org: ${userProfile.organization || 'N/A'}`);
+  }
+
+  // Get or create conversation (fresh start - no history)
   let conversation = conversations.get(roomId);
   if (!conversation) {
     conversation = [];
@@ -194,15 +280,15 @@ async function handleMessage(roomId: string, event: MatrixEvent): Promise<void> 
   await setTyping(roomId, true);
 
   try {
-    // Get AI response
-    const response = await callAI(conversation);
+    // Get AI response with user profile
+    const response = await callAI(conversation, userProfile);
 
     // Add assistant response
     conversation.push({ role: 'assistant', content: response });
 
-    // Keep conversation history manageable
-    if (conversation.length > 50) {
-      conversation.splice(0, conversation.length - 50);
+    // Keep conversation history short (last 10 exchanges)
+    if (conversation.length > 20) {
+      conversation.splice(0, conversation.length - 20);
     }
 
     // Stop typing and send response
@@ -212,7 +298,7 @@ async function handleMessage(roomId: string, event: MatrixEvent): Promise<void> 
   } catch (error) {
     console.error('Error handling message:', error);
     await setTyping(roomId, false);
-    await sendMessage(roomId, 'Извините, произошла ошибка. Попробуйте ещё раз.');
+    await sendMessage(roomId, 'Извините, произошла ошибка. Попробуйте ещё раз. 😔');
   }
 }
 
@@ -279,4 +365,6 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch(console.error);
+main()
+  .catch(console.error)
+  .finally(() => prisma.$disconnect());
