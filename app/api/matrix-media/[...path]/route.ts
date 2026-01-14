@@ -1,0 +1,79 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+
+const MATRIX_SERVER = process.env.MATRIX_SERVER_URL || 'https://matrix.myunion.pro';
+
+/**
+ * Proxy for Matrix media files
+ * Adds authentication header required by Matrix API
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's Matrix credentials
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { matrixAccessToken: true },
+    });
+
+    if (!user?.matrixAccessToken) {
+      return NextResponse.json({ error: 'No Matrix credentials' }, { status: 401 });
+    }
+
+    const { path } = await params;
+    const mediaPath = path.join('/');
+    
+    // Get thumbnail params if present
+    const { searchParams } = new URL(request.url);
+    const width = searchParams.get('width');
+    const height = searchParams.get('height');
+    const method = searchParams.get('method');
+    
+    // Build Matrix URL
+    let matrixUrl: string;
+    if (width && height) {
+      // Thumbnail request
+      matrixUrl = `${MATRIX_SERVER}/_matrix/client/v1/media/thumbnail/${mediaPath}?width=${width}&height=${height}&method=${method || 'scale'}`;
+    } else {
+      // Full download
+      matrixUrl = `${MATRIX_SERVER}/_matrix/client/v1/media/download/${mediaPath}`;
+    }
+
+    // Fetch from Matrix with auth
+    const response = await fetch(matrixUrl, {
+      headers: {
+        'Authorization': `Bearer ${user.matrixAccessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error(`Matrix media error: ${response.status} for ${mediaPath}`);
+      return NextResponse.json({ error: 'Media not found' }, { status: response.status });
+    }
+
+    // Get content type
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+    
+    // Stream the response
+    const blob = await response.blob();
+    
+    return new NextResponse(blob, {
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      },
+    });
+  } catch (error) {
+    console.error('Matrix media proxy error:', error);
+    return NextResponse.json({ error: 'Failed to fetch media' }, { status: 500 });
+  }
+}

@@ -518,16 +518,17 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
               const msgtype = (e.content?.msgtype || 'm.text') as MatrixMessage['msgtype'];
               let attachment: MessageAttachment | undefined;
               
-              // Helper to convert mxc:// to https://
+              // Helper to convert mxc:// to https:// using our proxy for auth
               const mxcToHttp = (mxcUrl: string, thumbnail = false) => {
                 if (!mxcUrl?.startsWith('mxc://')) return mxcUrl;
                 const parts = mxcUrl.replace('mxc://', '').split('/');
                 const server = parts[0];
                 const mediaId = parts.slice(1).join('/');
+                // Use our proxy to add auth header
                 if (thumbnail) {
-                  return `${credentials.serverUrl}/_matrix/media/v3/thumbnail/${server}/${mediaId}?width=400&height=400&method=scale`;
+                  return `/api/matrix-media/${server}/${mediaId}?width=400&height=400&method=scale`;
                 }
-                return `${credentials.serverUrl}/_matrix/media/v3/download/${server}/${mediaId}`;
+                return `/api/matrix-media/${server}/${mediaId}`;
               };
               
               // Handle attachments
@@ -760,16 +761,17 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
       const msgtype = e.content?.msgtype || 'm.text';
       let attachment: MessageAttachment | undefined;
       
-      // Helper to convert mxc:// to https://
+      // Helper to convert mxc:// to https:// using our proxy for auth
       const mxcToHttp = (mxcUrl: string, thumbnail = false) => {
         if (!mxcUrl?.startsWith('mxc://')) return mxcUrl;
         const parts = mxcUrl.replace('mxc://', '').split('/');
         const server = parts[0];
         const mediaId = parts.slice(1).join('/');
+        // Use our proxy to add auth header
         if (thumbnail) {
-          return `${credentials?.serverUrl}/_matrix/media/v3/thumbnail/${server}/${mediaId}?width=400&height=400&method=scale`;
+          return `/api/matrix-media/${server}/${mediaId}?width=400&height=400&method=scale`;
         }
-        return `${credentials?.serverUrl}/_matrix/media/v3/download/${server}/${mediaId}`;
+        return `/api/matrix-media/${server}/${mediaId}`;
       };
       
       // Handle attachments
