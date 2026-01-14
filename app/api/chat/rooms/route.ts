@@ -16,7 +16,12 @@ export async function GET() {
       where: {
         participants: { some: { userId: session.user.id } }
       },
-      include: {
+      select: {
+        id: true,
+        type: true,
+        name: true,
+        iconUrl: true,
+        matrixRoomId: true,
         participants: {
           include: {
             user: {
@@ -57,7 +62,10 @@ export async function GET() {
         
         // Determine display name
         let displayName = '';
-        if (isDirect && otherParticipant) {
+        if (chat.type === 'GROUP' && chat.name) {
+          // For groups with explicit names
+          displayName = chat.name;
+        } else if (isDirect && otherParticipant) {
           // Check if it's AI bot
           if (otherParticipant.matrixUserId?.includes('ai_assistant') || 
               otherParticipant.matrixUserId?.includes('myunion_bot')) {
@@ -68,7 +76,7 @@ export async function GET() {
               .join(' ') || 'Пользователь';
           }
         } else {
-          // Group chat - list participant names
+          // Group chat without name - list participant names
           displayName = chat.participants
             .filter(p => p.user?.id !== session.user.id)
             .map(p => p.user?.firstName)
@@ -77,11 +85,20 @@ export async function GET() {
             .join(', ') || 'Групповой чат';
         }
         
+        // Determine avatar URL
+        let avatarUrl: string | null = null;
+        if (isDirect && otherParticipant?.avatarUrl) {
+          avatarUrl = otherParticipant.avatarUrl;
+        } else if (chat.type === 'GROUP' && chat.iconUrl) {
+          avatarUrl = chat.iconUrl;
+        }
+        
         return {
           matrixRoomId: chat.matrixRoomId,
           displayName,
-          avatarUrl: isDirect ? otherParticipant?.avatarUrl : null,
+          avatarUrl,
           isDirect,
+          isGroup: chat.type === 'GROUP',
           participantCount: chat.participants.length,
           lastMessage: chat.messages[0]?.content,
           lastMessageTime: chat.messages[0]?.createdAt?.getTime(),

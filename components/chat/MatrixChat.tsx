@@ -453,15 +453,18 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
         const timelineEvents = rd.timeline?.events || [];
         const lastMsg = [...timelineEvents].reverse().find(e => e.type === 'm.room.message');
 
-        roomList.push({
-          roomId,
-          name: roomName || 'Новый чат',
-          avatarUrl: roomAvatar,
-          lastMessage: lastMsg?.content?.body,
-          lastMessageTime: lastMsg?.origin_server_ts,
-          unreadCount: rd.unread_notifications?.notification_count || 0,
-          isDirect,
-        });
+        // ONLY add rooms that exist in our database
+        if (dbInfo) {
+          roomList.push({
+            roomId,
+            name: dbInfo.displayName || roomName || 'Чат',
+            avatarUrl: dbInfo.avatarUrl || roomAvatar,
+            lastMessage: lastMsg?.content?.body,
+            lastMessageTime: lastMsg?.origin_server_ts,
+            unreadCount: rd.unread_notifications?.notification_count || 0,
+            isDirect: dbInfo.isDirect,
+          });
+        }
 
         // Handle typing indicators
         const typingEvent = rd.ephemeral?.events?.find(e => e.type === 'm.typing');
@@ -520,12 +523,34 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                 };
               }
               
-              const senderName = e.sender.includes('myunion_bot') ? 'МойСоюз Помощник' : e.sender.split(':')[0].replace('@', '');
+              // Get sender name from our DB data
+              let senderName = 'Пользователь';
+              let senderAvatar: string | undefined;
+              
+              if (e.sender.includes('myunion_bot') || e.sender.includes('ai_assistant')) {
+                senderName = 'МойСоюз Помощник';
+              } else if (dbInfo?.participants) {
+                // Find sender in our DB participants
+                const participant = dbInfo.participants.find(p => p.matrixUserId === e.sender);
+                if (participant) {
+                  senderName = [participant.firstName, participant.lastName].filter(Boolean).join(' ') || 'Пользователь';
+                  senderAvatar = participant.avatarUrl || undefined;
+                }
+              }
+              
+              // Fallback to Matrix display name
+              if (senderName === 'Пользователь') {
+                const memberEvent = allMemberEvents.find(m => m.state_key === e.sender);
+                if (memberEvent?.content?.displayname) {
+                  senderName = memberEvent.content.displayname;
+                }
+              }
               
               return {
                 eventId: e.event_id,
                 sender: e.sender,
                 senderName,
+                senderAvatar,
                 content: e.content?.body || '',
                 timestamp: e.origin_server_ts,
                 isOwn: e.sender === credentials.userId,
@@ -737,13 +762,27 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
         }
       }
       
-      // Get display name
-      const senderName = e.sender.includes('myunion_bot') ? 'МойСоюз Помощник' : e.sender.split(':')[0].replace('@', '');
+      // Get sender name from our DB data
+      let senderName = 'Пользователь';
+      let senderAvatar: string | undefined;
+      
+      const roomDbInfo = dbRoomInfo.get(roomId);
+      
+      if (e.sender.includes('myunion_bot') || e.sender.includes('ai_assistant')) {
+        senderName = 'МойСоюз Помощник';
+      } else if (roomDbInfo?.participants) {
+        const participant = roomDbInfo.participants.find(p => p.matrixUserId === e.sender);
+        if (participant) {
+          senderName = [participant.firstName, participant.lastName].filter(Boolean).join(' ') || 'Пользователь';
+          senderAvatar = participant.avatarUrl || undefined;
+        }
+      }
       
       return {
         eventId: e.event_id,
         sender: e.sender,
         senderName,
+        senderAvatar,
         content: e.content?.body || '',
         timestamp: e.origin_server_ts,
         isOwn: e.sender === credentials?.userId,
@@ -756,7 +795,7 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
 
     setMessages(msgs);
     scrollToBottom();
-  }, [credentials, matrixFetch]);
+  }, [credentials, matrixFetch, dbRoomInfo]);
 
   // Select room
   // Fetch room members to get proper names
@@ -1262,9 +1301,11 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                     <Avatar className="h-12 w-12 ring-2 ring-gray-100 dark:ring-gray-700 flex-shrink-0">
                       {room.avatarUrl ? (
                         <img 
-                          src={room.avatarUrl.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/thumbnail/`)}
+                          src={room.avatarUrl.startsWith('mxc://') 
+                            ? room.avatarUrl.replace('mxc://', `${credentials?.serverUrl}/_matrix/media/v3/thumbnail/`) 
+                            : room.avatarUrl}
                           alt={room.name}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover rounded-full"
                         />
                       ) : (
                         <AvatarFallback className={`bg-gradient-to-br ${gradientColor} text-white font-semibold text-lg`}>
@@ -1369,9 +1410,13 @@ export default function MatrixChat({ isPPOHead = false }: MatrixChatProps) {
                   >
                     {!msg.isOwn && showAvatar && (
                       <Avatar className="h-8 w-8 flex-shrink-0">
-                        <AvatarFallback className="bg-gray-300 dark:bg-gray-600 text-xs">
-                          {msg.senderName.charAt(0).toUpperCase()}
-                        </AvatarFallback>
+                        {msg.senderAvatar ? (
+                          <img src={msg.senderAvatar} alt="" className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                          <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xs">
+                            {msg.senderName.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        )}
                       </Avatar>
                     )}
                     {!msg.isOwn && !showAvatar && <div className="w-8" />}
