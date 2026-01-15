@@ -1,49 +1,49 @@
 #!/bin/bash
+# ПОЛНЫЙ ДЕПЛОЙ - запустите этот скрипт
 
 set -e
 
-echo "🚀 Starting deployment to production..."
+echo "🚀 НАЧАЛО ДЕПЛОЯ"
 echo ""
 
-cd /Users/renatusmanov/my-union-pro-ai && sshpass -p 'wu,iMrZj6goZh?' ssh -o StrictHostKeyChecking=no root@194.87.49.210 << 'ENDSSH'
-set -e
+cd /Users/renatusmanov/my-union-pro-ai
+
+echo "1️⃣ Коммит изменений..."
+git add -A
+git commit -m "Fix: версия 1.7.2, исправления создания чата и уведомлений" || echo "Уже закоммичено"
+git push
+
+echo ""
+echo "2️⃣ Деплой на сервер..."
+sshpass -p 'wu,iMrZj6goZh?' ssh -o StrictHostKeyChecking=no root@194.87.49.210 bash << 'SERVERDEPLOY'
 cd /opt/my-union-pro
-
-echo "=== Step 1: Git Pull ==="
+echo "📥 Обновление кода..."
 git pull
-echo ""
-
-echo "=== Step 2: Prisma Generate ==="
-npx prisma generate
-echo ""
-
-echo "=== Step 3: Prisma DB Push (if schema changed) ==="
-npx prisma db push --accept-data-loss || echo "Prisma push skipped"
-echo ""
-
-echo "=== Step 4: Installing dependencies ==="
-pnpm install
-echo ""
-
-echo "=== Step 5: Building project ==="
+echo "📋 Версия:"
+grep version package.json
+echo "🏗️ Сборка..."
 pnpm build
-echo ""
-
-echo "=== Step 6: Restarting PM2 ==="
-pm2 restart my-union-pro
-sleep 2
-echo ""
-
-echo "=== Step 7: PM2 Status ==="
-pm2 status
-echo ""
-
-echo "=== Step 8: Recent logs ==="
-pm2 logs my-union-pro --lines 20 --nostream
-echo ""
-
-echo "✅ Deployment completed!"
-ENDSSH
+echo "🔄 Перезапуск..."
+pm2 delete my-union-pro || true
+pm2 start npm --name my-union-pro -- start
+sleep 12
+echo "✅ Статус:"
+pm2 list
+echo "📝 Логи:"
+pm2 logs my-union-pro --lines 10 --nostream | tail -10
+SERVERDEPLOY
 
 echo ""
-echo "✨ Deployment finished!"
+echo "3️⃣ Проверка API..."
+sleep 8
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://myunion.pro/api/profile)
+echo "HTTP код: $HTTP_CODE"
+
+if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
+    echo "✅ СЕРВЕР РАБОТАЕТ!"
+else
+    echo "⚠️ Проблема: HTTP $HTTP_CODE"
+fi
+
+echo ""
+echo "🎉 ДЕПЛОЙ ЗАВЕРШЕН"

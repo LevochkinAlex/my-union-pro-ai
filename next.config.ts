@@ -33,6 +33,16 @@ const nextConfig = {
   ],
   // Оптимизация webpack
   webpack: (config, { isServer }) => {
+    // Исключаем подпроекты из компиляции
+    config.watchOptions = {
+      ...config.watchOptions,
+      ignored: [
+        '**/node_modules/**',
+        '**/trade-union-survey-system/**',
+        '**/profreport-main/**',
+      ],
+    };
+    
     if (!isServer) {
       // Исключаем серверные модули из клиентского бандла
       config.resolve.fallback = {

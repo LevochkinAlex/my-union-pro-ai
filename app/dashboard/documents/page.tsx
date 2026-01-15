@@ -66,7 +66,7 @@ export default function DocumentsPage() {
     }
   };
 
-  const loadDocuments = async () => {
+  const loadDocuments = async (): Promise<{ incoming: Document[]; outgoing: Document[] }> => {
     try {
       setIsLoading(true);
       setError(null);
@@ -97,9 +97,12 @@ export default function DocumentsPage() {
       });
       
       setOutgoingDocuments(outgoing);
+      
+      return { incoming, outgoing };
     } catch (err) {
       console.error("Ошибка загрузки документов:", err);
       setError(err instanceof Error ? err.message : "Не удалось загрузить документы");
+      return { incoming: [], outgoing: [] };
     } finally {
       setIsLoading(false);
     }
@@ -315,10 +318,11 @@ export default function DocumentsPage() {
     if (attempts >= 10) return; // Максимум 10 попыток (20 секунд)
     
     setTimeout(async () => {
-      await loadDocuments();
+      const { incoming, outgoing } = await loadDocuments();
       
-      // Проверяем статус документа
-      const doc = documents.find(d => d.id === docId);
+      // Проверяем статус документа в обоих списках
+      const allDocuments = [...incoming, ...outgoing];
+      const doc = allDocuments.find(d => d.id === docId);
       if (doc?.verificationStatus === "VERIFYING") {
         // Продолжаем polling
         pollVerificationStatus(docId, attempts + 1);

@@ -48,6 +48,7 @@ interface Document {
   type: string;
   status: string;
   title: string;
+  description?: string | null;
   fileName: string | null;
   filePath: string | null;
   createdAt: string;
@@ -161,7 +162,7 @@ export default function PPOHeadDocumentsPage() {
             const isCharter = 
               d.id === "charter-system" ||
               d.title?.toLowerCase().includes("устав") ||
-              d.description?.toLowerCase().includes("устав");
+              (d.description && d.description.toLowerCase().includes("устав"));
             return isCharter;
           }
           

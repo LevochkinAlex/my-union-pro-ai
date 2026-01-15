@@ -20,7 +20,10 @@ export async function POST(request: NextRequest) {
     // Find chat by matrix room ID
     const chat = await prisma.chat.findFirst({
       where: { matrixRoomId: roomId },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        type: true,
         participants: {
           include: {
             user: {
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest) {
 
     // Determine if it's a group chat
     const isGroupChat = chat.participants.length > 2;
-    const chatName = chat.displayName || (isGroupChat ? 'Групповой чат' : null);
+    const chatName = chat.name || (isGroupChat ? 'Групповой чат' : null);
     
     // Prepare message preview (remove HTML tags if present)
     const messagePreview = message.replace(/<[^>]*>/g, '').slice(0, 100);
