@@ -2,6 +2,45 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { sendMassNotification } from '@/lib/notifications';
+
+// Helper to send message to Matrix room
+async function sendMatrixMessage(roomId: string, message: string) {
+  const MATRIX_BOT_USER_ID = process.env.MATRIX_BOT_USER_ID;
+  const MATRIX_BOT_ACCESS_TOKEN = process.env.MATRIX_BOT_ACCESS_TOKEN;
+  const MATRIX_SERVER_URL = process.env.NEXT_PUBLIC_MATRIX_SERVER_URL || 'https://matrix.myunion.pro';
+
+  if (!MATRIX_BOT_ACCESS_TOKEN) {
+    console.warn('[tickets/close] Matrix bot token not configured');
+    return;
+  }
+
+  try {
+    const txnId = `close_${Date.now()}`;
+    const response = await fetch(
+      `${MATRIX_SERVER_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${MATRIX_BOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          msgtype: 'm.notice',
+          body: message,
+          format: 'org.matrix.custom.html',
+          formatted_body: `<strong>🎉 ${message}</strong>`,
+        }),
+      }
+    );
+    
+    if (!response.ok) {
+      console.error('[tickets/close] Failed to send Matrix message:', await response.text());
+    }
+  } catch (error) {
+    console.error('[tickets/close] Error sending Matrix message:', error);
+  }
+}
 
 /**
  * POST /api/tickets/[id]/close
@@ -20,7 +59,7 @@ export async function POST(
     const { id } = await params;
     const { rating, comment } = await request.json();
 
-    // Find ticket by publicId
+    // Find ticket by publicId with chat participants
     const ticket = await prisma.ticket.findFirst({
       where: { 
         publicId: id 
@@ -28,9 +67,35 @@ export async function POST(
       select: {
         id: true,
         publicId: true,
+        title: true,
         status: true,
         organizationId: true,
-        user: { select: { id: true } },
+        matrixRoomId: true,
+        chatId: true,
+        user: { 
+          select: { 
+            id: true, 
+            firstName: true, 
+            lastName: true,
+            email: true,
+          } 
+        },
+        chat: {
+          select: {
+            participants: {
+              select: {
+                userId: true,
+                user: {
+                  select: { 
+                    id: true, 
+                    email: true,
+                    firstName: true,
+                  }
+                }
+              }
+            }
+          }
+        }
       },
     });
 
@@ -54,6 +119,9 @@ export async function POST(
       );
     }
 
+    const userName = [ticket.user.firstName, ticket.user.lastName].filter(Boolean).join(' ') || 'Пользователь';
+    const ratingStars = '⭐'.repeat(rating || 0);
+
     // Update ticket
     const updatedTicket = await prisma.ticket.update({
       where: { id: ticket.id },
@@ -67,27 +135,41 @@ export async function POST(
       },
     });
 
-    // Create notification for organization PPO head if ticket has organization
-    if (ticket.organizationId) {
-      const ppoHead = await prisma.user.findFirst({
-        where: {
-          organizationId: ticket.organizationId,
-          role: 'PPO_HEAD',
-        },
-        select: { id: true },
+    // Send "Мой вопрос решен" message to Matrix chat
+    if (ticket.matrixRoomId) {
+      const closeMessage = `Обращение закрыто пользователем ${userName}.\n\nОценка: ${ratingStars} (${rating}/5)${comment ? `\nКомментарий: ${comment}` : ''}`;
+      await sendMatrixMessage(ticket.matrixRoomId, closeMessage);
+    }
+
+    // Get all chat participants (excluding the ticket creator)
+    const participantUserIds = ticket.chat?.participants
+      ?.map(p => p.userId)
+      .filter(uid => uid !== session.user.id) || [];
+
+    // Send notifications to all participants
+    if (participantUserIds.length > 0) {
+      const notificationTitle = `Обращение #${ticket.publicId} закрыто`;
+      const notificationBody = `${userName} закрыл обращение. Оценка: ${rating}/5${comment ? `. Комментарий: ${comment}` : ''}`;
+      
+      // Create in-app notifications for all participants
+      await prisma.userNotification.createMany({
+        data: participantUserIds.map(userId => ({
+          userId,
+          type: 'TICKET',
+          title: notificationTitle,
+          body: notificationBody,
+          url: `/dashboard/appeals/ppo-head?id=${ticket.publicId}`,
+        })),
       });
       
-      if (ppoHead) {
-        await prisma.userNotification.create({
-          data: {
-            userId: ppoHead.id,
-            type: 'TICKET',
-            title: `Обращение #${ticket.publicId} закрыто`,
-            body: `Оценка: ${rating}/5${comment ? `. Комментарий: ${comment}` : ''}`,
-            url: `/dashboard/appeals/${ticket.publicId}`,
-          },
-        });
-      }
+      // Send push and email notifications
+      await sendMassNotification({
+        userIds: participantUserIds,
+        title: notificationTitle,
+        body: notificationBody,
+        url: `/dashboard/appeals/ppo-head?id=${ticket.publicId}`,
+        type: 'ticket_closed',
+      });
     }
 
     // Log activity
@@ -95,15 +177,21 @@ export async function POST(
       data: {
         ticketId: ticket.id,
         userId: session.user.id,
-        actionType: 'status_changed',
-        description: `Обращение закрыто с оценкой ${rating}/5`,
-        metadata: { rating, comment },
+        actionType: 'closed',
+        description: `Обращение закрыто пользователем ${userName} с оценкой ${rating}/5`,
+        metadata: { 
+          rating, 
+          comment,
+          closedBy: session.user.id,
+          participantsNotified: participantUserIds.length,
+        },
       },
     });
 
     return NextResponse.json({ 
       success: true, 
-      ticket: updatedTicket 
+      ticket: updatedTicket,
+      message: 'Обращение успешно закрыто',
     });
   } catch (error: any) {
     console.error('[tickets/close] Error:', error);

@@ -141,8 +141,20 @@ export async function GET(
     // Проверяем права доступа
     let hasAccess = false;
     
+    // Системные документы (устав) доступны всем авторизованным пользователям
+    if (id === "charter-system" || (document.type === "OTHER" && 
+        (document.title?.toLowerCase().includes("устав") || 
+         document.description?.toLowerCase().includes("устав")))) {
+      hasAccess = true;
+    }
+    
     // Пользователь может скачать свои документы
     if (document.userId === session.user.id) {
+      hasAccess = true;
+    }
+    
+    // Пользователь может скачать документы, назначенные ему для ознакомления
+    if (document.assignedToId === session.user.id) {
       hasAccess = true;
     }
     
@@ -162,21 +174,31 @@ export async function GET(
         },
       });
       
-      // Получаем информацию о владельце документа
-      const documentOwner = await prisma.user.findUnique({
-        where: { id: document.userId },
-        select: { organizationId: true },
-      });
-      
-      const chairmanOrgId = chairman?.ppoHeadOrganizationId || chairman?.organizationId;
-      
-      if (chairmanOrgId && documentOwner?.organizationId === chairmanOrgId) {
-        hasAccess = true;
-        console.log("[documents/download] Chairman access granted for member document");
+      // Получаем информацию о владельце документа (если есть)
+      if (document.userId) {
+        const documentOwner = await prisma.user.findUnique({
+          where: { id: document.userId },
+          select: { organizationId: true },
+        });
+        
+        const chairmanOrgId = chairman?.ppoHeadOrganizationId || chairman?.organizationId;
+        
+        if (chairmanOrgId && documentOwner?.organizationId === chairmanOrgId) {
+          hasAccess = true;
+          console.log("[documents/download] Chairman access granted for member document");
+        }
       }
     }
     
     if (!hasAccess) {
+      console.log("[documents/download] Access denied:", {
+        userId: session.user.id,
+        documentId: id,
+        documentUserId: document.userId,
+        documentAssignedToId: document.assignedToId,
+        documentType: document.type,
+        documentTitle: document.title
+      });
       return NextResponse.json({ error: "Доступ запрещен" }, { status: 403 });
     }
 

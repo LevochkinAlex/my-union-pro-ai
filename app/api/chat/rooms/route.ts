@@ -23,7 +23,13 @@ export async function GET() {
         iconUrl: true,
         matrixRoomId: true,
         ticket: {
-          select: { id: true }
+          select: { 
+            id: true,
+            publicId: true,
+            status: true,
+            resolved: true,
+            userId: true, // Creator ID
+          }
         },
         participants: {
           include: {
@@ -65,7 +71,10 @@ export async function GET() {
         
         // Determine display name
         let displayName = '';
-        if (chat.type === 'GROUP' && chat.name) {
+        // For ticket chats, use the chat name (e.g., "Обращение #12345")
+        if (chat.ticket && chat.name) {
+          displayName = chat.name;
+        } else if (chat.type === 'GROUP' && chat.name) {
           // For groups with explicit names
           displayName = chat.name;
         } else if (isDirect && otherParticipant) {
@@ -108,6 +117,10 @@ export async function GET() {
           isDirect,
           isGroup: chat.type === 'GROUP',
           isTicket: !!chat.ticket, // true if this chat is linked to a ticket
+          ticketId: chat.ticket?.publicId || null,
+          ticketResolved: chat.ticket?.resolved || false,
+          ticketStatus: chat.ticket?.status || null,
+          isTicketCreator: chat.ticket?.userId === session.user.id, // Is current user the ticket creator
           participantCount: chat.participants.length,
           lastMessage: chat.messages[0]?.content,
           lastMessageTime: chat.messages[0]?.createdAt?.getTime(),

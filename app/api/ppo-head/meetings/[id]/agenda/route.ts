@@ -202,6 +202,7 @@ export async function PATCH(
         if (item.speakerName !== undefined) updateData.speakerName = item.speakerName;
         if (item.speakerPosition !== undefined) updateData.speakerPosition = item.speakerPosition;
         if (item.resolutionText !== undefined) updateData.resolutionText = item.resolutionText;
+        if (item.decidedText !== undefined) updateData.decidedText = item.decidedText;
         if (item.votesFor !== undefined) updateData.votesFor = item.votesFor;
         if (item.votesAgainst !== undefined) updateData.votesAgainst = item.votesAgainst;
         if (item.votesAbstained !== undefined) updateData.votesAbstained = item.votesAbstained;

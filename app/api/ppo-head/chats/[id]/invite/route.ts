@@ -162,6 +162,22 @@ export async function POST(
       },
     });
 
+    // Log action if this is a ticket chat
+    if (chat.ticket?.id) {
+      await prisma.ticketActionLog.create({
+        data: {
+          ticketId: chat.ticket.id,
+          userId: chairman.id,
+          actionType: 'participant_added',
+          description: `Добавлены участники: ${memberNames}`,
+          metadata: {
+            addedUserIds: newParticipantIds,
+            addedBy: chairman.id,
+          },
+        },
+      });
+    }
+
     // Инвалидируем кеш чата и списка чатов для всех новых участников
     await invalidateChatCache(chatId);
     await Promise.all(

@@ -115,7 +115,9 @@ export async function POST(request: NextRequest) {
       scheduledTime,
       location,
       onlineLink,
+      secretaryId,
       participantIds = [],
+      externalParticipants = [],
       agendaItems = [],
     } = body;
 
@@ -139,6 +141,57 @@ export async function POST(request: NextRequest) {
     });
     const meetingNumber = String(meetingsInYear + 1);
 
+    // Подготовка списка участников (исключаем дубликаты по userId)
+    const addedUserIds = new Set<string>();
+    
+    const participantsToCreate: any[] = [
+      // Председатель (всегда добавляется первым)
+      {
+        userId: session.user.id,
+        role: "CHAIRMAN",
+        attendance: "PRESENT",
+        canVote: true,
+      },
+    ];
+    addedUserIds.add(session.user.id);
+    
+    // Секретарь (если указан и еще не добавлен как председатель)
+    if (secretaryId && !addedUserIds.has(secretaryId)) {
+      participantsToCreate.push({
+        userId: secretaryId,
+        role: "SECRETARY" as const,
+        attendance: "INVITED" as const,
+        canVote: true,
+      });
+      addedUserIds.add(secretaryId);
+    }
+    
+    // Члены профкома (исключаем только тех, кто уже добавлен)
+    const uniqueParticipantIds = participantIds.filter(
+      (userId: string) => !addedUserIds.has(userId)
+    );
+    
+    uniqueParticipantIds.forEach((userId: string) => {
+      participantsToCreate.push({
+        userId,
+        role: "MEMBER" as const,
+        attendance: "INVITED" as const,
+        canVote: true,
+      });
+      addedUserIds.add(userId);
+    });
+    
+    // Внешние участники
+    externalParticipants.forEach((ext: any) => {
+      participantsToCreate.push({
+        externalName: ext.name,
+        externalPosition: ext.position,
+        role: "INVITED" as const, // Приглашённый (без права голоса)
+        attendance: "INVITED" as const,
+        canVote: false,
+      });
+    });
+
     // Создание заседания с участниками и пунктами повестки
     const meeting = await prisma.meeting.create({
       data: {
@@ -155,22 +208,7 @@ export async function POST(request: NextRequest) {
         createdById: session.user.id,
         // Добавление участников
         participants: {
-          create: [
-            // Председатель
-            {
-              userId: session.user.id,
-              role: "CHAIRMAN",
-              attendance: "PRESENT",
-              canVote: true,
-            },
-            // Остальные участники
-            ...(participantIds.map((userId: string, index: number) => ({
-              userId,
-              role: "MEMBER" as const,
-              attendance: "INVITED" as const,
-              canVote: true,
-            }))),
-          ],
+          create: participantsToCreate,
         },
         // Добавление пунктов повестки
         agendaItems: {
@@ -178,6 +216,11 @@ export async function POST(request: NextRequest) {
             orderNumber: index + 1,
             title: item.title || `Вопрос ${index + 1}`,
             description: item.description,
+            // Докладчик - может быть из базы или внешний
+            speakerId: item.speakerId || null,
+            speakerName: item.speakerName || null,
+            // Если выбран пользователь из базы, получим его позицию при необходимости
+            heardText: item.title || `Вопрос ${index + 1}`, // По умолчанию = title
           })),
         },
       },

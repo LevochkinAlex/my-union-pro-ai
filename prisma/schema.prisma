@@ -906,6 +906,9 @@ model MeetingAgendaItem {
   // ПОСТАНОВИЛИ
   resolutionText String? @db.Text         // Текст постановления
   
+  // РЕШИЛИ (после голосования)
+  decidedText    String? @db.Text         // Текст решения (необязательное поле)
+  
   // Голосование
   votes          MeetingAgendaVote[]
   votesFor       Int     @default(0)      // За
@@ -1968,6 +1971,9 @@ model Chat {
   
   // Связь с обращением (тикетом)
   ticket Ticket?
+  
+  // Архивирован ли чат
+  archivedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

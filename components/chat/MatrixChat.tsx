@@ -29,6 +29,10 @@ interface MatrixRoom {
   unreadCount: number;
   isDirect: boolean;
   isTicket?: boolean; // Обращения - всегда в рабочих чатах
+  ticketId?: string; // Public ID обращения
+  ticketResolved?: boolean; // Обращение закрыто
+  ticketStatus?: string; // Статус обращения
+  isTicketCreator?: boolean; // Текущий пользователь - создатель обращения
 }
 
 interface DbRoomInfo {
@@ -37,6 +41,10 @@ interface DbRoomInfo {
   avatarUrl?: string;
   isDirect: boolean;
   isTicket?: boolean;
+  ticketId?: string;
+  ticketResolved?: boolean;
+  ticketStatus?: string;
+  isTicketCreator?: boolean;
   participantCount: number;
   participants: Array<{
     id: string;
@@ -84,6 +92,8 @@ interface MatrixMessage {
   reactions?: MessageReaction[];
   replyTo?: ReplyInfo;
   attachment?: MessageAttachment;
+  isEdited?: boolean; // Пометка о редактировании
+  editTimestamp?: number; // Время последнего редактирования
 }
 
 interface TypingUser {
@@ -129,7 +139,12 @@ export default function MatrixChat() {
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null); // For mobile tap actions
   const [messageMenu, setMessageMenu] = useState<string | null>(null); // eventId of message with open menu
+  const [contextMenu, setContextMenu] = useState<{ eventId: string; x: number; y: number } | null>(null); // Context menu position
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null); // eventId of message being edited
+  const [editingText, setEditingText] = useState<string>(''); // Text being edited
+  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   
   // Group editing state
   const [showEditGroup, setShowEditGroup] = useState(false);
@@ -166,6 +181,36 @@ export default function MatrixChat() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const syncTokenRef = useRef<string | null>(null);
   const syncAbortRef = useRef<AbortController | null>(null);
+
+  // Close context menu on outside click or escape key
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        const target = e.target as HTMLElement;
+        if (!target.closest('[data-message-bubble]')) {
+          setContextMenu(null);
+        }
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setContextMenu(null);
+      }
+    };
+    if (contextMenu) {
+      // Use setTimeout to avoid immediate closure
+      setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('touchstart', handleClickOutside);
+        document.addEventListener('keydown', handleEscape);
+      }, 0);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('touchstart', handleClickOutside);
+        document.removeEventListener('keydown', handleEscape);
+      };
+    }
+  }, [contextMenu]);
 
   // Auth with Matrix and load viewMode
   useEffect(() => {
@@ -566,6 +611,10 @@ export default function MatrixChat() {
             unreadCount: rd.unread_notifications?.notification_count || 0,
             isDirect: dbInfo.isDirect,
             isTicket: isTicketChat, // Обращения всегда в Рабочих
+            ticketId: dbInfo.ticketId,
+            ticketResolved: dbInfo.ticketResolved,
+            ticketStatus: dbInfo.ticketStatus,
+            isTicketCreator: dbInfo.isTicketCreator,
           });
         }
 
@@ -582,9 +631,35 @@ export default function MatrixChat() {
 
         // Update messages for selected room
         if (roomId === selectedRoomId && !initialSync) {
-          type TimelineEvent = { type: string; event_id: string; sender: string; content: { body?: string; msgtype?: string; url?: string; info?: any; 'm.relates_to'?: any }; origin_server_ts: number };
+          type TimelineEvent = { type: string; event_id: string; sender: string; content: { body?: string; msgtype?: string; url?: string; info?: any; 'm.relates_to'?: any; 'm.new_content'?: any }; origin_server_ts: number };
+          
+          // First, handle edit events - update existing messages
+          const editEvents = (timelineEvents as TimelineEvent[])
+            .filter(e => e.type === 'm.room.message' && e.content?.['m.relates_to']?.rel_type === 'm.replace');
+          
+          if (editEvents.length > 0) {
+            setMessages(prev => {
+              const updated = [...prev];
+              editEvents.forEach(editEvent => {
+                const originalEventId = editEvent.content?.['m.relates_to']?.event_id;
+                const newContent = editEvent.content?.['m.new_content']?.body || editEvent.content?.body?.replace(/^\* /, '') || '';
+                const index = updated.findIndex(m => m.eventId === originalEventId);
+                if (index !== -1) {
+                  updated[index] = {
+                    ...updated[index],
+                    content: newContent,
+                    isEdited: true,
+                    editTimestamp: editEvent.origin_server_ts
+                  };
+                }
+              });
+              return updated;
+            });
+          }
+          
+          // Then, handle regular messages (excluding edit events)
           const newMsgs: MatrixMessage[] = (timelineEvents as TimelineEvent[])
-            .filter(e => e.type === 'm.room.message')
+            .filter(e => e.type === 'm.room.message' && e.content?.['m.relates_to']?.rel_type !== 'm.replace')
             .map(e => {
               const msgtype = (e.content?.msgtype || 'm.text') as MatrixMessage['msgtype'];
               let attachment: MessageAttachment | undefined;
@@ -664,17 +739,25 @@ export default function MatrixChat() {
                 }
               }
               
-              return {
-                eventId: e.event_id,
-                sender: e.sender,
-                senderName,
-                senderAvatar,
-                content: e.content?.body || '',
-                timestamp: e.origin_server_ts,
-                isOwn: e.sender === credentials.userId,
-                msgtype,
-                attachment
-              };
+      // Check if this is an edited message
+      const isEdited = e.content?.['m.relates_to']?.rel_type === 'm.replace';
+      const actualContent = isEdited 
+        ? (e.content?.['m.new_content']?.body || e.content?.body?.replace(/^\* /, '') || '')
+        : (e.content?.body || '');
+      
+      return {
+        eventId: isEdited ? e.content?.['m.relates_to']?.event_id || e.event_id : e.event_id,
+        sender: e.sender,
+        senderName,
+        senderAvatar,
+        content: actualContent,
+        timestamp: e.origin_server_ts,
+        isOwn: e.sender === credentials.userId,
+        msgtype,
+        attachment,
+        isEdited: isEdited || undefined,
+        editTimestamp: isEdited ? e.origin_server_ts : undefined
+      };
             });
 
           if (newMsgs.length > 0) {
@@ -692,7 +775,20 @@ export default function MatrixChat() {
         setRooms(prev => {
           const updated = new Map(prev.map(r => [r.roomId, r]));
           roomList.forEach(r => updated.set(r.roomId, r));
-          return Array.from(updated.values()).sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
+          const sorted = Array.from(updated.values()).sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
+          
+          // Calculate total unread count and notify sidebar
+          const totalUnread = sorted.reduce((sum, r) => sum + r.unreadCount, 0);
+          console.log('[MatrixChat] Total unread count after sync:', totalUnread, 'from', sorted.length, 'rooms');
+          setTimeout(() => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('chat-unread-updated', { 
+                detail: { count: totalUnread } 
+              }));
+            }
+          }, 0);
+          
+          return sorted;
         });
         
         // For rooms with generic names, fetch member info asynchronously
@@ -828,9 +924,28 @@ export default function MatrixChat() {
       });
     }
 
-    const msgs: MatrixMessage[] = messageEvents.map((e: any) => {
+    // First, collect all edit events and create a map of original event_id -> new content
+    const editMap = new Map<string, { content: string; timestamp: number }>();
+    messageEvents.forEach((e: any) => {
+      if (e.content?.['m.relates_to']?.rel_type === 'm.replace') {
+        const originalEventId = e.content['m.relates_to'].event_id;
+        const newContent = e.content?.['m.new_content']?.body || e.content?.body?.replace(/^\* /, '') || '';
+        editMap.set(originalEventId, {
+          content: newContent,
+          timestamp: e.origin_server_ts
+        });
+      }
+    });
+    
+    const msgs: MatrixMessage[] = messageEvents
+      .filter((e: any) => e.content?.['m.relates_to']?.rel_type !== 'm.replace') // Exclude edit events themselves
+      .map((e: any) => {
       const msgtype = e.content?.msgtype || 'm.text';
       let attachment: MessageAttachment | undefined;
+      
+      // Check if this message was edited
+      const editInfo = editMap.get(e.event_id);
+      const isEdited = !!editInfo;
       
       // Helper to convert mxc:// to https:// using our proxy for auth
       const mxcToHttp = (mxcUrl: string, thumbnail = false) => {
@@ -886,6 +1001,17 @@ export default function MatrixChat() {
         };
       }
       
+      // Extract content, removing reply fallback format if present
+      let content = editInfo?.content || e.content?.body || '';
+      // Remove Matrix reply fallback format: "> <@user:server> text...\n\nactual message"
+      if (content.includes('\n\n') && content.startsWith('> ')) {
+        const parts = content.split('\n\n');
+        if (parts.length > 1) {
+          // The actual message is after the double newline
+          content = parts.slice(1).join('\n\n');
+        }
+      }
+      
       // Handle reply
       let replyTo: ReplyInfo | undefined;
       const relatesTo = e.content?.['m.relates_to'];
@@ -893,10 +1019,20 @@ export default function MatrixChat() {
         const replyEventId = relatesTo['m.in_reply_to'].event_id;
         const replyMsg = messagesById.get(replyEventId);
         if (replyMsg) {
+          // Get proper sender name for reply
+          let replySenderName = replyMsg.sender.split(':')[0].replace('@', '').replace(/_/g, ' ');
+          const roomDbInfo = dbRoomInfo.get(roomId);
+          if (roomDbInfo?.participants) {
+            const replyParticipant = roomDbInfo.participants.find(p => p.matrixUserId === replyMsg.sender);
+            if (replyParticipant) {
+              replySenderName = [replyParticipant.firstName, replyParticipant.lastName].filter(Boolean).join(' ') || replySenderName;
+            }
+          }
+          
           replyTo = {
             eventId: replyEventId,
             sender: replyMsg.sender,
-            senderName: replyMsg.sender.split(':')[0].replace('@', ''),
+            senderName: replySenderName,
             content: replyMsg.content.slice(0, 100)
           };
         }
@@ -923,13 +1059,15 @@ export default function MatrixChat() {
         sender: e.sender,
         senderName,
         senderAvatar,
-        content: e.content?.body || '',
+        content,
         timestamp: e.origin_server_ts,
         isOwn: e.sender === credentials?.userId,
         msgtype: msgtype as MatrixMessage['msgtype'],
         reactions: reactionsMap.get(e.event_id),
         replyTo,
-        attachment
+        attachment,
+        isEdited: isEdited || undefined,
+        editTimestamp: editInfo?.timestamp
       };
     }).reverse();
 
@@ -998,21 +1136,21 @@ export default function MatrixChat() {
         body: JSON.stringify({}),
       });
       
-      // Update local unread count and calculate total
+      // Update local unread count
       setRooms(prev => {
         const updated = prev.map(r => 
           r.roomId === roomId ? { ...r, unreadCount: 0 } : r
         );
         
-        // Calculate new total unread count
+        // Calculate new total unread count and notify sidebar (setTimeout to avoid setState during render)
         const totalUnread = updated.reduce((sum, r) => sum + r.unreadCount, 0);
-        
-        // Notify sidebar badge with exact count
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('chat-messages-read', { 
-            detail: { count: totalUnread } 
-          }));
-        }
+        setTimeout(() => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('chat-messages-read', { 
+              detail: { count: totalUnread } 
+            }));
+          }
+        }, 0);
         
         return updated;
       });
@@ -1026,19 +1164,21 @@ export default function MatrixChat() {
     setMessages([]);
     setTypingUsers([]);
     
-    // Clear unread count immediately for better UX and update sidebar badge
+    // Clear unread count immediately for better UX
     setRooms(prev => {
       const updated = prev.map(r => 
         r.roomId === roomId ? { ...r, unreadCount: 0 } : r
       );
       
-      // Calculate new total and notify sidebar
+      // Calculate new total and notify sidebar (use setTimeout to avoid setState during render)
       const totalUnread = updated.reduce((sum, r) => sum + r.unreadCount, 0);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('chat-messages-read', { 
-          detail: { count: totalUnread } 
-        }));
-      }
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('chat-messages-read', { 
+            detail: { count: totalUnread } 
+          }));
+        }
+      }, 0);
       
       return updated;
     });
@@ -1119,7 +1259,7 @@ export default function MatrixChat() {
           eventId: data.event_id,
           sender: credentials.userId,
           senderName: session?.user?.name || 'Вы',
-          content,
+          content, // Already cleaned, no fallback format
           timestamp: Date.now(),
           isOwn: true,
           msgtype: 'm.text',
@@ -1133,11 +1273,30 @@ export default function MatrixChat() {
         scrollToBottom();
         
         // Send push notification to other participants
+        // This will create UserNotification records for recipients
+        console.log('[MatrixChat] 📤 Sending notification for message in room:', selectedRoomId);
         fetch('/api/chat/notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ roomId: selectedRoomId, message: content }),
-        }).catch(() => {}); // Ignore errors silently
+        })
+        .then(res => {
+          if (!res.ok) {
+            console.error('[MatrixChat] ❌ Notification API error:', res.status, res.statusText);
+            return res.json().catch(() => ({ error: 'Failed to parse response' }));
+          }
+          return res.json();
+        })
+        .then(data => {
+          if (data.error) {
+            console.error('[MatrixChat] ⚠️ Notification error:', data.error);
+          } else {
+            console.log('[MatrixChat] ✅ Notification sent successfully:', data);
+          }
+        })
+        .catch((err) => {
+          console.error('[MatrixChat] ❌ Error sending notification:', err);
+        });
       }
     } catch (err) {
       console.error('Send error:', err);
@@ -1247,6 +1406,58 @@ export default function MatrixChat() {
     } catch (err) {
       console.error('Delete message error:', err);
       alert('Не удалось удалить сообщение');
+    }
+  };
+
+  // Edit message
+  const handleEditMessage = async (eventId: string, newContent: string) => {
+    if (!selectedRoomId || !credentials || !newContent.trim()) return;
+    
+    try {
+      const txnId = `edit_${Date.now()}`;
+      
+      // Matrix edit format: send new message with m.relates_to pointing to original
+      const messageContent: Record<string, unknown> = {
+        msgtype: 'm.text',
+        body: `* ${newContent.trim()}`,
+        'm.new_content': {
+          msgtype: 'm.text',
+          body: newContent.trim()
+        },
+        'm.relates_to': {
+          rel_type: 'm.replace',
+          event_id: eventId
+        }
+      };
+      
+      const data = await matrixFetch(
+        `/rooms/${encodeURIComponent(selectedRoomId)}/send/m.room.message/${txnId}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(messageContent),
+        }
+      );
+
+      if (data?.event_id) {
+        // Update message in UI
+        setMessages(prev => prev.map(m => {
+          if (m.eventId === eventId) {
+            return {
+              ...m,
+              content: newContent.trim(),
+              isEdited: true,
+              editTimestamp: Date.now()
+            };
+          }
+          return m;
+        }));
+        
+        setEditingMessageId(null);
+        setEditingText('');
+      }
+    } catch (err) {
+      console.error('Edit message error:', err);
+      alert('Не удалось отредактировать сообщение');
     }
   };
 
@@ -1402,8 +1613,9 @@ export default function MatrixChat() {
         
         if (data?.users) {
           setSearchResults(
-            data.users.map((u: { matrixUserId: string; displayName: string; avatarUrl?: string; position?: string; organization?: string }) => ({
-              userId: u.matrixUserId,
+            data.users.map((u: { id: string; matrixUserId: string; displayName: string; avatarUrl?: string; position?: string; organization?: string }) => ({
+              userId: u.id, // Use our user ID, not matrixUserId
+              matrixUserId: u.matrixUserId, // Keep for reference
               displayName: u.displayName,
               avatarUrl: u.avatarUrl,
               position: u.position,
@@ -1546,19 +1758,25 @@ export default function MatrixChat() {
   // Close ticket with rating
   const handleCloseTicket = useCallback(async () => {
     if (!selectedRoomId) return;
-    setClosingTicket(true);
     
-    try {
-      // Get ticket ID from room info
+    // Get ticket ID from selectedRoom
+    const room = rooms.find(r => r.roomId === selectedRoomId);
+    const ticketId = room?.ticketId;
+    
+    if (!ticketId) {
+      // Fallback to parsing from displayName
       const roomInfo = dbRoomInfo.get(selectedRoomId);
       const ticketNumber = roomInfo?.displayName?.match(/#(\d+)/)?.[1];
-      
       if (!ticketNumber) {
         alert('Не удалось определить номер обращения');
         return;
       }
-      
-      const response = await fetch(`/api/tickets/${ticketNumber}/close`, {
+    }
+    
+    setClosingTicket(true);
+    
+    try {
+      const response = await fetch(`/api/tickets/${ticketId}/close`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1568,29 +1786,40 @@ export default function MatrixChat() {
       });
       
       if (response.ok) {
-        // Send system message to chat
-        if (credentials) {
-          const txnId = `close_${Date.now()}`;
-          await fetch(
-            `${credentials.serverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(selectedRoomId)}/send/m.room.message/${txnId}`,
-            {
-              method: 'PUT',
-              headers: {
-                'Authorization': `Bearer ${credentials.accessToken}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                msgtype: 'm.text',
-                body: `✅ Обращение закрыто.\nОценка: ${'⭐'.repeat(ticketRating)}\n${ticketComment ? `Комментарий: ${ticketComment}` : ''}`,
-              }),
+        // Update local room state to reflect closed ticket
+        setRooms(prev => prev.map(r => 
+          r.roomId === selectedRoomId 
+            ? { ...r, ticketResolved: true, ticketStatus: 'RESOLVED' } 
+            : r
+        ));
+        
+        // Reload dbRoomInfo to get updated ticket status from database
+        try {
+          const resp = await fetch('/api/chat/rooms');
+          if (resp.ok) {
+            const data = await resp.json();
+            const infoMap = new Map<string, DbRoomInfo>();
+            for (const room of data.rooms || []) {
+              if (room.matrixRoomId) {
+                infoMap.set(room.matrixRoomId, room);
+              }
             }
-          );
+            setDbRoomInfo(infoMap);
+            console.log('[MatrixChat] Updated dbRoomInfo after closing ticket');
+            
+            // Force sync to update rooms with new ticket status from dbInfo
+            setTimeout(async () => {
+              await sync(true);
+            }, 100);
+          }
+        } catch (err) {
+          console.error('[MatrixChat] Failed to reload dbRoomInfo after closing ticket:', err);
         }
         
         setShowCloseTicket(false);
         setTicketRating(5);
         setTicketComment('');
-        alert('Обращение успешно закрыто!');
+        alert('Обращение успешно закрыто! Всем участникам отправлены уведомления.');
       } else {
         const data = await response.json();
         alert(data.error || 'Ошибка закрытия обращения');
@@ -1601,7 +1830,7 @@ export default function MatrixChat() {
     } finally {
       setClosingTicket(false);
     }
-  }, [selectedRoomId, ticketRating, ticketComment, credentials, dbRoomInfo]);
+  }, [selectedRoomId, ticketRating, ticketComment, rooms, dbRoomInfo]);
 
   // Invite to group
   const handleInviteToGroup = useCallback(async (chatId: string) => {
@@ -1675,20 +1904,179 @@ export default function MatrixChat() {
 
   // Start chat with user
   const handleStartChat = async (userId: string) => {
-    const data = await matrixFetch('/createRoom', {
-      method: 'POST',
-      body: JSON.stringify({
-        preset: 'trusted_private_chat',
-        is_direct: true,
-        invite: [userId],
-      }),
-    });
-
-    if (data?.room_id) {
-      setSelectedRoomId(data.room_id);
-      setShowNewChat(false);
-      setSearchTerm('');
-      await sync(true);
+    try {
+      console.log('[MatrixChat] Creating chat with user ID:', userId);
+      
+      // Create chat using our API (this will create both Matrix room and DB record)
+      const chatResponse = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId: userId }),
+      });
+      
+      if (!chatResponse.ok) {
+        const errorText = await chatResponse.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || `HTTP ${chatResponse.status}` };
+        }
+        console.error('[MatrixChat] ❌ Failed to create chat:', {
+          status: chatResponse.status,
+          statusText: chatResponse.statusText,
+          error: errorData
+        });
+        alert(errorData.error || `Ошибка при создании чата (${chatResponse.status})`);
+        return;
+      }
+      
+      let chatData;
+      try {
+        chatData = await chatResponse.json();
+        console.log('[MatrixChat] ✅ Chat created:', chatData);
+      } catch (err) {
+        console.error('[MatrixChat] ❌ Failed to parse chat response:', err);
+        alert('Ошибка при обработке ответа сервера');
+        return;
+      }
+      
+      if (!chatData?.chat) {
+        console.error('[MatrixChat] ❌ Invalid chat response:', chatData);
+        alert('Неверный формат ответа от сервера');
+        return;
+      }
+      
+      // Use matrixRoomId from response or fetch it
+      let matrixRoomId = chatData.chat?.matrixRoomId;
+      console.log('[MatrixChat] Initial matrixRoomId from response:', matrixRoomId);
+      
+      if (!matrixRoomId) {
+        console.log('[MatrixChat] ⚠️ No matrixRoomId in response, trying to fetch from chat rooms API...');
+        // Try to get it from chat rooms API which includes matrixRoomId
+        try {
+          const roomsResponse = await fetch('/api/chat/rooms');
+          if (roomsResponse.ok) {
+            const roomsData = await roomsResponse.json();
+            const foundChat = roomsData.rooms?.find((r: any) => r.id === chatData.chat.id);
+            if (foundChat?.matrixRoomId) {
+              matrixRoomId = foundChat.matrixRoomId;
+              console.log('[MatrixChat] ✅ Found matrixRoomId from rooms API:', matrixRoomId);
+            } else {
+              console.log('[MatrixChat] ⚠️ Chat not found in rooms API, waiting 1 second and retrying...');
+              // Wait a bit for Matrix room creation to complete
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              
+              const retryRoomsResponse = await fetch('/api/chat/rooms');
+              if (retryRoomsResponse.ok) {
+                const retryRoomsData = await retryRoomsResponse.json();
+                const retryFoundChat = retryRoomsData.rooms?.find((r: any) => r.id === chatData.chat.id);
+                if (retryFoundChat?.matrixRoomId) {
+                  matrixRoomId = retryFoundChat.matrixRoomId;
+                  console.log('[MatrixChat] ✅ Found matrixRoomId after retry:', matrixRoomId);
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error('[MatrixChat] Error fetching rooms:', err);
+        }
+      }
+      
+      if (matrixRoomId) {
+        // Close modal first
+        setShowNewChat(false);
+        setSearchTerm('');
+        
+        // Get other user info from response
+        const otherUser = chatData.chat?.otherUser;
+        const otherUserName = otherUser 
+          ? [otherUser.firstName, otherUser.lastName].filter(Boolean).join(' ') || 'Пользователь'
+          : 'Пользователь';
+        const otherUserAvatar = otherUser?.avatarUrl;
+        
+        // Immediately add room to list with basic info (before Matrix sync)
+        const newRoom: MatrixRoom = {
+          roomId: matrixRoomId,
+          name: otherUserName,
+          avatarUrl: otherUserAvatar,
+          lastMessage: undefined,
+          lastMessageTime: Date.now(),
+          unreadCount: 0,
+          isDirect: true,
+        };
+        
+        setRooms(prev => {
+          // Check if room already exists
+          if (prev.some(r => r.roomId === matrixRoomId)) {
+            return prev;
+          }
+          // Add new room at the beginning (most recent)
+          return [newRoom, ...prev].sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
+        });
+        
+        // Reload dbRoomInfo to include the new chat
+        try {
+          const resp = await fetch('/api/chat/rooms');
+          if (resp.ok) {
+            const data = await resp.json();
+            const infoMap = new Map<string, DbRoomInfo>();
+            for (const room of data.rooms || []) {
+              if (room.matrixRoomId) {
+                infoMap.set(room.matrixRoomId, room);
+              }
+            }
+            setDbRoomInfo(infoMap);
+            console.log('[MatrixChat] Updated dbRoomInfo with new chat');
+          }
+        } catch (err) {
+          console.error('[MatrixChat] Failed to reload dbRoomInfo:', err);
+        }
+        
+        // Set selected room and load messages
+        // Use handleSelectRoom to properly load messages and update UI
+        await handleSelectRoom(matrixRoomId);
+        
+        // Wait a bit for Matrix to process the room creation, then sync to update room list
+        setTimeout(async () => {
+          await sync(true);
+        }, 500);
+      } else {
+        console.error('[MatrixChat] ⚠️ No matrixRoomId in chat response after all retries');
+        console.log('[MatrixChat] Chat data:', chatData);
+        
+        // Close modal
+        setShowNewChat(false);
+        setSearchTerm('');
+        
+        // Even without matrixRoomId, we can still show the chat in the list
+        // The chat exists in DB, it just needs Matrix room to be created
+        if (chatData.chat?.id) {
+          // Try to sync and wait for Matrix room to appear
+          await sync(true);
+          
+          // Wait a bit more and check again
+          setTimeout(async () => {
+            const finalCheck = await fetch('/api/chat/rooms');
+            if (finalCheck.ok) {
+              const finalData = await finalCheck.json();
+              const finalChat = finalData.rooms?.find((r: any) => r.id === chatData.chat.id);
+              if (finalChat?.matrixRoomId) {
+                console.log('[MatrixChat] ✅ Found matrixRoomId after sync:', finalChat.matrixRoomId);
+                await handleSelectRoom(finalChat.matrixRoomId);
+              } else {
+                console.warn('[MatrixChat] ⚠️ Matrix room still not created for chat', chatData.chat.id);
+                alert('Чат создан, но комната Matrix еще не готова. Попробуйте обновить страницу через несколько секунд.');
+              }
+            }
+          }, 2000);
+        } else {
+          alert('Ошибка: чат не был создан. Попробуйте еще раз.');
+        }
+      }
+    } catch (err) {
+      console.error('[MatrixChat] Error creating chat:', err);
+      alert('Ошибка при создании чата. Попробуйте еще раз.');
     }
   };
 
@@ -1848,9 +2236,10 @@ export default function MatrixChat() {
           ) : (
             rooms
               .filter(room => {
-                // For regular members (MEMBER mode) - only show personal chats
+                // For regular members (MEMBER mode) - show personal chats AND their own tickets
                 if (viewMode === 'MEMBER') {
-                  return room.isDirect && !room.isTicket;
+                  // Показываем личные чаты (не обращения) ИЛИ свои обращения
+                  return (room.isDirect && !room.isTicket) || (room.isTicket && room.isTicketCreator);
                 }
                 // Filter by tab - Telegram style (for staff/head modes)
                 // Рабочие = групповые ИЛИ обращения
@@ -1982,8 +2371,8 @@ export default function MatrixChat() {
                   )}
                 </div>
                 
-                {/* Close ticket button (for ticket creator) */}
-                {selectedRoom.isTicket && !isPPOHead && (
+                {/* Close ticket button (only for ticket creator, not resolved) */}
+                {selectedRoom.isTicket && selectedRoom.isTicketCreator && !selectedRoom.ticketResolved && (
                   <button
                     onClick={() => setShowCloseTicket(true)}
                     className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors flex items-center gap-1.5"
@@ -2044,10 +2433,18 @@ export default function MatrixChat() {
             <div 
               className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800"
               onClick={(e) => {
-                // Close action menu when clicking outside message bubbles
-                if ((e.target as HTMLElement).closest('[data-message-bubble]') === null) {
+                // Close menus when clicking outside
+                if ((e.target as HTMLElement).closest('[data-message-bubble]') === null && 
+                    (e.target as HTMLElement).closest('[data-context-menu]') === null) {
                   setActiveMessageId(null);
                   setShowReactions(null);
+                  setContextMenu(null);
+                }
+              }}
+              onContextMenu={(e) => {
+                // Close context menu on right click outside
+                if ((e.target as HTMLElement).closest('[data-message-bubble]') === null) {
+                  setContextMenu(null);
                 }
               }}
             >
@@ -2115,53 +2512,6 @@ export default function MatrixChat() {
                     {!msg.isOwn && !showAvatar && <div className="w-8" />}
                     
                     <div className="relative">
-                      {/* Action buttons - compact style, visible on hover (desktop) or tap (mobile) */}
-                      <div className={`absolute ${msg.isOwn ? 'left-0 -translate-x-full pr-1' : 'right-0 translate-x-full pl-1'} top-1/2 -translate-y-1/2 transition-opacity z-10
-                        ${activeMessageId === msg.eventId ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100 pointer-events-none md:pointer-events-auto'}
-                        ${activeMessageId === msg.eventId ? 'pointer-events-auto' : ''}`}
-                      >
-                        <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-100 dark:border-gray-700">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setReplyTo(msg); setActiveMessageId(null); }}
-                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-l-lg text-gray-500 dark:text-gray-400"
-                            title="Ответить"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setShowReactions(showReactions === msg.eventId ? null : msg.eventId); }}
-                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
-                            title="Реакция"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setForwardMessage(msg); setShowForwardModal(true); setActiveMessageId(null); }}
-                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
-                            title="Переслать"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
-                            </svg>
-                          </button>
-                          {msg.isOwn && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.eventId); setActiveMessageId(null); }}
-                              className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-r-lg text-gray-500 dark:text-gray-400 hover:text-red-500"
-                              title="Удалить"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      
                       {/* Reaction picker */}
                       {showReactions === msg.eventId && (
                         <div className={`absolute ${msg.isOwn ? 'right-0' : 'left-0'} bottom-full mb-2 bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 px-2 py-1 flex gap-1 z-20`}>
@@ -2177,25 +2527,47 @@ export default function MatrixChat() {
                         </div>
                       )}
                       
-                      {/* Message bubble - tap to show actions on mobile */}
+                      {/* Message bubble - context menu on right click (desktop) or long press (mobile) */}
                       <div
                         data-message-bubble
-                        onClick={(e) => {
+                        onContextMenu={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
-                          // Toggle action menu on mobile tap
-                          if (activeMessageId === msg.eventId) {
-                            setActiveMessageId(null);
+                          // Calculate position, ensuring menu stays within viewport
+                          const x = Math.min(e.clientX, window.innerWidth - 200);
+                          const y = Math.min(e.clientY, window.innerHeight - 300);
+                          setContextMenu({ eventId: msg.eventId, x, y });
+                          setShowReactions(null);
+                        }}
+                        onTouchStart={(e) => {
+                          const touch = e.touches[0];
+                          const timer = setTimeout(() => {
+                            // Long press detected
+                            e.preventDefault();
+                            const x = Math.min(touch.clientX, window.innerWidth - 200);
+                            const y = Math.min(touch.clientY, window.innerHeight - 300);
+                            setContextMenu({ eventId: msg.eventId, x, y });
                             setShowReactions(null);
-                          } else {
-                            setActiveMessageId(msg.eventId);
-                            setShowReactions(null);
+                          }, 500); // 500ms for long press
+                          setLongPressTimer(timer);
+                        }}
+                        onTouchEnd={() => {
+                          if (longPressTimer) {
+                            clearTimeout(longPressTimer);
+                            setLongPressTimer(null);
+                          }
+                        }}
+                        onTouchMove={() => {
+                          if (longPressTimer) {
+                            clearTimeout(longPressTimer);
+                            setLongPressTimer(null);
                           }
                         }}
                         className={`max-w-[280px] sm:max-w-[380px] rounded-2xl px-4 py-2 shadow-sm cursor-pointer select-none ${
                           msg.isOwn
                             ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-sm'
                             : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-sm border border-gray-100 dark:border-gray-600'
-                        } ${activeMessageId === msg.eventId ? 'ring-2 ring-blue-400 ring-opacity-50' : ''}`}
+                        }`}
                       >
                         {!msg.isOwn && showAvatar && (
                           <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">
@@ -2205,11 +2577,19 @@ export default function MatrixChat() {
                         
                         {/* Reply preview */}
                         {msg.replyTo && (
-                          <div className={`text-xs mb-2 p-2 rounded-lg ${
-                            msg.isOwn ? 'bg-blue-700/50' : 'bg-gray-100 dark:bg-gray-600'
+                          <div className={`mb-2 border-l-2 ${
+                            msg.isOwn ? 'border-blue-300 pl-2' : 'border-gray-400 dark:border-gray-500 pl-2'
                           }`}>
-                            <div className="font-semibold opacity-75">{msg.replyTo.senderName}</div>
-                            <div className="truncate opacity-75">{msg.replyTo.content}</div>
+                            <div className={`text-xs font-medium ${
+                              msg.isOwn ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'
+                            }`}>
+                              {msg.replyTo.senderName}
+                            </div>
+                            <div className={`text-xs truncate ${
+                              msg.isOwn ? 'text-blue-100' : 'text-gray-600 dark:text-gray-300'
+                            }`}>
+                              {msg.replyTo.content}
+                            </div>
                           </div>
                         )}
                         
@@ -2289,13 +2669,56 @@ export default function MatrixChat() {
                         )}
                         
                         {/* Text content (hide if only attachment without text) */}
-                        {(!msg.attachment || msg.content !== msg.attachment.name) && (
-                          <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                        {editingMessageId === msg.eventId ? (
+                          <div className="space-y-2">
+                            <textarea
+                              value={editingText}
+                              onChange={(e) => setEditingText(e.target.value)}
+                              className="w-full p-2 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 resize-none"
+                              rows={3}
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                  e.preventDefault();
+                                  handleEditMessage(msg.eventId, editingText);
+                                }
+                                if (e.key === 'Escape') {
+                                  setEditingMessageId(null);
+                                  setEditingText('');
+                                }
+                              }}
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleEditMessage(msg.eventId, editingText)}
+                                className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                              >
+                                Сохранить
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingMessageId(null);
+                                  setEditingText('');
+                                }}
+                                className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-300 dark:hover:bg-gray-600"
+                              >
+                                Отмена
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {(!msg.attachment || msg.content !== msg.attachment.name) && (
+                              <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                            )}
+                            <div className={`flex items-center gap-1 text-xs mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-400'}`}>
+                              <span>{new Date(msg.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>
+                              {msg.isEdited && (
+                                <span className="italic opacity-75">(отредактировано)</span>
+                              )}
+                            </div>
+                          </>
                         )}
-                        
-                        <div className={`text-xs mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-400'}`}>
-                          {new Date(msg.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
                       </div>
                       
                       {/* Reactions display */}
@@ -2324,8 +2747,122 @@ export default function MatrixChat() {
               <div ref={messagesEndRef} className="h-4" />
             </div>
 
+            {/* Context Menu */}
+            {contextMenu && (
+              <div
+                ref={contextMenuRef}
+                data-context-menu
+                className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[180px]"
+                style={{
+                  left: `${contextMenu.x}px`,
+                  top: `${contextMenu.y}px`,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {messages.find(m => m.eventId === contextMenu.eventId) && (() => {
+                  const msg = messages.find(m => m.eventId === contextMenu.eventId)!;
+                  return (
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setReplyTo(msg);
+                          setContextMenu(null);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                        Ответить
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowReactions(showReactions === msg.eventId ? null : msg.eventId);
+                          setContextMenu(null);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Реакция
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setForwardMessage(msg);
+                          setShowForwardModal(true);
+                          setContextMenu(null);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+                        </svg>
+                        Переслать
+                      </button>
+                      {msg.isOwn && (
+                        <>
+                          {msg.msgtype === 'm.text' && !msg.attachment && (
+                            <>
+                              <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingMessageId(msg.eventId);
+                                  setEditingText(msg.content);
+                                  setContextMenu(null);
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                Редактировать
+                              </button>
+                            </>
+                          )}
+                          <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteMessage(msg.eventId);
+                              setContextMenu(null);
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center gap-3"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Удалить
+                          </button>
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
             {/* Input */}
-            <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
+              {/* Ticket closed notice */}
+              {selectedRoom?.isTicket && selectedRoom?.ticketResolved && (
+                <div className="flex items-center justify-center gap-2 py-4 px-6 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                  <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-green-700 dark:text-green-300 font-medium">
+                    Обращение закрыто. Написать сообщение невозможно.
+                  </span>
+                </div>
+              )}
+              
+              {/* Show input only if ticket is not resolved */}
+              {(!selectedRoom?.isTicket || !selectedRoom?.ticketResolved) && (
+                <>
               {/* Reply preview */}
               {replyTo && (
                 <div className="mb-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-start gap-3">
@@ -2378,7 +2915,7 @@ export default function MatrixChat() {
                   )}
                 </button>
                 
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 flex items-end">
                   <textarea
                     ref={inputRef}
                     value={newMessage}
@@ -2400,7 +2937,7 @@ export default function MatrixChat() {
                     className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-600 
                       bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white 
                       resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                      placeholder:text-gray-400 overflow-y-auto"
+                      placeholder:text-gray-400 overflow-y-auto leading-relaxed"
                     style={{ minHeight: '48px', maxHeight: '150px' }}
                   />
                 </div>
@@ -2423,6 +2960,8 @@ export default function MatrixChat() {
                   )}
                 </button>
               </div>
+              </>
+              )}
             </div>
           </>
         ) : (
@@ -3035,11 +3574,17 @@ export default function MatrixChat() {
                     <button
                       key={star}
                       onClick={() => setTicketRating(star)}
-                      className={`text-4xl transition-transform hover:scale-110 ${
+                      className={`transition-transform hover:scale-110 ${
                         star <= ticketRating ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'
                       }`}
                     >
-                      ⭐
+                      <svg
+                        className="h-10 w-10"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
                     </button>
                   ))}
                 </div>

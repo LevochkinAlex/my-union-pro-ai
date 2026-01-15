@@ -82,12 +82,86 @@ export default function MeetingsPage() {
     scheduledTime: "",
     location: "",
     onlineLink: "",
-    agendaItems: [{ title: "", description: "" }],
+    // Участники
+    secretaryId: "",
+    participantIds: [] as string[],
+    externalParticipants: [] as Array<{ name: string; position: string }>,
+    // Пункты повестки
+    agendaItems: [{ title: "", description: "", speakerId: "", speakerName: "" }],
   });
+
+  // Список членов для выбора докладчика
+  const [members, setMembers] = useState<Array<{
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    middleName: string | null;
+    jobTitle: string | null;
+  }>>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
 
   useEffect(() => {
     loadMeetings();
   }, []);
+
+  // Загружаем членов при открытии формы создания
+  useEffect(() => {
+    if (showCreateForm && members.length === 0) {
+      loadMembers();
+    }
+  }, [showCreateForm]);
+
+  const loadMembers = async () => {
+    try {
+      setLoadingMembers(true);
+      const response = await fetch("/api/ppo-head/members?status=approved");
+      if (response.ok) {
+        const data = await response.json();
+        setMembers(data.members || []);
+      }
+    } catch (error) {
+      console.error("Ошибка загрузки членов:", error);
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
+
+  const getMemberFullName = (member: any) => {
+    return [member.lastName, member.firstName, member.middleName].filter(Boolean).join(" ");
+  };
+
+  // Управление участниками
+  const toggleParticipant = (memberId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      participantIds: prev.participantIds.includes(memberId)
+        ? prev.participantIds.filter(id => id !== memberId)
+        : [...prev.participantIds, memberId],
+    }));
+  };
+
+  const addExternalParticipant = () => {
+    setFormData(prev => ({
+      ...prev,
+      externalParticipants: [...prev.externalParticipants, { name: "", position: "" }],
+    }));
+  };
+
+  const updateExternalParticipant = (index: number, field: "name" | "position", value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      externalParticipants: prev.externalParticipants.map((p, i) =>
+        i === index ? { ...p, [field]: value } : p
+      ),
+    }));
+  };
+
+  const removeExternalParticipant = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      externalParticipants: prev.externalParticipants.filter((_, i) => i !== index),
+    }));
+  };
 
   const loadMeetings = async () => {
     try {
@@ -110,8 +184,20 @@ export default function MeetingsPage() {
       return;
     }
 
-    if (formData.agendaItems.every(item => !item.title.trim())) {
+    const validAgendaItems = formData.agendaItems.filter(item => item.title.trim());
+    
+    if (validAgendaItems.length === 0) {
       alertError("Добавьте хотя бы один вопрос в повестку");
+      return;
+    }
+
+    // Проверяем, что у каждого пункта повестки есть докладчик
+    const itemsWithoutSpeaker = validAgendaItems.filter(
+      item => !item.speakerId && !item.speakerName?.trim()
+    );
+    
+    if (itemsWithoutSpeaker.length > 0) {
+      alertError(`Укажите докладчика для всех пунктов повестки (${itemsWithoutSpeaker.length} пункт(ов) без докладчика)`);
       return;
     }
 
@@ -121,14 +207,30 @@ export default function MeetingsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...formData,
-          agendaItems: formData.agendaItems.filter(item => item.title.trim()),
+          type: formData.type,
+          format: formData.format,
+          title: formData.title,
+          scheduledDate: formData.scheduledDate,
+          scheduledTime: formData.scheduledTime || null,
+          location: formData.location || null,
+          onlineLink: formData.onlineLink || null,
+          secretaryId: formData.secretaryId || null,
+          participantIds: formData.participantIds,
+          externalParticipants: formData.externalParticipants.filter(p => p.name.trim()),
+          agendaItems: validAgendaItems.map(item => ({
+            title: item.title.trim(),
+            description: item.description?.trim() || null,
+            speakerId: item.speakerId || null,
+            speakerName: item.speakerName?.trim() || null,
+          })),
         }),
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Ошибка создания");
+        const errorData = await response.json();
+        const errorMessage = errorData.error || "Ошибка создания";
+        const errorDetails = errorData.details ? `\n\nДетали: ${errorData.details}` : "";
+        throw new Error(errorMessage + errorDetails);
       }
 
       alertSuccess("Заседание создано!");
@@ -141,7 +243,10 @@ export default function MeetingsPage() {
         scheduledTime: "",
         location: "",
         onlineLink: "",
-        agendaItems: [{ title: "", description: "" }],
+        secretaryId: "",
+        participantIds: [],
+        externalParticipants: [],
+        agendaItems: [{ title: "", description: "", speakerId: "", speakerName: "" }],
       });
       loadMeetings();
     } catch (error) {
@@ -154,7 +259,7 @@ export default function MeetingsPage() {
   const addAgendaItem = () => {
     setFormData(prev => ({
       ...prev,
-      agendaItems: [...prev.agendaItems, { title: "", description: "" }],
+      agendaItems: [...prev.agendaItems, { title: "", description: "", speakerId: "", speakerName: "" }],
     }));
   };
 
@@ -165,12 +270,28 @@ export default function MeetingsPage() {
     }));
   };
 
-  const updateAgendaItem = (index: number, field: "title" | "description", value: string) => {
+  const updateAgendaItem = (index: number, field: "title" | "description" | "speakerId" | "speakerName", value: string) => {
     setFormData(prev => ({
       ...prev,
-      agendaItems: prev.agendaItems.map((item, i) =>
-        i === index ? { ...item, [field]: value } : item
-      ),
+      agendaItems: prev.agendaItems.map((item, i) => {
+        if (i !== index) return item;
+        
+        // Если выбрали докладчика из списка, очищаем ручной ввод
+        if (field === "speakerId" && value) {
+          const member = members.find(m => m.id === value);
+          return { 
+            ...item, 
+            speakerId: value, 
+            speakerName: member ? getMemberFullName(member) : "" 
+          };
+        }
+        // Если вводят имя вручную, очищаем выбор из списка
+        if (field === "speakerName" && value) {
+          return { ...item, speakerName: value, speakerId: "" };
+        }
+        
+        return { ...item, [field]: value };
+      }),
     }));
   };
 
@@ -324,42 +445,224 @@ export default function MeetingsPage() {
             )}
           </div>
 
+          {/* Участники заседания */}
+          <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
+            <h3 className="mb-4 font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Состав заседания
+            </h3>
+            
+            <div className="space-y-4">
+              {/* Информация о председателе */}
+              <div className="flex items-center gap-2 p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <span className="text-xs font-medium text-blue-800 dark:text-blue-300 px-2 py-0.5 bg-blue-200 dark:bg-blue-800 rounded">
+                  Председатель
+                </span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {session?.user?.name || "Вы"} (автоматически)
+                </span>
+              </div>
+
+              {/* Секретарь */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Секретарь заседания
+                </label>
+                <select
+                  value={formData.secretaryId}
+                  onChange={(e) => setFormData(prev => ({ ...prev, secretaryId: e.target.value }))}
+                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                  disabled={loadingMembers}
+                >
+                  <option value="">— Выберите секретаря —</option>
+                  {members.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {getMemberFullName(member)}
+                      {member.jobTitle && ` (${member.jobTitle})`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Члены профкома */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Члены профкома / участники
+                </label>
+                {loadingMembers ? (
+                  <p className="text-sm text-gray-500">Загрузка списка...</p>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 max-h-48 overflow-y-auto p-2 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                    {members.map((member) => (
+                      <label
+                        key={member.id}
+                        className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                          formData.participantIds.includes(member.id)
+                            ? "bg-blue-100 dark:bg-blue-900/30"
+                            : "hover:bg-gray-50 dark:hover:bg-gray-600"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.participantIds.includes(member.id)}
+                          onChange={() => toggleParticipant(member.id)}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {getMemberFullName(member)}
+                          </div>
+                          {member.jobTitle && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                              {member.jobTitle}
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {formData.participantIds.length > 0 && (
+                  <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+                    Выбрано: {formData.participantIds.length} участников
+                  </p>
+                )}
+              </div>
+
+              {/* Внешние участники */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Приглашённые / внешние участники
+                </label>
+                <div className="space-y-2">
+                  {formData.externalParticipants.map((p, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={p.name}
+                        onChange={(e) => updateExternalParticipant(index, "name", e.target.value)}
+                        className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                        placeholder="ФИО"
+                      />
+                      <input
+                        type="text"
+                        value={p.position}
+                        onChange={(e) => updateExternalParticipant(index, "position", e.target.value)}
+                        className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                        placeholder="Должность"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeExternalParticipant(index)}
+                        className="text-red-500 hover:text-red-700 p-2"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={addExternalParticipant}
+                  className="mt-2 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400"
+                >
+                  + Добавить внешнего участника
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Пункты повестки */}
           <div className="mt-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Пункты повестки дня *
             </label>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {formData.agendaItems.map((item, index) => (
-                <div key={index} className="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+                <div key={index} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
                   <div className="flex items-start gap-3">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-200 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white flex-shrink-0">
                       {index + 1}
                     </span>
-                    <div className="flex-1 space-y-2">
-                      <input
-                        type="text"
-                        value={item.title}
-                        onChange={(e) => updateAgendaItem(index, "title", e.target.value)}
-                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
-                        placeholder="Название вопроса"
-                      />
-                      <textarea
-                        value={item.description}
-                        onChange={(e) => updateAgendaItem(index, "description", e.target.value)}
-                        rows={2}
-                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
-                        placeholder="Описание (опционально)"
-                      />
+                    <div className="flex-1 space-y-3">
+                      {/* Название вопроса */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Слушали (тема вопроса) *
+                        </label>
+                        <input
+                          type="text"
+                          value={item.title}
+                          onChange={(e) => updateAgendaItem(index, "title", e.target.value)}
+                          className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                          placeholder="О чём будет обсуждение..."
+                        />
+                      </div>
+                      
+                      {/* Докладчик */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Докладывает *
+                        </label>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <select
+                            value={item.speakerId}
+                            onChange={(e) => updateAgendaItem(index, "speakerId", e.target.value)}
+                            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                            disabled={loadingMembers}
+                          >
+                            <option value="">— Выбрать из списка —</option>
+                            {members.map((member) => (
+                              <option key={member.id} value={member.id}>
+                                {getMemberFullName(member)}
+                                {member.jobTitle && ` (${member.jobTitle})`}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            value={item.speakerId ? "" : item.speakerName}
+                            onChange={(e) => updateAgendaItem(index, "speakerName", e.target.value)}
+                            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                            placeholder="или ввести ФИО вручную"
+                            disabled={!!item.speakerId}
+                          />
+                        </div>
+                        {item.speakerId && item.speakerName && (
+                          <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+                            Выбран: {item.speakerName}
+                          </p>
+                        )}
+                      </div>
+                      
+                      {/* Описание */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Описание / материалы (опционально)
+                        </label>
+                        <textarea
+                          value={item.description}
+                          onChange={(e) => updateAgendaItem(index, "description", e.target.value)}
+                          rows={2}
+                          className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                          placeholder="Дополнительная информация по вопросу..."
+                        />
+                      </div>
                     </div>
+                    
                     {formData.agendaItems.length > 1 && (
                       <button
                         type="button"
                         onClick={() => removeAgendaItem(index)}
-                        className="text-red-500 hover:text-red-700"
+                        className="text-red-500 hover:text-red-700 p-1"
+                        title="Удалить вопрос"
                       >
                         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
                     )}
@@ -370,9 +673,12 @@ export default function MeetingsPage() {
             <button
               type="button"
               onClick={addAgendaItem}
-              className="mt-2 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400"
+              className="mt-3 flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400"
             >
-              + Добавить вопрос
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Добавить вопрос в повестку
             </button>
           </div>
 

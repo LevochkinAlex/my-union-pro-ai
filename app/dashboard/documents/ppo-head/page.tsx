@@ -58,6 +58,8 @@ type DocumentTab = "organization" | "personal";
 export default function PPOHeadDocumentsPage() {
   const { data: session } = useSession();
   const [activeTab, setActiveTab] = useState<DocumentTab>("organization");
+  const [journalDocuments, setJournalDocuments] = useState<Document[]>([]);
+  const [isLoadingJournal, setIsLoadingJournal] = useState(false);
   const [orgDocuments, setOrgDocuments] = useState<Document[]>([]);
   const [personalDocuments, setPersonalDocuments] = useState<Document[]>([]);
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
@@ -132,26 +134,41 @@ export default function PPOHeadDocumentsPage() {
         const orgDocs = allDocs.filter((d: Document) => 
           ORGANIZATION_DOC_TYPES.includes(d.type as DocumentType)
         );
-        const persDocs = allDocs.filter((d: Document) => 
-          PERSONAL_DOC_TYPES.includes(d.type as DocumentType) || 
-          !ORGANIZATION_DOC_TYPES.includes(d.type as DocumentType)
-        );
         
         setOrgDocuments(orgDocs);
-        setPersonalDocuments(persDocs);
       }
       
-      // Также загружаем личные документы председателя
+      // Загружаем личные документы председателя (только заявления и устав)
       const personalResponse = await fetch("/api/documents");
       if (personalResponse.ok) {
         const data = await personalResponse.json();
         const userDocs = data.documents || [];
-        // Объединяем с существующими личными документами
-        setPersonalDocuments(prev => {
-          const existingIds = new Set(prev.map(d => d.id));
-          const newDocs = userDocs.filter((d: Document) => !existingIds.has(d.id));
-          return [...prev, ...newDocs];
+        
+        // Фильтруем: только личные документы (заявления) и устав (OTHER с уставом)
+        const personalDocs = userDocs.filter((d: Document) => {
+          // Исключаем документы организации
+          if (ORGANIZATION_DOC_TYPES.includes(d.type as DocumentType)) {
+            return false;
+          }
+          
+          // Включаем только заявления
+          if (PERSONAL_DOC_TYPES.includes(d.type as DocumentType)) {
+            return true;
+          }
+          
+          // Включаем устав (OTHER с упоминанием "устав")
+          if (d.type === "OTHER") {
+            const isCharter = 
+              d.id === "charter-system" ||
+              d.title?.toLowerCase().includes("устав") ||
+              d.description?.toLowerCase().includes("устав");
+            return isCharter;
+          }
+          
+          return false;
         });
+        
+        setPersonalDocuments(personalDocs);
       }
     } catch (error) {
       console.error("Ошибка загрузки документов:", error);
@@ -369,14 +386,22 @@ export default function PPOHeadDocumentsPage() {
             Управление документами организации и личными документами
           </p>
         </div>
-        {activeTab === "organization" && (
-        <button
-          onClick={() => setIsCreating(true)}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-        >
-          + Создать документ
-        </button>
-        )}
+        <div className="flex items-center gap-3">
+          <a
+            href="/dashboard/documents/journal"
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+          >
+            Журнал документов
+          </a>
+          {activeTab === "organization" && (
+            <button
+              onClick={() => setIsCreating(true)}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+            >
+              + Создать документ
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Табы */}

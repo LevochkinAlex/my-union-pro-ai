@@ -77,8 +77,13 @@ export async function sendUserNotification(data: NotificationData) {
           emailSent: false,
         },
       });
+      console.log(`[notifications] ✅ Notification saved to DB for user ${data.userId}:`, {
+        id: notificationRecord.id,
+        type: notificationRecord.type,
+        title: notificationRecord.title,
+      });
     } catch (error) {
-      console.error("[notifications] Error saving notification to DB:", error);
+      console.error("[notifications] ❌ Error saving notification to DB:", error);
       // Продолжаем отправку даже если не удалось сохранить в БД
     }
 

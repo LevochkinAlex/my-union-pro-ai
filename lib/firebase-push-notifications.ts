@@ -91,6 +91,13 @@ export async function syncPushSubscription(): Promise<void> {
     return;
   }
 
+  // Skip push subscription on localhost (requires HTTPS)
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  if (isLocalhost && !('serviceWorker' in navigator && navigator.serviceWorker.controller)) {
+    console.log("[Firebase] ℹ️ Skipping push sync on localhost without active service worker");
+    return;
+  }
+
   try {
     // Get session
     const sessionResponse = await fetch("/api/auth/session", {
@@ -202,10 +209,25 @@ export async function syncPushSubscription(): Promise<void> {
         tokenLength: token?.length || 0,
       });
     } catch (tokenError: any) {
+      const errorMessage = tokenError?.message || String(tokenError);
+      const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+      
+      // Suppress known non-critical errors
       if (tokenError?.code === "messaging/permission-blocked") {
         console.warn("[Firebase] ⚠️ Browser blocked notification permission request");
         return;
       }
+      
+      // Suppress push service errors on localhost (expected - push requires HTTPS)
+      if (isLocalhost && (
+        errorMessage.includes('push service not available') ||
+        errorMessage.includes('Registration failed') ||
+        errorMessage.includes('AbortError')
+      )) {
+        console.log("[Firebase] ℹ️ Push notifications not available on localhost (requires HTTPS)");
+        return;
+      }
+      
       console.error("[Firebase] ❌ Error getting FCM token:", {
         code: tokenError?.code,
         message: tokenError?.message,

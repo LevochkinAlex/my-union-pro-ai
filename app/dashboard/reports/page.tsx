@@ -4,6 +4,30 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+interface TicketStatistics {
+  total: number;
+  resolved: number;
+  pending: number;
+  inProgress: number;
+  rejected: number;
+  resolutionRate: number;
+  avgRating: string | null;
+  ratedCount: number;
+  avgResolutionTime: number | null;
+  byType: Record<string, number>;
+  byPriority: Record<string, number>;
+  ratingDistribution: Record<number, number>;
+  byMonth: Record<number, { total: number; resolved: number }> | null;
+}
+
+interface RatedTicket {
+  id: string;
+  rating: number | null;
+  comment: string | null;
+  user: string;
+  resolvedAt: string | null;
+}
+
 interface ReportTemplate {
   id: string;
   code: string;
@@ -69,15 +93,22 @@ export default function ReportsPage() {
   const [creating, setCreating] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterYear, setFilterYear] = useState<string>("all");
+  
+  // Статистика по обращениям
+  const [ticketStats, setTicketStats] = useState<TicketStatistics | null>(null);
+  const [recentRated, setRecentRated] = useState<RatedTicket[]>([]);
+  const [statsYear, setStatsYear] = useState<number>(new Date().getFullYear());
+  const [activeTab, setActiveTab] = useState<'reports' | 'tickets'>('reports');
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
 
-      // Загружаем отчёты и шаблоны параллельно
-      const [reportsRes, templatesRes] = await Promise.all([
+      // Загружаем отчёты, шаблоны и статистику по обращениям параллельно
+      const [reportsRes, templatesRes, ticketStatsRes] = await Promise.all([
         fetch("/api/ppo-head/reports"),
         fetch("/api/ppo-head/reports/templates"),
+        fetch(`/api/ppo-head/tickets/statistics?year=${statsYear}`),
       ]);
 
       if (reportsRes.ok) {
@@ -89,12 +120,18 @@ export default function ReportsPage() {
         const data = await templatesRes.json();
         setTemplates(data.templates || []);
       }
+      
+      if (ticketStatsRes.ok) {
+        const data = await ticketStatsRes.json();
+        setTicketStats(data.statistics || null);
+        setRecentRated(data.recentRated || []);
+      }
     } catch (error) {
       console.error("Ошибка загрузки данных:", error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statsYear]);
 
   useEffect(() => {
     fetchData();
@@ -188,17 +225,45 @@ export default function ReportsPage() {
             Управление отчётами организации
           </p>
         </div>
+        {activeTab === 'reports' && (
+          <button
+            onClick={() => setShowNewReportModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Создать отчёт
+          </button>
+        )}
+      </div>
+      
+      {/* Табы */}
+      <div className="flex border-b border-gray-200 dark:border-gray-700">
         <button
-          onClick={() => setShowNewReportModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors"
+          onClick={() => setActiveTab('reports')}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'reports'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Создать отчёт
+          Форма отчётности
+        </button>
+        <button
+          onClick={() => setActiveTab('tickets')}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'tickets'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
+        >
+          Статистика по обращениям
         </button>
       </div>
 
+      {activeTab === 'reports' && (
+        <>
       {/* Статистика */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
@@ -400,6 +465,214 @@ export default function ReportsPage() {
           </table>
         )}
       </div>
+        </>
+      )}
+      
+      {/* Статистика по обращениям */}
+      {activeTab === 'tickets' && ticketStats && (
+        <div className="space-y-6">
+          {/* Выбор периода */}
+          <div className="flex items-center gap-4">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Год:
+            </label>
+            <select
+              value={statsYear}
+              onChange={(e) => setStatsYear(parseInt(e.target.value))}
+              className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm"
+            >
+              {[2024, 2025, 2026].map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Основная статистика */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <div className="text-3xl font-bold text-gray-900 dark:text-white">{ticketStats.total}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">Всего обращений</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <div className="text-3xl font-bold text-green-600">{ticketStats.resolved}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">Решено</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <div className="text-3xl font-bold text-yellow-600">{ticketStats.pending}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">Ожидание</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <div className="text-3xl font-bold text-blue-600">{ticketStats.inProgress}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">В работе</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <div className="text-3xl font-bold text-red-600">{ticketStats.rejected}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">Отклонено</div>
+            </div>
+          </div>
+          
+          {/* Показатели эффективности */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Процент решений */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Процент решённых</h3>
+                <span className="text-2xl font-bold text-green-600">{ticketStats.resolutionRate}%</span>
+              </div>
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                <div 
+                  className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full transition-all"
+                  style={{ width: `${ticketStats.resolutionRate}%` }}
+                />
+              </div>
+            </div>
+            
+            {/* Средняя оценка */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Средняя оценка</h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold text-yellow-500">{ticketStats.avgRating || '—'}</span>
+                  <svg className="h-6 w-6 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                </div>
+              </div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                На основе {ticketStats.ratedCount} оценок
+              </div>
+              {/* Распределение оценок */}
+              <div className="mt-4 space-y-2">
+                {[5, 4, 3, 2, 1].map((star) => (
+                  <div key={star} className="flex items-center gap-2 text-sm">
+                    <div className="w-8 flex items-center gap-0.5 text-gray-600 dark:text-gray-400">
+                      <span>{star}</span>
+                      <svg className="h-4 w-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full ${star >= 4 ? 'bg-green-500' : star >= 3 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                        style={{ 
+                          width: ticketStats.ratedCount > 0 
+                            ? `${(ticketStats.ratingDistribution[star] / ticketStats.ratedCount) * 100}%` 
+                            : '0%' 
+                        }}
+                      />
+                    </div>
+                    <span className="w-8 text-gray-500 dark:text-gray-400 text-right">
+                      {ticketStats.ratingDistribution[star]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Среднее время решения */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Среднее время решения</h3>
+                <span className="text-2xl font-bold text-blue-600">
+                  {ticketStats.avgResolutionTime !== null ? `${ticketStats.avgResolutionTime} дн.` : '—'}
+                </span>
+              </div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                Среднее время от создания до закрытия обращения
+              </div>
+            </div>
+          </div>
+          
+          {/* График по месяцам */}
+          {ticketStats.byMonth && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Динамика обращений по месяцам</h3>
+              <div className="grid grid-cols-12 gap-2">
+                {Object.entries(ticketStats.byMonth).map(([month, data]) => {
+                  const maxTotal = Math.max(...Object.values(ticketStats.byMonth!).map(d => d.total), 1);
+                  const heightPercent = (data.total / maxTotal) * 100;
+                  const resolvedPercent = data.total > 0 ? (data.resolved / data.total) * 100 : 0;
+                  const monthNames = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
+                  
+                  return (
+                    <div key={month} className="flex flex-col items-center">
+                      <div className="h-32 w-full flex items-end justify-center">
+                        <div 
+                          className="w-full max-w-[24px] bg-gray-200 dark:bg-gray-700 rounded-t relative overflow-hidden"
+                          style={{ height: `${heightPercent}%`, minHeight: data.total > 0 ? '8px' : '0' }}
+                        >
+                          <div 
+                            className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-green-500 to-green-400"
+                            style={{ height: `${resolvedPercent}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        {monthNames[parseInt(month) - 1]}
+                      </div>
+                      <div className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        {data.total}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-center gap-4 mt-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-gray-200 dark:bg-gray-700 rounded" />
+                  <span className="text-gray-500 dark:text-gray-400">Всего</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-500 rounded" />
+                  <span className="text-gray-500 dark:text-gray-400">Решено</span>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Последние оценки */}
+          {recentRated.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Последние отзывы пользователей</h3>
+              <div className="space-y-4">
+                {recentRated.map((item) => (
+                  <div key={item.id} className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <div className="flex-shrink-0 flex gap-0.5">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <svg
+                          key={star}
+                          className={`h-5 w-5 ${
+                            star <= (item.rating || 0)
+                              ? "text-yellow-400"
+                              : "text-gray-300 dark:text-gray-600"
+                          }`}
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      ))}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium text-gray-900 dark:text-white">{item.user}</span>
+                        {item.resolvedAt && (
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {new Date(item.resolvedAt).toLocaleDateString('ru-RU')}
+                          </span>
+                        )}
+                      </div>
+                      {item.comment && (
+                        <p className="text-sm text-gray-600 dark:text-gray-300">{item.comment}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Модалка создания отчёта */}
       {showNewReportModal && (

@@ -102,7 +102,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Отправляем magic link на email
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004";
+    // Используем NEXTAUTH_URL или NEXT_PUBLIC_APP_URL, fallback на продакшн URL
+    let baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                  process.env.NEXTAUTH_URL || 
+                  "https://myunion.pro";
+    
+    // Убеждаемся, что используется HTTPS и правильный домен в продакшене
+    // Если это localhost, заменяем на продакшн URL
+    if (baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1")) {
+      baseUrl = "https://myunion.pro";
+    } else {
+      // Убеждаемся, что используется HTTPS
+      baseUrl = baseUrl.replace(/^http:/, "https:");
+    }
+    
     const magicLink = `${baseUrl}/api/auth/email/verify?token=${token}`;
 
     const emailSent = await sendMagicLinkEmail(

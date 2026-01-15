@@ -24,6 +24,14 @@ interface Document {
   verifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  assignedAt?: string | null;
+  sender?: string | null;
+  user?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    middleName: string | null;
+  } | null;
 }
 
 export default function DocumentsPage() {
@@ -31,7 +39,9 @@ export default function DocumentsPage() {
   const router = useRouter();
   
   // Все hooks должны быть объявлены ДО любых условных return
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const [activeTab, setActiveTab] = useState<"incoming" | "outgoing">("incoming");
+  const [incomingDocuments, setIncomingDocuments] = useState<Document[]>([]);
+  const [outgoingDocuments, setOutgoingDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profileChanged, setProfileChanged] = useState(false);
@@ -67,26 +77,26 @@ export default function DocumentsPage() {
       }
 
       const data = await response.json();
-      // Фильтруем документы: скрываем только загруженные пользователем документы типа OTHER
-      // (но оставляем системный документ - устав, который всегда доступен)
-      const filteredDocuments = (data.documents || []).filter((doc: Document) => {
-        // Показываем все документы, кроме загруженных пользователем OTHER документов
-        if (doc.type === "OTHER") {
-          // Показываем устав (системный документ) - он всегда должен быть доступен
-          const isCharter = 
-            doc.id === "charter-system" ||
-            doc.title?.toLowerCase().includes("устав") ||
-            doc.description?.toLowerCase().includes("устав");
-          
-          // Скрываем только загруженные пользователем файлы (имеют путь в /uploads/documents/)
-          const isUploadedFile = doc.filePath?.startsWith("/uploads/documents/");
-          
-          // Показываем устав, скрываем только загруженные пользователем
-          return isCharter || !isUploadedFile;
-        }
-        return true;
+      
+      // Входящие документы: устав + назначенные для ознакомления
+      const incoming = (data.incomingDocuments || []).map((doc: any) => ({
+        ...doc,
+        assignedAt: doc.assignedAt,
+        sender: doc.user 
+          ? `${doc.user.firstName || ''} ${doc.user.lastName || ''} ${doc.user.middleName || ''}`.trim() 
+          : null,
+        user: doc.user,
+      }));
+      
+      setIncomingDocuments(incoming);
+      
+      // Исходящие документы: заявления пользователя (MEMBERSHIP_APPLICATION, CONTRIBUTION_APPLICATION)
+      const outgoing = (data.outgoingDocuments || []).filter((doc: Document) => {
+        // Показываем только заявления
+        return doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION";
       });
-      setDocuments(filteredDocuments);
+      
+      setOutgoingDocuments(outgoing);
     } catch (err) {
       console.error("Ошибка загрузки документов:", err);
       setError(err instanceof Error ? err.message : "Не удалось загрузить документы");
@@ -130,8 +140,7 @@ export default function DocumentsPage() {
       }
 
       // Перезагружаем документы и статус профиля
-      await loadDocuments();
-      await loadProfileStatus();
+      await Promise.all([loadDocuments(), loadProfileStatus()]);
 
       alertSuccess("Документы успешно переформированы! Проверьте их и скачайте обновленные версии.");
     } catch (err) {
@@ -166,8 +175,7 @@ export default function DocumentsPage() {
       }
 
       // Перезагружаем документы
-      await loadDocuments();
-      await loadProfileStatus();
+      await Promise.all([loadDocuments(), loadProfileStatus()]);
 
       alertSuccess("Документы успешно переформированы!");
     } catch (err) {
@@ -401,6 +409,8 @@ export default function DocumentsPage() {
       MEMBERSHIP_APPLICATION: "Заявление о вступлении",
       CONTRIBUTION_APPLICATION: "Заявление о взносах",
       APPEAL: "Обращение",
+      AGENDA: "Повестка дня",
+      PROTOCOL: "Протокол",
       OTHER: "Прочее",
     };
     return labels[type as keyof typeof labels] || type;
@@ -434,13 +444,53 @@ export default function DocumentsPage() {
     );
   }
 
+  const currentDocuments = activeTab === "incoming" ? incomingDocuments : outgoingDocuments;
+
   return (
     <div className="w-full max-w-full space-y-6 md:space-y-8 pb-8 md:pb-12">
       <div className="mb-6 md:mb-8">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white md:text-3xl">Мои документы</h1>
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 md:text-base">
-          Здесь хранятся все ваши документы: заявления, обращения и другие файлы
+          {activeTab === "incoming" 
+            ? "Документы для ознакомления: устав и документы, назначенные вам"
+            : "Ваши заявления: заявления о вступлении и о перечислении взносов"}
         </p>
+      </div>
+
+      {/* Вкладки */}
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab("incoming")}
+            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+              activeTab === "incoming"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Входящие
+            {incomingDocuments.length > 0 && (
+              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                {incomingDocuments.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("outgoing")}
+            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+              activeTab === "outgoing"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Исходящие
+            {outgoingDocuments.length > 0 && (
+              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                {outgoingDocuments.length}
+              </span>
+            )}
+          </button>
+        </nav>
       </div>
 
       {error && (
@@ -503,7 +553,7 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      {documents.length === 0 ? (
+      {currentDocuments.length === 0 ? (
         <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800 md:p-12">
           <svg
             className="mx-auto h-10 w-10 text-gray-400 md:h-12 md:w-12"
@@ -519,15 +569,17 @@ export default function DocumentsPage() {
             />
           </svg>
           <h3 className="mt-4 text-base font-medium text-gray-900 dark:text-white md:text-lg">
-            Документов пока нет
+            {activeTab === "incoming" ? "Нет входящих документов" : "Документов пока нет"}
           </h3>
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 md:text-sm">
-            Заполните профиль через AI чат, чтобы система сформировала ваши заявления
+            {activeTab === "incoming" 
+              ? "Здесь будут отображаться документы, назначенные вам для ознакомления"
+              : "Заполните профиль через AI чат, чтобы система сформировала ваши заявления"}
           </p>
         </div>
       ) : (
         <div className="grid gap-4 w-full max-w-full">
-          {documents.map((doc) => (
+          {currentDocuments.map((doc) => (
             <div
               key={doc.id}
               className="w-full max-w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800 sm:p-4 md:p-6 overflow-hidden"
@@ -551,6 +603,18 @@ export default function DocumentsPage() {
                   )}
                   <div className="mt-3 flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400 sm:mt-4 sm:flex-row sm:flex-wrap sm:gap-2 md:gap-4">
                     <span className="whitespace-nowrap">Создан: {formatDate(doc.createdAt)}</span>
+                    {activeTab === "incoming" && doc.assignedAt && (
+                      <>
+                        <span className="hidden sm:inline">•</span>
+                        <span className="whitespace-nowrap">Назначен: {formatDate(doc.assignedAt)}</span>
+                      </>
+                    )}
+                    {activeTab === "incoming" && doc.sender && (
+                      <>
+                        <span className="hidden sm:inline">•</span>
+                        <span className="whitespace-nowrap">От: {doc.sender}</span>
+                      </>
+                    )}
                     <span className="hidden sm:inline">•</span>
                     <span className="whitespace-nowrap">Размер: {formatFileSize(doc.fileSize)}</span>
                     {doc.fileName && (

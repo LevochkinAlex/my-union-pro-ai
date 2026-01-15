@@ -217,16 +217,90 @@ export async function POST(
         where: { id: meeting.id },
         data: { agendaDocumentId: document.id },
       });
+
+      // Назначаем повестку дня всем участникам заседания для ознакомления
+      const participantsWithUserId = meeting.participants.filter(p => p.user?.id);
+      
+      if (participantsWithUserId.length > 0) {
+        // Создаем копии документа для каждого участника с assignedToId
+        const assignedDocuments = await Promise.all(
+          participantsWithUserId.map(participant => 
+            prisma.document.create({
+              data: {
+                type: documentType as DocumentType,
+                status: DocumentStatus.GENERATED,
+                category: DocumentCategory.INTERNAL,
+                title: documentTitle,
+                content: htmlContent,
+                regNumber: `${regNumber}-${participant.user!.id.slice(0, 4)}`, // Уникальный номер для копии
+                regDate: new Date(),
+                filePath,
+                fileName: filePath ? filePath.split("/").pop() : null,
+                userId: session.user.id, // Создатель - председатель
+                organizationId: meeting.organizationId,
+                assignedToId: participant.user!.id, // Назначено участнику
+                assignedAt: new Date(),
+                metadata: {
+                  meetingId: meeting.id,
+                  meetingNumber: meeting.number,
+                  meetingDate: meeting.scheduledDate.toISOString(),
+                  isCopy: true,
+                  originalDocumentId: document.id,
+                },
+              },
+            })
+          )
+        );
+
+        console.log(`[generate-document] Повестка дня назначена ${assignedDocuments.length} участникам`);
+      }
     } else {
       await prisma.meeting.update({
         where: { id: meeting.id },
         data: { protocolDocumentId: document.id },
       });
+
+      // Назначаем протокол всем участникам заседания для ознакомления
+      const participantsWithUserId = meeting.participants.filter(p => p.user?.id);
+      
+      if (participantsWithUserId.length > 0) {
+        // Создаем копии документа для каждого участника с assignedToId
+        const assignedDocuments = await Promise.all(
+          participantsWithUserId.map(participant => 
+            prisma.document.create({
+              data: {
+                type: documentType as DocumentType,
+                status: DocumentStatus.GENERATED,
+                category: DocumentCategory.INTERNAL,
+                title: documentTitle,
+                content: htmlContent,
+                regNumber: `${regNumber}-${participant.user!.id.slice(0, 4)}`, // Уникальный номер для копии
+                regDate: new Date(),
+                filePath,
+                fileName: filePath ? filePath.split("/").pop() : null,
+                userId: session.user.id, // Создатель - председатель
+                organizationId: meeting.organizationId,
+                assignedToId: participant.user!.id, // Назначено участнику
+                assignedAt: new Date(),
+                metadata: {
+                  meetingId: meeting.id,
+                  meetingNumber: meeting.number,
+                  meetingDate: meeting.scheduledDate.toISOString(),
+                  isCopy: true,
+                  originalDocumentId: document.id,
+                },
+              },
+            })
+          )
+        );
+
+        console.log(`[generate-document] Протокол назначен ${assignedDocuments.length} участникам`);
+      }
     }
 
     return NextResponse.json({ 
       document,
-      message: `${documentType === "AGENDA" ? "Повестка" : "Протокол"} успешно сформирован(а)`,
+      message: `${documentType === "AGENDA" ? "Повестка" : "Протокол"} успешно сформирован(а)${documentType === "AGENDA" ? ` и назначена ${meeting.participants.filter(p => p.user?.id).length} участникам` : ""}`,
     });
   } catch (error: any) {
     console.error("[ppo-head/meetings/[id]/generate-document] POST error:", error);
@@ -400,6 +474,12 @@ function generateProtocolHTML(meeting: any, data: any): string {
             </table>
             <p>Решение: <strong>${item.isApproved === true ? "ПРИНЯТО" : item.isApproved === false ? "НЕ ПРИНЯТО" : "___________"}</strong></p>
           </div>
+          ${item.decidedText ? `
+          <div class="section">
+            <p class="section-title">РЕШИЛИ:</p>
+            <p>${item.decidedText}</p>
+          </div>
+          ` : ""}
         </div>
         <hr style="margin: 20px 0; border: none; border-top: 1px dashed #ccc;">
       `;
