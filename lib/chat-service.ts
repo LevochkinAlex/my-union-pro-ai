@@ -412,37 +412,49 @@ export async function getOrCreatePrivateChat(
   }
 
   // Создаем новый чат с использованием ChatParticipant
-  chat = await prisma.chat.create({
-    data: {
-      type: "PRIVATE",
-      // Оставляем старые поля для обратной совместимости (временно)
-      participant1Id: firstUserId,
-      participant2Id: secondUserId,
-      // Создаем участников через ChatParticipant
-      participants: {
-        create: [
-          { userId: firstUserId, role: "member" },
-          { userId: secondUserId, role: "member" },
-        ],
+  try {
+    console.log(`[chat-service] Creating new PRIVATE chat between ${firstUserId} and ${secondUserId}`);
+    chat = await prisma.chat.create({
+      data: {
+        type: "PRIVATE",
+        // Оставляем старые поля для обратной совместимости (временно)
+        participant1Id: firstUserId,
+        participant2Id: secondUserId,
+        // Создаем участников через ChatParticipant
+        participants: {
+          create: [
+            { userId: firstUserId, role: "member" },
+            { userId: secondUserId, role: "member" },
+          ],
+        },
       },
-    },
-    include: {
-      participants: {
-        where: { leftAt: null },
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              middleName: true,
-              avatarUrl: true,
+      include: {
+        participants: {
+          where: { leftAt: null },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                avatarUrl: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    });
+    console.log(`[chat-service] Successfully created chat ${chat.id}`);
+  } catch (error: any) {
+    console.error('[chat-service] Error creating chat:', {
+      message: error?.message,
+      code: error?.code,
+      meta: error?.meta,
+      stack: error?.stack?.substring(0, 500),
+    });
+    throw error;
+  }
 
   return { chat, isNew: true };
 }

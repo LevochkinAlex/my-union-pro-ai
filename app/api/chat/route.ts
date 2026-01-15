@@ -138,7 +138,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Используем новый сервис
-    const { chat, isNew } = await getOrCreatePrivateChat(userId, targetUserId);
+    console.log(`[chat] POST: Creating chat between ${userId} and ${targetUserId}`);
+    let chat, isNew;
+    try {
+      const result = await getOrCreatePrivateChat(userId, targetUserId);
+      chat = result.chat;
+      isNew = result.isNew;
+      console.log(`[chat] POST: Chat ${chat.id} ${isNew ? 'created' : 'found'}`);
+    } catch (error: any) {
+      console.error('[chat] POST: Error in getOrCreatePrivateChat:', {
+        message: error?.message,
+        code: error?.code,
+        stack: error?.stack,
+      });
+      throw error;
+    }
 
     // Если чат новый и у него нет matrixRoomId, создаем Matrix комнату
     if (isNew && !chat.matrixRoomId) {
@@ -301,6 +315,8 @@ export async function POST(request: NextRequest) {
 
     // Нормализуем аватарку
     const normalizedUser = normalizeUserAvatar(targetUser);
+
+    console.log(`[chat] POST: Successfully returning chat ${chat.id}`);
 
     return NextResponse.json({
       chat: {
