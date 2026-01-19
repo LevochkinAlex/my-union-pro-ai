@@ -155,6 +155,7 @@ export async function POST(request: NextRequest) {
         
         // For group chats or if recipient is PPO_HEAD, use PPO head chat page
         // For private chats with regular users, use regular chat page
+        // IMPORTANT: Use relative URL (without baseUrl) for Next.js router.push() to work correctly
         const chatUrl = (isGroupChat || recipientIsPPOHead) 
           ? `/dashboard/chats/ppo-head${chat.id ? `?chatId=${chat.id}` : ''}`
           : `/dashboard/chat${chat.id ? `?chatId=${chat.id}` : ''}`;
