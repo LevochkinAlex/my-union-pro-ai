@@ -133,11 +133,16 @@ export async function POST(
       },
     });
 
-    // Log action if this is a ticket chat
-    if (chat.ticket?.id) {
+    // Log action if this is a ticket chat (проверяем через matrixRoomId)
+    const ticket = chat.matrixRoomId ? await prisma.ticket.findUnique({
+      where: { matrixRoomId: chat.matrixRoomId },
+      select: { id: true, publicId: true },
+    }) : null;
+    
+    if (ticket?.id) {
       await prisma.ticketActionLog.create({
         data: {
-          ticketId: chat.ticket.id,
+          ticketId: ticket.id,
           userId: chairman.id,
           actionType: "participant_removed",
           description: `Участник ${participantName} удалён из группы`,
@@ -155,8 +160,8 @@ export async function POST(
     await invalidateUserChatsCache(chairman.id);
 
     // Уведомляем удалённого участника
-    const chatName = chat.ticket?.publicId
-      ? `Обращение #${chat.ticket.publicId}`
+    const chatName = ticket?.publicId
+      ? `Обращение #${ticket.publicId}`
       : chat.name || "группу";
 
     await sendUserNotification({

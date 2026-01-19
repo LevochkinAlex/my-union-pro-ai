@@ -411,11 +411,9 @@ async function handleBotChat(
 
   if (!bot) return null;
 
-  const chatHistory = await prisma.chatMessage.findMany({
-    where: { chatId, deletedAt: null },
-    orderBy: { createdAt: "asc" },
-    take: 20,
-  });
+  // TODO: Загружаем историю из Matrix через Matrix API
+  // const chatHistory = await getMatrixMessages(...);
+  const chatHistory: any[] = [];
 
   const user = await prisma.user.findUnique({
     where: { id: userId },

@@ -186,14 +186,18 @@ export async function POST(
     
     // Определяем название чата и URL для уведомления
     // Если чат связан с обращением, используем название "Обращение #..."
-    const isAppealChat = !!chat.ticket;
-    const chatName = isAppealChat && chat.ticket?.publicId
-      ? `Обращение #${chat.ticket.publicId}`
+    const isAppealChat = !!ticket;
+    const ticketWithPublicId = ticket ? await prisma.ticket.findUnique({
+      where: { id: ticket.id },
+      select: { publicId: true },
+    }) : null;
+    const chatName = isAppealChat && ticketWithPublicId?.publicId
+      ? `Обращение #${ticketWithPublicId.publicId}`
       : (chat.name || "группу");
     
     // URL для уведомления: если это обращение, ссылаемся на страницу обращения, иначе на чат
-    const notificationUrl = isAppealChat && chat.ticket?.id
-      ? `${baseUrl}/dashboard/appeals/${chat.ticket.id}`
+    const notificationUrl = isAppealChat && ticket?.id
+      ? `${baseUrl}/dashboard/appeals/${ticket.id}`
       : `${baseUrl}/dashboard/chat?chatId=${chatId}`;
     
     // Тип уведомления: для обращений используем ticket_response, иначе chat_message
