@@ -230,6 +230,72 @@ export async function POST(request: NextRequest) {
 
       if (threadInfo) {
         matrixRoomId = threadInfo.roomId;
+        
+        // Создаем Chat запись в БД для треда обращения
+        // Проверяем, не существует ли уже чат с таким matrixRoomId
+        let appealChat = await prisma.chat.findUnique({
+          where: { matrixRoomId },
+          include: {
+            participants: {
+              where: { leftAt: null },
+              select: { userId: true },
+            },
+          },
+        });
+
+        if (!appealChat) {
+          // Создаем новый Chat для обращения
+          appealChat = await prisma.chat.create({
+            data: {
+              type: "GROUP",
+              name: `Обращение #${publicId!}: ${title}`,
+              description: `Тред обращения от пользователя`,
+              matrixRoomId,
+              createdById: session.user.id,
+              isPublic: false,
+              participants: {
+                create: [
+                  {
+                    userId: session.user.id,
+                    role: "member",
+                    invitedById: session.user.id,
+                  },
+                  ...(chairmanId !== session.user.id ? [{
+                    userId: chairmanId,
+                    role: "admin", // Председатель - админ треда
+                    invitedById: session.user.id,
+                  }] : []),
+                ],
+              },
+            },
+            include: {
+              participants: {
+                where: { leftAt: null },
+                select: { userId: true },
+              },
+            },
+          });
+          console.log(`[tickets] ✅ Создан Chat для обращения: ${appealChat.id} (matrixRoomId: ${matrixRoomId})`);
+        } else {
+          // Чат уже существует, проверяем участников
+          const existingUserIds = appealChat.participants.map(p => p.userId);
+          const missingParticipants = [
+            ...(existingUserIds.includes(session.user.id) ? [] : [{ userId: session.user.id, role: "member" }]),
+            ...(chairmanId !== session.user.id && !existingUserIds.includes(chairmanId) ? [{ userId: chairmanId, role: "admin" }] : []),
+          ];
+
+          if (missingParticipants.length > 0) {
+            await prisma.chatParticipant.createMany({
+              data: missingParticipants.map(p => ({
+                chatId: appealChat.id,
+                userId: p.userId,
+                role: p.role,
+                invitedById: session.user.id,
+              })),
+            });
+            console.log(`[tickets] ✅ Добавлены участники в Chat обращения: ${appealChat.id}`);
+          }
+        }
       }
     }
 

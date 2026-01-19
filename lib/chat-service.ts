@@ -170,11 +170,40 @@ export async function getUserChats(
     whereConditions.push({ type: filter.type });
   }
 
-  // Фильтр по наличию обращения (через matrixRoomId)
+  // Фильтр по наличию обращения (проверяем связь с Ticket через matrixRoomId)
   if (filter?.hasTicket !== undefined) {
-    whereConditions.push({
-      matrixRoomId: filter.hasTicket ? { not: null } : null,
+    // Получаем все matrixRoomId из тикетов
+    const tickets = await prisma.ticket.findMany({
+      where: { matrixRoomId: { not: null } },
+      select: { matrixRoomId: true },
     });
+    const ticketMatrixRoomIds = tickets
+      .map(t => t.matrixRoomId)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+    
+    if (filter.hasTicket) {
+      // Только чаты, которые связаны с обращениями (есть Ticket с таким matrixRoomId)
+      if (ticketMatrixRoomIds.length > 0) {
+        whereConditions.push({
+          matrixRoomId: { in: ticketMatrixRoomIds },
+        });
+      } else {
+        // Если нет обращений, возвращаем пустой результат через невозможное условие
+        whereConditions.push({ 
+          id: 'nonexistent_chat_id_to_ensure_empty_result_when_no_tickets'
+        });
+      }
+    } else {
+      // Все чаты, кроме связанных с обращениями
+      if (ticketMatrixRoomIds.length > 0) {
+        whereConditions.push({
+          OR: [
+            { matrixRoomId: null },
+            { matrixRoomId: { notIn: ticketMatrixRoomIds } },
+          ],
+        });
+      }
+    }
   }
 
   // Получаем чаты

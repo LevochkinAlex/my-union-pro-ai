@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getPPOHead } from "@/lib/ppo-head-utils";
-import { getUserChats, ChatFilter } from "@/lib/chat-service";
+import { getUserChats, ChatFilter, formatChatInfo } from "@/lib/chat-service";
+import { prisma } from "@/lib/prisma";
 
 /**
  * GET /api/ppo-head/chats
@@ -44,8 +45,68 @@ export async function GET(request: NextRequest) {
       filter.hasTicket = false;
     }
 
-    // Используем новый сервис
-    const chats = await getUserChats(chairman.id, filter);
+    // Для председателя: если фильтр по обращениям, нужно включить ВСЕ обращения его организации
+    // а не только те, где он участник
+    let chats;
+    
+    if (filter?.hasTicket === true && chairman.organizationId) {
+      // Получаем все обращения организации председателя
+      const organizationTickets = await prisma.ticket.findMany({
+        where: {
+          organizationId: chairman.organizationId,
+          matrixRoomId: { not: null },
+        },
+        select: { matrixRoomId: true },
+      });
+      
+      const ticketMatrixRoomIds = organizationTickets
+        .map(t => t.matrixRoomId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0);
+      
+      if (ticketMatrixRoomIds.length > 0) {
+        // Получаем чаты по matrixRoomId обращений организации
+        const appealChats = await prisma.chat.findMany({
+          where: {
+            matrixRoomId: { in: ticketMatrixRoomIds },
+          },
+          include: {
+            participants: {
+              where: { leftAt: null },
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    middleName: true,
+                    avatarUrl: true,
+                    phone: true,
+                  },
+                },
+              },
+            },
+            _count: {
+              select: {
+                participants: true,
+              },
+            },
+          },
+          orderBy: {
+            lastMessageAt: "desc",
+          },
+        });
+        
+        // Форматируем как ChatInfo (без проверки непрочитанных для упрощения)
+        chats = appealChats.map((chat) => {
+          return formatChatInfo(chat, chairman.id, 0);
+        });
+      } else {
+        chats = [];
+      }
+    } else {
+      // Для обычных чатов используем стандартный метод
+      chats = await getUserChats(chairman.id, filter);
+    }
 
     // Форматируем для совместимости с фронтендом
     const formattedChats = chats.map((chat) => ({

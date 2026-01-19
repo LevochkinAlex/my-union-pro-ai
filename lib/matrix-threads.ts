@@ -128,6 +128,9 @@ async function sendThreadRootMessage(
 ): Promise<string | null> {
   try {
     const txnId = `m${Date.now()}`;
+    const eventId = `${txnId}`;
+    
+    // Отправляем корневое сообщение треда с self-reference
     const response = await fetch(
       `${MATRIX_SERVER_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`,
       {
@@ -141,15 +144,51 @@ async function sendThreadRootMessage(
           body: message,
           format: 'org.matrix.custom.html',
           formatted_body: message.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>'),
+          // Создаем тред с self-reference (корневое сообщение ссылается само на себя)
+          'm.relates_to': {
+            rel_type: 'm.thread',
+            event_id: null, // Для корневого сообщения event_id будет установлен после отправки
+          },
         }),
       }
     );
 
     if (response.ok) {
       const data = await response.json();
-      return data.event_id;
+      const rootEventId = data.event_id;
+      
+      // Обновляем корневое сообщение, чтобы оно ссылалось само на себя
+      // Это нужно для правильной работы треда в Matrix
+      try {
+        const updateResponse = await fetch(
+          `${MATRIX_SERVER_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/relations/${encodeURIComponent(rootEventId)}/m.thread`,
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              'm.relates_to': {
+                rel_type: 'm.thread',
+                event_id: rootEventId,
+              },
+            }),
+          }
+        );
+        
+        // Игнорируем ошибку обновления - главное что сообщение отправлено
+        if (!updateResponse.ok) {
+          console.warn('[matrix-threads] Failed to update thread root self-reference, but message sent');
+        }
+      } catch (updateError) {
+        console.warn('[matrix-threads] Error updating thread root:', updateError);
+      }
+      
+      return rootEventId;
     }
 
+    console.error('[matrix-threads] Failed to send thread root message:', await response.text());
     return null;
   } catch (error) {
     console.error('[matrix-threads] Error sending thread root:', error);
