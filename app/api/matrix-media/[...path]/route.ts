@@ -64,6 +64,12 @@ export async function GET(
     });
 
     if (!response.ok) {
+      // 404 is normal for missing/deleted media, don't log as error
+      if (response.status === 404) {
+        return NextResponse.json({ error: 'Media not found' }, { status: 404 });
+      }
+      
+      // Log other errors
       console.error(`Matrix media error: ${response.status} for ${serverName}/${mediaId}, URL: ${matrixUrl}`);
       const errorText = await response.text().catch(() => 'Unknown error');
       console.error(`Matrix media error response: ${errorText}`);
