@@ -79,11 +79,13 @@ async function cleanupAndMigrate() {
     console.log(`   Найдено сообщений: ${messagesCount}`);
     
     if (messagesCount > 0) {
-      // Удаляем вложения
-      await prisma.chatMessageAttachment.deleteMany({});
-      
-      // Удаляем прочитанные статусы
-      await prisma.chatMessageRead.deleteMany({});
+      // Удаляем вложения (если есть)
+      try {
+        await prisma.chatMessageAttachment.deleteMany({});
+      } catch (e) {
+        // Модель может не существовать
+        console.log('     ⚠️  ChatMessageAttachment не найдена, пропускаем');
+      }
       
       // Удаляем сообщения
       await prisma.chatMessage.deleteMany({});
