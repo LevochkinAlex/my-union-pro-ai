@@ -28,6 +28,7 @@ export async function GET() {
         name: true,
         iconUrl: true,
         matrixRoomId: true,
+        lastMessageAt: true,
         participants: {
           where: { leftAt: null }, // Only active participants
           include: {
