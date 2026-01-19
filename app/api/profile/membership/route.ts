@@ -156,10 +156,18 @@ export async function GET() {
       }
     }
 
+    // Маппинг статуса: APPROVED -> ACCEPTED для совместимости с фронтендом
+    let membershipStatusDisplay = "NOT_ACCEPTED";
+    if (user.membershipStatus === "APPROVED" || user.unionMembershipStatus === "ACCEPTED") {
+      membershipStatusDisplay = "ACCEPTED";
+    } else if (user.membershipStatus === "REJECTED" || user.unionMembershipStatus === "REMOVED") {
+      membershipStatusDisplay = "REMOVED";
+    }
+
     return NextResponse.json({
       unionCardNumber,
       membershipJoinedAt: user.membershipJoinedAt,
-      membershipStatus: user.unionMembershipStatus || "NOT_ACCEPTED",
+      membershipStatus: membershipStatusDisplay,
       currentOrganization,
       history,
     });

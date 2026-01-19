@@ -24,35 +24,31 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
 
-    // Получаем ID чатов, в которых пользователь является участником
+    // Получаем Matrix комнаты, в которых пользователь является участником
     const userChats = await prisma.chat.findMany({
       where: {
-        OR: [
-          // Старая схема PRIVATE чатов
-          { participants: { some: { userId: session.user.id, leftAt: null } } },
-          // Новая схема через ChatParticipant
-          {
-            participants: {
-              some: {
-                userId: session.user.id,
-                leftAt: null,
-              },
-            },
+        participants: {
+          some: {
+            userId: session.user.id,
+            leftAt: null,
           },
-        ],
+        },
       },
       select: {
         id: true,
+        matrixRoomId: true,
       },
     });
 
-    const userChatIds = userChats.map((chat) => chat.id);
+    // Обращения, созданные пользователем ИЛИ связанные с Matrix комнатами, в которых пользователь участвует
+    const userMatrixRoomIds = userChats
+      .map(chat => chat.matrixRoomId)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
 
-    // Обращения, созданные пользователем ИЛИ связанные с чатами, в которых пользователь участвует
     const where: any = {
       OR: [
         { userId: session.user.id },
-        ...(userChatIds.length > 0 ? [{ chatId: { in: userChatIds } }] : []),
+        ...(userMatrixRoomIds.length > 0 ? [{ matrixRoomId: { in: userMatrixRoomIds } }] : []),
       ],
     };
 
