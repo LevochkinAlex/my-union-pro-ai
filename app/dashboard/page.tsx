@@ -61,14 +61,27 @@ export default async function DashboardPage() {
           },
         },
       }),
-      new Promise((_, reject) => 
+      new Promise<null>((_, reject) => 
         setTimeout(() => reject(new Error("Database query timeout")), 10000)
       )
     ]).catch((error) => {
       console.error("[dashboard/page] Database query error:", error);
       // Возвращаем null при ошибке, чтобы использовать значения по умолчанию
       return null;
-    }) as Awaited<ReturnType<typeof prisma.user.findUnique>> | null;
+    }) as {
+      role: string;
+      firstName: string | null;
+      lastName: string | null;
+      viewMode: string | null;
+      isPPOHead: boolean;
+      isMPOHead: boolean;
+      isRPOHead: boolean;
+      ppoHeadOrganizationId: string | null;
+      mpoHeadOrganizationId: string | null;
+      rpoHeadOrganizationId: string | null;
+      organization: { id: string; name: string } | null;
+      ppoHeadOrganization: { id: string; name: string } | null;
+    } | null;
 
   // Определяем показывать ли дашборд председателя на основе viewMode
   const showPPOHeadDashboard = 
