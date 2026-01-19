@@ -847,7 +847,7 @@ function formatChatInfo(
 
   if (isGroup) {
     // Для групповых чатов
-    displayName = chat.name || (chat.ticket ? `Обращение #${chat.ticket.publicId}` : "Групповой чат");
+    displayName = chat.name || "Групповой чат";
     displayAvatar = chat.iconUrl || null;
 
     // Находим другого участника для показа в превью
@@ -941,9 +941,9 @@ function formatChatInfo(
     displayAvatar,
     participants,
     participantsCount: chat._count?.participants || participants.length,
-    ticketId: chat.ticket?.id || null,
-    ticketPublicId: chat.ticket?.publicId || null,
-    ticketTitle: chat.ticket?.title || null,
+    ticketId: null, // Тикеты теперь связаны через matrixRoomId
+    ticketPublicId: null,
+    ticketTitle: null,
     otherUser,
   };
 }

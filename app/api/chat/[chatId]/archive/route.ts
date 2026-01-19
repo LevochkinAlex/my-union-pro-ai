@@ -31,9 +31,6 @@ export async function POST(
             leftAt: null,
           },
         },
-        ticket: {
-          select: { id: true, publicId: true },
-        },
       },
     });
 
@@ -42,10 +39,7 @@ export async function POST(
     }
 
     // Проверяем участие в чате
-    const isParticipant =
-      chat.participants.length > 0 ||
-      chat.participant1Id === session.user.id ||
-      chat.participant2Id === session.user.id;
+    const isParticipant = chat.participants.length > 0;
 
     if (!isParticipant) {
       return NextResponse.json(
@@ -62,18 +56,25 @@ export async function POST(
       },
     });
 
-    // Журналируем действие для обращений
-    if (chat.ticket?.id) {
-      await prisma.ticketActionLog.create({
-        data: {
-          ticketId: chat.ticket.id,
-          userId: session.user.id,
-          actionType: archive ? "archived" : "unarchived",
-          description: archive
-            ? "Чат обращения перемещён в архив"
-            : "Чат обращения восстановлен из архива",
-        },
+    // Журналируем действие для обращений (если это чат обращения)
+    if (chat.matrixRoomId) {
+      const ticket = await prisma.ticket.findUnique({
+        where: { matrixRoomId: chat.matrixRoomId },
+        select: { id: true },
       });
+      
+      if (ticket) {
+        await prisma.ticketActionLog.create({
+          data: {
+            ticketId: ticket.id,
+            userId: session.user.id,
+            actionType: archive ? "archived" : "unarchived",
+            description: archive
+              ? "Чат обращения перемещён в архив"
+              : "Чат обращения восстановлен из архива",
+          },
+        });
+      }
     }
 
     return NextResponse.json({

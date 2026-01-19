@@ -28,15 +28,6 @@ export async function GET() {
         name: true,
         iconUrl: true,
         matrixRoomId: true,
-        ticket: {
-          select: { 
-            id: true,
-            publicId: true,
-            status: true,
-            resolved: true,
-            userId: true, // Creator ID
-          }
-        },
         participants: {
           where: { leftAt: null }, // Only active participants
           include: {
@@ -51,14 +42,6 @@ export async function GET() {
             }
           }
         },
-        messages: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: {
-            content: true,
-            createdAt: true
-          }
-        }
       },
       orderBy: {
         updatedAt: 'desc'
@@ -79,7 +62,9 @@ export async function GET() {
         // Determine display name
         let displayName = '';
         // For ticket chats, use the chat name (e.g., "Обращение #12345")
-        if (chat.ticket && chat.name) {
+        // Проверяем, является ли это чатом обращения по matrixRoomId
+        const isTicketChat = chat.name?.includes('Обращение #');
+        if (isTicketChat && chat.name) {
           displayName = chat.name;
         } else if (chat.type === 'GROUP' && chat.name) {
           // For groups with explicit names
@@ -123,14 +108,14 @@ export async function GET() {
           avatarUrl,
           isDirect,
           isGroup: chat.type === 'GROUP',
-          isTicket: !!chat.ticket, // true if this chat is linked to a ticket
-          ticketId: chat.ticket?.publicId || null,
-          ticketResolved: chat.ticket?.resolved || false,
-          ticketStatus: chat.ticket?.status || null,
-          isTicketCreator: chat.ticket?.userId === session.user.id, // Is current user the ticket creator
+          isTicket: !!ticket, // true if this chat is linked to a ticket
+          ticketId: ticket?.publicId || null,
+          ticketResolved: ticket?.resolved || false,
+          ticketStatus: ticket?.status || null,
+          isTicketCreator: ticket?.userId === session.user.id, // Is current user the ticket creator
           participantCount: chat.participants.length,
-          lastMessage: chat.messages[0]?.content,
-          lastMessageTime: chat.messages[0]?.createdAt?.getTime(),
+          lastMessage: null, // Сообщения теперь в Matrix
+          lastMessageTime: chat.lastMessageAt?.getTime() || null,
           participants: chat.participants.map(p => ({
             id: p.user?.id,
             firstName: p.user?.firstName,
