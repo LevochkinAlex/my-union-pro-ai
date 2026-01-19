@@ -84,10 +84,9 @@ export async function GET(
         return new NextResponse(null, { status: 404, statusText: 'Not Found' });
       }
       
-      // Log other errors
-      console.error(`Matrix media error: ${response.status} for ${serverName}/${mediaId}, URL: ${matrixUrl}`);
+      // Log other errors (but not 404)
       const errorText = await response.text().catch(() => 'Unknown error');
-      console.error(`Matrix media error response: ${errorText}`);
+      console.error(`Matrix media error: ${response.status} for ${serverName}/${mediaId}, URL: ${matrixUrl}, Response: ${errorText}`);
       return NextResponse.json({ error: 'Media not found', details: errorText }, { status: response.status });
     }
 
