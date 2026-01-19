@@ -338,6 +338,49 @@ interface SyncResponse {
   };
 }
 
+// Send notification for chat message
+async function notifyChatMessage(roomId: string, event: MatrixEvent): Promise<void> {
+  try {
+    const senderMatrixId = event.sender || '';
+    const messageText = event.content?.body || '';
+    
+    // Get user ID from matrixUserId
+    const user = await prisma.user.findFirst({
+      where: { matrixUserId: senderMatrixId },
+      select: { id: true },
+    });
+    
+    if (!user) {
+      console.log(`[notify] User not found for ${senderMatrixId}`);
+      return;
+    }
+    
+    // Call notify API with internal token
+    const baseUrl = process.env.NEXTAUTH_URL || 'https://myunion.pro';
+    const response = await fetch(`${baseUrl}/api/chat/notify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Internal-Token': process.env.INTERNAL_API_TOKEN || '',
+      },
+      body: JSON.stringify({
+        roomId,
+        message: messageText,
+        senderUserId: user.id,
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[notify] Failed to send notification: ${response.status} ${errorText}`);
+    } else {
+      console.log(`[notify] ✅ Notification sent for message in ${roomId}`);
+    }
+  } catch (error) {
+    console.error('[notify] Error sending notification:', error);
+  }
+}
+
 async function handleMessage(roomId: string, event: MatrixEvent): Promise<void> {
   // Ignore our own messages
   if (event.sender === BOT_USER_ID) return;
@@ -421,7 +464,13 @@ async function sync(): Promise<void> {
     const events = roomData.timeline?.events || [];
     for (const event of events) {
       if (event.type === 'm.room.message') {
+        // Handle bot messages
         await handleMessage(roomId, event);
+        
+        // Also send notifications for all user messages (not just bot messages)
+        if (event.sender !== BOT_USER_ID && event.content?.msgtype === 'm.text') {
+          await notifyChatMessage(roomId, event);
+        }
       }
     }
   }

@@ -7,12 +7,30 @@ import { sendUserNotification } from '@/lib/notifications';
 // POST /api/chat/notify - Send push notification for new chat message
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Check for internal token (from Matrix bot or other services)
+    const internalToken = request.headers.get('X-Internal-Token');
+    const isInternal = internalToken === process.env.INTERNAL_API_TOKEN;
+    
+    // Parse request body once
+    const body = await request.json();
+    const { roomId, message, senderUserId: bodySenderUserId } = body;
+    
+    let senderUserId: string | null = null;
+    
+    if (isInternal) {
+      // Internal call - get sender from request body
+      senderUserId = bodySenderUserId || null;
+      if (!senderUserId) {
+        return NextResponse.json({ error: 'Missing senderUserId for internal call' }, { status: 400 });
+      }
+    } else {
+      // Regular call - require session
+      const session = await getServerSession(authOptions);
+      if (!session?.user?.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      senderUserId = session.user.id;
     }
-
-    const { roomId, message } = await request.json();
     if (!roomId || !message) {
       return NextResponse.json({ error: 'Missing data' }, { status: 400 });
     }
@@ -49,7 +67,7 @@ export async function POST(request: NextRequest) {
         where: {
           participants: {
             some: {
-              userId: session.user.id,
+              userId: senderUserId,
               leftAt: null,
             }
           },
@@ -105,14 +123,19 @@ export async function POST(request: NextRequest) {
     
     console.log(`[chat/notify] ✅ Found chat ${chat.id} for matrixRoomId ${roomId}, participants: ${chat.participants.length}`);
 
-    // Get sender name
-    const senderName = [session.user.firstName, session.user.lastName]
+    // Get sender user info
+    const sender = await prisma.user.findUnique({
+      where: { id: senderUserId },
+      select: { firstName: true, lastName: true },
+    });
+    
+    const senderName = [sender?.firstName, sender?.lastName]
       .filter(Boolean)
       .join(' ') || 'Пользователь';
 
     // Get recipients (all participants except sender)
     const recipients = chat.participants
-      .filter(p => p.user?.id && p.user.id !== session.user.id)
+      .filter(p => p.user?.id && p.user.id !== senderUserId)
       .map(p => p.user!.id);
 
     if (recipients.length === 0) {
