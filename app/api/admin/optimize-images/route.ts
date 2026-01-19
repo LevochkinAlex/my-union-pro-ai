@@ -62,25 +62,10 @@ export async function POST(request: NextRequest) {
       itemsToProcess.push(...postAttachments.map(a => ({ ...a, _type: "post" as const })));
     }
 
-    if (type === "all" || type === "chat") {
-      const chatAttachments = await prisma.chatMessageAttachment.findMany({
-        where: {
-          type: "image",
-          filePath: {
-            not: "",
-          },
-        },
-        select: {
-          id: true,
-          filePath: true,
-          fileName: true,
-          messageId: true,
-        },
-        skip: type === "chat" ? offset : 0,
-        take: type === "chat" ? batchSize : 1000,
-      });
-      itemsToProcess.push(...chatAttachments.map(a => ({ ...a, _type: "chat" as const })));
-    }
+    // ChatMessageAttachment удалена - все сообщения теперь в Matrix
+    // if (type === "all" || type === "chat") {
+    //   const chatAttachments = await prisma.chatMessageAttachment.findMany({...});
+    // }
 
     if (type === "all" || type === "news") {
       const newsPosts = await prisma.newsPost.findMany({
@@ -170,11 +155,9 @@ export async function POST(request: NextRequest) {
             where: { id: item.id },
             data: { filePath: newFilePath },
           });
-        } else if (item._type === "chat") {
-          await prisma.chatMessageAttachment.update({
-            where: { id: item.id },
-            data: { filePath: newFilePath },
-          });
+        // ChatMessageAttachment удалена
+        // } else if (item._type === "chat") {
+        //   await prisma.chatMessageAttachment.update({...});
         } else {
           await prisma.newsPost.update({
             where: { id: item.id },
@@ -235,7 +218,7 @@ export async function GET() {
           filePath: { not: "" },
         },
       }),
-      prisma.chatMessageAttachment.count({
+      Promise.resolve(0), // ChatMessageAttachment удалена - все сообщения в Matrix
         where: {
           type: "image",
           filePath: { not: "" },
@@ -260,12 +243,7 @@ export async function GET() {
           filePath: { contains: '.webp' },
         },
       }),
-      prisma.chatMessageAttachment.count({
-        where: {
-          type: "image",
-          filePath: { contains: '.webp' },
-        },
-      }),
+      Promise.resolve(0), // ChatMessageAttachment удалена
       prisma.newsPost.count({
         where: {
           coverImage: { contains: '.webp' },
