@@ -491,10 +491,26 @@ export default async function DashboardLayout({
       <MiniChatWrapperConditional />
     </div>
   );
-  } catch (error) {
+  } catch (error: any) {
+    // NEXT_REDIRECT - это нормальное исключение Next.js, не ошибка
+    if (error?.message === 'NEXT_REDIRECT' || error?.digest?.startsWith('NEXT_REDIRECT')) {
+      throw error; // Пробрасываем редирект дальше
+    }
+    
     console.error("[dashboard/layout] Fatal error:", error);
-    // В случае критической ошибки редиректим на страницу логина
-    redirect("/login?error=session_error");
+    
+    // Только для реальных ошибок проверяем сессию еще раз
+    try {
+      const session = await getServerSession(authOptions);
+      if (!session) {
+        redirect("/login?error=session_error");
+      }
+    } catch (sessionError) {
+      redirect("/login?error=session_error");
+    }
+    
+    // Если сессия есть, но все равно ошибка - пробрасываем дальше
+    throw error;
   }
 }
 
