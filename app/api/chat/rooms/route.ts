@@ -52,6 +52,8 @@ export async function GET() {
     const roomsData = chats
       .filter(chat => chat.matrixRoomId) // Only return migrated chats
       .map(chat => {
+        // Получаем тикет через matrixRoomId
+        const ticket = ticketMap.get(chat.matrixRoomId!);
         const isDirect = chat.participants.length === 2;
         
         // Get the other participant for DM chats
