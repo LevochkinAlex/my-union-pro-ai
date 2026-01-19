@@ -1323,9 +1323,9 @@ model Ticket {
   resolved   Boolean   @default(false)
   resolvedAt DateTime?
   
-  // Связь с чатом
-  chatId String? @unique
-  chat   Chat?   @relation(fields: [chatId], references: [id], onDelete: SetNull)
+  // Связь с чатом удалена (тикеты больше не используются)
+  // chatId String? @unique
+  // chat   Chat?   @relation(fields: [chatId], references: [id], onDelete: SetNull)
   
   // Причина отклонения (для Председателя)
   rejectionReason String? @db.Text
