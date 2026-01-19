@@ -90,11 +90,11 @@ export async function POST(
       },
     });
 
-    // Отправляем сообщение в чат, если он существует
-    if (ticket.chatId) {
-      const rejectionMessage = `Ваше обращение отклонено.\n\nПричина: ${reason.trim()}`;
-      await sendChatMessage(ticket.chatId, chairman.id, rejectionMessage);
-    }
+    // TODO: Отправляем сообщение в тред обращения через Matrix API
+    // if (ticket.matrixRoomId) {
+    //   const rejectionMessage = `Ваше обращение отклонено.\n\nПричина: ${reason.trim()}`;
+    //   await sendMatrixMessage(...);
+    // }
 
     // Отправляем уведомления
     if (ticket.user.pushNotificationsEnabled) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { sendChatMessage } from "@/lib/chat-server-utils";
+// import { sendChatMessage } from "@/lib/chat-server-utils"; // TODO: Переделать на Matrix API
 import { sendUserNotification } from "@/lib/notifications";
 
 /**
@@ -112,7 +112,10 @@ export async function POST(
       if (comment) {
         message += `\n\nКомментарий: ${comment}`;
       }
-      await sendChatMessage(ticket.chatId, session.user.id, message);
+      // TODO: Отправляем сообщение через Matrix API в тред обращения
+      // if (ticket.matrixRoomId) {
+      //   await sendMatrixMessage(...);
+      // }
     }
 
     // Уведомляем Председателя об оценке

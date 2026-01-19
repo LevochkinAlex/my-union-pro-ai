@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendUserNotification } from "@/lib/notifications";
-import { getOrCreatePrivateChat, sendChatMessage } from "@/lib/chat-server-utils";
+import { getOrCreatePrivateChat } from "@/lib/chat-service";
+// import { sendChatMessage } from "@/lib/chat-server-utils"; // TODO: Переделать на Matrix API
 import { getPPOHead, isMemberOfOrganization } from "@/lib/ppo-head-utils";
 
 /**
@@ -77,7 +78,10 @@ export async function POST(
     // Создаем сообщение с поздравлением
     const congratulationMessage = `Поздравляем! Ваша заявка на вступление в профсоюз "${chairman.organization?.name || "организацию"}" одобрена. Добро пожаловать в наш профсоюз!`;
     
-    await sendChatMessage(chat.id, chairman.id, congratulationMessage);
+    // TODO: Отправляем сообщение через Matrix API
+    // if (chat.matrixRoomId) {
+    //   await sendMatrixMessage(...);
+    // }
 
     // Отправляем уведомление
     await sendUserNotification({
