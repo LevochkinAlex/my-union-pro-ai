@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
       description: chat.description || chat.ticketTitle,
       iconUrl: chat.displayAvatar,
       isPublic: chat.isPublic,
-      lastMessage: chat.lastMessage,
+      // lastMessage: chat.lastMessage, // Поле удалено, сообщения в Matrix
       lastMessageAt: chat.lastMessageAt?.toISOString() || null,
       unreadCount: chat.unreadCount,
       createdAt: chat.createdAt,

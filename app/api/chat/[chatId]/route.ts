@@ -248,8 +248,6 @@ export async function POST(
         id: true,
         type: true,
         name: true,
-        participant1Id: true,
-        participant2Id: true,
       },
     });
 

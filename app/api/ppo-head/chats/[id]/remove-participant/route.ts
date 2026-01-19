@@ -129,7 +129,7 @@ export async function POST(
       where: { id: chatId },
       data: {
         lastMessageAt: new Date(),
-        lastMessage: systemMessage,
+        // lastMessage: systemMessage, // Поле удалено
       },
     });
 
