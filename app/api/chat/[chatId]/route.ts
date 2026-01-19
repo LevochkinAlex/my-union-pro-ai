@@ -527,20 +527,7 @@ async function sendNotifications(
       where: { id: chatId },
       select: {
         type: true,
-        ticket: {
-          select: {
-            id: true,
-            publicId: true,
-            title: true,
-            user: {
-              select: {
-                firstName: true,
-                lastName: true,
-                middleName: true,
-              },
-            },
-          },
-        },
+        matrixRoomId: true,
       },
     });
 
