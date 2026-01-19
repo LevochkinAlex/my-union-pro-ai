@@ -123,7 +123,7 @@ async function getUserProfile(matrixUserId: string): Promise<UserProfile | null>
         hobbies: true,
         aboutMe: true,
         organization: {
-          select: { name: true, shortName: true }
+          select: { name: true }
         },
         userKnowledgeBase: {
           include: {
@@ -163,7 +163,7 @@ async function getUserProfile(matrixUserId: string): Promise<UserProfile | null>
 
     const profile: UserProfile = {
       name: [user.firstName, user.middleName].filter(Boolean).join(' ') || 'Пользователь',
-      organization: user.organization?.shortName || user.organization?.name,
+      organization: user.organization?.name,
       position: user.jobTitle || undefined,
       membershipStatus: user.membershipStatus || undefined,
       interests: user.hobbies ? [user.hobbies] : undefined,
