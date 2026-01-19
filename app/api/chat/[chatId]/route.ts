@@ -87,72 +87,8 @@ export async function GET(
           ? getCacheKey(`chat:messages:${chatId}`, { limit })
           : null;
 
-        // TODO: Переделать на Matrix API
-        // Сообщения теперь хранятся в Matrix
-        const fetchMessages = async () => [] as any[]; // prisma.chatMessage.findMany({
-          where: whereClause,
-          select: {
-            id: true,
-            chatId: true,
-            senderId: true,
-            content: true,
-            reactions: true,
-            replyToId: true,
-            forwardedFromId: true,
-            editedAt: true,
-            deletedAt: true,
-            createdAt: true,
-            sender: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatarUrl: true,
-              },
-            },
-            attachments: {
-              select: {
-                id: true,
-                type: true,
-                fileName: true,
-                originalName: true,
-                filePath: true,
-                fileSize: true,
-                mimeType: true,
-              },
-            },
-            replyTo: {
-              select: {
-                id: true,
-                content: true,
-                sender: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                  },
-                },
-              },
-            },
-            forwardedFrom: {
-              select: {
-                id: true,
-                content: true,
-                sender: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                  },
-                },
-              },
-            },
-          },
-          // orderBy: {
-          //   createdAt: "desc",
-          // },
-          // take: limit,
-        // });
+        // TODO: Переделать на Matrix API - сообщения теперь хранятся в Matrix
+        const fetchMessages = async () => [] as any[];
 
         if (shouldCache && cacheKey) {
           return withCache(cacheKey, fetchMessages, 60); // Увеличили кеш до 60 сек
