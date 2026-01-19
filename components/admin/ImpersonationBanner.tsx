@@ -24,26 +24,42 @@ export default function ImpersonationBanner() {
 
       const adminId = session.user.originalAdminId;
       
+      console.log("[Stop Impersonation] Starting restore for admin:", adminId);
+      
       // Восстанавливаем сессию админа через специальный провайдер
       // Добавляем таймаут для запроса
       const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error("Таймаут запроса")), 15000)
+        setTimeout(() => reject(new Error("Таймаут запроса")), 20000)
       );
 
       const signInPromise = signIn("restore-admin", {
         adminId: adminId,
         restoreToken: "restore", // Токен не проверяется строго, только для совместимости
         redirect: false,
+        callbackUrl: "/admin/users",
       });
 
       const result = await Promise.race([signInPromise, timeoutPromise]);
 
+      console.log("[Stop Impersonation] SignIn result:", result);
+
       if (result?.error) {
+        console.error("[Stop Impersonation] SignIn error:", result.error);
         throw new Error(result.error);
       }
 
+      if (!result?.ok) {
+        throw new Error("Не удалось восстановить сессию админа");
+      }
+
+      // Обновляем сессию перед редиректом
+      await router.refresh();
+      
+      // Небольшая задержка для обновления сессии
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Редиректим в админ-панель
-      window.location.href = "/admin/users";
+      router.push("/admin/users");
     } catch (error) {
       console.error("[Stop Impersonation] Error:", error);
       const errorMessage = error instanceof Error 
@@ -54,7 +70,7 @@ export default function ImpersonationBanner() {
       if (errorMessage.includes("Таймаут")) {
         alert("Превышено время ожидания. Пожалуйста, попробуйте еще раз или перезагрузите страницу.");
       } else {
-        alert(errorMessage);
+        alert(`Ошибка: ${errorMessage}\n\nПопробуйте выйти из системы и войти заново.`);
       }
     } finally {
       setLoading(false);

@@ -1,27 +1,25 @@
 import NextAuth from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 const handler = NextAuth(authOptions);
 
-// Оборачиваем обработчики для правильной обработки ошибок
-async function handleRequest(
-  req: NextRequest,
-  handlerFn: (req: Request) => Promise<Response>
-) {
+// NextAuth handler должен получать Request напрямую
+// Исправляем обработку для Next.js 16
+export async function GET(req: NextRequest) {
   try {
-    // NextAuth ожидает обычный Request, а не NextRequest
-    const request = new Request(req.url, {
+    // Создаем правильный Request объект с query параметрами
+    const url = new URL(req.url);
+    const request = new Request(url.toString(), {
       method: req.method,
       headers: req.headers,
-      body: req.body,
+      // Для GET запросов body не нужен
     });
-    const response = await handlerFn(request);
-    return response;
+    return await handler(request);
   } catch (error) {
-    console.error("[NextAuth] Error:", error);
+    console.error("[NextAuth] GET Error:", error);
     // Возвращаем JSON ошибку вместо HTML
-    return NextResponse.json(
+    return Response.json(
       { 
         error: "Authentication error",
         message: error instanceof Error ? error.message : "Unknown error"
@@ -31,10 +29,28 @@ async function handleRequest(
   }
 }
 
-export async function GET(req: NextRequest) {
-  return handleRequest(req, (r) => handler(r));
-}
-
 export async function POST(req: NextRequest) {
-  return handleRequest(req, (r) => handler(r));
+  try {
+    // Создаем правильный Request объект с body
+    const url = new URL(req.url);
+    const body = await req.text();
+    const request = new Request(url.toString(), {
+      method: req.method,
+      headers: req.headers,
+      body: body || undefined,
+      // Добавляем duplex для streaming body в Next.js 16
+      duplex: body ? "half" : undefined,
+    });
+    return await handler(request);
+  } catch (error) {
+    console.error("[NextAuth] POST Error:", error);
+    // Возвращаем JSON ошибку вместо HTML
+    return Response.json(
+      { 
+        error: "Authentication error",
+        message: error instanceof Error ? error.message : "Unknown error"
+      },
+      { status: 500 }
+    );
+  }
 }
