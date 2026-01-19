@@ -414,6 +414,17 @@ export async function getOrCreatePrivateChat(
   // Создаем новый чат с использованием ChatParticipant
   try {
     console.log(`[chat-service] Creating new PRIVATE chat between ${firstUserId} and ${secondUserId}`);
+    
+    // Проверяем, что оба пользователя существуют
+    const [user1, user2] = await Promise.all([
+      prisma.user.findUnique({ where: { id: firstUserId }, select: { id: true } }),
+      prisma.user.findUnique({ where: { id: secondUserId }, select: { id: true } }),
+    ]);
+    
+    if (!user1 || !user2) {
+      throw new Error(`One or both users not found: ${firstUserId}, ${secondUserId}`);
+    }
+    
     chat = await prisma.chat.create({
       data: {
         type: "PRIVATE",
@@ -423,8 +434,8 @@ export async function getOrCreatePrivateChat(
         // Создаем участников через ChatParticipant
         participants: {
           create: [
-            { userId: firstUserId, role: "member" },
-            { userId: secondUserId, role: "member" },
+            { userId: firstUserId, role: "member", invitedById: firstUserId },
+            { userId: secondUserId, role: "member", invitedById: firstUserId },
           ],
         },
       },
