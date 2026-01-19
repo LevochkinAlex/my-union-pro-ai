@@ -89,14 +89,24 @@ async function clearAIChatHistory() {
       console.log(`   ✅ Удалено ${messageIds.length} сообщений`);
     }
 
-    // Обновляем чаты
-    await prisma.chat.updateMany({
-      where: { id: { in: chatIds } },
-      data: {
-        lastMessageId: null,
-        lastMessageAt: null,
-      },
-    });
+    // Обновляем чаты (проверяем наличие колонки)
+    try {
+      await prisma.chat.updateMany({
+        where: { id: { in: chatIds } },
+        data: {
+          lastMessageId: null,
+          lastMessageAt: null,
+        },
+      });
+    } catch (e) {
+      // Если миграция еще не применена, обновляем только lastMessageAt
+      await prisma.chat.updateMany({
+        where: { id: { in: chatIds } },
+        data: {
+          lastMessageAt: null,
+        },
+      });
+    }
     console.log(`   ✅ Обновлено ${chatIds.length} чатов\n`);
 
     console.log('✅ История чатов с ИИ полностью очищена!');

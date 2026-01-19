@@ -28,6 +28,7 @@
     "generate-icons": "node scripts/generate-icons.mjs",
     "sync:promo-codes": "dotenv -e .env.local -- tsx scripts/sync-all-users-promo-codes.ts",
     "socket": "dotenv -e .env.local -- tsx server/socket-server.ts",
+    "socket:chat": "dotenv -e .env.local -- tsx server/chat-server.ts",
     "socket:prod": "node dist/server/socket-server.js"
   },
   "dependencies": {
