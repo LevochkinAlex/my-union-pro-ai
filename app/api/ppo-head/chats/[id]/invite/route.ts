@@ -124,34 +124,77 @@ export async function POST(
       );
     }
 
-    // Фильтруем уже существующих участников
+    // Проверяем всех участников (включая тех, кто вышел - leftAt !== null)
+    const allParticipants = await prisma.chatParticipant.findMany({
+      where: { chatId },
+      select: { userId: true, leftAt: true },
+    });
+    
     const existingParticipantIds = chat.participants.map((p) => p.userId);
-    const newParticipantIds = participantIds.filter(
-      (id: string) => !existingParticipantIds.includes(id)
-    );
+    const allParticipantIds = allParticipants.map((p) => p.userId);
+    
+    // Разделяем на новых и тех, кто вышел и возвращается
+    const newParticipantIds: string[] = [];
+    const returningParticipantIds: string[] = [];
+    
+    for (const userId of participantIds) {
+      if (existingParticipantIds.includes(userId)) {
+        // Уже активный участник - пропускаем
+        continue;
+      }
+      
+      const existingParticipant = allParticipants.find(p => p.userId === userId);
+      if (existingParticipant && existingParticipant.leftAt) {
+        // Участник вышел ранее - восстанавливаем
+        returningParticipantIds.push(userId);
+      } else if (!existingParticipant) {
+        // Новый участник
+        newParticipantIds.push(userId);
+      }
+    }
 
-    if (newParticipantIds.length === 0) {
+    if (newParticipantIds.length === 0 && returningParticipantIds.length === 0) {
       return NextResponse.json(
         { error: "Все выбранные пользователи уже являются участниками группы" },
         { status: 400 }
       );
     }
 
-    // Получаем информацию о новых участниках для сообщения
+    // Получаем информацию о всех добавляемых участниках для сообщения
+    const allAddingIds = [...newParticipantIds, ...returningParticipantIds];
     const newMembers = await prisma.user.findMany({
-      where: { id: { in: newParticipantIds } },
+      where: { id: { in: allAddingIds } },
       select: { id: true, firstName: true, lastName: true },
     });
 
+    // Восстанавливаем участников, которые ранее вышли
+    if (returningParticipantIds.length > 0) {
+      await prisma.chatParticipant.updateMany({
+        where: {
+          chatId,
+          userId: { in: returningParticipantIds },
+        },
+        data: {
+          leftAt: null,
+          role: "member",
+          invitedById: chairman.id,
+          joinedAt: new Date(),
+        },
+      });
+    }
+
     // Добавляем новых участников
-    await prisma.chatParticipant.createMany({
-      data: newParticipantIds.map((userId: string) => ({
-        chatId,
-        userId,
-        role: "member",
-        invitedById: chairman.id,
-      })),
-    });
+    if (newParticipantIds.length > 0) {
+      await prisma.chatParticipant.createMany({
+        data: newParticipantIds.map((userId: string) => ({
+          chatId,
+          userId,
+          role: "member",
+          invitedById: chairman.id,
+        })),
+        skipDuplicates: true, // Пропускаем дубликаты на случай гонки условий
+      });
+    }
 
     // Формируем имена добавленных участников
     const memberNames = newMembers
@@ -251,7 +294,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      invitedCount: newParticipantIds.length,
+      invitedCount: allAddingIds.length,
       invitedNames: memberNames,
     });
   } catch (error: any) {
