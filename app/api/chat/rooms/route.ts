@@ -12,9 +12,15 @@ export async function GET() {
     }
 
     // Get user's chats from DB with participants info
+    // Only include chats where user is an active participant (not left)
     const chats = await prisma.chat.findMany({
       where: {
-        participants: { some: { userId: session.user.id } }
+        participants: { 
+          some: { 
+            userId: session.user.id,
+            leftAt: null, // User hasn't left the chat
+          } 
+        }
       },
       select: {
         id: true,
@@ -32,6 +38,7 @@ export async function GET() {
           }
         },
         participants: {
+          where: { leftAt: null }, // Only active participants
           include: {
             user: {
               select: {

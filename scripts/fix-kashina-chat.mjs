@@ -102,13 +102,15 @@ async function fixKashinaChat() {
       where: { id: kashina.id },
       select: {
         pushNotificationsEnabled: true,
-        emailNotificationsEnabled: true,
+        emailBotNotifications: true,
+        emailAppealNotifications: true,
       },
     });
 
     console.log(`\n⚙️ Настройки уведомлений:`);
     console.log(`  - Push: ${userSettings?.pushNotificationsEnabled ? 'Включены' : 'Выключены'}`);
-    console.log(`  - Email: ${userSettings?.emailNotificationsEnabled ? 'Включены' : 'Выключены'}`);
+    console.log(`  - Email (бот): ${userSettings?.emailBotNotifications ? 'Включены' : 'Выключены'}`);
+    console.log(`  - Email (обращения): ${userSettings?.emailAppealNotifications ? 'Включены' : 'Выключены'}`);
 
     // Если push выключены, включаем их
     if (!userSettings?.pushNotificationsEnabled) {
