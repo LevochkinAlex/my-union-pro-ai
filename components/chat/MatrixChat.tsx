@@ -735,9 +735,13 @@ export default function MatrixChat() {
       }
 
       if (initialSync || roomList.length > 0) {
+        const filteredRoomList = roomList.filter(r => dbRoomInfo.has(r.roomId));
+        if (filteredRoomList.length !== roomList.length) {
+          console.log('[MatrixChat] Filtered rooms not in DB:', roomList.length - filteredRoomList.length);
+        }
         setRooms(prev => {
           const updated = new Map(prev.map(r => [r.roomId, r]));
-          roomList.forEach(r => updated.set(r.roomId, r));
+          filteredRoomList.forEach(r => updated.set(r.roomId, r));
           const sorted = Array.from(updated.values()).sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
           
           // Calculate total unread count and notify sidebar
@@ -756,7 +760,7 @@ export default function MatrixChat() {
         
         // For rooms with generic names, fetch member info asynchronously
         if (initialSync) {
-          roomList.forEach(async (room) => {
+          filteredRoomList.forEach(async (room) => {
             if (room.name === 'Чат' || room.name === 'Групповой чат' || room.name === 'Личный чат' || !room.avatarUrl) {
               try {
                 const membersData = await matrixFetch(`/rooms/${encodeURIComponent(room.roomId)}/members`);
