@@ -97,18 +97,58 @@ export default function FloatingChatBot() {
     if (!session?.user?.id || isSendingMessageRef.current) return;
 
     try {
-      // Получаем список чатов и ищем чат с ботом
+      // Если chatId уже известен, используем его напрямую
+      if (chatId) {
+        const messagesResponse = await fetch(`/api/chat/${chatId}`);
+        if (messagesResponse.ok) {
+          const messagesData = await messagesResponse.json();
+          const chatMessages = (messagesData.messages || []).map((msg: any) => ({
+            role: msg.senderId === session.user.id ? "user" : "assistant",
+            content: msg.content,
+            timestamp: new Date(msg.createdAt).getTime(),
+            id: msg.id || `${msg.senderId === session.user.id ? "user" : "assistant"}-${msg.id || Date.now()}-${Math.random()}`,
+          }));
+          
+          // Объединяем с существующими сообщениями, избегая дубликатов
+          setMessages((prev) => {
+            // Создаем Set для быстрой проверки дубликатов по ID и содержимому
+            const existingIds = new Set(prev.map(m => m.id).filter(Boolean));
+            const existingContent = new Set(
+              prev.map(m => `${m.role}:${m.content}:${Math.floor(m.timestamp / 1000)}`)
+            );
+            
+            // Добавляем только новые сообщения
+            const newMessages = chatMessages.filter(m => {
+              if (m.id && existingIds.has(m.id)) return false;
+              const contentKey = `${m.role}:${m.content}:${Math.floor(m.timestamp / 1000)}`;
+              return !existingContent.has(contentKey);
+            });
+            
+            if (newMessages.length === 0) return prev;
+            
+            // Объединяем и сортируем по времени
+            const merged = [...prev, ...newMessages].sort((a, b) => a.timestamp - b.timestamp);
+            conversationHistoryRef.current = merged;
+            return merged;
+          });
+          return;
+        }
+      }
+
+      // Если chatId неизвестен, получаем список чатов и ищем чат с ботом
       const chatsResponse = await fetch("/api/chat");
       if (chatsResponse.ok) {
         const chatsData = await chatsResponse.json();
         const botChat = chatsData.chats?.find((chat: any) => 
           chat.otherUser?.email === "ai-assistant@myunion.pro" ||
-          (chat.otherUser?.firstName === "AI" && chat.otherUser?.lastName === "Помощник")
+          (chat.otherUser?.firstName === "AI" && chat.otherUser?.lastName === "Помощник") ||
+          chat.otherUser?.firstName?.includes("AI") ||
+          chat.otherUser?.firstName?.includes("Помощник")
         );
 
         if (botChat) {
           const newChatId = botChat.id;
-          // Обновляем chatId только если он изменился
+          // Обновляем chatId
           if (newChatId !== chatId) {
             setChatId(newChatId);
           }
@@ -144,7 +184,12 @@ export default function FloatingChatBot() {
                   return !existingContent.has(contentKey);
                 });
                 
-                return newMessages.length > 0 ? [...prev, ...newMessages] : prev;
+                if (newMessages.length === 0) return prev;
+                
+                // Объединяем и сортируем по времени
+                const merged = [...prev, ...newMessages].sort((a, b) => a.timestamp - b.timestamp);
+                conversationHistoryRef.current = merged;
+                return merged;
               });
             }
           }
@@ -202,52 +247,71 @@ export default function FloatingChatBot() {
     conversationHistoryRef.current.push(userMsg);
 
     try {
-      const response = await fetch("/api/assistant/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: userMessage,
-        }),
-      });
+      // Если chatId есть, отправляем через /api/chat/[chatId]
+      if (chatId) {
+        const response = await fetch(`/api/chat/${chatId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: userMessage,
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error("Ошибка отправки сообщения");
-      }
-
-      const data = await response.json();
-
-      // Сохраняем chatId если его еще нет
-      if (data.chatId && !chatId) {
-        setChatId(data.chatId);
-      }
-
-      // Добавляем ответ AI с уникальным ID
-      const aiMsgId = `ai-${Date.now()}-${Math.random()}`;
-      const aiMsg: ChatMessage = {
-        role: "assistant",
-        content: data.message,
-        timestamp: Date.now(),
-        id: aiMsgId,
-      };
-
-      setMessages((prev) => {
-        // Проверяем, нет ли уже такого сообщения
-        const exists = prev.some(m => m.id === aiMsgId || (m.role === "assistant" && m.content === data.message && Math.abs(m.timestamp - aiMsg.timestamp) < 2000));
-        if (exists) {
-          return prev; // Не добавляем дубликат
+        if (!response.ok) {
+          throw new Error("Ошибка отправки сообщения");
         }
-        const newMessages = [...prev, aiMsg];
-        // Принудительный скролл после добавления ответа AI
-        setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-        }, 100);
-        return newMessages;
-      });
-      conversationHistoryRef.current.push(aiMsg);
 
-      // Сохраняем chatId если его еще нет
-      // Не перезагружаем историю, так как уже добавили сообщения оптимистично
-      // loadChatHistory вызовется только при следующем открытии чата
+        const data = await response.json();
+
+        // Перезагружаем историю для получения ответа бота
+        setTimeout(() => {
+          loadChatHistory();
+        }, 1000);
+      } else {
+        // Если chatId нет, используем старый API
+        const response = await fetch("/api/assistant/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: userMessage,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Ошибка отправки сообщения");
+        }
+
+        const data = await response.json();
+
+        // Сохраняем chatId если его еще нет
+        if (data.chatId && !chatId) {
+          setChatId(data.chatId);
+        }
+
+        // Добавляем ответ AI с уникальным ID
+        const aiMsgId = `ai-${Date.now()}-${Math.random()}`;
+        const aiMsg: ChatMessage = {
+          role: "assistant",
+          content: data.message,
+          timestamp: Date.now(),
+          id: aiMsgId,
+        };
+
+        setMessages((prev) => {
+          // Проверяем, нет ли уже такого сообщения
+          const exists = prev.some(m => m.id === aiMsgId || (m.role === "assistant" && m.content === data.message && Math.abs(m.timestamp - aiMsg.timestamp) < 2000));
+          if (exists) {
+            return prev; // Не добавляем дубликат
+          }
+          const newMessages = [...prev, aiMsg];
+          // Принудительный скролл после добавления ответа AI
+          setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+          }, 100);
+          return newMessages;
+        });
+        conversationHistoryRef.current.push(aiMsg);
+      }
     } catch (error) {
       console.error("[FloatingChatBot] Error sending message:", error);
       const errorMsg: ChatMessage = {
@@ -286,10 +350,11 @@ export default function FloatingChatBot() {
       {/* Плавающая кнопка - показываем всегда, даже если сессия еще загружается */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 shadow-lg transition-all hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-blue-500 dark:hover:bg-blue-600"
-        aria-label="Открыть чат"
+        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-blue-600 shadow-lg transition-all hover:from-purple-600 hover:to-blue-700 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:from-purple-600 dark:to-blue-700 dark:hover:from-purple-700 dark:hover:to-blue-800"
+        aria-label="Открыть чат с ИИ помощником"
         disabled={!isSessionReady}
       >
+        {/* Иконка ИИ - звездочка/искра */}
         <svg
           className="h-7 w-7 text-white"
           fill="none"
@@ -299,8 +364,8 @@ export default function FloatingChatBot() {
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
-            strokeWidth={2}
-            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+            strokeWidth={1.5}
+            d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
           />
         </svg>
       </button>
