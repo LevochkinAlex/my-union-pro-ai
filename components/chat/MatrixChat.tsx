@@ -130,6 +130,7 @@ export default function MatrixChat() {
   const [orgMembers, setOrgMembers] = useState<Array<{id: string; firstName: string; lastName: string; avatarUrl?: string; matrixUserId?: string}>>([]);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const [memberSearchTerm, setMemberSearchTerm] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(true); // Default open on mobile
   const [connected, setConnected] = useState(false);
   const [replyTo, setReplyTo] = useState<MatrixMessage | null>(null);
@@ -3213,6 +3214,7 @@ export default function MatrixChat() {
                     setGroupName('');
                     setGroupDescription('');
                     setSelectedMembers([]);
+                    setMemberSearchTerm('');
                   }}
                   className="p-1 hover:bg-white/20 rounded-full"
                 >
@@ -3258,13 +3260,41 @@ export default function MatrixChat() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Участники * ({selectedMembers.length} выбрано)
                 </label>
+                {/* Поиск участников */}
+                <div className="mb-2">
+                  <input
+                    type="text"
+                    value={memberSearchTerm}
+                    onChange={(e) => setMemberSearchTerm(e.target.value)}
+                    placeholder="Поиск участников..."
+                    className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 
+                      bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white
+                      focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
                 <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-600">
                   {orgMembers.length === 0 ? (
                     <div className="p-4 text-center text-gray-500 dark:text-gray-400">
                       Загрузка участников...
                     </div>
-                  ) : (
-                    orgMembers.map(member => {
+                  ) : (() => {
+                    // Фильтруем участников по поисковому запросу
+                    const filteredMembers = orgMembers.filter(member => {
+                      if (!memberSearchTerm.trim()) return true;
+                      const fullName = [member.lastName, member.firstName].filter(Boolean).join(' ').toLowerCase();
+                      const searchLower = memberSearchTerm.toLowerCase();
+                      return fullName.includes(searchLower);
+                    });
+
+                    if (filteredMembers.length === 0) {
+                      return (
+                        <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                          Участники не найдены
+                        </div>
+                      );
+                    }
+
+                    return filteredMembers.map(member => {
                       const fullName = [member.lastName, member.firstName].filter(Boolean).join(' ') || 'Пользователь';
                       const isSelected = selectedMembers.includes(member.id);
                       return (
@@ -3286,22 +3316,36 @@ export default function MatrixChat() {
                             }}
                             className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
                           />
-                          {member.avatarUrl ? (
-                            <img 
-                              src={member.avatarUrl} 
-                              alt="" 
-                              className="w-8 h-8 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold">
-                              {fullName.charAt(0)}
-                            </div>
-                          )}
-                          <span className="text-sm text-gray-900 dark:text-white">{fullName}</span>
+                          <Avatar className="h-10 w-10 flex-shrink-0">
+                            {member.avatarUrl ? (
+                              <img 
+                                src={member.avatarUrl} 
+                                alt={fullName}
+                                className="w-full h-full object-cover rounded-full"
+                                onError={(e) => {
+                                  // Fallback на инициалы если изображение не загрузилось
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = 'none';
+                                  const fallback = target.nextElementSibling as HTMLElement;
+                                  if (fallback) fallback.style.display = 'flex';
+                                }}
+                              />
+                            ) : null}
+                            <AvatarFallback className={`bg-gradient-to-br ${
+                              ['from-blue-500 to-blue-600', 'from-purple-500 to-purple-600', 
+                               'from-green-500 to-green-600', 'from-orange-500 to-orange-600',
+                               'from-pink-500 to-pink-600', 'from-cyan-500 to-cyan-600'][
+                                (member.lastName?.charCodeAt(0) || member.firstName?.charCodeAt(0) || 0) % 6
+                              ]
+                            } text-white text-sm font-semibold ${member.avatarUrl ? 'hidden' : ''}`}>
+                              {fullName.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-sm text-gray-900 dark:text-white flex-1">{fullName}</span>
                         </label>
                       );
-                    })
-                  )}
+                    });
+                  })()}
                 </div>
               </div>
             </div>
@@ -3323,8 +3367,14 @@ export default function MatrixChat() {
                 onClick={handleCreateGroup}
                 disabled={creatingGroup || !groupName.trim() || selectedMembers.length === 0}
                 className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-teal-600 
-                  text-white hover:from-green-700 hover:to-teal-700 disabled:opacity-50 
-                  disabled:cursor-not-allowed transition-all"
+                  text-white font-semibold hover:from-green-700 hover:to-teal-700 
+                  disabled:opacity-50 disabled:cursor-not-allowed transition-all
+                  disabled:hover:from-green-600 disabled:hover:to-teal-600"
+                style={{
+                  color: (creatingGroup || !groupName.trim() || selectedMembers.length === 0) 
+                    ? 'rgba(255, 255, 255, 0.7)' 
+                    : 'white'
+                }}
               >
                 {creatingGroup ? 'Создание...' : 'Создать группу'}
               </button>
