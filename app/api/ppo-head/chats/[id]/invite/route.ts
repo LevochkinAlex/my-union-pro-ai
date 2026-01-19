@@ -45,7 +45,12 @@ export async function POST(
     // Проверяем, что чат существует и является групповым
     const chat = await prisma.chat.findUnique({
       where: { id: chatId },
-      include: {
+      select: {
+        id: true,
+        type: true,
+        name: true,
+        matrixRoomId: true,
+        createdById: true, // Добавляем createdById для проверки прав
         participants: {
           where: {
             leftAt: null,
