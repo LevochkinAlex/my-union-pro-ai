@@ -56,12 +56,27 @@ export async function GET(
       matrixUrl = `${MATRIX_SERVER}/_matrix/media/v3/download/${encodeURIComponent(serverName)}/${encodeURIComponent(mediaId)}`;
     }
 
-    // Fetch from Matrix with auth
-    const response = await fetch(matrixUrl, {
-      headers: {
-        'Authorization': `Bearer ${user.matrixAccessToken}`,
-      },
-    });
+    // Fetch from Matrix with auth (with timeout)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    let response: Response;
+    try {
+      response = await fetch(matrixUrl, {
+        headers: {
+          'Authorization': `Bearer ${user.matrixAccessToken}`,
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        console.error(`Matrix media timeout for ${serverName}/${mediaId}`);
+        return NextResponse.json({ error: 'Request timeout' }, { status: 504 });
+      }
+      throw error;
+    }
 
     if (!response.ok) {
       // 404 is normal for missing/deleted media, don't log as error
