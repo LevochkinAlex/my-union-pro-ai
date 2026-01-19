@@ -277,16 +277,31 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials): Promise<User | null> {
         if (!credentials?.adminId) {
+          console.error("[Auth] Restore admin: No adminId provided");
           return null;
         }
 
         try {
-          // Проверяем существование админа и его роль
-          const admin = await prisma.user.findUnique({
-            where: { id: credentials.adminId },
-          });
+          // Добавляем таймаут для запроса к БД
+          const admin = await Promise.race([
+            prisma.user.findUnique({
+              where: { id: credentials.adminId },
+            }),
+            new Promise<null>((_, reject) => 
+              setTimeout(() => reject(new Error("Database query timeout")), 10000)
+            )
+          ]).catch((error) => {
+            console.error("[Auth] Restore admin database error:", error);
+            return null;
+          }) as Awaited<ReturnType<typeof prisma.user.findUnique>> | null;
 
-          if (!admin || admin.role !== "SUPER_ADMIN") {
+          if (!admin) {
+            console.error("[Auth] Restore admin: Admin not found");
+            return null;
+          }
+
+          if (admin.role !== "SUPER_ADMIN") {
+            console.error("[Auth] Restore admin: User is not SUPER_ADMIN");
             return null;
           }
 

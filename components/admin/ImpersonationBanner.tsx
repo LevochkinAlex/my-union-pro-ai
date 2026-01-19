@@ -25,11 +25,18 @@ export default function ImpersonationBanner() {
       const adminId = session.user.originalAdminId;
       
       // Восстанавливаем сессию админа через специальный провайдер
-      const result = await signIn("restore-admin", {
+      // Добавляем таймаут для запроса
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error("Таймаут запроса")), 15000)
+      );
+
+      const signInPromise = signIn("restore-admin", {
         adminId: adminId,
         restoreToken: "restore", // Токен не проверяется строго, только для совместимости
         redirect: false,
       });
+
+      const result = await Promise.race([signInPromise, timeoutPromise]);
 
       if (result?.error) {
         throw new Error(result.error);
@@ -39,7 +46,16 @@ export default function ImpersonationBanner() {
       window.location.href = "/admin/users";
     } catch (error) {
       console.error("[Stop Impersonation] Error:", error);
-      alert(error instanceof Error ? error.message : "Ошибка при выходе из режима impersonation");
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Ошибка при выходе из режима impersonation";
+      
+      // Показываем более информативное сообщение
+      if (errorMessage.includes("Таймаут")) {
+        alert("Превышено время ожидания. Пожалуйста, попробуйте еще раз или перезагрузите страницу.");
+      } else {
+        alert(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
