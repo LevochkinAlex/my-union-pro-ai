@@ -1989,78 +1989,8 @@ model ChatParticipant {
   @@index([role])
 }
 
-// Сообщения в чатах
-model ChatMessage {
-  id String @id @default(cuid())
-
-  chatId String
-  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
-
-  // Отправитель
-  senderId String
-  sender   User   @relation("ChatMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-
-  // Текст сообщения
-  content String @db.Text
-
-  // Ответ на сообщение (reply)
-  replyToId String?
-  replyTo   ChatMessage?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies   ChatMessage[] @relation("MessageReplies")
-
-  // Пересылка сообщения (forward)
-  forwardedFromId String?
-  forwardedFrom   ChatMessage?  @relation("MessageForwards", fields: [forwardedFromId], references: [id], onDelete: SetNull)
-  forwards        ChatMessage[] @relation("MessageForwards")
-
-  // Вложения (файлы, изображения)
-  attachments ChatMessageAttachment[]
-
-  // Прочитано ли сообщение
-  readAt DateTime?
-
-  // Редактирование и удаление
-  editedAt  DateTime?
-  deletedAt DateTime?
-
-  // Реакции на сообщение (JSON: { "emoji": ["userId1", "userId2"], ... })
-  reactions Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([chatId])
-  @@index([senderId])
-  @@index([createdAt])
-  @@index([replyToId])
-  @@index([deletedAt])
-  @@index([chatId, deletedAt, createdAt]) // Составной индекс для оптимизации пагинации
-}
-
-// Вложения к сообщениям в чате
-model ChatMessageAttachment {
-  id String @id @default(cuid())
-
-  messageId String
-  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
-  // Тип вложения
-  type String // "image", "file", "video"
-
-  // Файл
-  fileName     String
-  originalName String
-  filePath     String  @db.Text
-  fileSize     Int
-  mimeType     String?
-
-  // Превью для изображений
-  thumbnailPath String? @db.Text
-
-  createdAt DateTime @default(now())
-
-  @@index([messageId])
-}
+// Сообщения теперь хранятся только в Matrix, не в БД
+// Модели ChatMessage и ChatMessageAttachment удалены
 
 // Посты пользователей (стена)
 model UserPost {
