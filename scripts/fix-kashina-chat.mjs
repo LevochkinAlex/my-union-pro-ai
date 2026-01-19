@@ -79,20 +79,21 @@ async function fixKashinaChat() {
       console.log(`\n✅ Ренат Усманов уже в чате`);
     }
 
-    // Проверяем push-токены для Кашиной
+    // Проверяем push-подписки для Кашиной
     console.log(`\n🔔 Проверяем push-уведомления для ${kashina.firstName} ${kashina.lastName}:`);
     
-    const pushTokens = await prisma.pushNotificationToken.findMany({
+    const pushSubscriptions = await prisma.pushSubscription.findMany({
       where: { userId: kashina.id },
     });
     
-    console.log(`Найдено токенов: ${pushTokens.length}`);
+    console.log(`Найдено подписок: ${pushSubscriptions.length}`);
     
-    if (pushTokens.length === 0) {
-      console.log(`⚠️ У Кашиной нет push-токенов. Нужно, чтобы она включила уведомления в браузере.`);
+    if (pushSubscriptions.length === 0) {
+      console.log(`⚠️ У Кашиной нет push-подписок. Нужно, чтобы она включила уведомления в браузере.`);
     } else {
-      pushTokens.forEach(token => {
-        console.log(`  - ${token.token.substring(0, 20)}... (${token.platform})`);
+      pushSubscriptions.forEach(sub => {
+        console.log(`  - FCM Token: ${sub.fcmToken ? sub.fcmToken.substring(0, 20) + '...' : 'Нет'}`);
+        console.log(`    Endpoint: ${sub.endpoint ? sub.endpoint.substring(0, 30) + '...' : 'Нет'}`);
       });
     }
 
