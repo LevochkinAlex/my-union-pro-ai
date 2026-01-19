@@ -55,24 +55,30 @@ export async function GET(
       deletedAt: null,
     };
 
-    // TODO: Переделать на Matrix API для получения сообщений
-    // Сообщения теперь хранятся в Matrix, не в БД
-    // if (cursor) {
-    //   const cursorMessage = await prisma.chatMessage.findUnique({...});
-    // }
-
-    // Получаем информацию о чате с matrixRoomId
+    // Получаем информацию о чате
     const chatInfo = await prisma.chat.findUnique({
       where: { id: chatId },
       select: {
         id: true,
         type: true,
         name: true,
-        matrixRoomId: true,
+        lastMessageId: true,
+        lastMessageAt: true,
       },
     });
 
-    // Загружаем сообщения
+    // Строим условие WHERE для загрузки сообщений
+    const where: any = {
+      chatId,
+      threadRootId: null, // Загружаем только основные сообщения (не ответы в тредах)
+    };
+
+    // Курсор для пагинации
+    if (cursor) {
+      where.id = direction === "newest" ? { gt: cursor } : { lt: cursor };
+    }
+
+    // Загружаем сообщения из БД
     const messages = await Sentry.startSpan(
       {
         op: "db.query",
@@ -87,11 +93,62 @@ export async function GET(
           ? getCacheKey(`chat:messages:${chatId}`, { limit })
           : null;
 
-        // TODO: Переделать на Matrix API - сообщения теперь хранятся в Matrix
-        const fetchMessages = async () => [] as any[];
+        const fetchMessages = async () => {
+          return await prisma.chatMessage.findMany({
+            where,
+            take: limit,
+            orderBy: { createdAt: direction === "newest" ? "desc" : "asc" },
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  middleName: true,
+                  avatarUrl: true,
+                },
+              },
+              replyTo: {
+                include: {
+                  sender: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                    },
+                  },
+                },
+              },
+              attachments: true,
+              reactions: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      middleName: true,
+                      avatarUrl: true,
+                    },
+                  },
+                },
+              },
+              readBy: {
+                where: { userId },
+                select: { userId: true },
+              },
+              _count: {
+                select: {
+                  threadReplies: true,
+                  readBy: true,
+                },
+              },
+            },
+          });
+        };
 
         if (shouldCache && cacheKey) {
-          return withCache(cacheKey, fetchMessages, 60); // Увеличили кеш до 60 сек
+          return withCache(cacheKey, fetchMessages, 60);
         }
         return fetchMessages();
       }
@@ -145,40 +202,43 @@ export async function GET(
       const normalizedSender = msg.sender ? normalizeUserAvatar(msg.sender) : msg.sender;
       const normalizedReplySender = msg.replyTo?.sender ? normalizeUserAvatar(msg.replyTo.sender) : msg.replyTo?.sender;
       
-      const normalizedMsg = {
-        ...msg,
-        sender: normalizedSender,
-        replyTo: msg.replyTo ? { ...msg.replyTo, sender: normalizedReplySender } : msg.replyTo,
-      };
-
-      if (msg.reactions && typeof msg.reactions === 'object' && !Array.isArray(msg.reactions)) {
-        try {
-          const reactionsWithUsers: Record<string, { userIds: string[]; users: any[] }> = {};
-          Object.entries(msg.reactions).forEach(([emoji, reactionData]: [string, any]) => {
-            let userIds: string[] = [];
-            if (Array.isArray(reactionData)) {
-              userIds = reactionData;
-            } else if (reactionData && typeof reactionData === 'object' && Array.isArray(reactionData.userIds)) {
-              userIds = reactionData.userIds;
-            }
-            
-            if (userIds.length > 0) {
-              reactionsWithUsers[emoji] = {
-                userIds,
-                users: normalizedReactionUsers.filter((u) => userIds.includes(u.id)),
-              };
-            }
-          });
-          return {
-            ...normalizedMsg,
-            reactions: reactionsWithUsers,
-          };
-        } catch (e) {
-          console.error("[chat] Error formatting reactions:", e);
-          return normalizedMsg;
-        }
+      // Форматируем реакции из БД
+      const reactionsWithUsers: Record<string, { userIds: string[]; users: any[] }> = {};
+      if (msg.reactions && Array.isArray(msg.reactions)) {
+        msg.reactions.forEach((reaction: any) => {
+          if (!reactionsWithUsers[reaction.emoji]) {
+            reactionsWithUsers[reaction.emoji] = {
+              userIds: [],
+              users: [],
+            };
+          }
+          reactionsWithUsers[reaction.emoji].userIds.push(reaction.user.id);
+          reactionsWithUsers[reaction.emoji].users.push(normalizeUserAvatar(reaction.user));
+        });
       }
-      return normalizedMsg;
+
+      return {
+        id: msg.id,
+        chatId: msg.chatId,
+        sender: normalizedSender,
+        content: msg.content,
+        messageType: msg.messageType,
+        replyTo: msg.replyTo ? {
+          id: msg.replyTo.id,
+          sender: normalizedReplySender,
+          content: msg.replyTo.content,
+        } : null,
+        threadRootId: msg.threadRootId,
+        threadRepliesCount: msg.threadRootId === null ? msg._count.threadReplies : 0,
+        threadLastReplyAt: msg.threadRootId === null ? msg.threadLastReplyAt : null,
+        attachments: msg.attachments || [],
+        reactions: reactionsWithUsers,
+        readByCount: msg._count.readBy,
+        isRead: msg.readBy?.length > 0,
+        editedAt: msg.editedAt,
+        createdAt: msg.createdAt,
+        updatedAt: msg.updatedAt,
+      };
     });
 
     const duration = Date.now() - startTime;
@@ -251,53 +311,39 @@ export async function POST(
       },
     });
 
-    // TODO: Отправка сообщения через Matrix API
-    // Получаем Matrix токен и отправляем через sendMatrixMessage
-    if (!chat.matrixRoomId) {
-      return NextResponse.json(
-        { error: "Чат не связан с Matrix комнатой" },
-        { status: 400 }
-      );
+    // Получаем параметры запроса
+    const body = await request.json();
+    const { content, replyToId, threadRootId, attachments } = body;
+
+    if (!content || !content.trim()) {
+      return NextResponse.json({ error: "Сообщение не может быть пустым" }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { matrixAccessToken: true, matrixUserId: true },
-    });
-
-    if (!user?.matrixAccessToken) {
-      return NextResponse.json(
-        { error: "Matrix аккаунт не настроен" },
-        { status: 500 }
-      );
-    }
-
-    const { sendMatrixMessage } = await import('@/lib/matrix-messages');
-    const { replyToThread } = await import('@/lib/matrix-threads');
-    let messageEventId: string | null = null;
-
+    // Проверяем replyToId если указан
     if (replyToId) {
-      // Отправляем reply в тред
-      messageEventId = await replyToThread(
-        user.matrixAccessToken,
-        chat.matrixRoomId,
-        replyToId, // Matrix event_id
-        content.trim()
-      );
-    } else {
-      // Обычное сообщение
-      messageEventId = await sendMatrixMessage(
-        user.matrixAccessToken,
-        chat.matrixRoomId,
-        content.trim()
-      );
+      const replyToMessage = await prisma.chatMessage.findUnique({
+        where: { id: replyToId },
+        select: { chatId: true },
+      });
+
+      if (!replyToMessage || replyToMessage.chatId !== chatId) {
+        return NextResponse.json({ error: "Сообщение для ответа не найдено" }, { status: 404 });
+      }
     }
 
-    if (!messageEventId) {
-      return NextResponse.json(
-        { error: "Не удалось отправить сообщение" },
-        { status: 500 }
-      );
+    // Проверяем threadRootId если указан (ответ в треде)
+    if (threadRootId) {
+      const threadRoot = await prisma.chatMessage.findFirst({
+        where: {
+          id: threadRootId,
+          chatId,
+          threadRootId: null, // Должно быть корневым сообщением
+        },
+      });
+
+      if (!threadRoot) {
+        return NextResponse.json({ error: "Тред не найден" }, { status: 404 });
+      }
     }
 
     // Получаем информацию об отправителе
@@ -312,19 +358,105 @@ export async function POST(
       },
     });
 
-    const message = {
-      id: messageEventId,
-      chatId,
-      senderId: userId,
-      content: content.trim(),
-      replyToId: replyToId || null,
-      sender: sender,
-      createdAt: new Date(),
-    };
+    if (!sender) {
+      return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+    }
+
+    // Создаем сообщение в БД
+    const message = await prisma.chatMessage.create({
+      data: {
+        chatId,
+        senderId: userId,
+        content: content.trim(),
+        messageType: "text",
+        replyToId: replyToId || null,
+        threadRootId: threadRootId || null,
+        attachments: attachments
+          ? {
+              create: attachments.map((att: any) => ({
+                type: att.type || "file",
+                url: att.url,
+                name: att.name,
+                size: att.size,
+                mimeType: att.mimeType,
+                thumbnailUrl: att.thumbnailUrl,
+                width: att.width,
+                height: att.height,
+              })),
+            }
+          : undefined,
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            avatarUrl: true,
+          },
+        },
+        replyTo: {
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+        attachments: true,
+      },
+    });
+
+    // Обновляем последнее сообщение в чате
+    await prisma.chat.update({
+      where: { id: chatId },
+      data: {
+        lastMessageId: message.id,
+        lastMessageAt: message.createdAt,
+      },
+    });
+
+    // Если это ответ в треде, обновляем метрики треда
+    if (threadRootId) {
+      const repliesCount = await prisma.chatMessage.count({
+        where: {
+          threadRootId,
+          id: { not: threadRootId }, // Не считаем корневое сообщение
+        },
+      });
+
+      await prisma.chatMessage.update({
+        where: { id: threadRootId },
+        data: {
+          threadRepliesCount: repliesCount + 1,
+          threadLastReplyAt: message.createdAt,
+        },
+      });
+    }
 
     const normalizedMessage = {
-      ...message,
+      id: message.id,
+      chatId: message.chatId,
       sender: normalizeUserAvatar(message.sender),
+      content: message.content,
+      messageType: message.messageType,
+      replyTo: message.replyTo ? {
+        id: message.replyTo.id,
+        sender: normalizeUserAvatar(message.replyTo.sender),
+        content: message.replyTo.content,
+      } : null,
+      threadRootId: message.threadRootId,
+      attachments: message.attachments || [],
+      reactions: {},
+      readByCount: 0,
+      isRead: false,
+      editedAt: message.editedAt,
+      createdAt: message.createdAt,
+      updatedAt: message.updatedAt,
     };
 
     // Получаем получателей
@@ -411,9 +543,18 @@ async function handleBotChat(
 
   if (!bot) return null;
 
-  // TODO: Загружаем историю из Matrix через Matrix API
-  // const chatHistory = await getMatrixMessages(...);
-  const chatHistory: any[] = [];
+  // Загружаем историю чата из БД
+  const chatHistory = await prisma.chatMessage.findMany({
+    where: { chatId },
+    take: 20,
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      senderId: true,
+      content: true,
+      createdAt: true,
+    },
+  });
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -439,7 +580,7 @@ ${formattedSearchInfo ? `### ДАННЫЕ:\n${formattedSearchInfo}` : ""}
 - Используй информацию из данных выше если она есть
 - Будь полезным, дружелюбным и конкретным`;
 
-  const conversationHistory = chatHistory.map((msg) => ({
+  const conversationHistory = chatHistory.reverse().map((msg) => ({
     role: msg.senderId === botUser.id ? "assistant" : "user",
     content: msg.content,
   }));
@@ -453,22 +594,26 @@ ${formattedSearchInfo ? `### ДАННЫЕ:\n${formattedSearchInfo}` : ""}
   const assistantRoute = await import("@/app/api/assistant/chat/route");
   const aiResponse = await assistantRoute.callAI(bot, messages);
 
-  // TODO: Отправляем ответ бота через Matrix API
-  // const botMessageEventId = await sendMatrixMessage(...);
-  const botMessage = {
-    id: 'temp',
-    chatId,
-    senderId: botUser.id,
-    content: aiResponse,
-    createdAt: new Date(),
-    sender: {
-      id: botUser.id,
-      firstName: 'AI',
-      lastName: 'Ассистент',
-      middleName: null,
-      avatarUrl: '/icon.png',
+  // Создаем ответ бота в БД
+  const botMessage = await prisma.chatMessage.create({
+    data: {
+      chatId,
+      senderId: botUser.id,
+      content: aiResponse,
+      messageType: "text",
     },
-  };
+    include: {
+      sender: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          middleName: true,
+          avatarUrl: true,
+        },
+      },
+    },
+  });
 
   // Сохраняем в базу знаний
   saveChatConversationToKnowledgeBase(
@@ -487,11 +632,12 @@ ${formattedSearchInfo ? `### ДАННЫЕ:\n${formattedSearchInfo}` : ""}
     { chatId, messageId: userMessage.id, botMessageId: botMessage.id, botId: bot.id }
   ).catch(console.error);
 
-  // Обновляем чат
+  // Обновляем чат с последним сообщением
   await prisma.chat.update({
     where: { id: chatId },
     data: {
-      lastMessageAt: new Date(),
+      lastMessageId: botMessage.id,
+      lastMessageAt: botMessage.createdAt,
     },
   });
 

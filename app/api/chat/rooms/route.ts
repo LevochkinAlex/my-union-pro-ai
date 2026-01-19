@@ -27,8 +27,31 @@ export async function GET() {
         type: true,
         name: true,
         iconUrl: true,
-        matrixRoomId: true,
+        lastMessageId: true,
         lastMessageAt: true,
+        lastMessage: {
+          select: {
+            id: true,
+            content: true,
+            senderId: true,
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatarUrl: true,
+              },
+            },
+            createdAt: true,
+            threadRootId: true,
+            threadRepliesCount: true,
+            _count: {
+              select: {
+                threadReplies: true,
+              },
+            },
+          },
+        },
         participants: {
           where: { leftAt: null }, // Only active participants
           include: {
@@ -50,17 +73,20 @@ export async function GET() {
     });
 
     // Format response
-    // Сначала получаем информацию о тикетах для чатов с matrixRoomId
-    const matrixRoomIds = chats
-      .filter(c => c.matrixRoomId)
-      .map(c => c.matrixRoomId!)
-      .filter(Boolean);
+    // Получаем информацию о тикетах для чатов
+    const chatIds = chats.map(c => c.id);
     
-    const tickets = matrixRoomIds.length > 0 ? await prisma.ticket.findMany({
-      where: { matrixRoomId: { in: matrixRoomIds } },
+    const tickets = chatIds.length > 0 ? await prisma.ticket.findMany({
+      where: { 
+        OR: [
+          { chatId: { in: chatIds } }, // Старая схема (если есть)
+          { matrixRoomId: { in: chats.filter(c => c.matrixRoomId).map(c => c.matrixRoomId!) } }, // Новая схема
+        ],
+      },
       select: { 
-        matrixRoomId: true,
         id: true,
+        chatId: true,
+        matrixRoomId: true,
         publicId: true,
         status: true,
         resolved: true,
@@ -68,13 +94,19 @@ export async function GET() {
       },
     }) : [];
     
-    const ticketMap = new Map(tickets.map(t => [t.matrixRoomId!, t]));
+    const ticketMap = new Map<string, typeof tickets[0]>();
+    tickets.forEach(t => {
+      if (t.chatId) ticketMap.set(t.chatId, t);
+      if (t.matrixRoomId) {
+        const chat = chats.find(c => c.matrixRoomId === t.matrixRoomId);
+        if (chat) ticketMap.set(chat.id, t);
+      }
+    });
 
     const roomsData = chats
-      .filter(chat => chat.matrixRoomId) // Only return migrated chats
       .map(chat => {
-        // Получаем тикет через matrixRoomId
-        const ticket = ticketMap.get(chat.matrixRoomId!) || null;
+        // Получаем тикет
+        const ticket = ticketMap.get(chat.id) || null;
         const isDirect = chat.participants.length === 2;
         
         // Get the other participant for DM chats
@@ -126,7 +158,8 @@ export async function GET() {
         }
         
         return {
-          matrixRoomId: chat.matrixRoomId,
+          chatId: chat.id, // Добавляем chatId для нового API
+          matrixRoomId: chat.matrixRoomId, // Оставляем для обратной совместимости
           displayName,
           avatarUrl,
           isDirect,
@@ -137,8 +170,14 @@ export async function GET() {
           ticketStatus: ticket?.status || null,
           isTicketCreator: ticket?.userId === session.user.id, // Is current user the ticket creator
           participantCount: chat.participants.length,
-          lastMessage: null, // Сообщения теперь в Matrix
+          lastMessage: chat.lastMessage ? {
+            id: chat.lastMessage.id,
+            content: chat.lastMessage.content,
+            sender: chat.lastMessage.sender,
+            createdAt: chat.lastMessage.createdAt,
+          } : null,
           lastMessageTime: chat.lastMessageAt?.getTime() || null,
+          threadRepliesCount: chat.lastMessage?._count?.threadReplies || 0, // Количество ответов в треде
           participants: chat.participants.map(p => ({
             id: p.user?.id,
             firstName: p.user?.firstName,
