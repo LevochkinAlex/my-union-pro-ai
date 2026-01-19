@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 
 /**
  * Страница успешной авторизации через Email
@@ -25,22 +25,63 @@ function EmailSuccessContent() {
     // Авторизуем пользователя по токену
     const authenticate = async () => {
       try {
+        console.log("[Email Success] Начало авторизации с токеном:", token?.substring(0, 10) + "...");
+        
         const result = await signIn("credentials", {
           loginToken: token,
           redirect: false,
         });
 
+        console.log("[Email Success] Результат signIn:", { ok: result?.ok, error: result?.error });
+
         if (result?.error) {
+          console.error("[Email Success] Ошибка авторизации:", result.error);
           setError("Ошибка авторизации. Попробуйте снова.");
-          setTimeout(() => router.push("/login"), 3000);
-        } else if (result?.ok) {
-          // Успешная авторизация - редирект в dashboard
-          router.push("/dashboard");
+          setTimeout(() => router.push("/login?error=auth_failed"), 3000);
+          return;
         }
+
+        if (!result?.ok) {
+          console.error("[Email Success] signIn вернул не ok");
+          setError("Ошибка авторизации. Попробуйте снова.");
+          setTimeout(() => router.push("/login?error=auth_failed"), 3000);
+          return;
+        }
+
+        // Ждем установки сессии перед редиректом
+        console.log("[Email Success] signIn успешен, ожидаем установки сессии...");
+        
+        // Даем время для установки cookie
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Проверяем сессию несколько раз с интервалом
+        let session = null;
+        for (let i = 0; i < 5; i++) {
+          session = await getSession();
+          if (session?.user?.id) {
+            console.log("[Email Success] Сессия подтверждена, пользователь:", session.user.id);
+            break;
+          }
+          console.log("[Email Success] Попытка", i + 1, "- сессия еще не готова, ждем...");
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        if (!session?.user?.id) {
+          console.error("[Email Success] Сессия не установилась после 5 попыток");
+          setError("Сессия не установилась. Попробуйте снова.");
+          setTimeout(() => router.push("/login?error=session_timeout"), 3000);
+          return;
+        }
+
+        // Успешная авторизация - обновляем роутер и редиректим
+        console.log("[Email Success] Редирект на /dashboard");
+        router.refresh();
+        // Используем window.location для полной перезагрузки страницы и установки всех cookies
+        window.location.href = "/dashboard";
       } catch (err) {
-        console.error("[Email Success] Ошибка:", err);
+        console.error("[Email Success] Исключение при авторизации:", err);
         setError("Произошла ошибка. Попробуйте снова.");
-        setTimeout(() => router.push("/login"), 3000);
+        setTimeout(() => router.push("/login?error=server_error"), 3000);
       }
     };
 
