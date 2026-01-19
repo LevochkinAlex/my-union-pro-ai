@@ -156,22 +156,13 @@ export async function getUserChats(
   const whereConditions: Prisma.ChatWhereInput[] = [];
 
   // Базовое условие: пользователь - участник чата
-  // Поддержка как старой схемы (participant1Id/participant2Id), так и новой (ChatParticipant)
   whereConditions.push({
-    OR: [
-      // Старая схема PRIVATE чатов
-      { participant1Id: userId },
-      { participant2Id: userId },
-      // Новая схема через ChatParticipant
-      {
-        participants: {
-          some: {
-            userId,
-            leftAt: null,
-          },
-        },
+    participants: {
+      some: {
+        userId,
+        leftAt: null,
       },
-    ],
+    },
   });
 
   // Фильтр по типу
@@ -179,10 +170,10 @@ export async function getUserChats(
     whereConditions.push({ type: filter.type });
   }
 
-  // Фильтр по наличию обращения
+  // Фильтр по наличию обращения (через matrixRoomId)
   if (filter?.hasTicket !== undefined) {
     whereConditions.push({
-      ticket: filter.hasTicket ? { isNot: null } : { is: null },
+      matrixRoomId: filter.hasTicket ? { isNot: null } : { is: null },
     });
   }
 
@@ -192,28 +183,6 @@ export async function getUserChats(
       AND: whereConditions,
     },
     include: {
-      // Старая схема
-      participant1: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          middleName: true,
-          avatarUrl: true,
-          phone: true,
-        },
-      },
-      participant2: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          middleName: true,
-          avatarUrl: true,
-          phone: true,
-        },
-      },
-      // Новая схема
       participants: {
         where: { leftAt: null },
         include: {
@@ -229,18 +198,10 @@ export async function getUserChats(
           },
         },
       },
-      // Обращение
-      ticket: {
-        select: {
-          id: true,
-          publicId: true,
-          title: true,
-        },
-      },
       _count: {
         select: {
           participants: true,
-          messages: true,
+          // messages: true, // Модель ChatMessage удалена - все сообщения в Matrix
         },
       },
     },
@@ -276,26 +237,6 @@ export async function getChatById(
   const chat = await prisma.chat.findUnique({
     where: { id: chatId },
     include: {
-      participant1: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          middleName: true,
-          avatarUrl: true,
-          phone: true,
-        },
-      },
-      participant2: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          middleName: true,
-          avatarUrl: true,
-          phone: true,
-        },
-      },
       participants: {
         where: { leftAt: null },
         include: {
@@ -350,30 +291,21 @@ export async function getOrCreatePrivateChat(
     ? [userId1, userId2] 
     : [userId2, userId1];
 
-  // Ищем существующий чат (поддержка обеих схем)
+  // Ищем существующий чат
   let chat = await prisma.chat.findFirst({
     where: {
       type: "PRIVATE",
-      OR: [
-        // Старая схема
+      // Оба пользователя - участники
+      AND: [
         {
-          participant1Id: firstUserId,
-          participant2Id: secondUserId,
+          participants: {
+            some: { userId: firstUserId, leftAt: null },
+          },
         },
-        // Новая схема: оба пользователя - участники
         {
-          AND: [
-            {
-              participants: {
-                some: { userId: firstUserId, leftAt: null },
-              },
-            },
-            {
-              participants: {
-                some: { userId: secondUserId, leftAt: null },
-              },
-            },
-          ],
+          participants: {
+            some: { userId: secondUserId, leftAt: null },
+          },
         },
       ],
     },
@@ -416,9 +348,6 @@ export async function getOrCreatePrivateChat(
     chat = await prisma.chat.create({
       data: {
         type: "PRIVATE",
-        // Оставляем старые поля для обратной совместимости (временно)
-        participant1Id: firstUserId,
-        participant2Id: secondUserId,
         // Создаем участников через ChatParticipant
         participants: {
           create: [
@@ -509,12 +438,13 @@ export async function createGroupChat(
   });
 
   // Если есть обращение, связываем с ним
-  if (options?.ticketId) {
-    await prisma.ticket.update({
-      where: { id: options.ticketId },
-      data: { chatId: chat.id },
-    });
-  }
+  // Тикеты теперь связаны через matrixRoomId, а не chatId
+  // if (options?.ticketId) {
+  //   await prisma.ticket.update({
+  //     where: { id: options.ticketId },
+  //     data: { matrixRoomId: chat.matrixRoomId },
+  //   });
+  // }
 
   return chat;
 }
@@ -649,25 +579,7 @@ export async function markAsRead(chatId: string, userId: string): Promise<void> 
     },
   });
 
-  // Также обновляем старую схему (для совместимости)
-  const chat = await prisma.chat.findUnique({
-    where: { id: chatId },
-    select: { participant1Id: true, participant2Id: true },
-  });
-
-  if (chat) {
-    if (chat.participant1Id === userId) {
-      await prisma.chat.update({
-        where: { id: chatId },
-        data: { participant1ReadAt: now },
-      });
-    } else if (chat.participant2Id === userId) {
-      await prisma.chat.update({
-        where: { id: chatId },
-        data: { participant2ReadAt: now },
-      });
-    }
-  }
+  // Старая схема удалена - используем только ChatParticipant
 }
 
 /**
@@ -683,40 +595,11 @@ export async function getUnreadCount(
     select: { readAt: true },
   });
 
-  // Также проверяем старую схему
-  const chat = await prisma.chat.findUnique({
-    where: { id: chatId },
-    select: {
-      participant1Id: true,
-      participant2Id: true,
-      participant1ReadAt: true,
-      participant2ReadAt: true,
-    },
-  });
-
   let lastReadAt: Date | null = participant?.readAt || null;
-  
-  // Fallback на старую схему
-  if (!lastReadAt && chat) {
-    if (chat.participant1Id === userId) {
-      lastReadAt = chat.participant1ReadAt;
-    } else if (chat.participant2Id === userId) {
-      lastReadAt = chat.participant2ReadAt;
-    }
-  }
 
-  // Считаем непрочитанные
-  const where: any = {
-    chatId,
-    senderId: { not: userId },
-    deletedAt: null,
-  };
-
-  if (lastReadAt) {
-    where.createdAt = { gt: lastReadAt };
-  }
-
-  return prisma.chatMessage.count({ where });
+  // Сообщения теперь хранятся в Matrix, поэтому непрочитанные считаются через Matrix API
+  // TODO: Интегрировать подсчет непрочитанных из Matrix
+  return 0;
 }
 
 /**
@@ -740,18 +623,6 @@ async function getUnreadCountsForChats(
     select: { chatId: true, readAt: true },
   });
 
-  // Получаем чаты для fallback на старую схему
-  const chats = await prisma.chat.findMany({
-    where: { id: { in: chatIds } },
-    select: {
-      id: true,
-      participant1Id: true,
-      participant2Id: true,
-      participant1ReadAt: true,
-      participant2ReadAt: true,
-    },
-  });
-
   // Строим map с временем прочтения
   const readAtMap = new Map<string, Date | null>();
   
@@ -759,36 +630,14 @@ async function getUnreadCountsForChats(
     readAtMap.set(p.chatId, p.readAt);
   }
 
-  // Fallback на старую схему для чатов без ChatParticipant
-  for (const chat of chats) {
-    if (!readAtMap.has(chat.id)) {
-      if (chat.participant1Id === userId) {
-        readAtMap.set(chat.id, chat.participant1ReadAt);
-      } else if (chat.participant2Id === userId) {
-        readAtMap.set(chat.id, chat.participant2ReadAt);
-      }
-    }
-  }
-
-  // Подсчитываем непрочитанные для каждого чата
+  // Сообщения теперь хранятся в Matrix, поэтому непрочитанные считаются через Matrix API
+  // TODO: Интегрировать подсчет непрочитанных из Matrix
   const results = new Map<string, number>();
-
-  // Группируем по наличию/отсутствию readAt для оптимизации
-  const chatsWithReadAt: { chatId: string; readAt: Date }[] = [];
-  const chatsWithoutReadAt: string[] = [];
-
   for (const chatId of chatIds) {
-    const readAt = readAtMap.get(chatId);
-    if (readAt) {
-      chatsWithReadAt.push({ chatId, readAt });
-    } else {
-      chatsWithoutReadAt.push(chatId);
-    }
+    results.set(chatId, 0);
   }
-
-  // Запрос для чатов без readAt (все сообщения непрочитаны)
-  if (chatsWithoutReadAt.length > 0) {
-    const counts = await prisma.chatMessage.groupBy({
+  
+  return results;
       by: ["chatId"],
       where: {
         chatId: { in: chatsWithoutReadAt },
@@ -883,12 +732,7 @@ function formatChatInfo(
       (p: any) => p.userId !== currentUserId
     )?.user;
 
-    // Fallback на старую схему
-    if (!other) {
-      other = chat.participant1Id === currentUserId 
-        ? chat.participant2 
-        : chat.participant1;
-    }
+    // Старая схема удалена - используем только ChatParticipant
 
     if (other) {
       const normalized = normalizeUserAvatar(other);
@@ -1038,21 +882,7 @@ export async function sendMessage(
     },
   });
 
-  // Также для старой схемы
-  if (chat?.participant1Id || chat?.participant2Id) {
-    const updateData: any = {};
-    if (chat.participant1Id === senderId) {
-      updateData.participant2ReadAt = null;
-    } else if (chat.participant2Id === senderId) {
-      updateData.participant1ReadAt = null;
-    }
-    if (Object.keys(updateData).length > 0) {
-      await prisma.chat.update({
-        where: { id: chatId },
-        data: updateData,
-      });
-    }
-  }
+  // Старая схема удалена - используем только ChatParticipant
 
   return {
     ...message,
@@ -1081,22 +911,7 @@ export async function getChatParticipantIds(
     return participants.map((p) => p.userId);
   }
 
-  // Fallback на старую схему
-  const chat = await prisma.chat.findUnique({
-    where: { id: chatId },
-    select: { participant1Id: true, participant2Id: true },
-  });
-
-  if (!chat) return [];
-
-  const ids: string[] = [];
-  if (chat.participant1Id && chat.participant1Id !== excludeUserId) {
-    ids.push(chat.participant1Id);
-  }
-  if (chat.participant2Id && chat.participant2Id !== excludeUserId) {
-    ids.push(chat.participant2Id);
-  }
-
-  return ids;
+  // Старая схема удалена - используем только ChatParticipant
+  return [];
 }
 

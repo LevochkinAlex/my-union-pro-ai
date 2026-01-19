@@ -59,7 +59,7 @@ export async function POST(
     const { id } = await params;
     const { rating, comment } = await request.json();
 
-    // Find ticket by publicId with chat participants
+    // Find ticket by publicId
     const ticket = await prisma.ticket.findFirst({
       where: { 
         publicId: id 
@@ -71,7 +71,6 @@ export async function POST(
         status: true,
         organizationId: true,
         matrixRoomId: true,
-        chatId: true,
         user: { 
           select: { 
             id: true, 
@@ -80,22 +79,6 @@ export async function POST(
             email: true,
           } 
         },
-        chat: {
-          select: {
-            participants: {
-              select: {
-                userId: true,
-                user: {
-                  select: { 
-                    id: true, 
-                    email: true,
-                    firstName: true,
-                  }
-                }
-              }
-            }
-          }
-        }
       },
     });
 
@@ -142,9 +125,23 @@ export async function POST(
     }
 
     // Get all chat participants (excluding the ticket creator)
-    const participantUserIds = ticket.chat?.participants
-      ?.map(p => p.userId)
-      .filter(uid => uid !== session.user.id) || [];
+    let participantUserIds: string[] = [];
+    if (ticket.matrixRoomId) {
+      const chat = await prisma.chat.findUnique({
+        where: { matrixRoomId: ticket.matrixRoomId },
+        select: {
+          participants: {
+            where: { leftAt: null },
+            select: {
+              userId: true,
+            },
+          },
+        },
+      });
+      participantUserIds = chat?.participants
+        ?.map(p => p.userId)
+        .filter(uid => uid !== session.user.id) || [];
+    }
 
     // Send notifications to all participants
     if (participantUserIds.length > 0) {

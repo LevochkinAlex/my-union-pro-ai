@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
         _count: {
           select: {
             participants: true,
-            messages: true,
+            // messages: true, // Модель ChatMessage удалена - все сообщения в Matrix
           },
         },
       },

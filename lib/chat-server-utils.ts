@@ -26,6 +26,7 @@ export async function getOrCreatePrivateChat(
 }
 
 /**
+ * @deprecated Эта функция больше не используется. Сообщения отправляются через Matrix API.
  * Отправляет сообщение в чат и обновляет последнее сообщение
  * @param chatId ID чата
  * @param senderId ID отправителя
@@ -36,40 +37,21 @@ export async function sendChatMessage(
   senderId: string,
   content: string
 ) {
-  // Получаем информацию о чате для определения, кого пометить как непрочитанное
-  const chat = await prisma.chat.findUnique({
+  // DEPRECATED: Эта функция больше не используется
+  // Сообщения теперь отправляются через Matrix API
+  // TODO: Удалить все вызовы этой функции из кода
+  
+  console.warn('[sendChatMessage] DEPRECATED: This function is no longer used. Messages are sent via Matrix API.');
+  
+  // Обновляем lastMessageAt в чате
+  await prisma.chat.update({
     where: { id: chatId },
-    select: { participant1Id: true, participant2Id: true },
+    data: {
+      lastMessageAt: new Date(),
+    },
   });
 
-  // Определяем, кого пометить как непрочитанное
-  const updateData: any = {
-    lastMessageAt: new Date(),
-    lastMessage: content.length > 100 ? content.substring(0, 100) + "..." : content,
-  };
-
-  if (chat?.participant1Id === senderId) {
-    updateData.participant2ReadAt = null;
-  } else if (chat?.participant2Id === senderId) {
-    updateData.participant1ReadAt = null;
-  }
-
-  // Создаем сообщение и обновляем чат параллельно
-  await Promise.all([
-    prisma.chatMessage.create({
-      data: {
-        chatId,
-        senderId,
-        content,
-      },
-    }),
-    prisma.chat.update({
-      where: { id: chatId },
-      data: updateData,
-    }),
-  ]);
-
-  // Также сбрасываем readAt в ChatParticipant
+  // Сбрасываем readAt в ChatParticipant для других участников
   await prisma.chatParticipant.updateMany({
     where: {
       chatId,

@@ -56,9 +56,6 @@ export async function POST(
             },
           },
         },
-        ticket: {
-          select: { id: true, publicId: true },
-        },
       },
     });
 

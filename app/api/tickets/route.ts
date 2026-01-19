@@ -375,7 +375,7 @@ export async function POST(request: NextRequest) {
         priority: ticket.priority,
         title: ticket.title,
         createdAt: ticket.createdAt,
-        chatId,
+        // chatId: ticket.chatId, // Тикеты теперь связаны через matrixRoomId
       },
     });
   } catch (error) {

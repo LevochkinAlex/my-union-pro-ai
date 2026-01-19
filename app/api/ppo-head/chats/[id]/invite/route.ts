@@ -55,13 +55,6 @@ export async function POST(
             role: true,
           },
         },
-        ticket: {
-          select: {
-            id: true,
-            publicId: true,
-            title: true,
-          },
-        },
       },
     });
 
@@ -148,29 +141,35 @@ export async function POST(
     // TODO: Отправляем системное сообщение через Matrix API
     // await sendMatrixMessage(...);
 
-    // Обновляем lastMessage в чате
+    // Обновляем lastMessageAt в чате
     await prisma.chat.update({
       where: { id: chatId },
       data: {
         lastMessageAt: new Date(),
-        lastMessage: systemMessage,
       },
     });
 
-    // Log action if this is a ticket chat
-    if (chat.ticket?.id) {
-      await prisma.ticketActionLog.create({
-        data: {
-          ticketId: chat.ticket.id,
-          userId: chairman.id,
-          actionType: 'participant_added',
-          description: `Добавлены участники: ${memberNames}`,
-          metadata: {
-            addedUserIds: newParticipantIds,
-            addedBy: chairman.id,
-          },
-        },
+    // Log action if this is a ticket chat (находим тикет по matrixRoomId)
+    if (chat.matrixRoomId) {
+      const ticket = await prisma.ticket.findUnique({
+        where: { matrixRoomId: chat.matrixRoomId },
+        select: { id: true },
       });
+      
+      if (ticket) {
+        await prisma.ticketActionLog.create({
+          data: {
+            ticketId: ticket.id,
+            userId: chairman.id,
+            actionType: 'participant_added',
+            description: `Добавлены участники: ${memberNames}`,
+            metadata: {
+              addedUserIds: newParticipantIds,
+              addedBy: chairman.id,
+            },
+          },
+        });
+      }
     }
 
     // Инвалидируем кеш чата и списка чатов для всех новых участников
@@ -186,13 +185,17 @@ export async function POST(
     
     // Определяем название чата и URL для уведомления
     // Если чат связан с обращением, используем название "Обращение #..."
+    let ticket = null;
+    if (chat.matrixRoomId) {
+      ticket = await prisma.ticket.findUnique({
+        where: { matrixRoomId: chat.matrixRoomId },
+        select: { id: true, publicId: true },
+      });
+    }
+    
     const isAppealChat = !!ticket;
-    const ticketWithPublicId = ticket ? await prisma.ticket.findUnique({
-      where: { id: ticket.id },
-      select: { publicId: true },
-    }) : null;
-    const chatName = isAppealChat && ticketWithPublicId?.publicId
-      ? `Обращение #${ticketWithPublicId.publicId}`
+    const chatName = isAppealChat && ticket?.publicId
+      ? `Обращение #${ticket.publicId}`
       : (chat.name || "группу");
     
     // URL для уведомления: если это обращение, ссылаемся на страницу обращения, иначе на чат

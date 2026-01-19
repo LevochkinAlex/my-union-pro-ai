@@ -64,16 +64,15 @@ export async function GET(
         select: {
           participants: {
             where: {
-              userId: session.user.id,
               leftAt: null,
             },
-            select: { id: true },
+            select: { userId: true },
           },
         },
       });
       
       isChatParticipant = !!(
-        chat?.participants?.some(p => p.userId === session.user.id && !p.leftAt) ||
+        chat?.participants?.some(p => p.userId === session.user.id) ||
         (chat?.participants && chat.participants.length > 0)
       );
     }
