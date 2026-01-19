@@ -1948,12 +1948,12 @@ model Chat {
   participants ChatParticipant[]
 
   // Последнее сообщение (для сортировки)
-  lastMessageId   String?
-  lastMessage     ChatMessage? @relation(fields: [lastMessageId], references: [id], onDelete: SetNull)
+  lastMessageId   String? @unique
+  lastMessage     ChatMessage? @relation("ChatLastMessage", fields: [lastMessageId], references: [id], onDelete: SetNull)
   lastMessageAt   DateTime?
   
   // Все сообщения чата
-  messages        ChatMessage[]
+  messages        ChatMessage[] @relation("ChatMessages")
   
   // Архивирован ли чат
   archivedAt DateTime?
@@ -2004,7 +2004,7 @@ model ChatParticipant {
 model ChatMessage {
   id          String   @id @default(cuid())
   chatId      String
-  chat        Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chat        Chat     @relation("ChatMessages", fields: [chatId], references: [id], onDelete: Cascade)
   senderId    String
   sender      User     @relation("ChatMessageSender", fields: [senderId], references: [id])
   content     String   @db.Text
@@ -2038,6 +2038,9 @@ model ChatMessage {
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  
+  // Обратная связь для lastMessage в Chat
+  chatAsLastMessage Chat? @relation("ChatLastMessage")
   
   @@index([chatId, createdAt])
   @@index([chatId, threadRootId, createdAt]) // Для загрузки тредов
