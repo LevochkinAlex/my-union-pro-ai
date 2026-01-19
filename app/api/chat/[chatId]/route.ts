@@ -496,7 +496,6 @@ ${formattedSearchInfo ? `### ДАННЫЕ:\n${formattedSearchInfo}` : ""}
   await prisma.chat.update({
     where: { id: chatId },
     data: {
-      lastMessage: aiResponse.substring(0, 200),
       lastMessageAt: new Date(),
     },
   });

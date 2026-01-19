@@ -100,7 +100,7 @@ export async function POST(
       // Update chat last message
       await prisma.chat.update({
         where: { id: chatId },
-        data: { lastMessage: null, lastMessageAt: null },
+        data: { lastMessageAt: null },
       });
 
       return NextResponse.json({ success: true, mode: 'all' });
