@@ -453,24 +453,22 @@ ${formattedSearchInfo ? `### ДАННЫЕ:\n${formattedSearchInfo}` : ""}
   const assistantRoute = await import("@/app/api/assistant/chat/route");
   const aiResponse = await assistantRoute.callAI(bot, messages);
 
-  const botMessage = await prisma.chatMessage.create({
-    data: {
-      chatId,
-      senderId: botUser.id,
-      content: aiResponse,
-    } as any,
-    include: {
-      sender: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          middleName: true,
-          avatarUrl: true,
-        },
-      },
+  // TODO: Отправляем ответ бота через Matrix API
+  // const botMessageEventId = await sendMatrixMessage(...);
+  const botMessage = {
+    id: 'temp',
+    chatId,
+    senderId: botUser.id,
+    content: aiResponse,
+    createdAt: new Date(),
+    sender: {
+      id: botUser.id,
+      firstName: 'AI',
+      lastName: 'Ассистент',
+      middleName: null,
+      avatarUrl: '/icon.png',
     },
-  });
+  };
 
   // Сохраняем в базу знаний
   saveChatConversationToKnowledgeBase(
@@ -549,11 +547,29 @@ async function sendNotifications(
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
     const messagePreview = content.trim().substring(0, 100);
 
-    // Если чат связан с обращением (есть ticketId), создаем уведомление об обращении
-    // Личные сообщения (без ticketId) обрабатываются как обычные сообщения
+    // Если чат связан с обращением (проверяем через matrixRoomId), создаем уведомление об обращении
+    // Личные сообщения обрабатываются как обычные сообщения
     // Уведомления отправляются ТОЛЬКО участникам конкретного чата (recipientIds), а не всем председателям
-    if (chat?.ticket) {
-      const ticket = chat.ticket;
+    let ticket = null;
+    if (chat?.matrixRoomId) {
+      ticket = await prisma.ticket.findUnique({
+        where: { matrixRoomId: chat.matrixRoomId },
+        select: {
+          id: true,
+          publicId: true,
+          title: true,
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+              middleName: true,
+            },
+          },
+        },
+      });
+    }
+    
+    if (ticket) {
       const ticketOwnerName = ticket.user
         ? [ticket.user.lastName, ticket.user.firstName, ticket.user.middleName].filter(Boolean).join(" ") || "Пользователь"
         : "Пользователь";
