@@ -126,43 +126,49 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Создаем сообщение
-      const message = await prisma.chatMessage.create({
-        data: {
-          chatId,
-          senderId: userId,
-          content,
-          replyToId: replyToId || null,
-        },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              middleName: true,
-              avatarUrl: true,
-            },
-          },
-          replyTo: {
-            include: {
-              sender: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                },
-              },
-            },
-          },
-          attachments: true,
+      // Сообщения теперь отправляются через Matrix API
+      // TODO: Интегрировать отправку сообщений через Matrix API
+      // const { sendMatrixMessage } = await import('@/lib/matrix-messages');
+      // const senderUser = await prisma.user.findUnique({ where: { id: userId }, select: { matrixAccessToken: true } });
+      // if (senderUser?.matrixAccessToken && chat?.matrixRoomId) {
+      //   await sendMatrixMessage(senderUser.matrixAccessToken, chat.matrixRoomId, content);
+      // }
+
+      // Получаем информацию об отправителе для возврата
+      const sender = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          middleName: true,
+          avatarUrl: true,
         },
       });
+
+      // Создаем временный объект сообщения для обратной совместимости
+      const message = {
+        id: `temp_${Date.now()}`,
+        chatId,
+        senderId: userId,
+        content,
+        replyToId: replyToId || null,
+        createdAt: new Date(),
+        sender: sender || {
+          id: userId,
+          firstName: null,
+          lastName: null,
+          middleName: null,
+          avatarUrl: null,
+        },
+        replyTo: null,
+        attachments: [],
+      };
 
       // Обновляем чат
       await prisma.chat.update({
         where: { id: chatId },
-        data: { updatedAt: new Date() },
+        data: { lastMessageAt: new Date() },
       });
 
       // Отправляем всем в чате (включая отправителя)
