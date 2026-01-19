@@ -290,18 +290,20 @@ export default function MatrixChat() {
               }
               // Close mobile menu to show chat
               setIsMobileMenuOpen(false);
-              setSelectedRoomId(data.chat.matrixRoomId);
+              // Use handleSelectRoom to properly load messages and update UI
+              await handleSelectRoom(data.chat.matrixRoomId);
               setUrlChatHandled(true);
             } else {
               console.log('[MatrixChat] Room not found in loaded rooms, matrixRoomId:', data.chat.matrixRoomId);
               console.log('[MatrixChat] Available rooms:', rooms.map(r => r.roomId).slice(0, 5));
               // Try to wait a bit more and retry
-              setTimeout(() => {
+              setTimeout(async () => {
                 const retryRoom = rooms.find(r => r.roomId === data.chat.matrixRoomId);
                 if (retryRoom) {
                   console.log('[MatrixChat] Found room on retry, opening chat');
                   setIsMobileMenuOpen(false);
-                  setSelectedRoomId(data.chat.matrixRoomId);
+                  // Use handleSelectRoom to properly load messages and update UI
+                  await handleSelectRoom(data.chat.matrixRoomId);
                   setUrlChatHandled(true);
                 } else {
                   console.error('[MatrixChat] Room still not found after retry');
@@ -325,7 +327,7 @@ export default function MatrixChat() {
     }
     
     openChatFromUrl();
-  }, [urlChatId, urlChatHandled, rooms, dbRoomInfo, dbRoomInfoLoaded]);
+  }, [urlChatId, urlChatHandled, rooms, dbRoomInfo, dbRoomInfoLoaded, handleSelectRoom]);
 
   // Load room info from our database (proper names, avatars)
   const loadDbRoomInfo = useCallback(async () => {
