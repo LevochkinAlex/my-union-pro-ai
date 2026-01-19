@@ -30,7 +30,15 @@ export async function GET(
     }
 
     const { path } = await params;
-    const mediaPath = path.join('/');
+    
+    // Path format: ['matrix.myunion.pro', 'elyDS...'] or ['matrix.myunion.pro', 'part1', 'part2', ...]
+    // We need serverName and mediaId
+    if (path.length < 2) {
+      return NextResponse.json({ error: 'Invalid media path' }, { status: 400 });
+    }
+    
+    const serverName = path[0];
+    const mediaId = path.slice(1).join('/'); // Join remaining parts in case mediaId has slashes
     
     // Get thumbnail params if present
     const { searchParams } = new URL(request.url);
@@ -38,14 +46,14 @@ export async function GET(
     const height = searchParams.get('height');
     const method = searchParams.get('method');
     
-    // Build Matrix URL
+    // Build Matrix URL - use v3 API format
     let matrixUrl: string;
     if (width && height) {
       // Thumbnail request
-      matrixUrl = `${MATRIX_SERVER}/_matrix/client/v1/media/thumbnail/${mediaPath}?width=${width}&height=${height}&method=${method || 'scale'}`;
+      matrixUrl = `${MATRIX_SERVER}/_matrix/media/v3/thumbnail/${encodeURIComponent(serverName)}/${encodeURIComponent(mediaId)}?width=${width}&height=${height}&method=${method || 'scale'}`;
     } else {
       // Full download
-      matrixUrl = `${MATRIX_SERVER}/_matrix/client/v1/media/download/${mediaPath}`;
+      matrixUrl = `${MATRIX_SERVER}/_matrix/media/v3/download/${encodeURIComponent(serverName)}/${encodeURIComponent(mediaId)}`;
     }
 
     // Fetch from Matrix with auth
@@ -56,8 +64,10 @@ export async function GET(
     });
 
     if (!response.ok) {
-      console.error(`Matrix media error: ${response.status} for ${mediaPath}`);
-      return NextResponse.json({ error: 'Media not found' }, { status: response.status });
+      console.error(`Matrix media error: ${response.status} for ${serverName}/${mediaId}, URL: ${matrixUrl}`);
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error(`Matrix media error response: ${errorText}`);
+      return NextResponse.json({ error: 'Media not found', details: errorText }, { status: response.status });
     }
 
     // Get content type
