@@ -43,36 +43,6 @@ export async function POST(
       { error: "Реакции временно недоступны (миграция на Matrix API)" },
       { status: 501 }
     );
-
-    // Получаем информацию о пользователях
-    const allUserIds = new Set<string>();
-    Object.values(updatedReactions).forEach((userIds) => {
-      userIds.forEach((id) => allUserIds.add(id));
-    });
-
-    const users = await prisma.user.findMany({
-      where: { id: { in: Array.from(allUserIds) } },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        middleName: true,
-        avatarUrl: true,
-      },
-    });
-
-    // Формируем ответ
-    const reactionsWithUsers: Record<string, { userIds: string[]; users: typeof users }> = {};
-    Object.entries(updatedReactions).forEach(([emojiKey, userIds]) => {
-      if (userIds.length > 0) {
-        reactionsWithUsers[emojiKey] = {
-          userIds,
-          users: users.filter((u) => userIds.includes(u.id)),
-        };
-      }
-    });
-
-    return NextResponse.json({ reactions: reactionsWithUsers });
   } catch (error: any) {
     console.error("[chat] POST reaction Error:", error);
     return NextResponse.json(
