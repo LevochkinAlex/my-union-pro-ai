@@ -272,7 +272,8 @@ export async function POST(
       );
     }
 
-    const { sendMatrixMessage, replyToThread } = await import('@/lib/matrix-messages');
+    const { sendMatrixMessage } = await import('@/lib/matrix-messages');
+    const { replyToThread } = await import('@/lib/matrix-threads');
     let messageEventId: string | null = null;
 
     if (replyToId) {
