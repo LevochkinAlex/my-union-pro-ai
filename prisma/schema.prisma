@@ -243,6 +243,12 @@ model User {
   chatParticipants    ChatParticipant[] @relation("ChatParticipants")
   // Приглашенные в чаты
   invitedToChats      ChatParticipant[] @relation("ChatInviter")
+  // Сообщения в чатах
+  chatMessages        ChatMessage[] @relation("ChatMessageSender")
+  // Реакции на сообщения
+  messageReactions    ChatMessageReaction[] @relation("ChatMessageReactions")
+  // Прочитанные сообщения
+  messageReads        ChatMessageRead[] @relation("ChatMessageReads")
 
   // Посты пользователя
   posts        UserPost[]    @relation("UserPostAuthor")
@@ -1941,8 +1947,13 @@ model Chat {
   // Участники чата (используется для всех типов чатов)
   participants ChatParticipant[]
 
-  // Последнее сообщение (для сортировки) - обновляется из Matrix
-  lastMessageAt DateTime?
+  // Последнее сообщение (для сортировки)
+  lastMessageId   String?
+  lastMessage     ChatMessage? @relation(fields: [lastMessageId], references: [id], onDelete: SetNull)
+  lastMessageAt   DateTime?
+  
+  // Все сообщения чата
+  messages        ChatMessage[]
   
   // Архивирован ли чат
   archivedAt DateTime?
@@ -1989,8 +2000,87 @@ model ChatParticipant {
   @@index([role])
 }
 
-// Сообщения теперь хранятся только в Matrix, не в БД
-// Модели ChatMessage и ChatMessageAttachment удалены
+// Сообщения чатов (заменили Matrix на собственный сервер)
+model ChatMessage {
+  id          String   @id @default(cuid())
+  chatId      String
+  chat        Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  senderId    String
+  sender      User     @relation("ChatMessageSender", fields: [senderId], references: [id])
+  content     String   @db.Text
+  messageType String   @default("text") // text, image, file, video, audio
+  
+  // Для ответов
+  replyToId   String?
+  replyTo     ChatMessage? @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies     ChatMessage[] @relation("MessageReplies")
+  
+  // Редактирование
+  editedAt    DateTime?
+  
+  // Вложения
+  attachments ChatMessageAttachment[]
+  
+  // Реакции
+  reactions   ChatMessageReaction[]
+  
+  // Прочитано кем
+  readBy      ChatMessageRead[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([chatId, createdAt])
+  @@index([senderId])
+  @@index([replyToId])
+}
+
+model ChatMessageAttachment {
+  id          String      @id @default(cuid())
+  messageId   String
+  message     ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  type        String      // image, file, video, audio
+  url         String
+  name        String
+  size        Int?
+  mimeType    String?
+  thumbnailUrl String?
+  width       Int?
+  height      Int?
+  
+  createdAt   DateTime    @default(now())
+  
+  @@index([messageId])
+}
+
+model ChatMessageReaction {
+  id          String      @id @default(cuid())
+  messageId   String
+  message     ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User        @relation("ChatMessageReactions", fields: [userId], references: [id])
+  emoji       String      // 🎉, 👍, ❤️ и т.д.
+  
+  createdAt   DateTime    @default(now())
+  
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@index([userId])
+}
+
+model ChatMessageRead {
+  id          String      @id @default(cuid())
+  messageId   String
+  message     ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User        @relation("ChatMessageReads", fields: [userId], references: [id])
+  
+  readAt      DateTime    @default(now())
+  
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+}
 
 // Посты пользователей (стена)
 model UserPost {
