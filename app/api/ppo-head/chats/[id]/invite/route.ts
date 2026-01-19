@@ -78,14 +78,34 @@ export async function POST(
     }
 
     // Проверяем, что Председатель является создателем или админом группы
+    // Если createdById не указан (старые чаты), разрешаем если пользователь - админ группы
     const isAdmin = chat.createdById === chairman.id || 
+      (chat.createdById === null && chat.participants.some(p => p.userId === chairman.id && p.role === "admin")) ||
       chat.participants.some(p => p.userId === chairman.id && p.role === "admin");
 
     if (!isAdmin) {
-      return NextResponse.json(
-        { error: "Только администратор группы может приглашать участников" },
-        { status: 403 }
-      );
+      // Для обращений (тикетов) разрешаем председателю добавлять участников
+      const isTicketChat = !!chat.matrixRoomId;
+      if (!isTicketChat) {
+        return NextResponse.json(
+          { error: "Только администратор группы может приглашать участников" },
+          { status: 403 }
+        );
+      }
+      // Если это обращение и председатель еще не админ, делаем его админом
+      const chairmanParticipant = chat.participants.find(p => p.userId === chairman.id);
+      if (!chairmanParticipant || chairmanParticipant.role !== "admin") {
+        // Обновляем роль председателя на админа
+        await prisma.chatParticipant.updateMany({
+          where: {
+            chatId,
+            userId: chairman.id,
+          },
+          data: {
+            role: "admin",
+          },
+        });
+      }
     }
 
     // Проверяем, что все участники принадлежат организации Председателя
