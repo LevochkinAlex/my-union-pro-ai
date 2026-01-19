@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
         middleName: true,
         email: true,
         phone: true,
+        avatarUrl: true,
         membershipStatus: true,
         createdAt: true,
         documents: {
