@@ -71,6 +71,20 @@ export default function FloatingChatBot() {
     }
   }, [isOpen, session?.user?.id]);
 
+  // Периодически синхронизируем сообщения с основным чатом
+  useEffect(() => {
+    if (!isOpen || !chatId || !session?.user?.id) return;
+
+    // Синхронизируем каждые 3 секунды, если чат открыт
+    const syncInterval = setInterval(() => {
+      if (!isSendingMessageRef.current) {
+        loadChatHistory();
+      }
+    }, 3000);
+
+    return () => clearInterval(syncInterval);
+  }, [isOpen, chatId, session?.user?.id]);
+
   // Автоскролл к последнему сообщению
   useEffect(() => {
     if (isOpen && (messages.length > 0 || isLoading)) {
