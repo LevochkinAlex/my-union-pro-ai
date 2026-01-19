@@ -145,13 +145,8 @@ export async function POST(
       ? `👤 ${memberNames} добавлен(а) в группу`
       : `👥 Добавлены участники: ${memberNames}`;
 
-    await prisma.chatMessage.create({
-      data: {
-        chatId,
-        senderId: chairman.id,
-        content: systemMessage,
-      },
-    });
+    // TODO: Отправляем системное сообщение через Matrix API
+    // await sendMatrixMessage(...);
 
     // Обновляем lastMessage в чате
     await prisma.chat.update({

@@ -121,13 +121,8 @@ export async function POST(
     // Создаём системное сообщение в чате
     const systemMessage = `👤 ${participantName} удалён из группы`;
 
-    await prisma.chatMessage.create({
-      data: {
-        chatId,
-        senderId: chairman.id,
-        content: systemMessage,
-      },
-    });
+    // TODO: Отправляем системное сообщение через Matrix API
+    // await sendMatrixMessage(...);
 
     // Обновляем lastMessage в чате
     await prisma.chat.update({

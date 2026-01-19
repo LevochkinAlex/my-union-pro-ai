@@ -54,16 +54,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Сообщение не может быть пустым" }, { status: 400 });
     }
 
-    // Проверяем сообщение
-    const message = await prisma.chatMessage.findUnique({
-      where: { id: messageId },
-      select: {
-        senderId: true,
-        chatId: true,
-        deletedAt: true,
-        attachments: true,
-      },
-    });
+    // TODO: Получаем сообщение из Matrix API
+    // const message = await getMatrixMessage(...);
+    return NextResponse.json(
+      { error: "Редактирование сообщений временно недоступно (миграция на Matrix API)" },
+      { status: 501 }
+    );
+
+    /* Временная заглушка
+    const message = null as any;
 
     if (!message) {
       return NextResponse.json({ error: "Сообщение не найдено" }, { status: 404 });

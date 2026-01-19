@@ -126,22 +126,18 @@ export async function PUT(
         systemMessage += `\n\n💬 Комментарий: ${comment}`;
       }
 
-      await prisma.chatMessage.create({
-        data: {
-          chatId: ticket.chatId,
-          senderId: chairman.id,
-          content: systemMessage,
-        },
-      });
-
-      // Обновляем lastMessage в чате
-      await prisma.chat.update({
-        where: { id: ticket.chatId },
-        data: {
-          lastMessageAt: new Date(),
-          lastMessage: `${emoji} Статус: ${STATUS_NAMES[status] || status}`,
-        },
-      });
+      // TODO: Отправляем системное сообщение через Matrix API в тред обращения
+      // await sendMatrixMessage(...);
+      
+      // Обновляем lastMessageAt в чате
+      if (ticket.chatId) {
+        await prisma.chat.update({
+          where: { id: ticket.chatId },
+          data: {
+            lastMessageAt: new Date(),
+          },
+        });
+      }
     }
 
     // Отправляем уведомление пользователю

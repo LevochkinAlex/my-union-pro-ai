@@ -37,69 +37,15 @@ export async function POST(
       throw error;
     }
 
-    // Получаем сообщение
-    const message = await prisma.chatMessage.findUnique({
-      where: { id: messageId },
-      select: {
-        id: true,
-        chatId: true,
-        reactions: true,
-      },
-    });
+    // TODO: Реакции теперь обрабатываются через Matrix API
+    // Matrix поддерживает аннотации (реакции) через m.annotation события
+    return NextResponse.json(
+      { error: "Реакции временно недоступны (миграция на Matrix API)" },
+      { status: 501 }
+    );
 
-    if (!message) {
-      return NextResponse.json({ error: "Сообщение не найдено" }, { status: 404 });
-    }
-
-    if (message.chatId !== chatId) {
-      return NextResponse.json({ error: "Сообщение не принадлежит этому чату" }, { status: 403 });
-    }
-
-    // Нормализуем реакции
-    const rawReactions = (message.reactions as Record<string, string[] | { userIds: string[] }> | null) || {};
-    const reactions: Record<string, string[]> = {};
-    
-    Object.entries(rawReactions).forEach(([emojiKey, reactionData]) => {
-      if (Array.isArray(reactionData)) {
-        reactions[emojiKey] = reactionData;
-      } else if (reactionData && typeof reactionData === 'object' && Array.isArray(reactionData.userIds)) {
-        reactions[emojiKey] = reactionData.userIds;
-      }
-    });
-
-    // Обновляем реакции (одна реакция на сообщение)
-    const updatedReactions: Record<string, string[]> = {};
-    let userHadThisEmoji = false;
-    
-    Object.entries(reactions).forEach(([existingEmoji, userIds]) => {
-      if (existingEmoji === emoji && userIds.includes(userId)) {
-        userHadThisEmoji = true;
-        const filtered = userIds.filter((id) => id !== userId);
-        if (filtered.length > 0) {
-          updatedReactions[existingEmoji] = filtered;
-        }
-      } else {
-        const filtered = userIds.filter((id) => id !== userId);
-        if (filtered.length > 0) {
-          updatedReactions[existingEmoji] = filtered;
-        }
-      }
-    });
-
-    if (!userHadThisEmoji) {
-      if (updatedReactions[emoji]) {
-        updatedReactions[emoji].push(userId);
-      } else {
-        updatedReactions[emoji] = [userId];
-      }
-    }
-
-    await prisma.chatMessage.update({
-      where: { id: messageId },
-      data: {
-        reactions: updatedReactions,
-      } as any,
-    });
+    /* Временная заглушка
+    const message = null as any;
 
     // Получаем информацию о пользователях
     const allUserIds = new Set<string>();
