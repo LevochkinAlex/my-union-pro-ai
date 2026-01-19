@@ -14,50 +14,61 @@ import { calculateProfileProgress } from "@/lib/profile-progress";
 import MembershipProtectedSection from "@/components/dashboard/MembershipProtectedSection";
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
+  try {
+    const session = await getServerSession(authOptions);
 
-  // ИСПРАВЛЕНО: Добавлено детальное логирование
-  if (!session?.user?.id) {
-    console.log("[dashboard/page] ⚠️ No session or user ID, redirecting to /login");
-    redirect("/login");
-  }
+    // ИСПРАВЛЕНО: Добавлено детальное логирование
+    if (!session?.user?.id) {
+      console.log("[dashboard/page] ⚠️ No session or user ID, redirecting to /login");
+      redirect("/login");
+    }
 
-  const userId = session.user.id;
-  if (!userId || typeof userId !== "string") {
-    console.log("[dashboard/page] ⚠️ Invalid userId type:", typeof userId, "- redirecting to /login");
-    redirect("/login");
-  }
-  
-  console.log("[dashboard/page] ✅ Rendering dashboard for user:", userId);
+    const userId = session.user.id;
+    if (!userId || typeof userId !== "string") {
+      console.log("[dashboard/page] ⚠️ Invalid userId type:", typeof userId, "- redirecting to /login");
+      redirect("/login");
+    }
+    
+    console.log("[dashboard/page] ✅ Rendering dashboard for user:", userId);
 
-  // Получаем роль и режим просмотра пользователя
-  const userRole = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      role: true,
-      firstName: true,
-      lastName: true,
-      viewMode: true,
-      isPPOHead: true,
-      isMPOHead: true,
-      isRPOHead: true,
-      ppoHeadOrganizationId: true,
-      mpoHeadOrganizationId: true,
-      rpoHeadOrganizationId: true,
-      organization: {
+    // Получаем роль и режим просмотра пользователя
+    // Добавляем таймаут для запроса к БД
+    const userRole = await Promise.race([
+      prisma.user.findUnique({
+        where: { id: userId },
         select: {
-          id: true,
-          name: true,
+          role: true,
+          firstName: true,
+          lastName: true,
+          viewMode: true,
+          isPPOHead: true,
+          isMPOHead: true,
+          isRPOHead: true,
+          ppoHeadOrganizationId: true,
+          mpoHeadOrganizationId: true,
+          rpoHeadOrganizationId: true,
+          organization: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          ppoHeadOrganization: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
-      },
-      ppoHeadOrganization: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-    },
-  });
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Database query timeout")), 10000)
+      )
+    ]).catch((error) => {
+      console.error("[dashboard/page] Database query error:", error);
+      // Возвращаем null при ошибке, чтобы использовать значения по умолчанию
+      return null;
+    }) as Awaited<ReturnType<typeof prisma.user.findUnique>> | null;
 
   // Определяем показывать ли дашборд председателя на основе viewMode
   const showPPOHeadDashboard = 
@@ -682,4 +693,9 @@ export default async function DashboardPage() {
       </div>
     </div>
   );
+  } catch (error) {
+    console.error("[dashboard/page] Fatal error:", error);
+    // В случае критической ошибки редиректим на страницу логина
+    redirect("/login?error=session_error");
+  }
 }

@@ -13,31 +13,42 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession(authOptions);
+  try {
+    const session = await getServerSession(authOptions);
 
-  // ИСПРАВЛЕНО: Добавлено логирование причин redirect
-  if (!session) {
-    console.log("[dashboard/layout] ⚠️ No session found, redirecting to /login");
-    redirect("/login");
-  }
+    // ИСПРАВЛЕНО: Добавлено логирование причин redirect
+    if (!session) {
+      console.log("[dashboard/layout] ⚠️ No session found, redirecting to /login");
+      redirect("/login");
+    }
 
-  const userRole = session.user.role;
-  const membershipStatus = session.user.membershipStatus;
-  const isImpersonating = session.user.isImpersonating || false;
-  
-  // Получаем дополнительные данные пользователя из БД (viewMode, isPPOHead, isMPOHead, isRPOHead)
-  const userData = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: {
-      viewMode: true,
-      isPPOHead: true,
-      ppoHeadOrganizationId: true,
-      isMPOHead: true,
-      mpoHeadOrganizationId: true,
-      isRPOHead: true,
-      rpoHeadOrganizationId: true,
-    },
-  });
+    const userRole = session.user.role;
+    const membershipStatus = session.user.membershipStatus;
+    const isImpersonating = session.user.isImpersonating || false;
+    
+    // Получаем дополнительные данные пользователя из БД (viewMode, isPPOHead, isMPOHead, isRPOHead)
+    // Добавляем таймаут для запроса к БД
+    const userData = await Promise.race([
+      prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          viewMode: true,
+          isPPOHead: true,
+          ppoHeadOrganizationId: true,
+          isMPOHead: true,
+          mpoHeadOrganizationId: true,
+          isRPOHead: true,
+          rpoHeadOrganizationId: true,
+        },
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Database query timeout")), 10000)
+      )
+    ]).catch((error) => {
+      console.error("[dashboard/layout] Database query error:", error);
+      // Возвращаем значения по умолчанию при ошибке
+      return null;
+    }) as Awaited<ReturnType<typeof prisma.user.findUnique>> | null;
   
   const viewMode = userData?.viewMode || "MEMBER";
   const isPPOHead = userData?.isPPOHead || false;
@@ -480,5 +491,10 @@ export default async function DashboardLayout({
       <MiniChatWrapperConditional />
     </div>
   );
+  } catch (error) {
+    console.error("[dashboard/layout] Fatal error:", error);
+    // В случае критической ошибки редиректим на страницу логина
+    redirect("/login?error=session_error");
+  }
 }
 
