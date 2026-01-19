@@ -105,17 +105,14 @@ export async function POST(
       },
     });
 
-    // Отправляем сообщение в чат
-    if (ticket.chatId) {
+    // TODO: Отправляем сообщение в тред обращения через Matrix API
+    if (ticket.matrixRoomId) {
       const ratingStars = "⭐".repeat(rating);
       let message = `📊 Оценка полезности ответа: ${ratingStars} (${rating}/5)`;
       if (comment) {
         message += `\n\nКомментарий: ${comment}`;
       }
-      // TODO: Отправляем сообщение через Matrix API в тред обращения
-      // if (ticket.matrixRoomId) {
-      //   await sendMatrixMessage(...);
-      // }
+      // await sendMatrixMessage(...);
     }
 
     // Уведомляем Председателя об оценке

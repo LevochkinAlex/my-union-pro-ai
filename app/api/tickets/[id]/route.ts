@@ -190,13 +190,9 @@ export async function PUT(
       },
     });
 
-    // Отправляем сообщение в чат об изменении
-    if (ticket.chatId) {
-      await sendChatMessage(
-        ticket.chatId,
-        session.user.id,
-        `📝 Обращение отредактировано\n\nНовый заголовок: ${title}\n\n${content}`
-      );
+    // TODO: Отправляем сообщение в тред обращения через Matrix API
+    if (ticket.matrixRoomId) {
+      // await sendMatrixMessage(...);
     }
 
     return NextResponse.json({
@@ -275,13 +271,9 @@ export async function DELETE(
       },
     });
 
-    // Отправляем сообщение в чат об удалении
-    if (ticket.chatId) {
-      await sendChatMessage(
-        ticket.chatId,
-        session.user.id,
-        `🗑️ Обращение "${ticket.title}" было удалено автором`
-      );
+    // TODO: Отправляем сообщение в тред обращения через Matrix API об удалении
+    if (ticket.matrixRoomId) {
+      // await sendMatrixMessage(...);
     }
 
     // Удаляем тикет (каскадно удалятся attachments и comments)
