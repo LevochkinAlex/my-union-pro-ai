@@ -79,9 +79,10 @@ export async function GET(
     }
 
     if (!response.ok) {
-      // 404 is normal for missing/deleted media, don't log as error
+      // 404 is normal for missing/deleted media, return 404 without logging
       if (response.status === 404) {
-        return NextResponse.json({ error: 'Media not found' }, { status: 404 });
+        // Return 404 with proper headers to avoid browser console noise
+        return new NextResponse(null, { status: 404 });
       }
       
       // Log other errors
