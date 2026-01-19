@@ -44,9 +44,6 @@ export async function POST(
       { status: 501 }
     );
 
-    /* Временная заглушка
-    const message = null as any;
-
     // Получаем информацию о пользователях
     const allUserIds = new Set<string>();
     Object.values(updatedReactions).forEach((userIds) => {
