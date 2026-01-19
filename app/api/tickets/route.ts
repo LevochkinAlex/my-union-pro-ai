@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
         attachmentsCount: ticket._count.attachments,
         commentsCount: ticket._count.comments,
         lastCommentAt: ticket.comments[0]?.createdAt || null,
-        chatId: ticket.chatId,
+        // chatId: ticket.chatId, // Тикеты теперь связаны через matrixRoomId
         // Информация о создателе обращения
         createdBy: {
           id: ticket.user.id,

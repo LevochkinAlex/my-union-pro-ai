@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
         user: ticket.user,
         commentsCount: ticket._count.comments,
         lastCommentAt: ticket.comments[0]?.createdAt.toISOString() || null,
-        chatId: ticket.chatId,
+        // chatId: ticket.chatId, // Тикеты теперь связаны через matrixRoomId
         rejectionReason: ticket.rejectionReason,
       })),
     });

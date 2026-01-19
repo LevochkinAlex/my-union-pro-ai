@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendPushNotification } from "@/lib/push-notifications";
 import { sendEmail } from "@/lib/email";
-import { sendChatMessage } from "@/lib/chat-server-utils";
+// import { sendChatMessage } from "@/lib/chat-server-utils"; // TODO: Переделать на Matrix API
 import { getPPOHead } from "@/lib/ppo-head-utils";
 
 /**

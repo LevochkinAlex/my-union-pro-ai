@@ -116,8 +116,8 @@ export async function PUT(
       },
     });
 
-    // Отправляем системное сообщение в чат
-    if (ticket.chatId) {
+    // Отправляем системное сообщение в тред обращения через Matrix API
+    if (ticket.matrixRoomId) {
       const emoji = STATUS_EMOJI[status] || "📌";
       let systemMessage = `${emoji} **Статус обращения изменен**\n\n`;
       systemMessage += `${STATUS_NAMES[oldStatus] || oldStatus} → ${STATUS_NAMES[status] || status}`;
@@ -127,12 +127,18 @@ export async function PUT(
       }
 
       // TODO: Отправляем системное сообщение через Matrix API в тред обращения
-      // await sendMatrixMessage(...);
+      // const chairman = await prisma.user.findUnique({...});
+      // await sendMatrixMessage(chairman.matrixAccessToken, ticket.matrixRoomId, systemMessage);
       
-      // Обновляем lastMessageAt в чате
-      if (ticket.chatId) {
+      // Обновляем lastMessageAt в чате через Chat по matrixRoomId
+      const chat = await prisma.chat.findUnique({
+        where: { matrixRoomId: ticket.matrixRoomId },
+        select: { id: true },
+      });
+      
+      if (chat) {
         await prisma.chat.update({
-          where: { id: ticket.chatId },
+          where: { id: chat.id },
           data: {
             lastMessageAt: new Date(),
           },

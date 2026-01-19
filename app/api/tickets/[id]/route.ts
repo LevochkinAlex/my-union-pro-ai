@@ -58,9 +58,9 @@ export async function GET(
 
     // Проверяем, является ли пользователь участником чата обращения
     let isChatParticipant = false;
-    if (ticket.chatId) {
+    if (ticket.matrixRoomId) {
       const chat = await prisma.chat.findUnique({
-        where: { id: ticket.chatId },
+        where: { matrixRoomId: ticket.matrixRoomId },
         select: {
           participants: {
             where: {
@@ -98,7 +98,7 @@ export async function GET(
         createdAt: ticket.createdAt,
         updatedAt: ticket.updatedAt,
         attachments: ticket.attachments,
-        chatId: ticket.chatId,
+        // chatId: ticket.chatId, // Тикеты теперь связаны через matrixRoomId
         rejectionReason: ticket.rejectionReason,
         helpfulRating: ticket.helpfulRating,
         helpfulRatingComment: ticket.helpfulRatingComment,
