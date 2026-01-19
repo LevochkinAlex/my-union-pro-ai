@@ -32,11 +32,7 @@ export async function POST(
     const chat = await prisma.chat.findFirst({
       where: {
         id: chatId,
-        OR: [
-          { participant1Id: session.user.id },
-          { participant2Id: session.user.id },
-          { participants: { some: { userId: session.user.id, leftAt: null } } },
-        ],
+        participants: { some: { userId: session.user.id, leftAt: null } },
       },
       select: {
         id: true,
@@ -131,14 +127,9 @@ export async function POST(
       const chatUpdate: any = {};
       const fullChat = await prisma.chat.findUnique({
         where: { id: chatId },
-        select: { participant1Id: true, participant2Id: true },
       });
 
-      if (fullChat?.participant1Id === session.user.id) {
-        chatUpdate.participant1ClearedAt = new Date();
-      } else if (fullChat?.participant2Id === session.user.id) {
-        chatUpdate.participant2ClearedAt = new Date();
-      }
+      // Обновляем через ChatParticipant (уже обработано выше)
 
       if (Object.keys(chatUpdate).length > 0) {
         await prisma.chat.update({
