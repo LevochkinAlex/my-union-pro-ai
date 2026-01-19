@@ -93,8 +93,7 @@ export async function checkChatAccess(
       id: true,
       type: true,
       name: true,
-      participant1Id: true,
-      participant2Id: true,
+      matrixRoomId: true,
     },
   });
 
@@ -102,18 +101,7 @@ export async function checkChatAccess(
     return { hasAccess: false, chat: null, participant: null };
   }
 
-  // Временная поддержка старой схемы (PRIVATE чаты с participant1Id/participant2Id)
-  // После миграции этот блок можно убрать
-  if (chat.type === "PRIVATE" && (chat.participant1Id || chat.participant2Id)) {
-    const hasAccess = chat.participant1Id === userId || chat.participant2Id === userId;
-    return { 
-      hasAccess, 
-      chat, 
-      participant: hasAccess ? { userId, role: "member" } : null 
-    };
-  }
-
-  // Новая логика через ChatParticipant
+  // Проверяем доступ через ChatParticipant
   const participant = await prisma.chatParticipant.findFirst({
     where: {
       chatId,

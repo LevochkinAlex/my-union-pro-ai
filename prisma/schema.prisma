@@ -237,18 +237,12 @@ model User {
   // Подписчики (кто подписан на этого пользователя)
   subscribers   UserSubscription[] @relation("UserSubscribers")
 
-  // Чаты (как участник 1)
-  chatsAsParticipant1 Chat[]        @relation("ChatParticipant1")
-  // Чаты (как участник 2)
-  chatsAsParticipant2 Chat[]        @relation("ChatParticipant2")
   // Созданные групповые чаты
   createdChats        Chat[]        @relation("ChatCreator")
-  // Участник групповых чатов
+  // Участник чатов
   chatParticipants    ChatParticipant[] @relation("ChatParticipants")
   // Приглашенные в чаты
   invitedToChats      ChatParticipant[] @relation("ChatInviter")
-  // Сообщения в чатах
-  chatMessages        ChatMessage[] @relation("ChatMessageSender")
 
   // Посты пользователя
   posts        UserPost[]    @relation("UserPostAuthor")
@@ -1936,13 +1930,6 @@ model Chat {
   // Matrix интеграция
   matrixRoomId String? @unique // ID комнаты в Matrix
 
-  // Участники чата (для личных чатов - два пользователя)
-  participant1Id String?
-  participant1   User?   @relation("ChatParticipant1", fields: [participant1Id], references: [id], onDelete: Cascade)
-
-  participant2Id String?
-  participant2   User?   @relation("ChatParticipant2", fields: [participant2Id], references: [id], onDelete: Cascade)
-
   // Для групповых чатов
   name        String? // Название группы
   description String? @db.Text // Описание группы
@@ -1951,26 +1938,11 @@ model Chat {
   createdById String? // Создатель группы
   createdBy   User?   @relation("ChatCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
-  // Участники группового чата
+  // Участники чата (используется для всех типов чатов)
   participants ChatParticipant[]
 
-  // Последнее сообщение (для сортировки)
+  // Последнее сообщение (для сортировки) - обновляется из Matrix
   lastMessageAt DateTime?
-  lastMessage   String?   @db.Text
-
-  // Кто прочитал последнее сообщение (для личных чатов)
-  participant1ReadAt DateTime?
-  participant2ReadAt DateTime?
-  
-  // Очищена история чата (для личных чатов)
-  participant1ClearedAt DateTime?
-  participant2ClearedAt DateTime?
-
-  // Сообщения в чате
-  messages ChatMessage[]
-  
-  // Связь с обращением (тикетом)
-  ticket Ticket?
   
   // Архивирован ли чат
   archivedAt DateTime?
@@ -1978,12 +1950,10 @@ model Chat {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([participant1Id, participant2Id], name: "unique_private_chat")
-  @@index([participant1Id])
-  @@index([participant2Id])
   @@index([createdById])
   @@index([type])
   @@index([lastMessageAt])
+  @@index([matrixRoomId])
 }
 
 // Участники группового чата
