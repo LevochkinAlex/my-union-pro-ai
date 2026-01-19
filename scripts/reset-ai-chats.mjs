@@ -154,21 +154,6 @@ async function resetAIChats() {
           },
         },
       },
-      include: {
-        participants: {
-          where: { leftAt: null },
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                matrixUserId: true,
-              },
-            },
-          },
-        },
-      },
       select: {
         id: true,
         name: true,
