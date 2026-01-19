@@ -154,10 +154,21 @@ async function resetAIChats() {
           },
         },
       },
-      select: {
-        id: true,
-        name: true,
-        matrixRoomId: true,
+      include: {
+        participants: {
+          where: { leftAt: null },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                matrixUserId: true,
+                matrixAccessToken: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -179,66 +190,75 @@ async function resetAIChats() {
         console.log(`📝 Обрабатываем чат: ${chat.name || chat.id}`);
         console.log(`   Matrix Room: ${roomId}`);
 
-        // Получаем все сообщения из комнаты
-        const messages = await getMatrixMessages(roomId, botToken);
+        // Находим участника-пользователя (не бота) для получения токена
+        const userParticipant = chat.participants?.find(p => {
+          const mUserId = p.user?.matrixUserId || '';
+          return !mUserId.includes('myunion_bot') && 
+                 !mUserId.includes('ai_assistant') && 
+                 !mUserId.includes('assistant') &&
+                 p.user?.matrixAccessToken;
+        });
+
+        if (!userParticipant?.user?.matrixAccessToken) {
+          console.log(`   ⚠️  Не найден участник с токеном для чата ${chat.id}`);
+          errorCount++;
+          continue;
+        }
+
+        const userToken = userParticipant.user.matrixAccessToken;
+        const userName = `${userParticipant.user.firstName || ''} ${userParticipant.user.lastName || ''}`.trim() || 'Пользователь';
+        console.log(`   Участник: ${userName} (${userParticipant.user.matrixUserId})`);
+
+        // Получаем все сообщения из комнаты используя токен пользователя
+        const messages = await getMatrixMessages(roomId, userToken);
         console.log(`   Найдено сообщений: ${messages.length}`);
 
         if (messages.length === 0) {
-          console.log(`   ⚠️  Нет сообщений в комнате, отправляем приветствие...`);
-          await sendWelcomeMessage(roomId, botToken);
-          console.log(`   ✅ Отправлено приветственное сообщение`);
-          resetCount++;
-          continue;
-        }
-
-        // Находим первое сообщение от бота (может быть приветствием)
-        const botMessages = messages.filter(m => 
-          m.sender?.includes('myunion_bot') || 
-          m.sender?.includes('ai_assistant') ||
-          m.sender?.includes('@myunion_bot')
-        );
-
-        if (botMessages.length === 0) {
-          // Если нет сообщений от бота, просто отправляем приветствие
-          console.log(`   ℹ️  Нет сообщений от бота, отправляем приветствие...`);
-          await sendWelcomeMessage(roomId, botToken);
-          console.log(`   ✅ Отправлено приветственное сообщение`);
-          resetCount++;
-          continue;
-        }
-
-        // Удаляем все сообщения кроме первого от бота (или все, если нужно)
-        const messagesToDelete = messages.filter(m => {
-          // Пропускаем события типа m.room.member (присоединения к комнате)
-          if (m.type !== 'm.room.message') return false;
-          
-          // Удаляем все сообщения пользователей
-          if (!m.sender?.includes('myunion_bot') && 
-              !m.sender?.includes('ai_assistant') &&
-              !m.sender?.includes('@myunion_bot')) {
-            return true;
+          console.log(`   ℹ️  Нет сообщений в комнате, отправляем приветствие от бота...`);
+          const welcomeEventId = await sendWelcomeMessage(roomId, botToken);
+          if (welcomeEventId) {
+            console.log(`   ✅ Отправлено приветственное сообщение`);
+            resetCount++;
+          } else {
+            console.log(`   ⚠️  Не удалось отправить приветствие`);
+            errorCount++;
           }
-          
-          // Удаляем все сообщения от бота, кроме последнего (самого старого - первое приветствие)
-          // Или можем удалить все и отправить новое
-          // Для простоты удалим все и отправим новое приветствие
-          return true;
+          continue;
+        }
+
+        // Удаляем все сообщения (используем токен пользователя для redact)
+        const messagesToDelete = messages.filter(m => {
+          // Удаляем только сообщения (m.room.message), пропускаем события типа m.room.member
+          return m.type === 'm.room.message';
         });
 
         console.log(`   Удаляем ${messagesToDelete.length} сообщений...`);
 
-        // Удаляем все сообщения (redact)
+        // Удаляем все сообщения (redact) - используем токен пользователя
+        let deletedCount = 0;
         for (const msg of messagesToDelete) {
-          await redactMessage(roomId, msg.event_id, botToken);
+          const deleted = await redactMessage(roomId, msg.event_id, userToken);
+          if (deleted) deletedCount++;
         }
 
-        // Отправляем новое приветственное сообщение
+        console.log(`   ✅ Удалено ${deletedCount} из ${messagesToDelete.length} сообщений`);
+
+        // Отправляем новое приветственное сообщение от бота
         const welcomeEventId = await sendWelcomeMessage(roomId, botToken);
         if (welcomeEventId) {
-          console.log(`   ✅ Удалено ${messagesToDelete.length} сообщений, отправлено новое приветствие`);
+          console.log(`   ✅ Отправлено новое приветственное сообщение`);
           resetCount++;
         } else {
-          console.log(`   ⚠️  Сообщения удалены, но не удалось отправить приветствие`);
+          console.log(`   ⚠️  Сообщения удалены, но не удалось отправить приветствие (бот может быть не в комнате)`);
+          // Пытаемся отправить от пользователя
+          const welcomeEventId2 = await sendWelcomeMessage(roomId, userToken);
+          if (welcomeEventId2) {
+            console.log(`   ✅ Отправлено приветствие от пользователя`);
+            resetCount++;
+          } else {
+            console.log(`   ❌ Не удалось отправить приветствие`);
+            errorCount++;
+          }
         }
 
       } catch (error) {
