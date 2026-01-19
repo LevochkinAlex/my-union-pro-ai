@@ -118,7 +118,6 @@ async function getUserProfile(matrixUserId: string): Promise<UserProfile | null>
         firstName: true,
         lastName: true,
         middleName: true,
-        position: true,
         jobTitle: true,
         membershipStatus: true,
         hobbies: true,
@@ -165,7 +164,7 @@ async function getUserProfile(matrixUserId: string): Promise<UserProfile | null>
     const profile: UserProfile = {
       name: [user.firstName, user.middleName].filter(Boolean).join(' ') || 'Пользователь',
       organization: user.organization?.shortName || user.organization?.name,
-      position: user.jobTitle || user.position || undefined,
+      position: user.jobTitle || undefined,
       membershipStatus: user.membershipStatus || undefined,
       interests: user.hobbies ? [user.hobbies] : undefined,
       knowledgeContent: knowledgeContent || undefined,
