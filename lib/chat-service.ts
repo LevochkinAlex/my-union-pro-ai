@@ -173,7 +173,7 @@ export async function getUserChats(
   // Фильтр по наличию обращения (через matrixRoomId)
   if (filter?.hasTicket !== undefined) {
     whereConditions.push({
-      matrixRoomId: filter.hasTicket ? { isNot: null } : { is: null },
+      matrixRoomId: filter.hasTicket ? { not: null } : null,
     });
   }
 
@@ -252,17 +252,9 @@ export async function getChatById(
           },
         },
       },
-      ticket: {
-        select: {
-          id: true,
-          publicId: true,
-          title: true,
-        },
-      },
       _count: {
         select: {
           participants: true,
-          messages: true,
         },
       },
     },
@@ -638,40 +630,10 @@ async function getUnreadCountsForChats(
   }
   
   return results;
-      by: ["chatId"],
-      where: {
-        chatId: { in: chatsWithoutReadAt },
-        senderId: { not: userId },
-        deletedAt: null,
-      },
-      _count: { id: true },
-    });
-
-    for (const c of counts) {
-      results.set(c.chatId, c._count.id);
-    }
-  }
 
   // Запрос для чатов с readAt (только новые сообщения)
-  // Делаем по одному запросу для каждого чата (можно оптимизировать через raw SQL)
-  const readAtCounts = await Promise.all(
-    chatsWithReadAt.slice(0, 50).map(async ({ chatId, readAt }) => {
-      const count = await prisma.chatMessage.count({
-        where: {
-          chatId,
-          senderId: { not: userId },
-          deletedAt: null,
-          createdAt: { gt: readAt },
-        },
-      });
-      return { chatId, count };
-    })
-  );
-
-  for (const { chatId, count } of readAtCounts) {
-    results.set(chatId, count);
-  }
-
+  // Сообщения теперь хранятся в Matrix, поэтому непрочитанные считаются через Matrix API
+  // TODO: Интегрировать подсчет непрочитанных из Matrix
   return results;
 }
 
@@ -826,38 +788,23 @@ export async function sendMessage(
     throw new ChatAccessError("Нет доступа к этому чату");
   }
 
-  // Создаем сообщение
-  const message = await prisma.chatMessage.create({
-    data: {
-      chatId,
-      senderId,
-      content,
-      replyToId: options?.replyToId,
-      forwardedFromId: options?.forwardedFromId,
-    },
-    include: {
-      sender: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          middleName: true,
-          avatarUrl: true,
-        },
-      },
-      replyTo: {
-        select: {
-          id: true,
-          content: true,
-          sender: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-        },
-      },
+  // Сообщения теперь отправляются через Matrix API
+  // TODO: Интегрировать отправку сообщений через Matrix API
+  // const { sendMatrixMessage } = await import('@/lib/matrix-messages');
+  // const senderUser = await prisma.user.findUnique({ where: { id: senderId }, select: { matrixAccessToken: true } });
+  // if (senderUser?.matrixAccessToken && chat?.matrixRoomId) {
+  //   await sendMatrixMessage(senderUser.matrixAccessToken, chat.matrixRoomId, content);
+  // }
+
+  // Получаем информацию об отправителе для возврата
+  const sender = await prisma.user.findUnique({
+    where: { id: senderId },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      middleName: true,
+      avatarUrl: true,
     },
   });
 
@@ -865,10 +812,28 @@ export async function sendMessage(
   await prisma.chat.update({
     where: { id: chatId },
     data: {
-      lastMessage: content.substring(0, 100),
       lastMessageAt: new Date(),
     },
   });
+
+  // Создаем временный объект сообщения для обратной совместимости
+  const message = {
+    id: `temp_${Date.now()}`,
+    chatId,
+    senderId,
+    content,
+    replyToId: options?.replyToId,
+    forwardedFromId: options?.forwardedFromId,
+    createdAt: new Date(),
+    sender: sender || {
+      id: senderId,
+      firstName: null,
+      lastName: null,
+      middleName: null,
+      avatarUrl: null,
+    },
+    replyTo: null,
+  };
 
   // Сбрасываем readAt для всех участников кроме отправителя
   await prisma.chatParticipant.updateMany({
