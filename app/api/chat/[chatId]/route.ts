@@ -355,7 +355,6 @@ export async function POST(
     await prisma.chat.update({
       where: { id: chatId },
       data: {
-        lastMessage: content.trim().substring(0, 100),
         lastMessageAt: new Date(),
       },
     });
@@ -575,7 +574,7 @@ async function sendNotifications(
             type: "ticket_response",
             title: `Обращение #${formattedPublicId}: ${ticketOwnerName}`,
             body: messagePreview,
-            url: `${baseUrl}/dashboard/appeals/${ticket.id}`,
+            url: `${baseUrl}/dashboard/appeals/${ticket?.id}`,
             senderName,
           }).catch((err) => {
             console.error(`[chat] Error sending notification to ${recipientId}:`, err?.message);
