@@ -34,13 +34,26 @@ export async function POST(req: NextRequest) {
     // Создаем правильный Request объект с body
     const url = new URL(req.url);
     const body = await req.text();
-    const request = new Request(url.toString(), {
+    
+    // Создаем Request с body через ReadableStream для Next.js 16
+    const requestInit: RequestInit = {
       method: req.method,
       headers: req.headers,
-      body: body || undefined,
-      // Добавляем duplex для streaming body в Next.js 16
-      duplex: body ? "half" : undefined,
-    });
+    };
+    
+    if (body) {
+      // Используем ReadableStream для body в Next.js 16
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(body));
+          controller.close();
+        },
+      });
+      requestInit.body = stream;
+    }
+    
+    const request = new Request(url.toString(), requestInit);
     return await handler(request);
   } catch (error) {
     console.error("[NextAuth] POST Error:", error);
