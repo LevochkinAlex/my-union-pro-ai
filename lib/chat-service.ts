@@ -550,8 +550,40 @@ export async function addParticipant(
     select: { type: true },
   });
 
-  if (!chat || chat.type !== "GROUP") {
-    throw new Error("Можно добавлять участников только в групповые чаты");
+  if (!chat) {
+    throw new Error("Чат не найден");
+  }
+
+  if (chat.type !== "GROUP") {
+    // Если приватный чат получает 3-го участника, меняем тип на GROUP
+    if (chat.type === "PRIVATE") {
+      const activeParticipants = await prisma.chatParticipant.count({
+        where: { chatId, leftAt: null },
+      });
+      
+      if (activeParticipants === 1) {
+        // Меняем тип на GROUP перед добавлением второго участника
+        await prisma.chat.update({
+          where: { id: chatId },
+          data: { type: "GROUP" },
+        });
+        console.log(`[chat-service] Changed chat ${chatId} type from PRIVATE to GROUP`);
+      } else {
+        throw new Error("Можно добавлять участников только в групповые чаты");
+      }
+    } else {
+      throw new Error("Можно добавлять участников только в групповые чаты");
+    }
+  }
+
+  // Проверяем, что пользователь существует
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+
+  if (!user) {
+    throw new Error(`Пользователь ${userId} не найден`);
   }
 
   // Проверяем, не является ли уже участником
@@ -572,7 +604,8 @@ export async function addParticipant(
         },
       });
     }
-    // Уже активный участник
+    // Уже активный участник - возвращаем существующую запись
+    console.log(`[chat-service] User ${userId} is already a participant in chat ${chatId}`);
     return existingParticipant;
   }
 
