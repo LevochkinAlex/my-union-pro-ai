@@ -40,11 +40,35 @@ async function fixVitalyUser() {
       console.log(`\nИсправляем пользователя: ${user.firstName} ${user.lastName} (${user.id})`);
       console.log(`Текущий статус: role=${user.role}, membershipStatus=${user.membershipStatus}`);
 
+      // Определяем правильную роль и статус
+      let newRole = user.role;
+      let newStatus = user.membershipStatus;
+
+      // Если пользователь Виталий Еременко (основной пользователь)
+      if (user.firstName === 'Виталий' && user.lastName === 'Еременко') {
+        // Сохраняем роль PPO_HEAD если она была, иначе MEMBER
+        if (user.role === 'PPO_HEAD' || user.role === 'MEMBER') {
+          newRole = 'PPO_HEAD'; // Восстанавливаем роль председателя
+        }
+        // Убеждаемся, что статус APPROVED
+        if (user.membershipStatus !== 'APPROVED') {
+          newStatus = 'APPROVED';
+        }
+      } else {
+        // Для других пользователей (например, Всеволод) - обычный член
+        if (user.role !== 'MEMBER' && user.role !== 'PPO_HEAD') {
+          newRole = 'MEMBER';
+        }
+        if (user.membershipStatus !== 'APPROVED') {
+          newStatus = 'APPROVED';
+        }
+      }
+
       const updated = await prisma.user.update({
         where: { id: user.id },
         data: {
-          role: 'MEMBER',
-          membershipStatus: 'APPROVED',
+          role: newRole,
+          membershipStatus: newStatus,
         },
       });
 
