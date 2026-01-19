@@ -372,16 +372,7 @@ export async function POST(
       },
     });
 
-    // Также для старой схемы
-    // ReadAt обновляется через ChatParticipant (уже обработано выше)
-    // Старая схема удалена
-      if (Object.keys(updateData).length > 0) {
-        await prisma.chat.update({
-          where: { id: chatId },
-          data: updateData,
-        });
-      }
-    }
+    // Старая схема удалена - все обновления через ChatParticipant выше
 
     // Инвалидируем кеш
     await invalidateChatCache(chatId);
