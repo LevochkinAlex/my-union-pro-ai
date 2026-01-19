@@ -3,8 +3,6 @@
  * Система тредов для обращений, как в Slack
  */
 
-import { prisma } from '@/lib/prisma';
-
 const MATRIX_SERVER_URL = process.env.MATRIX_SERVER_URL || 'https://matrix.myunion.pro';
 const MATRIX_ADMIN_TOKEN = process.env.MATRIX_ADMIN_TOKEN;
 
@@ -309,6 +307,8 @@ export async function addParticipantToThread(
   participantUserId: string, // MyUnion user ID
   inviterAccessToken: string
 ): Promise<boolean> {
+  const { prisma } = await import('@/lib/prisma');
+  
   try {
     const participant = await prisma.user.findUnique({
       where: { id: participantUserId },
