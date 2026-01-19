@@ -62,9 +62,28 @@ async function validateAndFixAllChats() {
         if (activeParticipants.length < 2) {
           issues.push(`❌ Приватный чат с ${activeParticipants.length} активными участниками (должно быть 2)`);
           errorsFound++;
+          
+          // Если нет участников, удаляем чат (ошибочный чат)
+          if (activeParticipants.length === 0 && chat.participants.length === 0) {
+            await prisma.chat.delete({
+              where: { id: chat.id },
+            });
+            fixes.push(`  ✅ Удален чат без участников`);
+            fixedCount++;
+            continue; // Переходим к следующему чату
+          }
         }
         if (activeParticipants.length > 2) {
-          issues.push(`⚠️  Приватный чат с ${activeParticipants.length} участниками (возможно, это ошибка)`);
+          issues.push(`⚠️  Приватный чат с ${activeParticipants.length} участниками - меняем тип на GROUP`);
+          errorsFound++;
+          
+          // Меняем тип чата на GROUP
+          await prisma.chat.update({
+            where: { id: chat.id },
+            data: { type: 'GROUP' },
+          });
+          fixes.push(`  ✅ Изменен тип чата с PRIVATE на GROUP`);
+          fixedCount++;
         }
       }
 
