@@ -673,7 +673,7 @@ async function getUnreadCountsForChats(
 /**
  * Форматирует данные чата для API ответа
  */
-function formatChatInfo(
+export function formatChatInfo(
   chat: any,
   currentUserId: string,
   unreadCount: number
