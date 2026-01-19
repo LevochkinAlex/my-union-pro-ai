@@ -467,6 +467,25 @@ export async function POST(
     const botUser = await getOrCreateAIBotUser();
     const isBotChat = !isGroupChat && recipientIds.length === 1 && recipientIds[0] === botUser.id;
 
+    // Отправляем уведомления получателям (кроме бота)
+    if (recipientIds.length > 0 && !isBotChat) {
+      // Отправляем уведомления асинхронно через API
+      fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/api/chat/notify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Internal-Token': process.env.INTERNAL_API_TOKEN || '',
+        },
+        body: JSON.stringify({
+          roomId: chatId,
+          message: content,
+          senderUserId: userId,
+        }),
+      }).catch(err => {
+        console.error('[chat] Error sending notifications:', err);
+      });
+    }
+
     // Обработка чата с ботом
     if (isBotChat) {
       try {

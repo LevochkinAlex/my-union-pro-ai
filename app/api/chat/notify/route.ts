@@ -42,9 +42,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing data' }, { status: 400 });
     }
 
-    // Find chat by matrix room ID
+    // Find chat by ID (from WebSocket) or by matrix room ID (from Matrix bot)
     let chat = await prisma.chat.findFirst({
-      where: { matrixRoomId: roomId },
+      where: {
+        OR: [
+          { id: roomId }, // Если передан chatId из WebSocket
+          { matrixRoomId: roomId }, // Если передан matrixRoomId из Matrix bot
+        ],
+      },
       select: {
         id: true,
         name: true,

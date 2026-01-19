@@ -364,6 +364,34 @@ io.on("connection", (socket) => {
       // Отправляем новое сообщение всем в чате
       io.to(`chat:${chatId}`).emit("message:new", message);
 
+      // Отправляем уведомления получателям через API
+      const recipients = await prisma.chatParticipant.findMany({
+        where: {
+          chatId,
+          userId: { not: userId },
+          leftAt: null,
+        },
+        select: { userId: true },
+      });
+
+      if (recipients.length > 0) {
+        // Отправляем уведомления асинхронно, не блокируя ответ
+        fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/api/chat/notify`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Internal-Token': process.env.INTERNAL_API_TOKEN || '',
+          },
+          body: JSON.stringify({
+            roomId: chatId, // Используем chatId вместо matrixRoomId
+            message: content,
+            senderUserId: userId,
+          }),
+        }).catch(err => {
+          console.error('[Chat Server] Error sending notifications:', err);
+        });
+      }
+
       callback({ success: true, message });
 
       console.log(`[Chat Server] ${userName} отправил сообщение в чат ${chatId}`);

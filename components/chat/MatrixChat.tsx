@@ -14,6 +14,56 @@ function AvatarFallback({ className, children }: { className?: string; children:
   return <div className={`w-full h-full flex items-center justify-center ${className || ''}`}>{children}</div>;
 }
 
+// Компонент для отображения сообщений с поддержкой Markdown
+function MessageContent({ content }: { content: string }) {
+  // Проверяем, содержит ли сообщение markdown разметку
+  const hasMarkdown = /(\*\*|__|\*|_|`|\[|\]|#|\n\n)/.test(content);
+  
+  if (!hasMarkdown) {
+    // Простой текст - без markdown
+    return <p className="whitespace-pre-wrap break-words">{content}</p>;
+  }
+  
+  // Markdown контент
+  return (
+    <div className="prose prose-sm dark:prose-invert max-w-none 
+      prose-headings:text-gray-900 dark:prose-headings:text-white
+      prose-p:text-gray-900 dark:prose-p:text-white prose-p:my-1
+      prose-strong:text-gray-900 dark:prose-strong:text-white
+      prose-code:text-blue-600 dark:prose-code:text-blue-400 prose-code:bg-gray-100 dark:prose-code:bg-gray-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded
+      prose-pre:bg-gray-100 dark:prose-pre:bg-gray-800 prose-pre:text-gray-900 dark:prose-pre:text-white
+      prose-a:text-blue-600 dark:prose-a:text-blue-400
+      prose-ul:my-1 prose-ol:my-1 prose-li:my-0
+      prose-blockquote:border-l-4 prose-blockquote:border-gray-300 dark:prose-blockquote:border-gray-600
+      break-words">
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm]}
+        components={{
+          // Стилизуем параграфы
+          p: ({ children }) => <p className="my-1">{children}</p>,
+          // Стилизуем списки
+          ul: ({ children }) => <ul className="my-1 ml-4 list-disc">{children}</ul>,
+          ol: ({ children }) => <ol className="my-1 ml-4 list-decimal">{children}</ol>,
+          // Стилизуем код
+          code: ({ className, children, ...props }) => {
+            const isInline = !className;
+            if (isInline) {
+              return (
+                <code className="bg-gray-100 dark:bg-gray-800 text-blue-600 dark:text-blue-400 px-1 py-0.5 rounded text-sm" {...props}>
+                  {children}
+                </code>
+              );
+            }
+            return <code className={className} {...props}>{children}</code>;
+          },
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
 interface MatrixCredentials {
   userId: string;
   accessToken: string;
@@ -2758,7 +2808,7 @@ export default function MatrixChat() {
                         ) : (
                           <>
                             {(!msg.attachment || msg.content !== msg.attachment.name) && (
-                              <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                              <MessageContent content={msg.content} />
                             )}
                             <div className={`flex items-center gap-1 text-xs mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-400'}`}>
                               <span>{new Date(msg.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>
