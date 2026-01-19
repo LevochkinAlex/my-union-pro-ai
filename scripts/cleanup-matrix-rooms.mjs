@@ -56,7 +56,7 @@ async function getAiRoomIds() {
 
   const ids = aiChats
     .map(c => c.matrixRoomId)
-    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+    .filter((id) => typeof id === 'string' && id.length > 0);
 
   return { ids, aiChats };
 }
