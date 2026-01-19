@@ -2010,10 +2010,15 @@ model ChatMessage {
   content     String   @db.Text
   messageType String   @default("text") // text, image, file, video, audio
   
-  // Для ответов
+  // Для ответов (reply to message)
   replyToId   String?
   replyTo     ChatMessage? @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies     ChatMessage[] @relation("MessageReplies")
+  
+  // Треды (threads) - корневое сообщение треда
+  threadRootId String? @unique // Если это корневое сообщение треда, то null. Иначе - ID корневого сообщения
+  threadRoot   ChatMessage? @relation("ThreadRoot", fields: [threadRootId], references: [id], onDelete: Cascade)
+  threadReplies ChatMessage[] @relation("ThreadRoot") // Ответы в треде (только для корневого сообщения)
   
   // Редактирование
   editedAt    DateTime?
@@ -2027,12 +2032,18 @@ model ChatMessage {
   // Прочитано кем
   readBy      ChatMessageRead[]
   
+  // Метрики треда (только для корневого сообщения)
+  threadRepliesCount Int @default(0) // Количество ответов в треде
+  threadLastReplyAt  DateTime? // Время последнего ответа в треде
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
   @@index([chatId, createdAt])
+  @@index([chatId, threadRootId, createdAt]) // Для загрузки тредов
   @@index([senderId])
   @@index([replyToId])
+  @@index([threadRootId])
 }
 
 model ChatMessageAttachment {
