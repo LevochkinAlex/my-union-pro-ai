@@ -62,8 +62,6 @@ export async function GET(
       const chat = await prisma.chat.findUnique({
         where: { id: ticket.chatId },
         select: {
-          participant1Id: true,
-          participant2Id: true,
           participants: {
             where: {
               userId: session.user.id,
@@ -75,8 +73,7 @@ export async function GET(
       });
       
       isChatParticipant = !!(
-        chat?.participant1Id === session.user.id ||
-        chat?.participant2Id === session.user.id ||
+        chat?.participants?.some(p => p.userId === session.user.id && !p.leftAt) ||
         (chat?.participants && chat.participants.length > 0)
       );
     }

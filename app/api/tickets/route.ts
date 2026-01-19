@@ -29,8 +29,7 @@ export async function GET(request: NextRequest) {
       where: {
         OR: [
           // Старая схема PRIVATE чатов
-          { participant1Id: session.user.id },
-          { participant2Id: session.user.id },
+          { participants: { some: { userId: session.user.id, leftAt: null } } },
           // Новая схема через ChatParticipant
           {
             participants: {

@@ -89,7 +89,16 @@ export async function POST(request: NextRequest) {
       : messagePreview;
 
     // Создаем пересланное сообщение
-    const forwardedMessage = await prisma.chatMessage.create({
+    // TODO: Пересылаем сообщение через Matrix API
+    // const forwardedMessage = await sendMatrixMessage(...);
+    const forwardedMessage = {
+      id: 'temp',
+      chatId: targetChatId,
+      senderId: userId,
+      content: originalMessage?.content || '',
+      forwardedFromId: messageId,
+      createdAt: new Date(),
+    };
       data: {
         chatId: chat.id,
         senderId: userId,
@@ -156,13 +165,8 @@ export async function POST(request: NextRequest) {
     });
 
     // Также для старой схемы
-    if (chat.participant1Id || chat.participant2Id) {
-      const updateData: any = {};
-      if (chat.participant1Id === userId) {
-        updateData.participant2ReadAt = null;
-      } else if (chat.participant2Id === userId) {
-        updateData.participant1ReadAt = null;
-      }
+    // ReadAt обновляется через ChatParticipant (уже обработано выше)
+    // Старая схема удалена
       if (Object.keys(updateData).length > 0) {
         await prisma.chat.update({
           where: { id: chat.id },

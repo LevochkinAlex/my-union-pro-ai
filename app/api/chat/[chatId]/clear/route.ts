@@ -95,11 +95,7 @@ export async function POST(
         }
       }
 
-      // Also delete from local DB
-      await prisma.chatMessage.updateMany({
-        where: { chatId },
-        data: { deletedAt: new Date() },
-      });
+      // Сообщения теперь в Matrix, удаление происходит через Matrix API (выше)
 
       // Update chat last message
       await prisma.chat.update({

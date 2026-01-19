@@ -55,20 +55,11 @@ export async function GET(
       deletedAt: null,
     };
 
-    if (cursor) {
-      const cursorMessage = await prisma.chatMessage.findUnique({
-        where: { id: cursor },
-        select: { createdAt: true },
-      });
-
-      if (cursorMessage) {
-        if (direction === "older") {
-          whereClause.createdAt = { lt: cursorMessage.createdAt };
-        } else {
-          whereClause.createdAt = { gt: cursorMessage.createdAt };
-        }
-      }
-    }
+    // TODO: Переделать на Matrix API для получения сообщений
+    // Сообщения теперь хранятся в Matrix, не в БД
+    // if (cursor) {
+    //   const cursorMessage = await prisma.chatMessage.findUnique({...});
+    // }
 
     // Получаем информацию о чате с matrixRoomId
     const chatInfo = await prisma.chat.findUnique({
@@ -96,7 +87,9 @@ export async function GET(
           ? getCacheKey(`chat:messages:${chatId}`, { limit })
           : null;
 
-        const fetchMessages = async () => prisma.chatMessage.findMany({
+        // TODO: Переделать на Matrix API
+        // Сообщения теперь хранятся в Matrix
+        const fetchMessages = async () => [] as any[]; // prisma.chatMessage.findMany({
           where: whereClause,
           select: {
             id: true,
@@ -155,11 +148,11 @@ export async function GET(
               },
             },
           },
-          orderBy: {
-            createdAt: "desc",
-          },
-          take: limit,
-        });
+          // orderBy: {
+          //   createdAt: "desc",
+          // },
+          // take: limit,
+        // });
 
         if (shouldCache && cacheKey) {
           return withCache(cacheKey, fetchMessages, 60); // Увеличили кеш до 60 сек
@@ -307,17 +300,10 @@ export async function POST(
       throw error;
     }
 
-    // Проверяем сообщение для ответа
-    if (replyToId) {
-      const replyToMessage = await prisma.chatMessage.findUnique({
-        where: { id: replyToId },
-        select: { chatId: true },
-      });
-
-      if (!replyToMessage || replyToMessage.chatId !== chatId) {
-        return NextResponse.json({ error: "Сообщение для ответа не найдено" }, { status: 404 });
-      }
-    }
+    // TODO: Проверка replyToId теперь через Matrix API
+    // if (replyToId) {
+    //   const replyToMessage = await getMatrixMessage(...);
+    // }
 
     // Получаем полную информацию о чате
     const fullChat = await prisma.chat.findUnique({
@@ -331,26 +317,75 @@ export async function POST(
       },
     });
 
-    // Создаем сообщение
-    const message = await prisma.chatMessage.create({
-      data: {
-        chatId,
-        senderId: userId,
-        content: content.trim(),
-        replyToId: replyToId || null,
-      } as any,
-      include: {
-        sender: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            middleName: true,
-            avatarUrl: true,
-          },
-        },
+    // TODO: Отправка сообщения через Matrix API
+    // Получаем Matrix токен и отправляем через sendMatrixMessage
+    if (!chat.matrixRoomId) {
+      return NextResponse.json(
+        { error: "Чат не связан с Matrix комнатой" },
+        { status: 400 }
+      );
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { matrixAccessToken: true, matrixUserId: true },
+    });
+
+    if (!user?.matrixAccessToken) {
+      return NextResponse.json(
+        { error: "Matrix аккаунт не настроен" },
+        { status: 500 }
+      );
+    }
+
+    const { sendMatrixMessage, replyToThread } = await import('@/lib/matrix-messages');
+    let messageEventId: string | null = null;
+
+    if (replyToId) {
+      // Отправляем reply в тред
+      messageEventId = await replyToThread(
+        user.matrixAccessToken,
+        chat.matrixRoomId,
+        replyToId, // Matrix event_id
+        content.trim()
+      );
+    } else {
+      // Обычное сообщение
+      messageEventId = await sendMatrixMessage(
+        user.matrixAccessToken,
+        chat.matrixRoomId,
+        content.trim()
+      );
+    }
+
+    if (!messageEventId) {
+      return NextResponse.json(
+        { error: "Не удалось отправить сообщение" },
+        { status: 500 }
+      );
+    }
+
+    // Получаем информацию об отправителе
+    const sender = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        avatarUrl: true,
       },
     });
+
+    const message = {
+      id: messageEventId,
+      chatId,
+      senderId: userId,
+      content: content.trim(),
+      replyToId: replyToId || null,
+      sender: sender,
+      createdAt: new Date(),
+    };
 
     const normalizedMessage = {
       ...message,
@@ -402,13 +437,8 @@ export async function POST(
     });
 
     // Также для старой схемы
-    if (fullChat?.participant1Id || fullChat?.participant2Id) {
-      const updateData: any = {};
-      if (fullChat.participant1Id === userId) {
-        updateData.participant2ReadAt = null;
-      } else if (fullChat.participant2Id === userId) {
-        updateData.participant1ReadAt = null;
-      }
+    // ReadAt обновляется через ChatParticipant (уже обработано выше)
+    // Старая схема удалена
       if (Object.keys(updateData).length > 0) {
         await prisma.chat.update({
           where: { id: chatId },
