@@ -49,11 +49,31 @@ export async function GET() {
     });
 
     // Format response
+    // Сначала получаем информацию о тикетах для чатов с matrixRoomId
+    const matrixRoomIds = chats
+      .filter(c => c.matrixRoomId)
+      .map(c => c.matrixRoomId!)
+      .filter(Boolean);
+    
+    const tickets = matrixRoomIds.length > 0 ? await prisma.ticket.findMany({
+      where: { matrixRoomId: { in: matrixRoomIds } },
+      select: { 
+        matrixRoomId: true,
+        id: true,
+        publicId: true,
+        status: true,
+        resolved: true,
+        userId: true,
+      },
+    }) : [];
+    
+    const ticketMap = new Map(tickets.map(t => [t.matrixRoomId!, t]));
+
     const roomsData = chats
       .filter(chat => chat.matrixRoomId) // Only return migrated chats
       .map(chat => {
         // Получаем тикет через matrixRoomId
-        const ticket = ticketMap.get(chat.matrixRoomId!);
+        const ticket = ticketMap.get(chat.matrixRoomId!) || null;
         const isDirect = chat.participants.length === 2;
         
         // Get the other participant for DM chats
