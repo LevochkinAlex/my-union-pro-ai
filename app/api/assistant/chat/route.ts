@@ -6,6 +6,8 @@ import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
 import { saveChatConversationToKnowledgeBase } from "@/lib/chat-knowledge-learning";
 import { saveUserInteractionToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { enhancedSearch, formatSearchResultsForPrompt } from "@/lib/chat-enhanced-search";
+import { getOrCreatePrivateChat } from "@/lib/chat-service";
+import { getMatrixMessages, sendMatrixMessage } from "@/lib/matrix-messages";
 import type { ChatBot, ApiProvider } from "@prisma/client";
 
 /**
@@ -110,35 +112,54 @@ export async function POST(request: NextRequest) {
 
     // Получаем или создаем чат с ботом
     const userId = session.user.id;
-    const { getOrCreatePrivateChat } = await import("@/lib/chat-server-utils");
-    const chat = await getOrCreatePrivateChat(userId, botUser.id);
+    const { chat } = await getOrCreatePrivateChat(userId, botUser.id);
 
-    // Загружаем историю сообщений из чата для контекста
-    const chatHistory = await prisma.chatMessage.findMany({
-      where: {
-        chatId: chat.id,
-        deletedAt: null,
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
-      take: 20, // Последние 20 сообщений
+    if (!chat.matrixRoomId) {
+      return NextResponse.json(
+        { error: "Чат с ботом не настроен. Попробуйте позже." },
+        { status: 500 }
+      );
+    }
+
+    // Получаем Matrix токен пользователя
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { matrixAccessToken: true, matrixUserId: true },
     });
 
+    if (!currentUser?.matrixAccessToken || !currentUser?.matrixUserId) {
+      return NextResponse.json(
+        { error: "Matrix аккаунт не настроен" },
+        { status: 500 }
+      );
+    }
+
+    // Загружаем историю сообщений из Matrix для контекста
+    const matrixMessages = await getMatrixMessages(
+      currentUser.matrixAccessToken,
+      chat.matrixRoomId,
+      20
+    );
+
     // Преобразуем историю в формат для AI
-    const conversationHistory = chatHistory.map((msg) => ({
-      role: msg.senderId === botUser.id ? "assistant" : "user",
+    const conversationHistory = matrixMessages.map((msg) => ({
+      role: msg.sender === botUser.matrixUserId ? "assistant" : "user",
       content: msg.content,
     }));
 
-    // Сохраняем сообщение пользователя
-    const userMessage = await prisma.chatMessage.create({
-      data: {
-        chatId: chat.id,
-        senderId: userId,
-        content: message.trim(),
-      },
-    });
+    // Отправляем сообщение пользователя в Matrix
+    const userMessageEventId = await sendMatrixMessage(
+      currentUser.matrixAccessToken,
+      chat.matrixRoomId,
+      message.trim()
+    );
+
+    if (!userMessageEventId) {
+      return NextResponse.json(
+        { error: "Не удалось отправить сообщение" },
+        { status: 500 }
+      );
+    }
 
     // Формируем историю сообщений для контекста (обновляем с учетом сохраненного сообщения)
     const messages = [
@@ -158,12 +179,37 @@ export async function POST(request: NextRequest) {
       throw aiError;
     }
 
-    // Сохраняем ответ бота
-    const botMessage = await prisma.chatMessage.create({
+    // Отправляем ответ бота в Matrix
+    const botUserMatrix = await prisma.user.findUnique({
+      where: { id: botUser.id },
+      select: { matrixAccessToken: true },
+    });
+
+    if (!botUserMatrix?.matrixAccessToken) {
+      return NextResponse.json(
+        { error: "Бот не настроен в Matrix" },
+        { status: 500 }
+      );
+    }
+
+    const botMessageEventId = await sendMatrixMessage(
+      botUserMatrix.matrixAccessToken,
+      chat.matrixRoomId,
+      aiResponse
+    );
+
+    if (!botMessageEventId) {
+      return NextResponse.json(
+        { error: "Не удалось отправить ответ бота" },
+        { status: 500 }
+      );
+    }
+
+    // Обновляем последнее сообщение в чате
+    await prisma.chat.update({
+      where: { id: chat.id },
       data: {
-        chatId: chat.id,
-        senderId: botUser.id,
-        content: aiResponse,
+        lastMessageAt: new Date(),
       },
     });
 
@@ -174,24 +220,12 @@ export async function POST(request: NextRequest) {
       aiResponse,
       {
         chatId: chat.id,
-        messageId: userMessage.id,
-        botMessageId: botMessage.id,
+        messageId: userMessageEventId,
+        botMessageId: botMessageEventId,
         botId: bot.id,
       }
     ).catch((error) => {
       console.error("[assistant/chat] Error saving interaction to user knowledge base:", error);
-    });
-
-    // Обновляем последнее сообщение в чате
-    await prisma.chat.update({
-      where: { id: chat.id },
-      data: {
-        lastMessage: aiResponse.substring(0, 200),
-        lastMessageAt: new Date(),
-        ...(chat.participant1Id === userId
-          ? { participant2ReadAt: null }
-          : { participant1ReadAt: null }),
-      },
     });
 
     // Сохраняем переписку в базу знаний для обучения бота (асинхронно, не блокируем ответ)
@@ -201,14 +235,14 @@ export async function POST(request: NextRequest) {
       aiResponse,
       userId,
       chat.id,
-      botMessage.id
+      botMessageEventId
     ).catch((error) => {
       console.error("[assistant/chat] Error saving conversation to knowledge base:", error);
     });
 
     return NextResponse.json({
       message: aiResponse,
-      id: botMessage.id,
+      id: botMessageEventId,
       chatId: chat.id,
     });
   } catch (error) {

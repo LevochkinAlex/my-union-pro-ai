@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateAppealPublicId, formatAppealId } from "@/lib/appeal-id";
+import { createAppealThread } from "@/lib/matrix-threads";
 import { saveTicketToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { createGroupChat } from "@/lib/chat-service";
 
@@ -216,7 +217,24 @@ export async function POST(request: NextRequest) {
       chairmanId = chairman?.id || null;
     }
 
-    // Создаем тикет
+    // Сначала создаем Matrix тред, чтобы получить matrixRoomId
+    let matrixRoomId: string | null = null;
+    if (chairmanId && chairmanId !== session.user.id) {
+      let messageContent = `📋 **${title}**\n\n${content.replace(/<[^>]*>/g, "")}`;
+      
+      const threadInfo = await createAppealThread(
+        `Обращение #${publicId!}: ${title}`,
+        messageContent,
+        session.user.id,
+        chairmanId
+      );
+
+      if (threadInfo) {
+        matrixRoomId = threadInfo.roomId;
+      }
+    }
+
+    // Создаем тикет с matrixRoomId
     const ticket = await prisma.ticket.create({
       data: {
         userId: session.user.id,
@@ -227,6 +245,7 @@ export async function POST(request: NextRequest) {
         title,
         content,
         organizationId: user?.organizationId || null,
+        matrixRoomId,
       },
     });
 
@@ -287,59 +306,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Создаем чат для обращения через сервис
-    let chatId: string | null = null;
-    if (chairmanId && chairmanId !== session.user.id) {
-      const chat = await createGroupChat(
-        session.user.id,
-        `Обращение #${publicId}`,
-        title,
-        [chairmanId],
-        {
-          isPublic: false,
-          ticketId: ticket.id,
+    // Если тред создан и есть файлы, отправляем информацию о файлах в тред
+    if (matrixRoomId && uploadedFiles.length > 0) {
+      // Получаем токен создателя для отправки сообщения в тред
+      const creator = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { matrixAccessToken: true },
+      });
+
+      if (creator?.matrixAccessToken) {
+        const filesList = uploadedFiles.map((f, i) => `${i + 1}. ${f.originalName}`).join('\n');
+        const filesMessage = `📎 **Прикрепленные файлы:**\n${filesList}`;
+        
+        // Отправляем сообщение в тред (reply к корневому сообщению)
+        const { replyToThread } = await import('@/lib/matrix-threads');
+        // Получаем thread root event ID из первого сообщения в комнате
+        const { getMatrixMessages } = await import('@/lib/matrix-messages');
+        const messages = await getMatrixMessages(creator.matrixAccessToken, matrixRoomId, 1);
+        if (messages.length > 0) {
+          await replyToThread(
+            creator.matrixAccessToken,
+            matrixRoomId,
+            messages[0].eventId,
+            filesMessage
+          );
         }
-      );
-      chatId = chat.id;
-
-      // Формируем текст первого сообщения
-      let messageContent = `📋 **${title}**\n\n${content.replace(/<[^>]*>/g, "")}`;
-      if (uploadedFiles.length > 0) {
-        messageContent += `\n\n📎 Прикреплено файлов: ${uploadedFiles.length}`;
       }
-
-      // Создаем первое сообщение
-      const chatMessage = await prisma.chatMessage.create({
-        data: {
-          chatId: chat.id,
-          senderId: session.user.id,
-          content: messageContent,
-        },
-      });
-
-      // Прикрепляем файлы к сообщению
-      if (uploadedFiles.length > 0) {
-        await prisma.chatMessageAttachment.createMany({
-          data: uploadedFiles.map(f => ({
-            messageId: chatMessage.id,
-            type: f.mimeType.startsWith("image/") ? "image" : "file",
-            fileName: f.fileName,
-            originalName: f.originalName,
-            filePath: f.filePath,
-            fileSize: f.fileSize,
-            mimeType: f.mimeType,
-          })),
-        });
-      }
-
-      // Обновляем lastMessage в чате
-      await prisma.chat.update({
-        where: { id: chat.id },
-        data: {
-          lastMessageAt: new Date(),
-          lastMessage: `📋 ${title}`,
-        },
-      });
     }
 
     // Логируем создание
