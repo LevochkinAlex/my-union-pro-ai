@@ -848,9 +848,13 @@ export default function ProfilePage() {
       }
 
       setMessage({ type: "success", text: "Профиль успешно обновлен" });
+      // Очищаем сообщение через 5 секунд
+      setTimeout(() => setMessage(null), 5000);
     } catch (error) {
       console.error(error);
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка обновления профиля" });
+      // Очищаем сообщение об ошибке через 5 секунд
+      setTimeout(() => setMessage(null), 5000);
     } finally {
       setSavingProfile(false);
     }
@@ -953,6 +957,8 @@ export default function ProfilePage() {
       }
 
       setMessage({ type: "success", text: "Дополнительная информация успешно обновлена" });
+      // Очищаем сообщение через 5 секунд
+      setTimeout(() => setMessage(null), 5000);
     } catch (error) {
       console.error(error);
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Ошибка обновления данных" });
@@ -997,6 +1003,8 @@ export default function ProfilePage() {
       }
       
       setMessage({ type: "success", text: "Фото профиля успешно обновлено" });
+      // Очищаем сообщение через 5 секунд
+      setTimeout(() => setMessage(null), 5000);
     } catch (error) {
       console.error("[Profile] Avatar save error:", error);
       const errorMessage = error instanceof Error ? error.message : "Ошибка загрузки фото";
@@ -1160,7 +1168,7 @@ export default function ProfilePage() {
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                Отчество <span className="text-red-500">*</span>
+                Отчество
               </label>
               <input
                 type="text"
@@ -1170,7 +1178,6 @@ export default function ProfilePage() {
                 onBlur={() => handleFieldBlur("middleName", profileData.middleName)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                 placeholder="Например: Петрович"
-                required
               />
             </div>
             <div>

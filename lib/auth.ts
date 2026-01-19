@@ -485,8 +485,17 @@ export const authOptions: NextAuthOptions = {
             }
 
             // Обновляем имя и фамилию, если их нет
-            if (yandexUserInfo.real_name) {
-              const nameParts = yandexUserInfo.real_name.split(" ");
+            // Используем first_name и last_name из Yandex API, если доступны (более надежно)
+            if (yandexUserInfo.first_name || yandexUserInfo.last_name) {
+              if (!existingUser.firstName && yandexUserInfo.first_name) {
+                updateData.firstName = yandexUserInfo.first_name;
+              }
+              if (!existingUser.lastName && yandexUserInfo.last_name) {
+                updateData.lastName = yandexUserInfo.last_name;
+              }
+            } else if (yandexUserInfo.real_name) {
+              // Fallback: парсим real_name (формат: "Фамилия Имя Отчество")
+              const nameParts = yandexUserInfo.real_name.trim().split(/\s+/);
               if (nameParts.length >= 2) {
                 if (!existingUser.firstName) {
                   updateData.firstName = nameParts[1]; // Имя
@@ -575,13 +584,22 @@ export const authOptions: NextAuthOptions = {
             };
 
             // Парсим имя
-            if (yandexUserInfo.real_name) {
-              const nameParts = yandexUserInfo.real_name.split(" ");
+            // Используем first_name и last_name из Yandex API, если доступны (более надежно)
+            if (yandexUserInfo.first_name || yandexUserInfo.last_name) {
+              if (yandexUserInfo.first_name) {
+                newUserData.firstName = yandexUserInfo.first_name;
+              }
+              if (yandexUserInfo.last_name) {
+                newUserData.lastName = yandexUserInfo.last_name;
+              }
+            } else if (yandexUserInfo.real_name) {
+              // Fallback: парсим real_name (формат: "Фамилия Имя Отчество")
+              const nameParts = yandexUserInfo.real_name.trim().split(/\s+/);
               if (nameParts.length >= 2) {
-                newUserData.firstName = nameParts[1];
-                newUserData.lastName = nameParts[0];
+                newUserData.firstName = nameParts[1]; // Имя
+                newUserData.lastName = nameParts[0]; // Фамилия
                 if (nameParts.length >= 3) {
-                  newUserData.middleName = nameParts.slice(2).join(" ");
+                  newUserData.middleName = nameParts.slice(2).join(" "); // Отчество
                 }
               }
             }
