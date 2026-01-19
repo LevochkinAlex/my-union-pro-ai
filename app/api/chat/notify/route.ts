@@ -3,6 +3,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { sendUserNotification } from '@/lib/notifications';
+import { config } from 'dotenv';
+import { resolve } from 'path';
+
+// Load .env.local explicitly for server-side routes
+config({ path: resolve(process.cwd(), '.env.local') });
 
 // POST /api/chat/notify - Send push notification for new chat message
 export async function POST(request: NextRequest) {
