@@ -68,16 +68,7 @@ async function cleanupAndMigrate() {
         },
       });
       
-      // Удаляем тикеты (чаты будут удалены каскадом, но нужно обнулить ticketId)
-      await prisma.chat.updateMany({
-        where: {
-          ticketId: { not: null },
-        },
-        data: {
-          ticketId: null,
-        },
-      });
-      
+      // Удаляем тикеты (связи с чатами уже удалены в схеме)
       await prisma.ticket.deleteMany({});
       console.log(`   ✅ Удалено ${ticketsCount} обращений`);
     }
