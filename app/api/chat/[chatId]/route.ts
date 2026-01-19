@@ -278,11 +278,6 @@ export async function POST(
     const resolvedParams = await Promise.resolve(params);
     const chatId = resolvedParams.chatId;
     const userId = session.user.id;
-    const { content, replyToId } = await request.json();
-
-    if (!content || !content.trim()) {
-      return NextResponse.json({ error: "Сообщение не может быть пустым" }, { status: 400 });
-    }
 
     // Проверяем доступ
     let chat: any;
