@@ -235,30 +235,52 @@ async function resetAIChats() {
         console.log(`   Удаляем ${messagesToDelete.length} сообщений...`);
 
         // Удаляем все сообщения (redact) - используем токен пользователя
+        // Добавляем задержку между запросами чтобы избежать rate limit
         let deletedCount = 0;
-        for (const msg of messagesToDelete) {
+        for (let i = 0; i < messagesToDelete.length; i++) {
+          const msg = messagesToDelete[i];
           const deleted = await redactMessage(roomId, msg.event_id, userToken);
           if (deleted) deletedCount++;
+          
+          // Задержка между запросами (кроме последнего)
+          if (i < messagesToDelete.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 100)); // 100ms задержка
+          }
         }
 
         console.log(`   ✅ Удалено ${deletedCount} из ${messagesToDelete.length} сообщений`);
 
-        // Отправляем новое приветственное сообщение от бота
-        const welcomeEventId = await sendWelcomeMessage(roomId, botToken);
+        // Ждем немного перед отправкой приветствия (чтобы избежать rate limit)
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Отправляем новое приветственное сообщение
+        // Сначала пробуем от бота, если не получается - от пользователя
+        let welcomeEventId = null;
+        
+        // Пробуем найти правильного бота из участников комнаты
+        const botParticipant = chat.participants?.find(p => {
+          const mUserId = p.user?.matrixUserId || '';
+          return mUserId.includes('myunion_bot') || 
+                 mUserId.includes('ai_assistant') || 
+                 mUserId.includes('assistant');
+        });
+        
+        if (botParticipant?.user?.matrixAccessToken) {
+          const botUserToken = botParticipant.user.matrixAccessToken;
+          welcomeEventId = await sendWelcomeMessage(roomId, botUserToken);
+        }
+        
+        // Если не удалось от бота, пробуем от пользователя
+        if (!welcomeEventId) {
+          welcomeEventId = await sendWelcomeMessage(roomId, userToken);
+        }
+        
         if (welcomeEventId) {
           console.log(`   ✅ Отправлено новое приветственное сообщение`);
           resetCount++;
         } else {
-          console.log(`   ⚠️  Сообщения удалены, но не удалось отправить приветствие (бот может быть не в комнате)`);
-          // Пытаемся отправить от пользователя
-          const welcomeEventId2 = await sendWelcomeMessage(roomId, userToken);
-          if (welcomeEventId2) {
-            console.log(`   ✅ Отправлено приветствие от пользователя`);
-            resetCount++;
-          } else {
-            console.log(`   ❌ Не удалось отправить приветствие`);
-            errorCount++;
-          }
+          console.log(`   ⚠️  Сообщения удалены, но не удалось отправить приветствие`);
+          errorCount++;
         }
 
       } catch (error) {
