@@ -1,4 +1,8 @@
 import { PrismaClient } from '@prisma/client';
+import { config as loadEnv } from 'dotenv';
+
+// Load env vars from .env.local if present
+loadEnv({ path: '.env.local' });
 
 const prisma = new PrismaClient();
 
