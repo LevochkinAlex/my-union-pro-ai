@@ -199,7 +199,20 @@ export async function GET() {
         };
       });
 
-    return NextResponse.json({ rooms: roomsData });
+    // Сортируем комнаты: сначала чат с ИИ, затем по времени последнего сообщения
+    const sortedRooms = roomsData.sort((a, b) => {
+      // Чат с ИИ всегда первый
+      const aIsBot = a.displayName?.includes('Помощник') || a.displayName?.includes('AI') || a.displayName?.includes('Бот');
+      const bIsBot = b.displayName?.includes('Помощник') || b.displayName?.includes('AI') || b.displayName?.includes('Бот');
+      
+      if (aIsBot && !bIsBot) return -1;
+      if (!aIsBot && bIsBot) return 1;
+      
+      // Остальные сортируем по времени последнего сообщения
+      return (b.lastMessageTime || 0) - (a.lastMessageTime || 0);
+    });
+
+    return NextResponse.json({ rooms: sortedRooms });
   } catch (error) {
     console.error('Error fetching chat rooms:', error);
     return NextResponse.json({ error: 'Failed to fetch rooms' }, { status: 500 });

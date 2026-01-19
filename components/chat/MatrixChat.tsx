@@ -795,7 +795,40 @@ export default function MatrixChat() {
         setRooms(prev => {
           const updated = new Map(prev.map(r => [r.roomId, r]));
           filteredRoomList.forEach(r => updated.set(r.roomId, r));
-          const sorted = Array.from(updated.values()).sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
+          
+          // Добавляем чат с ИИ из dbRoomInfo если его нет в Matrix rooms
+          dbRoomInfo.forEach((info, matrixRoomId) => {
+            const isBotChat = info.displayName?.includes('Помощник') || 
+                             info.displayName?.includes('AI') || 
+                             info.displayName?.includes('Бот') ||
+                             info.participants?.some(p => p.matrixUserId?.includes('myunion_bot') || p.matrixUserId?.includes('ai_assistant'));
+            
+            if (isBotChat && !updated.has(matrixRoomId)) {
+              // Создаем чат с ИИ если его нет в Matrix rooms
+              updated.set(matrixRoomId, {
+                roomId: matrixRoomId,
+                name: info.displayName || 'МойСоюз Помощник',
+                avatarUrl: info.avatarUrl || '/icon.png',
+                lastMessage: undefined,
+                lastMessageTime: 0,
+                unreadCount: 0,
+                isDirect: true,
+              });
+            }
+          });
+          
+          const allRooms = Array.from(updated.values());
+          
+          // Сортируем: чат с ИИ первый, затем по времени последнего сообщения
+          const sorted = allRooms.sort((a, b) => {
+            const aIsBot = a.name?.includes('Помощник') || a.name?.includes('AI') || a.name?.includes('Бот');
+            const bIsBot = b.name?.includes('Помощник') || b.name?.includes('AI') || b.name?.includes('Бот');
+            
+            if (aIsBot && !bIsBot) return -1;
+            if (!aIsBot && bIsBot) return 1;
+            
+            return (b.lastMessageTime || 0) - (a.lastMessageTime || 0);
+          });
           
           // Calculate total unread count and notify sidebar
           const totalUnread = sorted.reduce((sum, r) => sum + r.unreadCount, 0);
