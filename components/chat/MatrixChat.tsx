@@ -250,85 +250,6 @@ export default function MatrixChat() {
     authenticate();
   }, [session]);
 
-  // Handle chatId from URL (e.g., from appeals page or notifications)
-  useEffect(() => {
-    if (!urlChatId || urlChatHandled) return;
-    
-    // Wait for rooms and dbRoomInfo to be loaded, with retry logic
-    if (rooms.length === 0 || !dbRoomInfoLoaded) {
-      // Retry after a short delay if rooms are not loaded yet
-      const retryTimer = setTimeout(() => {
-        if (rooms.length === 0 || !dbRoomInfoLoaded) {
-          console.log('[MatrixChat] Waiting for rooms/dbRoomInfo to load before opening chat from URL...');
-        }
-      }, 1000);
-      return () => clearTimeout(retryTimer);
-    }
-    
-    async function openChatFromUrl() {
-      try {
-        console.log('[MatrixChat] Opening chat from URL, chatId:', urlChatId);
-        // Find chat by ID and get its matrixRoomId
-        const response = await fetch(`/api/chat/${urlChatId}`);
-        if (response.ok) {
-          const data = await response.json();
-          console.log('[MatrixChat] Chat data from API:', { 
-            chatId: data.chat?.id, 
-            matrixRoomId: data.chat?.matrixRoomId,
-            hasMessages: data.messages?.length > 0 
-          });
-          
-          if (data.chat?.matrixRoomId) {
-            // Find the room in our loaded rooms
-            const room = rooms.find(r => r.roomId === data.chat.matrixRoomId);
-            if (room) {
-              console.log('[MatrixChat] Found room, opening chat:', data.chat.matrixRoomId);
-              // If this is a ticket chat, switch to work tab
-              const roomInfo = dbRoomInfo.get(data.chat.matrixRoomId);
-              if (roomInfo?.isTicket || room.isTicket) {
-                setChatTab('work');
-              }
-              // Close mobile menu to show chat
-              setIsMobileMenuOpen(false);
-              // Use handleSelectRoom to properly load messages and update UI
-              await handleSelectRoom(data.chat.matrixRoomId);
-              setUrlChatHandled(true);
-            } else {
-              console.log('[MatrixChat] Room not found in loaded rooms, matrixRoomId:', data.chat.matrixRoomId);
-              console.log('[MatrixChat] Available rooms:', rooms.map(r => r.roomId).slice(0, 5));
-              // Try to wait a bit more and retry
-              setTimeout(async () => {
-                const retryRoom = rooms.find(r => r.roomId === data.chat.matrixRoomId);
-                if (retryRoom) {
-                  console.log('[MatrixChat] Found room on retry, opening chat');
-                  setIsMobileMenuOpen(false);
-                  // Use handleSelectRoom to properly load messages and update UI
-                  await handleSelectRoom(data.chat.matrixRoomId);
-                  setUrlChatHandled(true);
-                } else {
-                  console.error('[MatrixChat] Room still not found after retry');
-                  setUrlChatHandled(true); // Mark as handled to prevent infinite retries
-                }
-              }, 2000);
-            }
-          } else {
-            console.error('[MatrixChat] Chat has no matrixRoomId:', data.chat);
-            setUrlChatHandled(true);
-          }
-        } else {
-          const errorText = await response.text();
-          console.error('[MatrixChat] Failed to fetch chat:', response.status, errorText);
-          setUrlChatHandled(true);
-        }
-      } catch (err) {
-        console.error('[MatrixChat] Failed to open chat from URL:', err);
-        setUrlChatHandled(true);
-      }
-    }
-    
-    openChatFromUrl();
-  }, [urlChatId, urlChatHandled, rooms, dbRoomInfo, dbRoomInfoLoaded, handleSelectRoom]);
-
   // Load room info from our database (proper names, avatars)
   const loadDbRoomInfo = useCallback(async () => {
     try {
@@ -1201,7 +1122,8 @@ export default function MatrixChat() {
     }
   }, [credentials, matrixFetch]);
 
-  const handleSelectRoom = async (roomId: string) => {
+  // Select room - must be declared before useEffect that uses it
+  const handleSelectRoom = useCallback(async (roomId: string) => {
     setSelectedRoomId(roomId);
     setMessages([]);
     setTypingUsers([]);
@@ -1249,7 +1171,87 @@ export default function MatrixChat() {
         return r;
       }));
     }
-  };
+  }, [loadRoomMessages, markRoomAsRead, fetchRoomMembers]);
+
+  // Handle chatId from URL (e.g., from appeals page or notifications)
+  // Note: This useEffect is placed after handleSelectRoom declaration to avoid hoisting issues
+  useEffect(() => {
+    if (!urlChatId || urlChatHandled) return;
+    
+    // Wait for rooms and dbRoomInfo to be loaded, with retry logic
+    if (rooms.length === 0 || !dbRoomInfoLoaded) {
+      // Retry after a short delay if rooms are not loaded yet
+      const retryTimer = setTimeout(() => {
+        if (rooms.length === 0 || !dbRoomInfoLoaded) {
+          console.log('[MatrixChat] Waiting for rooms/dbRoomInfo to load before opening chat from URL...');
+        }
+      }, 1000);
+      return () => clearTimeout(retryTimer);
+    }
+    
+    async function openChatFromUrl() {
+      try {
+        console.log('[MatrixChat] Opening chat from URL, chatId:', urlChatId);
+        // Find chat by ID and get its matrixRoomId
+        const response = await fetch(`/api/chat/${urlChatId}`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[MatrixChat] Chat data from API:', { 
+            chatId: data.chat?.id, 
+            matrixRoomId: data.chat?.matrixRoomId,
+            hasMessages: data.messages?.length > 0 
+          });
+          
+          if (data.chat?.matrixRoomId) {
+            // Find the room in our loaded rooms
+            const room = rooms.find(r => r.roomId === data.chat.matrixRoomId);
+            if (room) {
+              console.log('[MatrixChat] Found room, opening chat:', data.chat.matrixRoomId);
+              // If this is a ticket chat, switch to work tab
+              const roomInfo = dbRoomInfo.get(data.chat.matrixRoomId);
+              if (roomInfo?.isTicket || room.isTicket) {
+                setChatTab('work');
+              }
+              // Close mobile menu to show chat
+              setIsMobileMenuOpen(false);
+              // Use handleSelectRoom to properly load messages and update UI
+              await handleSelectRoom(data.chat.matrixRoomId);
+              setUrlChatHandled(true);
+            } else {
+              console.log('[MatrixChat] Room not found in loaded rooms, matrixRoomId:', data.chat.matrixRoomId);
+              console.log('[MatrixChat] Available rooms:', rooms.map(r => r.roomId).slice(0, 5));
+              // Try to wait a bit more and retry
+              setTimeout(async () => {
+                const retryRoom = rooms.find(r => r.roomId === data.chat.matrixRoomId);
+                if (retryRoom) {
+                  console.log('[MatrixChat] Found room on retry, opening chat');
+                  setIsMobileMenuOpen(false);
+                  // Use handleSelectRoom to properly load messages and update UI
+                  await handleSelectRoom(data.chat.matrixRoomId);
+                  setUrlChatHandled(true);
+                } else {
+                  console.error('[MatrixChat] Room still not found after retry');
+                  setUrlChatHandled(true); // Mark as handled to prevent infinite retries
+                }
+              }, 2000);
+            }
+          } else {
+            console.error('[MatrixChat] Chat has no matrixRoomId:', data.chat);
+            setUrlChatHandled(true);
+          }
+        } else {
+          const errorText = await response.text();
+          console.error('[MatrixChat] Failed to fetch chat:', response.status, errorText);
+          setUrlChatHandled(true);
+        }
+      } catch (err) {
+        console.error('[MatrixChat] Failed to open chat from URL:', err);
+        setUrlChatHandled(true);
+      }
+    }
+    
+    openChatFromUrl();
+  }, [urlChatId, urlChatHandled, rooms, dbRoomInfo, dbRoomInfoLoaded, handleSelectRoom]);
 
   // Send message (with reply support)
   const handleSend = async () => {
