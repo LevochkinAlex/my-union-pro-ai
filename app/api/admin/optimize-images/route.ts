@@ -219,11 +219,6 @@ export async function GET() {
         },
       }),
       Promise.resolve(0), // ChatMessageAttachment удалена - все сообщения в Matrix
-        where: {
-          type: "image",
-          filePath: { not: "" },
-        },
-      }),
       prisma.newsPost.count({
         where: {
           coverImage: { not: "" },
