@@ -166,25 +166,41 @@ async function clearAllMatrixAIMessages() {
         console.log(`   📨 Найдено сообщений: ${allMessages.length}`);
 
         if (allMessages.length > 0) {
-          // Удаляем все сообщения
+          // Удаляем ВСЕ сообщения (любого типа)
           let deleted = 0;
+          let failed = 0;
           for (const msg of allMessages) {
-            if (msg.type === 'm.room.message' || msg.type === 'm.room.encrypted') {
+            // Пропускаем системные события, которые нельзя удалить
+            if (msg.type === 'm.room.member' || 
+                msg.type === 'm.room.create' || 
+                msg.type === 'm.room.join_rules' ||
+                msg.type === 'm.room.power_levels' ||
+                msg.type === 'm.room.name' ||
+                msg.type === 'm.room.topic') {
+              continue;
+            }
+            
+            try {
               const success = await redactMessage(roomId, msg.event_id, userToken);
               if (success) {
                 deleted++;
                 totalDeleted++;
-              }
-              
-              // Задержка, чтобы не перегрузить Matrix
-              if (deleted % 10 === 0) {
-                await new Promise(resolve => setTimeout(resolve, 500));
               } else {
-                await new Promise(resolve => setTimeout(resolve, 100));
+                failed++;
               }
+            } catch (error) {
+              failed++;
+              // Продолжаем удаление даже при ошибках
+            }
+            
+            // Задержка, чтобы не перегрузить Matrix
+            if (deleted % 10 === 0) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+            } else {
+              await new Promise(resolve => setTimeout(resolve, 50));
             }
           }
-          console.log(`      ✅ Удалено ${deleted} сообщений для ${userName}`);
+          console.log(`      ✅ Удалено ${deleted} сообщений для ${userName}${failed > 0 ? `, ошибок: ${failed}` : ''}`);
         } else {
           console.log(`   ⏭️  Нет сообщений для ${userName}`);
         }
