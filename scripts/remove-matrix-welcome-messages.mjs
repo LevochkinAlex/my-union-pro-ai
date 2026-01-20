@@ -77,7 +77,7 @@ async function removeMatrixWelcomeMessages() {
 
     console.log(`✅ Бот найден: ${botUser.id}\n`);
 
-    // 2. Находим все чаты с ботом, у которых есть matrixRoomId
+    // 2. Находим все чаты с ботом, у которых есть matrixRoomId (используем select, чтобы избежать проблем с несуществующими колонками)
     const aiChats = await prisma.chat.findMany({
       where: {
         type: 'PRIVATE',
@@ -89,10 +89,14 @@ async function removeMatrixWelcomeMessages() {
           },
         },
       },
-      include: {
+      select: {
+        id: true,
+        matrixRoomId: true,
+        type: true,
         participants: {
           where: { leftAt: null },
-          include: {
+          select: {
+            userId: true,
             user: {
               select: {
                 id: true,

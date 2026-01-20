@@ -38,31 +38,11 @@ export async function GET() {
         type: true,
         name: true,
         iconUrl: true,
-        lastMessageId: true,
-        lastMessageAt: true,
-        lastMessage: {
-          select: {
-            id: true,
-            content: true,
-            senderId: true,
-            sender: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatarUrl: true,
-              },
-            },
-            createdAt: true,
-            threadRootId: true,
-            threadRepliesCount: true,
-            _count: {
-              select: {
-                threadReplies: true,
-              },
-            },
-          },
-        },
+        matrixRoomId: true,
+        createdAt: true,
+        updatedAt: true,
+        // lastMessageId и lastMessage могут не существовать до миграции
+        // Используем try-catch или проверяем существование колонок
         participants: {
           where: { leftAt: null }, // Only active participants
           include: {
@@ -181,14 +161,9 @@ export async function GET() {
           ticketStatus: ticket?.status || null,
           isTicketCreator: ticket?.userId === session.user.id, // Is current user the ticket creator
           participantCount: chat.participants.length,
-          lastMessage: chat.lastMessage ? {
-            id: chat.lastMessage.id,
-            content: chat.lastMessage.content,
-            sender: chat.lastMessage.sender,
-            createdAt: chat.lastMessage.createdAt,
-          } : null,
-          lastMessageTime: chat.lastMessageAt?.getTime() || null,
-          threadRepliesCount: chat.lastMessage?._count?.threadReplies || 0, // Количество ответов в треде
+          lastMessage: null, // Будет загружаться отдельно если нужно
+          lastMessageTime: null, // Будет загружаться отдельно если нужно
+          threadRepliesCount: 0,
           participants: chat.participants.map(p => ({
             id: p.user?.id,
             firstName: p.user?.firstName,
