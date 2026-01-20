@@ -950,8 +950,98 @@ export default function MatrixChat() {
 
   // Send message - через API
   const handleSend = async () => {
-    console.warn('handleSend temporarily disabled - Matrix removed');
-    return;
+    if (!selectedRoomId || !newMessage.trim() || sending) return;
+
+    setSending(true);
+    const content = newMessage.trim();
+    setNewMessage('');
+    const currentReplyTo = replyTo;
+    setReplyTo(null);
+    
+    // Reset textarea height
+    if (inputRef.current) {
+      inputRef.current.style.height = '48px';
+    }
+
+    try {
+      // Получаем actualChatId из selectedRoomId
+      const dbInfo = Array.from(dbRoomInfo.values()).find(info => 
+        info.matrixRoomId === selectedRoomId || 
+        info.id === selectedRoomId
+      );
+      const actualChatId = dbInfo?.id || selectedRoomId;
+
+      // Отправляем сообщение через API
+      const response = await fetch(`/api/chat/${actualChatId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: content,
+          replyToId: currentReplyTo?.eventId || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Ошибка отправки сообщения' }));
+        throw new Error(error.error || 'Ошибка отправки сообщения');
+      }
+
+      const data = await response.json();
+      
+      // Добавляем сообщение в список
+      if (data.message) {
+        const msg = data.message;
+        const senderName = msg.sender 
+          ? [msg.sender.firstName, msg.sender.lastName].filter(Boolean).join(' ') || 'Пользователь'
+          : 'Пользователь';
+        
+        setMessages(prev => [...prev, {
+          eventId: msg.id,
+          sender: msg.sender?.id || session?.user?.id || '',
+          senderName: senderName,
+          content: msg.content,
+          timestamp: new Date(msg.createdAt).getTime(),
+          isOwn: true,
+          msgtype: 'm.text',
+          replyTo: msg.replyTo ? {
+            eventId: msg.replyTo.id,
+            sender: msg.replyTo.sender?.id || '',
+            senderName: [msg.replyTo.sender?.firstName, msg.replyTo.sender?.lastName].filter(Boolean).join(' ') || 'Пользователь',
+            content: msg.replyTo.content,
+          } : undefined,
+        }]);
+        
+        scrollToBottom();
+      }
+
+      // Если есть ответ от бота, добавляем его тоже
+      if (data.botMessage) {
+        const botMsg = data.botMessage;
+        setMessages(prev => [...prev, {
+          eventId: botMsg.id,
+          sender: botMsg.sender?.id || '',
+          senderName: 'МойСоюз Помощник',
+          content: botMsg.content,
+          timestamp: new Date(botMsg.createdAt).getTime(),
+          isOwn: false,
+          msgtype: 'm.text',
+        }]);
+        
+        scrollToBottom();
+      }
+
+      // Перезагружаем сообщения для синхронизации
+      await loadRoomMessages(actualChatId);
+      
+    } catch (err) {
+      console.error('Send error:', err);
+      setError(err instanceof Error ? err.message : 'Ошибка отправки сообщения');
+      setNewMessage(content);
+      setReplyTo(currentReplyTo);
+    } finally {
+      setSending(false);
+      inputRef.current?.focus();
+    }
   };
 
   // Send reaction - через API
