@@ -7,7 +7,7 @@ import { saveChatConversationToKnowledgeBase } from "@/lib/chat-knowledge-learni
 import { saveUserInteractionToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { enhancedSearch, formatSearchResultsForPrompt } from "@/lib/chat-enhanced-search";
 import { getOrCreatePrivateChat } from "@/lib/chat-service";
-import { getMatrixMessages, sendMatrixMessage } from "@/lib/matrix-messages";
+// Matrix больше не используется - работаем через WebSocket и базу данных
 import type { ChatBot, ApiProvider } from "@prisma/client";
 
 /**
@@ -114,52 +114,54 @@ export async function POST(request: NextRequest) {
     const userId = session.user.id;
     const { chat } = await getOrCreatePrivateChat(userId, botUser.id);
 
-    if (!chat.matrixRoomId) {
-      return NextResponse.json(
-        { error: "Чат с ботом не настроен. Попробуйте позже." },
-        { status: 500 }
-      );
-    }
-
-    // Получаем Matrix токен пользователя
-    const currentUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { matrixAccessToken: true, matrixUserId: true },
+    // Загружаем историю сообщений из БД для контекста
+    const chatHistory = await prisma.chatMessage.findMany({
+      where: { chatId: chat.id },
+      take: 20,
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        senderId: true,
+        content: true,
+        createdAt: true,
+      },
     });
 
-    if (!currentUser?.matrixAccessToken || !currentUser?.matrixUserId) {
-      return NextResponse.json(
-        { error: "Matrix аккаунт не настроен" },
-        { status: 500 }
-      );
-    }
-
-    // Загружаем историю сообщений из Matrix для контекста
-    const matrixMessages = await getMatrixMessages(
-      currentUser.matrixAccessToken,
-      chat.matrixRoomId,
-      20
-    );
-
     // Преобразуем историю в формат для AI
-    const conversationHistory = matrixMessages.map((msg) => ({
-      role: msg.sender === botUser.matrixUserId ? "assistant" : "user",
+    const conversationHistory = chatHistory.reverse().map((msg) => ({
+      role: msg.senderId === botUser.id ? "assistant" : "user",
       content: msg.content,
     }));
 
-    // Отправляем сообщение пользователя в Matrix
-    const userMessageEventId = await sendMatrixMessage(
-      currentUser.matrixAccessToken,
-      chat.matrixRoomId,
-      message.trim()
-    );
+    // Сохраняем сообщение пользователя в БД
+    const userMessage = await prisma.chatMessage.create({
+      data: {
+        chatId: chat.id,
+        senderId: userId,
+        content: message.trim(),
+        messageType: "text",
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
 
-    if (!userMessageEventId) {
-      return NextResponse.json(
-        { error: "Не удалось отправить сообщение" },
-        { status: 500 }
-      );
-    }
+    // Обновляем последнее сообщение в чате
+    await prisma.chat.update({
+      where: { id: chat.id },
+      data: {
+        lastMessageId: userMessage.id,
+        lastMessageAt: userMessage.createdAt,
+      },
+    });
 
     // Формируем историю сообщений для контекста (обновляем с учетом сохраненного сообщения)
     const messages = [
@@ -179,37 +181,33 @@ export async function POST(request: NextRequest) {
       throw aiError;
     }
 
-    // Отправляем ответ бота в Matrix
-    const botUserMatrix = await prisma.user.findUnique({
-      where: { id: botUser.id },
-      select: { matrixAccessToken: true },
+    // Сохраняем ответ бота в БД
+    const botMessage = await prisma.chatMessage.create({
+      data: {
+        chatId: chat.id,
+        senderId: botUser.id,
+        content: aiResponse,
+        messageType: "text",
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            avatarUrl: true,
+          },
+        },
+      },
     });
-
-    if (!botUserMatrix?.matrixAccessToken) {
-      return NextResponse.json(
-        { error: "Бот не настроен в Matrix" },
-        { status: 500 }
-      );
-    }
-
-    const botMessageEventId = await sendMatrixMessage(
-      botUserMatrix.matrixAccessToken,
-      chat.matrixRoomId,
-      aiResponse
-    );
-
-    if (!botMessageEventId) {
-      return NextResponse.json(
-        { error: "Не удалось отправить ответ бота" },
-        { status: 500 }
-      );
-    }
 
     // Обновляем последнее сообщение в чате
     await prisma.chat.update({
       where: { id: chat.id },
       data: {
-        lastMessageAt: new Date(),
+        lastMessageId: botMessage.id,
+        lastMessageAt: botMessage.createdAt,
       },
     });
 
@@ -220,8 +218,8 @@ export async function POST(request: NextRequest) {
       aiResponse,
       {
         chatId: chat.id,
-        messageId: userMessageEventId,
-        botMessageId: botMessageEventId,
+        messageId: userMessage.id,
+        botMessageId: botMessage.id,
         botId: bot.id,
       }
     ).catch((error) => {
@@ -235,15 +233,28 @@ export async function POST(request: NextRequest) {
       aiResponse,
       userId,
       chat.id,
-      botMessageEventId
+      botMessage.id
     ).catch((error) => {
       console.error("[assistant/chat] Error saving conversation to knowledge base:", error);
     });
 
+    // Отправляем уведомления через WebSocket (если нужно)
+    // WebSocket сервер автоматически получит новые сообщения через базу данных
+
     return NextResponse.json({
       message: aiResponse,
-      id: botMessageEventId,
+      id: botMessage.id,
       chatId: chat.id,
+      userMessage: {
+        id: userMessage.id,
+        content: userMessage.content,
+        createdAt: userMessage.createdAt,
+      },
+      botMessage: {
+        id: botMessage.id,
+        content: botMessage.content,
+        createdAt: botMessage.createdAt,
+      },
     });
   } catch (error) {
     console.error("[assistant/chat] Error:", error);
