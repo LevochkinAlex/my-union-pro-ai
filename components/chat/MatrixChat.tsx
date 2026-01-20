@@ -738,54 +738,7 @@ export default function MatrixChat() {
           return sorted;
         });
         
-        // For rooms with generic names, fetch member info asynchronously
-        if (initialSync) {
-          filteredRoomList.forEach(async (room) => {
-            if (room.name === 'Чат' || room.name === 'Групповой чат' || room.name === 'Личный чат' || !room.avatarUrl) {
-              try {
-                const membersData = await matrixFetch(`/rooms/${encodeURIComponent(room.roomId)}/members`);
-                if (!membersData?.chunk) return;
-                
-                const members = membersData.chunk.filter((m: any) => 
-                  m.content?.membership === 'join' || m.content?.membership === 'invite'
-                );
-                
-                const otherMember = members.find((m: any) => m.state_key !== credentials.userId);
-                const isBotRoom = members.some((m: any) => m.state_key?.includes('myunion_bot'));
-                
-                let name = room.name;
-                let avatar = room.avatarUrl;
-                
-                if (isBotRoom) {
-                  name = 'МойСоюз Помощник';
-                  avatar = '/icon.png';
-                } else if (otherMember) {
-                  name = otherMember.content?.displayname || '';
-                  avatar = otherMember.content?.avatar_url || '';
-                  
-                  if (!name && otherMember.state_key) {
-                    const username = otherMember.state_key.split(':')[0].replace('@', '');
-                    if (username.startsWith('myunion_')) {
-                      name = 'Пользователь';
-                    } else {
-                      name = username.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                    }
-                  }
-                }
-                
-                if (name && name !== room.name) {
-                  setRooms(prev => prev.map(r => 
-                    r.roomId === room.roomId 
-                      ? { ...r, name: name || r.name, avatarUrl: avatar || r.avatarUrl, isDirect: members.length <= 2 }
-                      : r
-                  ));
-                }
-              } catch (err) {
-                console.error('Failed to fetch room members for', room.roomId, err);
-              }
-            }
-          });
-        }
+        // Matrix fetch members УДАЛЕН - получаем информацию из БД
       }
 
     } catch (err: unknown) {
@@ -1099,6 +1052,10 @@ export default function MatrixChat() {
     if (!selectedRoomId) return;
     setShowReactions(null);
     
+    // TODO: Реализовать через API
+    console.warn('handleReaction temporarily disabled - Matrix removed');
+    return;
+    
     // Check if user already reacted with this emoji
     const msg = messages.find(m => m.eventId === eventId);
     const existingReaction = msg?.reactions?.find(r => r.key === emoji);
@@ -1108,10 +1065,7 @@ export default function MatrixChat() {
       if (userAlreadyReacted && existingReaction?.eventIds?.get(credentials.userId)) {
         // Remove existing reaction via redaction
         const reactionEventId = existingReaction.eventIds.get(credentials.userId);
-        await matrixFetch(
-          `/rooms/${encodeURIComponent(selectedRoomId)}/redact/${encodeURIComponent(reactionEventId!)}/${Date.now()}`,
-          { method: 'PUT', body: JSON.stringify({ reason: 'User toggled reaction' }) }
-        );
+        // await matrixFetch(...);
         
         // Update UI - remove reaction
         setMessages(prev => prev.map(m => {
@@ -1173,216 +1127,37 @@ export default function MatrixChat() {
     }
   };
 
-  // Delete message (redact in Matrix)
+  // Delete message - через API
   const handleDeleteMessage = async (eventId: string) => {
-    if (!selectedRoomId || !credentials) return;
-    setMessageMenu(null);
-    
-    if (!confirm('Удалить сообщение?')) return;
-    
-    try {
-      const txnId = `redact_${Date.now()}`;
-      await matrixFetch(
-        `/rooms/${encodeURIComponent(selectedRoomId)}/redact/${encodeURIComponent(eventId)}/${txnId}`,
-        { method: 'PUT', body: JSON.stringify({ reason: 'Deleted by sender' }) }
-      );
-      
-      // Remove from UI
-      setMessages(prev => prev.filter(m => m.eventId !== eventId));
-    } catch (err) {
-      console.error('Delete message error:', err);
-      alert('Не удалось удалить сообщение');
-    }
+    console.warn('handleDeleteMessage temporarily disabled - Matrix removed');
+    return;
   };
 
-  // Edit message
+  // Edit message - через API
   const handleEditMessage = async (eventId: string, newContent: string) => {
-    if (!selectedRoomId || !credentials || !newContent.trim()) return;
-    
-    try {
-      const txnId = `edit_${Date.now()}`;
-      
-      // Matrix edit format: send new message with m.relates_to pointing to original
-      const messageContent: Record<string, unknown> = {
-        msgtype: 'm.text',
-        body: `* ${newContent.trim()}`,
-        'm.new_content': {
-          msgtype: 'm.text',
-          body: newContent.trim()
-        },
-        'm.relates_to': {
-          rel_type: 'm.replace',
-          event_id: eventId
-        }
-      };
-      
-      const data = await matrixFetch(
-        `/rooms/${encodeURIComponent(selectedRoomId)}/send/m.room.message/${txnId}`,
-        {
-          method: 'PUT',
-          body: JSON.stringify(messageContent),
-        }
-      );
-
-      if (data?.event_id) {
-        // Update message in UI
-        setMessages(prev => prev.map(m => {
-          if (m.eventId === eventId) {
-            return {
-              ...m,
-              content: newContent.trim(),
-              isEdited: true,
-              editTimestamp: Date.now()
-            };
-          }
-          return m;
-        }));
-        
-        setEditingMessageId(null);
-        setEditingText('');
-      }
-    } catch (err) {
-      console.error('Edit message error:', err);
-      alert('Не удалось отредактировать сообщение');
-    }
+    console.warn('handleEditMessage temporarily disabled - Matrix removed');
+    return;
   };
 
-  // Upload and send file
+  // Upload and send file - через API
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedRoomId || !credentials) return;
-    
-    setUploading(true);
-    
-    try {
-      // Upload file to Matrix media repo
-      const uploadUrl = `${credentials.serverUrl}/_matrix/media/v3/upload?filename=${encodeURIComponent(file.name)}`;
-      const uploadResp = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${credentials.accessToken}`,
-          'Content-Type': file.type
-        },
-        body: file
-      });
-      
-      if (!uploadResp.ok) throw new Error('Upload failed');
-      
-      const { content_uri } = await uploadResp.json();
-      
-      // Determine message type (support iPhone formats)
-      let msgtype = 'm.file';
-      const fileName = file.name.toLowerCase();
-      const isHeic = fileName.endsWith('.heic') || fileName.endsWith('.heif');
-      const isImage = file.type.startsWith('image/') || isHeic;
-      const isVideo = file.type.startsWith('video/') || fileName.endsWith('.mov');
-      
-      if (isImage) msgtype = 'm.image';
-      else if (isVideo) msgtype = 'm.video';
-      else if (file.type.startsWith('audio/')) msgtype = 'm.audio';
-      
-      // Send message with attachment
-      const txnId = `f${Date.now()}`;
-      const messageContent: Record<string, unknown> = {
-        msgtype,
-        body: file.name,
-        url: content_uri,
-        info: {
-          mimetype: file.type,
-          size: file.size
-        }
-      };
-      
-      // For images, try to get dimensions
-      if (msgtype === 'm.image') {
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        await new Promise(resolve => img.onload = resolve);
-        (messageContent.info as Record<string, unknown>).w = img.width;
-        (messageContent.info as Record<string, unknown>).h = img.height;
-        URL.revokeObjectURL(img.src);
-      }
-      
-      const data = await matrixFetch(
-        `/rooms/${encodeURIComponent(selectedRoomId)}/send/m.room.message/${txnId}`,
-        {
-          method: 'PUT',
-          body: JSON.stringify(messageContent),
-        }
-      );
-      
-      if (data?.event_id) {
-        setMessages(prev => [...prev, {
-          eventId: data.event_id,
-          sender: credentials.userId,
-          senderName: session?.user?.name || 'Вы',
-          content: file.name,
-          timestamp: Date.now(),
-          isOwn: true,
-          msgtype: msgtype as MatrixMessage['msgtype'],
-          attachment: {
-            type: msgtype.replace('m.', '') as MessageAttachment['type'],
-            url: content_uri.replace('mxc://', `${credentials.serverUrl}/_matrix/media/v3/download/`),
-            name: file.name,
-            mimeType: file.type,
-            size: file.size
-          }
-        }]);
-        scrollToBottom();
-      }
-    } catch (err) {
-      console.error('Upload error:', err);
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+    console.warn('handleFileUpload temporarily disabled - Matrix removed');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    return;
   };
 
-  // Forward message to another room
+  // Forward message - через API
   const handleForward = async (targetRoomId: string) => {
-    if (!forwardMessage || !credentials) return;
-    
-    try {
-      const txnId = `fw${Date.now()}`;
-      const messageContent: Record<string, unknown> = {
-        msgtype: forwardMessage.msgtype || 'm.text',
-        body: forwardMessage.content
-      };
-      
-      // If forwarding an attachment, include it
-      if (forwardMessage.attachment) {
-        messageContent.url = forwardMessage.attachment.url.replace(
-          `${credentials.serverUrl}/_matrix/media/v3/download/`,
-          'mxc://'
-        );
-        messageContent.info = {
-          mimetype: forwardMessage.attachment.mimeType,
-          size: forwardMessage.attachment.size
-        };
-      }
-      
-      await matrixFetch(
-        `/rooms/${encodeURIComponent(targetRoomId)}/send/m.room.message/${txnId}`,
-        {
-          method: 'PUT',
-          body: JSON.stringify(messageContent),
-        }
-      );
-      
-      setForwardMessage(null);
-      setShowForwardModal(false);
-    } catch (err) {
-      console.error('Forward error:', err);
-    }
+    console.warn('handleForward temporarily disabled - Matrix removed');
+    setForwardMessage(null);
+    setShowForwardModal(false);
+    return;
   };
 
-  // Send typing indicator
+  // Send typing indicator - через API
   const handleTyping = async () => {
-    if (!selectedRoomId || !credentials) return;
-    await matrixFetch(`/rooms/${encodeURIComponent(selectedRoomId)}/typing/${encodeURIComponent(credentials.userId)}`, {
-      method: 'PUT',
-      body: JSON.stringify({ typing: true, timeout: 10000 }),
-    });
+    console.warn('handleTyping temporarily disabled - Matrix removed');
+    return;
   };
 
   // Search users from our DB
