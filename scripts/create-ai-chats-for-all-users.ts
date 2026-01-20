@@ -38,7 +38,6 @@ async function ensureAIUser() {
         password: '', // ИИ не имеет пароля
         role: 'EMPLOYEE',
         emailVerified: new Date(),
-        isActive: true,
         isPPOHead: false,
         avatarUrl: '/icon.png',
       },
@@ -127,10 +126,9 @@ async function createAIChatsForAllUsers() {
     // 1. Убедимся что ИИ пользователь существует
     const aiUser = await ensureAIUser();
 
-    // 2. Получаем всех активных пользователей (кроме ИИ)
+    // 2. Получаем всех пользователей (кроме ИИ)
     const users = await prisma.user.findMany({
       where: {
-        isActive: true,
         id: { not: aiUser.id },
       },
       select: {
