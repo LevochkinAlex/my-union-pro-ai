@@ -88,6 +88,7 @@ interface MatrixRoom {
 }
 
 interface DbRoomInfo {
+  id: string;  // Chat ID from database
   matrixRoomId: string;
   displayName: string;
   avatarUrl?: string;
@@ -756,10 +757,9 @@ export default function MatrixChat() {
     // Получаем chatId из matrixRoomId или используем напрямую
     const dbInfo = Array.from(dbRoomInfo.values()).find(info => 
       info.matrixRoomId === roomIdOrChatId || 
-      info.chatId === roomIdOrChatId ||
-      info.chatId === roomIdOrChatId
+      info.id === roomIdOrChatId
     );
-    const actualChatId = dbInfo?.chatId || roomIdOrChatId;
+    const actualChatId = dbInfo?.id || roomIdOrChatId;
     
     try {
       const response = await fetch(`/api/chat/${actualChatId}/messages?limit=50`);
@@ -857,10 +857,10 @@ export default function MatrixChat() {
       // Отмечаем как прочитанное через наш API
       try {
         const dbInfo = Array.from(dbRoomInfo.values()).find(info => 
-          info.matrixRoomId === roomId || info.chatId === roomId
+          info.matrixRoomId === roomId || info.id === roomId
         );
-        if (dbInfo?.chatId) {
-          await fetch(`/api/chat/${dbInfo.chatId}/messages/${lastMessageId}/read`, { method: 'POST' });
+        if (dbInfo?.id) {
+          await fetch(`/api/chat/${dbInfo.id}/messages/${lastMessageId}/read`, { method: 'POST' });
         }
       } catch (err) {
         console.error('[Chat] Failed to mark as read:', err);
