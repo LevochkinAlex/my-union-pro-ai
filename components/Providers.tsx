@@ -2,7 +2,6 @@
 
 import { SessionProvider } from "next-auth/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
-import { HeroUIProvider } from "@heroui/react";
 import FirebasePushInit from "./firebase-push-init";
 import { LanguageProvider } from "@/lib/language-context";
 import { AlertProvider } from "./providers/AlertProvider";
@@ -19,17 +18,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
         storageKey="myunion-theme"
         disableTransitionOnChange={false}
       >
-        <HeroUIProvider>
-          <LanguageProvider>
-            <AlertProvider>
-              <ToastProvider>
-                <ErrorHandler />
-                <FirebasePushInit />
-                {children}
-              </ToastProvider>
-            </AlertProvider>
-          </LanguageProvider>
-        </HeroUIProvider>
+        <LanguageProvider>
+          <AlertProvider>
+            <ToastProvider>
+              <ErrorHandler />
+              <FirebasePushInit />
+              {children}
+            </ToastProvider>
+          </AlertProvider>
+        </LanguageProvider>
       </NextThemesProvider>
     </SessionProvider>
   );
