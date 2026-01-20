@@ -948,103 +948,10 @@ export default function MatrixChat() {
     openChatFromUrl();
   }, [urlChatId, urlChatHandled, rooms, dbRoomInfo, dbRoomInfoLoaded, handleSelectRoom]);
 
-  // Send message (with reply support) - через API, не Matrix
+  // Send message - через API
   const handleSend = async () => {
-    if (!selectedRoomId || !newMessage.trim() || sending) return;
-
-    setSending(true);
-    const content = newMessage.trim();
-    setNewMessage('');
-    const currentReplyTo = replyTo;
-    setReplyTo(null);
-    
-    // Reset textarea height
-    if (inputRef.current) {
-      inputRef.current.style.height = '48px';
-    }
-
-    try {
-      const txnId = `m${Date.now()}`;
-      
-      // Build message content
-      const messageContent: Record<string, unknown> = {
-        msgtype: 'm.text',
-        body: content
-      };
-      
-      // Add reply reference if replying
-      if (currentReplyTo) {
-        messageContent['m.relates_to'] = {
-          'm.in_reply_to': {
-            event_id: currentReplyTo.eventId
-          }
-        };
-        // Include fallback for clients that don't support rich replies
-        messageContent.body = `> <${currentReplyTo.sender}> ${currentReplyTo.content.slice(0, 50)}...\n\n${content}`;
-        messageContent['format'] = 'org.matrix.custom.html';
-        messageContent['formatted_body'] = `<mx-reply><blockquote><a href="#">In reply to</a> <a href="#">${currentReplyTo.senderName}</a><br>${currentReplyTo.content.slice(0, 100)}</blockquote></mx-reply>${content}`;
-      }
-      
-      const data = await matrixFetch(
-        `/rooms/${encodeURIComponent(selectedRoomId)}/send/m.room.message/${txnId}`,
-        {
-          method: 'PUT',
-          body: JSON.stringify(messageContent),
-        }
-      );
-
-      if (data?.event_id) {
-        setMessages(prev => [...prev, {
-          eventId: data.event_id,
-          sender: credentials.userId,
-          senderName: session?.user?.name || 'Вы',
-          content, // Already cleaned, no fallback format
-          timestamp: Date.now(),
-          isOwn: true,
-          msgtype: 'm.text',
-          replyTo: currentReplyTo ? {
-            eventId: currentReplyTo.eventId,
-            sender: currentReplyTo.sender,
-            senderName: currentReplyTo.senderName,
-            content: currentReplyTo.content
-          } : undefined
-        }]);
-        scrollToBottom();
-        
-        // Send push notification to other participants
-        // This will create UserNotification records for recipients
-        console.log('[MatrixChat] 📤 Sending notification for message in room:', selectedRoomId);
-        fetch('/api/chat/notify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ roomId: selectedRoomId, message: content }),
-        })
-        .then(res => {
-          if (!res.ok) {
-            console.error('[MatrixChat] ❌ Notification API error:', res.status, res.statusText);
-            return res.json().catch(() => ({ error: 'Failed to parse response' }));
-          }
-          return res.json();
-        })
-        .then(data => {
-          if (data.error) {
-            console.error('[MatrixChat] ⚠️ Notification error:', data.error);
-          } else {
-            console.log('[MatrixChat] ✅ Notification sent successfully:', data);
-          }
-        })
-        .catch((err) => {
-          console.error('[MatrixChat] ❌ Error sending notification:', err);
-        });
-      }
-    } catch (err) {
-      console.error('Send error:', err);
-      setNewMessage(content);
-      setReplyTo(currentReplyTo);
-    } finally {
-      setSending(false);
-      inputRef.current?.focus();
-    }
+    console.warn('handleSend temporarily disabled - Matrix removed');
+    return;
   };
 
   // Send reaction - через API, не Matrix
