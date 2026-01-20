@@ -37,7 +37,7 @@ async function clearOldAIMessages() {
     // Находим все чаты с ИИ
     const aiChats = await prisma.chat.findMany({
       where: {
-        isDirect: true,
+        type: 'PRIVATE',
         participants: {
           some: {
             userId: aiUser.id,

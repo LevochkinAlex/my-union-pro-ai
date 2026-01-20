@@ -55,7 +55,7 @@ async function createAIChatForUser(userId: string, aiUserId: string) {
   // Проверяем, существует ли уже чат между пользователем и ИИ
   const existingChat = await prisma.chat.findFirst({
     where: {
-      isDirect: true,
+      type: 'PRIVATE',
       participants: {
         every: {
           OR: [
@@ -86,7 +86,7 @@ async function createAIChatForUser(userId: string, aiUserId: string) {
   const chat = await prisma.chat.create({
     data: {
       name: 'МойСоюз Помощник',
-      isDirect: true,
+      type: 'PRIVATE',
       participants: {
         create: [
           {
