@@ -140,17 +140,26 @@ async function clearAllAIChatHistory() {
       }
     }
 
-    // 4. Обновляем чаты - очищаем lastMessage и lastMessageAt
-    const chatsUpdated = await prisma.chat.updateMany({
-      where: {
-        id: { in: chatIds },
-      },
-      data: {
-        lastMessageId: null,
-        lastMessageAt: null,
-      },
-    });
-    console.log(`   ✅ Обновлено чатов: ${chatsUpdated.count}`);
+    // 4. Обновляем чаты - очищаем lastMessage и lastMessageAt (если колонки существуют)
+    let chatsUpdated = { count: 0 };
+    try {
+      chatsUpdated = await prisma.chat.updateMany({
+        where: {
+          id: { in: chatIds },
+        },
+        data: {
+          lastMessageId: null,
+          lastMessageAt: null,
+        },
+      });
+      console.log(`   ✅ Обновлено чатов: ${chatsUpdated.count}`);
+    } catch (error) {
+      if (error.code === 'P2022') {
+        console.log(`   ⚠️  Колонки lastMessageId/lastMessageAt не существуют, пропускаем обновление`);
+      } else {
+        throw error;
+      }
+    }
 
     // 5. Статистика
     console.log('\n📊 Итоговая статистика:');
