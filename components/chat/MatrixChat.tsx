@@ -474,37 +474,15 @@ export default function MatrixChat() {
     return response.json();
   }, [credentials]);
 
-  // Sync with Matrix server
+  // Matrix sync УДАЛЕН - используем только API /api/chat/rooms
   const sync = useCallback(async (initialSync = false) => {
-    if (!credentials) return;
-    
+    // Matrix больше не используется - загружаем комнаты через API
     try {
-      const params = new URLSearchParams({
-        timeout: initialSync ? '0' : '30000',
-        filter: JSON.stringify({
-          room: {
-            timeline: { limit: 50 },
-            state: { 
-              lazy_load_members: false,  // Load all members to get names
-              types: ['m.room.name', 'm.room.member', 'm.room.avatar', 'm.room.canonical_alias']
-            },
-          },
-        }),
-      });
+      const response = await fetch('/api/chat/rooms');
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!data.rooms) return;
       
-      if (syncTokenRef.current) {
-        params.set('since', syncTokenRef.current);
-      }
-
-      syncAbortRef.current = new AbortController();
-      
-      const data = await matrixFetch(`/sync?${params}`, {
-        signal: syncAbortRef.current.signal,
-      });
-
-      if (!data) return;
-
-      syncTokenRef.current = data.next_batch;
       setConnected(true);
 
       // Process rooms
@@ -893,12 +871,10 @@ export default function MatrixChat() {
       }
 
     } catch (err: unknown) {
-      if (err instanceof Error && err.name !== 'AbortError') {
-        console.error('Sync error:', err);
-        setConnected(false);
-      }
+      console.error('Error loading rooms:', err);
+      setConnected(false);
     }
-  }, [credentials, matrixFetch, selectedRoomId, dbRoomInfo]);
+  }, [dbRoomInfo]);
 
   // Matrix sync удален - используем WebSocket и API
   // Сообщения загружаются через loadRoomMessages при выборе комнаты
