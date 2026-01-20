@@ -157,7 +157,7 @@ export default function MatrixChat() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const urlChatId = searchParams.get('chatId');
-  const [credentials, setCredentials] = useState<MatrixCredentials | null>(null);
+  // credentials удален - Matrix больше не используется
   const [rooms, setRooms] = useState<MatrixRoom[]>([]);
   const [dbRoomInfo, setDbRoomInfo] = useState<Map<string, DbRoomInfo>>(new Map());
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -282,18 +282,16 @@ export default function MatrixChat() {
           }
         }
 
-        const response = await fetch('/api/chat/matrix/auth', { method: 'POST' });
-        if (response.ok) {
-          const data = await response.json();
-          setCredentials(data);
-          
-          // Load room info from our DB FIRST
-          await loadDbRoomInfo();
-          // Then ensure user has a chat with AI bot
-          ensureBotChat(data);
-        } else {
-          setError('Не удалось подключиться к чату');
-        }
+        // Matrix auth удален - загружаем только комнаты из БД
+        // Load room info from our DB
+        await loadDbRoomInfo();
+        
+        // Устанавливаем фиктивные credentials для совместимости (будут удалены позже)
+        setCredentials({
+          userId: session.user.id,
+          accessToken: '',
+          serverUrl: ''
+        });
       } catch {
         setError('Ошибка подключения');
       } finally {
@@ -902,37 +900,81 @@ export default function MatrixChat() {
     }
   }, [credentials, matrixFetch, selectedRoomId, dbRoomInfo]);
 
-  // Start sync loop
-  useEffect(() => {
-    if (!credentials) return;
-    // Wait for dbRoomInfo to load before starting sync
-    if (!dbRoomInfoLoaded) return;
+  // Matrix sync удален - используем WebSocket и API
+  // Сообщения загружаются через loadRoomMessages при выборе комнаты
+  // Новые сообщения приходят через WebSocket (если подключен)
 
-    let running = true;
+  // Load room messages from our API (NOT Matrix)
+  const loadRoomMessages = useCallback(async (roomIdOrChatId: string) => {
+    // Получаем chatId из matrixRoomId или используем напрямую
+    const dbInfo = Array.from(dbRoomInfo.values()).find(info => 
+      info.matrixRoomId === roomIdOrChatId || 
+      info.chatId === roomIdOrChatId ||
+      info.chatId === roomIdOrChatId
+    );
+    const actualChatId = dbInfo?.chatId || roomIdOrChatId;
     
-    const syncLoop = async () => {
-      // Initial sync
-      await sync(true);
-      
-      // Long poll loop
-      while (running) {
-        await sync(false);
-        await new Promise(r => setTimeout(r, 1000)); // Small delay between syncs
+    try {
+      const response = await fetch(`/api/chat/${actualChatId}/messages?limit=50`);
+      if (!response.ok) {
+        console.error('[Chat] Failed to load messages:', response.status);
+        return [];
       }
-    };
-
-    syncLoop();
-
-    return () => {
-      running = false;
-      syncAbortRef.current?.abort();
-    };
-  }, [credentials, sync, dbRoomInfoLoaded]);
-
-  // Load room messages with reactions, replies, and attachments
-  const loadRoomMessages = useCallback(async (roomId: string) => {
-    const data = await matrixFetch(`/rooms/${encodeURIComponent(roomId)}/messages?dir=b&limit=50`);
-    if (!data) return;
+      const data = await response.json();
+      if (!data.messages || !Array.isArray(data.messages)) return [];
+      
+      // Преобразуем сообщения из API в формат MatrixMessage для совместимости
+      const msgs: MatrixMessage[] = data.messages.map((msg: any) => {
+        const senderName = msg.sender 
+          ? [msg.sender.firstName, msg.sender.lastName].filter(Boolean).join(' ') || 'Пользователь'
+          : 'Пользователь';
+        
+        const isBot = msg.sender?.firstName === 'AI' || msg.sender?.lastName === 'Помощник';
+        
+        return {
+          eventId: msg.id,
+          sender: msg.senderId,
+          senderName: isBot ? 'МойСоюз Помощник' : senderName,
+          senderAvatar: msg.sender?.avatarUrl,
+          content: msg.content,
+          timestamp: new Date(msg.createdAt).getTime(),
+          isOwn: msg.senderId === session?.user?.id,
+          msgtype: msg.messageType === 'image' ? 'm.image' : msg.messageType === 'file' ? 'm.file' : 'm.text',
+          reactions: msg.reactions ? Object.entries(msg.reactions).map(([emoji, data]: [string, any]) => ({
+            key: emoji,
+            count: data.count || 0,
+            users: data.userIds || [],
+            eventIds: new Map()
+          })) : undefined,
+          replyTo: msg.replyTo ? {
+            eventId: msg.replyTo.id,
+            sender: msg.replyTo.senderId,
+            senderName: [msg.replyTo.sender?.firstName, msg.replyTo.sender?.lastName].filter(Boolean).join(' ') || 'Пользователь',
+            content: msg.replyTo.content
+          } : undefined,
+          attachment: msg.attachments && msg.attachments.length > 0 ? {
+            type: msg.attachments[0].type,
+            url: msg.attachments[0].url,
+            thumbnailUrl: msg.attachments[0].thumbnailUrl,
+            name: msg.attachments[0].name,
+            mimeType: msg.attachments[0].mimeType,
+            size: msg.attachments[0].size,
+            width: msg.attachments[0].width,
+            height: msg.attachments[0].height
+          } : undefined,
+          isEdited: !!msg.editedAt,
+          editTimestamp: msg.editedAt ? new Date(msg.editedAt).getTime() : undefined
+        };
+      });
+      
+      setMessages(msgs);
+      scrollToBottom();
+      return msgs;
+    } catch (error) {
+      console.error('[Chat] Error loading messages:', error);
+      return [];
+    }
+  }, [dbRoomInfo, session?.user?.id]);
 
     // First pass: collect all messages
     const messageEvents = (data.chunk || []).filter((e: { type: string }) => e.type === 'm.room.message');
@@ -1178,39 +1220,7 @@ export default function MatrixChat() {
     }
   }, [credentials, matrixFetch]);
 
-  // Mark room as read - send read receipt to Matrix
-  const markRoomAsRead = useCallback(async (roomId: string, eventId?: string) => {
-    if (!credentials || !eventId) return;
-    
-    try {
-      // Send read receipt
-      await matrixFetch(`/rooms/${encodeURIComponent(roomId)}/receipt/m.read/${encodeURIComponent(eventId)}`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-      });
-      
-      // Update local unread count
-      setRooms(prev => {
-        const updated = prev.map(r => 
-          r.roomId === roomId ? { ...r, unreadCount: 0 } : r
-        );
-        
-        // Calculate new total unread count and notify sidebar (setTimeout to avoid setState during render)
-        const totalUnread = updated.reduce((sum, r) => sum + r.unreadCount, 0);
-        setTimeout(() => {
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('chat-messages-read', { 
-              detail: { count: totalUnread } 
-            }));
-          }
-        }, 0);
-        
-        return updated;
-      });
-    } catch (err) {
-      console.error('Failed to mark room as read:', err);
-    }
-  }, [credentials, matrixFetch]);
+  // markRoomAsRead удален - отметка прочитано делается через API в handleSelectRoom
 
   // Select room - must be declared before useEffect that uses it
   const handleSelectRoom = useCallback(async (roomId: string) => {
