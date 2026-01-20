@@ -164,6 +164,15 @@ async function resetAIChatsToWelcome() {
 
         // 3.2. Создаем приветственное сообщение от бота
         try {
+          // Проверяем, существует ли модель ChatMessage
+          const hasChatMessage = 'chatMessage' in prisma;
+          
+          if (!hasChatMessage) {
+            console.log(`      ⚠️  Модель ChatMessage не существует, пропускаем создание приветствия`);
+            errorCount++;
+            continue;
+          }
+
           const welcomeMessage = await prisma.chatMessage.create({
             data: {
               chatId: chat.id,
@@ -173,14 +182,19 @@ async function resetAIChatsToWelcome() {
             },
           });
 
-          // 3.3. Обновляем чат с последним сообщением
-          await prisma.chat.update({
-            where: { id: chat.id },
-            data: {
-              lastMessageId: welcomeMessage.id,
-              lastMessageAt: welcomeMessage.createdAt,
-            },
-          });
+          // 3.3. Обновляем чат с последним сообщением (если поля существуют)
+          try {
+            await prisma.chat.update({
+              where: { id: chat.id },
+              data: {
+                lastMessageId: welcomeMessage.id,
+                lastMessageAt: welcomeMessage.createdAt,
+              },
+            });
+          } catch (updateError) {
+            // Поля lastMessageId/lastMessageAt могут не существовать до миграции
+            console.log(`      ⚠️  Не удалось обновить lastMessage (возможно, миграция не применена)`);
+          }
 
           console.log(`      ✅ Создано приветственное сообщение`);
           resetCount++;
