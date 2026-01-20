@@ -2588,9 +2588,14 @@ export default function MatrixChat() {
                 selectedRoom.name?.includes('AI') || 
                 selectedRoom.name?.includes('Бот') ||
                 selectedRoom.name?.includes('ai-assistant') ||
-                dbRoomInfo[selectedRoomId]?.otherUser?.email === 'ai-assistant@myunion.pro' ||
-                dbRoomInfo[selectedRoomId]?.otherUser?.firstName === 'AI' ||
-                dbRoomInfo[selectedRoomId]?.otherUser?.lastName === 'Помощник'
+                // Проверяем участников чата на наличие ИИ бота
+                dbRoomInfo[selectedRoomId]?.participants?.some(p => 
+                  p.matrixUserId?.includes('ai_assistant') ||
+                  p.matrixUserId?.includes('myunion_bot') ||
+                  p.matrixUserId?.includes('assistant') ||
+                  p.firstName === 'AI' ||
+                  p.lastName === 'Помощник'
+                )
               ) && (
                 <div className="flex flex-col items-center justify-center h-full py-8">
                   <div className="w-20 h-20 mb-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
