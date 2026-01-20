@@ -157,7 +157,15 @@ export default function MatrixChat() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const urlChatId = searchParams.get('chatId');
-  // credentials удален - Matrix больше не используется
+  
+  // Временная заглушка credentials для совместимости со старым кодом
+  // TODO: Полностью удалить все ссылки на credentials
+  const credentials = {
+    userId: session?.user?.id || '',
+    serverUrl: 'https://matrix.myunion.pro',
+    accessToken: ''
+  };
+  
   const [rooms, setRooms] = useState<MatrixRoom[]>([]);
   const [dbRoomInfo, setDbRoomInfo] = useState<Map<string, DbRoomInfo>>(new Map());
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -285,13 +293,6 @@ export default function MatrixChat() {
         // Matrix auth удален - загружаем только комнаты из БД
         // Load room info from our DB
         await loadDbRoomInfo();
-        
-        // Устанавливаем фиктивные credentials для совместимости (будут удалены позже)
-        setCredentials({
-          userId: session.user.id,
-          accessToken: '',
-          serverUrl: ''
-        });
       } catch {
         setError('Ошибка подключения');
       } finally {
@@ -339,11 +340,11 @@ export default function MatrixChat() {
 
   // Create group chat (PPO Head only)
   const handleCreateGroup = useCallback(async () => {
-    if (!credentials || !groupName.trim() || selectedMembers.length === 0) return;
+    if (!groupName.trim() || selectedMembers.length === 0) return;
     
     setCreatingGroup(true);
     try {
-      // Create group via our API (which creates in DB and Matrix)
+      // Create group via our API (which creates in DB)
       const resp = await fetch('/api/ppo-head/chats/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -370,9 +371,9 @@ export default function MatrixChat() {
       setGroupDescription('');
       setSelectedMembers([]);
       
-      // Select new room if it has matrixRoomId
-      if (data.chat?.matrixRoomId) {
-        setSelectedRoomId(data.chat.matrixRoomId);
+      // Select new room
+      if (data.chat?.id) {
+        setSelectedRoomId(data.chat.id);
       }
     } catch (err) {
       console.error('Failed to create group:', err);
@@ -380,7 +381,7 @@ export default function MatrixChat() {
     } finally {
       setCreatingGroup(false);
     }
-  }, [credentials, groupName, groupDescription, selectedMembers, loadDbRoomInfo]);
+  }, [groupName, groupDescription, selectedMembers, loadDbRoomInfo]);
 
   // Load org members when showing create group modal
   useEffect(() => {
@@ -389,90 +390,7 @@ export default function MatrixChat() {
     }
   }, [showCreateGroup, viewMode, loadOrgMembers]);
 
-  // Ensure user has a DM chat with AI bot
-  const ensureBotChat = useCallback(async (creds: MatrixCredentials) => {
-    const BOT_USER_ID = '@myunion_bot:matrix.myunion.pro';
-    
-    try {
-      // Check if DM with bot exists by looking at account data
-      const accountDataResp = await fetch(
-        `${creds.serverUrl}/_matrix/client/v3/user/${encodeURIComponent(creds.userId)}/account_data/m.direct`,
-        { headers: { 'Authorization': `Bearer ${creds.accessToken}` } }
-      );
-      
-      let hasBotRoom = false;
-      if (accountDataResp.ok) {
-        const directRooms = await accountDataResp.json();
-        hasBotRoom = directRooms[BOT_USER_ID]?.length > 0;
-      }
-      
-      if (!hasBotRoom) {
-        // Create DM room with bot
-        const createResp = await fetch(
-          `${creds.serverUrl}/_matrix/client/v3/createRoom`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${creds.accessToken}`
-            },
-            body: JSON.stringify({
-              preset: 'trusted_private_chat',
-              is_direct: true,
-              invite: [BOT_USER_ID],
-              initial_state: [{
-                type: 'm.room.name',
-                content: { name: 'МойСоюз Помощник' }
-              }]
-            })
-          }
-        );
-        
-        if (createResp.ok) {
-          const room = await createResp.json();
-          
-          // Update m.direct account data
-          const newDirectRooms = { [BOT_USER_ID]: [room.room_id] };
-          await fetch(
-            `${creds.serverUrl}/_matrix/client/v3/user/${encodeURIComponent(creds.userId)}/account_data/m.direct`,
-            {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${creds.accessToken}`
-              },
-              body: JSON.stringify(newDirectRooms)
-            }
-          );
-          
-          console.log('Created bot chat room:', room.room_id);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to ensure bot chat:', err);
-    }
-  }, []);
-
-  // Matrix API helpers
-  const matrixFetch = useCallback(async (
-    endpoint: string, 
-    options: RequestInit = {}
-  ) => {
-    if (!credentials) return null;
-    
-    const url = `${credentials.serverUrl}/_matrix/client/v3${endpoint}`;
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${credentials.accessToken}`,
-        ...options.headers,
-      },
-    });
-    
-    if (!response.ok) return null;
-    return response.json();
-  }, [credentials]);
+  // ensureBotChat и matrixFetch удалены - Matrix больше не используется
 
   // Matrix sync УДАЛЕН - используем только API /api/chat/rooms
   const sync = useCallback(async (initialSync = false) => {
@@ -952,252 +870,6 @@ export default function MatrixChat() {
     }
   }, [dbRoomInfo, session?.user?.id]);
 
-    // First pass: collect all messages
-    const messageEvents = (data.chunk || []).filter((e: { type: string }) => e.type === 'm.room.message');
-    
-    // Second pass: collect reactions
-    const reactionEvents = (data.chunk || []).filter((e: { type: string }) => e.type === 'm.reaction');
-    const reactionsMap = new Map<string, MessageReaction[]>();
-    
-    for (const event of reactionEvents) {
-      const relatesTo = event.content?.['m.relates_to'];
-      if (relatesTo?.rel_type === 'm.annotation') {
-        const targetId = relatesTo.event_id;
-        const key = relatesTo.key;
-        
-        if (!reactionsMap.has(targetId)) {
-          reactionsMap.set(targetId, []);
-        }
-        
-        const reactions = reactionsMap.get(targetId)!;
-        const existing = reactions.find(r => r.key === key);
-        if (existing) {
-          if (!existing.users.includes(event.sender)) {
-            existing.count++;
-            existing.users.push(event.sender);
-            if (!existing.eventIds) existing.eventIds = new Map();
-            existing.eventIds.set(event.sender, event.event_id);
-          }
-        } else {
-          const eventIds = new Map<string, string>();
-          eventIds.set(event.sender, event.event_id);
-          reactions.push({ key, count: 1, users: [event.sender], eventIds });
-        }
-      }
-    }
-
-    // Build messages map for replies
-    const messagesById = new Map<string, { sender: string; content: string }>();
-    for (const e of messageEvents) {
-      messagesById.set(e.event_id, {
-        sender: e.sender,
-        content: e.content?.body || ''
-      });
-    }
-
-    // First, collect all edit events and create a map of original event_id -> new content
-    const editMap = new Map<string, { content: string; timestamp: number }>();
-    messageEvents.forEach((e: any) => {
-      if (e.content?.['m.relates_to']?.rel_type === 'm.replace') {
-        const originalEventId = e.content['m.relates_to'].event_id;
-        const newContent = e.content?.['m.new_content']?.body || e.content?.body?.replace(/^\* /, '') || '';
-        editMap.set(originalEventId, {
-          content: newContent,
-          timestamp: e.origin_server_ts
-        });
-      }
-    });
-    
-    const msgs: MatrixMessage[] = messageEvents
-      .filter((e: any) => e.content?.['m.relates_to']?.rel_type !== 'm.replace') // Exclude edit events themselves
-      .map((e: any) => {
-      const msgtype = e.content?.msgtype || 'm.text';
-      let attachment: MessageAttachment | undefined;
-      
-      // Check if this message was edited
-      const editInfo = editMap.get(e.event_id);
-      const isEdited = !!editInfo;
-      
-      // Helper to convert mxc:// to https:// using our proxy for auth
-      const mxcToHttp = (mxcUrl: string, thumbnail = false) => {
-        if (!mxcUrl?.startsWith('mxc://')) return mxcUrl;
-        const parts = mxcUrl.replace('mxc://', '').split('/');
-        const server = parts[0];
-        const mediaId = parts.slice(1).join('/');
-        // Use our proxy to add auth header
-        if (thumbnail) {
-          return `/api/matrix-media/${server}/${mediaId}?width=400&height=400&method=scale`;
-        }
-        return `/api/matrix-media/${server}/${mediaId}`;
-      };
-      
-      // Handle attachments
-      if (msgtype === 'm.image' && e.content?.url) {
-        attachment = {
-          type: 'image',
-          url: mxcToHttp(e.content.url),
-          thumbnailUrl: e.content.info?.thumbnail_url ? mxcToHttp(e.content.info.thumbnail_url, true) : mxcToHttp(e.content.url, true),
-          name: e.content.body || 'image',
-          mimeType: e.content.info?.mimetype,
-          width: e.content.info?.w,
-          height: e.content.info?.h,
-          size: e.content.info?.size
-        };
-      } else if (msgtype === 'm.file' && e.content?.url) {
-        attachment = {
-          type: 'file',
-          url: mxcToHttp(e.content.url),
-          name: e.content.body || 'file',
-          mimeType: e.content.info?.mimetype,
-          size: e.content.info?.size
-        };
-      } else if (msgtype === 'm.video' && e.content?.url) {
-        attachment = {
-          type: 'video',
-          url: mxcToHttp(e.content.url),
-          thumbnailUrl: e.content.info?.thumbnail_url ? mxcToHttp(e.content.info.thumbnail_url, true) : undefined,
-          name: e.content.body || 'video',
-          mimeType: e.content.info?.mimetype,
-          width: e.content.info?.w,
-          height: e.content.info?.h,
-          size: e.content.info?.size
-        };
-      } else if (msgtype === 'm.audio' && e.content?.url) {
-        attachment = {
-          type: 'audio',
-          url: mxcToHttp(e.content.url),
-          name: e.content.body || 'audio',
-          mimeType: e.content.info?.mimetype,
-          size: e.content.info?.size
-        };
-      }
-      
-      // Extract content, removing reply fallback format if present
-      let content = editInfo?.content || e.content?.body || '';
-      // Remove Matrix reply fallback format: "> <@user:server> text...\n\nactual message"
-      if (content.includes('\n\n') && content.startsWith('> ')) {
-        const parts = content.split('\n\n');
-        if (parts.length > 1) {
-          // The actual message is after the double newline
-          content = parts.slice(1).join('\n\n');
-        }
-      }
-      
-      // Handle reply
-      let replyTo: ReplyInfo | undefined;
-      const relatesTo = e.content?.['m.relates_to'];
-      if (relatesTo?.['m.in_reply_to']?.event_id) {
-        const replyEventId = relatesTo['m.in_reply_to'].event_id;
-        const replyMsg = messagesById.get(replyEventId);
-        if (replyMsg) {
-          // Get proper sender name for reply
-          let replySenderName = replyMsg.sender.split(':')[0].replace('@', '').replace(/_/g, ' ');
-          const roomDbInfo = dbRoomInfo.get(roomId);
-          if (roomDbInfo?.participants) {
-            const replyParticipant = roomDbInfo.participants.find(p => p.matrixUserId === replyMsg.sender);
-            if (replyParticipant) {
-              replySenderName = [replyParticipant.firstName, replyParticipant.lastName].filter(Boolean).join(' ') || replySenderName;
-            }
-          }
-          
-          replyTo = {
-            eventId: replyEventId,
-            sender: replyMsg.sender,
-            senderName: replySenderName,
-            content: replyMsg.content.slice(0, 100)
-          };
-        }
-      }
-      
-      // Get sender name from our DB data
-      let senderName = 'Пользователь';
-      let senderAvatar: string | undefined;
-      
-      const roomDbInfo = dbRoomInfo.get(roomId);
-      
-      if (e.sender.includes('myunion_bot') || e.sender.includes('ai_assistant')) {
-        senderName = 'МойСоюз Помощник';
-      } else if (roomDbInfo?.participants) {
-        const participant = roomDbInfo.participants.find(p => p.matrixUserId === e.sender);
-        if (participant) {
-          senderName = [participant.firstName, participant.lastName].filter(Boolean).join(' ') || 'Пользователь';
-          senderAvatar = participant.avatarUrl || undefined;
-        }
-      }
-      
-      return {
-        eventId: e.event_id,
-        sender: e.sender,
-        senderName,
-        senderAvatar,
-        content,
-        timestamp: e.origin_server_ts,
-        isOwn: e.sender === credentials?.userId,
-        msgtype: msgtype as MatrixMessage['msgtype'],
-        reactions: reactionsMap.get(e.event_id),
-        replyTo,
-        attachment,
-        isEdited: isEdited || undefined,
-        editTimestamp: editInfo?.timestamp
-      };
-    }).reverse();
-
-    setMessages(msgs);
-    scrollToBottom();
-    return msgs;
-  }, [credentials, matrixFetch, dbRoomInfo]);
-
-  // Select room
-  // Fetch room members to get proper names
-  const fetchRoomMembers = useCallback(async (roomId: string) => {
-    if (!credentials) return null;
-    
-    try {
-      const data = await matrixFetch(`/rooms/${encodeURIComponent(roomId)}/members`);
-      if (!data?.chunk) return null;
-      
-      const members = data.chunk.filter((m: any) => 
-        m.content?.membership === 'join' || m.content?.membership === 'invite'
-      );
-      
-      // Find other member (not current user)
-      const otherMember = members.find((m: any) => m.state_key !== credentials.userId);
-      const isBotRoom = members.some((m: any) => m.state_key?.includes('myunion_bot'));
-      
-      let name = '';
-      let avatar = '';
-      
-      if (isBotRoom) {
-        name = 'МойСоюз Помощник';
-        avatar = '/icon.png';
-      } else if (otherMember) {
-        name = otherMember.content?.displayname || '';
-        avatar = otherMember.content?.avatar_url || '';
-        
-        if (!name && otherMember.state_key) {
-          const username = otherMember.state_key.split(':')[0].replace('@', '');
-          if (username.startsWith('myunion_')) {
-            name = 'Пользователь';
-          } else {
-            name = username.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-          }
-        }
-      }
-      
-      return {
-        name: name || 'Личный чат',
-        avatarUrl: avatar,
-        isDirect: members.length <= 2,
-        memberCount: members.length
-      };
-    } catch (err) {
-      console.error('Failed to fetch room members:', err);
-      return null;
-    }
-  }, [credentials, matrixFetch]);
-
-  // markRoomAsRead удален - отметка прочитано делается через API в handleSelectRoom
-
   // Select room - must be declared before useEffect that uses it
   const handleSelectRoom = useCallback(async (roomId: string) => {
     setSelectedRoomId(roomId);
@@ -1223,31 +895,25 @@ export default function MatrixChat() {
       return updated;
     });
     
-    // Load messages
+    // Load messages from API
     const msgs = await loadRoomMessages(roomId);
     
-    // Mark the last message as read
+    // Mark messages as read (через API, не Matrix)
     if (msgs && msgs.length > 0) {
-      const lastEventId = msgs[msgs.length - 1].eventId;
-      markRoomAsRead(roomId, lastEventId);
-    }
-    
-    // Fetch room members to update room info
-    const memberInfo = await fetchRoomMembers(roomId);
-    if (memberInfo) {
-      setRooms(prev => prev.map(r => {
-        if (r.roomId === roomId && (!r.name || r.name === 'Чат' || r.name === 'Групповой чат' || r.name === 'Личный чат')) {
-          return {
-            ...r,
-            name: memberInfo.name,
-            avatarUrl: memberInfo.avatarUrl || r.avatarUrl,
-            isDirect: memberInfo.isDirect
-          };
+      const lastMessageId = msgs[msgs.length - 1].eventId;
+      // Отмечаем как прочитанное через наш API
+      try {
+        const dbInfo = Array.from(dbRoomInfo.values()).find(info => 
+          info.matrixRoomId === roomId || info.chatId === roomId
+        );
+        if (dbInfo?.chatId) {
+          await fetch(`/api/chat/${dbInfo.chatId}/messages/${lastMessageId}/read`, { method: 'POST' });
         }
-        return r;
-      }));
+      } catch (err) {
+        console.error('[Chat] Failed to mark as read:', err);
+      }
     }
-  }, [loadRoomMessages, markRoomAsRead, fetchRoomMembers]);
+  }, [loadRoomMessages, dbRoomInfo]);
 
   // Handle chatId from URL (e.g., from appeals page or notifications)
   // Note: This useEffect is placed after handleSelectRoom declaration to avoid hoisting issues
@@ -1329,9 +995,9 @@ export default function MatrixChat() {
     openChatFromUrl();
   }, [urlChatId, urlChatHandled, rooms, dbRoomInfo, dbRoomInfoLoaded, handleSelectRoom]);
 
-  // Send message (with reply support)
+  // Send message (with reply support) - через API, не Matrix
   const handleSend = async () => {
-    if (!selectedRoomId || !newMessage.trim() || sending || !credentials) return;
+    if (!selectedRoomId || !newMessage.trim() || sending) return;
 
     setSending(true);
     const content = newMessage.trim();
@@ -1428,9 +1094,9 @@ export default function MatrixChat() {
     }
   };
 
-  // Send reaction
+  // Send reaction - через API, не Matrix
   const handleReaction = async (eventId: string, emoji: string) => {
-    if (!selectedRoomId || !credentials) return;
+    if (!selectedRoomId) return;
     setShowReactions(null);
     
     // Check if user already reacted with this emoji
