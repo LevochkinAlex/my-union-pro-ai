@@ -2582,8 +2582,16 @@ export default function MatrixChat() {
                 }
               }}
             >
-              {/* Quick questions for AI chat */}
-              {messages.length === 0 && (selectedRoom.name.includes('Помощник') || selectedRoom.name.includes('AI') || selectedRoom.name.includes('Бот')) && (
+              {/* Quick questions for AI chat - показываем приветствие если нет сообщений и это чат с ИИ */}
+              {messages.length === 0 && (
+                selectedRoom.name?.includes('Помощник') || 
+                selectedRoom.name?.includes('AI') || 
+                selectedRoom.name?.includes('Бот') ||
+                selectedRoom.name?.includes('ai-assistant') ||
+                dbRoomInfo[selectedRoomId]?.otherUser?.email === 'ai-assistant@myunion.pro' ||
+                dbRoomInfo[selectedRoomId]?.otherUser?.firstName === 'AI' ||
+                dbRoomInfo[selectedRoomId]?.otherUser?.lastName === 'Помощник'
+              ) && (
                 <div className="flex flex-col items-center justify-center h-full py-8">
                   <div className="w-20 h-20 mb-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
                     <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
