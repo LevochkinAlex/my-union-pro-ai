@@ -84,7 +84,6 @@ export async function GET() {
     
     const ticketMap = new Map<string, typeof tickets[0]>();
     tickets.forEach(t => {
-      if (t.chatId) ticketMap.set(t.chatId, t);
       if (t.matrixRoomId) {
         const chat = chats.find(c => c.matrixRoomId === t.matrixRoomId);
         if (chat) ticketMap.set(chat.id, t);
