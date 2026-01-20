@@ -92,6 +92,11 @@ export async function GET(
             },
           },
         },
+        readBy: {
+          select: {
+            userId: true,
+          },
+        },
         _count: {
           select: {
             threadReplies: true, // Количество ответов в треде (только для корневых сообщений)
