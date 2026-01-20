@@ -14,8 +14,9 @@ export async function GET() {
     }
 
     // Убеждаемся что у пользователя есть чат с ИИ ботом
+    let botUser = null;
     try {
-      const botUser = await getOrCreateAIBotUser();
+      botUser = await getOrCreateAIBotUser();
       await getOrCreatePrivateChat(session.user.id, botUser.id);
     } catch (err) {
       console.error('[chat/rooms] Error ensuring AI bot chat:', err);
@@ -116,9 +117,13 @@ export async function GET() {
           // For groups with explicit names
           displayName = chat.name;
         } else if (isDirect && otherParticipant) {
-          // Check if it's AI bot
-          if (otherParticipant.matrixUserId?.includes('ai_assistant') || 
-              otherParticipant.matrixUserId?.includes('myunion_bot')) {
+          // Check if it's AI bot (by id, matrixUserId, or name)
+          const isBot = (botUser && otherParticipant.id === botUser.id) ||
+                        otherParticipant.matrixUserId?.includes('ai_assistant') || 
+                        otherParticipant.matrixUserId?.includes('myunion_bot') ||
+                        otherParticipant.matrixUserId?.includes('assistant') ||
+                        (otherParticipant.firstName === 'AI' && (otherParticipant.lastName === 'Помощник' || otherParticipant.lastName?.includes('Помощник')));
+          if (isBot) {
             displayName = 'МойСоюз Помощник';
           } else {
             displayName = [otherParticipant.firstName, otherParticipant.lastName]
@@ -137,11 +142,13 @@ export async function GET() {
         
         // Determine avatar URL
         let avatarUrl: string | null = null;
-        const isBot = otherParticipant?.matrixUserId?.includes('myunion_bot') || 
-                      otherParticipant?.matrixUserId?.includes('ai_assistant');
+        const isBotAvatar = (botUser && otherParticipant?.id === botUser.id) ||
+                            otherParticipant?.matrixUserId?.includes('myunion_bot') || 
+                            otherParticipant?.matrixUserId?.includes('ai_assistant') ||
+                            (otherParticipant?.firstName === 'AI' && otherParticipant?.lastName === 'Помощник');
         
-        if (isBot) {
-          avatarUrl = '/icon.png';
+        if (isBotAvatar) {
+          avatarUrl = '/icon-512x512.png'; // Используем иконку ИИ
         } else if (isDirect && otherParticipant?.avatarUrl) {
           avatarUrl = otherParticipant.avatarUrl;
         } else if (chat.type === 'GROUP' && chat.iconUrl) {
