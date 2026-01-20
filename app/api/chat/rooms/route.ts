@@ -70,14 +70,10 @@ export async function GET() {
     
     const tickets = chatIds.length > 0 ? await prisma.ticket.findMany({
       where: { 
-        OR: [
-          { chatId: { in: chatIds } }, // Старая схема (если есть)
-          { matrixRoomId: { in: chats.filter(c => c.matrixRoomId).map(c => c.matrixRoomId!) } }, // Новая схема
-        ],
+        matrixRoomId: { in: chats.filter(c => c.matrixRoomId).map(c => c.matrixRoomId!) },
       },
       select: { 
         id: true,
-        chatId: true,
         matrixRoomId: true,
         publicId: true,
         status: true,
