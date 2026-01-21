@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateAppealPublicId, formatAppealId } from "@/lib/appeal-id";
-import { createAppealThread } from "@/lib/matrix-threads";
+// Matrix удален - создаем чаты напрямую
 import { saveTicketToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { createGroupChat } from "@/lib/chat-service";
 
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
 
-    // Получаем Matrix комнаты, в которых пользователь является участником
+    // Получаем чаты, в которых пользователь является участником
     const userChats = await prisma.chat.findMany({
       where: {
         participants: {
@@ -36,19 +36,16 @@ export async function GET(request: NextRequest) {
       },
       select: {
         id: true,
-        matrixRoomId: true,
       },
     });
 
-    // Обращения, созданные пользователем ИЛИ связанные с Matrix комнатами, в которых пользователь участвует
-    const userMatrixRoomIds = userChats
-      .map(chat => chat.matrixRoomId)
-      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+    // Обращения, созданные пользователем ИЛИ связанные с чатами, в которых пользователь участвует
+    const userChatIds = userChats.map(chat => chat.id);
 
     const where: any = {
       OR: [
         { userId: session.user.id },
-        ...(userMatrixRoomIds.length > 0 ? [{ matrixRoomId: { in: userMatrixRoomIds } }] : []),
+        ...(userChatIds.length > 0 ? [{ chatId: { in: userChatIds } }] : []),
       ],
     };
 
@@ -113,7 +110,7 @@ export async function GET(request: NextRequest) {
         attachmentsCount: ticket._count.attachments,
         commentsCount: ticket._count.comments,
         lastCommentAt: ticket.comments[0]?.createdAt || null,
-        // chatId: ticket.chatId, // Тикеты теперь связаны через matrixRoomId
+        chatId: ticket.chatId,
         // Информация о создателе обращения
         createdBy: {
           id: ticket.user.id,
@@ -212,25 +209,47 @@ export async function POST(request: NextRequest) {
       chairmanId = chairman?.id || null;
     }
 
-    // Сначала создаем Matrix тред, чтобы получить matrixRoomId
-    let matrixRoomId: string | null = null;
+    // Создаем чат для обращения
+    let appealChat = null;
     if (chairmanId && chairmanId !== session.user.id) {
-      let messageContent = `📋 **${title}**\n\n${content.replace(/<[^>]*>/g, "")}`;
-      
-      const threadInfo = await createAppealThread(
-        `Обращение #${publicId!}: ${title}`,
-        messageContent,
-        session.user.id,
-        chairmanId
-      );
+      // Проверяем, не существует ли уже чат для этого обращения
+      appealChat = await prisma.chat.findFirst({
+        where: {
+          name: `Обращение #${publicId!}: ${title}`,
+          type: 'GROUP',
+        },
+        include: {
+          participants: {
+            where: { leftAt: null },
+            select: { userId: true },
+          },
+        },
+      });
 
-      if (threadInfo) {
-        matrixRoomId = threadInfo.roomId;
-        
-        // Создаем Chat запись в БД для треда обращения
-        // Проверяем, не существует ли уже чат с таким matrixRoomId
-        let appealChat = await prisma.chat.findUnique({
-          where: { matrixRoomId },
+      if (!appealChat) {
+        // Создаем новый Chat для обращения
+        appealChat = await prisma.chat.create({
+          data: {
+            type: "GROUP",
+            name: `Обращение #${publicId!}: ${title}`,
+            description: `Тред обращения от пользователя`,
+            createdById: session.user.id,
+            isPublic: false,
+            participants: {
+              create: [
+                {
+                  userId: session.user.id,
+                  role: "member",
+                  invitedById: session.user.id,
+                },
+                ...(chairmanId !== session.user.id ? [{
+                  userId: chairmanId,
+                  role: "admin", // Председатель - админ треда
+                  invitedById: session.user.id,
+                }] : []),
+              ],
+            },
+          },
           include: {
             participants: {
               where: { leftAt: null },
@@ -238,64 +257,30 @@ export async function POST(request: NextRequest) {
             },
           },
         });
+        console.log(`[tickets] ✅ Создан Chat для обращения: ${appealChat.id}`);
+      } else {
+        // Чат уже существует, проверяем участников
+        const existingUserIds = appealChat.participants.map(p => p.userId);
+        const missingParticipants = [
+          ...(existingUserIds.includes(session.user.id) ? [] : [{ userId: session.user.id, role: "member" }]),
+          ...(chairmanId !== session.user.id && !existingUserIds.includes(chairmanId) ? [{ userId: chairmanId, role: "admin" }] : []),
+        ];
 
-        if (!appealChat) {
-          // Создаем новый Chat для обращения
-          appealChat = await prisma.chat.create({
-            data: {
-              type: "GROUP",
-              name: `Обращение #${publicId!}: ${title}`,
-              description: `Тред обращения от пользователя`,
-              matrixRoomId,
-              createdById: session.user.id,
-              isPublic: false,
-              participants: {
-                create: [
-                  {
-                    userId: session.user.id,
-                    role: "member",
-                    invitedById: session.user.id,
-                  },
-                  ...(chairmanId !== session.user.id ? [{
-                    userId: chairmanId,
-                    role: "admin", // Председатель - админ треда
-                    invitedById: session.user.id,
-                  }] : []),
-                ],
-              },
-            },
-            include: {
-              participants: {
-                where: { leftAt: null },
-                select: { userId: true },
-              },
-            },
+        if (missingParticipants.length > 0) {
+          await prisma.chatParticipant.createMany({
+            data: missingParticipants.map(p => ({
+              chatId: appealChat!.id,
+              userId: p.userId,
+              role: p.role,
+              invitedById: session.user.id,
+            })),
           });
-          console.log(`[tickets] ✅ Создан Chat для обращения: ${appealChat.id} (matrixRoomId: ${matrixRoomId})`);
-        } else {
-          // Чат уже существует, проверяем участников
-          const existingUserIds = appealChat.participants.map(p => p.userId);
-          const missingParticipants = [
-            ...(existingUserIds.includes(session.user.id) ? [] : [{ userId: session.user.id, role: "member" }]),
-            ...(chairmanId !== session.user.id && !existingUserIds.includes(chairmanId) ? [{ userId: chairmanId, role: "admin" }] : []),
-          ];
-
-          if (missingParticipants.length > 0) {
-            await prisma.chatParticipant.createMany({
-              data: missingParticipants.map(p => ({
-                chatId: appealChat.id,
-                userId: p.userId,
-                role: p.role,
-                invitedById: session.user.id,
-              })),
-            });
-            console.log(`[tickets] ✅ Добавлены участники в Chat обращения: ${appealChat.id}`);
-          }
+          console.log(`[tickets] ✅ Добавлены участники в Chat обращения: ${appealChat.id}`);
         }
       }
     }
 
-    // Создаем тикет с matrixRoomId
+    // Создаем тикет с chatId
     const ticket = await prisma.ticket.create({
       data: {
         userId: session.user.id,
@@ -306,7 +291,7 @@ export async function POST(request: NextRequest) {
         title,
         content,
         organizationId: user?.organizationId || null,
-        matrixRoomId,
+        chatId: appealChat?.id || null,
       },
     });
 
@@ -367,31 +352,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Если тред создан и есть файлы, отправляем информацию о файлах в тред
-    if (matrixRoomId && uploadedFiles.length > 0) {
-      // Получаем токен создателя для отправки сообщения в тред
-      const creator = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { matrixAccessToken: true },
-      });
-
-      if (creator?.matrixAccessToken) {
+    // Если чат создан и есть файлы, отправляем информацию о файлах в чат
+    if (appealChat && uploadedFiles.length > 0) {
+      try {
         const filesList = uploadedFiles.map((f, i) => `${i + 1}. ${f.originalName}`).join('\n');
         const filesMessage = `📎 **Прикрепленные файлы:**\n${filesList}`;
         
-        // Отправляем сообщение в тред (reply к корневому сообщению)
-        const { replyToThread } = await import('@/lib/matrix-threads');
-        // Получаем thread root event ID из первого сообщения в комнате
-        const { getMatrixMessages } = await import('@/lib/matrix-messages');
-        const messages = await getMatrixMessages(creator.matrixAccessToken, matrixRoomId, 1);
-        if (messages.length > 0) {
-          await replyToThread(
-            creator.matrixAccessToken,
-            matrixRoomId,
-            messages[0].eventId,
-            filesMessage
-          );
-        }
+        // Отправляем сообщение в чат через наш API
+        await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/api/chat/${appealChat.id}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Internal-Token': process.env.INTERNAL_API_TOKEN || '',
+          },
+          body: JSON.stringify({
+            content: filesMessage,
+            senderUserId: session.user.id,
+          }),
+        }).catch(err => {
+          console.error('[tickets] Error sending files message to chat:', err);
+        });
+      } catch (err) {
+        console.error('[tickets] Error sending files message:', err);
       }
     }
 
@@ -437,7 +419,7 @@ export async function POST(request: NextRequest) {
         priority: ticket.priority,
         title: ticket.title,
         createdAt: ticket.createdAt,
-        // chatId: ticket.chatId, // Тикеты теперь связаны через matrixRoomId
+        chatId: ticket.chatId,
       },
     });
   } catch (error) {

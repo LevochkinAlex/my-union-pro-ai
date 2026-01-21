@@ -54,20 +54,20 @@ export async function GET(request: NextRequest) {
       const organizationTickets = await prisma.ticket.findMany({
         where: {
           organizationId: chairman.organizationId,
-          matrixRoomId: { not: null },
+          chatId: { not: null },
         },
-        select: { matrixRoomId: true },
+        select: { chatId: true },
       });
       
-      const ticketMatrixRoomIds = organizationTickets
-        .map(t => t.matrixRoomId)
+      const ticketChatIds = organizationTickets
+        .map(t => t.chatId)
         .filter((id): id is string => typeof id === 'string' && id.length > 0);
       
-      if (ticketMatrixRoomIds.length > 0) {
-        // Получаем чаты по matrixRoomId обращений организации
+      if (ticketChatIds.length > 0) {
+        // Получаем чаты по chatId обращений организации
         const appealChats = await prisma.chat.findMany({
           where: {
-            matrixRoomId: { in: ticketMatrixRoomIds },
+            id: { in: ticketChatIds },
           },
           include: {
             participants: {

@@ -116,8 +116,8 @@ export async function PUT(
       },
     });
 
-    // Отправляем системное сообщение в тред обращения через Matrix API
-    if (ticket.matrixRoomId) {
+    // Отправляем системное сообщение в чат обращения
+    if (ticket.chatId) {
       const emoji = STATUS_EMOJI[status] || "📌";
       let systemMessage = `${emoji} **Статус обращения изменен**\n\n`;
       systemMessage += `${STATUS_NAMES[oldStatus] || oldStatus} → ${STATUS_NAMES[status] || status}`;
@@ -126,19 +126,31 @@ export async function PUT(
         systemMessage += `\n\n💬 Комментарий: ${comment}`;
       }
 
-      // TODO: Отправляем системное сообщение через Matrix API в тред обращения
+      // Отправляем сообщение в чат через наш API
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/api/chat/${ticket.chatId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Internal-Token': process.env.INTERNAL_API_TOKEN || '',
+          },
+          body: JSON.stringify({
+            content: systemMessage,
+            senderUserId: session.user.id,
+          }),
+        }).catch(err => {
+          console.error('[appeals/status] Error sending status message:', err);
+        });
+      } catch (err) {
+        console.error('[appeals/status] Error:', err);
+      }
       // const chairman = await prisma.user.findUnique({...});
       // await sendMatrixMessage(chairman.matrixAccessToken, ticket.matrixRoomId, systemMessage);
       
-      // Обновляем lastMessageAt в чате через Chat по matrixRoomId
-      const chat = await prisma.chat.findUnique({
-        where: { matrixRoomId: ticket.matrixRoomId },
-        select: { id: true },
-      });
-      
-      if (chat) {
+      // Обновляем lastMessageAt в чате
+      if (ticket.chatId) {
         await prisma.chat.update({
-          where: { id: chat.id },
+          where: { id: ticket.chatId },
           data: {
             lastMessageAt: new Date(),
           },

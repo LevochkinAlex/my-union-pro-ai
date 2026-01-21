@@ -1,39 +1,90 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { normalizeUserAvatar, normalizeUsersAvatars } from "@/lib/api-helpers";
-import { getOrCreateAIBotUser } from "@/lib/ai-assistant-bot";
-import { saveChatConversationToKnowledgeBase } from "@/lib/chat-knowledge-learning";
-import { saveUserInteractionToKnowledgeBase } from "@/lib/user-knowledge-base";
-import { sendUserNotification } from "@/lib/notifications";
-import { withCache, getCacheKey } from "@/lib/cache";
-import { invalidateChatCache } from "@/lib/cache-invalidation";
-import { 
-  requireChatAccess, 
-  ChatAccessError,
-  markAsRead,
-  getChatParticipantIds,
-} from "@/lib/chat-service";
-import * as Sentry from "@sentry/nextjs";
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { requireChatAccess, ChatAccessError } from '@/lib/chat-service';
+import { normalizeUserAvatar } from '@/lib/api-helpers';
+import * as Sentry from '@sentry/nextjs';
 
-// GET - получение сообщений чата
+/**
+ * GET /api/chat/[chatId]
+ * Получить информацию о чате
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: { chatId: string } | Promise<{ chatId: string }> }
 ) {
-  const startTime = Date.now();
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const resolvedParams = await Promise.resolve(params);
+    const chatId = resolvedParams.chatId;
+
+    try {
+      await requireChatAccess(chatId, session.user.id);
+    } catch (error) {
+      if (error instanceof ChatAccessError) {
+        return NextResponse.json({ error: error.message }, { status: 403 });
+      }
+      throw error;
+    }
+
+    const chat = await prisma.chat.findUnique({
+      where: { id: chatId },
+      include: {
+        participants: {
+          where: { leftAt: null },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!chat) {
+      return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ chat });
+  } catch (error: any) {
+    Sentry.captureException(error);
+    console.error('[chat] GET Error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/chat/[chatId]
+ * Отправить сообщение в чат
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { chatId: string } | Promise<{ chatId: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const resolvedParams = await Promise.resolve(params);
     const chatId = resolvedParams.chatId;
     const userId = session.user.id;
 
-    // Проверяем доступ через новый сервис
+    // Проверяем доступ
     try {
       await requireChatAccess(chatId, userId);
     } catch (error) {
@@ -43,278 +94,17 @@ export async function GET(
       throw error;
     }
 
-    // Получаем параметры пагинации
-    const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get("limit") || "50", 10);
-    const cursor = searchParams.get("cursor");
-    const direction = searchParams.get("direction") || "newest";
-
-    // Строим условие WHERE
-    const whereClause: any = {
-      chatId,
-      deletedAt: null,
-    };
-
-    // Получаем информацию о чате
-    const chatInfo = await prisma.chat.findUnique({
-      where: { id: chatId },
-      select: {
-        id: true,
-        type: true,
-        name: true,
-        lastMessageId: true,
-        lastMessageAt: true,
-      },
-    });
-
-    // Строим условие WHERE для загрузки сообщений
-    const where: any = {
-      chatId,
-      threadRootId: null, // Загружаем только основные сообщения (не ответы в тредах)
-    };
-
-    // Курсор для пагинации
-    if (cursor) {
-      where.id = direction === "newest" ? { gt: cursor } : { lt: cursor };
-    }
-
-    // Загружаем сообщения из БД
-    const messages = await Sentry.startSpan(
-      {
-        op: "db.query",
-        name: "GET /api/chat/[chatId] - fetch messages",
-      },
-      async (span) => {
-        span.setAttribute("chatId", chatId);
-        span.setAttribute("limit", limit);
-
-        const shouldCache = !cursor && limit <= 50;
-        const cacheKey = shouldCache 
-          ? getCacheKey(`chat:messages:${chatId}`, { limit })
-          : null;
-
-        const fetchMessages = async () => {
-          return await prisma.chatMessage.findMany({
-            where,
-            take: limit,
-            orderBy: { createdAt: direction === "newest" ? "desc" : "asc" },
-            include: {
-              sender: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  middleName: true,
-                  avatarUrl: true,
-                },
-              },
-              replyTo: {
-                include: {
-                  sender: {
-                    select: {
-                      id: true,
-                      firstName: true,
-                      lastName: true,
-                    },
-                  },
-                },
-              },
-              attachments: true,
-              reactions: {
-                include: {
-                  user: {
-                    select: {
-                      id: true,
-                      firstName: true,
-                      lastName: true,
-                      middleName: true,
-                      avatarUrl: true,
-                    },
-                  },
-                },
-              },
-              readBy: {
-                where: { userId },
-                select: { userId: true },
-              },
-              _count: {
-                select: {
-                  threadReplies: true,
-                  readBy: true,
-                },
-              },
-            },
-          });
-        };
-
-        if (shouldCache && cacheKey) {
-          return withCache(cacheKey, fetchMessages, 60);
-        }
-        return fetchMessages();
-      }
-    );
-
-    // Переворачиваем для правильного отображения
-    const orderedMessages = [...messages].reverse();
-
-    // Пагинация
-    const hasMore = messages.length === limit;
-    const oldestMessageId = orderedMessages.length > 0 ? orderedMessages[0].id : null;
-    const newestMessageId = orderedMessages.length > 0 ? orderedMessages[orderedMessages.length - 1].id : null;
-
-    // Обрабатываем реакции
-    const allUserIds = new Set<string>();
-    const hasReactions = messages.some((msg: any) => 
-      msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0
-    );
-    
-    if (hasReactions) {
-      messages.forEach((msg: any) => {
-        if (msg.reactions && typeof msg.reactions === 'object') {
-          Object.values(msg.reactions).forEach((reactionData: any) => {
-            let userIds: string[] = [];
-            if (Array.isArray(reactionData)) {
-              userIds = reactionData;
-            } else if (reactionData?.userIds && Array.isArray(reactionData.userIds)) {
-              userIds = reactionData.userIds;
-            }
-            userIds.forEach((id: string) => id && allUserIds.add(id));
-          });
-        }
-      });
-    }
-
-    const reactionUsers = allUserIds.size > 0 
-      ? await withCache(
-          getCacheKey("users:reactions", { userIds: Array.from(allUserIds).sort().join(",") }),
-          async () => prisma.user.findMany({
-            where: { id: { in: Array.from(allUserIds) } },
-            select: { id: true, firstName: true, lastName: true, middleName: true, avatarUrl: true },
-          }),
-          300
-        )
-      : [];
-
-    const normalizedReactionUsers = normalizeUsersAvatars(reactionUsers);
-
-    // Форматируем сообщения
-    const messagesWithReactions = orderedMessages.map((msg: any) => {
-      const normalizedSender = msg.sender ? normalizeUserAvatar(msg.sender) : msg.sender;
-      const normalizedReplySender = msg.replyTo?.sender ? normalizeUserAvatar(msg.replyTo.sender) : msg.replyTo?.sender;
-      
-      // Форматируем реакции из БД
-      const reactionsWithUsers: Record<string, { userIds: string[]; users: any[] }> = {};
-      if (msg.reactions && Array.isArray(msg.reactions)) {
-        msg.reactions.forEach((reaction: any) => {
-          if (!reactionsWithUsers[reaction.emoji]) {
-            reactionsWithUsers[reaction.emoji] = {
-              userIds: [],
-              users: [],
-            };
-          }
-          reactionsWithUsers[reaction.emoji].userIds.push(reaction.user.id);
-          reactionsWithUsers[reaction.emoji].users.push(normalizeUserAvatar(reaction.user));
-        });
-      }
-
-      return {
-        id: msg.id,
-        chatId: msg.chatId,
-        sender: normalizedSender,
-        content: msg.content,
-        messageType: msg.messageType,
-        replyTo: msg.replyTo ? {
-          id: msg.replyTo.id,
-          sender: normalizedReplySender,
-          content: msg.replyTo.content,
-        } : null,
-        threadRootId: msg.threadRootId,
-        threadRepliesCount: msg.threadRootId === null ? msg._count.threadReplies : 0,
-        threadLastReplyAt: msg.threadRootId === null ? msg.threadLastReplyAt : null,
-        attachments: msg.attachments || [],
-        reactions: reactionsWithUsers,
-        readByCount: msg._count.readBy,
-        isRead: msg.readBy?.length > 0,
-        editedAt: msg.editedAt,
-        createdAt: msg.createdAt,
-        updatedAt: msg.updatedAt,
-      };
-    });
-
-    const duration = Date.now() - startTime;
-    console.log(`[chat] GET /api/chat/${chatId} - ${messagesWithReactions.length} messages in ${duration}ms`);
-    
-    return NextResponse.json({ 
-      messages: messagesWithReactions,
-      chat: chatInfo,
-      pagination: {
-        hasMore,
-        oldestMessageId,
-        newestMessageId,
-        count: messagesWithReactions.length,
-      },
-    });
-  } catch (error: any) {
-    Sentry.captureException(error);
-    console.error("[chat] GET Error:", error?.message);
-    return NextResponse.json(
-      { error: "Внутренняя ошибка сервера" },
-      { status: 500 }
-    );
-  }
-}
-
-// POST - отправка сообщения в чат
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { chatId: string } | Promise<{ chatId: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
-    }
-
-    const resolvedParams = await Promise.resolve(params);
-    const chatId = resolvedParams.chatId;
-    const userId = session.user.id;
-
-    // Проверяем доступ
-    let chat: any;
-    try {
-      const accessResult = await requireChatAccess(chatId, userId);
-      chat = accessResult.chat;
-    } catch (error) {
-      if (error instanceof ChatAccessError) {
-        return NextResponse.json({ error: error.message }, { status: 403 });
-      }
-      throw error;
-    }
-
-    // TODO: Проверка replyToId теперь через Matrix API
-    // if (replyToId) {
-    //   const replyToMessage = await getMatrixMessage(...);
-    // }
-
-    // Получаем полную информацию о чате
-    const fullChat = await prisma.chat.findUnique({
-      where: { id: chatId },
-      select: {
-        id: true,
-        type: true,
-        name: true,
-      },
-    });
-
-    // Получаем параметры запроса
     const body = await request.json();
     const { content, replyToId, threadRootId, attachments } = body;
 
     if (!content || !content.trim()) {
-      return NextResponse.json({ error: "Сообщение не может быть пустым" }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Message cannot be empty' },
+        { status: 400 }
+      );
     }
 
-    // Проверяем replyToId если указан
+    // Проверяем replyToId
     if (replyToId) {
       const replyToMessage = await prisma.chatMessage.findUnique({
         where: { id: replyToId },
@@ -322,54 +112,62 @@ export async function POST(
       });
 
       if (!replyToMessage || replyToMessage.chatId !== chatId) {
-        return NextResponse.json({ error: "Сообщение для ответа не найдено" }, { status: 404 });
+        return NextResponse.json(
+          { error: 'Reply message not found' },
+          { status: 404 }
+        );
       }
     }
 
-    // Проверяем threadRootId если указан (ответ в треде)
+    // Проверяем threadRootId
     if (threadRootId) {
       const threadRoot = await prisma.chatMessage.findFirst({
         where: {
           id: threadRootId,
           chatId,
-          threadRootId: null, // Должно быть корневым сообщением
+          threadRootId: null,
         },
       });
 
       if (!threadRoot) {
-        return NextResponse.json({ error: "Тред не найден" }, { status: 404 });
+        return NextResponse.json(
+          { error: 'Thread not found' },
+          { status: 404 }
+        );
       }
     }
 
-    // Получаем информацию об отправителе
+    // Получаем отправителя
     const sender = await prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
         firstName: true,
         lastName: true,
-        middleName: true,
         avatarUrl: true,
       },
     });
 
     if (!sender) {
-      return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
     }
 
-    // Создаем сообщение в БД
+    // Создаем сообщение
     const message = await prisma.chatMessage.create({
       data: {
         chatId,
         senderId: userId,
         content: content.trim(),
-        messageType: "text",
+        messageType: 'text',
         replyToId: replyToId || null,
         threadRootId: threadRootId || null,
         attachments: attachments
           ? {
               create: attachments.map((att: any) => ({
-                type: att.type || "file",
+                type: att.type || 'file',
                 url: att.url,
                 name: att.name,
                 size: att.size,
@@ -387,7 +185,6 @@ export async function POST(
             id: true,
             firstName: true,
             lastName: true,
-            middleName: true,
             avatarUrl: true,
           },
         },
@@ -416,12 +213,12 @@ export async function POST(
       },
     });
 
-    // Если это ответ в треде, обновляем метрики треда
+    // Если это ответ в треде, обновляем метрики
     if (threadRootId) {
       const repliesCount = await prisma.chatMessage.count({
         where: {
           threadRootId,
-          id: { not: threadRootId }, // Не считаем корневое сообщение
+          id: { not: threadRootId },
         },
       });
 
@@ -434,78 +231,7 @@ export async function POST(
       });
     }
 
-    const normalizedMessage = {
-      id: message.id,
-      chatId: message.chatId,
-      sender: normalizeUserAvatar(message.sender),
-      content: message.content,
-      messageType: message.messageType,
-      replyTo: message.replyTo ? {
-        id: message.replyTo.id,
-        sender: normalizeUserAvatar(message.replyTo.sender),
-        content: message.replyTo.content,
-      } : null,
-      threadRootId: message.threadRootId,
-      attachments: message.attachments || [],
-      reactions: {},
-      readByCount: 0,
-      isRead: false,
-      editedAt: message.editedAt,
-      createdAt: message.createdAt,
-      updatedAt: message.updatedAt,
-    };
-
-    // Получаем получателей
-    const recipientIds = await getChatParticipantIds(chatId, userId);
-    const isGroupChat = fullChat?.type === "GROUP";
-
-    // Проверяем, является ли это чатом с ботом
-    const botUser = await getOrCreateAIBotUser();
-    const isBotChat = !isGroupChat && recipientIds.length === 1 && recipientIds[0] === botUser.id;
-
-    // Отправляем уведомления получателям (кроме бота)
-    if (recipientIds.length > 0 && !isBotChat) {
-      // Отправляем уведомления асинхронно через API
-      fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/api/chat/notify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Internal-Token': process.env.INTERNAL_API_TOKEN || '',
-        },
-        body: JSON.stringify({
-          roomId: chatId,
-          message: content,
-          senderUserId: userId,
-        }),
-      }).catch(err => {
-        console.error('[chat] Error sending notifications:', err);
-      });
-    }
-
-    // Обработка чата с ботом
-    if (isBotChat) {
-      try {
-        const botResponse = await handleBotChat(chatId, userId, content, botUser, message);
-        if (botResponse) {
-          return NextResponse.json({ 
-            message: normalizedMessage,
-            botMessage: botResponse,
-          });
-        }
-      } catch (botError) {
-        console.error("[chat] Error getting bot response:", botError);
-      }
-    }
-
-    // Обновляем чат
-    await prisma.chat.update({
-      where: { id: chatId },
-      data: {
-        lastMessageAt: new Date(),
-      },
-    });
-
-    // Сбрасываем readAt для всех участников кроме отправителя
+    // Сбрасываем readAt для других участников
     await prisma.chatParticipant.updateMany({
       where: {
         chatId,
@@ -517,254 +243,35 @@ export async function POST(
       },
     });
 
-    // Старая схема удалена - все обновления через ChatParticipant выше
-
-    // Инвалидируем кеш
-    await invalidateChatCache(chatId);
-
-    // Отправляем уведомления
-    // ВАЖНО: recipientIds содержит ТОЛЬКО участников конкретного чата, а не всех председателей
-    // Личные сообщения (PRIVATE без ticketId) обрабатываются как обычные сообщения
-    // Обращения (с ticketId) обрабатываются как обращения, но уведомления идут только участникам чата
-    if (recipientIds.length > 0 && !isBotChat) {
-      await sendNotifications(chatId, userId, content, recipientIds, isGroupChat, fullChat?.name);
-    }
+    // Форматируем ответ
+    const normalizedMessage = {
+      id: message.id,
+      chatId: message.chatId,
+      senderId: message.senderId,
+      sender: normalizeUserAvatar(message.sender),
+      content: message.content,
+      messageType: message.messageType,
+      replyTo: message.replyTo
+        ? {
+            id: message.replyTo.id,
+            sender: normalizeUserAvatar(message.replyTo.sender),
+            content: message.replyTo.content,
+          }
+        : null,
+      threadRootId: message.threadRootId,
+      attachments: message.attachments || [],
+      reactions: {},
+      createdAt: message.createdAt,
+      editedAt: message.editedAt,
+    };
 
     return NextResponse.json({ message: normalizedMessage });
   } catch (error: any) {
     Sentry.captureException(error);
-    console.error("[chat] POST Error:", error?.message);
+    console.error('[chat] POST Error:', error);
     return NextResponse.json(
-      { error: "Внутренняя ошибка сервера" },
+      { error: 'Internal server error' },
       { status: 500 }
     );
-  }
-}
-
-// Обработка чата с AI ботом
-async function handleBotChat(
-  chatId: string,
-  userId: string,
-  content: string,
-  botUser: any,
-  userMessage: any
-): Promise<any | null> {
-  const { enhancedSearch, formatSearchResultsForPrompt } = await import("@/lib/chat-enhanced-search");
-  
-  const bot = await prisma.chatBot.findFirst({
-    where: { isActive: true },
-    include: { apiProvider: true },
-  });
-
-  if (!bot) return null;
-
-  // Загружаем историю чата из БД
-  const chatHistory = await prisma.chatMessage.findMany({
-    where: { chatId },
-    take: 20,
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      senderId: true,
-      content: true,
-      createdAt: true,
-    },
-  });
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { organization: true },
-  });
-
-  if (!user) return null;
-
-  const searchResults = await enhancedSearch(content.trim(), bot.id, userId);
-  const formattedSearchInfo = formatSearchResultsForPrompt(searchResults);
-
-  const userName = user.firstName || user.email?.split("@")[0] || "друг";
-  const userOrg = user.organization?.name || "не указана";
-
-  const systemPrompt = `Ты умный и дружелюбный AI-ассистент. Ты можешь помочь с любыми вопросами.
-
-Пользователь: ${userName}
-Его организация: ${userOrg}
-
-${formattedSearchInfo ? `### ДАННЫЕ:\n${formattedSearchInfo}` : ""}
-
-Правила:
-- Используй информацию из данных выше если она есть
-- Будь полезным, дружелюбным и конкретным`;
-
-  const conversationHistory = chatHistory.reverse().map((msg) => ({
-    role: msg.senderId === botUser.id ? "assistant" : "user",
-    content: msg.content,
-  }));
-
-  const messages = [
-    { role: "system", content: systemPrompt },
-    ...conversationHistory.slice(-10),
-    { role: "user", content: content.trim() },
-  ];
-
-  const assistantRoute = await import("@/app/api/assistant/chat/route");
-  const aiResponse = await assistantRoute.callAI(bot, messages);
-
-  // Создаем ответ бота в БД
-  const botMessage = await prisma.chatMessage.create({
-    data: {
-      chatId,
-      senderId: botUser.id,
-      content: aiResponse,
-      messageType: "text",
-    },
-    include: {
-      sender: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          middleName: true,
-          avatarUrl: true,
-        },
-      },
-    },
-  });
-
-  // Сохраняем в базу знаний
-  saveChatConversationToKnowledgeBase(
-    bot.id,
-    content.trim(),
-    aiResponse,
-    userId,
-    chatId,
-    botMessage.id
-  ).catch(console.error);
-
-  saveUserInteractionToKnowledgeBase(
-    userId,
-    content.trim(),
-    aiResponse,
-    { chatId, messageId: userMessage.id, botMessageId: botMessage.id, botId: bot.id }
-  ).catch(console.error);
-
-  // Обновляем чат с последним сообщением
-  await prisma.chat.update({
-    where: { id: chatId },
-    data: {
-      lastMessageId: botMessage.id,
-      lastMessageAt: botMessage.createdAt,
-    },
-  });
-
-  return {
-    ...botMessage,
-    sender: normalizeUserAvatar(botMessage.sender),
-  };
-}
-
-// Отправка уведомлений
-async function sendNotifications(
-  chatId: string,
-  senderId: string,
-  content: string,
-  recipientIds: string[],
-  isGroupChat: boolean,
-  chatName?: string | null
-) {
-  try {
-    const sender = await prisma.user.findUnique({
-      where: { id: senderId },
-      select: { firstName: true, lastName: true, middleName: true },
-    });
-
-    const senderName = sender 
-      ? `${sender.firstName || ""} ${sender.lastName || ""}`.trim() || "Пользователь"
-      : "Пользователь";
-
-    // Проверяем, связан ли чат с обращением
-    // ВАЖНО: только чаты с ticketId являются обращениями
-    // Личные сообщения (PRIVATE без ticketId) НЕ должны обрабатываться как обращения
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
-      select: {
-        type: true,
-        matrixRoomId: true,
-      },
-    });
-
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
-    const messagePreview = content.trim().substring(0, 100);
-
-    // Если чат связан с обращением (проверяем через matrixRoomId), создаем уведомление об обращении
-    // Личные сообщения обрабатываются как обычные сообщения
-    // Уведомления отправляются ТОЛЬКО участникам конкретного чата (recipientIds), а не всем председателям
-    let ticket = null;
-    if (chat?.matrixRoomId) {
-      ticket = await prisma.ticket.findUnique({
-        where: { matrixRoomId: chat.matrixRoomId },
-        select: {
-          id: true,
-          publicId: true,
-          title: true,
-          user: {
-            select: {
-              firstName: true,
-              lastName: true,
-              middleName: true,
-            },
-          },
-        },
-      });
-    }
-    
-    if (ticket) {
-      const ticketOwnerName = ticket.user
-        ? [ticket.user.lastName, ticket.user.firstName, ticket.user.middleName].filter(Boolean).join(" ") || "Пользователь"
-        : "Пользователь";
-      
-      // Форматируем publicId для отображения
-      const formattedPublicId = ticket.publicId.length === 8
-        ? `${ticket.publicId.slice(0, 4)}-${ticket.publicId.slice(4)}`
-        : ticket.publicId;
-
-      await Promise.all(
-        recipientIds.map((recipientId) =>
-          sendUserNotification({
-            userId: recipientId,
-            type: "ticket_response",
-            title: `Обращение #${formattedPublicId}: ${ticketOwnerName}`,
-            body: messagePreview,
-            url: `${baseUrl}/dashboard/appeals/${ticket?.id}`,
-            senderName,
-          }).catch((err) => {
-            console.error(`[chat] Error sending notification to ${recipientId}:`, err?.message);
-            return { push: false, email: false };
-          })
-        )
-      );
-    } else {
-      // Обычное уведомление о сообщении в чате
-    await Promise.all(
-      recipientIds.map((recipientId) =>
-        sendUserNotification({
-          userId: recipientId,
-          type: "chat_message",
-          title: isGroupChat 
-            ? `💬 ${chatName || "Групповой чат"}: ${senderName}`
-            : `💬 Новое сообщение от ${senderName}`,
-          body: messagePreview,
-          url: isGroupChat
-            ? `${baseUrl}/dashboard/chats/ppo-head?chatId=${chatId}`
-            : `${baseUrl}/dashboard/chat?chatId=${chatId}`,
-          senderName,
-        }).catch((err) => {
-          console.error(`[chat] Error sending notification to ${recipientId}:`, err?.message);
-          return { push: false, email: false };
-        })
-      )
-    );
-    }
-  } catch (error: any) {
-    console.error("[chat] Error sending notifications:", error?.message);
   }
 }

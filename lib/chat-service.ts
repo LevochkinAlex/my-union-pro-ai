@@ -93,7 +93,6 @@ export async function checkChatAccess(
       id: true,
       type: true,
       name: true,
-      matrixRoomId: true,
     },
   });
 
@@ -170,22 +169,22 @@ export async function getUserChats(
     whereConditions.push({ type: filter.type });
   }
 
-  // Фильтр по наличию обращения (проверяем связь с Ticket через matrixRoomId)
+  // Фильтр по наличию обращения (проверяем связь с Ticket через chatId)
   if (filter?.hasTicket !== undefined) {
-    // Получаем все matrixRoomId из тикетов
+    // Получаем все chatId из тикетов
     const tickets = await prisma.ticket.findMany({
-      where: { matrixRoomId: { not: null } },
-      select: { matrixRoomId: true },
+      where: { chatId: { not: null } },
+      select: { chatId: true },
     });
-    const ticketMatrixRoomIds = tickets
-      .map(t => t.matrixRoomId)
+    const ticketChatIds = tickets
+      .map(t => t.chatId)
       .filter((id): id is string => typeof id === 'string' && id.length > 0);
     
     if (filter.hasTicket) {
-      // Только чаты, которые связаны с обращениями (есть Ticket с таким matrixRoomId)
-      if (ticketMatrixRoomIds.length > 0) {
+      // Только чаты, которые связаны с обращениями (есть Ticket с таким chatId)
+      if (ticketChatIds.length > 0) {
         whereConditions.push({
-          matrixRoomId: { in: ticketMatrixRoomIds },
+          id: { in: ticketChatIds },
         });
       } else {
         // Если нет обращений, возвращаем пустой результат через невозможное условие
@@ -195,12 +194,9 @@ export async function getUserChats(
       }
     } else {
       // Все чаты, кроме связанных с обращениями
-      if (ticketMatrixRoomIds.length > 0) {
+      if (ticketChatIds.length > 0) {
         whereConditions.push({
-          OR: [
-            { matrixRoomId: null },
-            { matrixRoomId: { notIn: ticketMatrixRoomIds } },
-          ],
+          id: { notIn: ticketChatIds },
         });
       }
     }

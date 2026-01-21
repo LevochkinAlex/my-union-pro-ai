@@ -365,35 +365,21 @@ export function ChatPageBase({
 
               <div className="flex-1 flex flex-col overflow-hidden min-h-0 w-full max-w-full">
                 <ChatMessages
-                  chat={selectedChat}
-                  messages={messages}
-                  currentUserId={currentUserId}
-                  loading={loadingMessages}
-                  loadingOlder={loadingOlder}
-                  hasMore={hasMore}
-                  isBotTyping={isBotTyping}
-                  typingUsers={typingUsers}
-                  onLoadMore={loadOlderMessages}
-                  onReply={handleReply}
-                  onEdit={handleEdit}
-                  onDelete={handleDeleteRequest}
-                  onForward={handleForward}
-                  onReaction={toggleReaction}
-                  onImageClick={(url, name) => setSelectedImage({ url, name })}
-                  onProfileClick={enableProfileClick ? handleProfileClick : undefined}
-                  onSaveScrollPosition={saveScrollPosition}
-                  getSavedScrollPosition={getScrollPosition}
+                  messages={messages.map(m => ({
+                    ...m,
+                    messageType: (m as any).messageType || 'text',
+                    createdAt: new Date(m.createdAt),
+                  } as any))}
+                  currentUserId={currentUserId || ''}
+                  typingUsers={new Set(typingUsers?.map(u => typeof u === 'string' ? u : (u as any).userId) || [])}
                 />
               </div>
 
               <ChatInput
-                replyingTo={replyingTo}
-                editingMessage={editingMessage}
-                disabled={sending}
-                onSend={handleSendMessage}
+                onSend={(content) => handleSendMessage(content)}
+                replyTo={replyingTo ? { id: replyingTo.id, content: replyingTo.content } : null}
                 onCancelReply={() => setReplyingTo(null)}
-                onCancelEdit={() => setEditingMessage(null)}
-                onTyping={sendTyping}
+                disabled={sending}
               />
             </>
           ) : (

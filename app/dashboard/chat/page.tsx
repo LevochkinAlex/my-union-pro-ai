@@ -4,8 +4,8 @@ import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { MembershipGate } from "@/components/MembershipGate";
 
-// Lazy load Matrix Chat компонент
-const MatrixChat = dynamic(() => import("@/components/chat/MatrixChat"), {
+// Lazy load Chat компонент
+const Chat = dynamic(() => import("@/components/chat/Chat"), {
   ssr: false,
   loading: () => <ChatSkeleton />,
 });
@@ -33,8 +33,8 @@ export default function ChatPage() {
     >
       <div className="fixed inset-0 top-16 md:top-0 md:left-64 right-0 bottom-0">
         <Suspense fallback={<ChatSkeleton />}>
-          <MatrixChat />
-      </Suspense>
+          <Chat />
+        </Suspense>
       </div>
     </MembershipGate>
   );

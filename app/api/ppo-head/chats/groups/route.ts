@@ -5,8 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getPPOHead, isMemberOfOrganization } from "@/lib/ppo-head-utils";
 import { sendPushNotification } from "@/lib/push-notifications";
 
-const MATRIX_SERVER = process.env.MATRIX_SERVER_URL || 'http://localhost:8008';
-const MATRIX_ADMIN_TOKEN = process.env.MATRIX_ADMIN_TOKEN;
+// Matrix удален
 
 /**
  * POST /api/ppo-head/chats/groups
@@ -77,55 +76,12 @@ export async function POST(request: NextRequest) {
 
     // Get all participants' Matrix IDs for room creation
     const allParticipantIds = [chairman.id, ...filteredParticipantIds];
-    const usersWithMatrix = await prisma.user.findMany({
+    const users = await prisma.user.findMany({
       where: { id: { in: allParticipantIds } },
-      select: { id: true, matrixUserId: true, matrixAccessToken: true }
+      select: { id: true }
     });
 
-    // Create Matrix room if we have admin token
-    let matrixRoomId: string | null = null;
-    if (MATRIX_ADMIN_TOKEN) {
-      try {
-        // Create room with admin
-        const createRoomResp = await fetch(`${MATRIX_SERVER}/_matrix/client/v3/createRoom`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${MATRIX_ADMIN_TOKEN}`
-          },
-          body: JSON.stringify({
-            name: name.trim(),
-            topic: description?.trim() || undefined,
-            preset: 'private_chat'
-          })
-        });
-
-        if (createRoomResp.ok) {
-          const roomData = await createRoomResp.json();
-          matrixRoomId = roomData.room_id;
-
-          // Join all users to the room
-          for (const user of usersWithMatrix) {
-            if (user.matrixUserId) {
-              try {
-                await fetch(`${MATRIX_SERVER}/_synapse/admin/v1/join/${encodeURIComponent(matrixRoomId)}`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${MATRIX_ADMIN_TOKEN}`
-                  },
-                  body: JSON.stringify({ user_id: user.matrixUserId })
-                });
-              } catch (joinErr) {
-                console.error(`Failed to join user ${user.matrixUserId} to room:`, joinErr);
-              }
-            }
-          }
-        }
-      } catch (matrixErr) {
-        console.error('Failed to create Matrix room:', matrixErr);
-      }
-    }
+    // Matrix удален - создаем чат напрямую
 
     // Создаем групповой чат
     const chat = await prisma.chat.create({
@@ -136,7 +92,6 @@ export async function POST(request: NextRequest) {
         iconUrl: iconUrl || null,
         isPublic: Boolean(isPublic),
         createdById: chairman.id,
-        matrixRoomId,
         participants: {
           create: [
             // Добавляем создателя как админа

@@ -58,9 +58,9 @@ export async function GET(
 
     // Проверяем, является ли пользователь участником чата обращения
     let isChatParticipant = false;
-    if (ticket.matrixRoomId) {
+    if (ticket.chatId) {
       const chat = await prisma.chat.findUnique({
-        where: { matrixRoomId: ticket.matrixRoomId },
+        where: { id: ticket.chatId },
         select: {
           participants: {
             where: {
@@ -97,7 +97,7 @@ export async function GET(
         createdAt: ticket.createdAt,
         updatedAt: ticket.updatedAt,
         attachments: ticket.attachments,
-        // chatId: ticket.chatId, // Тикеты теперь связаны через matrixRoomId
+        chatId: ticket.chatId,
         rejectionReason: ticket.rejectionReason,
         helpfulRating: ticket.helpfulRating,
         helpfulRatingComment: ticket.helpfulRatingComment,
@@ -189,9 +189,26 @@ export async function PUT(
       },
     });
 
-    // TODO: Отправляем сообщение в тред обращения через Matrix API
-    if (ticket.matrixRoomId) {
-      // await sendMatrixMessage(...);
+    // Отправляем сообщение в чат обращения
+    if (ticket.chatId) {
+      try {
+        const updateMessage = `📝 Обращение отредактировано`;
+        await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/api/chat/${ticket.chatId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Internal-Token': process.env.INTERNAL_API_TOKEN || '',
+          },
+          body: JSON.stringify({
+            content: updateMessage,
+            senderUserId: session.user.id,
+          }),
+        }).catch(err => {
+          console.error('[tickets] Error sending update message:', err);
+        });
+      } catch (err) {
+        console.error('[tickets] Error:', err);
+      }
     }
 
     return NextResponse.json({
@@ -270,9 +287,26 @@ export async function DELETE(
       },
     });
 
-    // TODO: Отправляем сообщение в тред обращения через Matrix API об удалении
-    if (ticket.matrixRoomId) {
-      // await sendMatrixMessage(...);
+    // Отправляем сообщение в чат обращения об удалении
+    if (ticket.chatId) {
+      try {
+        const deleteMessage = `🗑️ Обращение удалено пользователем`;
+        await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/api/chat/${ticket.chatId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Internal-Token': process.env.INTERNAL_API_TOKEN || '',
+          },
+          body: JSON.stringify({
+            content: deleteMessage,
+            senderUserId: session.user.id,
+          }),
+        }).catch(err => {
+          console.error('[tickets] Error sending delete message:', err);
+        });
+      } catch (err) {
+        console.error('[tickets] Error:', err);
+      }
     }
 
     // Удаляем тикет (каскадно удалятся attachments и comments)

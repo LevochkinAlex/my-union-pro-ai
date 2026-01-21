@@ -106,7 +106,7 @@ export async function POST(
     });
 
     // TODO: Отправляем сообщение в тред обращения через Matrix API
-    if (ticket.matrixRoomId) {
+    if (ticket.chatId) {
       const ratingStars = "⭐".repeat(rating);
       let message = `📊 Оценка полезности ответа: ${ratingStars} (${rating}/5)`;
       if (comment) {

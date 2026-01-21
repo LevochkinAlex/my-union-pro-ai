@@ -130,11 +130,11 @@ export async function POST(
       },
     });
 
-    // Log action if this is a ticket chat (проверяем через matrixRoomId)
-    const ticket = chat.matrixRoomId ? await prisma.ticket.findUnique({
-      where: { matrixRoomId: chat.matrixRoomId },
+    // Log action if this is a ticket chat (проверяем через chatId)
+    const ticket = await prisma.ticket.findFirst({
+      where: { chatId: chatId },
       select: { id: true, publicId: true },
-    }) : null;
+    });
     
     if (ticket?.id) {
       await prisma.ticketActionLog.create({

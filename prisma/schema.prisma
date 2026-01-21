@@ -1302,8 +1302,9 @@ model Ticket {
   // 8-значный публичный ID для отслеживания (10000000-99999999)
   publicId String @unique @db.Char(8)
   
-  // Matrix интеграция
-  matrixRoomId String? @unique // ID комнаты в Matrix для обращения
+  // Связь с чатом (если есть)
+  chatId String? @unique
+  chat   Chat?   @relation("TicketChat", fields: [chatId], references: [id], onDelete: SetNull)
 
   userId String
   user   User   @relation("UserTickets", fields: [userId], references: [id], onDelete: Cascade)
@@ -1932,9 +1933,6 @@ model Chat {
 
   // Тип чата
   type ChatType @default(PRIVATE)
-  
-  // Matrix интеграция
-  matrixRoomId String? @unique // ID комнаты в Matrix
 
   // Для групповых чатов
   name        String? // Название группы
@@ -1955,6 +1953,9 @@ model Chat {
   // Все сообщения чата
   messages        ChatMessage[] @relation("ChatMessages")
   
+  // Обращения (тикеты) связанные с чатом
+  ticket          Ticket?       @relation("TicketChat")
+  
   // Архивирован ли чат
   archivedAt DateTime?
 
@@ -1964,7 +1965,6 @@ model Chat {
   @@index([createdById])
   @@index([type])
   @@index([lastMessageAt])
-  @@index([matrixRoomId])
 }
 
 // Участники группового чата

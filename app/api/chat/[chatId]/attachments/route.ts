@@ -54,7 +54,6 @@ export async function POST(
       select: {
         type: true,
         name: true,
-        matrixRoomId: true,
       },
     });
 
@@ -142,16 +141,12 @@ export async function POST(
       attachmentType = "video";
     }
 
-    // TODO: Переделать на Matrix API для отправки файлов
-    // Сейчас временно возвращаем успех
-    // Сообщения теперь хранятся в Matrix, нужно использовать Matrix Media API
-    
-    if (!fullChat?.matrixRoomId) {
-      return NextResponse.json(
-        { error: "Чат не связан с Matrix комнатой" },
-        { status: 400 }
-      );
-    }
+    // TODO: Реализовать загрузку файлов
+    // Пока возвращаем ошибку
+    return NextResponse.json(
+      { error: "Загрузка файлов временно недоступна" },
+      { status: 501 }
+    );
 
     // Обновляем чат
     const attachmentText = attachmentType === "image" ? "📷 Фото" : attachmentType === "video" ? "🎥 Видео" : "📎 Файл";

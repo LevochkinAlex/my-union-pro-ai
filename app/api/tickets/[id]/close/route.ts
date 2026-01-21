@@ -70,7 +70,7 @@ export async function POST(
         title: true,
         status: true,
         organizationId: true,
-        matrixRoomId: true,
+        chatId: true,
         user: { 
           select: { 
             id: true, 
@@ -118,17 +118,33 @@ export async function POST(
       },
     });
 
-    // Send "Мой вопрос решен" message to Matrix chat
-    if (ticket.matrixRoomId) {
+    // Отправляем сообщение в чат обращения
+    if (ticket.chatId) {
       const closeMessage = `Обращение закрыто пользователем ${userName}.\n\nОценка: ${ratingStars} (${rating}/5)${comment ? `\nКомментарий: ${comment}` : ''}`;
-      await sendMatrixMessage(ticket.matrixRoomId, closeMessage);
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/api/chat/${ticket.chatId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Internal-Token': process.env.INTERNAL_API_TOKEN || '',
+          },
+          body: JSON.stringify({
+            content: closeMessage,
+            senderUserId: session.user.id,
+          }),
+        }).catch(err => {
+          console.error('[tickets/close] Error sending close message:', err);
+        });
+      } catch (err) {
+        console.error('[tickets/close] Error:', err);
+      }
     }
 
     // Get all chat participants (excluding the ticket creator)
     let participantUserIds: string[] = [];
-    if (ticket.matrixRoomId) {
+    if (ticket.chatId) {
       const chat = await prisma.chat.findUnique({
-        where: { matrixRoomId: ticket.matrixRoomId },
+        where: { id: ticket.chatId },
         select: {
           participants: {
             where: { leftAt: null },

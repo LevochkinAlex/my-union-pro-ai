@@ -91,7 +91,6 @@ interface MatrixRoom {
 
 interface DbRoomInfo {
   id: string;  // Chat ID from database
-  matrixRoomId: string;
   displayName: string;
   avatarUrl?: string;
   isDirect: boolean;
@@ -106,7 +105,6 @@ interface DbRoomInfo {
     firstName?: string;
     lastName?: string;
     avatarUrl?: string;
-    matrixUserId?: string;
   }>;
 }
 
@@ -192,7 +190,7 @@ export default function MatrixChat() {
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
-  const [orgMembers, setOrgMembers] = useState<Array<{id: string; firstName: string; lastName: string; avatarUrl?: string; matrixUserId?: string}>>([]);
+  const [orgMembers, setOrgMembers] = useState<Array<{id: string; firstName: string; lastName: string; avatarUrl?: string}>>([]);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [memberSearchTerm, setMemberSearchTerm] = useState('');
@@ -222,7 +220,7 @@ export default function MatrixChat() {
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteSearch, setInviteSearch] = useState('');
-  const [inviteResults, setInviteResults] = useState<Array<{id: string; firstName: string; lastName: string; avatarUrl?: string; matrixUserId?: string}>>([]);
+  const [inviteResults, setInviteResults] = useState<Array<{id: string; firstName: string; lastName: string; avatarUrl?: string}>>([]);
   const [selectedInvites, setSelectedInvites] = useState<string[]>([]);
   const [groupParticipants, setGroupParticipants] = useState<Array<{id: string; firstName: string; lastName: string; avatarUrl?: string; role: string}>>([]);
   
@@ -317,8 +315,8 @@ export default function MatrixChat() {
         const data = await resp.json();
         const infoMap = new Map<string, DbRoomInfo>();
         for (const room of data.rooms || []) {
-          if (room.matrixRoomId) {
-            infoMap.set(room.matrixRoomId, room);
+          if (room.id) {
+            infoMap.set(room.id, room);
           }
         }
         setDbRoomInfo(infoMap);
@@ -399,9 +397,8 @@ export default function MatrixChat() {
 
   // ensureBotChat и matrixFetch удалены - Matrix больше не используется
 
-  // Matrix sync УДАЛЕН - используем только API /api/chat/rooms
+  // Загружаем комнаты через API (Matrix удален)
   const sync = useCallback(async (initialSync = false) => {
-    // Matrix больше не используется - загружаем комнаты через API
     try {
       const response = await fetch('/api/chat/rooms');
       if (!response.ok) return;
@@ -410,282 +407,29 @@ export default function MatrixChat() {
       
       setConnected(true);
 
-      // Process rooms
-      const joinedRooms = data.rooms?.join || {};
+      // Process rooms from API
       const roomList: MatrixRoom[] = [];
 
-      for (const [roomId, roomData] of Object.entries(joinedRooms)) {
-        interface MemberContent { 
-          displayname?: string; 
-          avatar_url?: string; 
-          is_direct?: boolean;
-          membership?: string;
-        }
-        interface StateEvent { 
-          type: string; 
-          state_key?: string;
-          sender?: string;
-          content: { name?: string } & MemberContent;
-        }
+      for (const room of data.rooms || []) {
+        // Используем chatId из API ответа (или id для обратной совместимости)
+        const roomId = room.chatId || room.id;
+        const displayName = room.displayName || 'Чат';
+        const isTicketChat = room.isTicket || displayName.startsWith('Обращение #');
         
-        const rd = roomData as {
-          state?: { events?: StateEvent[] };
-          timeline?: { events?: Array<{ type: string; content: { body?: string }; origin_server_ts?: number }> };
-          unread_notifications?: { notification_count?: number };
-          ephemeral?: { events?: Array<{ type: string; content: { user_ids?: string[] } }> };
-        };
-        
-        const stateEvents = rd.state?.events || [];
-        const nameEvent = stateEvents.find(e => e.type === 'm.room.name');
-        
-        // Get all member events
-        const allMemberEvents = stateEvents.filter(e => e.type === 'm.room.member');
-        
-        // Count joined/invited members
-        const activeMembers = allMemberEvents.filter(e => 
-          e.content?.membership === 'join' || e.content?.membership === 'invite'
-        );
-        
-        // Check if this is a bot room
-        const isBotRoom = allMemberEvents.some(
-          e => e.state_key?.includes('myunion_bot')
-        );
-        
-        // Find other members (not the current user)
-        const otherMembers = allMemberEvents.filter(
-          e => e.state_key !== credentials.userId && 
-               (e.content?.membership === 'join' || e.content?.membership === 'invite')
-        );
-        
-        // Check if we have DB info for this room (preferred source)
-        const dbInfo = dbRoomInfo.get(roomId);
-        
-        // Determine if this is a direct chat
-        const isDirect = dbInfo?.isDirect ?? (activeMembers.length <= 2 && !nameEvent?.content?.name);
-        
-        // Get room name - priority: DB info > explicit name > member name > fallback
-        let roomName = dbInfo?.displayName || nameEvent?.content?.name;
-        let roomAvatar: string | undefined = dbInfo?.avatarUrl;
-        
-        // For rooms without name from DB, try to determine from Matrix data
-        if (!roomName && otherMembers.length > 0) {
-          const otherMember = otherMembers[0];
-          
-          // Check if it's the bot
-          if (otherMember.state_key?.includes('myunion_bot') || otherMember.state_key?.includes('ai_assistant')) {
-            roomName = 'МойСоюз Помощник';
-          } else {
-            // Get display name from member event
-            roomName = otherMember.content?.displayname;
-            if (!roomAvatar) roomAvatar = otherMember.content?.avatar_url;
-            
-            // If no display name, try to create readable name from Matrix ID
-            if (!roomName && otherMember.state_key) {
-              const username = otherMember.state_key.split(':')[0].replace('@', '');
-              if (username.startsWith('myunion_')) {
-                roomName = 'Пользователь';
-              } else {
-                roomName = username.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-              }
-            }
-          }
-        }
-        
-        // Fallback names based on room type
-        if (!roomName) {
-          if (isBotRoom) {
-            roomName = 'МойСоюз Помощник';
-            roomAvatar = '/icon.png';
-          } else if (activeMembers.length === 1) {
-            roomName = 'Новый чат';
-          } else if (isDirect) {
-            roomName = 'Личный чат';
-          } else {
-            roomName = 'Групповой чат';
-          }
-        }
-        
-        // Always set bot avatar if it's a bot room
-        if (isBotRoom && !roomAvatar) {
-          roomAvatar = '/icon.png';
-        }
-        
-        const timelineEvents = rd.timeline?.events || [];
-        const lastMsg = [...timelineEvents].reverse().find(e => e.type === 'm.room.message');
-
-        // ONLY add rooms that exist in our database
-        if (dbInfo) {
-          const displayName = dbInfo.displayName || roomName || 'Чат';
-          // Use isTicket from API, fallback to name check for backwards compatibility
-          const isTicketChat = dbInfo.isTicket || displayName.startsWith('Обращение #');
-          
-          roomList.push({
-            roomId,
-            name: displayName,
-            avatarUrl: dbInfo.avatarUrl || roomAvatar,
-            lastMessage: lastMsg?.content?.body,
-            lastMessageTime: lastMsg?.origin_server_ts,
-            unreadCount: rd.unread_notifications?.notification_count || 0,
-            isDirect: dbInfo.isDirect,
-            isTicket: isTicketChat, // Обращения всегда в Рабочих
-            ticketId: dbInfo.ticketId,
-            ticketResolved: dbInfo.ticketResolved,
-            ticketStatus: dbInfo.ticketStatus,
-            isTicketCreator: dbInfo.isTicketCreator,
-          });
-        }
-
-        // Handle typing indicators
-        const typingEvent = rd.ephemeral?.events?.find(e => e.type === 'm.typing');
-        if (typingEvent && roomId === selectedRoomId) {
-          const typingUserIds = typingEvent.content?.user_ids || [];
-          setTypingUsers(
-            typingUserIds
-              .filter(id => id !== credentials.userId)
-              .map(id => ({ userId: id, name: id.split(':')[0].replace('@', '') }))
-          );
-        }
-
-        // Update messages for selected room
-        if (roomId === selectedRoomId && !initialSync) {
-          type TimelineEvent = { type: string; event_id: string; sender: string; content: { body?: string; msgtype?: string; url?: string; info?: any; 'm.relates_to'?: any; 'm.new_content'?: any }; origin_server_ts: number };
-          
-          // First, handle edit events - update existing messages
-          const editEvents = (timelineEvents as TimelineEvent[])
-            .filter(e => e.type === 'm.room.message' && e.content?.['m.relates_to']?.rel_type === 'm.replace');
-          
-          if (editEvents.length > 0) {
-            setMessages(prev => {
-              const updated = [...prev];
-              editEvents.forEach(editEvent => {
-                const originalEventId = editEvent.content?.['m.relates_to']?.event_id;
-                const newContent = editEvent.content?.['m.new_content']?.body || editEvent.content?.body?.replace(/^\* /, '') || '';
-                const index = updated.findIndex(m => m.eventId === originalEventId);
-                if (index !== -1) {
-                  updated[index] = {
-                    ...updated[index],
-                    content: newContent,
-                    isEdited: true,
-                    editTimestamp: editEvent.origin_server_ts
-                  };
-                }
-              });
-              return updated;
-            });
-          }
-          
-          // Then, handle regular messages (excluding edit events)
-          const newMsgs: MatrixMessage[] = (timelineEvents as TimelineEvent[])
-            .filter(e => e.type === 'm.room.message' && e.content?.['m.relates_to']?.rel_type !== 'm.replace')
-            .map(e => {
-              const msgtype = (e.content?.msgtype || 'm.text') as MatrixMessage['msgtype'];
-              let attachment: MessageAttachment | undefined;
-              
-              // Helper to convert mxc:// to https:// using our proxy for auth
-              const mxcToHttp = (mxcUrl: string, thumbnail = false) => {
-                if (!mxcUrl?.startsWith('mxc://')) return mxcUrl;
-                const parts = mxcUrl.replace('mxc://', '').split('/');
-                const server = parts[0];
-                const mediaId = parts.slice(1).join('/');
-                // Use our proxy to add auth header
-                if (thumbnail) {
-                  return `/api/matrix-media/${server}/${mediaId}?width=400&height=400&method=scale`;
-                }
-                return `/api/matrix-media/${server}/${mediaId}`;
-              };
-              
-              // Handle attachments
-              if (msgtype === 'm.image' && e.content?.url) {
-                attachment = {
-                  type: 'image',
-                  url: mxcToHttp(e.content.url),
-                  thumbnailUrl: e.content.info?.thumbnail_url ? mxcToHttp(e.content.info.thumbnail_url, true) : mxcToHttp(e.content.url, true),
-                  name: e.content.body || 'image',
-                  mimeType: e.content.info?.mimetype,
-                  width: e.content.info?.w,
-                  height: e.content.info?.h,
-                  size: e.content.info?.size
-                };
-              } else if (msgtype === 'm.file' && e.content?.url) {
-                attachment = {
-                  type: 'file',
-                  url: mxcToHttp(e.content.url),
-                  name: e.content.body || 'file',
-                  mimeType: e.content.info?.mimetype,
-                  size: e.content.info?.size
-                };
-              } else if (msgtype === 'm.video' && e.content?.url) {
-                attachment = {
-                  type: 'video',
-                  url: mxcToHttp(e.content.url),
-                  thumbnailUrl: e.content.info?.thumbnail_url ? mxcToHttp(e.content.info.thumbnail_url, true) : undefined,
-                  name: e.content.body || 'video',
-                  mimeType: e.content.info?.mimetype,
-                  size: e.content.info?.size
-                };
-              } else if (msgtype === 'm.audio' && e.content?.url) {
-                attachment = {
-                  type: 'audio',
-                  url: mxcToHttp(e.content.url),
-                  name: e.content.body || 'audio',
-                  mimeType: e.content.info?.mimetype,
-                  size: e.content.info?.size
-                };
-              }
-              
-              // Get sender name from our DB data
-              let senderName = 'Пользователь';
-              let senderAvatar: string | undefined;
-              
-              if (e.sender.includes('myunion_bot') || e.sender.includes('ai_assistant')) {
-                senderName = 'МойСоюз Помощник';
-              } else if (dbInfo?.participants) {
-                // Find sender in our DB participants
-                const participant = dbInfo.participants.find(p => p.matrixUserId === e.sender);
-                if (participant) {
-                  senderName = [participant.firstName, participant.lastName].filter(Boolean).join(' ') || 'Пользователь';
-                  senderAvatar = participant.avatarUrl || undefined;
-                }
-              }
-              
-              // Fallback to Matrix display name
-              if (senderName === 'Пользователь') {
-                const memberEvent = allMemberEvents.find(m => m.state_key === e.sender);
-                if (memberEvent?.content?.displayname) {
-                  senderName = memberEvent.content.displayname;
-                }
-              }
-              
-      // Check if this is an edited message
-      const isEdited = e.content?.['m.relates_to']?.rel_type === 'm.replace';
-      const actualContent = isEdited 
-        ? (e.content?.['m.new_content']?.body || e.content?.body?.replace(/^\* /, '') || '')
-        : (e.content?.body || '');
-      
-      return {
-        eventId: isEdited ? e.content?.['m.relates_to']?.event_id || e.event_id : e.event_id,
-        sender: e.sender,
-        senderName,
-        senderAvatar,
-        content: actualContent,
-        timestamp: e.origin_server_ts,
-        isOwn: e.sender === credentials.userId,
-        msgtype,
-        attachment,
-        isEdited: isEdited || undefined,
-        editTimestamp: isEdited ? e.origin_server_ts : undefined
-      };
-            });
-
-          if (newMsgs.length > 0) {
-            setMessages(prev => {
-              const existing = new Set(prev.map(m => m.eventId));
-              const unique = newMsgs.filter(m => !existing.has(m.eventId));
-              return [...prev, ...unique].sort((a, b) => a.timestamp - b.timestamp);
-            });
-            scrollToBottom();
-          }
-        }
+        roomList.push({
+          roomId, // Это chatId из базы данных
+          name: displayName,
+          avatarUrl: room.avatarUrl,
+          lastMessage: room.lastMessage?.content,
+          lastMessageTime: room.lastMessage?.createdAt ? new Date(room.lastMessage.createdAt).getTime() : undefined,
+          unreadCount: room.unreadCount || 0,
+          isDirect: room.isDirect || false,
+          isTicket: isTicketChat,
+          ticketId: room.ticketId,
+          ticketResolved: room.ticketResolved,
+          ticketStatus: room.ticketStatus,
+          isTicketCreator: room.isTicketCreator,
+        });
       }
 
       if (initialSync || roomList.length > 0) {
@@ -697,17 +441,16 @@ export default function MatrixChat() {
           const updated = new Map(prev.map(r => [r.roomId, r]));
           filteredRoomList.forEach(r => updated.set(r.roomId, r));
           
-          // Добавляем чат с ИИ из dbRoomInfo если его нет в Matrix rooms
-          dbRoomInfo.forEach((info, matrixRoomId) => {
+          // Добавляем чат с ИИ из dbRoomInfo если его нет в списке комнат
+          dbRoomInfo.forEach((info, chatId) => {
             const isBotChat = info.displayName?.includes('Помощник') || 
                              info.displayName?.includes('AI') || 
-                             info.displayName?.includes('Бот') ||
-                             info.participants?.some(p => p.matrixUserId?.includes('myunion_bot') || p.matrixUserId?.includes('ai_assistant'));
+                             info.displayName?.includes('Бот');
             
-            if (isBotChat && !updated.has(matrixRoomId)) {
-              // Создаем чат с ИИ если его нет в Matrix rooms
-              updated.set(matrixRoomId, {
-                roomId: matrixRoomId,
+            if (isBotChat && !updated.has(chatId)) {
+              // Создаем чат с ИИ если его нет в списке комнат
+              updated.set(chatId, {
+                roomId: chatId,
                 name: info.displayName || 'МойСоюз Помощник',
                 avatarUrl: info.avatarUrl || '/icon.png',
                 lastMessage: undefined,
@@ -760,9 +503,8 @@ export default function MatrixChat() {
 
   // Load room messages from our API (NOT Matrix)
   const loadRoomMessages = useCallback(async (roomIdOrChatId: string) => {
-    // Получаем chatId из matrixRoomId или используем напрямую
+    // Получаем chatId напрямую
     const dbInfo = Array.from(dbRoomInfo.values()).find(info => 
-      info.matrixRoomId === roomIdOrChatId || 
       info.id === roomIdOrChatId
     );
     const actualChatId = dbInfo?.id || roomIdOrChatId;
@@ -859,13 +601,13 @@ export default function MatrixChat() {
     // Load messages from API
     const msgs = await loadRoomMessages(roomId);
     
-    // Mark messages as read (через API, не Matrix)
+    // Mark messages as read (через API)
     if (msgs && msgs.length > 0) {
       const lastMessageId = msgs[msgs.length - 1].eventId;
       // Отмечаем как прочитанное через наш API
       try {
         const dbInfo = Array.from(dbRoomInfo.values()).find(info => 
-          info.matrixRoomId === roomId || info.id === roomId
+          info.id === roomId
         );
         if (dbInfo?.id) {
           await fetch(`/api/chat/${dbInfo.id}/messages/${lastMessageId}/read`, { method: 'POST' });
@@ -895,42 +637,41 @@ export default function MatrixChat() {
     async function openChatFromUrl() {
       try {
         console.log('[MatrixChat] Opening chat from URL, chatId:', urlChatId);
-        // Find chat by ID and get its matrixRoomId
+        // Find chat by ID
         const response = await fetch(`/api/chat/${urlChatId}`);
         if (response.ok) {
           const data = await response.json();
           console.log('[MatrixChat] Chat data from API:', { 
             chatId: data.chat?.id, 
-            matrixRoomId: data.chat?.matrixRoomId,
             hasMessages: data.messages?.length > 0 
           });
           
-          if (data.chat?.matrixRoomId) {
+          if (data.chat?.id) {
             // Find the room in our loaded rooms
-            const room = rooms.find(r => r.roomId === data.chat.matrixRoomId);
+            const room = rooms.find(r => r.roomId === data.chat.id);
             if (room) {
-              console.log('[MatrixChat] Found room, opening chat:', data.chat.matrixRoomId);
+              console.log('[MatrixChat] Found room, opening chat:', data.chat.id);
               // If this is a ticket chat, switch to work tab
-              const roomInfo = dbRoomInfo.get(data.chat.matrixRoomId);
+              const roomInfo = dbRoomInfo.get(data.chat.id);
               if (roomInfo?.isTicket || room.isTicket) {
                 setChatTab('work');
               }
               // Close mobile menu to show chat
               setIsMobileMenuOpen(false);
               // Use handleSelectRoom to properly load messages and update UI
-              await handleSelectRoom(data.chat.matrixRoomId);
+              await handleSelectRoom(data.chat.id);
               setUrlChatHandled(true);
             } else {
-              console.log('[MatrixChat] Room not found in loaded rooms, matrixRoomId:', data.chat.matrixRoomId);
+              console.log('[MatrixChat] Room not found in loaded rooms, chatId:', data.chat.id);
               console.log('[MatrixChat] Available rooms:', rooms.map(r => r.roomId).slice(0, 5));
               // Try to wait a bit more and retry
               setTimeout(async () => {
-                const retryRoom = rooms.find(r => r.roomId === data.chat.matrixRoomId);
+                const retryRoom = rooms.find(r => r.roomId === data.chat.id);
                 if (retryRoom) {
                   console.log('[MatrixChat] Found room on retry, opening chat');
                   setIsMobileMenuOpen(false);
                   // Use handleSelectRoom to properly load messages and update UI
-                  await handleSelectRoom(data.chat.matrixRoomId);
+                  await handleSelectRoom(data.chat.id);
                   setUrlChatHandled(true);
                 } else {
                   console.error('[MatrixChat] Room still not found after retry');
@@ -939,7 +680,7 @@ export default function MatrixChat() {
               }, 2000);
             }
           } else {
-            console.error('[MatrixChat] Chat has no matrixRoomId:', data.chat);
+            console.error('[MatrixChat] Chat has no ID:', data.chat);
             setUrlChatHandled(true);
           }
         } else {
@@ -972,12 +713,8 @@ export default function MatrixChat() {
     }
 
     try {
-      // Получаем actualChatId из selectedRoomId
-      const dbInfo = Array.from(dbRoomInfo.values()).find(info => 
-        info.matrixRoomId === selectedRoomId || 
-        info.id === selectedRoomId
-      );
-      const actualChatId = dbInfo?.id || selectedRoomId;
+      // selectedRoomId уже является chatId из базы данных
+      const actualChatId = selectedRoomId;
 
       // Отправляем сообщение через API
       const response = await fetch(`/api/chat/${actualChatId}`, {
@@ -1063,11 +800,8 @@ export default function MatrixChat() {
     setShowReactions(null);
     
     try {
-      const dbInfo = Array.from(dbRoomInfo.values()).find(info => 
-        info.matrixRoomId === selectedRoomId || 
-        info.id === selectedRoomId
-      );
-      const actualChatId = dbInfo?.id || selectedRoomId;
+      // selectedRoomId уже является chatId
+      const actualChatId = selectedRoomId;
 
       const response = await fetch(`/api/chat/${actualChatId}/messages/${eventId}/reactions`, {
         method: 'POST',
@@ -1089,11 +823,8 @@ export default function MatrixChat() {
     if (!selectedRoomId || !newContent.trim()) return;
 
     try {
-      const dbInfo = Array.from(dbRoomInfo.values()).find(info => 
-        info.matrixRoomId === selectedRoomId || 
-        info.id === selectedRoomId
-      );
-      const actualChatId = dbInfo?.id || selectedRoomId;
+      // selectedRoomId уже является chatId
+      const actualChatId = selectedRoomId;
 
       const response = await fetch(`/api/chat/${actualChatId}/messages/${messageId}`, {
         method: 'PATCH',
@@ -1117,11 +848,8 @@ export default function MatrixChat() {
     if (!confirm('Удалить сообщение?')) return;
 
     try {
-      const dbInfo = Array.from(dbRoomInfo.values()).find(info => 
-        info.matrixRoomId === selectedRoomId || 
-        info.id === selectedRoomId
-      );
-      const actualChatId = dbInfo?.id || selectedRoomId;
+      // selectedRoomId уже является chatId
+      const actualChatId = selectedRoomId;
 
       const response = await fetch(`/api/chat/${actualChatId}/messages/${eventId}`, {
         method: 'DELETE',
@@ -1171,9 +899,8 @@ export default function MatrixChat() {
         
         if (data?.users) {
           setSearchResults(
-            data.users.map((u: { id: string; matrixUserId: string; displayName: string; avatarUrl?: string; position?: string; organization?: string }) => ({
-              userId: u.id, // Use our user ID, not matrixUserId
-              matrixUserId: u.matrixUserId, // Keep for reference
+            data.users.map((u: { id: string; displayName: string; avatarUrl?: string; position?: string; organization?: string }) => ({
+              userId: u.id,
               displayName: u.displayName,
               avatarUrl: u.avatarUrl,
               position: u.position,
@@ -1358,8 +1085,8 @@ export default function MatrixChat() {
             const data = await resp.json();
             const infoMap = new Map<string, DbRoomInfo>();
             for (const room of data.rooms || []) {
-              if (room.matrixRoomId) {
-                infoMap.set(room.matrixRoomId, room);
+              if (room.id) {
+                infoMap.set(room.id, room);
               }
             }
             setDbRoomInfo(infoMap);
@@ -1499,139 +1226,111 @@ export default function MatrixChat() {
         return;
       }
       
-      if (!chatData?.chat) {
+      if (!chatData?.chat?.id) {
         console.error('[MatrixChat] ❌ Invalid chat response:', chatData);
         alert('Неверный формат ответа от сервера');
         return;
       }
       
-      // Use matrixRoomId from response or fetch it
-      let matrixRoomId = chatData.chat?.matrixRoomId;
-      console.log('[MatrixChat] Initial matrixRoomId from response:', matrixRoomId);
+      const chatId = chatData.chat.id;
+      console.log('[MatrixChat] ✅ Chat created with ID:', chatId);
       
-      if (!matrixRoomId) {
-        console.log('[MatrixChat] ⚠️ No matrixRoomId in response, trying to fetch from chat rooms API...');
-        // Try to get it from chat rooms API which includes matrixRoomId
-        try {
-          const roomsResponse = await fetch('/api/chat/rooms');
-          if (roomsResponse.ok) {
-            const roomsData = await roomsResponse.json();
-            const foundChat = roomsData.rooms?.find((r: any) => r.id === chatData.chat.id);
-            if (foundChat?.matrixRoomId) {
-              matrixRoomId = foundChat.matrixRoomId;
-              console.log('[MatrixChat] ✅ Found matrixRoomId from rooms API:', matrixRoomId);
-            } else {
-              console.log('[MatrixChat] ⚠️ Chat not found in rooms API, waiting 1 second and retrying...');
-              // Wait a bit for Matrix room creation to complete
-              await new Promise(resolve => setTimeout(resolve, 1000));
-              
-              const retryRoomsResponse = await fetch('/api/chat/rooms');
-              if (retryRoomsResponse.ok) {
-                const retryRoomsData = await retryRoomsResponse.json();
-                const retryFoundChat = retryRoomsData.rooms?.find((r: any) => r.id === chatData.chat.id);
-                if (retryFoundChat?.matrixRoomId) {
-                  matrixRoomId = retryFoundChat.matrixRoomId;
-                  console.log('[MatrixChat] ✅ Found matrixRoomId after retry:', matrixRoomId);
-                }
-              }
+      // Close modal first
+      setShowNewChat(false);
+      setSearchTerm('');
+      
+      // Get other user info from response
+      const otherUser = chatData.chat?.otherUser;
+      const otherUserName = otherUser 
+        ? [otherUser.firstName, otherUser.lastName].filter(Boolean).join(' ') || 'Пользователь'
+        : 'Пользователь';
+      const otherUserAvatar = otherUser?.avatarUrl;
+      
+      // Immediately add room to list with basic info
+      const newRoom: MatrixRoom = {
+        roomId: chatId, // Use chat.id directly as roomId
+        name: otherUserName,
+        avatarUrl: otherUserAvatar,
+        lastMessage: undefined,
+        lastMessageTime: Date.now(),
+        unreadCount: 0,
+        isDirect: true,
+      };
+      
+      setRooms(prev => {
+        // Check if room already exists
+        if (prev.some(r => r.roomId === chatId)) {
+          return prev;
+        }
+        // Add new room at the beginning (most recent)
+        return [newRoom, ...prev].sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
+      });
+      
+      // Reload dbRoomInfo to include the new chat
+      try {
+        const resp = await fetch('/api/chat/rooms');
+        if (resp.ok) {
+          const data = await resp.json();
+          const infoMap = new Map<string, DbRoomInfo>();
+          for (const room of data.rooms || []) {
+            // Use chat.id as the key, not matrixRoomId
+            if (room.id) {
+              infoMap.set(room.id, room);
             }
           }
-        } catch (err) {
-          console.error('[MatrixChat] Error fetching rooms:', err);
+          setDbRoomInfo(infoMap);
+          console.log('[MatrixChat] Updated dbRoomInfo with new chat');
         }
+      } catch (err) {
+        console.error('[MatrixChat] Failed to reload dbRoomInfo:', err);
       }
       
-      if (matrixRoomId) {
-        // Close modal first
-        setShowNewChat(false);
-        setSearchTerm('');
-        
-        // Get other user info from response
-        const otherUser = chatData.chat?.otherUser;
-        const otherUserName = otherUser 
-          ? [otherUser.firstName, otherUser.lastName].filter(Boolean).join(' ') || 'Пользователь'
-          : 'Пользователь';
-        const otherUserAvatar = otherUser?.avatarUrl;
-        
-        // Immediately add room to list with basic info (before Matrix sync)
-        const newRoom: MatrixRoom = {
-          roomId: matrixRoomId,
-          name: otherUserName,
-          avatarUrl: otherUserAvatar,
-          lastMessage: undefined,
-          lastMessageTime: Date.now(),
-          unreadCount: 0,
-          isDirect: true,
-        };
-        
-        setRooms(prev => {
-          // Check if room already exists
-          if (prev.some(r => r.roomId === matrixRoomId)) {
-            return prev;
-          }
-          // Add new room at the beginning (most recent)
-          return [newRoom, ...prev].sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
-        });
-        
-        // Reload dbRoomInfo to include the new chat
+      // Set selected room and load messages
+      // Use handleSelectRoom to properly load messages and update UI
+      await handleSelectRoom(chatId);
+      
+      // Reload rooms list to get latest data
+      setTimeout(async () => {
         try {
           const resp = await fetch('/api/chat/rooms');
           if (resp.ok) {
             const data = await resp.json();
             const infoMap = new Map<string, DbRoomInfo>();
             for (const room of data.rooms || []) {
-              if (room.matrixRoomId) {
-                infoMap.set(room.matrixRoomId, room);
+              if (room.id) {
+                infoMap.set(room.id, room);
               }
             }
             setDbRoomInfo(infoMap);
-            console.log('[MatrixChat] Updated dbRoomInfo with new chat');
+            
+            // Update rooms list
+            const roomList: MatrixRoom[] = [];
+            for (const room of data.rooms || []) {
+              const displayName = room.displayName || 'Чат';
+              const avatarUrl = room.avatarUrl;
+              
+              roomList.push({
+                roomId: room.id, // Use chat.id as roomId
+                name: displayName,
+                avatarUrl: avatarUrl,
+                lastMessage: room.lastMessage?.content,
+                lastMessageTime: room.lastMessage?.createdAt ? new Date(room.lastMessage.createdAt).getTime() : undefined,
+                unreadCount: room.unreadCount || 0,
+                isDirect: room.type === 'PRIVATE',
+                isTicket: room.isTicket,
+                ticketId: room.ticketId,
+                ticketResolved: room.ticketResolved,
+                ticketStatus: room.ticketStatus,
+                isTicketCreator: room.isTicketCreator,
+              });
+            }
+            
+            setRooms(roomList.sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0)));
           }
         } catch (err) {
-          console.error('[MatrixChat] Failed to reload dbRoomInfo:', err);
+          console.error('[MatrixChat] Failed to reload rooms:', err);
         }
-        
-        // Set selected room and load messages
-        // Use handleSelectRoom to properly load messages and update UI
-        await handleSelectRoom(matrixRoomId);
-        
-        // Wait a bit for Matrix to process the room creation, then sync to update room list
-        setTimeout(async () => {
-          await sync(true);
-        }, 500);
-      } else {
-        console.error('[MatrixChat] ⚠️ No matrixRoomId in chat response after all retries');
-        console.log('[MatrixChat] Chat data:', chatData);
-        
-        // Close modal
-        setShowNewChat(false);
-        setSearchTerm('');
-        
-        // Even without matrixRoomId, we can still show the chat in the list
-        // The chat exists in DB, it just needs Matrix room to be created
-        if (chatData.chat?.id) {
-          // Try to sync and wait for Matrix room to appear
-          await sync(true);
-          
-          // Wait a bit more and check again
-          setTimeout(async () => {
-            const finalCheck = await fetch('/api/chat/rooms');
-            if (finalCheck.ok) {
-              const finalData = await finalCheck.json();
-              const finalChat = finalData.rooms?.find((r: any) => r.id === chatData.chat.id);
-              if (finalChat?.matrixRoomId) {
-                console.log('[MatrixChat] ✅ Found matrixRoomId after sync:', finalChat.matrixRoomId);
-                await handleSelectRoom(finalChat.matrixRoomId);
-              } else {
-                console.warn('[MatrixChat] ⚠️ Matrix room still not created for chat', chatData.chat.id);
-                alert('Чат создан, но комната Matrix еще не готова. Попробуйте обновить страницу через несколько секунд.');
-              }
-            }
-          }, 2000);
-        } else {
-          alert('Ошибка: чат не был создан. Попробуйте еще раз.');
-        }
-      }
+      }, 500);
     } catch (err) {
       console.error('[MatrixChat] Error creating chat:', err);
       alert('Ошибка при создании чата. Попробуйте еще раз.');
@@ -2014,11 +1713,10 @@ export default function MatrixChat() {
                 selectedRoom.name?.includes('ai-assistant') ||
                 // Проверяем участников чата на наличие ИИ бота
                 dbRoomInfo[selectedRoomId]?.participants?.some(p => 
-                  p.matrixUserId?.includes('ai_assistant') ||
-                  p.matrixUserId?.includes('myunion_bot') ||
-                  p.matrixUserId?.includes('assistant') ||
                   p.firstName === 'AI' ||
-                  p.lastName === 'Помощник'
+                  p.lastName === 'Помощник' ||
+                  p.firstName?.includes('AI') ||
+                  p.lastName?.includes('Помощник')
                 )
               ) && (
                 <div className="flex flex-col items-center justify-center h-full py-8">
@@ -3412,7 +3110,6 @@ export default function MatrixChat() {
         <ThreadView
           threadRootId={openThreadId}
           chatId={Array.from(dbRoomInfo.values()).find(info => 
-            info.matrixRoomId === selectedRoomId || 
             info.id === selectedRoomId
           )?.id || selectedRoomId}
           onClose={() => setOpenThreadId(null)}

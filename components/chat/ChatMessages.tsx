@@ -1,369 +1,185 @@
-"use client";
+'use client';
 
-import { memo, useRef, useEffect, useCallback, useState } from "react";
-import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
-import { Message, Chat } from "@/types/chat";
-import MessageItem from "./MessageItem";
-import { formatMessageDate, getNameInitials, getInitials, getUserName } from "@/lib/chat-utils";
+import { useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
-// Большое начальное значение для firstItemIndex (для поддержки prepend)
-const START_INDEX = 100000;
-
-interface TypingUser {
-  userId: string;
-  userName: string;
+interface Message {
+  id: string;
+  senderId: string;
+  sender: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    avatarUrl?: string;
+  };
+  content: string;
+  messageType: string;
+  createdAt: Date;
+  replyTo?: {
+    id: string;
+    content: string;
+    sender: {
+      firstName?: string;
+      lastName?: string;
+    };
+  };
+  reactions?: Record<string, { count: number; userIds: string[] }>;
+  attachments?: Array<{
+    type: string;
+    url: string;
+    name: string;
+  }>;
+  editedAt?: Date;
 }
 
 interface ChatMessagesProps {
-  chat: Chat;
   messages: Message[];
-  currentUserId: string | null;
-  loading: boolean;
-  loadingOlder: boolean;
-  hasMore: boolean;
-  isBotTyping?: boolean;
-  typingUsers?: TypingUser[];
-  onLoadMore: () => void;
-  onReply: (message: Message) => void;
-  onEdit: (message: Message) => void;
-  onDelete: (messageId: string) => void;
-  onForward: (message: Message) => void;
-  onReaction: (messageId: string, emoji: string) => void;
-  onImageClick: (url: string, name?: string) => void;
-  onProfileClick?: (userId: string) => void;
-  // Deprecated - не используется с Virtuoso
-  onSaveScrollPosition?: (chatId: string, position: number) => void;
-  getSavedScrollPosition?: (chatId: string) => number | null;
+  currentUserId: string;
+  typingUsers: Set<string>;
 }
 
-// Подготовка данных с разделителями дат
-interface MessageOrDate {
-  type: "message" | "date";
-  message?: Message;
-  date?: string;
-}
+export default function ChatMessages({ messages, currentUserId, typingUsers }: ChatMessagesProps) {
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-function prepareMessagesWithDates(messages: Message[]): MessageOrDate[] {
-  const result: MessageOrDate[] = [];
-  let currentDate = "";
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
-  messages.forEach((message) => {
-    const date = formatMessageDate(message.createdAt);
-    
-    if (date !== currentDate) {
-      result.push({ type: "date", date });
-      currentDate = date;
-    }
-    result.push({ type: "message", message });
-  });
-
-  return result;
-}
-
-function ChatMessagesComponent({
-  chat,
-  messages,
-  currentUserId,
-  loading,
-  loadingOlder,
-  hasMore,
-  isBotTyping,
-  typingUsers = [],
-  onLoadMore,
-  onReply,
-  onEdit,
-  onDelete,
-  onForward,
-  onReaction,
-  onImageClick,
-  onProfileClick,
-}: ChatMessagesProps) {
-  // Определяем, является ли чат групповым или чатом обращения (показываем имена отправителей)
-  const isGroupChat = chat.type === "GROUP" || !!chat.ticketId;
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
-  const prevChatId = useRef<string | null>(null);
-  const atBottomRef = useRef(true);
-  const [, forceUpdate] = useState(0);
-  const hasInitialized = useRef(false);
-  
-  // Обработчик изменения позиции скролла - не вызывает ререндер
-  const handleAtBottomStateChange = useCallback((isAtBottom: boolean) => {
-    atBottomRef.current = isAtBottom;
-  }, []);
-  
-  // Для prepend паттерна: отслеживаем firstItemIndex
-  const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
-  const prevMessagesLength = useRef(0);
-
-  // Подготовка данных с разделителями дат
-  const items = prepareMessagesWithDates(messages);
-
-  // При смене чата — сбрасываем состояние
   useEffect(() => {
-    if (prevChatId.current !== chat.id) {
-      hasInitialized.current = false;
-      atBottomRef.current = true;
-      setFirstItemIndex(START_INDEX);
-      prevMessagesLength.current = 0;
-    }
-    prevChatId.current = chat.id;
-  }, [chat.id]);
+    scrollToBottom();
+  }, [messages]);
 
-  // Обновляем firstItemIndex при добавлении старых сообщений (prepend)
-  useEffect(() => {
-    if (items.length > prevMessagesLength.current && prevMessagesLength.current > 0 && hasInitialized.current) {
-      const addedCount = items.length - prevMessagesLength.current;
-      
-      // Только при загрузке старых сообщений уменьшаем firstItemIndex
-      if (loadingOlder) {
-        setFirstItemIndex(prev => prev - addedCount);
-      }
-    }
-    prevMessagesLength.current = items.length;
-  }, [items.length, loadingOlder]);
-
-  // Начальный скролл к концу при загрузке чата
-  useEffect(() => {
-    if (!hasInitialized.current && items.length > 0 && virtuosoRef.current) {
-      const timeoutId = setTimeout(() => {
-        virtuosoRef.current?.scrollToIndex({
-          index: items.length - 1,
-          align: "end",
-          behavior: "auto",
-        });
-        hasInitialized.current = true;
-      }, 50);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [items.length]);
-
-  // Скролл к новым сообщениям - только при изменении количества
-  const prevMessageCountRef = useRef(0);
-  const lastScrolledIdRef = useRef<string | null>(null);
-  
-  useEffect(() => {
-    // Только когда количество сообщений увеличилось
-    if (messages.length <= prevMessageCountRef.current) {
-      prevMessageCountRef.current = messages.length;
-      return;
-    }
-    
-    if (!hasInitialized.current) {
-      prevMessageCountRef.current = messages.length;
-      return;
-    }
-    
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage || lastMessage.id === lastScrolledIdRef.current) {
-      prevMessageCountRef.current = messages.length;
-      return;
-    }
-    
-    const isOwnMessage = lastMessage.senderId === currentUserId;
-    
-    // Скроллим только для своих сообщений или если внизу
-    if (isOwnMessage || atBottomRef.current) {
-      lastScrolledIdRef.current = lastMessage.id;
-      virtuosoRef.current?.scrollToIndex({
-        index: items.length - 1,
-        align: "end",
-        behavior: "auto",
-      });
-    }
-    
-    prevMessageCountRef.current = messages.length;
-  }, [messages.length, currentUserId, items.length]);
-  
-  // followOutput - автоскролл Virtuoso
-  const handleFollowOutput = useCallback(() => {
-    return atBottomRef.current ? "smooth" : false;
-  }, []);
-
-  // Загрузка старых сообщений при скролле вверх
-  const handleStartReached = useCallback(() => {
-    if (hasMore && !loadingOlder) {
-      onLoadMore();
-    }
-  }, [hasMore, loadingOlder, onLoadMore]);
-
-  // Рендер элемента (сообщение или разделитель даты)
-  const itemContent = useCallback((index: number, item: MessageOrDate) => {
-    if (item.type === "date") {
-      return (
-        <div className="flex items-center justify-center my-4">
-          <div className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs px-3 py-1 rounded-full">
-            {item.date}
-          </div>
-        </div>
-      );
-    }
-
-    if (item.type === "message" && item.message) {
-      // Определяем, является ли сообщение "старым" (не в последних 15 сообщениях)
-      const lastIndex = items.length - 1;
-      // index здесь - это виртуальный индекс, нужно получить реальный
-      const realIndex = index - firstItemIndex;
-      const distanceFromEnd = lastIndex - realIndex;
-      const isOldMessage = distanceFromEnd > 15;
-      
-      return (
-        <MessageItem
-          message={item.message}
-          currentUserId={currentUserId}
-          isOwn={item.message.senderId === currentUserId}
-          isOldMessage={isOldMessage}
-          showSenderName={isGroupChat}
-          onReply={(messageId: string) => {
-            const msg = messages.find(m => m.id === messageId);
-            if (msg) onReply(msg);
-          }}
-          onEdit={(messageId: string, content: string) => {
-            const msg = messages.find(m => m.id === messageId);
-            if (msg) {
-              // Создаем обновленное сообщение
-              const updatedMsg = { ...msg, content };
-              onEdit(updatedMsg);
-            }
-          }}
-          onDelete={onDelete}
-          onForward={(messageId: string) => {
-            const msg = messages.find(m => m.id === messageId);
-            if (msg) onForward(msg);
-          }}
-          onReaction={onReaction}
-          onImageClick={onImageClick}
-          onProfileClick={onProfileClick}
-        />
-      );
-    }
-
-    return null;
-  }, [currentUserId, isGroupChat, firstItemIndex, items.length, onReply, onEdit, onDelete, onForward, onReaction, onImageClick, onProfileClick]);
-
-  if (loading) {
-    return <LoadingState />;
-  }
-
-  if (messages.length === 0) {
-    return <EmptyState chat={chat} />;
-  }
+  const getSenderName = (sender: Message['sender']) => {
+    return [sender.firstName, sender.lastName].filter(Boolean).join(' ') || 'Пользователь';
+  };
 
   return (
-    <div className="h-full w-full overflow-hidden chat-messages-container">
-      <Virtuoso
-        key={chat.id}
-        ref={virtuosoRef}
-        data={items}
-        firstItemIndex={firstItemIndex}
-        initialTopMostItemIndex={items.length - 1}
-        itemContent={itemContent}
-        followOutput={handleFollowOutput}
-        atBottomStateChange={handleAtBottomStateChange}
-        atBottomThreshold={50}
-        startReached={handleStartReached}
-        className="h-full w-full"
-        components={{
-          Header: () => (
-            <>
-              {loadingOlder && (
-                <div className="flex justify-center py-3">
-                  <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-solid border-blue-500 border-r-transparent" />
+    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      {messages.map(message => {
+        const isOwn = message.senderId === currentUserId;
+        const senderName = getSenderName(message.sender);
+
+        return (
+          <div
+            key={message.id}
+            className={`flex gap-3 ${isOwn ? 'flex-row-reverse' : ''}`}
+          >
+            {/* Avatar */}
+            {!isOwn && (
+              <img
+                src={message.sender.avatarUrl || '/default-avatar.png'}
+                alt={senderName}
+                className="w-8 h-8 rounded-full"
+              />
+            )}
+
+            {/* Message content */}
+            <div className={`flex-1 ${isOwn ? 'items-end' : 'items-start'} flex flex-col`}>
+              {!isOwn && (
+                <span className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                  {senderName}
+                </span>
+              )}
+
+              {/* Reply preview */}
+              {message.replyTo && (
+                <div className="mb-1 pl-3 border-l-2 border-blue-500 text-sm text-gray-600 dark:text-gray-400">
+                  <div className="font-medium">
+                    {message.replyTo.sender.firstName || 'Пользователь'}
+                  </div>
+                  <div className="truncate">{message.replyTo.content}</div>
                 </div>
               )}
-              {hasMore && !loadingOlder && (
-                <div className="flex justify-center py-3">
-                  <button
-                    onClick={onLoadMore}
-                    className="text-sm text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
-                  >
-                    Загрузить ранние сообщения
-                  </button>
+
+              {/* Message bubble */}
+              <div
+                className={`rounded-lg px-4 py-2 max-w-md ${
+                  isOwn
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white'
+                }`}
+              >
+                {/* Attachments */}
+                {message.attachments && message.attachments.length > 0 && (
+                  <div className="mb-2 space-y-2">
+                    {message.attachments.map((att, idx) => (
+                      <div key={idx}>
+                        {att.type === 'image' ? (
+                          <img
+                            src={att.url}
+                            alt={att.name}
+                            className="max-w-full rounded"
+                          />
+                        ) : (
+                          <a
+                            href={att.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-500 hover:underline"
+                          >
+                            📎 {att.name}
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Content */}
+                <div className={isOwn ? 'prose prose-invert prose-sm max-w-none' : 'prose prose-sm dark:prose-invert max-w-none'}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {message.content}
+                  </ReactMarkdown>
                 </div>
-              )}
-            </>
-          ),
-          Footer: () => (
-            <div className="h-20 pb-4">
-              {(isBotTyping || typingUsers.length > 0) && (
-                <TypingIndicator users={typingUsers} />
-              )}
+
+                {/* Reactions */}
+                {message.reactions && Object.keys(message.reactions).length > 0 && (
+                  <div className="flex gap-1 mt-2 flex-wrap">
+                    {Object.entries(message.reactions).map(([emoji, data]) => (
+                      <span
+                        key={emoji}
+                        className="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-sm"
+                      >
+                        {emoji} {data.count}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Edited indicator */}
+                {message.editedAt && (
+                  <span className="text-xs opacity-70 ml-2">(изменено)</span>
+                )}
+              </div>
+
+              {/* Timestamp */}
+              <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {new Date(message.createdAt).toLocaleTimeString('ru-RU', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
             </div>
-          ),
-        }}
-      />
+          </div>
+        );
+      })}
+
+      {/* Typing indicator */}
+      {typingUsers.size > 0 && (
+        <div className="flex gap-3">
+          <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600" />
+          <div className="bg-white dark:bg-gray-800 rounded-lg px-4 py-2">
+            <div className="flex gap-1">
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div ref={messagesEndRef} />
     </div>
   );
 }
-
-const LoadingState = memo(function LoadingState() {
-  return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="text-center">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent" />
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Загрузка сообщений...</p>
-      </div>
-    </div>
-  );
-});
-
-const EmptyState = memo(function EmptyState({ chat }: { chat: Chat }) {
-  // Для групп - название и инициалы от названия
-  // Для личных чатов - имя пользователя и его инициалы
-  const isGroup = chat.type === "GROUP";
-  const name = isGroup ? (chat.name || "Группа") : getUserName(chat.otherUser);
-  const initials = isGroup ? getNameInitials(chat.name) : getInitials(chat.otherUser);
-  const gradientClass = isGroup 
-    ? "from-green-500 to-teal-600" 
-    : "from-blue-500 to-purple-600";
-
-  // Проверяем наличие аватарки (для групп - iconUrl, для личных - otherUser.avatarUrl)
-  const avatarUrl = isGroup ? chat.iconUrl : chat.otherUser?.avatarUrl;
-
-  return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="text-center p-6">
-        {avatarUrl ? (
-          <img 
-            src={avatarUrl} 
-            alt={name} 
-            className="w-20 h-20 mx-auto mb-4 rounded-full object-cover"
-          />
-        ) : (
-          <div className={`w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br ${gradientClass} flex items-center justify-center text-white text-2xl font-semibold`}>
-            {initials}
-          </div>
-        )}
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">
-          {name}
-        </h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          Начните переписку!
-        </p>
-      </div>
-    </div>
-  );
-});
-
-const TypingIndicator = memo(function TypingIndicator({ users = [] }: { users?: TypingUser[] }) {
-  const typingText = users.length > 0 
-    ? users.length === 1 
-      ? `${users[0].userName} печатает`
-      : `${users.map(u => u.userName).join(", ")} печатают`
-    : "печатает";
-
-  return (
-    <div className="flex justify-start mb-2 px-4">
-      <div className="px-4 py-2 rounded-2xl bg-gray-100 dark:bg-gray-700 rounded-bl-md flex items-center gap-2">
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-        </div>
-        <span className="text-xs text-gray-500 dark:text-gray-400">{typingText}...</span>
-      </div>
-    </div>
-  );
-});
-
-export const ChatMessages = memo(ChatMessagesComponent);
-export default ChatMessages;

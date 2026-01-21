@@ -49,7 +49,6 @@ export async function POST(
         id: true,
         type: true,
         name: true,
-        matrixRoomId: true,
         createdById: true, // Добавляем createdById для проверки прав
         participants: {
           where: {
@@ -85,7 +84,10 @@ export async function POST(
 
     if (!isAdmin) {
       // Для обращений (тикетов) разрешаем председателю добавлять участников
-      const isTicketChat = !!chat.matrixRoomId;
+      const ticket = await prisma.ticket.findFirst({
+        where: { chatId: chatId },
+      });
+      const isTicketChat = !!ticket;
       if (!isTicketChat) {
         return NextResponse.json(
           { error: "Только администратор группы может приглашать участников" },
@@ -217,27 +219,25 @@ export async function POST(
       },
     });
 
-    // Log action if this is a ticket chat (находим тикет по matrixRoomId)
-    if (chat.matrixRoomId) {
-      const ticket = await prisma.ticket.findUnique({
-        where: { matrixRoomId: chat.matrixRoomId },
-        select: { id: true },
-      });
-      
-      if (ticket) {
-        await prisma.ticketActionLog.create({
-          data: {
-            ticketId: ticket.id,
-            userId: chairman.id,
-            actionType: 'participant_added',
-            description: `Добавлены участники: ${memberNames}`,
-            metadata: {
-              addedUserIds: newParticipantIds,
-              addedBy: chairman.id,
-            },
+    // Log action if this is a ticket chat (находим тикет по chatId)
+    const ticketForLog = await prisma.ticket.findFirst({
+      where: { chatId: chatId },
+      select: { id: true },
+    });
+    
+    if (ticketForLog) {
+      await prisma.ticketActionLog.create({
+        data: {
+          ticketId: ticketForLog.id,
+          userId: chairman.id,
+          actionType: 'participant_added',
+          description: `Добавлены участники: ${memberNames}`,
+          metadata: {
+            addedUserIds: newParticipantIds,
+            addedBy: chairman.id,
           },
-        });
-      }
+        },
+      });
     }
 
     // Инвалидируем кеш чата и списка чатов для всех новых участников
@@ -253,13 +253,10 @@ export async function POST(
     
     // Определяем название чата и URL для уведомления
     // Если чат связан с обращением, используем название "Обращение #..."
-    let ticket = null;
-    if (chat.matrixRoomId) {
-      ticket = await prisma.ticket.findUnique({
-        where: { matrixRoomId: chat.matrixRoomId },
-        select: { id: true, publicId: true },
-      });
-    }
+    const ticket = await prisma.ticket.findFirst({
+      where: { chatId: chatId },
+      select: { id: true, publicId: true },
+    });
     
     const isAppealChat = !!ticket;
     const chatName = isAppealChat && ticket?.publicId
