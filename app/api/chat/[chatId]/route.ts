@@ -481,7 +481,7 @@ export async function POST(
     }
 
     // Логика для каналов (CHANNEL): только председатель/админ может создавать посты
-    if (chat.type === ChatType.CHANNEL) {
+    if (chat.type === 'CHANNEL') {
       const participant = chat.participants[0];
       const isAdmin = participant?.role === 'admin';
       
