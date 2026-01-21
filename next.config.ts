@@ -30,6 +30,7 @@ const nextConfig = {
     'firebase-admin',
     'bullmq',
     'ioredis',
+    '@socket.io/redis-adapter',
   ],
   // Оптимизация webpack
   webpack: (config, { isServer }) => {

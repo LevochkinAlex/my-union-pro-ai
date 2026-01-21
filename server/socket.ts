@@ -46,13 +46,15 @@ export async function initSocketServer(httpServer: HttpServer) {
   if (io) return io;
 
   // Инициализируем Redis клиенты для adapter
+  // Используем динамические импорты для избежания проблем при сборке
   try {
-    // Динамический импорт Redis только в runtime
-    const { default: Redis } = await import("ioredis");
-    const { getRedisOptions } = await import("@/lib/redis");
-    const redisOptions = getRedisOptions();
-    pubClient = new Redis(redisOptions);
-    subClient = pubClient.duplicate();
+    if (typeof window === "undefined") {
+      // Только на сервере
+      const Redis = (await import("ioredis")).default;
+      const { getRedisOptions } = await import("@/lib/redis");
+      const redisOptions = getRedisOptions();
+      pubClient = new Redis(redisOptions);
+      subClient = pubClient.duplicate();
 
     pubClient.on("error", (err) => {
       console.error("[Socket Redis] Pub client error:", err);
@@ -62,7 +64,8 @@ export async function initSocketServer(httpServer: HttpServer) {
       console.error("[Socket Redis] Sub client error:", err);
     });
 
-    console.log("[Socket] ✅ Redis clients initialized for adapter");
+      console.log("[Socket] ✅ Redis clients initialized for adapter");
+    }
   } catch (error) {
     console.warn("[Socket] ⚠️ Redis adapter initialization failed, using in-memory mode:", error);
   }

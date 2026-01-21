@@ -1,19 +1,27 @@
 /**
  * Redis утилиты для чатов
  * Оптимизировано для масштабирования на 20+ млн пользователей
+ * ВАЖНО: Использовать ТОЛЬКО на сервере!
  */
 
-import { Redis } from "ioredis";
-import { getRedisOptions } from "./redis";
+import type { Redis } from "ioredis";
 
 let redisClient: Redis | null = null;
 
-function getRedisClient(): Redis | null {
+async function getRedisClient(): Promise<Redis | null> {
   if (redisClient && redisClient.status === "ready") {
     return redisClient;
   }
 
+  // Проверяем, что мы на сервере
+  if (typeof window !== "undefined") {
+    return null;
+  }
+
   try {
+    // Динамический импорт для избежания проблем при сборке
+    const { default: Redis } = await import("ioredis");
+    const { getRedisOptions } = await import("./redis");
     const options = getRedisOptions();
     redisClient = new Redis(options);
     
@@ -46,7 +54,7 @@ export async function setTypingIndicator(
   userId: string,
   userName: string
 ): Promise<void> {
-  const client = getRedisClient();
+  const client = await getRedisClient();
   if (!client) return;
 
   const key = `chat:typing:${chatId}:${userId}`;
@@ -66,7 +74,7 @@ export async function removeTypingIndicator(
   chatId: string,
   userId: string
 ): Promise<void> {
-  const client = getRedisClient();
+  const client = await getRedisClient();
   if (!client) return;
 
   const key = `chat:typing:${chatId}:${userId}`;
@@ -82,7 +90,7 @@ export async function removeTypingIndicator(
  * Получает всех пользователей, которые печатают в чате
  */
 export async function getTypingUsers(chatId: string): Promise<Array<{ userId: string; userName: string }>> {
-  const client = getRedisClient();
+  const client = await getRedisClient();
   if (!client) return [];
 
   const pattern = `chat:typing:${chatId}:*`;
@@ -121,7 +129,7 @@ export async function getTypingUsers(chatId: string): Promise<Array<{ userId: st
  * TTL: 3 минуты (пользователь считается онлайн если активен в последние 3 минуты)
  */
 export async function updateUserOnlineStatus(userId: string): Promise<void> {
-  const client = getRedisClient();
+  const client = await getRedisClient();
   if (!client) return;
 
   const key = `user:online:${userId}`;
@@ -137,7 +145,7 @@ export async function updateUserOnlineStatus(userId: string): Promise<void> {
  * Проверяет, онлайн ли пользователь
  */
 export async function isUserOnline(userId: string): Promise<boolean> {
-  const client = getRedisClient();
+  const client = await getRedisClient();
   if (!client) return false;
 
   const key = `user:online:${userId}`;
@@ -156,7 +164,7 @@ export async function isUserOnline(userId: string): Promise<boolean> {
  * Оптимизировано для массовых запросов
  */
 export async function getUsersOnlineStatus(userIds: string[]): Promise<Map<string, boolean>> {
-  const client = getRedisClient();
+  const client = await getRedisClient();
   if (!client) return new Map();
 
   const result = new Map<string, boolean>();
@@ -197,7 +205,7 @@ export async function getUsersOnlineStatus(userIds: string[]): Promise<Map<strin
  * Инвалидирует кэш списка чатов для пользователя
  */
 export async function invalidateUserChatsCache(userId: string): Promise<void> {
-  const client = getRedisClient();
+  const client = await getRedisClient();
   if (!client) return;
 
   try {
@@ -216,7 +224,7 @@ export async function invalidateUserChatsCache(userId: string): Promise<void> {
  * Инвалидирует кэш конкретного чата
  */
 export async function invalidateChatCache(chatId: string): Promise<void> {
-  const client = getRedisClient();
+  const client = await getRedisClient();
   if (!client) return;
 
   try {
