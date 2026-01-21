@@ -208,7 +208,6 @@ export default function MatrixChat() {
   const [contextMenu, setContextMenu] = useState<{ eventId: string; x: number; y: number } | null>(null); // Context menu position
   const [openThreadId, setOpenThreadId] = useState<string | null>(null); // ID корневого сообщения открытого треда
   const [showGroupModal, setShowGroupModal] = useState(false);
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null); // eventId of message being edited
   const [editingText, setEditingText] = useState<string>(''); // Text being edited
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
@@ -1135,12 +1134,6 @@ export default function MatrixChat() {
       console.error('Delete error:', error);
       alert('Не удалось удалить сообщение');
     }
-  };
-
-  // Edit message - через API
-  const handleEditMessage = async (eventId: string, newContent: string) => {
-    console.warn('handleEditMessage temporarily disabled - Matrix removed');
-    return;
   };
 
   // Upload and send file - через API
