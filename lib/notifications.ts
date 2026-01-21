@@ -25,6 +25,7 @@ interface NotificationData {
   body: string;
   url: string; // URL для перехода при клике
   senderName?: string; // Имя отправителя
+  metadata?: Record<string, any>; // Дополнительные данные (chatId, messageId и т.д.)
 }
 
 /**
@@ -72,6 +73,7 @@ export async function sendUserNotification(data: NotificationData) {
           url: data.url,
           metadata: {
             senderName: data.senderName,
+            ...(data.metadata || {}), // Сохраняем chatId, messageId и другие данные
           },
           pushSent: false,
           emailSent: false,
@@ -104,6 +106,7 @@ export async function sendUserNotification(data: NotificationData) {
                   url: data.url,
                   type: data.type,
                   notificationId: notificationRecord?.id || "",
+                  ...(data.metadata || {}), // Передаем chatId, messageId и другие данные
                 },
                 webpush: {
                   notification: {
@@ -114,6 +117,8 @@ export async function sendUserNotification(data: NotificationData) {
                     tag: data.type,
                     data: {
                       url: data.url,
+                      type: data.type,
+                      ...(data.metadata || {}), // Передаем chatId, messageId для навигации
                     },
                   },
                 },

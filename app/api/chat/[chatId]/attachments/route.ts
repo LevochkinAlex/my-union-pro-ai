@@ -288,7 +288,7 @@ export async function POST(
       console.error('[chat/attachments] Error emitting message via WebSocket:', wsError);
     }
 
-    // Отправляем push-уведомления другим участникам через Firebase
+    // Отправляем уведомления другим участникам (push + запись в БД для раздела уведомлений)
     try {
       const participants = await prisma.chatParticipant.findMany({
         where: {
@@ -300,70 +300,35 @@ export async function POST(
       });
 
       if (participants.length > 0) {
-        const recipientIds = participants.map(p => p.userId);
-        const subscriptions = await prisma.pushSubscription.findMany({
-          where: {
-            userId: { in: recipientIds },
-            fcmToken: { not: null },
-          },
-          select: { userId: true, fcmToken: true },
-        });
+        const senderName = `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || 'Пользователь';
+        const notificationContent = attachmentText.length > 100 ? attachmentText.substring(0, 100) + '...' : attachmentText;
+        const notificationUrl = `/dashboard/chat?chatId=${chatId}`;
 
-        if (subscriptions.length > 0) {
-          const senderName = `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || 'Пользователь';
-          const notificationContent = attachmentText.length > 100 ? attachmentText.substring(0, 100) + '...' : attachmentText;
-          const fcmTokens = subscriptions.map(s => s.fcmToken).filter(Boolean) as string[];
-
-          const { messaging } = await import('@/lib/firebase-admin');
-
-          const notificationMessage = {
-            notification: {
-              title: `Новое сообщение от ${senderName}`,
-              body: notificationContent,
-            },
-            webpush: {
-              notification: {
+        // Отправляем уведомления каждому участнику через sendUserNotification
+        // Это создаст записи в БД и отправит push-уведомления
+        await Promise.allSettled(
+          participants.map(async (participant) => {
+            try {
+              await sendUserNotification({
+                userId: participant.userId,
+                type: 'chat_message',
                 title: `Новое сообщение от ${senderName}`,
                 body: notificationContent,
-                icon: `${process.env.NEXT_PUBLIC_APP_URL || 'https://myunion.pro'}/icon.png`,
-                badge: `${process.env.NEXT_PUBLIC_APP_URL || 'https://myunion.pro'}/icon.png`,
-              },
-              data: {
-                type: 'chat_message',
-                chatId,
-                messageId: normalizedMessage.id,
-                url: `/dashboard/chat?chatId=${chatId}`,
-              },
-            },
-            android: {
-              priority: 'high' as const,
-              notification: { sound: 'default' },
-              data: {
-                type: 'chat_message',
-                chatId,
-                messageId: normalizedMessage.id,
-                url: `/dashboard/chat?chatId=${chatId}`,
-              },
-            },
-            apns: {
-              payload: { aps: { sound: 'default' } },
-              data: {
-                type: 'chat_message',
-                chatId,
-                messageId: normalizedMessage.id,
-                url: `/dashboard/chat?chatId=${chatId}`,
-              },
-            },
-            tokens: fcmTokens,
-          };
-
-          await messaging.sendEachForMulticast(notificationMessage).catch(err => {
-            console.error('[chat/attachments] Error sending Firebase push notification:', err);
-          });
-        }
+                url: notificationUrl,
+                senderName: senderName,
+                metadata: {
+                  chatId,
+                  messageId: normalizedMessage.id,
+                },
+              });
+            } catch (err) {
+              console.error(`[chat/attachments] Error sending notification to user ${participant.userId}:`, err);
+            }
+          })
+        );
       }
     } catch (notifError) {
-      console.error('[chat/attachments] Error preparing push notifications:', notifError);
+      console.error('[chat/attachments] Error preparing notifications:', notifError);
     }
 
     return NextResponse.json({ message: normalizedMessage });

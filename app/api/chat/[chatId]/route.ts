@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { requireChatAccess, ChatAccessError } from '@/lib/chat-service';
 import { normalizeUserAvatar } from '@/lib/api-helpers';
 import * as Sentry from '@sentry/nextjs';
+import { sendUserNotification } from '@/lib/notifications';
 // Динамический импорт для избежания проблем при сборке
 // Кэшируем модуль для производительности
 let socketModule: typeof import('@/server/socket') | null = null;
@@ -580,7 +581,7 @@ export async function POST(
         // Не прерываем выполнение, WebSocket - это дополнение
       }
 
-      // Отправляем push-уведомления другим участникам через Firebase
+      // Отправляем уведомления другим участникам (push + запись в БД для раздела уведомлений)
       try {
         const participants = await prisma.chatParticipant.findMany({
           where: {
@@ -594,82 +595,35 @@ export async function POST(
         });
 
         if (participants.length > 0) {
-          const recipientIds = participants.map(p => p.userId);
-          
-          // Получаем FCM токены для участников
-          const subscriptions = await prisma.pushSubscription.findMany({
-            where: {
-              userId: { in: recipientIds },
-              fcmToken: { not: null },
-            },
-            select: {
-              userId: true,
-              fcmToken: true,
-            },
-          });
+          const senderName = `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || 'Пользователь';
+          const notificationContent = content.length > 100 ? content.substring(0, 100) + '...' : content;
+          const notificationUrl = `/dashboard/chat?chatId=${chatId}`;
 
-          if (subscriptions.length > 0) {
-            const senderName = `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || 'Пользователь';
-            const notificationContent = content.length > 100 ? content.substring(0, 100) + '...' : content;
-            const fcmTokens = subscriptions.map(s => s.fcmToken).filter(Boolean) as string[];
-
-            // Отправляем через Firebase Admin
-            const { messaging } = await import('@/lib/firebase-admin');
-            
-            const notificationMessage = {
-              notification: {
-                title: `Новое сообщение от ${senderName}`,
-                body: notificationContent,
-              },
-              webpush: {
-                notification: {
+          // Отправляем уведомления каждому участнику через sendUserNotification
+          // Это создаст записи в БД и отправит push-уведомления
+          await Promise.allSettled(
+            participants.map(async (participant) => {
+              try {
+                await sendUserNotification({
+                  userId: participant.userId,
+                  type: 'chat_message',
                   title: `Новое сообщение от ${senderName}`,
                   body: notificationContent,
-                  icon: `${process.env.NEXT_PUBLIC_APP_URL || 'https://myunion.pro'}/icon.png`,
-                  badge: `${process.env.NEXT_PUBLIC_APP_URL || 'https://myunion.pro'}/icon.png`,
-                },
-                data: {
-                  type: 'chat_message',
-                  chatId,
-                  messageId: normalizedMessage.id,
-                  url: `/dashboard/chat?chatId=${chatId}`,
-                },
-              },
-              android: {
-                priority: 'high' as const,
-                notification: {
-                  sound: 'default',
-                },
-                data: {
-                  type: 'chat_message',
-                  chatId,
-                  messageId: normalizedMessage.id,
-                  url: `/dashboard/chat?chatId=${chatId}`,
-                },
-              },
-              apns: {
-                payload: {
-                  aps: {
-                    sound: 'default',
+                  url: notificationUrl,
+                  senderName: senderName,
+                  metadata: {
+                    chatId,
+                    messageId: normalizedMessage.id,
                   },
-                },
-                data: {
-                  type: 'chat_message',
-                  chatId,
-                  messageId: normalizedMessage.id,
-                  url: `/dashboard/chat?chatId=${chatId}`,
-                },
-              },
-              tokens: fcmTokens,
-            };
-
-            await messaging.sendEachForMulticast(notificationMessage).catch(err => {
-              console.error('[chat] Error sending Firebase push notification:', err);
-            });
-          }
+                });
+              } catch (err) {
+                console.error(`[chat] Error sending notification to user ${participant.userId}:`, err);
+              }
+            })
+          );
         }
       } catch (notifError) {
-        console.error('[chat] Error preparing push notifications:', notifError);
+        console.error('[chat] Error preparing notifications:', notifError);
         // Не прерываем выполнение
       }
 
