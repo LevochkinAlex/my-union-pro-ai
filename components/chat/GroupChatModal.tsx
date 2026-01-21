@@ -127,10 +127,11 @@ export default function GroupChatModal({
 
       if (mode === 'edit' && onUpdate) {
         await onUpdate(data);
+        handleClose();
       } else {
         await onCreate(data);
+        handleClose();
       }
-      handleClose();
     } catch (error) {
       console.error(`Failed to ${mode === 'edit' ? 'update' : 'create'} group:`, error);
       alert(`Ошибка ${mode === 'edit' ? 'обновления' : 'создания'} группы`);

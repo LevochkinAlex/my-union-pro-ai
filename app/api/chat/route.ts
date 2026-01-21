@@ -253,6 +253,8 @@ export async function POST(request: NextRequest) {
     } 
     // Создаем групповой чат
     else if (participantIds && Array.isArray(participantIds) && participantIds.length > 0) {
+      console.log('[chat] Creating group chat:', { name, participantIds: participantIds.length, userId });
+      
       // Проверяем, нет ли уже такого группового чата с теми же участниками
       const existingChat = await prisma.chat.findFirst({
         where: {
@@ -273,24 +275,27 @@ export async function POST(request: NextRequest) {
       });
 
       if (existingChat && existingChat.participants.length === participantIds.length + 1) {
+        console.log('[chat] Existing group chat found:', existingChat.id);
         chat = existingChat;
         isNew = false;
       } else {
         // Создаем новый групповой чат
-        chat = await prisma.chat.create({
-          data: {
-            type: 'GROUP',
-            name: name || 'Групповой чат',
-            description: description?.trim() || null,
-            iconUrl: iconUrl || null,
-            createdById: userId,
-            participants: {
-              create: [
-                { userId, role: 'admin' },
-                ...participantIds.map((id: string) => ({ userId: id, role: 'member' })),
-              ],
+        console.log('[chat] Creating new group chat with participants:', participantIds);
+        try {
+          chat = await prisma.chat.create({
+            data: {
+              type: 'GROUP',
+              name: name || 'Групповой чат',
+              description: description?.trim() || null,
+              iconUrl: iconUrl || null,
+              createdById: userId,
+              participants: {
+                create: [
+                  { userId, role: 'admin' },
+                  ...participantIds.map((id: string) => ({ userId: id, role: 'member' })),
+                ],
+              },
             },
-          },
           include: {
             participants: {
               where: { leftAt: null },
@@ -314,7 +319,17 @@ export async function POST(request: NextRequest) {
             },
           },
         });
+        console.log('[chat] ✅ Group chat created successfully:', chat.id);
         isNew = true;
+        } catch (createError: any) {
+          console.error('[chat] ❌ Error creating group chat:', createError);
+          console.error('[chat] Error details:', {
+            message: createError?.message,
+            code: createError?.code,
+            meta: createError?.meta,
+          });
+          throw createError;
+        }
 
         // Инвалидируем кэш для всех участников
         const allParticipantIds = [userId, ...participantIds];

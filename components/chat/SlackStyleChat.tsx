@@ -344,6 +344,7 @@ export default function SlackStyleChat({
   }, [createOrOpenChat]);
 
   const handleCreateGroup = useCallback(async (data: { name: string; description?: string; participantIds: string[]; iconUrl?: string | null }) => {
+    console.log('[SlackStyleChat] Creating group:', data);
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -356,21 +357,30 @@ export default function SlackStyleChat({
         }),
       });
 
+      console.log('[SlackStyleChat] Response status:', response.status);
+
       if (response.ok) {
         const result = await response.json();
+        console.log('[SlackStyleChat] Group created successfully:', result);
         showToast("Группа создана", "success");
-        loadChats();
+        await loadChats();
         if (result.chat) {
           selectChat(result.chat);
         }
       } else {
-        const error = await response.json();
+        const errorText = await response.text();
+        let error;
+        try {
+          error = JSON.parse(errorText);
+        } catch {
+          error = { error: errorText || "Ошибка создания группы" };
+        }
         console.error("Failed to create group:", error);
         showToast(error.error || "Ошибка создания группы", "error");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to create group:", error);
-      showToast("Ошибка создания группы", "error");
+      showToast(error?.message || "Ошибка создания группы", "error");
     }
   }, [loadChats, selectChat, showToast]);
 
