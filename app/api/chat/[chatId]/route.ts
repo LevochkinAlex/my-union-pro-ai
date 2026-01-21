@@ -481,7 +481,8 @@ export async function POST(
     }
 
     // Логика для каналов (CHANNEL): только председатель/админ может создавать посты
-    if (chat.type === 'CHANNEL') {
+    // Используем приведение типа, так как Prisma Client может не экспортировать enum значения напрямую
+    if ((chat.type as string) === 'CHANNEL') {
       const participant = chat.participants[0];
       const isAdmin = participant?.role === 'admin';
       
