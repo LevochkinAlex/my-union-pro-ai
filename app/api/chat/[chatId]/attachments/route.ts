@@ -13,7 +13,11 @@ import {
   ChatAccessError,
   getChatParticipantIds,
 } from "@/lib/chat-service";
-import { emitNewMessage } from "@/server/socket";
+// Динамический импорт для избежания проблем при сборке
+async function emitNewMessage(chatId: string, message: any) {
+  const { emitNewMessage: emit } = await import('@/server/socket');
+  emit(chatId, message);
+}
 import { normalizeUserAvatar } from "@/lib/api-helpers";
 
 // Инициализируем VDS хранилище при загрузке модуля

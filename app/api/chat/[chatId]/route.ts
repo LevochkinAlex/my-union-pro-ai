@@ -5,7 +5,11 @@ import { prisma } from '@/lib/prisma';
 import { requireChatAccess, ChatAccessError } from '@/lib/chat-service';
 import { normalizeUserAvatar } from '@/lib/api-helpers';
 import * as Sentry from '@sentry/nextjs';
-import { emitNewMessage } from '@/server/socket';
+// Динамический импорт для избежания проблем при сборке
+async function emitNewMessage(chatId: string, message: any) {
+  const { emitNewMessage: emit } = await import('@/server/socket');
+  emit(chatId, message);
+}
 
 /**
  * GET /api/chat/[chatId]
