@@ -218,11 +218,19 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ chats: finalChats });
   } catch (error: any) {
-    Sentry.captureException(error);
-    console.error("[chat] GET Error:", error?.message);
+    console.error("[chat] GET Error:", error);
+    Sentry.captureException(error, {
+      tags: { endpoint: 'GET /api/chat' },
+      extra: { userId: session?.user?.id, filter },
+    });
+    
+    const statusCode = (error as any)?.statusCode || 500;
     return NextResponse.json(
-      { error: "Внутренняя ошибка сервера" },
-      { status: 500 }
+      { 
+        error: "Ошибка при загрузке чатов",
+        details: process.env.NODE_ENV === 'development' ? error?.message : undefined,
+      },
+      { status: statusCode }
     );
   }
 }
@@ -440,7 +448,6 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    Sentry.captureException(error);
     console.error("[chat] POST Error:", {
       message: error?.message,
       code: error?.code,

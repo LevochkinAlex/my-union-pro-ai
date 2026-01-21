@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Search, UserPlus, Users, Settings, Crown } from 'lucide-react';
+import { safeJsonParse } from "@/lib/api-client";
 import GroupIconUpload from './GroupIconUpload';
 
 interface User {
@@ -70,8 +71,8 @@ export default function GroupChatModal({
       setSearching(true);
       const response = await fetch('/api/users/search?status=approved&limit=100');
       if (response.ok) {
-        const data = await response.json();
-        setAvailableUsers(data.users || []);
+        const data = await safeJsonParse(response);
+        setAvailableUsers(data?.users || []);
       }
     } catch (error) {
       console.error('Failed to load users:', error);
@@ -91,8 +92,8 @@ export default function GroupChatModal({
       setSearching(true);
       const response = await fetch(`/api/users/search?q=${encodeURIComponent(term)}&status=approved&limit=50`);
       if (response.ok) {
-        const data = await response.json();
-        setAvailableUsers(data.users || []);
+        const data = await safeJsonParse(response);
+        setAvailableUsers(data?.users || []);
       }
     } catch (error) {
       console.error('Search failed:', error);

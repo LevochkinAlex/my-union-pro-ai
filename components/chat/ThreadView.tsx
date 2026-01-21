@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Reply, Send } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { safeJsonParse } from "@/lib/api-client";
 
 interface ThreadMessage {
   id: string;
@@ -64,8 +65,8 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
       // Загружаем корневое сообщение
       const rootResponse = await fetch(`/api/chat/${chatId}/messages?threadRootId=${threadRootId}&limit=1`);
       if (rootResponse.ok) {
-        const rootData = await rootResponse.json();
-        if (rootData.messages && rootData.messages.length > 0) {
+        const rootData = await safeJsonParse(rootResponse);
+        if (rootData?.messages && rootData.messages.length > 0) {
           setRootMessage(rootData.messages[0]);
         }
       }
@@ -73,8 +74,8 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
       // Загружаем ответы в треде
       const response = await fetch(`/api/chat/${chatId}/messages?threadRootId=${threadRootId}`);
       if (response.ok) {
-        const data = await response.json();
-        setMessages(data.messages || []);
+        const data = await safeJsonParse(response);
+        setMessages(data?.messages || []);
       }
     } catch (error) {
       console.error('Failed to load thread:', error);
@@ -104,8 +105,8 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
         throw new Error('Ошибка отправки сообщения');
       }
 
-      const data = await response.json();
-      if (data.message) {
+      const data = await safeJsonParse(response);
+      if (data?.message) {
         setMessages(prev => [...prev, data.message]);
       }
 

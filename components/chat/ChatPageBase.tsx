@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import { useToast } from "@/components/ui/Toast";
 import { useChat } from "@/hooks/useChat";
+import { safeJsonParse } from "@/lib/api-helpers";
 import { Chat, Message } from "@/types/chat";
 
 // Lazy load компоненты
@@ -191,7 +192,7 @@ export function ChatPageBase({
       } else {
         // Загружаем чат напрямую
         fetch(`/api/chat/${targetChatId}`)
-          .then((res) => (res.ok ? res.json() : null))
+          .then(async (res) => (res.ok ? await safeJsonParse(res) : null))
           .then((data) => {
             if (data?.chat) {
               const chatToSelect: Chat = {

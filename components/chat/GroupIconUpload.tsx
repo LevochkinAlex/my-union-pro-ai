@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
+import { safeJsonParse } from "@/lib/api-client";
 
 interface GroupIconUploadProps {
   value: string | null;
@@ -100,16 +101,14 @@ export default function GroupIconUpload({ value, onChange }: GroupIconUploadProp
 
       if (!response.ok) {
         let errorMessage = "Не удалось загрузить иконку";
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorMessage;
-        } catch (e) {
-          // Если не удалось распарсить ошибку, используем дефолтное сообщение
+        const errorData = await safeJsonParse(response);
+        if (errorData?.error) {
+          errorMessage = errorData.error;
         }
         throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      const data = await safeJsonParse(response);
       if (!data.url) {
         throw new Error("Сервер не вернул URL иконки");
       }

@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { formatLastSeen } from "@/lib/format-last-seen";
+import { safeJsonParse } from "@/lib/api-client";
 import {
   Search,
   Plus,
@@ -219,9 +220,9 @@ function NewChatModal({ isOpen, onClose, onSelectUser, currentUserId }: NewChatM
       
       const response = await fetch(`/api/chat/users/search?${params}`);
       if (response.ok) {
-        const data = await response.json();
+        const data = await safeJsonParse(response);
         // Фильтруем текущего пользователя
-        setUsers((data.users || []).filter((u: UserSearchResult) => u.id !== currentUserId));
+        setUsers((data?.users || []).filter((u: UserSearchResult) => u.id !== currentUserId));
       }
     } catch (error) {
       console.error("Failed to load users:", error);

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getOrCreateAIBotUser } from '@/lib/ai-assistant-bot';
 import { getUserChats, getOrCreatePrivateChat, ChatInfo } from '@/lib/chat-service';
+import * as Sentry from '@sentry/nextjs';
 
 /**
  * GET /api/chat/rooms
@@ -41,9 +42,24 @@ export async function GET() {
     });
 
     return NextResponse.json({ rooms: sortedRooms });
-  } catch (error) {
-    console.error('Error fetching chat rooms:', error);
-    return NextResponse.json({ error: 'Failed to fetch rooms' }, { status: 500 });
+  } catch (error: any) {
+    console.error('[chat/rooms] Error fetching chat rooms:', error);
+    Sentry.captureException(error, {
+      tags: { endpoint: 'GET /api/chat/rooms' },
+      extra: { userId: session?.user?.id },
+    });
+    
+    // Более информативное сообщение об ошибке
+    const errorMessage = error?.message || 'Failed to fetch rooms';
+    const statusCode = error?.statusCode || 500;
+    
+    return NextResponse.json(
+      { 
+        error: 'Ошибка при загрузке чатов',
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
+      },
+      { status: statusCode }
+    );
   }
 }
 

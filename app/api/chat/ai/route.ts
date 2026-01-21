@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import * as Sentry from "@sentry/nextjs";
 
 const AI_CHAT_NAME = "ИИ-Ассистент";
 const AI_BOT_ID = "ai-assistant-bot"; // Виртуальный ID бота
@@ -147,12 +148,18 @@ export async function GET() {
     return NextResponse.json({ chat: response });
   } catch (error: any) {
     console.error("[chat/ai] GET error:", error);
+    Sentry.captureException(error, {
+      tags: { endpoint: 'GET /api/chat/ai' },
+      extra: { userId: session?.user?.id },
+    });
+    
+    const statusCode = error?.statusCode || 500;
     return NextResponse.json(
       {
         error: "Ошибка при получении чата с ИИ",
         details: process.env.NODE_ENV === "development" ? error.message : undefined,
       },
-      { status: 500 }
+      { status: statusCode }
     );
   }
 }
@@ -325,12 +332,18 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error("[chat/ai] POST error:", error);
+    Sentry.captureException(error, {
+      tags: { endpoint: 'POST /api/chat/ai' },
+      extra: { userId: session?.user?.id, chatId },
+    });
+    
+    const statusCode = error?.statusCode || 500;
     return NextResponse.json(
       {
         error: "Ошибка при отправке сообщения",
         details: process.env.NODE_ENV === "development" ? error.message : undefined,
       },
-      { status: 500 }
+      { status: statusCode }
     );
   }
 }

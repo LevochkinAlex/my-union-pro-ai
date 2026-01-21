@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { io, Socket } from "socket.io-client";
 import { Chat, Message } from "@/types/chat";
+import { fetchJsonWithRetry } from "@/lib/api-client";
 
 interface TypingUser {
   userId: string;
@@ -176,10 +177,15 @@ export function useChat(options: UseChatOptions = {}) {
   // Загрузка списка чатов
   const loadChats = useCallback(async () => {
     try {
-      const response = await fetch("/api/chat");
-      if (response.ok) {
-        const data = await response.json();
-        setChats(data.chats || []);
+      const data = await fetchJsonWithRetry<{ chats: Chat[] }>("/api/chat", {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+      
+      if (data?.chats) {
+        setChats(data.chats);
+      } else {
+        options.onError?.("Ошибка загрузки чатов");
       }
     } catch (error) {
       console.error("[useChat] Error loading chats:", error);
@@ -193,9 +199,15 @@ export function useChat(options: UseChatOptions = {}) {
   const loadMessages = useCallback(async (chatId: string) => {
     setLoadingMessages(true);
     try {
-      const response = await fetch(`/api/chat/${chatId}?limit=50&t=${Date.now()}`);
-      if (response.ok) {
-        const data = await response.json();
+      const data = await fetchJsonWithRetry<{ messages: Message[]; hasMore: boolean }>(
+        `/api/chat/${chatId}?limit=50&t=${Date.now()}`,
+        {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+      
+      if (data) {
         setMessages(data.messages || []);
         setHasMore(data.pagination?.hasMore || false);
         setOldestMessageId(data.pagination?.oldestMessageId || null);
@@ -224,12 +236,15 @@ export function useChat(options: UseChatOptions = {}) {
 
     setLoadingOlder(true);
     try {
-      const response = await fetch(
-        `/api/chat/${selectedChat.id}?limit=50&cursor=${oldestMessageId}&direction=older&t=${Date.now()}`
+      const data = await fetchJsonWithRetry<{ messages: Message[]; pagination?: { hasMore: boolean; oldestMessageId: string | null } }>(
+        `/api/chat/${selectedChat.id}?limit=50&cursor=${oldestMessageId}&direction=older&t=${Date.now()}`,
+        {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        }
       );
 
-      if (response.ok) {
-        const data = await response.json();
+      if (data) {
         const olderMessages = data.messages || [];
 
         if (olderMessages.length > 0) {
@@ -240,6 +255,8 @@ export function useChat(options: UseChatOptions = {}) {
         } else {
           setHasMore(false);
         }
+      } else {
+        console.warn("[useChat] Failed to load older messages");
       }
     } catch (error) {
       console.error("[useChat] Error loading older messages:", error);

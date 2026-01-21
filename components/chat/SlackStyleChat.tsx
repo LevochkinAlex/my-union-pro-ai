@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { formatLastSeen } from "@/lib/format-last-seen";
+import { safeJsonParse } from "@/lib/api-client";
 import { useToast } from "@/components/ui/Toast";
 import { useChat } from "@/hooks/useChat";
 import { Chat, Message } from "@/types/chat";
@@ -326,8 +327,8 @@ export default function SlackStyleChat({
     try {
       const response = await fetch("/api/chat/ai");
       if (response.ok) {
-        const data = await response.json();
-        if (data.chat) {
+        const data = await safeJsonParse(response);
+        if (data?.chat) {
           selectChat({ ...data.chat, isAIChat: true });
           setShowChatView(true);
         }
@@ -363,7 +364,7 @@ export default function SlackStyleChat({
       console.log('[SlackStyleChat] Response status:', response.status);
 
       if (response.ok) {
-        const result = await response.json();
+        const result = await safeJsonParse(response);
         console.log('[SlackStyleChat] Group created successfully:', result);
         showToast("Группа создана", "success");
         await loadChats();
@@ -401,12 +402,12 @@ export default function SlackStyleChat({
         showToast("Группа обновлена", "success");
         loadChats();
         // Обновляем текущий чат
-        const updated = await response.json();
-        if (updated.chat) {
+        const updated = await safeJsonParse(response);
+        if (updated?.chat) {
           selectChat(updated.chat);
         }
       } else {
-        const error = await response.json();
+        const error = await safeJsonParse(response) || { error: "Ошибка обновления группы" };
         console.error("Failed to update group:", error);
         showToast(error.error || "Ошибка обновления группы", "error");
       }
@@ -444,7 +445,7 @@ export default function SlackStyleChat({
             });
             
             if (!response.ok) {
-              const errorData = await response.json().catch(() => ({}));
+              const errorData = await safeJsonParse(response) || {};
               console.error("File upload error:", errorData);
               hasError = true;
             }
@@ -684,7 +685,7 @@ export default function SlackStyleChat({
               showToast("Пост создан", "success");
               await loadChats();
             } else {
-              const error = await response.json();
+              const error = await safeJsonParse(response) || { error: "Ошибка создания поста" };
               showToast(error.error || "Ошибка создания поста", "error");
             }
           } catch (error) {

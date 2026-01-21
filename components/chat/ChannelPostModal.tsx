@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Image as ImageIcon, Plus, X as XIcon } from 'lucide-react';
+import { safeJsonParse } from "@/lib/api-client";
 import dynamic from 'next/dynamic';
 
 const TinyMCE = dynamic(() => import('@tinymce/tinymce-react').then(mod => mod.Editor), {
@@ -74,13 +75,13 @@ export default function ChannelPostModal({
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Ошибка загрузки' }));
+        const error = await safeJsonParse(response) || { error: 'Ошибка загрузки' };
         throw new Error(error.error || 'Ошибка загрузки изображения');
       }
 
       if (response.ok) {
-        const data = await response.json();
-        setCoverImage(data.url);
+        const data = await safeJsonParse(response);
+        setCoverImage(data?.url || '');
       } else {
         alert('Ошибка загрузки изображения');
       }
