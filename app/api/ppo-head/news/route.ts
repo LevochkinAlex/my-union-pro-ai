@@ -255,6 +255,11 @@ export async function POST(request: NextRequest) {
             iconUrl: true,
           },
         },
+        polls: {
+          select: {
+            id: true,
+          },
+        },
       },
     });
 

@@ -62,6 +62,11 @@ export async function GET(request: NextRequest) {
         organizationId: chairman.organizationId,
       },
       include: {
+        chat: {
+          select: {
+            id: true,
+          },
+        },
         _count: {
           select: {
             newsPosts: true,

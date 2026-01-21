@@ -18,6 +18,7 @@ import {
   X,
   Check,
   Loader2,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Chat, ChatUser } from "@/types/chat";
 
@@ -69,6 +70,10 @@ function getChatDisplayName(chat: Chat, currentUserId: string | null): string {
 }
 
 function getChatAvatar(chat: Chat): string | null {
+  if (chat.type === "CHANNEL") {
+    // Для каналов используем iconUrl из Chat или NewsChannel
+    return chat.iconUrl || null;
+  }
   if (chat.type === "GROUP") {
     return chat.iconUrl || null;
   }
@@ -360,6 +365,31 @@ function NewChatModal({ isOpen, onClose, onSelectUser, currentUserId }: NewChatM
 }
 
 // ============================================================================
+// КОМПОНЕНТ АВАТАРА КАНАЛА
+// ============================================================================
+
+function ChannelAvatar({ src, alt }: { src: string; alt: string }) {
+  const [imageError, setImageError] = useState(false);
+
+  if (imageError || !src) {
+    return (
+      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center shadow-sm">
+        <ImageIcon className="w-6 h-6 text-white" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="w-11 h-11 rounded-xl object-cover"
+      onError={() => setImageError(true)}
+    />
+  );
+}
+
+// ============================================================================
 // ЭЛЕМЕНТ ЧАТА
 // ============================================================================
 
@@ -405,6 +435,15 @@ function ChatListItem({ chat, isSelected, currentUserId, onClick }: ChatListItem
           <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shadow-lg">
             <Bot className="w-5 h-5 text-white" />
           </div>
+        ) : chat.type === "CHANNEL" ? (
+          // Для каналов показываем иконку канала или заглушку с иконкой изображения
+          avatar ? (
+            <ChannelAvatar src={avatar} alt={displayName} />
+          ) : (
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center shadow-sm">
+              <ImageIcon className="w-6 h-6 text-white" />
+            </div>
+          )
         ) : isGroup ? (
           avatar ? (
             <img
@@ -758,24 +797,24 @@ export default function SlackStyleSidebar({
           />
         )}
 
-        {/* Channels */}
-        {isChairman && (activeTab === "all" || activeTab === "work") && displayedChats.channels.length > 0 && (
-          <ChatSection
-            title="Каналы"
-            icon={<Hash className="w-4 h-4" />}
-            chats={displayedChats.channels}
-            selectedChat={selectedChat}
-            currentUserId={currentUserId}
-            onSelectChat={onSelectChat}
-          />
-        )}
-
         {/* Personal Chats */}
         {(activeTab === "all" || activeTab === "personal") && displayedChats.personal.length > 0 && (
           <ChatSection
             title={isChairman ? "Личные чаты" : "Чаты"}
             icon={<MessageCircle className="w-4 h-4" />}
             chats={displayedChats.personal.filter(chat => !isAIChat(chat))} // Дополнительная фильтрация AI чатов
+            selectedChat={selectedChat}
+            currentUserId={currentUserId}
+            onSelectChat={onSelectChat}
+          />
+        )}
+
+        {/* Channels */}
+        {isChairman && (activeTab === "all" || activeTab === "work") && displayedChats.channels.length > 0 && (
+          <ChatSection
+            title="Каналы"
+            icon={<Hash className="w-4 h-4" />}
+            chats={displayedChats.channels}
             selectedChat={selectedChat}
             currentUserId={currentUserId}
             onSelectChat={onSelectChat}
