@@ -33,7 +33,7 @@ interface Message {
       lastName?: string;
     };
   };
-  reactions?: Record<string, { count: number; userIds: string[] }>;
+  reactions?: Record<string, { count?: number; userIds: string[]; users?: any[] }> | null;
   attachments?: Array<{
     type: string;
     url: string;
@@ -167,7 +167,7 @@ export default function ChatMessages({ messages, currentUserId, typingUsers }: C
                             variant="flat"
                             className="text-xs"
                           >
-                            {emoji} {data.count}
+                            {emoji} {data.count ?? data.userIds?.length ?? 0}
                           </Chip>
                         ))}
                       </div>
