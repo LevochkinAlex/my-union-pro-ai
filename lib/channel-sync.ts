@@ -44,15 +44,21 @@ export async function syncChannelWithChat(
     const organization = await prisma.organization.findUnique({
       where: { id: organizationId },
       select: {
-        ppoChairmanId: true,
-        mpoChairmanId: true,
-        rpoChairmanId: true,
+        ppoChairman: {
+          select: { id: true },
+        },
+        mpoChairman: {
+          select: { id: true },
+        },
+        rpoChairman: {
+          select: { id: true },
+        },
       },
     });
 
-    const chairmanId = organization?.ppoChairmanId || 
-                      organization?.mpoChairmanId || 
-                      organization?.rpoChairmanId;
+    const chairmanId = organization?.ppoChairman?.id || 
+                      organization?.mpoChairman?.id || 
+                      organization?.rpoChairman?.id;
 
     if (!chairmanId) {
       console.error(`[channel-sync] No chairman found for organization ${organizationId}`);
