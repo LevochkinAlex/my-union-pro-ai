@@ -213,10 +213,23 @@ function ChatMessagesComponent({
           isOwn={item.message.senderId === currentUserId}
           isOldMessage={isOldMessage}
           showSenderName={isGroupChat}
-          onReply={onReply}
-          onEdit={onEdit}
+          onReply={(messageId: string) => {
+            const msg = messages.find(m => m.id === messageId);
+            if (msg) onReply(msg);
+          }}
+          onEdit={(messageId: string, content: string) => {
+            const msg = messages.find(m => m.id === messageId);
+            if (msg) {
+              // Создаем обновленное сообщение
+              const updatedMsg = { ...msg, content };
+              onEdit(updatedMsg);
+            }
+          }}
           onDelete={onDelete}
-          onForward={onForward}
+          onForward={(messageId: string) => {
+            const msg = messages.find(m => m.id === messageId);
+            if (msg) onForward(msg);
+          }}
           onReaction={onReaction}
           onImageClick={onImageClick}
           onProfileClick={onProfileClick}
