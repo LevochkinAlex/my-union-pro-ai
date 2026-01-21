@@ -1,8 +1,17 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useTheme } from 'next-themes';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import {
+  Card,
+  CardBody,
+  Avatar,
+  Chip,
+  ScrollShadow,
+} from '@heroui/react';
+import { Check, CheckCheck } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -41,6 +50,7 @@ interface ChatMessagesProps {
 
 export default function ChatMessages({ messages, currentUserId, typingUsers }: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { resolvedTheme } = useTheme();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -55,131 +65,160 @@ export default function ChatMessages({ messages, currentUserId, typingUsers }: C
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-      {messages.map(message => {
-        const isOwn = message.senderId === currentUserId;
-        const senderName = getSenderName(message.sender);
+    <ScrollShadow className="flex-1 h-full">
+      <div className="p-4 space-y-4">
+        {messages.map(message => {
+          const isOwn = message.senderId === currentUserId;
+          const senderName = getSenderName(message.sender);
 
-        return (
-          <div
-            key={message.id}
-            className={`flex gap-3 ${isOwn ? 'flex-row-reverse' : ''}`}
-          >
-            {/* Avatar */}
-            {!isOwn && (
-              <img
-                src={message.sender.avatarUrl || '/default-avatar.png'}
-                alt={senderName}
-                className="w-8 h-8 rounded-full"
-              />
-            )}
-
-            {/* Message content */}
-            <div className={`flex-1 ${isOwn ? 'items-end' : 'items-start'} flex flex-col`}>
+          return (
+            <div
+              key={message.id}
+              className={`flex gap-3 ${isOwn ? 'flex-row-reverse' : ''}`}
+            >
+              {/* Avatar */}
               {!isOwn && (
-                <span className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                  {senderName}
-                </span>
+                <Avatar
+                  src={message.sender.avatarUrl}
+                  name={senderName}
+                  size="sm"
+                  className="flex-shrink-0"
+                />
               )}
 
-              {/* Reply preview */}
-              {message.replyTo && (
-                <div className="mb-1 pl-3 border-l-2 border-blue-500 text-sm text-gray-600 dark:text-gray-400">
-                  <div className="font-medium">
-                    {message.replyTo.sender.firstName || 'Пользователь'}
-                  </div>
-                  <div className="truncate">{message.replyTo.content}</div>
-                </div>
-              )}
+              {/* Message content */}
+              <div className={`flex-1 ${isOwn ? 'items-end' : 'items-start'} flex flex-col max-w-[70%]`}>
+                {!isOwn && (
+                  <span className="text-xs text-foreground-500 mb-1 px-1">
+                    {senderName}
+                  </span>
+                )}
 
-              {/* Message bubble */}
-              <div
-                className={`rounded-lg px-4 py-2 max-w-md ${
-                  isOwn
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white'
-                }`}
-              >
-                {/* Attachments */}
-                {message.attachments && message.attachments.length > 0 && (
-                  <div className="mb-2 space-y-2">
-                    {message.attachments.map((att, idx) => (
-                      <div key={idx}>
-                        {att.type === 'image' ? (
-                          <img
-                            src={att.url}
-                            alt={att.name}
-                            className="max-w-full rounded"
-                          />
-                        ) : (
-                          <a
-                            href={att.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-500 hover:underline"
-                          >
-                            📎 {att.name}
-                          </a>
-                        )}
+                {/* Reply preview */}
+                {message.replyTo && (
+                  <Card className="mb-1 w-full" shadow="none">
+                    <CardBody className="p-2 bg-default-100 dark:bg-default-50">
+                      <div className="text-xs font-medium text-foreground-600 dark:text-foreground-400">
+                        {message.replyTo.sender.firstName || 'Пользователь'}
                       </div>
-                    ))}
-                  </div>
+                      <div className="text-xs text-foreground-500 truncate">
+                        {message.replyTo.content}
+                      </div>
+                    </CardBody>
+                  </Card>
                 )}
 
-                {/* Content */}
-                <div className={isOwn ? 'prose prose-invert prose-sm max-w-none' : 'prose prose-sm dark:prose-invert max-w-none'}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {message.content}
-                  </ReactMarkdown>
-                </div>
+                {/* Message bubble */}
+                <Card
+                  className={`${
+                    isOwn
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-default-100 dark:bg-default-50'
+                  }`}
+                  shadow="sm"
+                >
+                  <CardBody className="p-3">
+                    {/* Attachments */}
+                    {message.attachments && message.attachments.length > 0 && (
+                      <div className="mb-2 space-y-2">
+                        {message.attachments.map((att, idx) => (
+                          <div key={idx}>
+                            {att.type === 'image' ? (
+                              <img
+                                src={att.url}
+                                alt={att.name}
+                                className="max-w-full rounded-lg"
+                              />
+                            ) : (
+                              <a
+                                href={att.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`text-sm underline ${
+                                  isOwn ? 'text-primary-foreground' : 'text-primary'
+                                }`}
+                              >
+                                📎 {att.name}
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
-                {/* Reactions */}
-                {message.reactions && Object.keys(message.reactions).length > 0 && (
-                  <div className="flex gap-1 mt-2 flex-wrap">
-                    {Object.entries(message.reactions).map(([emoji, data]) => (
-                      <span
-                        key={emoji}
-                        className="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-sm"
-                      >
-                        {emoji} {data.count}
+                    {/* Content */}
+                    <div className={`text-sm ${
+                      isOwn ? 'text-primary-foreground' : 'text-foreground'
+                    }`}>
+                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {message.content}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+
+                    {/* Reactions */}
+                    {message.reactions && Object.keys(message.reactions).length > 0 && (
+                      <div className="flex gap-1 mt-2 flex-wrap">
+                        {Object.entries(message.reactions).map(([emoji, data]) => (
+                          <Chip
+                            key={emoji}
+                            size="sm"
+                            variant="flat"
+                            className="text-xs"
+                          >
+                            {emoji} {data.count}
+                          </Chip>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Edited indicator */}
+                    {message.editedAt && (
+                      <span className={`text-xs mt-1 ${
+                        isOwn ? 'text-primary-foreground/70' : 'text-foreground-400'
+                      }`}>
+                        (изменено)
                       </span>
-                    ))}
-                  </div>
-                )}
+                    )}
+                  </CardBody>
+                </Card>
 
-                {/* Edited indicator */}
-                {message.editedAt && (
-                  <span className="text-xs opacity-70 ml-2">(изменено)</span>
-                )}
+                {/* Timestamp and read status */}
+                <div className="flex items-center gap-1 mt-1 px-1">
+                  <span className="text-xs text-foreground-400">
+                    {new Date(message.createdAt).toLocaleTimeString('ru-RU', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                  {isOwn && (
+                    <CheckCheck className="w-3 h-3 text-primary" />
+                  )}
+                </div>
               </div>
-
-              {/* Timestamp */}
-              <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {new Date(message.createdAt).toLocaleTimeString('ru-RU', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </span>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
 
-      {/* Typing indicator */}
-      {typingUsers.size > 0 && (
-        <div className="flex gap-3">
-          <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600" />
-          <div className="bg-white dark:bg-gray-800 rounded-lg px-4 py-2">
-            <div className="flex gap-1">
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
-            </div>
+        {/* Typing indicator */}
+        {typingUsers.size > 0 && (
+          <div className="flex gap-3">
+            <Avatar size="sm" className="flex-shrink-0" />
+            <Card className="bg-default-100 dark:bg-default-50" shadow="sm">
+              <CardBody className="p-3">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-foreground-400 rounded-full animate-bounce" />
+                  <div className="w-2 h-2 bg-foreground-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                  <div className="w-2 h-2 bg-foreground-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
+                </div>
+              </CardBody>
+            </Card>
           </div>
-        </div>
-      )}
+        )}
 
-      <div ref={messagesEndRef} />
-    </div>
+        <div ref={messagesEndRef} />
+      </div>
+    </ScrollShadow>
   );
 }

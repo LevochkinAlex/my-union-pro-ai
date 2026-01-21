@@ -1,16 +1,29 @@
 'use client';
 
 /**
- * Новый чистый компонент чата
- * Полностью переписан с нуля без Matrix
+ * Новый компонент чата с HeroUI
+ * Полностью переписан с использованием HeroUI компонентов
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { io, Socket } from 'socket.io-client';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import {
+  Card,
+  CardBody,
+  CardHeader,
+  Avatar,
+  Button,
+  Input,
+  Spinner,
+  Chip,
+  Divider,
+} from '@heroui/react';
+import { MessageCircle, Send, Search, Users } from 'lucide-react';
 import ChatSidebar from './ChatSidebar';
 import ChatMessages from './ChatMessages';
 import ChatInput from './ChatInput';
@@ -62,6 +75,7 @@ interface Message {
 
 export default function Chat() {
   const { data: session } = useSession();
+  const { theme, resolvedTheme } = useTheme();
   const searchParams = useSearchParams();
   const urlChatId = searchParams.get('chatId');
 
@@ -115,7 +129,7 @@ export default function Chat() {
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3005';
     const newSocket = io(socketUrl, {
       auth: {
-        token: session.user.id, // В реальности нужен JWT токен
+        token: session.user.id,
       },
       transports: ['websocket'],
     });
@@ -130,10 +144,9 @@ export default function Chat() {
 
     // Новое сообщение
     newSocket.on('message:new', (message: Message) => {
-      if (message.senderId === session.user.id) return; // Свое сообщение уже добавлено
+      if (message.senderId === session.user.id) return;
       
       setMessages(prev => {
-        // Проверяем, нет ли уже такого сообщения
         if (prev.some(m => m.id === message.id)) return prev;
         return [...prev, message].sort((a, b) => 
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
@@ -210,17 +223,21 @@ export default function Chat() {
   }, [selectedChatId, socket]);
 
   const selectedRoom = rooms.find(r => r.id === selectedChatId);
+  const isDark = resolvedTheme === 'dark';
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-gray-500">Загрузка чатов...</div>
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <Spinner size="lg" color="primary" />
+          <p className="text-foreground-500">Загрузка чатов...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-background">
       {/* Sidebar */}
       <ChatSidebar
         rooms={rooms}
@@ -229,38 +246,50 @@ export default function Chat() {
       />
 
       {/* Main chat area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {selectedRoom ? (
           <>
             {/* Header */}
-            <div className="h-16 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 bg-white dark:bg-gray-800">
-              <div className="flex items-center gap-3">
-                {selectedRoom.avatarUrl && (
-                  <img
+            <Card className="rounded-none border-b border-divider shadow-none">
+              <CardHeader className="px-4 py-3">
+                <div className="flex items-center gap-3 w-full">
+                  <Avatar
                     src={selectedRoom.avatarUrl}
-                    alt={selectedRoom.name}
-                    className="w-10 h-10 rounded-full"
+                    name={selectedRoom.name}
+                    size="md"
+                    className="flex-shrink-0"
                   />
-                )}
-                <div>
-                  <h2 className="font-semibold text-gray-900 dark:text-white">
-                    {selectedRoom.name}
-                  </h2>
-                  {selectedRoom.isDirect && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Личный чат
-                    </p>
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-lg font-semibold text-foreground truncate">
+                      {selectedRoom.name}
+                    </h2>
+                    {selectedRoom.isDirect && (
+                      <p className="text-sm text-foreground-500">
+                        Личный чат
+                      </p>
+                    )}
+                  </div>
+                  {selectedRoom.unreadCount > 0 && (
+                    <Chip
+                      size="sm"
+                      color="primary"
+                      variant="flat"
+                    >
+                      {selectedRoom.unreadCount}
+                    </Chip>
                   )}
                 </div>
-              </div>
-            </div>
+              </CardHeader>
+            </Card>
 
             {/* Messages */}
-            <ChatMessages
-              messages={messages}
-              currentUserId={session?.user?.id || ''}
-              typingUsers={typingUsers}
-            />
+            <div className="flex-1 overflow-hidden">
+              <ChatMessages
+                messages={messages}
+                currentUserId={session?.user?.id || ''}
+                typingUsers={typingUsers}
+              />
+            </div>
 
             {/* Input */}
             <ChatInput
@@ -270,11 +299,17 @@ export default function Chat() {
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-gray-500 dark:text-gray-400 mb-4">
-                Выберите чат для начала общения
-              </p>
-            </div>
+            <Card className="max-w-md">
+              <CardBody className="text-center py-12">
+                <MessageCircle className="w-16 h-16 mx-auto mb-4 text-default-400" />
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  Выберите чат
+                </h3>
+                <p className="text-foreground-500">
+                  Выберите чат из списка для начала общения
+                </p>
+              </CardBody>
+            </Card>
           </div>
         )}
       </div>
