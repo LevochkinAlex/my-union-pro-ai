@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import { useToast } from "@/components/ui/Toast";
 import { useChat } from "@/hooks/useChat";
-import { safeJsonParse } from "@/lib/api-helpers";
+import { safeJsonParse } from "@/lib/api-client";
 import { Chat, Message } from "@/types/chat";
 
 // Lazy load компоненты
