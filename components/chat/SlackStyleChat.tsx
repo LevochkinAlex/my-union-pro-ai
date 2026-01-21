@@ -502,6 +502,7 @@ export default function SlackStyleChat({
               <div className="flex-1 flex overflow-hidden relative">
                 <div className="flex-1 flex flex-col min-w-0">
                   <SlackStyleMessages
+                    isGroupChat={selectedChat.type === 'GROUP'}
                     messages={formattedMessages}
                     currentUserId={currentUserId || ""}
                     typingUsers={new Set(typingUsers?.map((u) => typeof u === "string" ? u : (u as any).userId) || [])}

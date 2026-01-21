@@ -96,6 +96,7 @@ export interface SlackStyleMessagesProps {
   currentUserId: string;
   typingUsers: Set<string>;
   isTicketChat?: boolean;
+  isGroupChat?: boolean; // Для определения типа чата (групповой или приватный)
   onReply?: (message: Message) => void;
   onEdit?: (message: Message) => void;
   onDelete?: (messageId: string) => void;
@@ -337,12 +338,14 @@ interface MessageReactionsDisplayProps {
   reactions: MessageReactions;
   currentUserId: string;
   onToggle: (emoji: string) => void;
+  isGroupChat?: boolean; // Для приватных чатов показываем по одной реакции на пользователя
 }
 
 function MessageReactionsDisplay({
   reactions,
   currentUserId,
   onToggle,
+  isGroupChat = false,
 }: MessageReactionsDisplayProps) {
   // Нормализуем reactions: может прийти как объект или массив
   let normalizedReactions: MessageReactions = {};
@@ -394,6 +397,38 @@ function MessageReactionsDisplay({
   
   if (entries.length === 0) return null;
 
+  // Для приватных чатов показываем по одной реакции на пользователя (без счетчика)
+  if (!isGroupChat) {
+    return (
+      <div className="flex flex-wrap gap-1 mt-2">
+        {entries.flatMap(([emoji, data]) => {
+          const userIds = data.userIds || [];
+          // Создаем отдельный бабл для каждого пользователя
+          return userIds.map((userId) => {
+            const isLiked = userId === currentUserId;
+            return (
+              <button
+                key={`${emoji}-${userId}`}
+                onClick={() => onToggle(emoji)}
+                className={`
+                  inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-all
+                  ${isLiked
+                    ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 ring-1 ring-blue-300 dark:ring-blue-700"
+                    : "bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }
+                `}
+                title={data.users?.find(u => u.id === userId)?.name || 'Пользователь'}
+              >
+                <span className="text-sm" role="img" aria-label={`emoji ${emoji}`}>{emoji}</span>
+              </button>
+            );
+          });
+        })}
+      </div>
+    );
+  }
+
+  // Для групповых чатов показываем с счетчиком
   return (
     <div className="flex flex-wrap gap-1 mt-2">
       {entries.map(([emoji, data]) => {
@@ -518,6 +553,7 @@ interface MessageBubbleProps {
   onReaction?: (emoji: string) => void;
   onOpenThread?: () => void;
   onImageClick?: (url: string, name?: string) => void;
+  isGroupChat?: boolean;
 }
 
 function MessageBubble({
@@ -530,6 +566,7 @@ function MessageBubble({
   onReaction,
   onOpenThread,
   onImageClick,
+  isGroupChat = false,
 }: MessageBubbleProps) {
   const isDeleted = !!message.deletedAt;
 
@@ -646,6 +683,7 @@ function MessageBubble({
             reactions={message.reactions}
             currentUserId={currentUserId}
             onToggle={(emoji) => onReaction?.(emoji)}
+            isGroupChat={isGroupChat}
           />
         )}
 
@@ -703,6 +741,7 @@ export default function SlackStyleMessages({
   currentUserId,
   typingUsers,
   isTicketChat = false,
+  isGroupChat = false,
   onReply,
   onEdit,
   onDelete,
@@ -801,6 +840,7 @@ export default function SlackStyleMessages({
                   onReaction={(emoji) => onReaction?.(message.id, emoji)}
                   onOpenThread={() => onOpenThread?.(message)}
                   onImageClick={onImageClick}
+                  isGroupChat={isGroupChat}
                 />
               </div>
             </div>
