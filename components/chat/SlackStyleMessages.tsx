@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useTheme } from "next-themes";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -14,10 +13,15 @@ import {
   ChevronDown,
   Copy,
   Check,
+  CheckCheck,
   AlertCircle,
   UserPlus,
   Settings,
   FileText,
+  Download,
+  ExternalLink,
+  Smile,
+  Image as ImageIcon,
 } from "lucide-react";
 import EmojiPicker from "./EmojiPicker";
 
@@ -82,7 +86,6 @@ export interface Message {
   attachments?: MessageAttachment[];
   threadRepliesCount?: number;
   threadLastReplyAt?: Date | null;
-  // Activity messages
   isActivity?: boolean;
   activityType?: string;
   activityData?: any;
@@ -155,169 +158,180 @@ function shouldShowDateSeparator(current: Message, previous?: Message): boolean 
   return currentDate !== previousDate;
 }
 
-function shouldGroupWithPrevious(current: Message, previous?: Message): boolean {
-  if (!previous) return false;
-  if (current.isActivity || previous.isActivity) return false;
-  if (current.senderId !== previous.senderId) return false;
-  const timeDiff = new Date(current.createdAt).getTime() - new Date(previous.createdAt).getTime();
-  return timeDiff < 5 * 60 * 1000; // 5 минут
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function getAttachmentUrl(att: MessageAttachment): string {
+  return att.url || att.filePath || '';
+}
+
+function getAttachmentName(att: MessageAttachment): string {
+  return att.name || att.fileName || att.originalName || 'Файл';
+}
+
+function getAttachmentSize(att: MessageAttachment): number {
+  return att.size || att.fileSize || 0;
 }
 
 // ============================================================================
-// SUB-COMPONENTS
+// КОНТЕКСТНОЕ МЕНЮ
 // ============================================================================
 
-interface MessageActionsProps {
+interface ContextMenuProps {
+  x: number;
+  y: number;
   message: Message;
   isOwn: boolean;
+  onClose: () => void;
   onReply?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
-  onReaction?: (emoji: string) => void;
-  onOpenThread?: () => void;
   onForward?: () => void;
+  onCopy?: () => void;
+  onReaction?: (emoji: string) => void;
 }
 
-function MessageActions({
+function ContextMenu({
+  x,
+  y,
   message,
   isOwn,
+  onClose,
   onReply,
   onEdit,
   onDelete,
-  onReaction,
-  onOpenThread,
   onForward,
-}: MessageActionsProps) {
-  const [showMenu, setShowMenu] = useState(false);
-  const [copied, setCopied] = useState(false);
+  onCopy,
+  onReaction,
+}: ContextMenuProps) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(message.content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    setShowMenu(false);
-  }, [message.content]);
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [onClose]);
 
-  const quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🎉"];
+  // Корректировка позиции меню чтобы не выходило за границы экрана
+  const adjustedX = Math.min(x, window.innerWidth - 220);
+  const adjustedY = Math.min(y, window.innerHeight - 350);
+
+  const quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🎉", "👏", "🔥"];
 
   return (
-    <div className="absolute -top-3 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-      <div className="flex items-center gap-0.5 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-0.5">
-        {/* Quick reactions */}
-        {quickReactions.slice(0, 3).map((emoji) => (
-          <button
-            key={emoji}
-            onClick={() => onReaction?.(emoji)}
-            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm"
-            title={`Реакция ${emoji}`}
-          >
-            {emoji}
-          </button>
-        ))}
-
-        {/* Emoji picker */}
-        <div className="relative">
-          <EmojiPicker
-            onEmojiSelect={(emoji) => {
-              onReaction?.(emoji);
-            }}
-            showButton={true}
-          />
-        </div>
-
-        {/* Reply */}
-        <button
-          onClick={onReply}
-          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          title="Ответить"
-        >
-          <Reply className="w-4 h-4 text-gray-500" />
-        </button>
-
-        {/* Thread */}
-        <button
-          onClick={onOpenThread}
-          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          title="Открыть тред"
-        >
-          <MessageSquare className="w-4 h-4 text-gray-500" />
-        </button>
-
-        {/* More menu */}
-        <div className="relative">
-          <button
-            onClick={() => setShowMenu(!showMenu)}
-            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            title="Ещё"
-          >
-            <MoreHorizontal className="w-4 h-4 text-gray-500" />
-          </button>
-
-          {showMenu && (
-            <>
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setShowMenu(false)}
-              />
-              <div className="absolute top-full right-0 mt-1 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-50">
-                <button
-                  onClick={handleCopy}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                >
-                  {copied ? (
-                    <Check className="w-4 h-4 text-green-500" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
-                  {copied ? "Скопировано!" : "Копировать текст"}
-                </button>
-
-                {onForward && (
-                  <button
-                    onClick={() => {
-                      onForward();
-                      setShowMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  >
-                    <Forward className="w-4 h-4" />
-                    Переслать
-                  </button>
-                )}
-
-                {isOwn && onEdit && (
-                  <button
-                    onClick={() => {
-                      onEdit();
-                      setShowMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    Редактировать
-                  </button>
-                )}
-
-                {isOwn && onDelete && (
-                  <button
-                    onClick={() => {
-                      onDelete();
-                      setShowMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Удалить
-                  </button>
-                )}
+    <div
+      ref={menuRef}
+      className="fixed z-[100] bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 py-2 min-w-[200px] animate-in fade-in zoom-in-95 duration-100"
+      style={{ left: adjustedX, top: adjustedY }}
+    >
+      {/* Quick reactions */}
+      <div className="px-2 pb-2 border-b border-gray-100 dark:border-gray-700">
+        <div className="flex items-center gap-1">
+          {quickReactions.map((emoji) => (
+            <button
+              key={emoji}
+              onClick={() => {
+                onReaction?.(emoji);
+                onClose();
+              }}
+              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-lg transition-transform hover:scale-110"
+            >
+              {emoji}
+            </button>
+          ))}
+          <div className="relative">
+            <button
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+            >
+              <Smile className="w-5 h-5 text-gray-500" />
+            </button>
+            {showEmojiPicker && (
+              <div className="absolute left-0 bottom-full mb-2">
+                <EmojiPicker
+                  onEmojiSelect={(emoji) => {
+                    onReaction?.(emoji);
+                    onClose();
+                  }}
+                  showButton={false}
+                  isOpen={true}
+                  onOpenChange={(open) => !open && setShowEmojiPicker(false)}
+                />
               </div>
-            </>
-          )}
+            )}
+          </div>
         </div>
+      </div>
+
+      {/* Menu items */}
+      <div className="py-1">
+        <button
+          onClick={() => { onReply?.(); onClose(); }}
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          <Reply className="w-4 h-4" />
+          Ответить
+        </button>
+        
+        {onForward && (
+          <button
+            onClick={() => { onForward?.(); onClose(); }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            <Forward className="w-4 h-4" />
+            Переслать
+          </button>
+        )}
+        
+        <button
+          onClick={() => { onCopy?.(); onClose(); }}
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          <Copy className="w-4 h-4" />
+          Копировать текст
+        </button>
+
+        {isOwn && onEdit && (
+          <>
+            <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+            <button
+              onClick={() => { onEdit?.(); onClose(); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Edit2 className="w-4 h-4" />
+              Редактировать
+            </button>
+          </>
+        )}
+
+        {isOwn && onDelete && (
+          <>
+            <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+            <button
+              onClick={() => { onDelete?.(); onClose(); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+            >
+              <Trash2 className="w-4 h-4" />
+              Удалить
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
 }
+
+// ============================================================================
+// КОМПОНЕНТ РЕАКЦИЙ
+// ============================================================================
 
 interface MessageReactionsDisplayProps {
   reactions: MessageReactions;
@@ -330,28 +344,77 @@ function MessageReactionsDisplay({
   currentUserId,
   onToggle,
 }: MessageReactionsDisplayProps) {
+  // Нормализуем reactions: может прийти как объект или массив
+  let normalizedReactions: MessageReactions = {};
+  
+  if (!reactions) {
+    return null;
+  }
+  
+  // Если reactions - массив, преобразуем в объект
+  if (Array.isArray(reactions)) {
+    normalizedReactions = reactions.reduce((acc: MessageReactions, item: any) => {
+      // Если элемент имеет структуру { emoji, count, users } или { emoji, userIds }
+      const emoji = item.emoji || item[0];
+      if (emoji && typeof emoji === 'string') {
+        acc[emoji] = {
+          count: item.count || item.userIds?.length || 0,
+          userIds: item.userIds || item.users || [],
+          users: item.users || [],
+        };
+      }
+      return acc;
+    }, {});
+  } else if (typeof reactions === 'object') {
+    normalizedReactions = reactions;
+  } else {
+    return null;
+  }
+  
+  // Преобразуем reactions в массив, фильтруя валидные эмодзи
+  const entries = Object.entries(normalizedReactions)
+    .filter(([emoji, data]) => {
+      // Проверяем, что emoji - это строка и не пустая, и не число
+      if (!emoji || typeof emoji !== 'string' || emoji.trim().length === 0) {
+        return false;
+      }
+      // Пропускаем если emoji выглядит как индекс массива (число)
+      if (!isNaN(Number(emoji)) && emoji.trim().length <= 3 && !emoji.includes('️')) {
+        return false;
+      }
+      // Проверяем, что есть пользователи или счетчик
+      const count = data?.count ?? data?.userIds?.length ?? 0;
+      return count > 0;
+    })
+    .map(([emoji, data]) => {
+      // Убеждаемся, что emoji - это строка (не число или индекс)
+      const emojiStr = String(emoji).trim();
+      return [emojiStr, data] as [string, typeof data];
+    });
+  
+  if (entries.length === 0) return null;
+
   return (
-    <div className="flex flex-wrap gap-1 mt-1">
-      {Object.entries(reactions).map(([emoji, data]) => {
+    <div className="flex flex-wrap gap-1 mt-2">
+      {entries.map(([emoji, data]) => {
         const count = data.count ?? data.userIds?.length ?? 0;
         const isLiked = data.userIds?.includes(currentUserId);
-        if (count === 0) return null;
 
         return (
           <button
             key={emoji}
             onClick={() => onToggle(emoji)}
             className={`
-              inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-colors
+              inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium transition-all
               ${isLiked
-                ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 ring-1 ring-blue-300 dark:ring-blue-700"
+                : "bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
               }
             `}
-            title={data.users?.map((u) => u.name).join(", ")}
+            title={data.users?.map((u) => u.name).join(", ") || `${count} реакций`}
           >
-            <span>{emoji}</span>
-            <span>{count}</span>
+            <span className="text-sm" role="img" aria-label={`emoji ${emoji}`}>{emoji}</span>
+            <span className="font-medium">{count}</span>
           </button>
         );
       })}
@@ -359,59 +422,271 @@ function MessageReactionsDisplay({
   );
 }
 
-interface ThreadIndicatorProps {
-  repliesCount: number;
-  lastReplyAt?: Date | null;
-  onClick: () => void;
+// ============================================================================
+// КОМПОНЕНТ ВЛОЖЕНИЙ
+// ============================================================================
+
+interface AttachmentsDisplayProps {
+  attachments: MessageAttachment[];
+  isOwn: boolean;
+  onImageClick?: (url: string, name?: string) => void;
 }
 
-function ThreadIndicator({ repliesCount, lastReplyAt, onClick }: ThreadIndicatorProps) {
-  if (repliesCount === 0) return null;
+function AttachmentsDisplay({ attachments, isOwn, onImageClick }: AttachmentsDisplayProps) {
+  const images = attachments.filter(a => a.type === 'image' || a.mimeType?.startsWith('image/'));
+  const files = attachments.filter(a => a.type !== 'image' && !a.mimeType?.startsWith('image/'));
 
   return (
-    <button
-      onClick={onClick}
-      className="mt-2 flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-    >
-      <MessageSquare className="w-4 h-4" />
-      <span>
-        {repliesCount} {repliesCount === 1 ? "ответ" : repliesCount < 5 ? "ответа" : "ответов"}
-      </span>
-      {lastReplyAt && (
-        <span className="text-gray-500 dark:text-gray-400">
-          · {formatMessageTime(new Date(lastReplyAt))}
-        </span>
+    <div className="space-y-2">
+      {/* Images grid */}
+      {images.length > 0 && (
+        <div className={`grid gap-1 ${images.length === 1 ? 'grid-cols-1' : images.length === 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
+          {images.map((img, idx) => {
+            const url = getAttachmentUrl(img);
+            const name = getAttachmentName(img);
+            return (
+              <button
+                key={img.id || idx}
+                onClick={() => onImageClick?.(url, name)}
+                className="relative group overflow-hidden rounded-xl"
+              >
+                <img
+                  src={img.thumbnailUrl || url}
+                  alt={name}
+                  className="w-full max-w-[300px] max-h-[300px] object-cover rounded-xl transition-transform group-hover:scale-105"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-xl" />
+              </button>
+            );
+          })}
+        </div>
       )}
-    </button>
+
+      {/* Files */}
+      {files.map((file, idx) => {
+        const url = getAttachmentUrl(file);
+        const name = getAttachmentName(file);
+        const size = getAttachmentSize(file);
+        
+        return (
+          <a
+            key={file.id || idx}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`
+              flex items-center gap-3 p-3 rounded-xl transition-colors
+              ${isOwn 
+                ? 'bg-white/20 hover:bg-white/30' 
+                : 'bg-gray-100 dark:bg-gray-700/60 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }
+            `}
+          >
+            <div className={`p-2 rounded-lg ${isOwn ? 'bg-white/20' : 'bg-gray-200 dark:bg-gray-600'}`}>
+              <FileText className={`w-5 h-5 ${isOwn ? 'text-white' : 'text-gray-600 dark:text-gray-300'}`} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className={`text-sm font-medium truncate ${isOwn ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
+                {name}
+              </div>
+              {size > 0 && (
+                <div className={`text-xs ${isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'}`}>
+                  {formatFileSize(size)}
+                </div>
+              )}
+            </div>
+            <Download className={`w-4 h-4 ${isOwn ? 'text-white/70' : 'text-gray-400'}`} />
+          </a>
+        );
+      })}
+    </div>
   );
 }
 
-interface ActivityMessageProps {
+// ============================================================================
+// КОМПОНЕНТ СООБЩЕНИЯ
+// ============================================================================
+
+interface MessageBubbleProps {
   message: Message;
+  isOwn: boolean;
+  showAvatar: boolean;
+  showName: boolean;
+  currentUserId: string;
+  onContextMenu: (e: React.MouseEvent, message: Message) => void;
+  onReaction?: (emoji: string) => void;
+  onOpenThread?: () => void;
+  onImageClick?: (url: string, name?: string) => void;
 }
 
-function ActivityMessage({ message }: ActivityMessageProps) {
+function MessageBubble({
+  message,
+  isOwn,
+  showAvatar,
+  showName,
+  currentUserId,
+  onContextMenu,
+  onReaction,
+  onOpenThread,
+  onImageClick,
+}: MessageBubbleProps) {
+  const isDeleted = !!message.deletedAt;
+
+  return (
+    <div 
+      className={`flex gap-2 ${isOwn ? 'flex-row-reverse' : ''}`}
+      onContextMenu={(e) => onContextMenu(e, message)}
+    >
+      {/* Avatar */}
+      <div className="flex-shrink-0 w-8">
+        {showAvatar && !isOwn && (
+          message.sender.avatarUrl ? (
+            <img
+              src={message.sender.avatarUrl}
+              alt={getSenderName(message.sender)}
+              className="w-8 h-8 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-semibold">
+              {getSenderInitials(message.sender)}
+            </div>
+          )
+        )}
+      </div>
+
+      {/* Message content */}
+      <div className={`max-w-[70%] ${isOwn ? 'items-end' : 'items-start'}`}>
+        {/* Sender name */}
+        {showName && !isOwn && (
+          <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 ml-1">
+            {getSenderName(message.sender)}
+          </div>
+        )}
+
+        {/* Reply preview */}
+        {message.replyTo && (
+          <div className={`
+            mb-1 px-3 py-2 rounded-xl text-xs border-l-2
+            ${isOwn 
+              ? 'bg-blue-600/30 dark:bg-blue-400/20 border-blue-400 dark:border-blue-300' 
+              : 'bg-gray-100 dark:bg-gray-700/60 border-blue-500 dark:border-blue-400'
+            }
+          `}>
+            <div className={`font-medium ${isOwn ? 'text-blue-900 dark:text-blue-100' : 'text-blue-700 dark:text-blue-400'}`}>
+              {getSenderName(message.replyTo.sender)}
+            </div>
+            <div className={`truncate mt-0.5 ${isOwn ? 'text-gray-900 dark:text-white/90' : 'text-gray-900 dark:text-gray-300'}`}>
+              {message.replyTo.content}
+            </div>
+          </div>
+        )}
+
+        {/* Bubble */}
+        <div className={`
+          group relative rounded-2xl px-4 py-2.5 
+          ${isOwn 
+            ? 'bg-blue-500 text-white rounded-br-md' 
+            : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-bl-md'
+          }
+          ${isDeleted ? 'opacity-60' : ''}
+        `}>
+          {isDeleted ? (
+            <div className={`italic text-sm opacity-70 ${isOwn ? 'text-white' : 'text-gray-600 dark:text-gray-400'}`}>
+              Сообщение удалено
+            </div>
+          ) : (
+            <>
+              {/* Attachments */}
+              {message.attachments && message.attachments.length > 0 && (
+                <div className="mb-2">
+                  <AttachmentsDisplay
+                    attachments={message.attachments}
+                    isOwn={isOwn}
+                    onImageClick={onImageClick}
+                  />
+                </div>
+              )}
+
+              {/* Text content with markdown */}
+              {message.content && (
+                <div className={`
+                  text-[15px] leading-relaxed break-words
+                  ${isOwn ? '!text-white' : 'text-gray-900 dark:text-gray-100'}
+                  prose prose-sm max-w-none
+                  ${isOwn 
+                    ? 'prose-invert [&_*]:!text-white [&_p]:!text-white [&_strong]:!text-white [&_em]:!text-white [&_li]:!text-white [&_h1]:!text-white [&_h2]:!text-white [&_h3]:!text-white [&_h4]:!text-white [&_h5]:!text-white [&_h6]:!text-white [&_blockquote]:!text-white [&_blockquote]:border-blue-300 [&_a]:!text-blue-200 [&_a]:underline hover:[&_a]:!text-blue-100 [&_code]:!text-blue-100 [&_code]:bg-blue-400/30 [&_pre]:bg-blue-400/20 [&_pre]:!text-white' 
+                    : '[&_p]:text-gray-900 dark:[&_p]:text-gray-100 [&_strong]:text-gray-900 dark:[&_strong]:text-gray-100 [&_em]:text-gray-900 dark:[&_em]:text-gray-100 [&_li]:text-gray-900 dark:[&_li]:text-gray-100 [&_h1]:text-gray-900 dark:[&_h1]:text-gray-100 [&_h2]:text-gray-900 dark:[&_h2]:text-gray-100 [&_h3]:text-gray-900 dark:[&_h3]:text-gray-100 [&_h4]:text-gray-900 dark:[&_h4]:text-gray-100 [&_h5]:text-gray-900 dark:[&_h5]:text-gray-100 [&_h6]:text-gray-900 dark:[&_h6]:text-gray-100 [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_code]:text-gray-900 dark:[&_code]:text-gray-100'
+                  }
+                `}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {message.content}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Time and status */}
+          <div className={`
+            flex items-center gap-1 mt-1 text-[10px]
+            ${isOwn ? 'text-blue-100/70 justify-end' : 'text-gray-400 dark:text-gray-500'}
+          `}>
+            <span>{formatMessageTime(new Date(message.createdAt))}</span>
+            {message.editedAt && <span>(ред.)</span>}
+            {isOwn && (
+              <CheckCheck className="w-3.5 h-3.5" />
+            )}
+          </div>
+        </div>
+
+        {/* Reactions */}
+        {!isDeleted && message.reactions && (
+          <MessageReactionsDisplay
+            reactions={message.reactions}
+            currentUserId={currentUserId}
+            onToggle={(emoji) => onReaction?.(emoji)}
+          />
+        )}
+
+        {/* Thread indicator */}
+        {!isDeleted && (message.threadRepliesCount || 0) > 0 && (
+          <button
+            onClick={onOpenThread}
+            className="mt-2 flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>
+              {message.threadRepliesCount} {message.threadRepliesCount === 1 ? 'ответ' : 'ответов'}
+            </span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// СИСТЕМНОЕ СООБЩЕНИЕ
+// ============================================================================
+
+function ActivityMessage({ message }: { message: Message }) {
   const getActivityIcon = () => {
     switch (message.activityType) {
-      case "status_changed":
-        return <Settings className="w-4 h-4" />;
-      case "participant_added":
-        return <UserPlus className="w-4 h-4" />;
-      case "message_edited":
-        return <Edit2 className="w-4 h-4" />;
-      case "file_attached":
-        return <FileText className="w-4 h-4" />;
-      default:
-        return <AlertCircle className="w-4 h-4" />;
+      case "status_changed": return <Settings className="w-4 h-4" />;
+      case "participant_added": return <UserPlus className="w-4 h-4" />;
+      case "message_edited": return <Edit2 className="w-4 h-4" />;
+      case "file_attached": return <FileText className="w-4 h-4" />;
+      default: return <AlertCircle className="w-4 h-4" />;
     }
   };
 
   return (
-    <div className="flex items-center justify-center py-2">
-      <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-full text-sm text-gray-600 dark:text-gray-400">
+    <div className="flex items-center justify-center py-3">
+      <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-full text-xs text-gray-500 dark:text-gray-400">
         {getActivityIcon()}
         <span>{message.content}</span>
-        <span className="text-xs text-gray-400">
+        <span className="text-gray-400 dark:text-gray-500">
           {formatMessageTime(new Date(message.createdAt))}
         </span>
       </div>
@@ -420,7 +695,7 @@ function ActivityMessage({ message }: ActivityMessageProps) {
 }
 
 // ============================================================================
-// MAIN COMPONENT
+// ОСНОВНОЙ КОМПОНЕНТ
 // ============================================================================
 
 export default function SlackStyleMessages({
@@ -439,6 +714,11 @@ export default function SlackStyleMessages({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    message: Message;
+  } | null>(null);
 
   const scrollToBottom = useCallback((smooth = true) => {
     messagesEndRef.current?.scrollIntoView({
@@ -446,42 +726,51 @@ export default function SlackStyleMessages({
     });
   }, []);
 
-  // Auto-scroll when new messages arrive
   useEffect(() => {
     if (isAtBottom) {
       scrollToBottom();
     }
   }, [messages.length, isAtBottom, scrollToBottom]);
 
-  // Track scroll position
   const handleScroll = useCallback(() => {
     if (!containerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-    const threshold = 100;
-    setIsAtBottom(scrollHeight - scrollTop - clientHeight < threshold);
+    setIsAtBottom(scrollHeight - scrollTop - clientHeight < 100);
+  }, []);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, message: Message) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, message });
+  }, []);
+
+  const handleCopy = useCallback((message: Message) => {
+    navigator.clipboard.writeText(message.content);
   }, []);
 
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-y-auto"
+      className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900"
       onScroll={handleScroll}
     >
-      <div className="py-4 px-4 min-h-full">
+      <div className="py-4 px-4 space-y-1 min-h-full">
         {messages.map((message, index) => {
           const previousMessage = index > 0 ? messages[index - 1] : undefined;
           const showDate = shouldShowDateSeparator(message, previousMessage);
-          const groupWithPrevious = shouldGroupWithPrevious(message, previousMessage);
           const isOwn = message.senderId === currentUserId;
-          const isDeleted = !!message.deletedAt;
+          
+          // Показываем аватар и имя если это первое сообщение или от другого отправителя
+          const showAvatar = !previousMessage || 
+            previousMessage.senderId !== message.senderId ||
+            showDate;
+          const showName = showAvatar;
 
-          // Activity messages
           if (message.isActivity) {
             return (
               <div key={message.id}>
                 {showDate && (
                   <div className="flex items-center justify-center my-4">
-                    <div className="px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full text-xs font-medium text-gray-600 dark:text-gray-400">
+                    <div className="px-4 py-1.5 bg-white dark:bg-gray-800 rounded-full text-xs font-medium text-gray-500 dark:text-gray-400 shadow-sm">
                       {formatMessageDate(new Date(message.createdAt))}
                     </div>
                   </div>
@@ -493,162 +782,26 @@ export default function SlackStyleMessages({
 
           return (
             <div key={message.id}>
-              {/* Date separator */}
               {showDate && (
                 <div className="flex items-center justify-center my-4">
-                  <div className="px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full text-xs font-medium text-gray-600 dark:text-gray-400">
+                  <div className="px-4 py-1.5 bg-white dark:bg-gray-800 rounded-full text-xs font-medium text-gray-500 dark:text-gray-400 shadow-sm">
                     {formatMessageDate(new Date(message.createdAt))}
                   </div>
                 </div>
               )}
-
-              {/* Message */}
-              <div
-                className={`
-                  group relative flex gap-3 px-2 py-1 rounded-lg
-                  ${groupWithPrevious ? "mt-0.5" : "mt-4"}
-                  hover:bg-gray-50 dark:hover:bg-gray-800/50
-                `}
-              >
-                {/* Avatar */}
-                <div className="flex-shrink-0 w-9">
-                  {!groupWithPrevious && (
-                    <>
-                      {message.sender.avatarUrl ? (
-                        <img
-                          src={message.sender.avatarUrl}
-                          alt={getSenderName(message.sender)}
-                          className="w-9 h-9 rounded-lg object-cover"
-                        />
-                      ) : (
-                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white font-medium text-sm">
-                          {getSenderInitials(message.sender)}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  {/* Header (name + time) */}
-                  {!groupWithPrevious && (
-                    <div className="flex items-baseline gap-2 mb-0.5">
-                      <span className="font-semibold text-sm text-gray-900 dark:text-white">
-                        {getSenderName(message.sender)}
-                      </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {formatMessageTime(new Date(message.createdAt))}
-                      </span>
-                      {message.editedAt && (
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
-                          (изменено)
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Reply preview */}
-                  {message.replyTo && (
-                    <div className="mb-2 pl-3 border-l-2 border-gray-300 dark:border-gray-600">
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        <span className="font-medium">
-                          {getSenderName(message.replyTo.sender)}
-                        </span>
-                      </div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                        {message.replyTo.content}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Message content */}
-                  {isDeleted ? (
-                    <div className="italic text-gray-400 dark:text-gray-500 text-sm">
-                      Сообщение удалено
-                    </div>
-                  ) : (
-                    <>
-                      {/* Attachments */}
-                      {message.attachments && message.attachments.length > 0 && (
-                        <div className="mb-2 space-y-2">
-                          {message.attachments.map((att) => (
-                            <div key={att.id}>
-                              {att.type === "image" ? (
-                                <button
-                                  onClick={() => onImageClick?.(att.url, att.name)}
-                                  className="block max-w-sm"
-                                >
-                                  <img
-                                    src={att.thumbnailUrl || att.url}
-                                    alt={att.name}
-                                    className="rounded-lg max-h-64 object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                                  />
-                                </button>
-                              ) : (
-                                <a
-                                  href={att.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                                >
-                                  <FileText className="w-4 h-4 text-gray-500" />
-                                  <span className="text-sm text-gray-700 dark:text-gray-300">
-                                    {att.name}
-                                  </span>
-                                  {att.size && (
-                                    <span className="text-xs text-gray-400">
-                                      ({Math.round(att.size / 1024)} KB)
-                                    </span>
-                                  )}
-                                </a>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Text content */}
-                      <div className="text-sm text-gray-900 dark:text-gray-100 prose prose-sm dark:prose-invert max-w-none break-words">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {message.content}
-                        </ReactMarkdown>
-                      </div>
-
-                      {/* Reactions */}
-                      {message.reactions && Object.keys(message.reactions).length > 0 && (
-                        <MessageReactionsDisplay
-                          reactions={message.reactions}
-                          currentUserId={currentUserId}
-                          onToggle={(emoji) => onReaction?.(message.id, emoji)}
-                        />
-                      )}
-
-                      {/* Thread indicator */}
-                      {(message.threadRepliesCount || 0) > 0 && (
-                        <ThreadIndicator
-                          repliesCount={message.threadRepliesCount || 0}
-                          lastReplyAt={message.threadLastReplyAt}
-                          onClick={() => onOpenThread?.(message)}
-                        />
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* Actions (shown on hover) */}
-                {!isDeleted && (
-                  <MessageActions
-                    message={message}
-                    isOwn={isOwn}
-                    onReply={() => onReply?.(message)}
-                    onEdit={() => onEdit?.(message)}
-                    onDelete={() => onDelete?.(message.id)}
-                    onReaction={(emoji) => onReaction?.(message.id, emoji)}
-                    onOpenThread={() => onOpenThread?.(message)}
-                    onForward={() => onForward?.(message)}
-                  />
-                )}
+              
+              <div className={`py-1 ${showAvatar ? 'mt-3' : ''}`}>
+                <MessageBubble
+                  message={message}
+                  isOwn={isOwn}
+                  showAvatar={showAvatar}
+                  showName={showName}
+                  currentUserId={currentUserId}
+                  onContextMenu={handleContextMenu}
+                  onReaction={(emoji) => onReaction?.(message.id, emoji)}
+                  onOpenThread={() => onOpenThread?.(message)}
+                  onImageClick={onImageClick}
+                />
               </div>
             </div>
           );
@@ -656,26 +809,16 @@ export default function SlackStyleMessages({
 
         {/* Typing indicator */}
         {typingUsers.size > 0 && (
-          <div className="flex items-center gap-3 px-2 py-2 mt-2">
-            <div className="w-9" />
-            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-              <div className="flex gap-1">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                <div
-                  className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                  style={{ animationDelay: "0.2s" }}
-                />
-                <div
-                  className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                  style={{ animationDelay: "0.4s" }}
-                />
-              </div>
-              <span>печатает...</span>
+          <div className="flex items-center gap-2 py-2 px-4">
+            <div className="flex gap-1">
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.4s" }} />
             </div>
+            <span className="text-sm text-gray-500 dark:text-gray-400">печатает...</span>
           </div>
         )}
 
-        {/* Scroll anchor */}
         <div ref={messagesEndRef} />
       </div>
 
@@ -683,10 +826,27 @@ export default function SlackStyleMessages({
       {!isAtBottom && (
         <button
           onClick={() => scrollToBottom()}
-          className="absolute bottom-24 right-6 p-2 bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          className="absolute bottom-24 right-6 p-3 bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all hover:scale-105"
         >
           <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-300" />
         </button>
+      )}
+
+      {/* Context menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          message={contextMenu.message}
+          isOwn={contextMenu.message.senderId === currentUserId}
+          onClose={() => setContextMenu(null)}
+          onReply={() => onReply?.(contextMenu.message)}
+          onEdit={() => onEdit?.(contextMenu.message)}
+          onDelete={() => onDelete?.(contextMenu.message.id)}
+          onForward={() => onForward?.(contextMenu.message)}
+          onCopy={() => handleCopy(contextMenu.message)}
+          onReaction={(emoji) => onReaction?.(contextMenu.message.id, emoji)}
+        />
       )}
     </div>
   );

@@ -1,26 +1,64 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { useTheme } from 'next-themes';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Textarea,
-  Button,
-  Card,
-  CardBody,
-} from '@heroui/react';
-import { Send, X, Edit2, Paperclip, Smile } from 'lucide-react';
+  Send,
+  X,
+  Edit2,
+  Paperclip,
+  Image as ImageIcon,
+  FileText,
+  Link2,
+  Smile,
+  AtSign,
+  Mic,
+  StopCircle,
+} from 'lucide-react';
+import EmojiPicker from './EmojiPicker';
 
 interface ChatInputProps {
-  onSend: (content: string, replyToId?: string) => void;
+  onSend: (content: string, files?: File[], replyToId?: string) => void;
   disabled?: boolean;
   replyTo?: {
     id: string;
     content: string;
+    senderName?: string;
   } | null;
   editingMessage?: string | null;
   onCancelReply?: () => void;
   onCancelEdit?: () => void;
+  placeholder?: string;
 }
+
+// Поддерживаемые форматы изображений
+const IMAGE_FORMATS = [
+  'image/jpeg',
+  'image/jpg', 
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'image/svg+xml',
+  'image/bmp',
+  'image/tiff',
+];
+
+// Поддерживаемые форматы документов
+const DOCUMENT_FORMATS = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain',
+  'text/csv',
+  'application/zip',
+  'application/x-rar-compressed',
+  'application/x-7z-compressed',
+];
 
 export default function ChatInput({ 
   onSend, 
@@ -28,11 +66,17 @@ export default function ChatInput({
   replyTo, 
   editingMessage,
   onCancelReply,
-  onCancelEdit 
+  onCancelEdit,
+  placeholder = "Напишите сообщение..."
 }: ChatInputProps) {
   const [content, setContent] = useState('');
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { resolvedTheme } = useTheme();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // При включении режима редактирования - заполняем поле
   useEffect(() => {
@@ -42,27 +86,40 @@ export default function ChatInput({
     }
   }, [editingMessage]);
 
-  const handleSend = () => {
-    if (!content.trim() || disabled) return;
-    
-    onSend(content.trim(), replyTo?.id);
-    setContent('');
-    
-    if (textareaRef.current) {
-      textareaRef.current.style.height = '48px';
+  // Автоматическое изменение высоты textarea
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      const newHeight = Math.min(textarea.scrollHeight, 200); // Максимум 200px
+      textarea.style.height = `${newHeight}px`;
     }
-  };
+  }, [content]);
 
-  const handleCancel = () => {
+  const handleSend = useCallback(() => {
+    const trimmedContent = content.trim();
+    if ((!trimmedContent && attachedFiles.length === 0) || disabled) return;
+    
+    onSend(trimmedContent, attachedFiles.length > 0 ? attachedFiles : undefined, replyTo?.id);
+    setContent('');
+    setAttachedFiles([]);
+    
+    // Сброс высоты textarea
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  }, [content, attachedFiles, disabled, onSend, replyTo?.id]);
+
+  const handleCancel = useCallback(() => {
     if (editingMessage && onCancelEdit) {
       onCancelEdit();
       setContent('');
     } else if (replyTo && onCancelReply) {
       onCancelReply();
     }
-  };
+  }, [editingMessage, onCancelEdit, replyTo, onCancelReply]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -70,27 +127,104 @@ export default function ChatInput({
     if (e.key === 'Escape') {
       handleCancel();
     }
-  };
+  }, [handleSend, handleCancel]);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setAttachedFiles(prev => [...prev, ...files]);
+    }
+    // Reset input
+    e.target.value = '';
+  }, []);
+
+  const removeFile = useCallback((index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleEmojiSelect = useCallback((emoji: string) => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const newContent = content.slice(0, start) + emoji + content.slice(end);
+      setContent(newContent);
+      
+      // Устанавливаем курсор после emoji
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + emoji.length, start + emoji.length);
+      }, 0);
+    } else {
+      setContent(prev => prev + emoji);
+    }
+    setShowEmojiPicker(false);
+  }, [content]);
+
+  // Drag and drop
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      setAttachedFiles(prev => [...prev, ...files]);
+    }
+  }, []);
 
   const isEditing = !!editingMessage;
+  const canSend = content.trim() || attachedFiles.length > 0;
 
   return (
-    <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+    <div 
+      className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 bg-blue-500/10 border-2 border-dashed border-blue-500 rounded-lg flex items-center justify-center z-50">
+          <div className="text-blue-600 dark:text-blue-400 font-medium">
+            Перетащите файлы сюда
+          </div>
+        </div>
+      )}
+
       {/* Edit mode banner */}
       {isEditing && (
-        <div className="mb-2 flex items-center justify-between px-3 py-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+        <div className="flex items-center justify-between px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800">
           <div className="flex items-center gap-2">
-            <Edit2 className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-            <span className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
+            <Edit2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
               Редактирование сообщения
             </span>
           </div>
           {onCancelEdit && (
             <button
               onClick={onCancelEdit}
-              className="p-1 hover:bg-yellow-100 dark:hover:bg-yellow-800/30 rounded"
+              className="p-1 hover:bg-amber-100 dark:hover:bg-amber-800/30 rounded transition-colors"
             >
-              <X className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+              <X className="w-4 h-4 text-amber-600 dark:text-amber-400" />
             </button>
           )}
         </div>
@@ -98,75 +232,207 @@ export default function ChatInput({
 
       {/* Reply preview */}
       {replyTo && !isEditing && (
-        <Card className="mb-2" shadow="sm">
-          <CardBody className="p-2 bg-primary-50 dark:bg-primary-900/20">
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium text-primary mb-1">
-                  Ответ на сообщение
-                </div>
-                <div className="text-xs text-foreground-600 dark:text-foreground-400 truncate">
-                  {replyTo.content}
-                </div>
+        <div className="flex items-center justify-between px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="w-1 h-8 bg-blue-500 rounded-full flex-shrink-0" />
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                {replyTo.senderName || 'Ответ на сообщение'}
               </div>
-              {onCancelReply && (
-                <Button
-                  isIconOnly
-                  size="sm"
-                  variant="light"
-                  onPress={onCancelReply}
-                  className="min-w-6 w-6 h-6"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              )}
+              <div className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                {replyTo.content}
+              </div>
             </div>
-          </CardBody>
-        </Card>
+          </div>
+          {onCancelReply && (
+            <button
+              onClick={onCancelReply}
+              className="p-1 hover:bg-blue-100 dark:hover:bg-blue-800/30 rounded transition-colors flex-shrink-0 ml-2"
+            >
+              <X className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            </button>
+          )}
+        </div>
       )}
 
-      {/* Input */}
-      <div className="flex items-end gap-2">
-        <Textarea
-          ref={textareaRef}
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={isEditing ? "Редактировать сообщение..." : "Напишите сообщение..."}
-          disabled={disabled}
-          minRows={1}
-          maxRows={5}
-          classNames={{
-            input: "text-sm",
-            inputWrapper: `border-default-200 ${isEditing ? 'border-yellow-400 dark:border-yellow-600' : ''}`,
-          }}
-          variant="bordered"
-        />
-        
-        <Button
-          color={isEditing ? "warning" : "primary"}
-          onPress={handleSend}
-          isDisabled={!content.trim() || disabled}
-          isIconOnly
-          className="min-w-12 h-12"
-        >
-          {isEditing ? (
-            <Edit2 className="w-5 h-5" />
-          ) : (
-            <Send className="w-5 h-5" />
-          )}
-        </Button>
-      </div>
-      
-      {/* Keyboard hint */}
-      <div className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-        <span className="hidden sm:inline">
-          <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">Enter</kbd> отправить • 
-          <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs ml-1">Shift+Enter</kbd> новая строка
+      {/* Attached files preview */}
+      {attachedFiles.length > 0 && (
+        <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex flex-wrap gap-2">
+            {attachedFiles.map((file, index) => {
+              const isImage = file.type.startsWith('image/');
+              return (
+                <div 
+                  key={index}
+                  className="relative group"
+                >
+                  {isImage ? (
+                    <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
+                      <img 
+                        src={URL.createObjectURL(file)} 
+                        alt={file.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                      <FileText className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm text-gray-700 dark:text-gray-300 max-w-[150px] truncate">
+                        {file.name}
+                      </span>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => removeFile(index)}
+                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-3 h-3 text-white" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Main input area */}
+      <div className="p-3">
+        <div className={`
+          flex items-end gap-2 rounded-2xl border-2 transition-colors px-3 py-2
+          ${isEditing 
+            ? 'border-amber-300 dark:border-amber-600 bg-amber-50/50 dark:bg-amber-900/10' 
+            : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50'
+          }
+          focus-within:border-blue-400 dark:focus-within:border-blue-500
+        `}>
+          {/* Attachment buttons */}
+          <div className="flex items-center gap-1 flex-shrink-0 mb-1">
+            {/* Image upload */}
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
+              title="Прикрепить изображение"
+            >
+              <ImageIcon className="w-5 h-5" />
+            </button>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept={IMAGE_FORMATS.join(',')}
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+
+            {/* File upload */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
+              title="Прикрепить документ"
+            >
+              <Paperclip className="w-5 h-5" />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={[...IMAGE_FORMATS, ...DOCUMENT_FORMATS].join(',')}
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+
+            {/* Emoji picker */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
+                title="Добавить эмодзи"
+              >
+                <Smile className="w-5 h-5" />
+              </button>
+              {showEmojiPicker && (
+                <div className="absolute bottom-full left-0 mb-2 z-50">
+                  <EmojiPicker
+                    onEmojiSelect={handleEmojiSelect}
+                    showButton={false}
+                    isOpen={true}
+                    onOpenChange={setShowEmojiPicker}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Text input */}
+          <div className="flex-1 min-w-0">
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={isEditing ? "Редактировать сообщение..." : placeholder}
+              disabled={disabled}
+              rows={1}
+              className="w-full resize-none bg-transparent border-none outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-[15px] leading-relaxed py-1"
+              style={{ maxHeight: '200px' }}
+            />
+          </div>
+
+          {/* Send button */}
+          <div className="flex-shrink-0 mb-1">
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={!canSend || disabled}
+              className={`
+                w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200
+                ${canSend && !disabled
+                  ? isEditing
+                    ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                }
+              `}
+            >
+              {isEditing ? (
+                <Edit2 className="w-5 h-5" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Keyboard hints */}
+        <div className="mt-2 px-2 flex items-center gap-4 flex-wrap text-[11px]">
+          <div className="flex items-center gap-1.5">
+            <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-[10px] font-semibold text-gray-700 dark:text-gray-300 shadow-sm">
+              Enter
+            </kbd>
+            <span className="text-gray-500 dark:text-gray-400">отправить</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-[10px] font-semibold text-gray-700 dark:text-gray-300 shadow-sm">
+              Shift
+            </kbd>
+            <span className="text-gray-400 dark:text-gray-500">+</span>
+            <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-[10px] font-semibold text-gray-700 dark:text-gray-300 shadow-sm">
+              Enter
+            </kbd>
+            <span className="text-gray-500 dark:text-gray-400">новая строка</span>
+          </div>
           {(isEditing || replyTo) && (
-            <> • <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs ml-1">Esc</kbd> отмена</>
+            <div className="flex items-center gap-1.5">
+              <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-[10px] font-semibold text-gray-700 dark:text-gray-300 shadow-sm">
+                Esc
+              </kbd>
+              <span className="text-gray-500 dark:text-gray-400">отмена</span>
+            </div>
           )}
-        </span>
+        </div>
       </div>
     </div>
   );

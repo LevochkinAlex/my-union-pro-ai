@@ -5,10 +5,11 @@ import { prisma } from '@/lib/prisma';
 import { requireChatAccess, ChatAccessError } from '@/lib/chat-service';
 import { normalizeUserAvatar } from '@/lib/api-helpers';
 import * as Sentry from '@sentry/nextjs';
+import { emitNewMessage } from '@/server/socket';
 
 /**
  * GET /api/chat/[chatId]
- * Получить информацию о чате
+ * Получить информацию о чате и сообщения
  */
 export async function GET(
   request: NextRequest,
@@ -22,6 +23,11 @@ export async function GET(
 
     const resolvedParams = await Promise.resolve(params);
     const chatId = resolvedParams.chatId;
+    const { searchParams } = new URL(request.url);
+    
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const cursor = searchParams.get('cursor');
+    const direction = searchParams.get('direction') || 'newer';
 
     try {
       await requireChatAccess(chatId, session.user.id);
@@ -32,6 +38,7 @@ export async function GET(
       throw error;
     }
 
+    // Загружаем чат
     const chat = await prisma.chat.findUnique({
       where: { id: chatId },
       include: {
@@ -55,7 +62,135 @@ export async function GET(
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ chat });
+    // Загружаем сообщения
+    const whereClause: any = {
+      chatId,
+      threadRootId: null, // Только сообщения верхнего уровня, не треды
+    };
+
+    if (cursor) {
+      const cursorMessage = await prisma.chatMessage.findUnique({
+        where: { id: cursor },
+        select: { createdAt: true },
+      });
+      
+      if (cursorMessage) {
+        whereClause.createdAt = direction === 'older' 
+          ? { lt: cursorMessage.createdAt }
+          : { gt: cursorMessage.createdAt };
+      }
+    }
+
+    const messages = await prisma.chatMessage.findMany({
+      where: whereClause,
+      take: limit + 1, // +1 для проверки hasMore
+      orderBy: { createdAt: direction === 'older' ? 'desc' : 'asc' },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            avatarUrl: true,
+          },
+        },
+        replyTo: {
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+        reactions: true,
+        attachments: true,
+        _count: {
+          select: {
+            threadReplies: true,
+          },
+        },
+      },
+    });
+
+    // Проверяем есть ли еще сообщения
+    const hasMore = messages.length > limit;
+    const resultMessages = hasMore ? messages.slice(0, limit) : messages;
+    
+    // Если загружаем старые - нужно перевернуть обратно в хронологическом порядке
+    if (direction === 'older') {
+      resultMessages.reverse();
+    }
+
+    // Форматируем сообщения
+    const formattedMessages = resultMessages.map((msg: any) => {
+      // Проверяем что sender существует
+      if (!msg.sender) {
+        console.error('[chat] Message without sender:', msg.id);
+        return null;
+      }
+      
+      return {
+      id: msg.id,
+      chatId: msg.chatId,
+      senderId: msg.senderId,
+      content: msg.content,
+      messageType: msg.messageType,
+      createdAt: msg.createdAt,
+      editedAt: msg.editedAt,
+      sender: {
+        id: msg.sender.id,
+        firstName: msg.sender.firstName,
+        lastName: msg.sender.lastName,
+        middleName: msg.sender.middleName,
+        avatarUrl: normalizeUserAvatar(msg.sender),
+      },
+      replyTo: msg.replyTo && msg.replyTo.sender ? {
+        id: msg.replyTo.id,
+        content: msg.replyTo.content,
+        sender: {
+          id: msg.replyTo.sender.id,
+          firstName: msg.replyTo.sender.firstName,
+          lastName: msg.replyTo.sender.lastName,
+          avatarUrl: normalizeUserAvatar(msg.replyTo.sender),
+        },
+      } : null,
+      reactions: (msg.reactions || []).reduce((acc: any, r: any) => {
+        if (!acc[r.emoji]) {
+          acc[r.emoji] = { count: 0, userIds: [] };
+        }
+        acc[r.emoji].count!++;
+        acc[r.emoji].userIds.push(r.userId);
+        return acc;
+      }, {} as Record<string, { count?: number; userIds: string[] }>),
+      attachments: (msg.attachments || []).map((att: any) => ({
+        id: att.id,
+        type: att.type,
+        url: att.url,
+        name: att.name,
+        size: att.size,
+        mimeType: att.mimeType,
+        thumbnailUrl: att.thumbnailUrl,
+        width: att.width,
+        height: att.height,
+      })),
+      threadRepliesCount: msg._count?.threadReplies || 0,
+      };
+    }).filter((msg: any) => msg !== null);
+
+    return NextResponse.json({
+      chat,
+      messages: formattedMessages,
+      pagination: {
+        hasMore,
+        oldestMessageId: formattedMessages.length > 0 ? formattedMessages[0].id : null,
+        newestMessageId: formattedMessages.length > 0 ? formattedMessages[formattedMessages.length - 1].id : null,
+      },
+    });
   } catch (error: any) {
     Sentry.captureException(error);
     console.error('[chat] GET Error:', error);
@@ -94,15 +229,34 @@ export async function POST(
       throw error;
     }
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return NextResponse.json(
+        { error: 'Invalid JSON body' },
+        { status: 400 }
+      );
+    }
+
     const { content, replyToId, threadRootId, attachments } = body;
 
-    if (!content || !content.trim()) {
+    if (!content || typeof content !== 'string' || !content.trim()) {
       return NextResponse.json(
         { error: 'Message cannot be empty' },
         { status: 400 }
       );
     }
+
+    // Логируем для отладки
+    console.log('[chat] POST request:', {
+      chatId,
+      userId,
+      hasContent: !!content,
+      contentLength: content.length,
+      hasAttachments: !!attachments,
+      attachmentsType: Array.isArray(attachments) ? attachments.length : typeof attachments,
+    });
 
     // Проверяем replyToId
     if (replyToId) {
@@ -156,29 +310,68 @@ export async function POST(
     }
 
     // Создаем сообщение
-    const message = await prisma.chatMessage.create({
-      data: {
-        chatId,
-        senderId: userId,
-        content: content.trim(),
-        messageType: 'text',
-        replyToId: replyToId || null,
-        threadRootId: threadRootId || null,
-        attachments: attachments
-          ? {
-              create: attachments.map((att: any) => ({
-                type: att.type || 'file',
-                url: att.url,
-                name: att.name,
-                size: att.size,
-                mimeType: att.mimeType,
-                thumbnailUrl: att.thumbnailUrl,
-                width: att.width,
-                height: att.height,
-              })),
+    const messageData: any = {
+      chatId,
+      senderId: userId,
+      content: content.trim(),
+      messageType: 'text',
+      replyToId: replyToId || null,
+      threadRootId: threadRootId || null,
+    };
+
+    // Добавляем вложения ТОЛЬКО если они есть, валидны и не пустые
+    // НЕ добавляем attachments в messageData если их нет - это важно!
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      try {
+        const validAttachments = attachments
+          .filter((att: any) => {
+            // Фильтруем только те, у которых есть url или filePath
+            const hasUrl = att?.url || att?.filePath;
+            return att && typeof att === 'object' && hasUrl;
+          })
+          .map((att: any) => {
+            const url = att.url || att.filePath;
+            if (!url || typeof url !== 'string' || url.trim().length === 0) {
+              throw new Error('Attachment must have valid url or filePath');
             }
-          : undefined,
-      },
+            
+            return {
+              type: (att.type && typeof att.type === 'string') ? att.type : 'file',
+              url: url.trim(), // Обязательное поле, не может быть null или пустым
+              name: (att.name || att.fileName || att.originalName || 'Файл').toString(),
+              size: (att.size || att.fileSize) ? parseInt(String(att.size || att.fileSize)) : undefined,
+              mimeType: att.mimeType ? String(att.mimeType) : undefined,
+              thumbnailUrl: att.thumbnailUrl ? String(att.thumbnailUrl) : undefined,
+              width: att.width ? parseInt(String(att.width)) : undefined,
+              height: att.height ? parseInt(String(att.height)) : undefined,
+            };
+          });
+        
+        // Добавляем attachments ТОЛЬКО если есть валидные
+        if (validAttachments.length > 0) {
+          messageData.attachments = {
+            create: validAttachments,
+          };
+          console.log('[chat] Adding attachments:', validAttachments.length);
+        } else {
+          console.log('[chat] No valid attachments after filtering');
+        }
+      } catch (attachmentError: any) {
+        console.error('[chat] Error processing attachments:', attachmentError);
+        // Не прерываем создание сообщения, просто не добавляем attachments
+      }
+    } else {
+      console.log('[chat] No attachments provided');
+    }
+
+    console.log('[chat] Creating message with data:', {
+      chatId: messageData.chatId,
+      senderId: messageData.senderId,
+      hasAttachments: !!messageData.attachments,
+    });
+
+    const message = await prisma.chatMessage.create({
+      data: messageData,
       include: {
         sender: {
           select: {
@@ -204,14 +397,28 @@ export async function POST(
       },
     });
 
-    // Обновляем последнее сообщение в чате
-    await prisma.chat.update({
-      where: { id: chatId },
-      data: {
-        lastMessageId: message.id,
-        lastMessageAt: message.createdAt,
-      },
-    });
+    // Обновляем последнее сообщение в чате и онлайн статус отправителя
+    try {
+      await Promise.allSettled([
+        prisma.chat.update({
+          where: { id: chatId },
+          data: {
+            lastMessageId: message.id,
+            lastMessageAt: message.createdAt,
+          },
+        }),
+        // Обновляем онлайн статус отправителя
+        prisma.user.update({
+          where: { id: userId },
+          data: {
+            updatedAt: new Date(),
+          },
+        }),
+      ]);
+    } catch (updateError) {
+      // Логируем но не прерываем выполнение
+      console.warn('[chat] Error updating chat/user:', updateError);
+    }
 
     // Если это ответ в треде, обновляем метрики
     if (threadRootId) {
@@ -244,33 +451,230 @@ export async function POST(
     });
 
     // Форматируем ответ
-    const normalizedMessage = {
-      id: message.id,
-      chatId: message.chatId,
-      senderId: message.senderId,
-      sender: normalizeUserAvatar(message.sender),
-      content: message.content,
-      messageType: message.messageType,
-      replyTo: message.replyTo
-        ? {
-            id: message.replyTo.id,
-            sender: normalizeUserAvatar(message.replyTo.sender),
-            content: message.replyTo.content,
-          }
-        : null,
-      threadRootId: message.threadRootId,
-      attachments: message.attachments || [],
-      reactions: {},
-      createdAt: message.createdAt,
-      editedAt: message.editedAt,
-    };
+    if (!message.sender) {
+      console.error('[chat] Message created but sender is missing:', message.id);
+      return NextResponse.json(
+        { error: 'Message sender is missing' },
+        { status: 500 }
+      );
+    }
 
-    return NextResponse.json({ message: normalizedMessage });
+    try {
+      // Безопасное получение avatarUrl
+      let avatarUrl: string | null = null;
+      try {
+        const normalized = normalizeUserAvatar(message.sender);
+        avatarUrl = normalized?.avatarUrl || message.sender.avatarUrl || null;
+      } catch (avatarError) {
+        console.warn('[chat] Error normalizing avatar:', avatarError);
+        avatarUrl = message.sender.avatarUrl || null;
+      }
+
+      const normalizedMessage = {
+        id: message.id,
+        chatId: message.chatId,
+        senderId: message.senderId,
+        sender: {
+          id: message.sender.id,
+          firstName: message.sender.firstName || null,
+          lastName: message.sender.lastName || null,
+          middleName: null,
+          avatarUrl: avatarUrl,
+        },
+        content: message.content,
+        messageType: message.messageType,
+        replyTo: message.replyTo && message.replyTo.sender
+          ? (() => {
+              try {
+                let replyAvatarUrl: string | null = null;
+                try {
+                  replyAvatarUrl = normalizeUserAvatar(message.replyTo.sender).avatarUrl || null;
+                } catch (avatarError) {
+                  console.warn('[chat] Error normalizing reply avatar:', avatarError);
+                  replyAvatarUrl = message.replyTo.sender.avatarUrl || null;
+                }
+                return {
+                  id: message.replyTo.id,
+                  content: message.replyTo.content || '',
+                  sender: {
+                    id: message.replyTo.sender.id,
+                    firstName: message.replyTo.sender.firstName || null,
+                    lastName: message.replyTo.sender.lastName || null,
+                    avatarUrl: replyAvatarUrl,
+                  },
+                };
+              } catch (replyError) {
+                console.error('[chat] Error formatting replyTo:', replyError);
+                return null;
+              }
+            })()
+          : null,
+        threadRootId: message.threadRootId,
+        attachments: (message.attachments || []).map((att: any) => ({
+          id: att.id,
+          type: att.type,
+          url: att.url,
+          name: att.name,
+          size: att.size,
+          mimeType: att.mimeType,
+          thumbnailUrl: att.thumbnailUrl,
+          width: att.width,
+          height: att.height,
+        })),
+        reactions: {},
+        createdAt: message.createdAt,
+        editedAt: message.editedAt,
+      };
+
+      // Отправляем сообщение через WebSocket другим участникам
+      try {
+        // Используем формат комнаты chat:${chatId} для совместимости с socket-server
+        emitNewMessage(`chat:${chatId}`, normalizedMessage);
+        console.log('[chat] Message emitted via WebSocket to room chat:' + chatId, normalizedMessage.id);
+      } catch (wsError) {
+        console.error('[chat] Error emitting message via WebSocket:', wsError);
+        // Не прерываем выполнение, WebSocket - это дополнение
+      }
+
+      // Отправляем push-уведомления другим участникам через Firebase
+      try {
+        const participants = await prisma.chatParticipant.findMany({
+          where: {
+            chatId,
+            userId: { not: userId },
+            leftAt: null,
+          },
+          select: {
+            userId: true,
+          },
+        });
+
+        if (participants.length > 0) {
+          const recipientIds = participants.map(p => p.userId);
+          
+          // Получаем FCM токены для участников
+          const subscriptions = await prisma.pushSubscription.findMany({
+            where: {
+              userId: { in: recipientIds },
+              fcmToken: { not: null },
+            },
+            select: {
+              userId: true,
+              fcmToken: true,
+            },
+          });
+
+          if (subscriptions.length > 0) {
+            const senderName = `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || 'Пользователь';
+            const notificationContent = content.length > 100 ? content.substring(0, 100) + '...' : content;
+            const fcmTokens = subscriptions.map(s => s.fcmToken).filter(Boolean) as string[];
+
+            // Отправляем через Firebase Admin
+            const { messaging } = await import('@/lib/firebase-admin');
+            
+            const notificationMessage = {
+              notification: {
+                title: `Новое сообщение от ${senderName}`,
+                body: notificationContent,
+              },
+              webpush: {
+                notification: {
+                  title: `Новое сообщение от ${senderName}`,
+                  body: notificationContent,
+                  icon: `${process.env.NEXT_PUBLIC_APP_URL || 'https://myunion.pro'}/icon.png`,
+                  badge: `${process.env.NEXT_PUBLIC_APP_URL || 'https://myunion.pro'}/icon.png`,
+                },
+                data: {
+                  type: 'chat_message',
+                  chatId,
+                  messageId: normalizedMessage.id,
+                  url: `/dashboard/chat?chatId=${chatId}`,
+                },
+              },
+              android: {
+                priority: 'high' as const,
+                notification: {
+                  sound: 'default',
+                },
+                data: {
+                  type: 'chat_message',
+                  chatId,
+                  messageId: normalizedMessage.id,
+                  url: `/dashboard/chat?chatId=${chatId}`,
+                },
+              },
+              apns: {
+                payload: {
+                  aps: {
+                    sound: 'default',
+                  },
+                },
+                data: {
+                  type: 'chat_message',
+                  chatId,
+                  messageId: normalizedMessage.id,
+                  url: `/dashboard/chat?chatId=${chatId}`,
+                },
+              },
+              tokens: fcmTokens,
+            };
+
+            await messaging.sendEachForMulticast(notificationMessage).catch(err => {
+              console.error('[chat] Error sending Firebase push notification:', err);
+            });
+          }
+        }
+      } catch (notifError) {
+        console.error('[chat] Error preparing push notifications:', notifError);
+        // Не прерываем выполнение
+      }
+
+      return NextResponse.json({ message: normalizedMessage });
+    } catch (formatError: any) {
+      console.error('[chat] Error formatting message:', formatError);
+      console.error('[chat] Format error stack:', formatError?.stack);
+      // Возвращаем базовую структуру даже если форматирование не удалось
+      return NextResponse.json({
+        message: {
+          id: message.id,
+          chatId: message.chatId,
+          senderId: message.senderId,
+          content: message.content,
+          messageType: message.messageType,
+          createdAt: message.createdAt,
+          sender: message.sender ? {
+            id: message.sender.id,
+            firstName: message.sender.firstName,
+            lastName: message.sender.lastName,
+            avatarUrl: message.sender.avatarUrl,
+          } : null,
+        },
+      });
+    }
   } catch (error: any) {
     Sentry.captureException(error);
     console.error('[chat] POST Error:', error);
+    console.error('[chat] POST Error stack:', error?.stack);
+    
+    // Безопасное логирование деталей
+    try {
+      const resolvedParams = await Promise.resolve(params);
+      const session = await getServerSession(authOptions);
+      console.error('[chat] POST Error details:', {
+        chatId: resolvedParams?.chatId,
+        userId: session?.user?.id,
+        errorMessage: error?.message,
+        errorName: error?.name,
+      });
+    } catch (logError) {
+      // Игнорируем ошибки логирования
+    }
+    
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: error?.message || 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
+      },
       { status: 500 }
     );
   }

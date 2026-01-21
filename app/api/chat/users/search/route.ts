@@ -3,68 +3,86 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
-// GET /api/chat/users/search?q=term - Search users for new chat
+/**
+ * GET /api/chat/users/search
+ * Поиск пользователей для создания нового чата
+ */
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Не авторизован' }, { status: 401 });
     }
 
     const searchParams = request.nextUrl.searchParams;
     const q = searchParams.get('q')?.trim();
+    const limit = parseInt(searchParams.get('limit') || '50');
 
-    if (!q || q.length < 2) {
-      return NextResponse.json({ users: [] });
-    }
+    // Если нет поискового запроса - вернём последних активных пользователей
+    const whereCondition: any = q && q.length >= 2
+      ? {
+          AND: [
+            { id: { not: session.user.id } },
+            {
+              OR: [
+                { firstName: { contains: q, mode: 'insensitive' as const } },
+                { lastName: { contains: q, mode: 'insensitive' as const } },
+                { email: { contains: q, mode: 'insensitive' as const } },
+                { phone: { contains: q } },
+              ],
+            },
+          ],
+        }
+      : {
+          id: { not: session.user.id },
+          membershipStatus: 'APPROVED' as const,
+        };
 
-    // Search users by name, excluding current user and bot
     const users = await prisma.user.findMany({
-      where: {
-        AND: [
-          { id: { not: session.user.id } },
-          { matrixUserId: { not: null } },
-          { email: { not: { contains: 'bot@' } } },
-          {
-            OR: [
-              { firstName: { contains: q, mode: 'insensitive' } },
-              { lastName: { contains: q, mode: 'insensitive' } },
-              { email: { contains: q, mode: 'insensitive' } },
-              { phone: { contains: q } },
-            ],
-          },
-        ],
-      },
+      where: whereCondition,
       select: {
         id: true,
         firstName: true,
         lastName: true,
+        middleName: true,
         avatarUrl: true,
-        matrixUserId: true,
+        email: true,
+        phone: true,
         jobTitle: true,
+        profession: true,
         organization: {
-          select: { name: true }
+          select: { 
+            id: true,
+            name: true 
+          }
         }
       },
-      take: 20,
+      take: Math.min(limit, 100),
       orderBy: [
-        { firstName: 'asc' },
-        { lastName: 'asc' }
+        { lastName: 'asc' },
+        { firstName: 'asc' }
       ]
     });
 
     const results = users.map(u => ({
       id: u.id,
-      matrixUserId: u.matrixUserId,
-      displayName: [u.firstName, u.lastName].filter(Boolean).join(' ') || 'Пользователь',
+      firstName: u.firstName,
+      lastName: u.lastName,
+      middleName: u.middleName,
       avatarUrl: u.avatarUrl,
-      position: u.jobTitle,
-      organization: u.organization?.name,
+      email: u.email,
+      phone: u.phone,
+      jobTitle: u.jobTitle,
+      profession: u.profession,
+      organization: u.organization ? {
+        id: u.organization.id,
+        name: u.organization.name,
+      } : null,
     }));
 
     return NextResponse.json({ users: results });
   } catch (error) {
-    console.error('Error searching users:', error);
-    return NextResponse.json({ error: 'Search failed' }, { status: 500 });
+    console.error('[chat/users/search] Error:', error);
+    return NextResponse.json({ error: 'Ошибка поиска' }, { status: 500 });
   }
 }

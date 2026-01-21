@@ -42,6 +42,27 @@ export function useChat(options: UseChatOptions = {}) {
     selectedChatRef.current = selectedChat;
   }, [selectedChat]);
 
+  // Периодическое обновление онлайн статуса
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    const updateOnlineStatus = async () => {
+      try {
+        await fetch('/api/users/online-status', { method: 'POST' });
+      } catch (error) {
+        // Игнорируем ошибки
+      }
+    };
+
+    // Обновляем сразу
+    updateOnlineStatus();
+
+    // Затем каждые 30 секунд для более точного трекинга
+    const interval = setInterval(updateOnlineStatus, 30 * 1000);
+
+    return () => clearInterval(interval);
+  }, [session?.user?.id]);
+
   // Инициализация WebSocket
   useEffect(() => {
     if (!session?.user) return;
@@ -83,7 +104,9 @@ export function useChat(options: UseChatOptions = {}) {
     });
 
     socket.on("connect_error", (error) => {
-      console.error("[useChat] Socket error:", error.message);
+      console.warn("[useChat] Socket connection error (will use HTTP fallback):", error.message);
+      setIsConnected(false);
+      // Не прерываем работу - используем HTTP fallback
     });
 
     // Новое сообщение
@@ -109,7 +132,16 @@ export function useChat(options: UseChatOptions = {}) {
 
     // Сообщение обновлено
     socket.on("message:updated", (message: Message) => {
-      setMessages(prev => prev.map(m => m.id === message.id ? message : m));
+      setMessages(prev => prev.map(m => {
+        if (m.id === message.id) {
+          // Сохраняем senderId из старого сообщения, если его нет в новом
+          return {
+            ...message,
+            senderId: message.senderId || m.senderId,
+          };
+        }
+        return m;
+      }));
     });
 
     // Сообщение удалено
@@ -307,38 +339,116 @@ export function useChat(options: UseChatOptions = {}) {
       } else {
         // Для текста можно использовать сокет (быстрее) или HTTP
         if (socketRef.current?.connected) {
-          // Отправка через WebSocket
+          // Отправка через WebSocket с таймаутом
           return new Promise((resolve) => {
+            const timeout = setTimeout(() => {
+              console.warn("[useChat] WebSocket send timeout, falling back to HTTP");
+              // Fallback на HTTP если сокет не отвечает
+              fetch(`/api/chat/${selectedChat.id}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ content, replyToId }),
+              })
+                .then(async (res) => {
+                  if (res.ok) {
+                    const data = await res.json();
+                    setMessages(prev => {
+                      if (prev.some(m => m.id === data.message.id)) return prev;
+                      return [...prev, data.message];
+                    });
+                    loadChats();
+                    resolve(true);
+                  } else {
+                    options.onError?.("Ошибка отправки сообщения");
+                    resolve(false);
+                  }
+                })
+                .catch(() => {
+                  options.onError?.("Ошибка отправки сообщения");
+                  resolve(false);
+                })
+                .finally(() => setSending(false));
+            }, 3000); // 3 секунды таймаут
+
             socketRef.current!.emit(
               "message:send" as any,
               { chatId: selectedChat.id, content, replyToId },
               (response: any) => {
+                clearTimeout(timeout);
                 setSending(false);
                 if (response.success) {
                   // Сообщение придёт через событие message:new
                   resolve(true);
                 } else {
-                  options.onError?.(response.error || "Ошибка отправки");
-                  resolve(false);
+                  // Если сокет вернул ошибку, пробуем HTTP
+                  fetch(`/api/chat/${selectedChat.id}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ content, replyToId }),
+                  })
+                    .then(async (res) => {
+                      if (res.ok) {
+                        const data = await res.json();
+                        setMessages(prev => {
+                          if (prev.some(m => m.id === data.message.id)) return prev;
+                          return [...prev, data.message];
+                        });
+                        loadChats();
+                        resolve(true);
+                      } else {
+                        options.onError?.(response.error || "Ошибка отправки");
+                        resolve(false);
+                      }
+                    })
+                    .catch(() => {
+                      options.onError?.(response.error || "Ошибка отправки");
+                      resolve(false);
+                    });
                 }
               }
             );
           });
         } else {
-          // Fallback на HTTP
-          const response = await fetch(`/api/chat/${selectedChat.id}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content, replyToId }),
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            setMessages(prev => {
-              if (prev.some(m => m.id === data.message.id)) return prev;
-              return [...prev, data.message];
+          // Fallback на HTTP если WebSocket не подключен
+          console.log("[useChat] Using HTTP fallback for message send");
+          try {
+            const response = await fetch(`/api/chat/${selectedChat.id}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ content, replyToId }),
             });
-            return true;
+
+            if (response.ok) {
+              const data = await response.json();
+              if (data.message) {
+                setMessages(prev => {
+                  if (prev.some(m => m.id === data.message.id)) return prev;
+                  return [...prev, data.message];
+                });
+                // Обновляем список чатов
+                loadChats();
+                return true;
+              } else {
+                console.error("[useChat] Response OK but no message:", data);
+                options.onError?.("Сообщение не было создано");
+                return false;
+              }
+            } else {
+              const errorText = await response.text();
+              let errorData;
+              try {
+                errorData = JSON.parse(errorText);
+              } catch {
+                errorData = { error: errorText || "Ошибка отправки сообщения" };
+              }
+              console.error("[useChat] HTTP send error:", response.status, errorData);
+              options.onError?.(errorData.error || `Ошибка ${response.status}: ${response.statusText}`);
+              return false;
+            }
+          } catch (fetchError: any) {
+            console.error("[useChat] Fetch error:", fetchError);
+            options.onError?.("Ошибка сети при отправке сообщения");
+            return false;
           }
         }
       }
@@ -384,7 +494,16 @@ export function useChat(options: UseChatOptions = {}) {
 
       if (response.ok) {
         const data = await response.json();
-        setMessages(prev => prev.map(m => m.id === messageId ? data.message : m));
+        setMessages(prev => prev.map(m => {
+          if (m.id === messageId) {
+            // Сохраняем senderId из старого сообщения, если его нет в новом
+            return {
+              ...data.message,
+              senderId: data.message.senderId || m.senderId,
+            };
+          }
+          return m;
+        }));
         return true;
       }
     } catch (error) {

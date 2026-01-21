@@ -79,14 +79,47 @@ export async function PATCH(
       },
     });
 
+    // Нормализуем avatarUrl для sender
+    const normalizeUserAvatar = (user: any) => {
+      if (!user?.avatarUrl) return null;
+      try {
+        const url = user.avatarUrl;
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          return url;
+        }
+        if (url.startsWith('/')) {
+          return url;
+        }
+        return `/${url}`;
+      } catch {
+        return null;
+      }
+    };
+
     return NextResponse.json({
       message: {
         id: updatedMessage.id,
         chatId: updatedMessage.chatId,
-        sender: updatedMessage.sender,
+        senderId: updatedMessage.senderId, // КРИТИЧНО: senderId нужен для определения isOwn
+        sender: {
+          id: updatedMessage.sender.id,
+          firstName: updatedMessage.sender.firstName,
+          lastName: updatedMessage.sender.lastName,
+          middleName: updatedMessage.sender.middleName,
+          avatarUrl: normalizeUserAvatar(updatedMessage.sender),
+        },
         content: updatedMessage.content,
         messageType: updatedMessage.messageType,
-        replyTo: updatedMessage.replyTo,
+        replyTo: updatedMessage.replyTo && updatedMessage.replyTo.sender ? {
+          id: updatedMessage.replyTo.id,
+          content: updatedMessage.replyTo.content,
+          sender: {
+            id: updatedMessage.replyTo.sender.id,
+            firstName: updatedMessage.replyTo.sender.firstName,
+            lastName: updatedMessage.replyTo.sender.lastName,
+            avatarUrl: normalizeUserAvatar(updatedMessage.replyTo.sender),
+          },
+        } : null,
         threadRootId: updatedMessage.threadRootId,
         attachments: updatedMessage.attachments,
         editedAt: updatedMessage.editedAt,

@@ -183,8 +183,11 @@ self.addEventListener('notificationclick', (event) => {
     
     switch (type) {
       case 'chat_message':
-        // Для сообщений чата используем senderId если есть
-        if (event.notification.data.senderId) {
+        // Для сообщений чата используем chatId если есть
+        if (event.notification.data.chatId) {
+          targetUrl = `${baseUrl}/dashboard/chat?chatId=${event.notification.data.chatId}`;
+        } else if (event.notification.data.senderId) {
+          // Fallback на senderId для обратной совместимости
           targetUrl = `${baseUrl}/dashboard/chat?userId=${event.notification.data.senderId}`;
         } else {
           targetUrl = `${baseUrl}/dashboard/chat`;

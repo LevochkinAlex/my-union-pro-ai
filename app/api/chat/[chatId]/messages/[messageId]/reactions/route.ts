@@ -70,22 +70,28 @@ export async function POST(
       },
     });
 
-    // Группируем по эмодзи
+    // Группируем по эмодзи в формате, совместимом с MessageReactions
     const groupedReactions = reactions.reduce((acc, reaction) => {
       if (!acc[reaction.emoji]) {
         acc[reaction.emoji] = {
-          emoji: reaction.emoji,
           count: 0,
-          users: [],
+          userIds: [] as string[],
+          users: [] as Array<{ id: string; firstName: string; lastName: string }>,
         };
       }
       acc[reaction.emoji].count++;
-      acc[reaction.emoji].users.push(reaction.user.id);
+      acc[reaction.emoji].userIds.push(reaction.user.id);
+      acc[reaction.emoji].users.push({
+        id: reaction.user.id,
+        firstName: reaction.user.firstName || '',
+        lastName: reaction.user.lastName || '',
+      });
       return acc;
-    }, {} as Record<string, { emoji: string; count: number; users: string[] }>);
+    }, {} as Record<string, { count: number; userIds: string[]; users: Array<{ id: string; firstName: string; lastName: string }> }>);
 
+    // Возвращаем объект в том же формате, что и при загрузке сообщений
     return NextResponse.json({
-      reactions: Object.values(groupedReactions),
+      reactions: groupedReactions,
     });
   } catch (error: any) {
     console.error("[POST /api/chat/[chatId]/messages/[messageId]/reactions] Error:", error);
