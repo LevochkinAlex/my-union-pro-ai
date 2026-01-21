@@ -36,8 +36,11 @@ interface MessageItemProps {
     attachments?: Array<{
       id: string;
       type: string;
-      url: string;
-      name: string;
+      url?: string;
+      name?: string;
+      fileName?: string;
+      originalName?: string;
+      filePath?: string;
     }>;
   };
   currentUserId: string;
@@ -194,27 +197,34 @@ export default function MessageItem({
           {/* Attachments */}
           {message.attachments && message.attachments.length > 0 && (
             <div className="mt-2 space-y-2">
-              {message.attachments.map((att) => (
-                <div key={att.id} className="border border-gray-200 dark:border-gray-700 rounded p-2">
-                  {att.type === 'image' ? (
-                    <img 
-                      src={att.url} 
-                      alt={att.name} 
-                      className="max-w-md rounded cursor-pointer hover:opacity-90 transition-opacity"
-                      onClick={() => onImageClick?.(att.url)}
-                    />
-                  ) : (
-                    <a
-                      href={att.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      📎 {att.name}
-                    </a>
-                  )}
-                </div>
-              ))}
+              {message.attachments.map((att) => {
+                const url = att.url || (att.filePath ? `/uploads/${att.filePath}` : '');
+                const name = att.name || att.originalName || att.fileName || 'Файл';
+                
+                return (
+                  <div key={att.id} className="border border-gray-200 dark:border-gray-700 rounded p-2">
+                    {att.type === 'image' && url ? (
+                      <img 
+                        src={url} 
+                        alt={name} 
+                        className="max-w-md rounded cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => onImageClick?.(url)}
+                      />
+                    ) : url ? (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        📎 {name}
+                      </a>
+                    ) : (
+                      <div className="text-gray-500">📎 {name}</div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
