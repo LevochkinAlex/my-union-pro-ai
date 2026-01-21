@@ -41,7 +41,7 @@ interface Message {
     fileName?: string;
     filePath?: string;
   }>;
-  editedAt?: Date;
+  editedAt?: Date | string;
 }
 
 interface ChatMessagesProps {
