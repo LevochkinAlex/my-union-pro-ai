@@ -370,6 +370,30 @@ function NewChatModal({ isOpen, onClose, onSelectUser, currentUserId }: NewChatM
 
 function ChannelAvatar({ src, alt }: { src: string; alt: string }) {
   const [imageError, setImageError] = useState(false);
+  const [cdnUrl, setCdnUrl] = useState<string | null>(null);
+
+  // Используем CDN для иконок каналов (только на клиенте после гидратации)
+  useEffect(() => {
+    if (!src) {
+      setCdnUrl(null);
+      return;
+    }
+
+    // Если это уже полный URL, используем как есть
+    if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:')) {
+      setCdnUrl(src);
+      return;
+    }
+
+    // Пытаемся получить CDN URL с обработкой ошибок
+    try {
+      const { getFileUrlWithCDN } = require("@/lib/cdn");
+      setCdnUrl(getFileUrlWithCDN(src, true));
+    } catch {
+      // В случае ошибки используем оригинальный URL
+      setCdnUrl(src);
+    }
+  }, [src]);
 
   if (imageError || !src) {
     return (
@@ -379,9 +403,12 @@ function ChannelAvatar({ src, alt }: { src: string; alt: string }) {
     );
   }
 
+  // Используем оригинальный src до завершения гидратации, затем переключаемся на CDN URL
+  const displayUrl = cdnUrl !== null ? cdnUrl : src;
+
   return (
     <img
-      src={src}
+      src={displayUrl}
       alt={alt}
       className="w-11 h-11 rounded-xl object-cover"
       onError={() => setImageError(true)}

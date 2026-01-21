@@ -61,6 +61,8 @@ export interface MessageAttachment {
   width?: number;
   height?: number;
   originalName?: string;
+  blurPlaceholder?: string; // Base64 blur placeholder для ленивой загрузки
+  isOld?: boolean; // Флаг для старых сообщений (для блюра)
 }
 
 export interface MessageReactions {
@@ -196,8 +198,51 @@ function formatFileSize(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+/**
+ * Hook для безопасного преобразования URL в CDN URL после гидратации
+ * Предотвращает hydration mismatch между сервером и клиентом
+ */
+function useCDNUrl(url: string | null | undefined): string {
+  const [cdnUrl, setCdnUrl] = useState<string>(url || '');
+
+  useEffect(() => {
+    if (!url) {
+      setCdnUrl('');
+      return;
+    }
+
+    // Если это уже полный URL, используем как есть
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+      setCdnUrl(url);
+      return;
+    }
+
+    // Преобразуем в CDN URL только на клиенте после гидратации
+    try {
+      const { getFileUrlWithCDN } = require('@/lib/cdn');
+      setCdnUrl(getFileUrlWithCDN(url, true));
+    } catch {
+      // В случае ошибки используем оригинальный URL
+      setCdnUrl(url);
+    }
+  }, [url]);
+
+  return cdnUrl;
+}
+
 function getAttachmentUrl(att: MessageAttachment): string {
-  return att.url || att.filePath || '';
+  const url = att.url || att.filePath || '';
+  if (!url) return '';
+  
+  // Если это уже полный URL (CDN или внешний), возвращаем как есть
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  
+  // ВАЖНО: Для избежания hydration mismatch всегда возвращаем оригинальный URL
+  // CDN трансформация будет применена на клиенте через useCDNUrl hook
+  // Это гарантирует, что сервер и клиент рендерят одинаковые значения
+  return url;
 }
 
 function getAttachmentName(att: MessageAttachment): string {
@@ -507,6 +552,268 @@ function MessageReactionsDisplay({
 }
 
 // ============================================================================
+// КОМПОНЕНТ ЛЕНИВОЙ ЗАГРУЗКИ ИЗОБРАЖЕНИЙ
+// ============================================================================
+
+interface LazyImageProps {
+  src: string;
+  thumbnail?: string;
+  alt: string;
+  blurPlaceholder?: string | null;
+  isOld?: boolean;
+  onClick?: () => void;
+  className?: string;
+}
+
+function LazyImage({ 
+  src, 
+  thumbnail, 
+  alt, 
+  blurPlaceholder, 
+  isOld = false,
+  onClick,
+  className = "" 
+}: LazyImageProps) {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState(!isOld); // Для старых сообщений не загружаем сразу
+
+  // Используем CDN URL после гидратации для предотвращения hydration mismatch
+  const cdnSrc = useCDNUrl(src);
+  const cdnThumbnail = useCDNUrl(thumbnail);
+
+  // Для старых сообщений используем Intersection Observer
+  const containerRef = useRef<HTMLButtonElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    if (!isOld || shouldLoad) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setShouldLoad(true);
+            observer.disconnect();
+          }
+        });
+      },
+      { rootMargin: "100px" } // Начинаем загрузку за 100px до появления
+    );
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [isOld, shouldLoad]);
+
+  const displaySrc = shouldLoad ? (cdnThumbnail || cdnSrc) : (blurPlaceholder || undefined);
+  const showBlur = isOld && (!shouldLoad || !isLoaded);
+
+  return (
+    <button
+      ref={containerRef}
+      onClick={onClick}
+      className={`relative group overflow-hidden rounded-xl ${className} ${!onClick ? 'cursor-default' : 'cursor-pointer'}`}
+      type="button"
+    >
+      {displaySrc && (
+        <img
+          src={displaySrc}
+          alt={alt}
+          className={`w-full h-full object-cover rounded-xl transition-all duration-300 ${
+            showBlur ? 'blur-md scale-105' : 'group-hover:scale-105'
+          } ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+          loading={isOld ? "lazy" : "lazy"}
+          onLoad={() => {
+            setIsLoaded(true);
+            // Если это thumbnail, загружаем полное изображение в фоне
+            if (cdnThumbnail && shouldLoad && displaySrc === cdnThumbnail) {
+              const fullImg = new Image();
+              fullImg.src = cdnSrc;
+              fullImg.onload = () => {
+                // Переключаемся на полное изображение после загрузки
+                if (imgRef.current) {
+                  imgRef.current.src = cdnSrc;
+                }
+              };
+            }
+          }}
+          onError={() => setImageError(true)}
+        />
+      )}
+      
+      {/* Blur overlay для старых сообщений */}
+      {showBlur && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-200/80 dark:bg-gray-700/80 backdrop-blur-sm rounded-xl">
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-12 h-12 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center shadow-lg">
+              <ImageIcon className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShouldLoad(true);
+              }}
+              className="px-3 py-1.5 text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors shadow-sm"
+            >
+              Загрузить
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Hover overlay */}
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-xl pointer-events-none" />
+      
+      {imageError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-xl">
+          <ImageIcon className="w-8 h-8 text-gray-400" />
+        </div>
+      )}
+    </button>
+  );
+}
+
+// ============================================================================
+// КОМПОНЕНТ ПРЕВЬЮ ССЫЛОК
+// ============================================================================
+
+interface LinkPreviewsProps {
+  content: string;
+  isOwn: boolean;
+}
+
+function LinkPreviews({ content, isOwn }: LinkPreviewsProps) {
+  const [previews, setPreviews] = useState<Array<{ url: string; preview: any }>>([]);
+
+  useEffect(() => {
+    // Извлекаем URL из текста
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const urls = content.match(urlRegex) || [];
+    
+    if (urls.length === 0) {
+      setPreviews([]);
+      return;
+    }
+
+    // Получаем превью для каждого URL
+    const fetchPreviews = async () => {
+      const { fetchLinkPreview } = await import('@/lib/link-preview');
+      const previewPromises = urls.map(async (url) => {
+        const preview = await fetchLinkPreview(url);
+        return preview ? { url, preview } : null;
+      });
+      
+      const results = await Promise.all(previewPromises);
+      setPreviews(results.filter((p): p is { url: string; preview: any } => p !== null));
+    };
+
+    fetchPreviews();
+  }, [content]);
+
+  if (previews.length === 0) return null;
+
+  return (
+    <div className="space-y-2 mt-2">
+      {previews.map(({ url, preview }, idx) => (
+        <LinkPreviewCard
+          key={idx}
+          url={url}
+          preview={preview}
+          isOwn={isOwn}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface LinkPreviewCardProps {
+  url: string;
+  preview: any;
+  isOwn: boolean;
+}
+
+function LinkPreviewCard({ url, preview, isOwn }: LinkPreviewCardProps) {
+  const isVideo = preview.type === 'video' || preview.videoUrl;
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`
+        block rounded-xl overflow-hidden border transition-all
+        ${isOwn 
+          ? 'border-white/30 bg-white/10 hover:bg-white/20' 
+          : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800'
+        }
+      `}
+    >
+      {preview.image && !isVideo && (
+        <div className="relative w-full h-48 bg-gray-200 dark:bg-gray-700">
+          <img
+            src={preview.image}
+            alt={preview.title || ''}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        </div>
+      )}
+      
+      <div className="p-3">
+        {preview.siteName && (
+          <div className={clsx(
+            "text-xs font-medium mb-1",
+            isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
+          )}>
+            {preview.siteName}
+          </div>
+        )}
+        
+        {preview.title && (
+          <h4 className={clsx(
+            "text-sm font-semibold mb-1 line-clamp-2",
+            isOwn ? 'text-white' : 'text-gray-900 dark:text-white'
+          )}>
+            {preview.title}
+          </h4>
+        )}
+        
+        {preview.description && (
+          <p className={clsx(
+            "text-xs line-clamp-2",
+            isOwn ? 'text-white/80' : 'text-gray-600 dark:text-gray-300'
+          )}>
+            {preview.description}
+          </p>
+        )}
+
+        {isVideo && preview.videoUrl && (
+          <div className="mt-2 flex items-center gap-2">
+            <div className={clsx(
+              "w-10 h-10 rounded-full flex items-center justify-center",
+              isOwn ? 'bg-white/20' : 'bg-gray-200 dark:bg-gray-700'
+            )}>
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+            <span className={clsx(
+              "text-xs",
+              isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
+            )}>
+              Видео
+            </span>
+          </div>
+        )}
+      </div>
+    </a>
+  );
+}
+
+// ============================================================================
 // КОМПОНЕНТ ВЛОЖЕНИЙ
 // ============================================================================
 
@@ -528,20 +835,20 @@ function AttachmentsDisplay({ attachments, isOwn, onImageClick }: AttachmentsDis
           {images.map((img, idx) => {
             const url = getAttachmentUrl(img);
             const name = getAttachmentName(img);
+            const isOld = img.isOld || false;
+            const blurPlaceholder = img.blurPlaceholder || null;
+            
             return (
-              <button
+              <LazyImage
                 key={img.id || idx}
+                src={url}
+                thumbnail={img.thumbnailUrl ? getAttachmentUrl({ ...img, url: img.thumbnailUrl }) : undefined}
+                alt={name}
+                blurPlaceholder={blurPlaceholder}
+                isOld={isOld}
                 onClick={() => onImageClick?.(url, name)}
-                className="relative group overflow-hidden rounded-xl"
-              >
-                <img
-                  src={img.thumbnailUrl || url}
-                  alt={name}
-                  className="w-full max-w-[300px] max-h-[300px] object-cover rounded-xl transition-transform group-hover:scale-105"
-                  loading="lazy"
-                />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-xl" />
-              </button>
+                className="w-full max-w-[300px] max-h-[300px] object-cover rounded-xl"
+              />
             );
           })}
         </div>
@@ -549,14 +856,31 @@ function AttachmentsDisplay({ attachments, isOwn, onImageClick }: AttachmentsDis
 
       {/* Files */}
       {files.map((file, idx) => {
-        const url = getAttachmentUrl(file);
+        const baseUrl = getAttachmentUrl(file);
         const name = getAttachmentName(file);
         const size = getAttachmentSize(file);
         
         return (
-          <a
+          <FileLink
             key={file.id || idx}
-            href={url}
+            url={baseUrl}
+            name={name}
+            size={size}
+            isOwn={isOwn}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+// Компонент для файловых ссылок с безопасной CDN трансформацией
+function FileLink({ url, name, size, isOwn }: { url: string; name: string; size: number; isOwn: boolean }) {
+  const cdnUrl = useCDNUrl(url);
+  
+  return (
+    <a
+      href={cdnUrl}
             target="_blank"
             rel="noopener noreferrer"
             className={`
@@ -627,6 +951,7 @@ function ChannelPostDisplay({ post, isOwn, onPollVote, onImageClick }: ChannelPo
           <button
             onClick={() => onImageClick?.(post.coverImage!, post.title)}
             className="w-full"
+            type="button"
           >
             <img
               src={post.coverImage}
@@ -922,19 +1247,24 @@ function MessageBubble({
 
               {/* Text content with markdown */}
               {message.content && (
-                <div className={`
-                  text-[15px] leading-relaxed break-words
-                  ${isOwn ? '!text-white' : 'text-gray-900 dark:text-gray-100'}
-                  prose prose-sm max-w-none
-                  ${isOwn 
-                    ? 'prose-invert [&_*]:!text-white [&_p]:!text-white [&_strong]:!text-white [&_em]:!text-white [&_li]:!text-white [&_h1]:!text-white [&_h2]:!text-white [&_h3]:!text-white [&_h4]:!text-white [&_h5]:!text-white [&_h6]:!text-white [&_blockquote]:!text-white [&_blockquote]:border-blue-300 [&_a]:!text-blue-200 [&_a]:underline hover:[&_a]:!text-blue-100 [&_code]:!text-blue-100 [&_code]:bg-blue-400/30 [&_pre]:bg-blue-400/20 [&_pre]:!text-white' 
-                    : '[&_p]:text-gray-900 dark:[&_p]:text-gray-100 [&_strong]:text-gray-900 dark:[&_strong]:text-gray-100 [&_em]:text-gray-900 dark:[&_em]:text-gray-100 [&_li]:text-gray-900 dark:[&_li]:text-gray-100 [&_h1]:text-gray-900 dark:[&_h1]:text-gray-100 [&_h2]:text-gray-900 dark:[&_h2]:text-gray-100 [&_h3]:text-gray-900 dark:[&_h3]:text-gray-100 [&_h4]:text-gray-900 dark:[&_h4]:text-gray-100 [&_h5]:text-gray-900 dark:[&_h5]:text-gray-100 [&_h6]:text-gray-900 dark:[&_h6]:text-gray-100 [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_code]:text-gray-900 dark:[&_code]:text-gray-100'
-                  }
-                `}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {message.content}
-                  </ReactMarkdown>
-                </div>
+                <>
+                  <div className={`
+                    text-[15px] leading-relaxed break-words
+                    ${isOwn ? '!text-white' : 'text-gray-900 dark:text-gray-100'}
+                    prose prose-sm max-w-none
+                    ${isOwn 
+                      ? 'prose-invert [&_*]:!text-white [&_p]:!text-white [&_strong]:!text-white [&_em]:!text-white [&_li]:!text-white [&_h1]:!text-white [&_h2]:!text-white [&_h3]:!text-white [&_h4]:!text-white [&_h5]:!text-white [&_h6]:!text-white [&_blockquote]:!text-white [&_blockquote]:border-blue-300 [&_a]:!text-blue-200 [&_a]:underline hover:[&_a]:!text-blue-100 [&_code]:!text-blue-100 [&_code]:bg-blue-400/30 [&_pre]:bg-blue-400/20 [&_pre]:!text-white' 
+                      : '[&_p]:text-gray-900 dark:[&_p]:text-gray-100 [&_strong]:text-gray-900 dark:[&_strong]:text-gray-100 [&_em]:text-gray-900 dark:[&_em]:text-gray-100 [&_li]:text-gray-900 dark:[&_li]:text-gray-100 [&_h1]:text-gray-900 dark:[&_h1]:text-gray-100 [&_h2]:text-gray-900 dark:[&_h2]:text-gray-100 [&_h3]:text-gray-900 dark:[&_h3]:text-gray-100 [&_h4]:text-gray-900 dark:[&_h4]:text-gray-100 [&_h5]:text-gray-900 dark:[&_h5]:text-gray-100 [&_h6]:text-gray-900 dark:[&_h6]:text-gray-100 [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_code]:text-gray-900 dark:[&_code]:text-gray-100'
+                    }
+                  `}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {message.content}
+                    </ReactMarkdown>
+                  </div>
+                  
+                  {/* Link previews */}
+                  <LinkPreviews content={message.content} isOwn={isOwn} />
+                </>
               )}
             </>
           )}

@@ -4,9 +4,11 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { requireChatAccess, ChatAccessError } from '@/lib/chat-service';
 import { normalizeUserAvatar } from '@/lib/api-helpers';
+import { getFileUrlWithCDN } from '@/lib/cdn';
 import * as Sentry from '@sentry/nextjs';
 import { sendUserNotification } from '@/lib/notifications';
 import { invalidateChatCache, invalidateUserChatsCache } from '@/lib/chat-redis';
+import { ChatType } from '@prisma/client';
 // Динамический импорт для избежания проблем при сборке
 // Кэшируем модуль для производительности
 let socketModule: typeof import('@/server/socket') | null = null;
@@ -346,17 +348,24 @@ export async function GET(
         acc[r.emoji].userIds.push(r.userId);
         return acc;
       }, {} as Record<string, { count?: number; userIds: string[] }>),
-      attachments: (msg.attachments || []).map((att: any) => ({
-        id: att.id,
-        type: att.type,
-        url: att.url,
-        name: att.name,
-        size: att.size,
-        mimeType: att.mimeType,
-        thumbnailUrl: att.thumbnailUrl,
-        width: att.width,
-        height: att.height,
-      })),
+      attachments: (msg.attachments || []).map((att: any) => {
+        // Определяем, является ли сообщение старым (старше 7 дней)
+        const messageAge = Date.now() - new Date(msg.createdAt).getTime();
+        const isOld = messageAge > 7 * 24 * 60 * 60 * 1000; // 7 дней
+        
+        return {
+          id: att.id,
+          type: att.type,
+          url: getFileUrlWithCDN(att.url, true), // Используем CDN URL
+          name: att.name,
+          size: att.size,
+          mimeType: att.mimeType,
+          thumbnailUrl: att.thumbnailUrl ? getFileUrlWithCDN(att.thumbnailUrl, true) : undefined,
+          width: att.width,
+          height: att.height,
+          isOld, // Флаг для старых сообщений
+        };
+      }),
       threadRepliesCount: msg._count?.threadReplies || 0,
       // Данные поста для channel_post
       post: postData,
@@ -472,7 +481,7 @@ export async function POST(
     }
 
     // Логика для каналов (CHANNEL): только председатель/админ может создавать посты
-    if (chat.type === 'CHANNEL') {
+    if (chat.type === ChatType.CHANNEL) {
       const participant = chat.participants[0];
       const isAdmin = participant?.role === 'admin';
       
@@ -740,17 +749,24 @@ export async function POST(
             })()
           : null,
         threadRootId: message.threadRootId,
-        attachments: (message.attachments || []).map((att: any) => ({
-          id: att.id,
-          type: att.type,
-          url: att.url,
-          name: att.name,
-          size: att.size,
-          mimeType: att.mimeType,
-          thumbnailUrl: att.thumbnailUrl,
-          width: att.width,
-          height: att.height,
-        })),
+        attachments: (message.attachments || []).map((att: any) => {
+          // Определяем, является ли сообщение старым (старше 7 дней)
+          const messageAge = Date.now() - new Date(message.createdAt).getTime();
+          const isOld = messageAge > 7 * 24 * 60 * 60 * 1000; // 7 дней
+          
+          return {
+            id: att.id,
+            type: att.type,
+            url: getFileUrlWithCDN(att.url, true), // Используем CDN URL
+            name: att.name,
+            size: att.size,
+            mimeType: att.mimeType,
+            thumbnailUrl: att.thumbnailUrl ? getFileUrlWithCDN(att.thumbnailUrl, true) : undefined,
+            width: att.width,
+            height: att.height,
+            isOld, // Флаг для старых сообщений
+          };
+        }),
         reactions: {},
         createdAt: message.createdAt,
         editedAt: message.editedAt,
@@ -910,7 +926,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Чат не найден' }, { status: 404 });
     }
 
-    if (chat.type !== 'GROUP') {
+    if (chat.type !== ChatType.GROUP) {
       return NextResponse.json(
         { error: 'Можно редактировать только групповые чаты' },
         { status: 400 }

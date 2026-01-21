@@ -1,155 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 
-interface LinkPreview {
-  url: string;
-  title: string | null;
-  description: string | null;
-  image: string | null;
-  siteName: string | null;
-  favicon: string | null;
-  type: "website" | "video" | "article";
-  videoUrl?: string;
-  videoType?: "youtube" | "vimeo" | "other";
-  videoId?: string;
-}
-
-// Extract YouTube video ID
-function getYouTubeVideoId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
-    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
-    /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
-  ];
-
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
-  }
-
-  return null;
-}
-
-// Extract Vimeo video ID
-function getVimeoVideoId(url: string): string | null {
-  const pattern = /vimeo\.com\/(\d+)/;
-  const match = url.match(pattern);
-  return match ? match[1] : null;
-}
-
-// Parse Open Graph and meta tags
-async function fetchLinkPreview(url: string): Promise<LinkPreview> {
+/**
+ * GET /api/link-preview
+ * Получает Open Graph метаданные для ссылки
+ */
+export async function GET(request: NextRequest) {
   try {
-    // Check if it's a video URL
-    const youtubeId = getYouTubeVideoId(url);
-    if (youtubeId) {
-      return {
-        url,
-        title: `YouTube Video`,
-        description: null,
-        image: `https://img.youtube.com/vi/${youtubeId}/maxresdefault.jpg`,
-        siteName: "YouTube",
-        favicon: "https://www.youtube.com/favicon.ico",
-        type: "video",
-        videoType: "youtube",
-        videoId: youtubeId,
-        videoUrl: url,
-      };
-    }
-
-    const vimeoId = getVimeoVideoId(url);
-    if (vimeoId) {
-      // Fetch Vimeo API for thumbnail
-      const vimeoResponse = await fetch(`https://vimeo.com/api/v2/video/${vimeoId}.json`);
-      const vimeoData = await vimeoResponse.json();
-      const video = vimeoData[0];
-
-      return {
-        url,
-        title: video?.title || "Vimeo Video",
-        description: video?.description || null,
-        image: video?.thumbnail_large || null,
-        siteName: "Vimeo",
-        favicon: "https://vimeo.com/favicon.ico",
-        type: "video",
-        videoType: "vimeo",
-        videoId: vimeoId,
-        videoUrl: url,
-      };
-    }
-
-    // Fetch the URL
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; LinkPreviewBot/1.0)",
-      },
-      signal: AbortSignal.timeout(10000), // 10 second timeout
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch URL: ${response.status}`);
-    }
-
-    const html = await response.text();
-
-    // Parse Open Graph and meta tags
-    const ogTitle = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]*)"[^>]*>/i)?.[1];
-    const ogDescription = html.match(/<meta[^>]*property="og:description"[^>]*content="([^"]*)"[^>]*>/i)?.[1];
-    const ogImage = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]*)"[^>]*>/i)?.[1];
-    const ogSiteName = html.match(/<meta[^>]*property="og:site_name"[^>]*content="([^"]*)"[^>]*>/i)?.[1];
-    const ogType = html.match(/<meta[^>]*property="og:type"[^>]*content="([^"]*)"[^>]*>/i)?.[1];
-
-    // Fallback to regular meta tags
-    const metaTitle = html.match(/<meta[^>]*name="title"[^>]*content="([^"]*)"[^>]*>/i)?.[1];
-    const metaDescription = html.match(/<meta[^>]*name="description"[^>]*content="([^"]*)"[^>]*>/i)?.[1];
-    const titleTag = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1];
-
-    // Get favicon
-    const faviconLink = html.match(/<link[^>]*rel="(?:shortcut )?icon"[^>]*href="([^"]*)"[^>]*>/i)?.[1];
-    let favicon = faviconLink;
-    if (favicon && !favicon.startsWith("http")) {
-      const urlObj = new URL(url);
-      favicon = favicon.startsWith("/") 
-        ? `${urlObj.origin}${favicon}` 
-        : `${urlObj.origin}/${favicon}`;
-    }
-
-    // Determine type
-    let type: "website" | "video" | "article" = "website";
-    if (ogType === "video" || ogType === "video.other") {
-      type = "video";
-    } else if (ogType === "article") {
-      type = "article";
-    }
-
-    return {
-      url,
-      title: ogTitle || metaTitle || titleTag || new URL(url).hostname,
-      description: ogDescription || metaDescription || null,
-      image: ogImage || null,
-      siteName: ogSiteName || new URL(url).hostname,
-      favicon: favicon || `${new URL(url).origin}/favicon.ico`,
-      type,
-    };
-  } catch (error) {
-    console.error("[link-preview] Error fetching preview:", error);
-    
-    // Return basic info on error
-    const urlObj = new URL(url);
-    return {
-      url,
-      title: urlObj.hostname,
-      description: null,
-      image: null,
-      siteName: urlObj.hostname,
-      favicon: `${urlObj.origin}/favicon.ico`,
-      type: "website",
-    };
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const { url } = await request.json();
+    const searchParams = request.nextUrl.searchParams;
+    const url = searchParams.get("url");
 
     if (!url) {
       return NextResponse.json(
@@ -158,7 +17,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate URL
+    // Валидация URL
     try {
       new URL(url);
     } catch {
@@ -168,15 +27,103 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const preview = await fetchLinkPreview(url);
+    // Получаем HTML страницы
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; MyUnionBot/1.0; +https://myunion.pro)",
+      },
+      signal: AbortSignal.timeout(5000), // Таймаут 5 секунд
+    });
 
-    return NextResponse.json(preview);
-  } catch (error) {
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: "Failed to fetch URL" },
+        { status: response.status }
+      );
+    }
+
+    const html = await response.text();
+
+    // Извлекаем OG метаданные
+    const preview: {
+      url: string;
+      title?: string;
+      description?: string;
+      image?: string;
+      siteName?: string;
+      type?: string;
+      videoUrl?: string;
+      videoType?: string;
+    } = {
+      url,
+    };
+
+    // Извлекаем title
+    const titleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i) ||
+                   html.match(/<title>([^<]+)<\/title>/i);
+    if (titleMatch) {
+      preview.title = titleMatch[1].trim();
+    }
+
+    // Извлекаем description
+    const descMatch = html.match(/<meta\s+property=["']og:description["']\s+content=["']([^"']+)["']/i) ||
+                     html.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i);
+    if (descMatch) {
+      preview.description = descMatch[1].trim();
+    }
+
+    // Извлекаем image
+    const imageMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
+    if (imageMatch) {
+      preview.image = imageMatch[1].trim();
+    }
+
+    // Извлекаем siteName
+    const siteMatch = html.match(/<meta\s+property=["']og:site_name["']\s+content=["']([^"']+)["']/i);
+    if (siteMatch) {
+      preview.siteName = siteMatch[1].trim();
+    }
+
+    // Извлекаем type
+    const typeMatch = html.match(/<meta\s+property=["']og:type["']\s+content=["']([^"']+)["']/i);
+    if (typeMatch) {
+      preview.type = typeMatch[1].trim() as any;
+    }
+
+    // Для видео извлекаем video URL
+    if (preview.type === "video.other" || preview.type === "video") {
+      const videoMatch = html.match(/<meta\s+property=["']og:video["']\s+content=["']([^"']+)["']/i);
+      if (videoMatch) {
+        preview.videoUrl = videoMatch[1].trim();
+      }
+      
+      const videoTypeMatch = html.match(/<meta\s+property=["']og:video:type["']\s+content=["']([^"']+)["']/i);
+      if (videoTypeMatch) {
+        preview.videoType = videoTypeMatch[1].trim();
+      }
+    }
+
+    // Для YouTube и Vimeo определяем тип видео
+    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+      preview.type = 'video';
+      preview.videoUrl = url;
+      preview.videoType = 'video/youtube';
+    } else if (url.includes('vimeo.com')) {
+      preview.type = 'video';
+      preview.videoUrl = url;
+      preview.videoType = 'video/vimeo';
+    }
+
+    return NextResponse.json({ preview });
+  } catch (error: any) {
+    Sentry.captureException(error);
     console.error("[link-preview] Error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch link preview" },
+      {
+        error: "Failed to fetch link preview",
+        details: process.env.NODE_ENV === "development" ? error?.message : undefined,
+      },
       { status: 500 }
     );
   }
 }
-

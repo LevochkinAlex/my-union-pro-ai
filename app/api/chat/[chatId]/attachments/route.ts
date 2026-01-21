@@ -7,7 +7,9 @@ import path from "path";
 import { processMediaFile, detectFileType } from "@/lib/media-processor";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import { optimizeWithPreset, getMimeType } from "@/lib/image-optimizer";
+import { generateBlurPlaceholder, generateThumbnail } from "@/lib/blur-placeholder";
 import { sendUserNotification } from "@/lib/notifications";
+import { getFileUrlWithCDN } from "@/lib/cdn";
 import { 
   requireChatAccess, 
   ChatAccessError,
@@ -156,6 +158,31 @@ export async function POST(
       attachmentType = "video";
     }
 
+    // Генерируем blur placeholder и thumbnail для изображений
+    let blurPlaceholder: string | null = null;
+    let thumbnailUrl: string | null = null;
+    
+    if (attachmentType === "image" && mimeType !== "image/gif") {
+      try {
+        // Генерируем blur placeholder
+        blurPlaceholder = await generateBlurPlaceholder(buffer);
+        
+        // Генерируем thumbnail
+        const thumbnailBuffer = await generateThumbnail(buffer, 300, 300);
+        const thumbnailFileName = `thumb_${fileName}`;
+        const thumbnailKey = `chat/${thumbnailFileName}`;
+        
+        // Загружаем thumbnail на VDS
+        const thumbnailPath = await uploadFileToVDS(thumbnailKey, thumbnailBuffer, "image/webp");
+        thumbnailUrl = getFileUrlWithCDN(thumbnailPath, true);
+        
+        console.log(`[chat/attachments] Generated blur placeholder and thumbnail for image`);
+      } catch (thumbError) {
+        console.error(`[chat/attachments] Error generating thumbnail/placeholder:`, thumbError);
+        // Продолжаем без thumbnail и placeholder
+      }
+    }
+
     // Получаем отправителя
     const sender = await prisma.user.findUnique({
       where: { id: userId },
@@ -184,10 +211,11 @@ export async function POST(
         attachments: {
           create: {
             type: attachmentType,
-            url: filePath,
+            url: getFileUrlWithCDN(filePath, true), // Используем CDN URL
             name: originalName,
             size: buffer.length,
             mimeType: mimeType || null,
+            thumbnailUrl: thumbnailUrl || null,
             ...(attachmentType === "image" && processedFile?.width && processedFile?.height ? {
               width: processedFile.width,
               height: processedFile.height,
@@ -269,11 +297,11 @@ export async function POST(
       attachments: message.attachments.map((att: any) => ({
         id: att.id,
         type: att.type,
-        url: att.url,
+        url: getFileUrlWithCDN(att.url, true), // Используем CDN URL
         name: att.name,
         size: att.size,
         mimeType: att.mimeType,
-        thumbnailUrl: att.thumbnailUrl,
+        thumbnailUrl: att.thumbnailUrl ? getFileUrlWithCDN(att.thumbnailUrl, true) : undefined,
         width: att.width,
         height: att.height,
       })),
