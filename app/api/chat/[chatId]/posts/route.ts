@@ -145,6 +145,12 @@ export async function POST(
             },
           },
         },
+        _count: {
+          select: {
+            likes: true,
+            comments: true,
+          },
+        },
       },
     });
 
@@ -191,6 +197,76 @@ export async function POST(
     // Нормализуем аватар отправителя
     const normalizedSender = normalizeUserAvatar(message.sender);
 
+    // Получаем лайк пользователя для поста
+    const userLike = await prisma.newsLike.findUnique({
+      where: {
+        newsPostId_userId: {
+          newsPostId: newsPost.id,
+          userId: userId,
+        },
+      },
+    });
+
+    // Получаем голоса пользователя в опросах
+    const pollIds = newsPost.polls?.map(p => p.id) || [];
+    let userPollVotes: Record<string, string> = {};
+    if (pollIds.length > 0) {
+      const votes = await prisma.newsPollVote.findMany({
+        where: {
+          userId,
+          pollId: { in: pollIds },
+        },
+        select: {
+          pollId: true,
+          optionId: true,
+        },
+      });
+      userPollVotes = votes.reduce(
+        (acc, vote) => {
+          acc[vote.pollId] = vote.optionId;
+          return acc;
+        },
+        {} as Record<string, string>
+      );
+    }
+
+    // Получаем статистику голосов для каждого опроса
+    const pollsWithStats = await Promise.all(
+      (newsPost.polls || []).map(async (poll) => {
+        const votes = await prisma.newsPollVote.groupBy({
+          by: ["optionId"],
+          where: {
+            pollId: poll.id,
+          },
+          _count: {
+            optionId: true,
+          },
+        });
+
+        const totalVotes = votes.reduce((sum, v) => sum + v._count.optionId, 0);
+        const options = poll.options as Array<{ id: string; text: string }>;
+        const optionsWithStats = options.map((option) => {
+          const voteCount = votes.find((v) => v.optionId === option.id)?._count.optionId || 0;
+          const percentage = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 1000) / 10 : 0;
+
+          return {
+            ...option,
+            voteCount,
+            percentage,
+          };
+        });
+
+        return {
+          id: poll.id,
+          question: poll.question,
+          options: optionsWithStats,
+          totalVotes,
+          userVote: userPollVotes[poll.id] || null,
+          isClosed: poll.isClosed,
+        };
+      })
+    );
+
     // Формируем ответ
     const normalizedMessage = {
       id: message.id,
@@ -217,13 +293,11 @@ export async function POST(
         title: newsPost.title,
         content: newsPost.content,
         coverImage: newsPost.coverImage,
-        polls: newsPost.polls?.map((poll) => ({
-          id: poll.id,
-          question: poll.question,
-          options: poll.options as Array<{ id: string; text: string }>,
-          totalVotes: poll._count.votes,
-          isClosed: poll.isClosed,
-        })) || [],
+        polls: pollsWithStats,
+        _count: {
+          likes: newsPost._count?.likes || 0,
+          comments: newsPost._count?.comments || 0,
+        },
       },
     };
 

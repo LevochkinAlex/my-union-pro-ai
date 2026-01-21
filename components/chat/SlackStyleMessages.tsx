@@ -757,13 +757,28 @@ function ChannelPostDisplay({ post, isOwn, onPollVote, onImageClick }: ChannelPo
         "flex items-center gap-4 pt-2 border-t",
         isOwn ? 'border-white/20' : 'border-gray-200 dark:border-gray-700'
       )}>
-        <div className={clsx(
-          "flex items-center gap-1.5 text-xs",
-          isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
-        )}>
+        <button
+          onClick={async () => {
+            try {
+              const response = await fetch(`/api/news/${post.id}/like`, {
+                method: "POST",
+              });
+              if (response.ok) {
+                // Обновление будет через WebSocket или перезагрузка
+                window.location.reload();
+              }
+            } catch (error) {
+              console.error("Error toggling like:", error);
+            }
+          }}
+          className={clsx(
+            "flex items-center gap-1.5 text-xs transition-colors",
+            isOwn ? 'text-white/70 hover:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+          )}
+        >
           <Heart className="w-3.5 h-3.5" />
           <span>{post._count.likes}</span>
-        </div>
+        </button>
         <div className={clsx(
           "flex items-center gap-1.5 text-xs",
           isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
