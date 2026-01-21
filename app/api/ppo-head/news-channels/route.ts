@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getPPOHead } from "@/lib/ppo-head-utils";
+import { syncChannelWithChat } from "@/lib/channel-sync";
 
 /**
  * GET /api/ppo-head/news-channels
@@ -28,6 +29,35 @@ export async function GET(request: NextRequest) {
 
     // Получаем каналы организации
     let channels = await prisma.newsChannel.findMany({
+      where: {
+        organizationId: chairman.organizationId,
+      },
+      include: {
+        _count: {
+          select: {
+            newsPosts: true,
+          },
+        },
+        chat: {
+          select: {
+            id: true,
+          },
+        },
+      },
+      orderBy: [
+        { createdAt: "asc" },
+      ],
+    });
+
+    // Синхронизируем каналы без Chat с чатами
+    for (const channel of channels) {
+      if (!channel.chat) {
+        await syncChannelWithChat(channel.id, chairman.organizationId);
+      }
+    }
+
+    // Перезагружаем каналы после синхронизации
+    channels = await prisma.newsChannel.findMany({
       where: {
         organizationId: chairman.organizationId,
       },
@@ -136,6 +166,9 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    // Синхронизируем с чатом: создаем Chat для канала
+    await syncChannelWithChat(channel.id, chairman.organizationId);
 
     return NextResponse.json({ channel }, { status: 201 });
   } catch (error: any) {

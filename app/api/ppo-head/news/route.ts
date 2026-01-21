@@ -258,6 +258,90 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Синхронизируем с чатом: создаем ChatMessage в канале, если канал связан с Chat
+    try {
+      const channelChat = await prisma.chat.findUnique({
+        where: { newsChannelId: channelId },
+        select: { id: true },
+      });
+
+      if (channelChat) {
+        // Формируем контент сообщения с метаданными поста
+        const messageContent = JSON.stringify({
+          type: "channel_post",
+          postId: newsPost.id,
+          title: newsPost.title,
+          content: newsPost.content,
+          coverImage: newsPost.coverImage,
+          hasPolls: (newsPost.polls?.length || 0) > 0,
+        });
+
+        const message = await prisma.chatMessage.create({
+          data: {
+            chatId: channelChat.id,
+            senderId: chairman.id,
+            content: messageContent,
+            messageType: "channel_post",
+          },
+        });
+
+        // Обновляем lastMessage в чате
+        await prisma.chat.update({
+          where: { id: channelChat.id },
+          data: {
+            lastMessageId: message.id,
+            lastMessageAt: new Date(),
+          },
+        });
+
+        // Отправляем через WebSocket
+        try {
+          const { emitNewMessage } = await import("@/server/socket");
+          const { normalizeUserAvatar } = await import("@/lib/api-helpers");
+          
+          const sender = await prisma.user.findUnique({
+            where: { id: chairman.id },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+            },
+          });
+
+          if (sender) {
+            const normalizedSender = normalizeUserAvatar(sender);
+            await emitNewMessage(channelChat.id, {
+              id: message.id,
+              chatId: channelChat.id,
+              senderId: chairman.id,
+              sender: {
+                id: normalizedSender.id,
+                firstName: normalizedSender.firstName,
+                lastName: normalizedSender.lastName,
+                avatarUrl: normalizedSender.avatarUrl,
+              },
+              content: messageContent,
+              messageType: "channel_post",
+              createdAt: message.createdAt,
+              editedAt: null,
+              replyTo: null,
+              replyToId: null,
+              reactions: {},
+              attachments: [],
+              threadRepliesCount: 0,
+            });
+          }
+        } catch (wsError) {
+          console.error("[ppo-head/news] WebSocket error:", wsError);
+          // Не прерываем выполнение, если WebSocket не работает
+        }
+      }
+    } catch (chatError) {
+      console.error("[ppo-head/news] Chat sync error:", chatError);
+      // Не прерываем выполнение, если синхронизация с чатом не удалась
+    }
+
     return NextResponse.json({ news: newsPost }, { status: 201 });
   } catch (error: any) {
     console.error("[ppo-head/news] POST error:", error);

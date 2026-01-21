@@ -317,6 +317,20 @@ export async function POST(
     const senderName = `${sender.firstName || ""} ${sender.lastName || ""}`.trim() || "Председатель";
     const channelName = chat.name || "канал";
 
+    // Функция для очистки HTML тегов
+    const stripHtml = (html: string): string => {
+      return html
+        .replace(/<[^>]*>/g, '') // Удаляем все HTML теги
+        .replace(/&nbsp;/g, ' ') // Заменяем &nbsp; на пробел
+        .replace(/&amp;/g, '&') // Заменяем &amp; на &
+        .replace(/&lt;/g, '<') // Заменяем &lt; на <
+        .replace(/&gt;/g, '>') // Заменяем &gt; на >
+        .replace(/&quot;/g, '"') // Заменяем &quot; на "
+        .replace(/&#39;/g, "'") // Заменяем &#39; на '
+        .replace(/\s+/g, ' ') // Убираем множественные пробелы
+        .trim();
+    };
+
     await Promise.allSettled(
       allParticipants.map(async (p) => {
         try {
@@ -324,7 +338,7 @@ export async function POST(
             userId: p.userId,
             type: "chat_message",
             title: `📢 Новый пост в канале "${channelName}"`,
-            body: title,
+            body: stripHtml(title),
             url: `/dashboard/chat?chatId=${chatId}`,
             senderName,
             metadata: {

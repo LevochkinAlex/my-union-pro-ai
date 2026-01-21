@@ -595,8 +595,23 @@ export async function POST(request: NextRequest) {
         const { sendUserNotification } = await import("@/lib/notifications");
         const authorName = `${post.author.firstName || ""} ${post.author.middleName || ""} ${post.author.lastName || ""}`.trim() || "Пользователь";
 
+        // Функция для очистки HTML тегов
+        const stripHtml = (html: string): string => {
+          return html
+            .replace(/<[^>]*>/g, '') // Удаляем все HTML теги
+            .replace(/&nbsp;/g, ' ') // Заменяем &nbsp; на пробел
+            .replace(/&amp;/g, '&') // Заменяем &amp; на &
+            .replace(/&lt;/g, '<') // Заменяем &lt; на <
+            .replace(/&gt;/g, '>') // Заменяем &gt; на >
+            .replace(/&quot;/g, '"') // Заменяем &quot; на "
+            .replace(/&#39;/g, "'") // Заменяем &#39; на '
+            .replace(/\s+/g, ' ') // Убираем множественные пробелы
+            .trim();
+        };
+
         for (const subscription of subscribers) {
-          const messageText = content.trim() || (attachments.length > 0 ? "Новое изображение" : "Новый пост");
+          const rawText = content.trim() || (attachments.length > 0 ? "Новое изображение" : "Новый пост");
+          const messageText = stripHtml(rawText);
           await sendUserNotification({
             userId: subscription.subscriberId,
             type: "user_post",

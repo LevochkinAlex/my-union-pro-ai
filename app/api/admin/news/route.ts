@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { title, content, coverImage, isPublished, polls } = body;
+    const { title, content, coverImage, isPublished, polls, channelId } = body;
 
     if (!title || !content) {
       return NextResponse.json(
@@ -107,6 +107,7 @@ export async function POST(request: NextRequest) {
         content,
         coverImage: normalizedCoverImage,
         authorId: session.user.id!,
+        channelId: channelId || null,
         isPublished: isPublished || false,
         publishedAt: isPublished ? new Date() : null,
       },
@@ -143,6 +144,92 @@ export async function POST(request: NextRequest) {
     // Требуется реализация функции массовых уведомлений
     if (isPublished) {
       console.log("[api/admin/news] Новость опубликована, массовые уведомления пока отключены");
+    }
+
+    // Синхронизируем с чатом: создаем ChatMessage в канале, если канал связан с Chat
+    if (channelId) {
+      try {
+        const channelChat = await prisma.chat.findUnique({
+          where: { newsChannelId: channelId },
+          select: { id: true },
+        });
+
+        if (channelChat) {
+          // Формируем контент сообщения с метаданными поста
+          const messageContent = JSON.stringify({
+            type: "channel_post",
+            postId: newsPost.id,
+            title: newsPost.title,
+            content: newsPost.content,
+            coverImage: normalizedCoverImage,
+            hasPolls: (polls?.length || 0) > 0,
+          });
+
+          const message = await prisma.chatMessage.create({
+            data: {
+              chatId: channelChat.id,
+              senderId: session.user.id!,
+              content: messageContent,
+              messageType: "channel_post",
+            },
+          });
+
+          // Обновляем lastMessage в чате
+          await prisma.chat.update({
+            where: { id: channelChat.id },
+            data: {
+              lastMessageId: message.id,
+              lastMessageAt: new Date(),
+            },
+          });
+
+          // Отправляем через WebSocket
+          try {
+            const { emitNewMessage } = await import("@/server/socket");
+            const { normalizeUserAvatar } = await import("@/lib/api-helpers");
+            
+            const sender = await prisma.user.findUnique({
+              where: { id: session.user.id! },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatarUrl: true,
+              },
+            });
+
+            if (sender) {
+              const normalizedSender = normalizeUserAvatar(sender);
+              await emitNewMessage(channelChat.id, {
+                id: message.id,
+                chatId: channelChat.id,
+                senderId: session.user.id!,
+                sender: {
+                  id: normalizedSender.id,
+                  firstName: normalizedSender.firstName,
+                  lastName: normalizedSender.lastName,
+                  avatarUrl: normalizedSender.avatarUrl,
+                },
+                content: messageContent,
+                messageType: "channel_post",
+                createdAt: message.createdAt,
+                editedAt: null,
+                replyTo: null,
+                replyToId: null,
+                reactions: {},
+                attachments: [],
+                threadRepliesCount: 0,
+              });
+            }
+          } catch (wsError) {
+            console.error("[admin/news] WebSocket error:", wsError);
+            // Не прерываем выполнение, если WebSocket не работает
+          }
+        }
+      } catch (chatError) {
+        console.error("[admin/news] Chat sync error:", chatError);
+        // Не прерываем выполнение, если синхронизация с чатом не удалась
+      }
     }
 
     // Инвалидируем кеш новостей
