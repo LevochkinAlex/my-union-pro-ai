@@ -9,7 +9,8 @@ import MessageContent from './MessageContent';
 interface MessageItemProps {
   message: {
     id: string;
-    sender: {
+    senderId?: string;
+    sender?: {
       id: string;
       firstName?: string;
       lastName?: string;
@@ -17,7 +18,6 @@ interface MessageItemProps {
     };
     content: string;
     createdAt: string;
-  isOwn: boolean;
     replyTo?: {
       id: string;
       content: string;
@@ -41,31 +41,45 @@ interface MessageItemProps {
     }>;
   };
   currentUserId: string;
+  isOwn?: boolean;
+  isOldMessage?: boolean;
+  showSenderName?: boolean;
   onReply?: (messageId: string) => void;
   onStartThread?: (messageId: string) => void;
   onEdit?: (messageId: string, content: string) => void;
   onDelete?: (messageId: string) => void;
   onReaction?: (messageId: string, emoji: string) => void;
   onOpenThread?: (messageId: string) => void;
+  onForward?: (messageId: string) => void;
+  onImageClick?: (url: string) => void;
+  onProfileClick?: (userId: string) => void;
 }
 
 export default function MessageItem({
   message,
   currentUserId,
+  isOwn = false,
+  isOldMessage = false,
+  showSenderName = false,
   onReply,
   onStartThread,
   onEdit,
   onDelete,
   onReaction,
   onOpenThread,
+  onForward,
+  onImageClick,
+  onProfileClick,
 }: MessageItemProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
 
   const getSenderName = () => {
-    if (message.sender.firstName || message.sender.lastName) {
-      return [message.sender.firstName, message.sender.lastName].filter(Boolean).join(' ') || 'Пользователь';
+    if (message.sender) {
+      if (message.sender.firstName || message.sender.lastName) {
+        return [message.sender.firstName, message.sender.lastName].filter(Boolean).join(' ') || 'Пользователь';
+      }
     }
     return 'Пользователь';
   };
@@ -97,14 +111,18 @@ export default function MessageItem({
     <div className="group hover:bg-gray-50 dark:hover:bg-gray-800/50 px-4 py-2 relative">
       <div className="flex items-start gap-3">
         {/* Avatar */}
-        {message.sender.avatarUrl ? (
+        {message.sender?.avatarUrl ? (
           <img
             src={message.sender.avatarUrl}
             alt={getSenderName()}
             className="w-8 h-8 rounded-full flex-shrink-0"
+            onClick={() => message.sender?.id && onProfileClick?.(message.sender.id)}
           />
         ) : (
-          <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center text-xs flex-shrink-0">
+          <div 
+            className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center text-xs flex-shrink-0 cursor-pointer"
+            onClick={() => (message.sender?.id || message.senderId) && onProfileClick?.((message.sender?.id || message.senderId)!)}
+          >
             {getSenderName()[0]?.toUpperCase()}
           </div>
         )}
@@ -112,20 +130,25 @@ export default function MessageItem({
         {/* Message content */}
         <div className="flex-1 min-w-0">
           {/* Header */}
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-medium text-sm text-gray-900 dark:text-white">
-              {getSenderName()}
-            </span>
-            <span className="text-xs text-gray-500">
-              {formatTime(message.createdAt)}
-            </span>
-            {message.isOwn && (
-              <span className="text-xs text-blue-600 dark:text-blue-400">Вы</span>
-            )}
-          </div>
+          {(showSenderName || !isOwn) && (
+            <div className="flex items-center gap-2 mb-1">
+              <span 
+                className="font-medium text-sm text-gray-900 dark:text-white cursor-pointer hover:underline"
+                onClick={() => (message.sender?.id || message.senderId) && onProfileClick?.((message.sender?.id || message.senderId)!)}
+              >
+                {getSenderName()}
+              </span>
+              <span className="text-xs text-gray-500">
+                {formatTime(message.createdAt)}
+              </span>
+              {isOwn && (
+                <span className="text-xs text-blue-600 dark:text-blue-400">Вы</span>
+              )}
+            </div>
+          )}
 
           {/* Reply to */}
-            {message.replyTo && (
+          {message.replyTo && (
             <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs text-gray-600 dark:text-gray-400 border-l-2 border-gray-300 dark:border-gray-700">
               <div className="font-medium">
                 {message.replyTo.sender.firstName} {message.replyTo.sender.lastName}
@@ -174,18 +197,23 @@ export default function MessageItem({
               {message.attachments.map((att) => (
                 <div key={att.id} className="border border-gray-200 dark:border-gray-700 rounded p-2">
                   {att.type === 'image' ? (
-                    <img src={att.url} alt={att.name} className="max-w-md rounded" />
+                    <img 
+                      src={att.url} 
+                      alt={att.name} 
+                      className="max-w-md rounded cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => onImageClick?.(att.url)}
+                    />
                   ) : (
                     <a
                       href={att.url}
-            target="_blank"
-            rel="noopener noreferrer"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="text-blue-600 dark:text-blue-400 hover:underline"
                     >
                       📎 {att.name}
                     </a>
                   )}
-            </div>
+                </div>
               ))}
             </div>
           )}
@@ -241,7 +269,7 @@ export default function MessageItem({
               </button>
               {showMenu && (
                 <div className="absolute left-0 bottom-full mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-10 min-w-[150px]">
-                  {message.isOwn && (
+                  {isOwn && (
                     <>
                       <button
                         onClick={() => {
@@ -266,6 +294,18 @@ export default function MessageItem({
                         Удалить
                       </button>
                     </>
+                  )}
+                  {onForward && (
+                    <button
+                      onClick={() => {
+                        onForward(message.id);
+                        setShowMenu(false);
+                      }}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                    >
+                      <Reply className="w-4 h-4" />
+                      Переслать
+                    </button>
                   )}
                   <button
                     onClick={() => {
