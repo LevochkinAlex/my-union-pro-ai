@@ -1,47 +1,26 @@
 'use client';
 
 /**
- * Новый компонент чата с HeroUI
- * Полностью переписан с использованием HeroUI компонентов
+ * Компонент чата с HeroUI
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { io, Socket } from 'socket.io-client';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import {
   Card,
   CardBody,
   CardHeader,
   Avatar,
-  Button,
-  Input,
   Spinner,
   Chip,
-  Divider,
 } from '@heroui/react';
-import { MessageCircle, Send, Search, Users } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import ChatSidebar from './ChatSidebar';
 import ChatMessages from './ChatMessages';
 import ChatInput from './ChatInput';
-
-interface ChatRoom {
-  id: string;
-  name: string;
-  avatarUrl?: string;
-  type: 'PRIVATE' | 'GROUP' | 'TICKET';
-  lastMessage?: {
-    content: string;
-    createdAt: Date;
-  };
-  unreadCount: number;
-  isDirect: boolean;
-  isTicket?: boolean;
-  ticketId?: string;
-}
 
 interface Message {
   id: string;
@@ -75,11 +54,11 @@ interface Message {
 
 export default function Chat() {
   const { data: session } = useSession();
-  const { theme, resolvedTheme } = useTheme();
+  const { resolvedTheme } = useTheme();
   const searchParams = useSearchParams();
   const urlChatId = searchParams.get('chatId');
 
-  const [rooms, setRooms] = useState<ChatRoom[]>([]);
+  const [rooms, setRooms] = useState<any[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,7 +76,7 @@ export default function Chat() {
       
       // Если есть chatId в URL, открываем его
       if (urlChatId && !selectedChatId) {
-        const room = data.rooms?.find((r: ChatRoom) => r.id === urlChatId);
+        const room = data.rooms?.find((r: any) => r.id === urlChatId);
         if (room) {
           setSelectedChatId(urlChatId);
         }
@@ -223,7 +202,8 @@ export default function Chat() {
   }, [selectedChatId, socket]);
 
   const selectedRoom = rooms.find(r => r.id === selectedChatId);
-  const isDark = resolvedTheme === 'dark';
+  const roomName = selectedRoom?.name || selectedRoom?.displayName || 'Без названия';
+  const roomAvatar = selectedRoom?.avatarUrl || null;
 
   if (loading) {
     return (
@@ -254,14 +234,14 @@ export default function Chat() {
               <CardHeader className="px-4 py-3">
                 <div className="flex items-center gap-3 w-full">
                   <Avatar
-                    src={selectedRoom.avatarUrl}
-                    name={selectedRoom.name}
+                    src={roomAvatar}
+                    name={roomName}
                     size="md"
                     className="flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
                     <h2 className="text-lg font-semibold text-foreground truncate">
-                      {selectedRoom.name}
+                      {roomName}
                     </h2>
                     {selectedRoom.isDirect && (
                       <p className="text-sm text-foreground-500">
@@ -269,7 +249,7 @@ export default function Chat() {
                       </p>
                     )}
                   </div>
-                  {selectedRoom.unreadCount > 0 && (
+                  {(selectedRoom.unreadCount || 0) > 0 && (
                     <Chip
                       size="sm"
                       color="primary"

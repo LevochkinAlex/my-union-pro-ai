@@ -150,7 +150,9 @@ export async function GET() {
       return {
         id: chat.id,
         chatId: chat.id,
+        name: displayName || 'Без названия',
         displayName,
+        type: chat.type,
         avatarUrl,
         isDirect,
         isGroup: chat.type === 'GROUP',
