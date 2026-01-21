@@ -615,7 +615,6 @@ export async function getUnreadCount(
       where: {
         chatId,
         senderId: { not: userId },
-        deletedAt: null,
       },
     });
   }
@@ -626,7 +625,6 @@ export async function getUnreadCount(
       chatId,
       senderId: { not: userId },
       createdAt: { gt: lastReadAt },
-      deletedAt: null,
     },
   });
 }
@@ -674,7 +672,6 @@ async function getUnreadCountsForChats(
       where: {
         chatId: { in: unreadChats },
         senderId: { not: userId },
-        deletedAt: null,
       },
       _count: true,
     });
@@ -693,7 +690,6 @@ async function getUnreadCountsForChats(
         chatId,
         senderId: { not: userId },
         createdAt: { gt: readAt },
-        deletedAt: null,
       },
     });
     results.set(chatId, count);
