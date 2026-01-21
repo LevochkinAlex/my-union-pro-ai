@@ -88,9 +88,9 @@ export async function initSocketServer(httpServer: HttpServer) {
   // Настраиваем Redis adapter если клиенты доступны
   if (pubClient && subClient) {
     try {
-      // Динамический импорт adapter только в runtime
-      const { createAdapter } = await import("@socket.io/redis-adapter");
-      io.adapter(createAdapter(pubClient, subClient));
+      // Используем require для динамического импорта, чтобы обойти статический анализ Next.js
+      const redisAdapter = require("@socket.io/redis-adapter");
+      io.adapter(redisAdapter.createAdapter(pubClient, subClient));
       console.log("[Socket] ✅ Redis adapter configured for horizontal scaling");
     } catch (error) {
       console.warn("[Socket] ⚠️ Failed to configure Redis adapter:", error);
