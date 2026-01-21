@@ -31,6 +31,7 @@ const nextConfig = {
     'bullmq',
     'ioredis',
     '@socket.io/redis-adapter',
+    'socket.io',
   ],
   // Оптимизация webpack
   webpack: (config, { isServer }) => {
@@ -43,6 +44,14 @@ const nextConfig = {
         '**/profreport-main/**',
       ],
     };
+    
+    // Исключаем server/socket.ts из сборки (используется только в runtime)
+    if (isServer) {
+      config.externals = config.externals || [];
+      config.externals.push({
+        '@/server/socket': 'commonjs @/server/socket',
+      });
+    }
     
     if (!isServer) {
       // Исключаем серверные модули из клиентского бандла
@@ -121,6 +130,8 @@ module.exports = withSentryConfig(
     silent: true,
     org: "yappix-llc-vk",
     project: "javascript-nextjs",
+    // Отключаем автоматическую загрузку source maps во время сборки (может вызывать проблемы с Turbopack)
+    disable: process.env.SKIP_SENTRY_BUILD === 'true',
   },
   {
     // For all available options, see:
