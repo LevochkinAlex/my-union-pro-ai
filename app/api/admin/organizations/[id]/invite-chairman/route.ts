@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import { encryptPassword } from "@/lib/best-benefits-password";
 import { createBestBenefitsUser } from "@/lib/best-benefits-users";
 import { sendEmail } from "@/lib/email";
+import { createDefaultChannelForOrganization } from "@/lib/channel-utils";
 
 /**
  * POST /api/admin/organizations/[id]/invite-chairman
@@ -125,6 +126,9 @@ export async function POST(
         },
       });
 
+      // Создаем дефолтный канал для организации
+      await createDefaultChannelForOrganization(id, existingUserId);
+
       // Отправляем email с уведомлением о новых правах
       const userEmail = existingUser.email || email;
       await sendPPOHeadPromotionEmail(
@@ -192,6 +196,9 @@ export async function POST(
         },
       });
 
+      // Создаем дефолтный канал для организации
+      await createDefaultChannelForOrganization(id, updatedUser.id);
+
       // Генерируем инвайт-токен
       const inviteToken = crypto.randomBytes(32).toString("hex");
       const inviteTokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 дней
@@ -258,6 +265,9 @@ export async function POST(
         chairmanJobTitle: jobTitle || null,
       },
     });
+
+    // Создаем дефолтный канал для организации
+    await createDefaultChannelForOrganization(id, newUser.id);
 
     // Создаем учетную запись в BestBenefits
     try {

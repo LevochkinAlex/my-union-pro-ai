@@ -178,7 +178,7 @@ export default function GroupChatModal({
               <>
                 <UserPlus className="w-5 h-5 text-blue-600" />
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Создать групповой чат
+                  {mode === 'create' && chatType === 'CHANNEL' ? 'Создать канал' : 'Создать групповой чат'}
                 </h2>
               </>
             ) : (

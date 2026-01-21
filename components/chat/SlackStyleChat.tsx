@@ -516,6 +516,10 @@ export default function SlackStyleChat({
             onSelectChat={handleSelectChat}
             onCreateChat={handleCreateChat}
             onCreateGroup={() => setShowGroupModal(true)}
+            onCreateChannel={() => {
+              setGroupModalMode('create');
+              setShowGroupModal(true);
+            }}
             onOpenAIChat={handleOpenAIChat}
           />
         </div>

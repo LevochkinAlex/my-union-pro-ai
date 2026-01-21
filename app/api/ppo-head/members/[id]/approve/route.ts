@@ -6,6 +6,7 @@ import { sendUserNotification } from "@/lib/notifications";
 import { getOrCreatePrivateChat } from "@/lib/chat-service";
 // import { sendChatMessage } from "@/lib/chat-server-utils"; // TODO: Переделать на Matrix API
 import { getPPOHead, isMemberOfOrganization } from "@/lib/ppo-head-utils";
+import { subscribeUserToOrganizationChannel } from "@/lib/channel-utils";
 
 /**
  * POST /api/ppo-head/members/[id]/approve
@@ -74,6 +75,11 @@ export async function POST(
 
     // Создаем или находим чат с членом профсоюза
     const chat = await getOrCreatePrivateChat(chairman.id, member.id);
+
+    // Подписываем нового члена на канал организации
+    if (member.organizationId) {
+      await subscribeUserToOrganizationChannel(member.id, member.organizationId);
+    }
 
     // Создаем сообщение с поздравлением
     const congratulationMessage = `Поздравляем! Ваша заявка на вступление в профсоюз "${chairman.organization?.name || "организацию"}" одобрена. Добро пожаловать в наш профсоюз!`;

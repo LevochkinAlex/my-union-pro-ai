@@ -36,6 +36,7 @@ export interface SlackStyleSidebarProps {
   onSelectChat: (chat: Chat) => void;
   onCreateChat?: (userId: string) => void;
   onCreateGroup?: () => void;
+  onCreateChannel?: () => void;
   onOpenAIChat?: () => void;
 }
 
@@ -553,6 +554,7 @@ export default function SlackStyleSidebar({
   onSelectChat,
   onCreateChat,
   onCreateGroup,
+  onCreateChannel,
   onOpenAIChat,
 }: SlackStyleSidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -560,7 +562,7 @@ export default function SlackStyleSidebar({
   const [showNewChatModal, setShowNewChatModal] = useState(false);
 
   // Разделяем чаты по категориям
-  const { workChats, personalChats, aiChat } = useMemo(() => {
+  const { workChats, personalChats, channels, aiChat } = useMemo(() => {
     const filtered = searchQuery
       ? chats.filter((chat) => {
           const name = getChatDisplayName(chat, currentUserId);
@@ -570,6 +572,7 @@ export default function SlackStyleSidebar({
 
     const work: Chat[] = [];
     const personal: Chat[] = [];
+    const channelList: Chat[] = [];
     let ai: Chat | null = null;
 
     for (const chat of filtered) {
@@ -585,8 +588,10 @@ export default function SlackStyleSidebar({
         continue; // Явно пропускаем, чтобы не попало в personal
       }
       
-      // Если не AI чат, проверяем остальные категории
-      if (isWorkChat(chat)) {
+      // Каналы отдельно
+      if (chat.type === 'CHANNEL') {
+        channelList.push(chat);
+      } else if (isWorkChat(chat)) {
         work.push(chat);
       } else {
         // Дополнительная проверка: убеждаемся, что это точно не AI чат
@@ -597,16 +602,16 @@ export default function SlackStyleSidebar({
       }
     }
 
-    return { workChats: work, personalChats: personal, aiChat: ai };
+    return { workChats: work, personalChats: personal, channels: channelList, aiChat: ai };
   }, [chats, searchQuery, currentUserId]);
 
   const displayedChats = useMemo(() => {
     switch (activeTab) {
-      case "work": return { work: workChats, personal: [], ai: null };
-      case "personal": return { work: [], personal: personalChats, ai: null };
-      default: return { work: workChats, personal: personalChats, ai: aiChat };
+      case "work": return { work: workChats, personal: [], channels: [], ai: null };
+      case "personal": return { work: [], personal: personalChats, channels: [], ai: null };
+      default: return { work: workChats, personal: personalChats, channels: channels, ai: aiChat };
     }
-  }, [activeTab, workChats, personalChats, aiChat]);
+  }, [activeTab, workChats, personalChats, channels, aiChat]);
 
   const handleAIChatClick = useCallback(() => {
     if (aiChat) {
@@ -664,6 +669,15 @@ export default function SlackStyleSidebar({
                 title="Создать группу"
               >
                 <Users className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+              </button>
+            )}
+            {isChairman && onCreateChannel && (
+              <button
+                onClick={onCreateChannel}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                title="Создать канал"
+              >
+                <Hash className="w-5 h-5 text-gray-600 dark:text-gray-300" />
               </button>
             )}
           </div>
@@ -738,6 +752,18 @@ export default function SlackStyleSidebar({
             title="Рабочие чаты"
             icon={<Briefcase className="w-4 h-4" />}
             chats={displayedChats.work}
+            selectedChat={selectedChat}
+            currentUserId={currentUserId}
+            onSelectChat={onSelectChat}
+          />
+        )}
+
+        {/* Channels */}
+        {isChairman && (activeTab === "all" || activeTab === "work") && displayedChats.channels.length > 0 && (
+          <ChatSection
+            title="Каналы"
+            icon={<Hash className="w-4 h-4" />}
+            chats={displayedChats.channels}
             selectedChat={selectedChat}
             currentUserId={currentUserId}
             onSelectChat={onSelectChat}

@@ -1693,6 +1693,9 @@ model NewsChannel {
   // Новости в канале
   newsPosts NewsPost[]
 
+  // Связанный чат (для отображения в UI чата)
+  chat Chat? @relation("ChatNewsChannel")
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1956,6 +1959,10 @@ model Chat {
 
   // Обращения (тикеты) связанные с чатом
   ticket Ticket? @relation("TicketChat")
+
+  // Канал новостей (для CHANNEL типа чата)
+  newsChannelId String? @unique
+  newsChannel   NewsChannel? @relation("ChatNewsChannel", fields: [newsChannelId], references: [id], onDelete: SetNull)
 
   // Архивирован ли чат
   archivedAt DateTime?

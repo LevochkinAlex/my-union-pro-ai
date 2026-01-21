@@ -291,6 +291,28 @@ export async function POST(request: NextRequest) {
         const defaultName = chatType === 'CHANNEL' ? 'Канал' : 'Групповой чат';
         console.log(`[chat] Creating new ${chatType} chat with participants:`, participantIds);
         try {
+          // Для канала создаем также NewsChannel
+          let newsChannelId: string | undefined;
+          if (chatType === 'CHANNEL') {
+            // Получаем организацию пользователя
+            const user = await prisma.user.findUnique({
+              where: { id: userId },
+              select: { organizationId: true },
+            });
+            
+            const newsChannel = await prisma.newsChannel.create({
+              data: {
+                name: name || defaultName,
+                description: description?.trim() || null,
+                iconUrl: iconUrl || null,
+                organizationId: user?.organizationId || null,
+                createdById: userId,
+                isMain: false, // Дефолтный канал создается отдельно
+              },
+            });
+            newsChannelId = newsChannel.id;
+          }
+
           chat = await prisma.chat.create({
             data: {
               type: chatType,
@@ -298,6 +320,7 @@ export async function POST(request: NextRequest) {
               description: description?.trim() || null,
               iconUrl: iconUrl || null,
               createdById: userId,
+              newsChannelId: newsChannelId,
               participants: {
                 create: [
                   { userId, role: 'admin' },
