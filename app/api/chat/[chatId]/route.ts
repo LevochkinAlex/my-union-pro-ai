@@ -6,9 +6,18 @@ import { requireChatAccess, ChatAccessError } from '@/lib/chat-service';
 import { normalizeUserAvatar } from '@/lib/api-helpers';
 import * as Sentry from '@sentry/nextjs';
 // Динамический импорт для избежания проблем при сборке
+// Кэшируем модуль для производительности
+let socketModule: typeof import('@/server/socket') | null = null;
 async function emitNewMessage(chatId: string, message: any) {
-  const { emitNewMessage: emit } = await import('@/server/socket');
-  emit(chatId, message);
+  try {
+    if (!socketModule) {
+      socketModule = await import('@/server/socket');
+    }
+    socketModule.emitNewMessage(chatId, message);
+  } catch (error) {
+    console.error('[chat] Failed to emit message via WebSocket:', error);
+    // Не пробрасываем ошибку, чтобы не прерывать основной поток
+  }
 }
 
 /**
@@ -564,7 +573,7 @@ export async function POST(
       // Отправляем сообщение через WebSocket другим участникам
       try {
         // Используем формат комнаты chatId (без префикса chat:)
-        emitNewMessage(chatId, normalizedMessage);
+        await emitNewMessage(chatId, normalizedMessage);
         console.log('[chat] Message emitted via WebSocket to room:', chatId, normalizedMessage.id);
       } catch (wsError) {
         console.error('[chat] Error emitting message via WebSocket:', wsError);

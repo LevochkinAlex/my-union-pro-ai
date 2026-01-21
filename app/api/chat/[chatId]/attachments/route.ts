@@ -14,9 +14,18 @@ import {
   getChatParticipantIds,
 } from "@/lib/chat-service";
 // Динамический импорт для избежания проблем при сборке
+// Кэшируем модуль для производительности
+let socketModule: typeof import('@/server/socket') | null = null;
 async function emitNewMessage(chatId: string, message: any) {
-  const { emitNewMessage: emit } = await import('@/server/socket');
-  emit(chatId, message);
+  try {
+    if (!socketModule) {
+      socketModule = await import('@/server/socket');
+    }
+    socketModule.emitNewMessage(chatId, message);
+  } catch (error) {
+    console.error('[chat/attachments] Failed to emit message via WebSocket:', error);
+    // Не пробрасываем ошибку, чтобы не прерывать основной поток
+  }
 }
 import { normalizeUserAvatar } from "@/lib/api-helpers";
 
@@ -273,7 +282,7 @@ export async function POST(
 
     // Отправляем сообщение через WebSocket другим участникам
     try {
-      emitNewMessage(chatId, normalizedMessage);
+      await emitNewMessage(chatId, normalizedMessage);
       console.log('[chat/attachments] Message emitted via WebSocket to room:', chatId, normalizedMessage.id);
     } catch (wsError) {
       console.error('[chat/attachments] Error emitting message via WebSocket:', wsError);
