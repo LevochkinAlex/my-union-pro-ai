@@ -10,7 +10,8 @@
 import { prisma } from "@/lib/prisma";
 import { 
   getOrCreatePrivateChat as newGetOrCreatePrivateChat,
-  sendMessage,
+  resetReadStatusForOthers,
+  updateChatLastMessage,
 } from "@/lib/chat-service";
 
 /**
@@ -26,7 +27,7 @@ export async function getOrCreatePrivateChat(
 }
 
 /**
- * @deprecated Эта функция больше не используется. Сообщения отправляются через Matrix API.
+ * @deprecated Эта функция больше не используется. Сообщения отправляются через API.
  * Отправляет сообщение в чат и обновляет последнее сообщение
  * @param chatId ID чата
  * @param senderId ID отправителя
@@ -37,29 +38,11 @@ export async function sendChatMessage(
   senderId: string,
   content: string
 ) {
-  // DEPRECATED: Эта функция больше не используется
-  // Сообщения теперь отправляются через Matrix API
-  // TODO: Удалить все вызовы этой функции из кода
-  
-  console.warn('[sendChatMessage] DEPRECATED: This function is no longer used. Messages are sent via Matrix API.');
+  console.warn('[sendChatMessage] DEPRECATED: Use API endpoint instead');
   
   // Обновляем lastMessageAt в чате
-  await prisma.chat.update({
-    where: { id: chatId },
-    data: {
-      lastMessageAt: new Date(),
-    },
-  });
+  await updateChatLastMessage(chatId);
 
-  // Сбрасываем readAt в ChatParticipant для других участников
-  await prisma.chatParticipant.updateMany({
-    where: {
-      chatId,
-      userId: { not: senderId },
-      leftAt: null,
-    },
-    data: {
-      readAt: null,
-    },
-  });
+  // Сбрасываем readAt для других участников
+  await resetReadStatusForOthers(chatId, senderId);
 }

@@ -1,0 +1,336 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+const AI_CHAT_NAME = "ИИ-Ассистент";
+const AI_BOT_ID = "ai-assistant-bot"; // Виртуальный ID бота
+
+/**
+ * GET /api/chat/ai
+ * Получить или создать чат с ИИ-ассистентом
+ */
+export async function GET() {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    const userId = session.user.id;
+
+    // Ищем существующий чат с ИИ для пользователя
+    let aiChat = await prisma.chat.findFirst({
+      where: {
+        type: "PRIVATE",
+        name: AI_CHAT_NAME,
+        participants: {
+          some: {
+            userId: userId,
+            leftAt: null,
+          },
+        },
+      },
+      include: {
+        participants: {
+          where: { leftAt: null },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+        messages: {
+          take: 1,
+          orderBy: { createdAt: "desc" },
+        },
+        _count: {
+          select: { messages: true },
+        },
+      },
+    });
+
+    // Если чата нет, создаём его
+    if (!aiChat) {
+      aiChat = await prisma.chat.create({
+        data: {
+          type: "PRIVATE",
+          name: AI_CHAT_NAME,
+          description: "Персональный ИИ-помощник по профсоюзным вопросам",
+          isPublic: false,
+          participants: {
+            create: [
+              {
+                userId: userId,
+                role: "member",
+              },
+            ],
+          },
+        },
+        include: {
+          participants: {
+            where: { leftAt: null },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  avatarUrl: true,
+                },
+              },
+            },
+          },
+          messages: {
+            take: 1,
+            orderBy: { createdAt: "desc" },
+          },
+          _count: {
+            select: { messages: true },
+          },
+        },
+      });
+
+      // Отправляем приветственное сообщение от бота
+      await prisma.chatMessage.create({
+        data: {
+          chatId: aiChat.id,
+          senderId: userId, // Временно используем userId, так как у бота нет реального user
+          content: `Здравствуйте! Я ИИ-Ассистент МойСоюз. 
+
+Я помогу вам с вопросами о:
+- Профсоюзном членстве и взносах
+- Оформлении документов и заявлений
+- Правовых вопросах и трудовых спорах
+- Льготах и скидках для членов профсоюза
+- Работе приложения МойСоюз
+
+Задайте свой вопрос, и я постараюсь помочь!`,
+          messageType: "system",
+        },
+      });
+    }
+
+    // Форматируем ответ
+    const response = {
+      id: aiChat.id,
+      type: "PRIVATE" as const,
+      name: AI_CHAT_NAME,
+      description: aiChat.description,
+      iconUrl: null,
+      isPublic: false,
+      lastMessage: aiChat.messages[0]?.content || null,
+      lastMessageAt: aiChat.messages[0]?.createdAt || aiChat.createdAt,
+      unreadCount: 0,
+      createdAt: aiChat.createdAt,
+      // Виртуальный "другой пользователь" - бот
+      otherUser: {
+        id: AI_BOT_ID,
+        firstName: "ИИ",
+        lastName: "Ассистент",
+        middleName: null,
+        avatarUrl: null,
+        isBot: true,
+      },
+      participants: aiChat.participants,
+      participantsCount: aiChat.participants.length,
+      _count: aiChat._count,
+      isAIChat: true,
+    };
+
+    return NextResponse.json({ chat: response });
+  } catch (error: any) {
+    console.error("[chat/ai] GET error:", error);
+    return NextResponse.json(
+      {
+        error: "Ошибка при получении чата с ИИ",
+        details: process.env.NODE_ENV === "development" ? error.message : undefined,
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/chat/ai
+ * Отправить сообщение в чат с ИИ и получить ответ
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    const userId = session.user.id;
+    const { content, chatId } = await request.json();
+
+    if (!content?.trim()) {
+      return NextResponse.json({ error: "Сообщение не может быть пустым" }, { status: 400 });
+    }
+
+    // Проверяем, что чат существует и пользователь является участником
+    const chat = await prisma.chat.findFirst({
+      where: {
+        id: chatId,
+        name: AI_CHAT_NAME,
+        participants: {
+          some: {
+            userId: userId,
+            leftAt: null,
+          },
+        },
+      },
+    });
+
+    if (!chat) {
+      return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
+    }
+
+    // Сохраняем сообщение пользователя
+    const userMessage = await prisma.chatMessage.create({
+      data: {
+        chatId: chat.id,
+        senderId: userId,
+        content: content.trim(),
+        messageType: "text",
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    // Обновляем lastMessageAt в чате
+    await prisma.chat.update({
+      where: { id: chat.id },
+      data: {
+        lastMessageId: userMessage.id,
+        lastMessageAt: userMessage.createdAt,
+      },
+    });
+
+    // Получаем ответ от ИИ через существующий API
+    let aiResponse = "Извините, произошла ошибка при обработке вашего запроса. Пожалуйста, попробуйте позже.";
+
+    try {
+      // Получаем историю сообщений для контекста
+      const history = await prisma.chatMessage.findMany({
+        where: { chatId: chat.id },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: {
+          content: true,
+          senderId: true,
+          messageType: true,
+        },
+      });
+
+      const messagesForAI = history
+        .reverse()
+        .filter(m => m.messageType !== "system")
+        .map(m => ({
+          role: m.senderId === userId ? "user" : "assistant",
+          content: m.content,
+        }));
+
+      // Вызываем ИИ API
+      const aiApiResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"}/api/assistant/chat`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: request.headers.get("cookie") || "",
+          },
+          body: JSON.stringify({
+            messages: messagesForAI,
+            stream: false,
+          }),
+        }
+      );
+
+      if (aiApiResponse.ok) {
+        const aiData = await aiApiResponse.json();
+        aiResponse = aiData.response || aiData.content || aiResponse;
+      }
+    } catch (aiError) {
+      console.error("[chat/ai] AI API error:", aiError);
+    }
+
+    // Сохраняем ответ ИИ
+    const botMessage = await prisma.chatMessage.create({
+      data: {
+        chatId: chat.id,
+        senderId: userId, // Используем userId, т.к. бот виртуальный
+        content: aiResponse,
+        messageType: "assistant", // Помечаем как сообщение от ассистента
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    // Обновляем lastMessageAt
+    await prisma.chat.update({
+      where: { id: chat.id },
+      data: {
+        lastMessageId: botMessage.id,
+        lastMessageAt: botMessage.createdAt,
+      },
+    });
+
+    return NextResponse.json({
+      userMessage: {
+        id: userMessage.id,
+        content: userMessage.content,
+        senderId: userMessage.senderId,
+        sender: userMessage.sender,
+        messageType: userMessage.messageType,
+        createdAt: userMessage.createdAt,
+      },
+      botMessage: {
+        id: botMessage.id,
+        content: botMessage.content,
+        senderId: AI_BOT_ID, // Возвращаем виртуальный ID бота
+        sender: {
+          id: AI_BOT_ID,
+          firstName: "ИИ",
+          lastName: "Ассистент",
+          avatarUrl: null,
+        },
+        messageType: botMessage.messageType,
+        createdAt: botMessage.createdAt,
+      },
+    });
+  } catch (error: any) {
+    console.error("[chat/ai] POST error:", error);
+    return NextResponse.json(
+      {
+        error: "Ошибка при отправке сообщения",
+        details: process.env.NODE_ENV === "development" ? error.message : undefined,
+      },
+      { status: 500 }
+    );
+  }
+}
