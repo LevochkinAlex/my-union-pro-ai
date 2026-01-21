@@ -99,6 +99,7 @@ export interface SlackStyleMessagesProps {
   isTicketChat?: boolean;
   isGroupChat?: boolean; // Для определения типа чата (групповой или приватный)
   onReply?: (message: Message) => void;
+  onStartThread?: (message: Message) => void;
   onEdit?: (message: Message) => void;
   onDelete?: (messageId: string) => void;
   onReaction?: (messageId: string, emoji: string) => void;
@@ -187,8 +188,10 @@ interface ContextMenuProps {
   y: number;
   message: Message;
   isOwn: boolean;
+  isGroupChat?: boolean;
   onClose: () => void;
   onReply?: () => void;
+  onStartThread?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onForward?: () => void;
@@ -201,8 +204,10 @@ function ContextMenu({
   y,
   message,
   isOwn,
+  isGroupChat = false,
   onClose,
   onReply,
+  onStartThread,
   onEdit,
   onDelete,
   onForward,
@@ -282,6 +287,16 @@ function ContextMenu({
           <Reply className="w-4 h-4" />
           Ответить
         </button>
+        
+        {isGroupChat && onStartThread && (
+          <button
+            onClick={() => { onStartThread?.(); onClose(); }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            <MessageSquare className="w-4 h-4" />
+            Ответить в треде
+          </button>
+        )}
         
         {onForward && (
           <button
@@ -771,6 +786,7 @@ export default function SlackStyleMessages({
   isTicketChat = false,
   isGroupChat = false,
   onReply,
+  onStartThread,
   onEdit,
   onDelete,
   onReaction,
@@ -907,8 +923,10 @@ export default function SlackStyleMessages({
           y={contextMenu.y}
           message={contextMenu.message}
           isOwn={contextMenu.message.senderId === currentUserId}
+          isGroupChat={isGroupChat}
           onClose={() => setContextMenu(null)}
           onReply={() => onReply?.(contextMenu.message)}
+          onStartThread={() => onStartThread?.(contextMenu.message)}
           onEdit={() => onEdit?.(contextMenu.message)}
           onDelete={() => onDelete?.(contextMenu.message.id)}
           onForward={() => onForward?.(contextMenu.message)}

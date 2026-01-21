@@ -16,7 +16,7 @@ interface User {
 interface GroupChatModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (data: { name: string; description?: string; participantIds: string[]; iconUrl?: string | null }) => Promise<void>;
+  onCreate: (data: { name: string; description?: string; participantIds: string[]; iconUrl?: string | null; type?: 'GROUP' | 'CHANNEL' }) => Promise<void>;
   onUpdate?: (data: { name: string; description?: string; participantIds: string[]; iconUrl?: string | null; adminId?: string }) => Promise<void>;
   mode: 'create' | 'edit';
   groupId?: string;
@@ -44,6 +44,7 @@ export default function GroupChatModal({
   const [description, setDescription] = useState(initialData?.description || '');
   const [iconUrl, setIconUrl] = useState<string | null>(initialData?.iconUrl || null);
   const [adminId, setAdminId] = useState<string | undefined>(initialData?.adminId);
+  const [chatType, setChatType] = useState<'GROUP' | 'CHANNEL'>('GROUP');
   const [searchTerm, setSearchTerm] = useState('');
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<Array<User & { isAdmin?: boolean }>>(initialData?.participants || []);
@@ -122,6 +123,7 @@ export default function GroupChatModal({
         description: description.trim() || undefined,
         participantIds: selectedUsers.map(u => u.id),
         iconUrl: iconUrl || undefined,
+        ...(mode === 'create' ? { type: chatType } : {}),
         ...(mode === 'edit' && adminId ? { adminId } : {}),
       };
 
@@ -145,6 +147,7 @@ export default function GroupChatModal({
     setDescription('');
     setIconUrl(null);
     setAdminId(undefined);
+    setChatType('GROUP');
     setSelectedUsers([]);
     setSearchTerm('');
     onClose();
@@ -233,6 +236,55 @@ export default function GroupChatModal({
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white resize-none"
             />
           </div>
+
+          {/* Chat type (only for create mode) */}
+          {mode === 'create' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Тип чата
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setChatType('GROUP')}
+                  className={`
+                    p-4 border-2 rounded-lg text-left transition-all
+                    ${chatType === 'GROUP'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                      : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600'
+                    }
+                  `}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Users className="w-5 h-5 text-blue-600" />
+                    <span className="font-semibold text-gray-900 dark:text-white">Группа</span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    Все участники могут отправлять сообщения и создавать треды
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChatType('CHANNEL')}
+                  className={`
+                    p-4 border-2 rounded-lg text-left transition-all
+                    ${chatType === 'CHANNEL'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                      : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600'
+                    }
+                  `}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Crown className="w-5 h-5 text-blue-600" />
+                    <span className="font-semibold text-gray-900 dark:text-white">Канал</span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    Только председатель создает посты, участники комментируют в тредах
+                  </p>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Selected users */}
           {selectedUsers.length > 0 && (

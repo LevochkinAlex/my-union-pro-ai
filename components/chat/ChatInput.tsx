@@ -17,13 +17,14 @@ import {
 import EmojiPicker from './EmojiPicker';
 
 interface ChatInputProps {
-  onSend: (content: string, files?: File[], replyToId?: string) => void;
+  onSend: (content: string, files?: File[], replyToId?: string, threadRootId?: string) => void;
   disabled?: boolean;
   replyTo?: {
     id: string;
     content: string;
     senderName?: string;
   } | null;
+  threadRootId?: string | null; // ID корневого сообщения треда (если отправляем в тред)
   editingMessage?: string | null;
   onCancelReply?: () => void;
   onCancelEdit?: () => void;
@@ -64,6 +65,7 @@ export default function ChatInput({
   onSend, 
   disabled, 
   replyTo, 
+  threadRootId,
   editingMessage,
   onCancelReply,
   onCancelEdit,
@@ -100,7 +102,7 @@ export default function ChatInput({
     const trimmedContent = content.trim();
     if ((!trimmedContent && attachedFiles.length === 0) || disabled) return;
     
-    onSend(trimmedContent, attachedFiles.length > 0 ? attachedFiles : undefined, replyTo?.id);
+    onSend(trimmedContent, attachedFiles.length > 0 ? attachedFiles : undefined, replyTo?.id, threadRootId || undefined);
     setContent('');
     setAttachedFiles([]);
     
@@ -108,7 +110,7 @@ export default function ChatInput({
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [content, attachedFiles, disabled, onSend, replyTo?.id]);
+  }, [content, attachedFiles, disabled, onSend, replyTo?.id, threadRootId]);
 
   const handleCancel = useCallback(() => {
     if (editingMessage && onCancelEdit) {

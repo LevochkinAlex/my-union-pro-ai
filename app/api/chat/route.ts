@@ -240,7 +240,7 @@ export async function POST(request: NextRequest) {
 
     const userId = session.user.id;
     const body = await request.json();
-    const { targetUserId, participantIds, name, description, iconUrl } = body;
+    const { targetUserId, participantIds, name, description, iconUrl, type } = body;
 
     let chat;
     let isNew = false;
@@ -286,13 +286,15 @@ export async function POST(request: NextRequest) {
         chat = existingChat;
         isNew = false;
       } else {
-        // Создаем новый групповой чат
-        console.log('[chat] Creating new group chat with participants:', participantIds);
+        // Создаем новый групповой чат или канал
+        const chatType = type === 'CHANNEL' ? 'CHANNEL' : 'GROUP';
+        const defaultName = chatType === 'CHANNEL' ? 'Канал' : 'Групповой чат';
+        console.log(`[chat] Creating new ${chatType} chat with participants:`, participantIds);
         try {
           chat = await prisma.chat.create({
             data: {
-              type: 'GROUP',
-              name: name || 'Групповой чат',
+              type: chatType,
+              name: name || defaultName,
               description: description?.trim() || null,
               iconUrl: iconUrl || null,
               createdById: userId,

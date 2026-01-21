@@ -343,7 +343,7 @@ export default function SlackStyleChat({
     }
   }, [createOrOpenChat]);
 
-  const handleCreateGroup = useCallback(async (data: { name: string; description?: string; participantIds: string[]; iconUrl?: string | null }) => {
+  const handleCreateGroup = useCallback(async (data: { name: string; description?: string; participantIds: string[]; iconUrl?: string | null; type?: 'GROUP' | 'CHANNEL' }) => {
     console.log('[SlackStyleChat] Creating group:', data);
     try {
       const response = await fetch("/api/chat", {
@@ -354,6 +354,7 @@ export default function SlackStyleChat({
           name: data.name,
           description: data.description,
           iconUrl: data.iconUrl,
+          type: data.type || 'GROUP',
         }),
       });
 
@@ -413,7 +414,7 @@ export default function SlackStyleChat({
     }
   }, [selectedChat, loadChats, selectChat, showToast]);
 
-  const handleSendMessage = useCallback(async (content: string, files?: File[], replyToId?: string) => {
+  const handleSendMessage = useCallback(async (content: string, files?: File[], replyToId?: string, threadRootId?: string) => {
     if (editingMessage) {
       const success = await editMessage(editingMessage.id, content);
       if (success) {
@@ -432,6 +433,7 @@ export default function SlackStyleChat({
           formData.append("content", files.indexOf(file) === 0 ? content : "");
           formData.append("file", file);
           if (replyToId) formData.append("replyToId", replyToId);
+          if (threadRootId) formData.append("threadRootId", threadRootId);
 
           try {
             const response = await fetch(`/api/chat/${selectedChat.id}/attachments`, {
@@ -457,13 +459,14 @@ export default function SlackStyleChat({
         setReplyingTo(null);
         loadChats();
       } else {
-        const success = await sendMessage(content, undefined, replyToId || replyingTo?.id);
+        const currentThreadRootId = activeThread?.id || undefined;
+        const success = await sendMessage(content, undefined, replyToId || replyingTo?.id, currentThreadRootId);
         if (success) {
           setReplyingTo(null);
         }
       }
     }
-  }, [editingMessage, replyingTo, selectedChat, editMessage, sendMessage, loadChats, showToast]);
+  }, [editingMessage, replyingTo, selectedChat, editMessage, sendMessage, loadChats, showToast, activeThread]);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (deleteConfirm.messageId) {
@@ -530,7 +533,7 @@ export default function SlackStyleChat({
                   setGroupModalMode('edit');
                   setShowGroupModal(true);
                 }}
-                isCurrentUserAdmin={selectedChat.type === 'GROUP' && selectedChat.participants?.some(
+                isCurrentUserAdmin={(selectedChat.type === 'GROUP' || selectedChat.type === 'CHANNEL') && selectedChat.participants?.some(
                   p => p.userId === currentUserId && p.role === 'admin'
                 )}
               />
@@ -538,12 +541,16 @@ export default function SlackStyleChat({
               <div className="flex-1 flex overflow-hidden relative">
                 <div className="flex-1 flex flex-col min-w-0">
                   <SlackStyleMessages
-                    isGroupChat={selectedChat?.type === 'GROUP'}
+                    isGroupChat={selectedChat?.type === 'GROUP' || selectedChat?.type === 'CHANNEL'}
                     messages={formattedMessages}
                     currentUserId={currentUserId || ""}
                     typingUsers={new Set(typingUsers?.map((u) => typeof u === "string" ? u : (u as any).userId) || [])}
                     isTicketChat={!!selectedChat.ticketId}
                     onReply={(msg) => setReplyingTo(msg as any)}
+                    onStartThread={(msg) => {
+                      // Открываем тред для этого сообщения
+                      setActiveThread(msg as any);
+                    }}
                     onEdit={(msg) => setEditingMessage(msg as any)}
                     onDelete={(id) => setDeleteConfirm({ isOpen: true, messageId: id })}
                     onReaction={(id, emoji) => toggleReaction(id, emoji)}
@@ -551,20 +558,39 @@ export default function SlackStyleChat({
                     onImageClick={(url, name) => setSelectedImage({ url, name })}
                   />
 
-                  <ChatInput
-                    onSend={handleSendMessage}
-                    replyTo={replyingTo ? {
-                      id: replyingTo.id,
-                      content: replyingTo.content,
-                      senderName: replyingTo.sender ? 
-                        [replyingTo.sender.firstName, replyingTo.sender.lastName].filter(Boolean).join(" ") : 
-                        undefined
-                    } : null}
-                    editingMessage={editingMessage?.content || null}
-                    onCancelReply={() => setReplyingTo(null)}
-                    onCancelEdit={() => setEditingMessage(null)}
-                    disabled={sending}
-                  />
+                  {/* Для каналов: только админ может создавать посты, остальные только в тредах */}
+                  {selectedChat.type === 'CHANNEL' && !selectedChat.participants?.some(
+                    p => p.userId === currentUserId && p.role === 'admin'
+                  ) && !activeThread ? (
+                    <div className="px-4 py-3 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
+                        В каналах только председатель может создавать посты. Вы можете комментировать посты в тредах.
+                      </p>
+                    </div>
+                  ) : (
+                    <ChatInput
+                      onSend={handleSendMessage}
+                      replyTo={replyingTo ? {
+                        id: replyingTo.id,
+                        content: replyingTo.content,
+                        senderName: replyingTo.sender ? 
+                          [replyingTo.sender.firstName, replyingTo.sender.lastName].filter(Boolean).join(" ") : 
+                          undefined
+                      } : null}
+                      threadRootId={activeThread?.id || null}
+                      editingMessage={editingMessage?.content || null}
+                      onCancelReply={() => setReplyingTo(null)}
+                      onCancelEdit={() => setEditingMessage(null)}
+                      disabled={sending}
+                      placeholder={
+                        selectedChat.type === 'CHANNEL' && activeThread
+                          ? "Напишите комментарий в треде..."
+                          : selectedChat.type === 'CHANNEL'
+                          ? "Создайте пост в канале..."
+                          : "Напишите сообщение..."
+                      }
+                    />
+                  )}
                 </div>
 
                 {/* Thread panel */}

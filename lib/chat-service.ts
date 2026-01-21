@@ -15,7 +15,7 @@ import { invalidateUserChatsCache, invalidateChatCache } from "@/lib/chat-redis"
 // ТИПЫ
 // ============================================================================
 
-export type ChatType = "PRIVATE" | "GROUP";
+export type ChatType = "PRIVATE" | "GROUP" | "CHANNEL";
 export type ParticipantRole = "admin" | "member";
 
 export interface ChatFilter {

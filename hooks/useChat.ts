@@ -308,7 +308,8 @@ export function useChat(options: UseChatOptions = {}) {
   const sendMessage = useCallback(async (
     content: string,
     file?: File,
-    replyToId?: string
+    replyToId?: string,
+    threadRootId?: string
   ): Promise<boolean> => {
     if (!selectedChat) return false;
 
@@ -321,6 +322,7 @@ export function useChat(options: UseChatOptions = {}) {
         formData.append("content", content);
         formData.append("file", file);
         if (replyToId) formData.append("replyToId", replyToId);
+        if (threadRootId) formData.append("threadRootId", threadRootId);
 
         const response = await fetch(`/api/chat/${selectedChat.id}/attachments`, {
           method: "POST",
@@ -347,7 +349,7 @@ export function useChat(options: UseChatOptions = {}) {
               fetch(`/api/chat/${selectedChat.id}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ content, replyToId }),
+                body: JSON.stringify({ content, replyToId, threadRootId }),
               })
                 .then(async (res) => {
                   if (res.ok) {
@@ -372,7 +374,7 @@ export function useChat(options: UseChatOptions = {}) {
 
             socketRef.current!.emit(
               "message:send" as any,
-              { chatId: selectedChat.id, content, replyToId },
+              { chatId: selectedChat.id, content, replyToId, threadRootId },
               (response: any) => {
                 clearTimeout(timeout);
                 setSending(false);
@@ -415,7 +417,7 @@ export function useChat(options: UseChatOptions = {}) {
             const response = await fetch(`/api/chat/${selectedChat.id}`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ content, replyToId }),
+              body: JSON.stringify({ content, replyToId, threadRootId }),
             });
 
             if (response.ok) {

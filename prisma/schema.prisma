@@ -70,22 +70,22 @@ model User {
 
   // Двойная роль: Член профсоюза + Руководитель организации
   // Первичная профсоюзная организация (ППО)
-  isPPOHead              Boolean  @default(false) // Флаг что пользователь является председателем ППО
-  ppoHeadOrganizationId  String?  @unique // ID ППО где пользователь является председателем
-  ppoHeadOrganization    Organization? @relation("PPOHeadOrganization", fields: [ppoHeadOrganizationId], references: [id])
-  
+  isPPOHead             Boolean       @default(false) // Флаг что пользователь является председателем ППО
+  ppoHeadOrganizationId String?       @unique // ID ППО где пользователь является председателем
+  ppoHeadOrganization   Organization? @relation("PPOHeadOrganization", fields: [ppoHeadOrganizationId], references: [id])
+
   // Местная организация (МПО)
-  isMPOHead              Boolean  @default(false) // Флаг что пользователь является председателем МПО
-  mpoHeadOrganizationId  String?  @unique // ID МПО где пользователь является председателем
-  mpoHeadOrganization    Organization? @relation("MPOHeadOrganization", fields: [mpoHeadOrganizationId], references: [id])
-  
+  isMPOHead             Boolean       @default(false) // Флаг что пользователь является председателем МПО
+  mpoHeadOrganizationId String?       @unique // ID МПО где пользователь является председателем
+  mpoHeadOrganization   Organization? @relation("MPOHeadOrganization", fields: [mpoHeadOrganizationId], references: [id])
+
   // Региональная организация (РПО)
-  isRPOHead              Boolean  @default(false) // Флаг что пользователь является председателем РПО
-  rpoHeadOrganizationId  String?  @unique // ID РПО где пользователь является председателем
-  rpoHeadOrganization    Organization? @relation("RPOHeadOrganization", fields: [rpoHeadOrganizationId], references: [id])
-  
+  isRPOHead             Boolean       @default(false) // Флаг что пользователь является председателем РПО
+  rpoHeadOrganizationId String?       @unique // ID РПО где пользователь является председателем
+  rpoHeadOrganization   Organization? @relation("RPOHeadOrganization", fields: [rpoHeadOrganizationId], references: [id])
+
   // Текущий режим просмотра: MEMBER, PPO_HEAD, MPO_HEAD, RPO_HEAD
-  viewMode               String   @default("MEMBER")
+  viewMode String @default("MEMBER")
 
   // Персональные данные
   firstName   String?
@@ -157,15 +157,15 @@ model User {
 
   // Документы пользователя
   documents Document[]
-  
+
   // Документооборот: назначенные документы
-  assignedDocuments  Document[] @relation("DocumentAssignedTo")
-  approvedDocuments  Document[] @relation("DocumentApprovedBy")
-  signedDocuments    Document[] @relation("DocumentSignedBy")
-  
+  assignedDocuments Document[] @relation("DocumentAssignedTo")
+  approvedDocuments Document[] @relation("DocumentApprovedBy")
+  signedDocuments   Document[] @relation("DocumentSignedBy")
+
   // История изменений статусов документов
   documentStatusChanges DocumentStatusHistory[] @relation("DocumentStatusChangedBy")
-  
+
   // Согласования документов
   documentApprovals DocumentApproval[] @relation("DocumentApprovalUser")
 
@@ -184,13 +184,13 @@ model User {
   updatedDocumentTemplates   DocumentTemplate[]  @relation("DocumentTemplateUpdatedBy")
 
   // Тикеты (обращения)
-  tickets        Ticket[]        @relation("UserTickets")
-  ticketComments TicketComment[] @relation("UserTicketComments")
+  tickets        Ticket[]          @relation("UserTickets")
+  ticketComments TicketComment[]   @relation("UserTicketComments")
   ticketActions  TicketActionLog[] @relation("UserTicketActions")
 
   // Push Notifications
-  pushSubscriptions  PushSubscription[]
-  discountPreference DiscountPreference?
+  pushSubscriptions   PushSubscription[]
+  discountPreference  DiscountPreference?
   discountActivations DiscountActivation[] @relation("DiscountActivations")
   discountFavorites   DiscountFavorite[]   @relation("DiscountFavorites")
 
@@ -204,12 +204,12 @@ model User {
   bestBenefitsPassword  String? // Пароль для BestBenefits (зашифрован AES-256-GCM)
 
   // Профсоюзное членство
-  unionCardNumber            String?   @unique // Номер профсоюзной карточки (16-значный код формата XXXX XXXX XXXX XXXX)
-  membershipJoinedAt         DateTime? // Дата вступления в профсоюз (если принят вышестоящим органом)
-  membershipExcludedAt       DateTime? // Дата исключения из профсоюза
-  membershipExclusionReason  String?   @db.Text // Причина исключения
-  unionMembershipStatus      String?   @default("NOT_ACCEPTED") // Статус членства: ACCEPTED (принят на учет), NOT_ACCEPTED (не принят), REMOVED (снят с учета)
-  isExistingMember           Boolean   @default(false) // Уже действующий член (документы на бумаге у председателя)
+  unionCardNumber           String?   @unique // Номер профсоюзной карточки (16-значный код формата XXXX XXXX XXXX XXXX)
+  membershipJoinedAt        DateTime? // Дата вступления в профсоюз (если принят вышестоящим органом)
+  membershipExcludedAt      DateTime? // Дата исключения из профсоюза
+  membershipExclusionReason String?   @db.Text // Причина исключения
+  unionMembershipStatus     String?   @default("NOT_ACCEPTED") // Статус членства: ACCEPTED (принят на учет), NOT_ACCEPTED (не принят), REMOVED (снят с учета)
+  isExistingMember          Boolean   @default(false) // Уже действующий член (документы на бумаге у председателя)
 
   // История членства
   membershipHistory MembershipHistory[]
@@ -226,7 +226,7 @@ model User {
 
   // Новости
   newsPosts     NewsPost[]     @relation("NewsPostAuthor")
-  newsChannels  NewsChannel[]   @relation("NewsChannelCreator")
+  newsChannels  NewsChannel[]  @relation("NewsChannelCreator")
   newsLikes     NewsLike[]     @relation("NewsLikeUser")
   newsViews     NewsView[]     @relation("NewsViewUser")
   newsComments  NewsComment[]  @relation("NewsCommentUser")
@@ -238,17 +238,17 @@ model User {
   subscribers   UserSubscription[] @relation("UserSubscribers")
 
   // Созданные групповые чаты
-  createdChats        Chat[]        @relation("ChatCreator")
+  createdChats     Chat[]                @relation("ChatCreator")
   // Участник чатов
-  chatParticipants    ChatParticipant[] @relation("ChatParticipants")
+  chatParticipants ChatParticipant[]     @relation("ChatParticipants")
   // Приглашенные в чаты
-  invitedToChats      ChatParticipant[] @relation("ChatInviter")
+  invitedToChats   ChatParticipant[]     @relation("ChatInviter")
   // Сообщения в чатах
-  chatMessages        ChatMessage[] @relation("ChatMessageSender")
+  chatMessages     ChatMessage[]         @relation("ChatMessageSender")
   // Реакции на сообщения
-  messageReactions    ChatMessageReaction[] @relation("ChatMessageReactions")
+  messageReactions ChatMessageReaction[] @relation("ChatMessageReactions")
   // Прочитанные сообщения
-  messageReads        ChatMessageRead[] @relation("ChatMessageReads")
+  messageReads     ChatMessageRead[]     @relation("ChatMessageReads")
 
   // Посты пользователя
   posts        UserPost[]    @relation("UserPostAuthor")
@@ -273,14 +273,14 @@ model User {
   staffPositions OrganizationStaff[] @relation("UserStaffPositions")
 
   // Заседания профкома
-  createdMeetings        Meeting[]             @relation("MeetingCreatedBy")
-  meetingParticipations  MeetingParticipant[]  @relation("UserMeetingParticipations")
-  agendaItemsSpeaker     MeetingAgendaItem[]   @relation("AgendaItemSpeaker")
-  agendaVotes            MeetingAgendaVote[]   @relation("UserAgendaVotes")
+  createdMeetings       Meeting[]            @relation("MeetingCreatedBy")
+  meetingParticipations MeetingParticipant[] @relation("UserMeetingParticipations")
+  agendaItemsSpeaker    MeetingAgendaItem[]  @relation("AgendaItemSpeaker")
+  agendaVotes           MeetingAgendaVote[]  @relation("UserAgendaVotes")
 
   // Matrix интеграция (чат)
-  matrixUserId       String?  @unique // Matrix User ID (@username:matrix.myunion.pro)
-  matrixAccessToken  String?  @db.Text // Matrix Access Token для API
+  matrixUserId      String? @unique // Matrix User ID (@username:matrix.myunion.pro)
+  matrixAccessToken String? @db.Text // Matrix Access Token для API
 
   @@index([email])
   @@index([phone])
@@ -444,27 +444,27 @@ model Organization {
   // Председатель (общие поля)
   chairmanName     String? // ФИО председателя (дублируется для отображения)
   chairmanJobTitle String? // Должность председателя (из справочника должностей)
-  
+
   // Связь с председателем по типу организации
-  ppoChairman      User?    @relation("PPOHeadOrganization")   // Для ППО
-  mpoChairman      User?    @relation("MPOHeadOrganization")   // Для МПО
-  rpoChairman      User?    @relation("RPOHeadOrganization")   // Для РПО
+  ppoChairman User? @relation("PPOHeadOrganization") // Для ППО
+  mpoChairman User? @relation("MPOHeadOrganization") // Для МПО
+  rpoChairman User? @relation("RPOHeadOrganization") // Для РПО
 
   // Статистика организации
-  totalEmployees   Int?     @default(0) // Общее количество работников в организации (для расчёта % членства)
+  totalEmployees Int? @default(0) // Общее количество работников в организации (для расчёта % членства)
 
   // Члены
   members User[]
 
   // Документы организации
   documents Document[]
-  
+
   // Журналы регистрации документов
   documentRegistries DocumentRegistry[]
-  
+
   // Обращения (тикеты) организации
   tickets Ticket[] @relation("OrganizationTickets")
-  
+
   // Каналы публикации новостей
   newsChannels NewsChannel[] @relation("OrganizationNewsChannels")
 
@@ -552,7 +552,7 @@ model Document {
   priority DocumentPriority @default(NORMAL)
 
   // Регистрация
-  regNumber String?   // Регистрационный номер
+  regNumber String? // Регистрационный номер
   regDate   DateTime? // Дата регистрации
   dueDate   DateTime? // Срок исполнения
   isUrgent  Boolean   @default(false)
@@ -596,10 +596,10 @@ model Document {
   template   DocumentTemplate? @relation("DocumentFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
 
   // Workflow: Назначен на исполнение
-  assignedToId String?
-  assignedTo   User?     @relation("DocumentAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
-  assignedAt   DateTime?
-  executionNotes String? @db.Text // Примечания для исполнителя
+  assignedToId   String?
+  assignedTo     User?     @relation("DocumentAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedAt     DateTime?
+  executionNotes String?   @db.Text // Примечания для исполнителя
 
   // Workflow: Согласование
   approvedById String?
@@ -617,12 +617,12 @@ model Document {
   responses        Document[] @relation("DocumentResponses")
 
   // Связи с заседаниями профкома
-  meetingAsAgenda    Meeting?   @relation("MeetingAgendaDocument")     // Этот документ - повестка дня заседания
-  meetingAsProtocol  Meeting?   @relation("MeetingProtocolDocument")   // Этот документ - протокол заседания
-  meetingResolutionId String?                                          // Постановление относится к заседанию
-  meetingResolution  Meeting?   @relation("MeetingResolutions", fields: [meetingResolutionId], references: [id])
-  meetingExtractId   String?                                           // Выписка относится к заседанию
-  meetingExtract     Meeting?   @relation("MeetingExtracts", fields: [meetingExtractId], references: [id])
+  meetingAsAgenda     Meeting? @relation("MeetingAgendaDocument") // Этот документ - повестка дня заседания
+  meetingAsProtocol   Meeting? @relation("MeetingProtocolDocument") // Этот документ - протокол заседания
+  meetingResolutionId String? // Постановление относится к заседанию
+  meetingResolution   Meeting? @relation("MeetingResolutions", fields: [meetingResolutionId], references: [id])
+  meetingExtractId    String? // Выписка относится к заседанию
+  meetingExtract      Meeting? @relation("MeetingExtracts", fields: [meetingExtractId], references: [id])
 
   // Комментарий при отклонении
   rejectionReason String? @db.Text
@@ -631,13 +631,13 @@ model Document {
   metadata Json?
 
   // Верификация документа (AI-проверка)
-  verificationStatus  String?   // VERIFYING, VERIFIED, FAILED, NEEDS_REVIEW
+  verificationStatus  String? // VERIFYING, VERIFIED, FAILED, NEEDS_REVIEW
   verificationMessage String?   @db.Text
   verifiedAt          DateTime?
 
   // История статусов
   statusHistory DocumentStatusHistory[]
-  
+
   // Цепочка согласований
   approvals DocumentApproval[]
 
@@ -662,15 +662,15 @@ model Document {
 
 // История статусов документа
 model DocumentStatusHistory {
-  id             String         @id @default(cuid())
+  id             String          @id @default(cuid())
   documentId     String
-  document       Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document       Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
   status         DocumentStatus
   previousStatus DocumentStatus?
   changedById    String?
-  changedBy      User?          @relation("DocumentStatusChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
-  comment        String?        @db.Text
-  changedAt      DateTime       @default(now())
+  changedBy      User?           @relation("DocumentStatusChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
+  comment        String?         @db.Text
+  changedAt      DateTime        @default(now())
 
   @@index([documentId])
   @@index([changedById])
@@ -678,16 +678,16 @@ model DocumentStatusHistory {
 
 // Цепочка согласований документа
 model DocumentApproval {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
   userId     String
-  user       User     @relation("DocumentApprovalUser", fields: [userId], references: [id], onDelete: Cascade)
-  order      Int      @default(1) // Порядок согласования
-  status     String   @default("PENDING") // PENDING, APPROVED, REJECTED
-  comment    String?  @db.Text
+  user       User      @relation("DocumentApprovalUser", fields: [userId], references: [id], onDelete: Cascade)
+  order      Int       @default(1) // Порядок согласования
+  status     String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  comment    String?   @db.Text
   approvedAt DateTime?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   @@unique([documentId, userId])
   @@index([documentId])
@@ -702,7 +702,7 @@ model DocumentRegistry {
   year           Int
   category       DocumentCategory
   lastNumber     Int              @default(0)
-  prefix         String?          // Префикс номера (например, "ВХ", "ИСХ", "ВН")
+  prefix         String? // Префикс номера (например, "ВХ", "ИСХ", "ВН")
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
@@ -749,80 +749,80 @@ model DocumentTemplate {
 
 // Тип заседания
 enum MeetingType {
-  COMMITTEE      // Заседание профсоюзного комитета
-  BUREAU         // Заседание профбюро
-  GROUP          // Собрание профгруппы
-  YOUTH_COUNCIL  // Заседание молодежного совета
-  PRESIDIUM      // Заседание президиума
-  GENERAL        // Общее собрание
+  COMMITTEE // Заседание профсоюзного комитета
+  BUREAU // Заседание профбюро
+  GROUP // Собрание профгруппы
+  YOUTH_COUNCIL // Заседание молодежного совета
+  PRESIDIUM // Заседание президиума
+  GENERAL // Общее собрание
 }
 
 // Статус заседания
 enum MeetingStatus {
-  DRAFT         // Черновик (подготовка)
-  SCHEDULED     // Запланировано
-  IN_PROGRESS   // Идёт заседание
-  VOTING        // Голосование (для онлайн)
-  COMPLETED     // Завершено
-  CANCELLED     // Отменено
+  DRAFT // Черновик (подготовка)
+  SCHEDULED // Запланировано
+  IN_PROGRESS // Идёт заседание
+  VOTING // Голосование (для онлайн)
+  COMPLETED // Завершено
+  CANCELLED // Отменено
 }
 
 // Формат заседания
 enum MeetingFormat {
-  OFFLINE       // Очное
-  ONLINE        // Онлайн
-  HYBRID        // Смешанное
+  OFFLINE // Очное
+  ONLINE // Онлайн
+  HYBRID // Смешанное
 }
 
 // Модель заседания (объединяет все документы заседания)
 model Meeting {
-  id             String        @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
   // Информация о заседании
-  type           MeetingType
-  status         MeetingStatus @default(DRAFT)
-  format         MeetingFormat @default(OFFLINE)
-  
+  type   MeetingType
+  status MeetingStatus @default(DRAFT)
+  format MeetingFormat @default(OFFLINE)
+
   // Номер и название
-  number         String?       // Номер заседания в году (например, "1", "2")
-  title          String?       // Название/тема заседания
-  
+  number String? // Номер заседания в году (например, "1", "2")
+  title  String? // Название/тема заседания
+
   // Дата и время
-  scheduledDate  DateTime      // Запланированная дата
-  scheduledTime  String?       // Время начала (HH:MM)
-  actualStartAt  DateTime?     // Фактическое начало
-  actualEndAt    DateTime?     // Фактическое окончание
-  
+  scheduledDate DateTime // Запланированная дата
+  scheduledTime String? // Время начала (HH:MM)
+  actualStartAt DateTime? // Фактическое начало
+  actualEndAt   DateTime? // Фактическое окончание
+
   // Место проведения
-  location       String?       // Место проведения
-  onlineLink     String?       // Ссылка для онлайн-участия
-  
+  location   String? // Место проведения
+  onlineLink String? // Ссылка для онлайн-участия
+
   // Связи с документами
-  agendaDocumentId    String?  @unique // Повестка дня (Document с type=AGENDA)
-  agendaDocument      Document? @relation("MeetingAgendaDocument", fields: [agendaDocumentId], references: [id])
-  
-  protocolDocumentId  String?  @unique // Протокол (Document с type=PROTOCOL)
-  protocolDocument    Document? @relation("MeetingProtocolDocument", fields: [protocolDocumentId], references: [id])
-  
+  agendaDocumentId String?   @unique // Повестка дня (Document с type=AGENDA)
+  agendaDocument   Document? @relation("MeetingAgendaDocument", fields: [agendaDocumentId], references: [id])
+
+  protocolDocumentId String?   @unique // Протокол (Document с type=PROTOCOL)
+  protocolDocument   Document? @relation("MeetingProtocolDocument", fields: [protocolDocumentId], references: [id])
+
   // Участники и пункты повестки
-  participants   MeetingParticipant[]
-  agendaItems    MeetingAgendaItem[]
-  
+  participants MeetingParticipant[]
+  agendaItems  MeetingAgendaItem[]
+
   // Постановления и выписки (на основе протокола)
-  resolutions    Document[] @relation("MeetingResolutions")
-  extracts       Document[] @relation("MeetingExtracts")
-  
+  resolutions Document[] @relation("MeetingResolutions")
+  extracts    Document[] @relation("MeetingExtracts")
+
   // Созыватель/Организатор
-  createdById    String
-  createdBy      User     @relation("MeetingCreatedBy", fields: [createdById], references: [id])
-  
+  createdById String
+  createdBy   User   @relation("MeetingCreatedBy", fields: [createdById], references: [id])
+
   // Метаданные
-  notes          String?  @db.Text // Примечания
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  notes String? @db.Text // Примечания
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([organizationId])
   @@index([type])
@@ -832,49 +832,49 @@ model Meeting {
 
 // Роль участника заседания
 enum MeetingParticipantRole {
-  CHAIRMAN       // Председатель заседания
-  SECRETARY      // Секретарь
-  MEMBER         // Член профкома (с правом голоса)
-  INVITED        // Приглашённый (без права голоса)
-  OBSERVER       // Наблюдатель
+  CHAIRMAN // Председатель заседания
+  SECRETARY // Секретарь
+  MEMBER // Член профкома (с правом голоса)
+  INVITED // Приглашённый (без права голоса)
+  OBSERVER // Наблюдатель
 }
 
 // Статус присутствия
 enum MeetingAttendanceStatus {
-  INVITED        // Приглашён
-  CONFIRMED      // Подтвердил участие
-  PRESENT        // Присутствует
-  ABSENT         // Отсутствует
-  EXCUSED        // Отсутствует по уважительной причине
+  INVITED // Приглашён
+  CONFIRMED // Подтвердил участие
+  PRESENT // Присутствует
+  ABSENT // Отсутствует
+  EXCUSED // Отсутствует по уважительной причине
 }
 
 // Участники заседания
 model MeetingParticipant {
-  id             String                    @id @default(cuid())
-  meetingId      String
-  meeting        Meeting                   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  
+  id        String  @id @default(cuid())
+  meetingId String
+  meeting   Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
   // Связь с пользователем (если есть в системе)
-  userId         String?
-  user           User?                     @relation("UserMeetingParticipations", fields: [userId], references: [id], onDelete: SetNull)
-  
+  userId String?
+  user   User?   @relation("UserMeetingParticipations", fields: [userId], references: [id], onDelete: SetNull)
+
   // Данные участника (для участников не из системы)
-  externalName     String?                 // ФИО внешнего участника
-  externalPosition String?                 // Должность внешнего участника
-  
+  externalName     String? // ФИО внешнего участника
+  externalPosition String? // Должность внешнего участника
+
   // Роль и статус
-  role           MeetingParticipantRole    @default(MEMBER)
-  attendance     MeetingAttendanceStatus   @default(INVITED)
-  
+  role       MeetingParticipantRole  @default(MEMBER)
+  attendance MeetingAttendanceStatus @default(INVITED)
+
   // Доступ к голосованию
-  canVote        Boolean @default(true)    // Имеет право голоса
-  hasVoted       Boolean @default(false)   // Проголосовал (для онлайн)
-  
+  canVote  Boolean @default(true) // Имеет право голоса
+  hasVoted Boolean @default(false) // Проголосовал (для онлайн)
+
   // Время отметки присутствия
-  checkedInAt    DateTime?
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  checkedInAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([meetingId, userId])
   @@index([meetingId])
@@ -885,45 +885,45 @@ model MeetingParticipant {
 
 // Пункт повестки дня (вопрос)
 model MeetingAgendaItem {
-  id             String  @id @default(cuid())
-  meetingId      String
-  meeting        Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  
+  id        String  @id @default(cuid())
+  meetingId String
+  meeting   Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
   // Номер и текст вопроса
-  orderNumber    Int                      // Порядковый номер вопроса (1, 2, 3...)
-  title          String                   // Краткое название вопроса
-  description    String? @db.Text         // Подробное описание
-  
+  orderNumber Int // Порядковый номер вопроса (1, 2, 3...)
+  title       String // Краткое название вопроса
+  description String? @db.Text // Подробное описание
+
   // СЛУШАЛИ
-  heardText      String? @db.Text         // Текст "Слушали"
-  
+  heardText String? @db.Text // Текст "Слушали"
+
   // ДОКЛАДЫВАЛ
-  speakerId      String?                  // ID докладчика (User)
-  speaker        User?   @relation("AgendaItemSpeaker", fields: [speakerId], references: [id])
-  speakerName    String?                  // ФИО докладчика (если не из системы)
-  speakerPosition String?                 // Должность докладчика
-  
+  speakerId       String? // ID докладчика (User)
+  speaker         User?   @relation("AgendaItemSpeaker", fields: [speakerId], references: [id])
+  speakerName     String? // ФИО докладчика (если не из системы)
+  speakerPosition String? // Должность докладчика
+
   // ПОСТАНОВИЛИ
-  resolutionText String? @db.Text         // Текст постановления
-  
+  resolutionText String? @db.Text // Текст постановления
+
   // РЕШИЛИ (после голосования)
-  decidedText    String? @db.Text         // Текст решения (необязательное поле)
-  
+  decidedText String? @db.Text // Текст решения (необязательное поле)
+
   // Голосование
-  votes          MeetingAgendaVote[]
-  votesFor       Int     @default(0)      // За
-  votesAgainst   Int     @default(0)      // Против
-  votesAbstained Int     @default(0)      // Воздержались
-  votingCompleted Boolean @default(false) // Голосование завершено
-  
+  votes           MeetingAgendaVote[]
+  votesFor        Int                 @default(0) // За
+  votesAgainst    Int                 @default(0) // Против
+  votesAbstained  Int                 @default(0) // Воздержались
+  votingCompleted Boolean             @default(false) // Голосование завершено
+
   // Статус вопроса
-  isApproved     Boolean?                 // Принят / Не принят
-  
+  isApproved Boolean? // Принят / Не принят
+
   // Прикреплённые файлы/документы
-  attachments    String? @db.Text         // JSON массив файлов
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  attachments String? @db.Text // JSON массив файлов
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([meetingId])
   @@index([orderNumber])
@@ -931,22 +931,22 @@ model MeetingAgendaItem {
 
 // Голосование по пункту повестки
 model MeetingAgendaVote {
-  id             String           @id @default(cuid())
-  agendaItemId   String
-  agendaItem     MeetingAgendaItem @relation(fields: [agendaItemId], references: [id], onDelete: Cascade)
-  
+  id           String            @id @default(cuid())
+  agendaItemId String
+  agendaItem   MeetingAgendaItem @relation(fields: [agendaItemId], references: [id], onDelete: Cascade)
+
   // Голосующий
-  participantId  String?          // Связь с MeetingParticipant (если через систему)
-  userId         String?          // Связь с User напрямую
-  user           User?            @relation("UserAgendaVotes", fields: [userId], references: [id])
-  voterName      String?          // ФИО (для ручного ввода)
-  
+  participantId String? // Связь с MeetingParticipant (если через систему)
+  userId        String? // Связь с User напрямую
+  user          User?   @relation("UserAgendaVotes", fields: [userId], references: [id])
+  voterName     String? // ФИО (для ручного ввода)
+
   // Голос
-  vote           String           // "FOR", "AGAINST", "ABSTAINED"
-  comment        String?          // Комментарий к голосу
-  
+  vote    String // "FOR", "AGAINST", "ABSTAINED"
+  comment String? // Комментарий к голосу
+
   // Время голосования
-  votedAt        DateTime @default(now())
+  votedAt DateTime @default(now())
 
   @@unique([agendaItemId, userId])
   @@index([agendaItemId])
@@ -1301,7 +1301,7 @@ model Ticket {
 
   // 8-значный публичный ID для отслеживания (10000000-99999999)
   publicId String @unique @db.Char(8)
-  
+
   // Связь с чатом (если есть)
   chatId String? @unique
   chat   Chat?   @relation("TicketChat", fields: [chatId], references: [id], onDelete: SetNull)
@@ -1321,7 +1321,7 @@ model Ticket {
 
   // Ответы на тикет (комментарии)
   comments TicketComment[]
-  
+
   // Журнал действий
   actionLogs TicketActionLog[]
 
@@ -1329,19 +1329,19 @@ model Ticket {
   tags       String? // JSON массив тегов для аналитики
   resolved   Boolean   @default(false)
   resolvedAt DateTime?
-  
+
   // Связь с чатом удалена (тикеты больше не используются)
   // chatId String? @unique
   // chat   Chat?   @relation(fields: [chatId], references: [id], onDelete: SetNull)
-  
+
   // Причина отклонения (для Председателя)
   rejectionReason String? @db.Text
-  
+
   // Рейтинг полезности ответа (1-5, заполняется членом профсоюза)
-  helpfulRating Int?
-  helpfulRatingComment String? @db.Text // Комментарий к оценке
-  helpfulRatingAt DateTime? // Когда была выставлена оценка
-  
+  helpfulRating        Int?
+  helpfulRatingComment String?   @db.Text // Комментарий к оценке
+  helpfulRatingAt      DateTime? // Когда была выставлена оценка
+
   // Организация (для фильтрации обращений Председателем)
   organizationId String?
   organization   Organization? @relation("OrganizationTickets", fields: [organizationId], references: [id], onDelete: SetNull)
@@ -1491,42 +1491,42 @@ model DiscountPreference {
 
 // Локальное хранилище скидок (синхронизация с BestBenefits)
 model Discount {
-  id              Int      @id // ID из BestBenefits (не автоинкремент)
-  title           String   // Название скидки
-  description     String?  @db.Text // Полное описание (очищенное от HTML-мусора)
+  id               Int     @id // ID из BestBenefits (не автоинкремент)
+  title            String // Название скидки
+  description      String? @db.Text // Полное описание (очищенное от HTML-мусора)
   shortDescription String? @db.Text // Краткое описание
-  discountValue   String?  // Размер скидки (например "10%", "500₽")
-  
+  discountValue    String? // Размер скидки (например "10%", "500₽")
+
   // Изображение (хранится локально на CDN)
-  imageUrl        String?  @db.Text // URL на CDN (вместо base64)
+  imageUrl         String? @db.Text // URL на CDN (вместо base64)
   originalImageUrl String? @db.Text // Оригинальный URL/base64 для сверки
-  
+
   // Ссылки
-  partnerUrl      String?  @db.Text // Ссылка на партнера
-  
+  partnerUrl String? @db.Text // Ссылка на партнера
+
   // Категории и города (JSON массивы для простоты)
-  categories      Json?    // [{id, name, order}]
-  mainCategoryId  Int?     // ID главной категории
+  categories       Json? // [{id, name, order}]
+  mainCategoryId   Int? // ID главной категории
   mainCategoryName String? // Название главной категории
-  cities          Json?    // [{id, name}]
-  tags            Json?    // ["tag1", "tag2"]
-  options         Json?    // [{id, name}] - варианты скидки (например Яндекс Лавка)
-  
+  cities           Json? // [{id, name}]
+  tags             Json? // ["tag1", "tag2"]
+  options          Json? // [{id, name}] - варианты скидки (например Яндекс Лавка)
+
   // Дополнительные поля
-  isPremium       Boolean  @default(false)
-  validUntil      DateTime? // Срок действия скидки
-  
+  isPremium  Boolean   @default(false)
+  validUntil DateTime? // Срок действия скидки
+
   // Синхронизация
-  bbUpdatedAt     DateTime? // Дата обновления в BestBenefits
-  lastSyncedAt    DateTime  @default(now()) // Когда синхронизировали
-  isActive        Boolean   @default(true) // Активна ли скидка
-  
+  bbUpdatedAt  DateTime? // Дата обновления в BestBenefits
+  lastSyncedAt DateTime  @default(now()) // Когда синхронизировали
+  isActive     Boolean   @default(true) // Активна ли скидка
+
   // Связи
-  favorites       DiscountFavorite[]   @relation("DiscountFavorites")
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
+  favorites DiscountFavorite[] @relation("DiscountFavorites")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([mainCategoryId])
   @@index([isActive])
   @@index([validUntil])
@@ -1535,30 +1535,30 @@ model Discount {
 
 // Категории скидок (синхронизация с BestBenefits)
 model DiscountCategory {
-  id              Int      @id // ID из BestBenefits
-  name            String   // Название категории
-  order           Int      @default(0) // Порядок сортировки
-  iconName        String?  // Название иконки (опционально)
-  discountCount   Int      @default(0) // Количество скидок в категории
-  
-  lastSyncedAt    DateTime @default(now())
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
+  id            Int     @id // ID из BestBenefits
+  name          String // Название категории
+  order         Int     @default(0) // Порядок сортировки
+  iconName      String? // Название иконки (опционально)
+  discountCount Int     @default(0) // Количество скидок в категории
+
+  lastSyncedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([order])
 }
 
 // Избранные скидки пользователя
 model DiscountFavorite {
-  id           String   @id @default(cuid())
-  userId       String
-  user         User     @relation("DiscountFavorites", fields: [userId], references: [id], onDelete: Cascade)
-  discountId   Int
-  discount     Discount @relation("DiscountFavorites", fields: [discountId], references: [id], onDelete: Cascade)
-  
-  createdAt    DateTime @default(now())
-  
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation("DiscountFavorites", fields: [userId], references: [id], onDelete: Cascade)
+  discountId Int
+  discount   Discount @relation("DiscountFavorites", fields: [discountId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
   @@unique([userId, discountId])
   @@index([userId])
   @@index([discountId])
@@ -1566,14 +1566,14 @@ model DiscountFavorite {
 
 // Активированные скидки пользователя с промокодами и сроками действия
 model DiscountActivation {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   userId       String
-  user         User     @relation("DiscountActivations", fields: [userId], references: [id], onDelete: Cascade)
-  discountId   Int      // ID скидки из BestBenefits (связь добавим позже после синхронизации)
-  promoCode    String?  // Промокод (сохраняем локально, даже если BestBenefits очистит)
-  activatedAt  DateTime @default(now()) // Дата активации
+  user         User      @relation("DiscountActivations", fields: [userId], references: [id], onDelete: Cascade)
+  discountId   Int // ID скидки из BestBenefits (связь добавим позже после синхронизации)
+  promoCode    String? // Промокод (сохраняем локально, даже если BestBenefits очистит)
+  activatedAt  DateTime  @default(now()) // Дата активации
   validUntil   DateTime? // Срок действия скидки (из BestBenefits API)
-  syncedFromBB Boolean  @default(false) // Синхронизировано ли из BestBenefits
+  syncedFromBB Boolean   @default(false) // Синхронизировано ли из BestBenefits
   lastSyncedAt DateTime? // Когда последний раз синхронизировали с BestBenefits
 
   createdAt DateTime @default(now())
@@ -1924,7 +1924,8 @@ model UserSubscription {
 // Тип чата
 enum ChatType {
   PRIVATE // Личный чат между двумя пользователями
-  GROUP   // Групповой чат
+  GROUP // Групповой чат
+  CHANNEL // Канал (как в Slack): только председатель создает посты, участники комментируют в тредах
 }
 
 // Чаты между пользователями
@@ -1938,7 +1939,7 @@ model Chat {
   name        String? // Название группы
   description String? @db.Text // Описание группы
   iconUrl     String? @db.Text // Иконка группы
-  isPublic    Boolean  @default(true) // Публичный или закрытый (для групповых чатов)
+  isPublic    Boolean @default(true) // Публичный или закрытый (для групповых чатов)
   createdById String? // Создатель группы
   createdBy   User?   @relation("ChatCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
@@ -1946,16 +1947,16 @@ model Chat {
   participants ChatParticipant[]
 
   // Последнее сообщение (для сортировки)
-  lastMessageId   String? @unique
-  lastMessage     ChatMessage? @relation("ChatLastMessage", fields: [lastMessageId], references: [id], onDelete: SetNull)
-  lastMessageAt   DateTime?
-  
+  lastMessageId String?      @unique
+  lastMessage   ChatMessage? @relation("ChatLastMessage", fields: [lastMessageId], references: [id], onDelete: SetNull)
+  lastMessageAt DateTime?
+
   // Все сообщения чата
-  messages        ChatMessage[] @relation("ChatMessages")
-  
+  messages ChatMessage[] @relation("ChatMessages")
+
   // Обращения (тикеты) связанные с чатом
-  ticket          Ticket?       @relation("TicketChat")
-  
+  ticket Ticket? @relation("TicketChat")
+
   // Архивирован ли чат
   archivedAt DateTime?
 
@@ -1972,10 +1973,10 @@ model ChatParticipant {
   id String @id @default(cuid())
 
   chatId String
-  chat   Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
   userId String
-  user   User @relation("ChatParticipants", fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation("ChatParticipants", fields: [userId], references: [id], onDelete: Cascade)
 
   // Роль в группе
   role String @default("member") // "admin", "member"
@@ -1986,12 +1987,12 @@ model ChatParticipant {
 
   // Прочитано ли последнее сообщение
   readAt DateTime?
-  
+
   // Очищена история чата (сообщения до этой даты скрыты для пользователя)
   clearedAt DateTime?
 
   // Timestamps
-  joinedAt DateTime @default(now())
+  joinedAt DateTime  @default(now())
   leftAt   DateTime?
 
   @@unique([chatId, userId])
@@ -2002,46 +2003,46 @@ model ChatParticipant {
 
 // Сообщения чатов (заменили Matrix на собственный сервер)
 model ChatMessage {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   chatId      String
-  chat        Chat     @relation("ChatMessages", fields: [chatId], references: [id], onDelete: Cascade)
+  chat        Chat   @relation("ChatMessages", fields: [chatId], references: [id], onDelete: Cascade)
   senderId    String
-  sender      User     @relation("ChatMessageSender", fields: [senderId], references: [id])
-  content     String   @db.Text
-  messageType String   @default("text") // text, image, file, video, audio
-  
+  sender      User   @relation("ChatMessageSender", fields: [senderId], references: [id])
+  content     String @db.Text
+  messageType String @default("text") // text, image, file, video, audio
+
   // Для ответов (reply to message)
-  replyToId   String?
-  replyTo     ChatMessage? @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies     ChatMessage[] @relation("MessageReplies")
-  
+  replyToId String?
+  replyTo   ChatMessage?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   ChatMessage[] @relation("MessageReplies")
+
   // Треды (threads) - корневое сообщение треда
-  threadRootId String? @unique // Если это корневое сообщение треда, то null. Иначе - ID корневого сообщения
-  threadRoot   ChatMessage? @relation("ThreadRoot", fields: [threadRootId], references: [id], onDelete: Cascade)
+  threadRootId  String?       @unique // Если это корневое сообщение треда, то null. Иначе - ID корневого сообщения
+  threadRoot    ChatMessage?  @relation("ThreadRoot", fields: [threadRootId], references: [id], onDelete: Cascade)
   threadReplies ChatMessage[] @relation("ThreadRoot") // Ответы в треде (только для корневого сообщения)
-  
+
   // Редактирование
-  editedAt    DateTime?
-  
+  editedAt DateTime?
+
   // Вложения
   attachments ChatMessageAttachment[]
-  
+
   // Реакции
-  reactions   ChatMessageReaction[]
-  
+  reactions ChatMessageReaction[]
+
   // Прочитано кем
-  readBy      ChatMessageRead[]
-  
+  readBy ChatMessageRead[]
+
   // Метрики треда (только для корневого сообщения)
-  threadRepliesCount Int @default(0) // Количество ответов в треде
+  threadRepliesCount Int       @default(0) // Количество ответов в треде
   threadLastReplyAt  DateTime? // Время последнего ответа в треде
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Обратная связь для lastMessage в Chat
   chatAsLastMessage Chat? @relation("ChatLastMessage")
-  
+
   @@index([chatId, createdAt])
   @@index([chatId, threadRootId, createdAt]) // Для загрузки тредов
   @@index([senderId])
@@ -2050,47 +2051,47 @@ model ChatMessage {
 }
 
 model ChatMessageAttachment {
-  id          String      @id @default(cuid())
-  messageId   String
-  message     ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  type        String      // image, file, video, audio
-  url         String
-  name        String
-  size        Int?
-  mimeType    String?
+  id           String      @id @default(cuid())
+  messageId    String
+  message      ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  type         String // image, file, video, audio
+  url          String
+  name         String
+  size         Int?
+  mimeType     String?
   thumbnailUrl String?
-  width       Int?
-  height      Int?
-  
-  createdAt   DateTime    @default(now())
-  
+  width        Int?
+  height       Int?
+
+  createdAt DateTime @default(now())
+
   @@index([messageId])
 }
 
 model ChatMessageReaction {
-  id          String      @id @default(cuid())
-  messageId   String
-  message     ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User        @relation("ChatMessageReactions", fields: [userId], references: [id])
-  emoji       String      // 🎉, 👍, ❤️ и т.д.
-  
-  createdAt   DateTime    @default(now())
-  
+  id        String      @id @default(cuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation("ChatMessageReactions", fields: [userId], references: [id])
+  emoji     String // 🎉, 👍, ❤️ и т.д.
+
+  createdAt DateTime @default(now())
+
   @@unique([messageId, userId, emoji])
   @@index([messageId])
   @@index([userId])
 }
 
 model ChatMessageRead {
-  id          String      @id @default(cuid())
-  messageId   String
-  message     ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User        @relation("ChatMessageReads", fields: [userId], references: [id])
-  
-  readAt      DateTime    @default(now())
-  
+  id        String      @id @default(cuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation("ChatMessageReads", fields: [userId], references: [id])
+
+  readAt DateTime @default(now())
+
   @@unique([messageId, userId])
   @@index([messageId])
   @@index([userId])
@@ -2229,18 +2230,18 @@ model PostComment {
 model SyncLog {
   id String @id @default(cuid())
 
-  type      String   // Тип синхронизации: DISCOUNTS, USERS, etc.
-  source    String   // Источник: CRON, MANUAL, API
-  status    String   // SUCCESS, PARTIAL, FAILED
-  
-  itemsCreated Int    @default(0)
-  itemsUpdated Int    @default(0)
-  itemsFailed  Int    @default(0)
-  
-  duration  Int      // Время выполнения в миллисекундах
-  errors    Json?    // Массив ошибок (если есть)
-  metadata  Json?    // Дополнительные данные
-  
+  type   String // Тип синхронизации: DISCOUNTS, USERS, etc.
+  source String // Источник: CRON, MANUAL, API
+  status String // SUCCESS, PARTIAL, FAILED
+
+  itemsCreated Int @default(0)
+  itemsUpdated Int @default(0)
+  itemsFailed  Int @default(0)
+
+  duration Int // Время выполнения в миллисекундах
+  errors   Json? // Массив ошибок (если есть)
+  metadata Json? // Дополнительные данные
+
   createdAt DateTime @default(now())
 
   @@index([type])
@@ -2325,10 +2326,10 @@ model StaffInvitation {
   // Кого приглашаем
   email String // Email приглашаемого
   phone String? // Телефон приглашаемого (опционально)
-  
+
   // Роль которую назначаем
   roleId String
-  
+
   // Токен приглашения
   token     String   @unique
   expiresAt DateTime
@@ -2342,7 +2343,7 @@ model StaffInvitation {
 
   // Кто отправил приглашение
   invitedByUserId String
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2471,8 +2472,8 @@ model Report {
   statusHistory ReportStatusHistory[]
 
   // Подчинённые отчёты (от дочерних организаций)
-  childReports Report[] @relation("ReportHierarchy")
-  parentReport Report?  @relation("ReportHierarchy", fields: [parentReportId], references: [id], onDelete: SetNull)
+  childReports   Report[] @relation("ReportHierarchy")
+  parentReport   Report?  @relation("ReportHierarchy", fields: [parentReportId], references: [id], onDelete: SetNull)
   parentReportId String?
 
   // Причина отклонения (revision)

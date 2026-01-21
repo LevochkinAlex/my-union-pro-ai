@@ -17,7 +17,7 @@ export interface ChatUser {
 
 export interface Chat {
   id: string;
-  type?: "PRIVATE" | "GROUP";
+  type?: "PRIVATE" | "GROUP" | "CHANNEL";
   otherUser: ChatUser;
   lastMessage: string | null;
   lastMessageAt: Date | null;

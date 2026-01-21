@@ -319,8 +319,57 @@ export async function POST(
       }
     }
 
-    // Проверяем threadRootId
-    if (threadRootId) {
+    // Получаем информацию о чате для проверки типа и прав
+    const chat = await prisma.chat.findUnique({
+      where: { id: chatId },
+      include: {
+        participants: {
+          where: { userId, leftAt: null },
+        },
+      },
+    });
+
+    if (!chat) {
+      return NextResponse.json(
+        { error: 'Chat not found' },
+        { status: 404 }
+      );
+    }
+
+    // Логика для каналов (CHANNEL): только председатель/админ может создавать посты
+    if (chat.type === 'CHANNEL') {
+      const participant = chat.participants[0];
+      const isAdmin = participant?.role === 'admin';
+      
+      // Если это не ответ в треде (threadRootId отсутствует), проверяем права
+      if (!threadRootId) {
+        if (!isAdmin) {
+          return NextResponse.json(
+            { error: 'В каналах только председатель может создавать посты. Вы можете комментировать посты в тредах.' },
+            { status: 403 }
+          );
+        }
+      }
+      // Если это ответ в треде, проверяем что тред существует
+      else {
+        const threadRoot = await prisma.chatMessage.findFirst({
+          where: {
+            id: threadRootId,
+            chatId,
+            threadRootId: null, // Корневое сообщение треда
+          },
+        });
+
+        if (!threadRoot) {
+          return NextResponse.json(
+            { error: 'Тред не найден' },
+            { status: 404 }
+          );
+        }
+      }
+    }
+    // Для обычных чатов проверяем threadRootId если указан
+    else if (threadRootId) {
       const threadRoot = await prisma.chatMessage.findFirst({
         where: {
           id: threadRootId,

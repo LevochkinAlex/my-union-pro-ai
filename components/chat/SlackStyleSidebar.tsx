@@ -54,8 +54,8 @@ interface UserSearchResult {
 // ============================================================================
 
 function getChatDisplayName(chat: Chat, currentUserId: string | null): string {
-  if (chat.type === "GROUP") {
-    return chat.name || "Групповой чат";
+  if (chat.type === "GROUP" || chat.type === "CHANNEL") {
+    return chat.name || (chat.type === "CHANNEL" ? "Канал" : "Групповой чат");
   }
   if (chat.otherUser) {
     const parts = [
@@ -75,7 +75,7 @@ function getChatAvatar(chat: Chat): string | null {
 }
 
 function isWorkChat(chat: Chat): boolean {
-  return chat.type === "GROUP" && (!!chat.ticketId || !!chat.ticketPublicId);
+  return (chat.type === "GROUP" || chat.type === "CHANNEL") && (!!chat.ticketId || !!chat.ticketPublicId);
 }
 
 function isAIChat(chat: Chat): boolean {
@@ -372,7 +372,7 @@ interface ChatListItemProps {
 function ChatListItem({ chat, isSelected, currentUserId, onClick }: ChatListItemProps) {
   const displayName = getChatDisplayName(chat, currentUserId);
   const avatar = getChatAvatar(chat);
-  const isGroup = chat.type === "GROUP";
+  const isGroup = chat.type === "GROUP" || chat.type === "CHANNEL";
   const isAI = isAIChat(chat);
   const hasUnread = (chat.unreadCount || 0) > 0;
   
