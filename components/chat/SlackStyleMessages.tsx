@@ -203,6 +203,7 @@ function formatFileSize(bytes: number): string {
  * Предотвращает hydration mismatch между сервером и клиентом
  */
 function useCDNUrl(url: string | null | undefined): string {
+  // На сервере и при первой гидратации используем оригинальный URL
   const [cdnUrl, setCdnUrl] = useState<string>(url || '');
 
   useEffect(() => {
@@ -220,9 +221,11 @@ function useCDNUrl(url: string | null | undefined): string {
     // Преобразуем в CDN URL только на клиенте после гидратации
     try {
       const { getFileUrlWithCDN } = require('@/lib/cdn');
-      setCdnUrl(getFileUrlWithCDN(url, true));
-    } catch {
+      const cdnUrl = getFileUrlWithCDN(url, true);
+      setCdnUrl(cdnUrl);
+    } catch (error) {
       // В случае ошибки используем оригинальный URL
+      console.warn('[useCDNUrl] Failed to get CDN URL, using original:', error);
       setCdnUrl(url);
     }
   }, [url]);
@@ -578,9 +581,10 @@ function LazyImage({
   const [imageError, setImageError] = useState(false);
   const [shouldLoad, setShouldLoad] = useState(!isOld); // Для старых сообщений не загружаем сразу
 
-  // Используем CDN для URL
-  const cdnSrc = getAttachmentUrl({ url: src } as MessageAttachment);
-  const cdnThumbnail = thumbnail ? getAttachmentUrl({ url: thumbnail } as MessageAttachment) : undefined;
+  // Используем useCDNUrl hook для безопасного преобразования URL после гидратации
+  // Это предотвращает hydration mismatch между сервером и клиентом
+  const cdnSrc = useCDNUrl(src);
+  const cdnThumbnail = useCDNUrl(thumbnail);
 
   // Для старых сообщений используем Intersection Observer
   const containerRef = useRef<HTMLButtonElement>(null);

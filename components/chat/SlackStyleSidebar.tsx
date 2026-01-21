@@ -388,9 +388,11 @@ function ChannelAvatar({ src, alt }: { src: string; alt: string }) {
     // Пытаемся получить CDN URL с обработкой ошибок
     try {
       const { getFileUrlWithCDN } = require("@/lib/cdn");
-      setCdnUrl(getFileUrlWithCDN(src, true));
-    } catch {
+      const cdnUrl = getFileUrlWithCDN(src, true);
+      setCdnUrl(cdnUrl);
+    } catch (error) {
       // В случае ошибки используем оригинальный URL
+      console.warn('[ChannelAvatar] Failed to get CDN URL, using original:', error);
       setCdnUrl(src);
     }
   }, [src]);
