@@ -127,7 +127,7 @@ export async function fetchJsonWithRetry<T = any>(
       return null;
     }
 
-    return await safeJsonParseClient<T>(response);
+    return await safeJsonParse<T>(response);
   } catch (error) {
     console.error('[fetchJsonWithRetry] Request error:', error);
     return null;
