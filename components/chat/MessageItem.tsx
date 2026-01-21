@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Reply, MoreVertical, Edit, Trash2, Smile } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import MessageContent from './MessageContent';
 
 interface MessageItemProps {
   message: {
@@ -190,8 +189,10 @@ export default function MessageItem({
             </div>
           ) : (
             <div className="text-sm text-gray-700 dark:text-gray-300">
-              <MessageContent content={message.content} />
-      </div>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {message.content}
+              </ReactMarkdown>
+            </div>
           )}
 
           {/* Attachments */}
