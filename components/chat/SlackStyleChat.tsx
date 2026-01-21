@@ -345,10 +345,15 @@ export default function SlackStyleChat({
 
   const handleCreateGroup = useCallback(async (data: { name: string; description?: string; participantIds: string[]; iconUrl?: string | null }) => {
     try {
-      const response = await fetch("/api/ppo-head/chats/groups", {
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          participantIds: data.participantIds,
+          name: data.name,
+          description: data.description,
+          iconUrl: data.iconUrl,
+        }),
       });
 
       if (response.ok) {
@@ -360,6 +365,7 @@ export default function SlackStyleChat({
         }
       } else {
         const error = await response.json();
+        console.error("Failed to create group:", error);
         showToast(error.error || "Ошибка создания группы", "error");
       }
     } catch (error) {

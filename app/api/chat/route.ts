@@ -238,7 +238,7 @@ export async function POST(request: NextRequest) {
 
     const userId = session.user.id;
     const body = await request.json();
-    const { targetUserId, participantIds, name } = body;
+    const { targetUserId, participantIds, name, description, iconUrl } = body;
 
     let chat;
     let isNew = false;
@@ -279,6 +279,8 @@ export async function POST(request: NextRequest) {
           data: {
             type: 'GROUP',
             name: name || 'Групповой чат',
+            description: description?.trim() || null,
+            iconUrl: iconUrl || null,
             createdById: userId,
             participants: {
               create: [
@@ -333,6 +335,8 @@ export async function POST(request: NextRequest) {
         id: chat.id,
         type: chat.type,
         name: chat.name,
+        description: chat.description,
+        iconUrl: chat.iconUrl,
         isNew,
         otherUser: otherUser ? {
           id: otherUser.id,
