@@ -6,6 +6,8 @@ import { useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import GroupIconUpload from './GroupIconUpload';
+import ThreadView from './ThreadView';
+import GroupChatModal from './GroupChatModal';
 
 // Simple Avatar component
 function Avatar({ className, children }: { className?: string; children: React.ReactNode }) {
@@ -144,6 +146,8 @@ interface MatrixMessage {
   msgtype: 'm.text' | 'm.image' | 'm.file' | 'm.video' | 'm.audio';
   reactions?: MessageReaction[];
   replyTo?: ReplyInfo;
+  threadRepliesCount?: number; // Количество ответов в треде
+  threadLastReplyAt?: string; // Время последнего ответа в треде
   attachment?: MessageAttachment;
   isEdited?: boolean; // Пометка о редактировании
   editTimestamp?: number; // Время последнего редактирования
@@ -202,6 +206,9 @@ export default function MatrixChat() {
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null); // For mobile tap actions
   const [messageMenu, setMessageMenu] = useState<string | null>(null); // eventId of message with open menu
   const [contextMenu, setContextMenu] = useState<{ eventId: string; x: number; y: number } | null>(null); // Context menu position
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null); // ID корневого сообщения открытого треда
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null); // eventId of message being edited
   const [editingText, setEditingText] = useState<string>(''); // Text being edited
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
@@ -799,6 +806,8 @@ export default function MatrixChat() {
             senderName: [msg.replyTo.sender?.firstName, msg.replyTo.sender?.lastName].filter(Boolean).join(' ') || 'Пользователь',
             content: msg.replyTo.content
           } : undefined,
+          threadRepliesCount: msg.threadRepliesCount || 0,
+          threadLastReplyAt: msg.threadLastReplyAt,
           attachment: msg.attachments && msg.attachments.length > 0 ? {
             type: msg.attachments[0].type,
             url: msg.attachments[0].url,
@@ -1044,18 +1053,88 @@ export default function MatrixChat() {
     }
   };
 
+  // Start thread - создание треда из сообщения
+  const handleStartThread = async (messageId: string) => {
+    setOpenThreadId(messageId);
+  };
+
   // Send reaction - через API
   const handleReaction = async (eventId: string, emoji: string) => {
     if (!selectedRoomId) return;
     setShowReactions(null);
-    console.warn('handleReaction temporarily disabled - Matrix removed');
-    return;
+    
+    try {
+      const dbInfo = Array.from(dbRoomInfo.values()).find(info => 
+        info.matrixRoomId === selectedRoomId || 
+        info.id === selectedRoomId
+      );
+      const actualChatId = dbInfo?.id || selectedRoomId;
+
+      const response = await fetch(`/api/chat/${actualChatId}/messages/${eventId}/reactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji }),
+      });
+
+      if (response.ok) {
+        // Перезагружаем сообщения для обновления реакций
+        await loadRoomMessages(actualChatId);
+      }
+    } catch (error) {
+      console.error('Reaction error:', error);
+    }
+  };
+
+  // Edit message - через API
+  const handleEditMessage = async (messageId: string, newContent: string) => {
+    if (!selectedRoomId || !newContent.trim()) return;
+
+    try {
+      const dbInfo = Array.from(dbRoomInfo.values()).find(info => 
+        info.matrixRoomId === selectedRoomId || 
+        info.id === selectedRoomId
+      );
+      const actualChatId = dbInfo?.id || selectedRoomId;
+
+      const response = await fetch(`/api/chat/${actualChatId}/messages/${messageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: newContent.trim() }),
+      });
+
+      if (response.ok) {
+        await loadRoomMessages(actualChatId);
+        setEditingMessageId(null);
+      }
+    } catch (error) {
+      console.error('Edit error:', error);
+    }
   };
 
   // Delete message - через API
   const handleDeleteMessage = async (eventId: string) => {
-    console.warn('handleDeleteMessage temporarily disabled - Matrix removed');
-    return;
+    if (!selectedRoomId) return;
+    
+    if (!confirm('Удалить сообщение?')) return;
+
+    try {
+      const dbInfo = Array.from(dbRoomInfo.values()).find(info => 
+        info.matrixRoomId === selectedRoomId || 
+        info.id === selectedRoomId
+      );
+      const actualChatId = dbInfo?.id || selectedRoomId;
+
+      const response = await fetch(`/api/chat/${actualChatId}/messages/${eventId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        await loadRoomMessages(actualChatId);
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Не удалось удалить сообщение');
+    }
   };
 
   // Edit message - через API
@@ -2239,6 +2318,32 @@ export default function MatrixChat() {
                           ))}
                         </div>
                       )}
+
+                      {/* Thread indicator and button */}
+                      <div className={`flex items-center gap-2 mt-1 ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
+                        {msg.threadRepliesCount !== undefined && msg.threadRepliesCount > 0 ? (
+                          <button
+                            onClick={() => handleStartThread(msg.eventId)}
+                            className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                            </svg>
+                            {msg.threadRepliesCount} {msg.threadRepliesCount === 1 ? 'ответ' : 'ответов'} в треде
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleStartThread(msg.eventId)}
+                            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors opacity-0 group-hover:opacity-100"
+                            title="Создать тред"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                            </svg>
+                            Тред
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -3308,6 +3413,42 @@ export default function MatrixChat() {
           />
         </div>
       )}
+
+      {/* Thread View */}
+      {openThreadId && selectedRoomId && (
+        <ThreadView
+          threadRootId={openThreadId}
+          chatId={Array.from(dbRoomInfo.values()).find(info => 
+            info.matrixRoomId === selectedRoomId || 
+            info.id === selectedRoomId
+          )?.id || selectedRoomId}
+          onClose={() => setOpenThreadId(null)}
+          currentUserId={session?.user?.id || ''}
+        />
+      )}
+
+      {/* Group Chat Modal */}
+      <GroupChatModal
+        isOpen={showGroupModal}
+        onClose={() => setShowGroupModal(false)}
+        onCreate={async (data) => {
+          try {
+            const resp = await fetch('/api/ppo-head/chats/groups', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data),
+            });
+            if (resp.ok) {
+              await loadDbRoomInfo();
+              setShowGroupModal(false);
+            }
+          } catch (error) {
+            console.error('Failed to create group:', error);
+            throw error;
+          }
+        }}
+        mode="create"
+      />
     </div>
   );
 }

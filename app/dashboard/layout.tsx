@@ -14,32 +14,32 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   try {
-    const session = await getServerSession(authOptions);
+  const session = await getServerSession(authOptions);
 
-    // ИСПРАВЛЕНО: Добавлено логирование причин redirect
-    if (!session) {
-      console.log("[dashboard/layout] ⚠️ No session found, redirecting to /login");
-      redirect("/login");
-    }
+  // ИСПРАВЛЕНО: Добавлено логирование причин redirect
+  if (!session) {
+    console.log("[dashboard/layout] ⚠️ No session found, redirecting to /login");
+    redirect("/login");
+  }
 
-    const userRole = session.user.role;
-    const membershipStatus = session.user.membershipStatus;
-    const isImpersonating = session.user.isImpersonating || false;
-    
+  const userRole = session.user.role;
+  const membershipStatus = session.user.membershipStatus;
+  const isImpersonating = session.user.isImpersonating || false;
+  
     // Получаем дополнительные данные пользователя из БД (viewMode, isPPOHead, isMPOHead, isRPOHead)
     // Добавляем таймаут для запроса к БД
     const userData = await Promise.race([
       prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: {
-          viewMode: true,
-          isPPOHead: true,
-          ppoHeadOrganizationId: true,
+    where: { id: session.user.id },
+    select: {
+      viewMode: true,
+      isPPOHead: true,
+      ppoHeadOrganizationId: true,
           isMPOHead: true,
           mpoHeadOrganizationId: true,
           isRPOHead: true,
           rpoHeadOrganizationId: true,
-        },
+    },
       }),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error("Database query timeout")), 10000)
@@ -412,24 +412,24 @@ export default async function DashboardLayout({
     });
 
     menuItems.push({
-      href: "/dashboard/profile",
-      label: "Профиль",
-      icon: (
+        href: "/dashboard/profile",
+        label: "Профиль",
+        icon: (
         <svg key="icon-profile" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-        </svg>
-      ),
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+        ),
     });
     
     menuItems.push({
-      href: "/dashboard/settings",
-      label: "Настройки",
-      icon: (
+        href: "/dashboard/settings",
+        label: "Настройки",
+        icon: (
         <svg key="icon-settings" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      ),
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        ),
     });
   }
 

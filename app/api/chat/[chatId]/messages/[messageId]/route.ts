@@ -1,14 +1,11 @@
-/**
- * PUT /api/chat/[chatId]/messages/[messageId] - Редактировать сообщение
- * DELETE /api/chat/[chatId]/messages/[messageId] - Удалить сообщение
- */
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireChatAccess } from "@/lib/chat-service";
 
-export async function PUT(
+// PATCH - редактирование сообщения
+export async function PATCH(
   request: NextRequest,
   { params }: { params: { chatId: string; messageId: string } | Promise<{ chatId: string; messageId: string }> }
 ) {
@@ -22,12 +19,16 @@ export async function PUT(
     const { chatId, messageId } = resolvedParams;
     const userId = session.user.id;
 
-    // Проверяем доступ к чату
     await requireChatAccess(chatId, userId);
 
-    const { content } = await request.json();
+    const body = await request.json();
+    const { content } = body;
 
-    // Проверяем что сообщение принадлежит пользователю
+    if (!content || !content.trim()) {
+      return NextResponse.json({ error: "Сообщение не может быть пустым" }, { status: 400 });
+    }
+
+    // Проверяем, что сообщение принадлежит текущему пользователю
     const message = await prisma.chatMessage.findUnique({
       where: { id: messageId },
       select: { senderId: true, chatId: true },
@@ -38,18 +39,18 @@ export async function PUT(
     }
 
     if (message.chatId !== chatId) {
-      return NextResponse.json({ error: "Неверный чат" }, { status: 400 });
+      return NextResponse.json({ error: "Сообщение не принадлежит этому чату" }, { status: 403 });
     }
 
     if (message.senderId !== userId) {
-      return NextResponse.json({ error: "Нет прав на редактирование" }, { status: 403 });
+      return NextResponse.json({ error: "Вы можете редактировать только свои сообщения" }, { status: 403 });
     }
 
     // Обновляем сообщение
     const updatedMessage = await prisma.chatMessage.update({
       where: { id: messageId },
       data: {
-        content,
+        content: content.trim(),
         editedAt: new Date(),
       },
       include: {
@@ -62,10 +63,9 @@ export async function PUT(
             avatarUrl: true,
           },
         },
-        attachments: true,
-        reactions: {
+        replyTo: {
           include: {
-            user: {
+            sender: {
               select: {
                 id: true,
                 firstName: true,
@@ -75,12 +75,27 @@ export async function PUT(
             },
           },
         },
+        attachments: true,
       },
     });
 
-    return NextResponse.json({ message: updatedMessage });
+    return NextResponse.json({
+      message: {
+        id: updatedMessage.id,
+        chatId: updatedMessage.chatId,
+        sender: updatedMessage.sender,
+        content: updatedMessage.content,
+        messageType: updatedMessage.messageType,
+        replyTo: updatedMessage.replyTo,
+        threadRootId: updatedMessage.threadRootId,
+        attachments: updatedMessage.attachments,
+        editedAt: updatedMessage.editedAt,
+        createdAt: updatedMessage.createdAt,
+        updatedAt: updatedMessage.updatedAt,
+      },
+    });
   } catch (error: any) {
-    console.error("[PUT /api/chat/[chatId]/messages/[messageId]] Error:", error);
+    console.error("[PATCH /api/chat/[chatId]/messages/[messageId]] Error:", error);
     return NextResponse.json(
       { error: error.message || "Ошибка редактирования сообщения" },
       { status: 500 }
@@ -88,6 +103,7 @@ export async function PUT(
   }
 }
 
+// DELETE - удаление сообщения
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { chatId: string; messageId: string } | Promise<{ chatId: string; messageId: string }> }
@@ -102,21 +118,12 @@ export async function DELETE(
     const { chatId, messageId } = resolvedParams;
     const userId = session.user.id;
 
-    // Проверяем доступ к чату
     await requireChatAccess(chatId, userId);
 
-    // Проверяем что сообщение принадлежит пользователю или пользователь - админ чата
+    // Проверяем, что сообщение принадлежит текущему пользователю
     const message = await prisma.chatMessage.findUnique({
       where: { id: messageId },
-      include: {
-        chat: {
-          include: {
-            participants: {
-              where: { userId, leftAt: null },
-            },
-          },
-        },
-      },
+      select: { senderId: true, chatId: true },
     });
 
     if (!message) {
@@ -124,34 +131,16 @@ export async function DELETE(
     }
 
     if (message.chatId !== chatId) {
-      return NextResponse.json({ error: "Неверный чат" }, { status: 400 });
+      return NextResponse.json({ error: "Сообщение не принадлежит этому чату" }, { status: 403 });
     }
 
-    const isOwner = message.senderId === userId;
-    const isAdmin = message.chat.participants.some((p) => p.role === "admin" && p.userId === userId);
-
-    if (!isOwner && !isAdmin) {
-      return NextResponse.json({ error: "Нет прав на удаление" }, { status: 403 });
+    if (message.senderId !== userId) {
+      return NextResponse.json({ error: "Вы можете удалять только свои сообщения" }, { status: 403 });
     }
 
-    // Удаляем сообщение (каскадно удалятся реакции, вложения, прочитанные)
+    // Удаляем сообщение (каскадно удалятся реакции, вложения и т.д.)
     await prisma.chatMessage.delete({
       where: { id: messageId },
-    });
-
-    // Если это было последнее сообщение в чате, обновляем lastMessageId
-    const lastMessage = await prisma.chatMessage.findFirst({
-      where: { chatId },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, createdAt: true },
-    });
-
-    await prisma.chat.update({
-      where: { id: chatId },
-      data: {
-        lastMessageId: lastMessage?.id || null,
-        lastMessageAt: lastMessage?.createdAt || null,
-      },
     });
 
     return NextResponse.json({ success: true });

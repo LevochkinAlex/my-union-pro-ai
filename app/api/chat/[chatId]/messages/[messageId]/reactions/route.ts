@@ -1,7 +1,3 @@
-/**
- * POST /api/chat/[chatId]/messages/[messageId]/reactions
- * Добавить/удалить реакцию на сообщение
- */
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -22,26 +18,16 @@ export async function POST(
     const { chatId, messageId } = resolvedParams;
     const userId = session.user.id;
 
-    // Проверяем доступ к чату
     await requireChatAccess(chatId, userId);
 
-    const { emoji } = await request.json();
+    const body = await request.json();
+    const { emoji } = body;
 
     if (!emoji) {
-      return NextResponse.json({ error: "Emoji не указан" }, { status: 400 });
+      return NextResponse.json({ error: "Эмодзи не указан" }, { status: 400 });
     }
 
-    // Проверяем существование сообщения
-    const message = await prisma.chatMessage.findUnique({
-      where: { id: messageId },
-      select: { chatId: true },
-    });
-
-    if (!message || message.chatId !== chatId) {
-      return NextResponse.json({ error: "Сообщение не найдено" }, { status: 404 });
-    }
-
-    // Проверяем есть ли уже реакция
+    // Проверяем, есть ли уже такая реакция от этого пользователя
     const existingReaction = await prisma.chatMessageReaction.findUnique({
       where: {
         messageId_userId_emoji: {
@@ -55,36 +41,56 @@ export async function POST(
     if (existingReaction) {
       // Удаляем реакцию
       await prisma.chatMessageReaction.delete({
-        where: { id: existingReaction.id },
+        where: {
+          id: existingReaction.id,
+        },
       });
-
-      return NextResponse.json({ action: "removed", reaction: null });
     } else {
       // Добавляем реакцию
-      const reaction = await prisma.chatMessageReaction.create({
+      await prisma.chatMessageReaction.create({
         data: {
           messageId,
           userId,
           emoji,
         },
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              avatarUrl: true,
-            },
+      });
+    }
+
+    // Получаем все реакции для этого сообщения
+    const reactions = await prisma.chatMessageReaction.findMany({
+      where: { messageId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
           },
         },
-      });
+      },
+    });
 
-      return NextResponse.json({ action: "added", reaction });
-    }
+    // Группируем по эмодзи
+    const groupedReactions = reactions.reduce((acc, reaction) => {
+      if (!acc[reaction.emoji]) {
+        acc[reaction.emoji] = {
+          emoji: reaction.emoji,
+          count: 0,
+          users: [],
+        };
+      }
+      acc[reaction.emoji].count++;
+      acc[reaction.emoji].users.push(reaction.user.id);
+      return acc;
+    }, {} as Record<string, { emoji: string; count: number; users: string[] }>);
+
+    return NextResponse.json({
+      reactions: Object.values(groupedReactions),
+    });
   } catch (error: any) {
     console.error("[POST /api/chat/[chatId]/messages/[messageId]/reactions] Error:", error);
     return NextResponse.json(
-      { error: error.message || "Ошибка обработки реакции" },
+      { error: error.message || "Ошибка добавления реакции" },
       { status: 500 }
     );
   }

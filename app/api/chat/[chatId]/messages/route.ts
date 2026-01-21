@@ -134,15 +134,22 @@ export async function GET(
       threadRepliesCount: msg.threadRootId === null ? msg.threadRepliesCount : 0, // Только для корневых сообщений
       threadLastReplyAt: msg.threadRootId === null ? msg.threadLastReplyAt : null,
       attachments: msg.attachments,
-      reactions: msg.reactions.map((r) => ({
-        emoji: r.emoji,
-        user: {
-          id: r.user.id,
-          firstName: r.user.firstName,
-          lastName: r.user.lastName,
-          avatarUrl: r.user.avatarUrl,
-        },
-      })),
+      reactions: (() => {
+        // Группируем реакции по эмодзи
+        const grouped = msg.reactions.reduce((acc, r) => {
+          if (!acc[r.emoji]) {
+            acc[r.emoji] = {
+              emoji: r.emoji,
+              count: 0,
+              users: [],
+            };
+          }
+          acc[r.emoji].count++;
+          acc[r.emoji].users.push(r.user.id);
+          return acc;
+        }, {} as Record<string, { emoji: string; count: number; users: string[] }>);
+        return Object.values(grouped);
+      })(),
       readByCount: msg._count.readBy,
       isRead: msg.readBy?.some((r) => r.userId === userId) || false,
       editedAt: msg.editedAt,
