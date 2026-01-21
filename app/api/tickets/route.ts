@@ -211,7 +211,8 @@ export async function POST(request: NextRequest) {
 
     // Создаем чат для обращения
     let appealChat = null;
-    if (chairmanId && chairmanId !== session.user.id) {
+    // Создаем чат если есть председатель (даже если это сам создатель обращения)
+    if (chairmanId) {
       // Проверяем, не существует ли уже чат для этого обращения
       appealChat = await prisma.chat.findFirst({
         where: {
@@ -228,23 +229,25 @@ export async function POST(request: NextRequest) {
 
       if (!appealChat) {
         // Создаем новый Chat для обращения
+        // Председатель всегда админ и создатель чата
         appealChat = await prisma.chat.create({
           data: {
             type: "GROUP",
             name: `Обращение #${publicId!}: ${title}`,
             description: `Тред обращения от пользователя`,
-            createdById: session.user.id,
+            createdById: chairmanId, // Председатель - создатель чата
             isPublic: false,
             participants: {
               create: [
                 {
-                  userId: session.user.id,
-                  role: "member",
-                  invitedById: session.user.id,
-                },
-                ...(chairmanId !== session.user.id ? [{
                   userId: chairmanId,
                   role: "admin", // Председатель - админ треда
+                  invitedById: session.user.id,
+                },
+                // Добавляем создателя обращения как участника (если это не председатель)
+                ...(chairmanId !== session.user.id ? [{
+                  userId: session.user.id,
+                  role: "member",
                   invitedById: session.user.id,
                 }] : []),
               ],
@@ -257,13 +260,15 @@ export async function POST(request: NextRequest) {
             },
           },
         });
-        console.log(`[tickets] ✅ Создан Chat для обращения: ${appealChat.id}`);
+        console.log(`[tickets] ✅ Создан Chat для обращения: ${appealChat.id}, председатель (${chairmanId}) - админ`);
       } else {
         // Чат уже существует, проверяем участников
         const existingUserIds = appealChat.participants.map(p => p.userId);
         const missingParticipants = [
-          ...(existingUserIds.includes(session.user.id) ? [] : [{ userId: session.user.id, role: "member" }]),
-          ...(chairmanId !== session.user.id && !existingUserIds.includes(chairmanId) ? [{ userId: chairmanId, role: "admin" }] : []),
+          // Председатель всегда должен быть админом
+          ...(!existingUserIds.includes(chairmanId) ? [{ userId: chairmanId, role: "admin" }] : []),
+          // Создатель обращения как участник (если это не председатель)
+          ...(chairmanId !== session.user.id && !existingUserIds.includes(session.user.id) ? [{ userId: session.user.id, role: "member" }] : []),
         ];
 
         if (missingParticipants.length > 0) {
