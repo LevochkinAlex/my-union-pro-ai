@@ -51,6 +51,7 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
   
   // Проверяем валидность avatarUrl
   const hasValidAvatar = user.avatarUrl && 
+    typeof user.avatarUrl === 'string' &&
     user.avatarUrl.trim() !== "" && 
     (user.avatarUrl.startsWith('http://') || 
      user.avatarUrl.startsWith('https://') || 

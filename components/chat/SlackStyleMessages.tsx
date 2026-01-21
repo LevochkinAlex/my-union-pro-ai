@@ -583,7 +583,7 @@ function MessageBubble({
       {/* Avatar */}
       <div className="flex-shrink-0 w-8">
         {showAvatar && !isOwn && (
-          message.sender.avatarUrl && message.sender.avatarUrl.trim() !== '' ? (
+          message.sender.avatarUrl && typeof message.sender.avatarUrl === 'string' && message.sender.avatarUrl.trim() !== '' ? (
             <img
               src={message.sender.avatarUrl}
               alt={getSenderName(message.sender)}

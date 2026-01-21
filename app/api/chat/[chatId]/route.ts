@@ -191,7 +191,7 @@ export async function GET(
         firstName: msg.sender.firstName,
         lastName: msg.sender.lastName,
         middleName: msg.sender.middleName,
-        avatarUrl: normalizeUserAvatar(msg.sender),
+        avatarUrl: normalizeUserAvatar(msg.sender)?.avatarUrl || null,
       },
       replyTo: msg.replyTo && msg.replyTo.sender ? {
         id: msg.replyTo.id,
@@ -200,7 +200,7 @@ export async function GET(
           id: msg.replyTo.sender.id,
           firstName: msg.replyTo.sender.firstName,
           lastName: msg.replyTo.sender.lastName,
-          avatarUrl: normalizeUserAvatar(msg.replyTo.sender),
+          avatarUrl: normalizeUserAvatar(msg.replyTo.sender)?.avatarUrl || null,
         },
       } : null,
       reactions: (msg.reactions || []).reduce((acc: any, r: any) => {

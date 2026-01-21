@@ -23,14 +23,17 @@ export function normalizeAvatarUrl(avatarUrl: string | null | undefined): string
 
 /**
  * Обрабатывает объект пользователя, нормализуя avatarUrl
+ * Гарантирует, что avatarUrl всегда строка или null, никогда undefined
  */
-export function normalizeUserAvatar<T extends { avatarUrl?: string | null }>(user: T): T {
-  if (!user || !user.avatarUrl) return user;
+export function normalizeUserAvatar<T extends { avatarUrl?: string | null }>(user: T): T & { avatarUrl: string | null } {
+  if (!user) return { ...user, avatarUrl: null } as T & { avatarUrl: string | null };
+  
+  const normalizedAvatarUrl = user.avatarUrl ? normalizeAvatarUrl(user.avatarUrl) : null;
   
   return {
     ...user,
-    avatarUrl: normalizeAvatarUrl(user.avatarUrl),
-  };
+    avatarUrl: normalizedAvatarUrl,
+  } as T & { avatarUrl: string | null };
 }
 
 /**
