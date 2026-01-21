@@ -253,7 +253,14 @@ export async function POST(request: NextRequest) {
     } 
     // Создаем групповой чат
     else if (participantIds && Array.isArray(participantIds) && participantIds.length > 0) {
-      console.log('[chat] Creating group chat:', { name, participantIds: participantIds.length, userId });
+      console.log('[chat] Creating group chat:', { 
+        name, 
+        participantIds: participantIds.length, 
+        participantIdsList: participantIds,
+        userId,
+        description,
+        iconUrl 
+      });
       
       // Проверяем, нет ли уже такого группового чата с теми же участниками
       const existingChat = await prisma.chat.findFirst({
@@ -365,6 +372,7 @@ export async function POST(request: NextRequest) {
         }
       }
     } else {
+      console.error('[chat] Missing required fields:', { targetUserId, participantIds });
       return NextResponse.json(
         { error: "Необходимо указать targetUserId или participantIds" },
         { status: 400 }
@@ -372,6 +380,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!chat) {
+      console.error('[chat] Chat creation failed - chat is null');
       return NextResponse.json(
         { error: "Не удалось создать чат" },
         { status: 500 }
@@ -410,12 +419,30 @@ export async function POST(request: NextRequest) {
     console.error("[chat] POST Error:", {
       message: error?.message,
       code: error?.code,
+      meta: error?.meta,
       stack: error?.stack?.substring(0, 500),
     });
+    
+    // Более детальная обработка ошибок Prisma
+    if (error?.code === 'P2002') {
+      return NextResponse.json(
+        { error: "Чат с таким названием уже существует" },
+        { status: 409 }
+      );
+    }
+    
+    if (error?.code === 'P2003') {
+      return NextResponse.json(
+        { error: "Один из участников не найден" },
+        { status: 400 }
+      );
+    }
+    
     return NextResponse.json(
       {
         error: "Внутренняя ошибка сервера",
         details: process.env.NODE_ENV === "development" ? error?.message : undefined,
+        code: error?.code,
       },
       { status: 500 }
     );
