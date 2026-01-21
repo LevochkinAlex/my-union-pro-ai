@@ -559,9 +559,9 @@ export async function POST(
 
       // Отправляем сообщение через WebSocket другим участникам
       try {
-        // Используем формат комнаты chat:${chatId} для совместимости с socket-server
-        emitNewMessage(`chat:${chatId}`, normalizedMessage);
-        console.log('[chat] Message emitted via WebSocket to room chat:' + chatId, normalizedMessage.id);
+        // Используем формат комнаты chatId (без префикса chat:)
+        emitNewMessage(chatId, normalizedMessage);
+        console.log('[chat] Message emitted via WebSocket to room:', chatId, normalizedMessage.id);
       } catch (wsError) {
         console.error('[chat] Error emitting message via WebSocket:', wsError);
         // Не прерываем выполнение, WebSocket - это дополнение

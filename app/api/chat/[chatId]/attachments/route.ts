@@ -269,8 +269,8 @@ export async function POST(
 
     // Отправляем сообщение через WebSocket другим участникам
     try {
-      emitNewMessage(`chat:${chatId}`, normalizedMessage);
-      console.log('[chat/attachments] Message emitted via WebSocket to room chat:' + chatId, normalizedMessage.id);
+      emitNewMessage(chatId, normalizedMessage);
+      console.log('[chat/attachments] Message emitted via WebSocket to room:', chatId, normalizedMessage.id);
     } catch (wsError) {
       console.error('[chat/attachments] Error emitting message via WebSocket:', wsError);
     }
