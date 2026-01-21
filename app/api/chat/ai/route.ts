@@ -170,7 +170,7 @@ export async function GET() {
  * Отправить сообщение в чат с ИИ и получить ответ
  */
 export async function POST(request: NextRequest) {
-  let session = null;
+  let session: any = null;
   let chatId: string | undefined;
   try {
     session = await getServerSession(authOptions);

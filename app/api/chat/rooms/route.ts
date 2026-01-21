@@ -12,7 +12,7 @@ import * as Sentry from '@sentry/nextjs';
  * РЕФАКТОРИНГ: Теперь использует единый chat-service вместо дублирования логики
  */
 export async function GET() {
-  let session = null;
+  let session: any = null;
   try {
     session = await getServerSession(authOptions);
     if (!session?.user?.id) {

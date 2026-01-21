@@ -242,7 +242,7 @@ export async function GET(request: NextRequest) {
  * Создать новый чат
  */
 export async function POST(request: NextRequest) {
-  let session = null;
+  let session: any = null;
   try {
     session = await getServerSession(authOptions);
     if (!session?.user?.id) {
