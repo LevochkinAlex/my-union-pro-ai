@@ -32,7 +32,7 @@ interface MessageItemProps {
       emoji: string;
       count: number;
       users: string[];
-    }>;
+    }> | Record<string, { userIds: string[]; users?: Array<{ id: string; avatarUrl: string | null; name: string }> }>;
     attachments?: Array<{
       id: string;
       type: string;
@@ -230,19 +230,34 @@ export default function MessageItem({
           )}
 
           {/* Reactions */}
-          {message.reactions && message.reactions.length > 0 && (
-            <div className="flex gap-1 mt-2 flex-wrap">
-              {message.reactions.map((reaction, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => onReaction?.(message.id, reaction.emoji)}
-                  className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded-full text-xs hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center gap-1"
-                >
-                  {reaction.emoji} {reaction.count}
-                </button>
-              ))}
-            </div>
-          )}
+          {(() => {
+            let reactionsArray: Array<{ emoji: string; count: number; users: string[] }> = [];
+            
+            if (Array.isArray(message.reactions)) {
+              reactionsArray = message.reactions;
+            } else if (message.reactions && typeof message.reactions === 'object') {
+              // Преобразуем Record в массив
+              reactionsArray = Object.entries(message.reactions).map(([emoji, data]) => ({
+                emoji,
+                count: data.userIds?.length || 0,
+                users: data.userIds || [],
+              }));
+            }
+            
+            return reactionsArray.length > 0 ? (
+              <div className="flex gap-1 mt-2 flex-wrap">
+                {reactionsArray.map((reaction, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => onReaction?.(message.id, reaction.emoji)}
+                    className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded-full text-xs hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center gap-1"
+                  >
+                    {reaction.emoji} {reaction.count}
+                  </button>
+                ))}
+              </div>
+            ) : null;
+          })()}
 
           {/* Action buttons (show on hover) */}
           <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
