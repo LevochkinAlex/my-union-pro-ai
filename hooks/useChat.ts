@@ -249,8 +249,8 @@ export function useChat(options: UseChatOptions = {}) {
 
         if (olderMessages.length > 0) {
           setMessages(prev => [...olderMessages, ...prev]);
-          setHasMore(data.pagination?.hasMore || false);
-          setOldestMessageId(data.pagination?.oldestMessageId || null);
+          setHasMore((data as any).pagination?.hasMore || false);
+          setOldestMessageId((data as any).pagination?.oldestMessageId || null);
           return { loadedCount: olderMessages.length };
         } else {
           setHasMore(false);
