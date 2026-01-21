@@ -294,17 +294,24 @@ export async function POST(
           avatarUrl: normalizeUserAvatar(message.replyTo.sender).avatarUrl,
         },
       } : null,
-      attachments: message.attachments.map((att: any) => ({
-        id: att.id,
-        type: att.type,
-        url: getFileUrlWithCDN(att.url, true), // Используем CDN URL
-        name: att.name,
-        size: att.size,
-        mimeType: att.mimeType,
-        thumbnailUrl: att.thumbnailUrl ? getFileUrlWithCDN(att.thumbnailUrl, true) : undefined,
-        width: att.width,
-        height: att.height,
-      })),
+      attachments: message.attachments.map((att: any) => {
+        // Определяем, является ли сообщение старым (старше 7 дней)
+        const messageAge = Date.now() - new Date(message.createdAt).getTime();
+        const isOld = messageAge > 7 * 24 * 60 * 60 * 1000; // 7 дней
+        
+        return {
+          id: att.id,
+          type: att.type,
+          url: getFileUrlWithCDN(att.url, true), // Используем CDN URL
+          name: att.name,
+          size: att.size,
+          mimeType: att.mimeType,
+          thumbnailUrl: att.thumbnailUrl ? getFileUrlWithCDN(att.thumbnailUrl, true) : undefined,
+          width: att.width,
+          height: att.height,
+          isOld, // Флаг для старых сообщений
+        };
+      }),
       reactions: {},
     };
 

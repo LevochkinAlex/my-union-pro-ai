@@ -578,9 +578,9 @@ function LazyImage({
   const [imageError, setImageError] = useState(false);
   const [shouldLoad, setShouldLoad] = useState(!isOld); // Для старых сообщений не загружаем сразу
 
-  // Используем CDN URL после гидратации для предотвращения hydration mismatch
-  const cdnSrc = useCDNUrl(src);
-  const cdnThumbnail = useCDNUrl(thumbnail);
+  // Используем CDN для URL
+  const cdnSrc = getAttachmentUrl({ url: src } as MessageAttachment);
+  const cdnThumbnail = thumbnail ? getAttachmentUrl({ url: thumbnail } as MessageAttachment) : undefined;
 
   // Для старых сообщений используем Intersection Observer
   const containerRef = useRef<HTMLButtonElement>(null);
@@ -638,6 +638,9 @@ function LazyImage({
                   imgRef.current.src = cdnSrc;
                 }
               };
+            } else if (!cdnThumbnail && shouldLoad) {
+              // Если нет thumbnail, просто помечаем как загруженное
+              setIsLoaded(true);
             }
           }}
           onError={() => setImageError(true)}
@@ -881,34 +884,31 @@ function FileLink({ url, name, size, isOwn }: { url: string; name: string; size:
   return (
     <a
       href={cdnUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`
-              flex items-center gap-3 p-3 rounded-xl transition-colors
-              ${isOwn 
-                ? 'bg-white/20 hover:bg-white/30' 
-                : 'bg-gray-100 dark:bg-gray-700/60 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }
-            `}
-          >
-            <div className={`p-2 rounded-lg ${isOwn ? 'bg-white/20' : 'bg-gray-200 dark:bg-gray-600'}`}>
-              <FileText className={`w-5 h-5 ${isOwn ? 'text-white' : 'text-gray-600 dark:text-gray-300'}`} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className={`text-sm font-medium truncate ${isOwn ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
-                {name}
-              </div>
-              {size > 0 && (
-                <div className={`text-xs ${isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'}`}>
-                  {formatFileSize(size)}
-                </div>
-              )}
-            </div>
-            <Download className={`w-4 h-4 ${isOwn ? 'text-white/70' : 'text-gray-400'}`} />
-          </a>
-        );
-      })}
-    </div>
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`
+        flex items-center gap-3 p-3 rounded-xl transition-colors
+        ${isOwn 
+          ? 'bg-white/20 hover:bg-white/30' 
+          : 'bg-gray-100 dark:bg-gray-700/60 hover:bg-gray-200 dark:hover:bg-gray-600'
+        }
+      `}
+    >
+      <div className={`p-2 rounded-lg ${isOwn ? 'bg-white/20' : 'bg-gray-200 dark:bg-gray-600'}`}>
+        <FileText className={`w-5 h-5 ${isOwn ? 'text-white' : 'text-gray-600 dark:text-gray-300'}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className={`text-sm font-medium truncate ${isOwn ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
+          {name}
+        </div>
+        {size > 0 && (
+          <div className={`text-xs ${isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'}`}>
+            {formatFileSize(size)}
+          </div>
+        )}
+      </div>
+      <Download className={`w-4 h-4 ${isOwn ? 'text-white/70' : 'text-gray-400'}`} />
+    </a>
   );
 }
 
