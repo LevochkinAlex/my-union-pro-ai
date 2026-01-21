@@ -1,49 +1,47 @@
 #!/bin/bash
-# ПОЛНЫЙ ДЕПЛОЙ - запустите этот скрипт
+
+# Скрипт деплоя на продакшн сервер
+# Использование: ./deploy.sh
 
 set -e
 
-echo "🚀 НАЧАЛО ДЕПЛОЯ"
-echo ""
+echo "🚀 Начинаем деплой на сервер..."
 
-cd /Users/renatusmanov/my-union-pro-ai
+SERVER="root@194.87.49.210"
+PROJECT_PATH="/opt/my-union-pro"
 
-echo "1️⃣ Коммит изменений..."
-git add -A
-git commit -m "Fix: версия 1.7.2, исправления создания чата и уведомлений" || echo "Уже закоммичено"
-git push
-
-echo ""
-echo "2️⃣ Деплой на сервер..."
-sshpass -p 'wu,iMrZj6goZh?' ssh -o StrictHostKeyChecking=no root@194.87.49.210 bash << 'SERVERDEPLOY'
+echo "📦 Подключение к серверу и обновление кода..."
+ssh $SERVER << 'ENDSSH'
 cd /opt/my-union-pro
-echo "📥 Обновление кода..."
-git pull
-echo "📋 Версия:"
-grep version package.json
-echo "🏗️ Сборка..."
+echo "📥 Получаем последние изменения из git..."
+git pull origin main
+
+echo "📦 Устанавливаем зависимости..."
+pnpm install
+
+echo "🗄️  Применяем миграции базы данных..."
+npx prisma db push --accept-data-loss
+
+echo "🔧 Генерируем Prisma клиент..."
+npx prisma generate
+
+echo "🏗️  Собираем проект..."
 pnpm build
-echo "🔄 Перезапуск..."
-pm2 delete my-union-pro || true
-pm2 start npm --name my-union-pro -- start
-sleep 12
-echo "✅ Статус:"
-pm2 list
-echo "📝 Логи:"
-pm2 logs my-union-pro --lines 10 --nostream | tail -10
-SERVERDEPLOY
+
+echo "🔄 Перезапускаем приложение..."
+pm2 restart my-union-pro
+
+echo "📋 Последние логи:"
+pm2 logs my-union-pro --lines 30 --nostream
+
+echo "✅ Деплой завершен!"
+ENDSSH
 
 echo ""
-echo "3️⃣ Проверка API..."
-sleep 8
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://myunion.pro/api/profile)
-echo "HTTP код: $HTTP_CODE"
-
-if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
-    echo "✅ СЕРВЕР РАБОТАЕТ!"
-else
-    echo "⚠️ Проблема: HTTP $HTTP_CODE"
-fi
-
+echo "✅ Деплой успешно выполнен!"
 echo ""
-echo "🎉 ДЕПЛОЙ ЗАВЕРШЕН"
+echo "🔍 Проверьте логи:"
+echo "   ssh $SERVER 'pm2 logs my-union-pro --lines 50'"
+echo ""
+echo "🔍 Проверьте статус:"
+echo "   ssh $SERVER 'pm2 status'"
