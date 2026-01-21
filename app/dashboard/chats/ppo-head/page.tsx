@@ -6,8 +6,8 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-// Lazy load Matrix Chat компонент
-const MatrixChat = dynamic(() => import("@/components/chat/MatrixChat"), {
+// Lazy load Chat компонент
+const Chat = dynamic(() => import("@/components/chat/Chat"), {
   ssr: false,
   loading: () => <ChatSkeleton />,
 });
@@ -48,7 +48,7 @@ function PPOHeadChatsContent() {
   return (
     <div className="fixed inset-0 top-16 md:top-0 md:left-64 right-0 bottom-0">
       <Suspense fallback={<ChatSkeleton />}>
-        <MatrixChat />
+        <Chat />
       </Suspense>
     </div>
   );
