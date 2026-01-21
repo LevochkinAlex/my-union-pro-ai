@@ -1,6 +1,5 @@
 import { Server as HttpServer } from "http";
 import { Server as SocketServer, Socket } from "socket.io";
-import { createAdapter } from "@socket.io/redis-adapter";
 import { verify } from "jsonwebtoken";
 import type { Redis } from "ioredis";
 
@@ -86,6 +85,8 @@ export async function initSocketServer(httpServer: HttpServer) {
   // Настраиваем Redis adapter если клиенты доступны
   if (pubClient && subClient) {
     try {
+      // Динамический импорт adapter только в runtime
+      const { createAdapter } = await import("@socket.io/redis-adapter");
       io.adapter(createAdapter(pubClient, subClient));
       console.log("[Socket] ✅ Redis adapter configured for horizontal scaling");
     } catch (error) {
