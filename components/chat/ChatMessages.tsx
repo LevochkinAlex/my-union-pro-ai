@@ -36,8 +36,10 @@ interface Message {
   reactions?: Record<string, { count?: number; userIds: string[]; users?: any[] }> | null;
   attachments?: Array<{
     type: string;
-    url: string;
-    name: string;
+    url?: string;
+    name?: string;
+    fileName?: string;
+    filePath?: string;
   }>;
   editedAt?: Date;
 }
@@ -121,28 +123,33 @@ export default function ChatMessages({ messages, currentUserId, typingUsers }: C
                     {/* Attachments */}
                     {message.attachments && message.attachments.length > 0 && (
                       <div className="mb-2 space-y-2">
-                        {message.attachments.map((att, idx) => (
-                          <div key={idx}>
-                            {att.type === 'image' ? (
-                              <img
-                                src={att.url}
-                                alt={att.name}
-                                className="max-w-full rounded-lg"
-                              />
-                            ) : (
-                              <a
-                                href={att.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={`text-sm underline ${
-                                  isOwn ? 'text-primary-foreground' : 'text-primary'
-                                }`}
-                              >
-                                📎 {att.name}
-                              </a>
-                            )}
-                          </div>
-                        ))}
+                        {message.attachments.map((att, idx) => {
+                          const attUrl = att.url || att.filePath || '';
+                          const attName = att.name || att.fileName || 'Вложение';
+                          
+                          return (
+                            <div key={idx}>
+                              {att.type === 'image' ? (
+                                <img
+                                  src={attUrl}
+                                  alt={attName}
+                                  className="max-w-full rounded-lg"
+                                />
+                              ) : (
+                                <a
+                                  href={attUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`text-sm underline ${
+                                    isOwn ? 'text-primary-foreground' : 'text-primary'
+                                  }`}
+                                >
+                                  📎 {attName}
+                                </a>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
