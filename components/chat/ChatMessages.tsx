@@ -3,7 +3,7 @@
 import { memo, useRef, useEffect, useCallback, useState } from "react";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { Message, Chat } from "@/types/chat";
-import { MessageItem } from "./MessageItem";
+import MessageItem from "./MessageItem";
 import { formatMessageDate, getNameInitials, getInitials, getUserName } from "@/lib/chat-utils";
 
 // Большое начальное значение для firstItemIndex (для поддержки prepend)
