@@ -6,8 +6,8 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-// Lazy load Chat компонент
-const Chat = dynamic(() => import("@/components/chat/Chat"), {
+// Lazy load SlackStyleChat компонент
+const SlackStyleChat = dynamic(() => import("@/components/chat/SlackStyleChat"), {
   ssr: false,
   loading: () => <ChatSkeleton />,
 });
@@ -32,6 +32,8 @@ function PPOHeadChatsContent() {
   
   // Проверяем режим просмотра - эта страница только для председателей
   const isPPOHead = session?.user?.viewMode === "PPO_HEAD" || 
+    session?.user?.viewMode === "MPO_HEAD" ||
+    session?.user?.viewMode === "RPO_HEAD" ||
     (session?.user?.role === "PPO_HEAD" && !session?.user?.isPPOHead);
 
   // Редирект для обычных членов на страницу личных чатов
@@ -48,7 +50,11 @@ function PPOHeadChatsContent() {
   return (
     <div className="fixed inset-0 top-16 md:top-0 md:left-64 right-0 bottom-0">
       <Suspense fallback={<ChatSkeleton />}>
-        <Chat />
+        <SlackStyleChat
+          isChairman={true}
+          baseUrl="/dashboard/chats/ppo-head"
+          containerHeight="100%"
+        />
       </Suspense>
     </div>
   );

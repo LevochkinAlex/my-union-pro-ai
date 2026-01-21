@@ -11,6 +11,142 @@ import {
 import { withCache, getCacheKey } from "@/lib/cache";
 import * as Sentry from "@sentry/nextjs";
 
+const AI_CHAT_NAME = "ИИ-Ассистент";
+const AI_BOT_ID = "ai-assistant-bot";
+
+/**
+ * Получает или создает чат с ИИ-ассистентом
+ */
+async function getOrCreateAIChat(userId: string) {
+  // Ищем существующий чат с ИИ
+  let aiChat = await prisma.chat.findFirst({
+    where: {
+      type: "PRIVATE",
+      name: AI_CHAT_NAME,
+      participants: {
+        some: {
+          userId: userId,
+          leftAt: null,
+        },
+      },
+    },
+    include: {
+      participants: {
+        where: { leftAt: null },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      },
+      lastMessage: {
+        select: {
+          content: true,
+          createdAt: true,
+        },
+      },
+      _count: {
+        select: { messages: true, participants: true },
+      },
+    },
+  });
+
+  // Если чата нет, создаём его
+  if (!aiChat) {
+    aiChat = await prisma.chat.create({
+      data: {
+        type: "PRIVATE",
+        name: AI_CHAT_NAME,
+        description: "Персональный ИИ-помощник по профсоюзным вопросам",
+        isPublic: false,
+        participants: {
+          create: [
+            {
+              userId: userId,
+              role: "member",
+            },
+          ],
+        },
+      },
+      include: {
+        participants: {
+          where: { leftAt: null },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+        lastMessage: {
+          select: {
+            content: true,
+            createdAt: true,
+          },
+        },
+        _count: {
+          select: { messages: true, participants: true },
+        },
+      },
+    });
+  }
+
+  return aiChat;
+}
+
+/**
+ * Форматирует ИИ чат для ответа API
+ */
+function formatAIChat(aiChat: any, userId: string) {
+  return {
+    id: aiChat.id,
+    type: "PRIVATE" as const,
+    name: AI_CHAT_NAME,
+    description: aiChat.description,
+    displayName: AI_CHAT_NAME,
+    displayAvatar: null,
+    iconUrl: null,
+    isPublic: false,
+    lastMessage: aiChat.lastMessage?.content || null,
+    lastMessageAt: aiChat.lastMessage?.createdAt || aiChat.createdAt,
+    unreadCount: 0,
+    createdAt: aiChat.createdAt,
+    otherUser: {
+      id: AI_BOT_ID,
+      firstName: "ИИ",
+      lastName: "Ассистент",
+      middleName: null,
+      avatarUrl: null,
+      isBot: true,
+    },
+    participants: aiChat.participants.map((p: any) => ({
+      id: p.id,
+      odvisId: p.id,
+      userId: p.userId,
+      role: p.role,
+      readAt: p.readAt,
+      joinedAt: p.joinedAt,
+      user: p.user,
+    })),
+    participantsCount: aiChat._count?.participants || 1,
+    ticketId: null,
+    ticketPublicId: null,
+    ticketTitle: null,
+    isAIChat: true,
+  };
+}
+
 /**
  * GET /api/chat
  * Получить список чатов пользователя
@@ -40,6 +176,8 @@ export async function GET(request: NextRequest) {
       filter.hasTicket = false;
     }
 
+    const includeAI = searchParams.get("includeAI") !== "false"; // По умолчанию включаем ИИ
+
     // Кешируем список чатов на короткое время (15 сек)
     const cacheKey = getCacheKey(`user:chats:${userId}`, filter);
     
@@ -58,7 +196,25 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    return NextResponse.json({ chats });
+    // Фильтруем ИИ чат из основного списка (он будет добавлен отдельно)
+    const filteredChats = chats.filter((c: any) => c.name !== AI_CHAT_NAME);
+
+    // Добавляем ИИ чат, если нужно
+    let finalChats = filteredChats;
+    if (includeAI && !filter.hasTicket) {
+      try {
+        const aiChat = await getOrCreateAIChat(userId);
+        const formattedAIChat = formatAIChat(aiChat, userId);
+        // ИИ чат добавляем в начало списка
+        finalChats = [formattedAIChat, ...filteredChats];
+      } catch (aiError) {
+        console.error("[chat] Error loading AI chat:", aiError);
+        // Продолжаем без ИИ чата
+        finalChats = filteredChats;
+      }
+    }
+
+    return NextResponse.json({ chats: finalChats });
   } catch (error: any) {
     Sentry.captureException(error);
     console.error("[chat] GET Error:", error?.message);

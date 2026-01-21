@@ -7,20 +7,17 @@ import remarkGfm from "remark-gfm";
 import {
   MoreHorizontal,
   Reply,
-  Smile,
   Edit2,
   Trash2,
   Forward,
   MessageSquare,
   ChevronDown,
-  Pin,
   Copy,
   Check,
   AlertCircle,
   UserPlus,
   Settings,
   FileText,
-  Clock,
 } from "lucide-react";
 import EmojiPicker from "./EmojiPicker";
 
@@ -188,7 +185,6 @@ function MessageActions({
   onForward,
 }: MessageActionsProps) {
   const [showMenu, setShowMenu] = useState(false);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {
@@ -217,24 +213,12 @@ function MessageActions({
 
         {/* Emoji picker */}
         <div className="relative">
-          <button
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            title="Добавить реакцию"
-          >
-            <Smile className="w-4 h-4 text-gray-500" />
-          </button>
-          {showEmojiPicker && (
-            <div className="absolute top-full right-0 mt-1 z-50">
-              <EmojiPicker
-                onSelect={(emoji) => {
-                  onReaction?.(emoji);
-                  setShowEmojiPicker(false);
-                }}
-                onClose={() => setShowEmojiPicker(false)}
-              />
-            </div>
-          )}
+          <EmojiPicker
+            onEmojiSelect={(emoji) => {
+              onReaction?.(emoji);
+            }}
+            showButton={true}
+          />
         </div>
 
         {/* Reply */}

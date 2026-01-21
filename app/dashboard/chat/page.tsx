@@ -2,10 +2,11 @@
 
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
+import { useSession } from "next-auth/react";
 import { MembershipGate } from "@/components/MembershipGate";
 
-// Lazy load Chat компонент
-const Chat = dynamic(() => import("@/components/chat/Chat"), {
+// Lazy load SlackStyleChat компонент
+const SlackStyleChat = dynamic(() => import("@/components/chat/SlackStyleChat"), {
   ssr: false,
   loading: () => <ChatSkeleton />,
 });
@@ -17,9 +18,28 @@ function ChatSkeleton() {
         <div className="w-16 h-16 mx-auto mb-4 relative">
           <div className="absolute inset-0 rounded-full border-4 border-blue-200 dark:border-blue-800"></div>
           <div className="absolute inset-0 rounded-full border-4 border-t-blue-600 animate-spin"></div>
-      </div>
+        </div>
         <p className="text-gray-600 dark:text-gray-400">Загрузка чата...</p>
       </div>
+    </div>
+  );
+}
+
+function ChatContent() {
+  const { data: session } = useSession();
+  
+  // Обычные члены профсоюза - не председатели
+  const isChairman = false;
+
+  return (
+    <div className="fixed inset-0 top-16 md:top-0 md:left-64 right-0 bottom-0">
+      <Suspense fallback={<ChatSkeleton />}>
+        <SlackStyleChat
+          isChairman={isChairman}
+          baseUrl="/dashboard/chat"
+          containerHeight="100%"
+        />
+      </Suspense>
     </div>
   );
 }
@@ -31,11 +51,7 @@ export default function ChatPage() {
       title="Чаты для членов профсоюза"
       description="Общайтесь с коллегами и председателем. Станьте членом профсоюза для доступа к чатам."
     >
-      <div className="fixed inset-0 top-16 md:top-0 md:left-64 right-0 bottom-0">
-        <Suspense fallback={<ChatSkeleton />}>
-          <Chat />
-        </Suspense>
-      </div>
+      <ChatContent />
     </MembershipGate>
   );
 }
