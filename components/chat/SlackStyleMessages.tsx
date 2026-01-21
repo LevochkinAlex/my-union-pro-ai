@@ -42,13 +42,17 @@ export interface MessageReply {
 export interface MessageAttachment {
   id: string;
   type: string;
-  url: string;
-  name: string;
+  url?: string;
+  name?: string;
+  fileName?: string;
+  filePath?: string;
   size?: number;
-  mimeType?: string;
+  fileSize?: number;
+  mimeType?: string | null;
   thumbnailUrl?: string;
   width?: number;
   height?: number;
+  originalName?: string;
 }
 
 export interface MessageReactions {
