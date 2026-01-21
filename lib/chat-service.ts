@@ -454,15 +454,6 @@ export async function createGroupChat(
     },
   });
 
-  // Если есть обращение, связываем с ним
-  // Тикеты теперь связаны через matrixRoomId, а не chatId
-  // if (options?.ticketId) {
-  //   await prisma.ticket.update({
-  //     where: { id: options.ticketId },
-  //     data: { matrixRoomId: chat.matrixRoomId },
-  //   });
-  // }
-
   return chat;
 }
 
@@ -596,11 +587,13 @@ export async function markAsRead(chatId: string, userId: string): Promise<void> 
     },
   });
 
-  // Старая схема удалена - используем только ChatParticipant
 }
 
 /**
  * Получает количество непрочитанных сообщений в чате для пользователя
+ * 
+ * NOTE: Сообщения хранятся в локальной БД (ChatMessage).
+ * Считаем сообщения созданные после последнего прочтения.
  */
 export async function getUnreadCount(
   chatId: string,
@@ -612,15 +605,35 @@ export async function getUnreadCount(
     select: { readAt: true },
   });
 
-  let lastReadAt: Date | null = participant?.readAt || null;
+  if (!participant) return 0;
+  
+  const lastReadAt = participant.readAt;
 
-  // Сообщения теперь хранятся в Matrix, поэтому непрочитанные считаются через Matrix API
-  // TODO: Интегрировать подсчет непрочитанных из Matrix
-  return 0;
+  // Если никогда не читал - считаем все сообщения
+  if (!lastReadAt) {
+    return await prisma.chatMessage.count({
+      where: {
+        chatId,
+        senderId: { not: userId },
+        deletedAt: null,
+      },
+    });
+  }
+
+  // Считаем сообщения после последнего прочтения
+  return await prisma.chatMessage.count({
+    where: {
+      chatId,
+      senderId: { not: userId },
+      createdAt: { gt: lastReadAt },
+      deletedAt: null,
+    },
+  });
 }
 
 /**
  * Получает количество непрочитанных для нескольких чатов одним запросом
+ * Оптимизированная версия для batch-загрузки
  */
 async function getUnreadCountsForChats(
   chatIds: string[],
@@ -628,6 +641,13 @@ async function getUnreadCountsForChats(
 ): Promise<Map<string, number>> {
   if (chatIds.length === 0) {
     return new Map();
+  }
+
+  const results = new Map<string, number>();
+  
+  // Инициализируем все чаты нулём
+  for (const chatId of chatIds) {
+    results.set(chatId, 0);
   }
 
   // Получаем участников для всех чатов
@@ -642,23 +662,43 @@ async function getUnreadCountsForChats(
 
   // Строим map с временем прочтения
   const readAtMap = new Map<string, Date | null>();
-  
   for (const p of participants) {
     readAtMap.set(p.chatId, p.readAt);
   }
 
-  // Сообщения теперь хранятся в Matrix, поэтому непрочитанные считаются через Matrix API
-  // TODO: Интегрировать подсчет непрочитанных из Matrix
-  const results = new Map<string, number>();
-  for (const chatId of chatIds) {
-    results.set(chatId, 0);
+  // Для чатов где readAt = null, считаем все сообщения от других
+  const unreadChats = chatIds.filter(id => !readAtMap.get(id));
+  if (unreadChats.length > 0) {
+    const counts = await prisma.chatMessage.groupBy({
+      by: ['chatId'],
+      where: {
+        chatId: { in: unreadChats },
+        senderId: { not: userId },
+        deletedAt: null,
+      },
+      _count: true,
+    });
+    
+    for (const item of counts) {
+      results.set(item.chatId, item._count);
+    }
   }
-  
-  return results;
 
-  // Запрос для чатов с readAt (только новые сообщения)
-  // Сообщения теперь хранятся в Matrix, поэтому непрочитанные считаются через Matrix API
-  // TODO: Интегрировать подсчет непрочитанных из Matrix
+  // Для чатов с readAt считаем сообщения после этого времени
+  const readChats = chatIds.filter(id => readAtMap.get(id));
+  for (const chatId of readChats) {
+    const readAt = readAtMap.get(chatId)!;
+    const count = await prisma.chatMessage.count({
+      where: {
+        chatId,
+        senderId: { not: userId },
+        createdAt: { gt: readAt },
+        deletedAt: null,
+      },
+    });
+    results.set(chatId, count);
+  }
+
   return results;
 }
 
@@ -675,75 +715,53 @@ export function formatChatInfo(
   unreadCount: number
 ): ChatInfo {
   const isGroup = chat.type === "GROUP";
+  const participantsCount = chat._count?.participants || chat.participants?.length || 0;
 
-  // Определяем отображаемое имя и аватар
+  // Находим другого участника
+  const otherParticipant = chat.participants?.find(
+    (p: any) => p.userId !== currentUserId
+  );
+  const other = otherParticipant?.user;
+
+  // Определяем отображаемые данные
   let displayName: string;
   let displayAvatar: string | null;
-  let otherUser: OtherUserInfo | null = null;
+  let otherUser: OtherUserInfo;
 
   if (isGroup) {
-    // Для групповых чатов
     displayName = chat.name || "Групповой чат";
     displayAvatar = chat.iconUrl || null;
-
-    // Находим другого участника для показа в превью
-    const otherParticipant = chat.participants?.find(
-      (p: any) => p.userId !== currentUserId
-    );
-    if (otherParticipant?.user) {
-      const normalized = normalizeUserAvatar(otherParticipant.user);
-      otherUser = {
-        id: chat.id,
-        firstName: null,
-        lastName: displayName,
-        middleName: null,
-        avatarUrl: displayAvatar,
-        isGroup: true,
-        participantsCount: chat._count?.participants || chat.participants?.length || 0,
-      };
-    } else {
-      otherUser = {
-        id: chat.id,
-        firstName: null,
-        lastName: displayName,
-        middleName: null,
-        avatarUrl: displayAvatar,
-        isGroup: true,
-        participantsCount: chat._count?.participants || chat.participants?.length || 0,
-      };
-    }
+    otherUser = {
+      id: chat.id,
+      firstName: null,
+      lastName: displayName,
+      middleName: null,
+      avatarUrl: displayAvatar,
+      isGroup: true,
+      participantsCount,
+    };
+  } else if (other) {
+    const normalized = normalizeUserAvatar(other);
+    displayName = getUserDisplayName(normalized);
+    displayAvatar = normalized.avatarUrl;
+    otherUser = {
+      id: normalized.id,
+      firstName: normalized.firstName,
+      lastName: normalized.lastName,
+      middleName: normalized.middleName,
+      avatarUrl: normalized.avatarUrl,
+      phone: normalized.phone,
+    };
   } else {
-    // Для личных чатов
-    // Пробуем найти через ChatParticipant
-    let other = chat.participants?.find(
-      (p: any) => p.userId !== currentUserId
-    )?.user;
-
-    // Старая схема удалена - используем только ChatParticipant
-
-    if (other) {
-      const normalized = normalizeUserAvatar(other);
-      displayName = getUserDisplayName(normalized);
-      displayAvatar = normalized.avatarUrl;
-      otherUser = {
-        id: normalized.id,
-        firstName: normalized.firstName,
-        lastName: normalized.lastName,
-        middleName: normalized.middleName,
-        avatarUrl: normalized.avatarUrl,
-        phone: normalized.phone,
-      };
-    } else {
-      displayName = "Пользователь";
-      displayAvatar = null;
-      otherUser = {
-        id: "",
-        firstName: null,
-        lastName: null,
-        middleName: null,
-        avatarUrl: null,
-      };
-    }
+    displayName = "Пользователь";
+    displayAvatar = null;
+    otherUser = {
+      id: "",
+      firstName: null,
+      lastName: null,
+      middleName: null,
+      avatarUrl: null,
+    };
   }
 
   // Форматируем участников
@@ -772,7 +790,7 @@ export function formatChatInfo(
     displayAvatar,
     participants,
     participantsCount: chat._count?.participants || participants.length,
-    ticketId: null, // Тикеты теперь связаны через matrixRoomId
+    ticketId: null,
     ticketPublicId: null,
     ticketTitle: null,
     otherUser,
@@ -792,75 +810,17 @@ function getUserDisplayName(user: {
 }
 
 // ============================================================================
-// ОТПРАВКА СООБЩЕНИЙ
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ОТПРАВКИ
 // ============================================================================
 
 /**
- * Отправляет сообщение в чат
+ * Сбрасывает readAt для всех участников чата кроме отправителя
+ * Используется после отправки сообщения через API
  */
-export async function sendMessage(
+export async function resetReadStatusForOthers(
   chatId: string,
-  senderId: string,
-  content: string,
-  options?: {
-    replyToId?: string;
-    forwardedFromId?: string;
-  }
-): Promise<any> {
-  // Проверяем доступ
-  const { hasAccess, chat } = await checkChatAccess(chatId, senderId);
-  if (!hasAccess) {
-    throw new ChatAccessError("Нет доступа к этому чату");
-  }
-
-  // Сообщения теперь отправляются через Matrix API
-  // TODO: Интегрировать отправку сообщений через Matrix API
-  // const { sendMatrixMessage } = await import('@/lib/matrix-messages');
-  // const senderUser = await prisma.user.findUnique({ where: { id: senderId }, select: { matrixAccessToken: true } });
-  // if (senderUser?.matrixAccessToken && chat?.matrixRoomId) {
-  //   await sendMatrixMessage(senderUser.matrixAccessToken, chat.matrixRoomId, content);
-  // }
-
-  // Получаем информацию об отправителе для возврата
-  const sender = await prisma.user.findUnique({
-    where: { id: senderId },
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      middleName: true,
-      avatarUrl: true,
-    },
-  });
-
-  // Обновляем чат
-  await prisma.chat.update({
-    where: { id: chatId },
-    data: {
-      lastMessageAt: new Date(),
-    },
-  });
-
-  // Создаем временный объект сообщения для обратной совместимости
-  const message = {
-    id: `temp_${Date.now()}`,
-    chatId,
-    senderId,
-    content,
-    replyToId: options?.replyToId,
-    forwardedFromId: options?.forwardedFromId,
-    createdAt: new Date(),
-    sender: sender || {
-      id: senderId,
-      firstName: null,
-      lastName: null,
-      middleName: null,
-      avatarUrl: null,
-    },
-    replyTo: null,
-  };
-
-  // Сбрасываем readAt для всех участников кроме отправителя
+  senderId: string
+): Promise<void> {
   await prisma.chatParticipant.updateMany({
     where: {
       chatId,
@@ -871,13 +831,22 @@ export async function sendMessage(
       readAt: null,
     },
   });
+}
 
-  // Старая схема удалена - используем только ChatParticipant
-
-  return {
-    ...message,
-    sender: normalizeUserAvatar(message.sender),
-  };
+/**
+ * Обновляет время последнего сообщения в чате
+ */
+export async function updateChatLastMessage(
+  chatId: string,
+  messageId?: string
+): Promise<void> {
+  await prisma.chat.update({
+    where: { id: chatId },
+    data: {
+      lastMessageAt: new Date(),
+      ...(messageId && { lastMessageId: messageId }),
+    },
+  });
 }
 
 /**
@@ -897,11 +866,6 @@ export async function getChatParticipantIds(
     select: { userId: true },
   });
 
-  if (participants.length > 0) {
-    return participants.map((p) => p.userId);
-  }
-
-  // Старая схема удалена - используем только ChatParticipant
-  return [];
+  return participants.map((p) => p.userId);
 }
 
