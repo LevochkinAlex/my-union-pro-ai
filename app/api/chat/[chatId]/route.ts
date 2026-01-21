@@ -109,6 +109,12 @@ export async function GET(
         },
         reactions: true,
         attachments: true,
+        readBy: {
+          select: {
+            userId: true,
+            readAt: true,
+          },
+        },
         _count: {
           select: {
             threadReplies: true,
@@ -126,12 +132,36 @@ export async function GET(
       resultMessages.reverse();
     }
 
+    // Получаем участников чата для проверки прочтения
+    const chatParticipants = await prisma.chatParticipant.findMany({
+      where: {
+        chatId,
+        leftAt: null,
+      },
+      select: {
+        userId: true,
+      },
+    });
+    const userId = session.user.id;
+    const otherParticipantIds = chatParticipants
+      .map(p => p.userId)
+      .filter(id => id !== userId);
+
     // Форматируем сообщения
     const formattedMessages = resultMessages.map((msg: any) => {
       // Проверяем что sender существует
       if (!msg.sender) {
         console.error('[chat] Message without sender:', msg.id);
         return null;
+      }
+      
+      // Проверяем, прочитано ли сообщение другими участниками
+      // Для своих сообщений: прочитано, если все другие участники прочитали
+      const isOwnMessage = msg.senderId === userId;
+      let isRead = false;
+      if (isOwnMessage && otherParticipantIds.length > 0) {
+        const readByUserIds = (msg.readBy || []).map((r: any) => r.userId);
+        isRead = otherParticipantIds.every(id => readByUserIds.includes(id));
       }
       
       return {
@@ -142,6 +172,7 @@ export async function GET(
       messageType: msg.messageType,
       createdAt: msg.createdAt,
       editedAt: msg.editedAt,
+      isRead, // Статус прочтения для своих сообщений
       sender: {
         id: msg.sender.id,
         firstName: msg.sender.firstName,

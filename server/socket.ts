@@ -1,6 +1,9 @@
 import { Server as HttpServer } from "http";
 import { Server as SocketServer, Socket } from "socket.io";
+import { createAdapter } from "@socket.io/redis-adapter";
 import { verify } from "jsonwebtoken";
+import { Redis } from "ioredis";
+import { getRedisOptions } from "@/lib/redis";
 
 // Типы событий
 export interface ServerToClientEvents {
@@ -29,15 +32,39 @@ interface SocketData {
   userName: string;
 }
 
-// Хранилище активных пользователей
+// Redis клиенты для Socket.io adapter
+let pubClient: Redis | null = null;
+let subClient: Redis | null = null;
+
+// Хранилище активных пользователей (локальное для быстрого доступа)
+// Для масштабирования лучше использовать Redis, но оставляем для fallback
 const activeUsers = new Map<string, Set<string>>(); // chatId -> Set<socketId>
 const userSockets = new Map<string, string>(); // socketId -> userId
 const typingUsers = new Map<string, Map<string, NodeJS.Timeout>>(); // chatId -> userId -> timeout
 
 let io: SocketServer<ClientToServerEvents, ServerToClientEvents, {}, SocketData> | null = null;
 
-export function initSocketServer(httpServer: HttpServer) {
+export async function initSocketServer(httpServer: HttpServer) {
   if (io) return io;
+
+  // Инициализируем Redis клиенты для adapter
+  try {
+    const redisOptions = getRedisOptions();
+    pubClient = new Redis(redisOptions);
+    subClient = pubClient.duplicate();
+
+    pubClient.on("error", (err) => {
+      console.error("[Socket Redis] Pub client error:", err);
+    });
+
+    subClient.on("error", (err) => {
+      console.error("[Socket Redis] Sub client error:", err);
+    });
+
+    console.log("[Socket] ✅ Redis clients initialized for adapter");
+  } catch (error) {
+    console.warn("[Socket] ⚠️ Redis adapter initialization failed, using in-memory mode:", error);
+  }
 
   io = new SocketServer<ClientToServerEvents, ServerToClientEvents, {}, SocketData>(httpServer, {
     path: "/api/socket",
@@ -47,7 +74,26 @@ export function initSocketServer(httpServer: HttpServer) {
       credentials: true,
     },
     transports: ["websocket", "polling"],
+    // Оптимизации для масштабирования
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    maxHttpBufferSize: 1e6, // 1MB
+    allowEIO3: true,
   });
+
+  // Настраиваем Redis adapter если клиенты доступны
+  if (pubClient && subClient) {
+    try {
+      io.adapter(createAdapter(pubClient, subClient));
+      console.log("[Socket] ✅ Redis adapter configured for horizontal scaling");
+    } catch (error) {
+      console.warn("[Socket] ⚠️ Failed to configure Redis adapter:", error);
+    }
+  }
+
+  // Rate limiting: храним количество соединений на пользователя
+  const userConnections = new Map<string, number>();
+  const MAX_CONNECTIONS_PER_USER = 5; // Максимум 5 одновременных соединений на пользователя
 
   io.use(async (socket, next) => {
     try {
@@ -62,7 +108,17 @@ export function initSocketServer(httpServer: HttpServer) {
         return next(new Error("Invalid token"));
       }
 
-      socket.data.userId = decoded.sub;
+      const userId = decoded.sub;
+      
+      // Rate limiting: проверяем количество соединений
+      const currentConnections = userConnections.get(userId) || 0;
+      if (currentConnections >= MAX_CONNECTIONS_PER_USER) {
+        return next(new Error("Too many connections"));
+      }
+
+      userConnections.set(userId, currentConnections + 1);
+
+      socket.data.userId = userId;
       socket.data.userName = decoded.name || "Пользователь";
       next();
     } catch (error) {
@@ -135,6 +191,14 @@ export function initSocketServer(httpServer: HttpServer) {
       console.log(`[Socket] User disconnected: ${userId}`);
       
       userSockets.delete(socket.id);
+      
+      // Уменьшаем счетчик соединений
+      const currentConnections = userConnections.get(userId) || 0;
+      if (currentConnections > 1) {
+        userConnections.set(userId, currentConnections - 1);
+      } else {
+        userConnections.delete(userId);
+      }
       
       // Удаляем из всех чатов
       for (const [chatId, users] of activeUsers) {

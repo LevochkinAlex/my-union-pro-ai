@@ -93,17 +93,26 @@ export default function GroupIconUpload({ value, onChange }: GroupIconUploadProp
       const formData = new FormData();
       formData.append("file", croppedImageBlob, "group-icon.webp");
 
-      const response = await fetch("/api/ppo-head/chats/upload-icon", {
+      const response = await fetch("/api/chat/upload-icon", {
         method: "POST",
         body: formData,
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to upload icon");
+        let errorMessage = "Не удалось загрузить иконку";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          // Если не удалось распарсить ошибку, используем дефолтное сообщение
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
+      if (!data.url) {
+        throw new Error("Сервер не вернул URL иконки");
+      }
       onChange(data.url);
       setShowCropper(false);
       setImageSrc(null);

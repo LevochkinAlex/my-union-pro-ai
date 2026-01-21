@@ -80,10 +80,11 @@ function isWorkChat(chat: Chat): boolean {
 function isAIChat(chat: Chat): boolean {
   // Проверка по ID другого участника
   if (chat.otherUser?.id) {
-    const odvisIdLower = chat.otherUser.id.toLowerCase();
-    if (odvisIdLower.includes('ai-assistant') || 
-        odvisIdLower.includes('bot') ||
-        odvisIdLower === 'ai-assistant-bot') {
+    const userIdLower = chat.otherUser.id.toLowerCase();
+    if (userIdLower.includes('ai-assistant') || 
+        userIdLower.includes('bot') ||
+        userIdLower === 'ai-assistant-bot' ||
+        userIdLower.includes('ai') && userIdLower.includes('assistant')) {
       return true;
     }
   }
@@ -94,17 +95,59 @@ function isAIChat(chat: Chat): boolean {
     const aiPatterns = [
       "ии-ассистент",
       "ии ассистент",
-      "ии",
       "ai assistant",
       "ai-assistant",
       "помощник ai",
       "ai помощник",
       "ai-помощник",
-      "помощник",
-      "ассистент",
-      "assistant",
     ];
     if (aiPatterns.some(pattern => nameLower.includes(pattern))) {
+      return true;
+    }
+  }
+  
+  // Проверка по displayName (для случаев, когда name не установлен)
+  const displayName = getChatDisplayName(chat, null);
+  const displayNameLower = displayName.toLowerCase();
+  // Убираем первую букву, если она одна (например, "П Помощник AI" -> "помощник ai")
+  const displayNameNormalized = displayNameLower.replace(/^[а-яa-z]\s+/, '');
+  const displayNamePatterns = [
+    "ии-ассистент",
+    "ии ассистент",
+    "ai assistant",
+    "ai-assistant",
+    "помощник ai",
+    "ai помощник",
+    "ai-помощник",
+  ];
+  if (displayNamePatterns.some(pattern => 
+    displayNameLower.includes(pattern) || displayNameNormalized.includes(pattern)
+  )) {
+    return true;
+  }
+  
+  // Дополнительная проверка: если есть "помощник" и ("ai" или "ии"), то это AI
+  if ((displayNameLower.includes('помощник') || displayNameNormalized.includes('помощник')) &&
+      (displayNameLower.includes('ai') || displayNameLower.includes('ии'))) {
+    return true;
+  }
+  
+  // Проверка по имени другого участника
+  if (chat.otherUser) {
+    const firstName = (chat.otherUser.firstName || '').toLowerCase();
+    const lastName = (chat.otherUser.lastName || '').toLowerCase();
+    const fullName = `${firstName} ${lastName}`.trim();
+    
+    if ((fullName.includes('помощник') || fullName.includes('ассистент')) && 
+        (fullName.includes('ai') || fullName.includes('ии'))) {
+      return true;
+    }
+    
+    // Проверка только по фамилии (например, "Помощник AI")
+    if (lastName && (
+      (lastName.includes('помощник') && (lastName.includes('ai') || lastName.includes('ии'))) ||
+      lastName.includes('ассистент')
+    )) {
       return true;
     }
   }
@@ -379,7 +422,11 @@ function ChatListItem({ chat, isSelected, currentUserId, onClick }: ChatListItem
         )}
         
         {/* Online indicator */}
-        {!isGroup && !isAI && (
+        {isAI ? (
+          // ИИ помощник всегда онлайн
+          <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-gray-900 bg-green-500" />
+        ) : !isGroup && (
+          // Для обычных пользователей показываем реальный статус
           <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-gray-900 ${
             isOtherUserOnline ? 'bg-green-500' : 'bg-gray-400'
           }`} />
@@ -512,16 +559,27 @@ export default function SlackStyleSidebar({
     let ai: Chat | null = null;
 
     for (const chat of filtered) {
-      if (isAIChat(chat)) {
+      // Сначала проверяем, является ли это AI чатом
+      const isAI = isAIChat(chat);
+      
+      if (isAI) {
         // Если это ИИ-чат, сохраняем первый найденный и НЕ добавляем в personal
         if (!ai) {
           ai = chat;
         }
         // Все остальные ИИ-чаты просто пропускаем (не добавляем никуда)
-      } else if (isWorkChat(chat)) {
+        continue; // Явно пропускаем, чтобы не попало в personal
+      }
+      
+      // Если не AI чат, проверяем остальные категории
+      if (isWorkChat(chat)) {
         work.push(chat);
       } else {
-        personal.push(chat);
+        // Дополнительная проверка: убеждаемся, что это точно не AI чат
+        // (на случай, если isAIChat вернул false, но мы хотим быть уверены)
+        if (!isAIChat(chat)) {
+          personal.push(chat);
+        }
       }
     }
 
@@ -677,7 +735,7 @@ export default function SlackStyleSidebar({
           <ChatSection
             title={isChairman ? "Личные чаты" : "Чаты"}
             icon={<MessageCircle className="w-4 h-4" />}
-            chats={displayedChats.personal}
+            chats={displayedChats.personal.filter(chat => !isAIChat(chat))} // Дополнительная фильтрация AI чатов
             selectedChat={selectedChat}
             currentUserId={currentUserId}
             onSelectChat={onSelectChat}

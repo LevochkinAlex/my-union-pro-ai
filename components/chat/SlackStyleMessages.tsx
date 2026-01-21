@@ -89,6 +89,7 @@ export interface Message {
   isActivity?: boolean;
   activityType?: string;
   activityData?: any;
+  isRead?: boolean; // Прочитано ли сообщение другими участниками (для своих сообщений)
 }
 
 export interface SlackStyleMessagesProps {
@@ -354,6 +355,9 @@ function MessageReactionsDisplay({
     return null;
   }
   
+  // Явно проверяем, что это НЕ групповой чат для приватных чатов
+  const isPrivateChat = !isGroupChat;
+  
   // Если reactions - массив, преобразуем в объект
   if (Array.isArray(reactions)) {
     normalizedReactions = reactions.reduce((acc: MessageReactions, item: any) => {
@@ -398,9 +402,10 @@ function MessageReactionsDisplay({
   if (entries.length === 0) return null;
 
   // Для приватных чатов показываем по одной реакции на пользователя (без счетчика)
-  if (!isGroupChat) {
+  // ВАЖНО: isGroupChat должен быть false для PRIVATE чатов
+  if (isPrivateChat) {
     return (
-      <div className="flex flex-wrap gap-1 mt-2">
+      <>
         {entries.flatMap(([emoji, data]) => {
           const userIds = data.userIds || [];
           // Создаем отдельный бабл для каждого пользователя
@@ -411,26 +416,26 @@ function MessageReactionsDisplay({
                 key={`${emoji}-${userId}`}
                 onClick={() => onToggle(emoji)}
                 className={`
-                  inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-all
+                  inline-flex items-center justify-center w-6 h-6 rounded-full text-xs transition-all shadow-sm
                   ${isLiked
                     ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 ring-1 ring-blue-300 dark:ring-blue-700"
-                    : "bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                    : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 ring-1 ring-gray-200 dark:ring-gray-600"
                   }
                 `}
                 title={data.users?.find(u => u.id === userId)?.name || 'Пользователь'}
               >
-                <span className="text-sm" role="img" aria-label={`emoji ${emoji}`}>{emoji}</span>
+                <span className="text-sm leading-none" role="img" aria-label={`emoji ${emoji}`}>{emoji}</span>
               </button>
             );
           });
         })}
-      </div>
+      </>
     );
   }
 
   // Для групповых чатов показываем с счетчиком
   return (
-    <div className="flex flex-wrap gap-1 mt-2">
+    <>
       {entries.map(([emoji, data]) => {
         const count = data.count ?? data.userIds?.length ?? 0;
         const isLiked = data.userIds?.includes(currentUserId);
@@ -440,20 +445,20 @@ function MessageReactionsDisplay({
             key={emoji}
             onClick={() => onToggle(emoji)}
             className={`
-              inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium transition-all
+              inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium transition-all shadow-sm
               ${isLiked
                 ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 ring-1 ring-blue-300 dark:ring-blue-700"
-                : "bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 ring-1 ring-gray-200 dark:ring-gray-600"
               }
             `}
             title={data.users?.map((u) => u.name).join(", ") || `${count} реакций`}
           >
-            <span className="text-sm" role="img" aria-label={`emoji ${emoji}`}>{emoji}</span>
-            <span className="font-medium">{count}</span>
+            <span className="text-xs leading-none" role="img" aria-label={`emoji ${emoji}`}>{emoji}</span>
+            <span className="font-semibold leading-none">{count}</span>
           </button>
         );
       })}
-    </div>
+    </>
   );
 }
 
@@ -578,11 +583,22 @@ function MessageBubble({
       {/* Avatar */}
       <div className="flex-shrink-0 w-8">
         {showAvatar && !isOwn && (
-          message.sender.avatarUrl ? (
+          message.sender.avatarUrl && message.sender.avatarUrl.trim() !== '' ? (
             <img
               src={message.sender.avatarUrl}
               alt={getSenderName(message.sender)}
               className="w-8 h-8 rounded-full object-cover"
+              onError={(e) => {
+                // Если изображение не загрузилось, скрываем его и показываем инициалы
+                e.currentTarget.style.display = 'none';
+                const parent = e.currentTarget.parentElement;
+                if (parent && !parent.querySelector('.avatar-fallback')) {
+                  const fallback = document.createElement('div');
+                  fallback.className = 'avatar-fallback w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-semibold';
+                  fallback.textContent = getSenderInitials(message.sender);
+                  parent.appendChild(fallback);
+                }
+              }}
             />
           ) : (
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-semibold">
@@ -621,7 +637,8 @@ function MessageBubble({
 
         {/* Bubble */}
         <div className={`
-          group relative rounded-2xl px-4 py-2.5 
+          group relative rounded-2xl px-4 py-2.5
+          ${message.reactions && Object.keys(message.reactions).length > 0 ? 'pb-8' : 'pb-2.5'}
           ${isOwn 
             ? 'bg-blue-500 text-white rounded-br-md' 
             : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-bl-md'
@@ -666,26 +683,37 @@ function MessageBubble({
 
           {/* Time and status */}
           <div className={`
-            flex items-center gap-1 mt-1 text-[10px]
+            flex items-center gap-1 mt-1 text-[10px] relative z-10
             ${isOwn ? 'text-blue-100/70 justify-end' : 'text-gray-400 dark:text-gray-500'}
+            ${message.reactions && Object.keys(message.reactions).length > 0 ? (isOwn ? 'mr-16' : 'ml-16') : ''}
           `}>
             <span>{formatMessageTime(new Date(message.createdAt))}</span>
             {message.editedAt && <span>(ред.)</span>}
             {isOwn && (
-              <CheckCheck className="w-3.5 h-3.5" />
+              // Одна галочка - отправлено, две галочки - прочитано
+              message.isRead ? (
+                <CheckCheck className="w-3.5 h-3.5" />
+              ) : (
+                <Check className="w-3.5 h-3.5 opacity-70" />
+              )
             )}
           </div>
-        </div>
 
-        {/* Reactions */}
-        {!isDeleted && message.reactions && (
-          <MessageReactionsDisplay
-            reactions={message.reactions}
-            currentUserId={currentUserId}
-            onToggle={(emoji) => onReaction?.(emoji)}
-            isGroupChat={isGroupChat}
-          />
-        )}
+          {/* Reactions - абсолютное позиционирование внутри бабла, как в Telegram/WhatsApp */}
+          {!isDeleted && message.reactions && (
+            <div className={`
+              absolute bottom-2.5 flex flex-wrap gap-0.5 z-20
+              ${isOwn ? 'right-2' : 'left-2'}
+            `}>
+              <MessageReactionsDisplay
+                reactions={message.reactions}
+                currentUserId={currentUserId}
+                onToggle={(emoji) => onReaction?.(emoji)}
+                isGroupChat={isGroupChat}
+              />
+            </div>
+          )}
+        </div>
 
         {/* Thread indicator */}
         {!isDeleted && (message.threadRepliesCount || 0) > 0 && (

@@ -101,9 +101,12 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
   const isOtherUserOnline = otherUserId.length > 0 ? isOnline(otherUserId[0]) : false;
   
   // Обновляем subtitle с реальным статусом
-  const statusSubtitle = !isGroup && !isAI 
-    ? (isOtherUserOnline ? "Онлайн" : "Офлайн")
-    : subtitle;
+  // ИИ помощник всегда онлайн
+  const statusSubtitle = isAI 
+    ? "Всегда онлайн"
+    : !isGroup 
+      ? (isOtherUserOnline ? "Онлайн" : "Офлайн")
+      : subtitle;
 
   return (
     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
@@ -138,9 +141,11 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
         <div className="min-w-0">
           <h2 className="font-semibold text-gray-900 dark:text-white truncate">{displayName}</h2>
           <p className={`text-sm truncate ${
-            !isGroup && !isAI && isOtherUserOnline 
-              ? 'text-green-600 dark:text-green-400' 
-              : 'text-gray-500 dark:text-gray-400'
+            isAI
+              ? 'text-green-600 dark:text-green-400' // ИИ помощник всегда онлайн - зеленый цвет
+              : !isGroup && isOtherUserOnline 
+                ? 'text-green-600 dark:text-green-400' 
+                : 'text-gray-500 dark:text-gray-400'
           }`}>
             {statusSubtitle}
           </p>
@@ -398,9 +403,12 @@ export default function SlackStyleChat({
       if (files && files.length > 0) {
         if (!selectedChat) return;
         
+        // Отправляем все файлы последовательно
+        let hasError = false;
         for (const file of files) {
           const formData = new FormData();
-          formData.append("content", content);
+          // Для каждого файла используем тот же текст, но только для первого файла
+          formData.append("content", files.indexOf(file) === 0 ? content : "");
           formData.append("file", file);
           if (replyToId) formData.append("replyToId", replyToId);
 
@@ -411,13 +419,20 @@ export default function SlackStyleChat({
             });
             
             if (!response.ok) {
-              showToast("Ошибка загрузки файла", "error");
+              const errorData = await response.json().catch(() => ({}));
+              console.error("File upload error:", errorData);
+              hasError = true;
             }
           } catch (error) {
             console.error("File upload error:", error);
-            showToast("Ошибка загрузки файла", "error");
+            hasError = true;
           }
         }
+        
+        if (hasError) {
+          showToast("Ошибка загрузки некоторых файлов", "error");
+        }
+        
         setReplyingTo(null);
         loadChats();
       } else {
@@ -502,7 +517,7 @@ export default function SlackStyleChat({
               <div className="flex-1 flex overflow-hidden relative">
                 <div className="flex-1 flex flex-col min-w-0">
                   <SlackStyleMessages
-                    isGroupChat={selectedChat.type === 'GROUP'}
+                    isGroupChat={selectedChat?.type === 'GROUP'}
                     messages={formattedMessages}
                     currentUserId={currentUserId || ""}
                     typingUsers={new Set(typingUsers?.map((u) => typeof u === "string" ? u : (u as any).userId) || [])}

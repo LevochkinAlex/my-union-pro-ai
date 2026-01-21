@@ -13,6 +13,8 @@ import {
   ChatAccessError,
   getChatParticipantIds,
 } from "@/lib/chat-service";
+import { emitNewMessage } from "@/server/socket";
+import { normalizeUserAvatar } from "@/lib/api-helpers";
 
 // Инициализируем VDS хранилище при загрузке модуля
 if (typeof window === "undefined") {
@@ -141,19 +143,76 @@ export async function POST(
       attachmentType = "video";
     }
 
-    // TODO: Реализовать загрузку файлов
-    // Пока возвращаем ошибку
-    return NextResponse.json(
-      { error: "Загрузка файлов временно недоступна" },
-      { status: 501 }
-    );
+    // Получаем отправителя
+    const sender = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        avatarUrl: true,
+      },
+    });
+
+    if (!sender) {
+      return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+    }
+
+    // Создаем сообщение с вложением
+    const attachmentText = content.trim() || (attachmentType === "image" ? "📷 Фото" : attachmentType === "video" ? "🎥 Видео" : "📎 Файл");
+    
+    const message = await prisma.chatMessage.create({
+      data: {
+        chatId,
+        senderId: userId,
+        content: attachmentText,
+        messageType: 'text',
+        replyToId: replyToId || null,
+        attachments: {
+          create: {
+            type: attachmentType,
+            url: filePath,
+            name: originalName,
+            size: buffer.length,
+            mimeType: mimeType || null,
+            ...(attachmentType === "image" && processedFile?.width && processedFile?.height ? {
+              width: processedFile.width,
+              height: processedFile.height,
+            } : {}),
+          },
+        },
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatarUrl: true,
+          },
+        },
+        replyTo: {
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+        attachments: true,
+      },
+    });
 
     // Обновляем чат
-    const attachmentText = attachmentType === "image" ? "📷 Фото" : attachmentType === "video" ? "🎥 Видео" : "📎 Файл";
     await prisma.chat.update({
       where: { id: chatId },
       data: {
-        lastMessageAt: new Date(),
+        lastMessageId: message.id,
+        lastMessageAt: message.createdAt,
       },
     });
 
@@ -169,58 +228,132 @@ export async function POST(
       },
     });
 
-    // TODO: Отправить файл через Matrix Media API и создать сообщение в Matrix
-    // Пока возвращаем информацию о загруженном файле
-    const message = {
-      id: 'temp',
-      sender: { id: userId },
-      content: content.trim() || attachmentText,
-      attachments: [{
-        type: attachmentType,
-        fileName: fileName,
-        originalName: originalName,
-        filePath: filePath,
-        fileSize: buffer.length,
-        mimeType: mimeType || null,
-      }],
+    // Нормализуем сообщение для ответа
+    const normalizedMessage = {
+      id: message.id,
+      chatId: message.chatId,
+      senderId: message.senderId,
+      content: message.content,
+      messageType: message.messageType,
+      createdAt: message.createdAt,
+      editedAt: message.editedAt,
+      sender: {
+        id: message.sender.id,
+        firstName: message.sender.firstName,
+        lastName: message.sender.lastName,
+        avatarUrl: normalizeUserAvatar(message.sender).avatarUrl,
+      },
+      replyTo: message.replyTo && message.replyTo.sender ? {
+        id: message.replyTo.id,
+        content: message.replyTo.content,
+        sender: {
+          id: message.replyTo.sender.id,
+          firstName: message.replyTo.sender.firstName,
+          lastName: message.replyTo.sender.lastName,
+          avatarUrl: normalizeUserAvatar(message.replyTo.sender).avatarUrl,
+        },
+      } : null,
+      attachments: message.attachments.map((att: any) => ({
+        id: att.id,
+        type: att.type,
+        url: att.url,
+        name: att.name,
+        size: att.size,
+        mimeType: att.mimeType,
+        thumbnailUrl: att.thumbnailUrl,
+        width: att.width,
+        height: att.height,
+      })),
+      reactions: {},
     };
 
-    // Отправляем уведомления
-    const recipientIds = await getChatParticipantIds(chatId, userId);
-    if (recipientIds.length > 0) {
-      try {
-        const sender = await prisma.user.findUnique({
-          where: { id: userId },
-          select: { firstName: true, lastName: true },
-        });
-
-        const senderName = sender 
-          ? `${sender.firstName || ""} ${sender.lastName || ""}`.trim() || "Пользователь"
-          : "Пользователь";
-
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
-        const isGroupChat = fullChat?.type === "GROUP";
-
-        await Promise.all(
-          recipientIds.map((recipientId) =>
-            sendUserNotification({
-              userId: recipientId,
-              type: "chat_message",
-              title: `💬 ${attachmentText} от ${senderName}`,
-              body: content.trim() || attachmentText,
-              url: isGroupChat
-                ? `${baseUrl}/dashboard/chats/ppo-head?chatId=${chatId}`
-                : `${baseUrl}/dashboard/chat?chatId=${chatId}`,
-              senderName,
-            }).catch(console.error)
-          )
-        );
-      } catch (notificationError) {
-        console.error("[chat/attachments] Error sending notification:", notificationError);
-      }
+    // Отправляем сообщение через WebSocket другим участникам
+    try {
+      emitNewMessage(`chat:${chatId}`, normalizedMessage);
+      console.log('[chat/attachments] Message emitted via WebSocket to room chat:' + chatId, normalizedMessage.id);
+    } catch (wsError) {
+      console.error('[chat/attachments] Error emitting message via WebSocket:', wsError);
     }
 
-    return NextResponse.json({ message });
+    // Отправляем push-уведомления другим участникам через Firebase
+    try {
+      const participants = await prisma.chatParticipant.findMany({
+        where: {
+          chatId,
+          userId: { not: userId },
+          leftAt: null,
+        },
+        select: { userId: true },
+      });
+
+      if (participants.length > 0) {
+        const recipientIds = participants.map(p => p.userId);
+        const subscriptions = await prisma.pushSubscription.findMany({
+          where: {
+            userId: { in: recipientIds },
+            fcmToken: { not: null },
+          },
+          select: { userId: true, fcmToken: true },
+        });
+
+        if (subscriptions.length > 0) {
+          const senderName = `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || 'Пользователь';
+          const notificationContent = attachmentText.length > 100 ? attachmentText.substring(0, 100) + '...' : attachmentText;
+          const fcmTokens = subscriptions.map(s => s.fcmToken).filter(Boolean) as string[];
+
+          const { messaging } = await import('@/lib/firebase-admin');
+
+          const notificationMessage = {
+            notification: {
+              title: `Новое сообщение от ${senderName}`,
+              body: notificationContent,
+            },
+            webpush: {
+              notification: {
+                title: `Новое сообщение от ${senderName}`,
+                body: notificationContent,
+                icon: `${process.env.NEXT_PUBLIC_APP_URL || 'https://myunion.pro'}/icon.png`,
+                badge: `${process.env.NEXT_PUBLIC_APP_URL || 'https://myunion.pro'}/icon.png`,
+              },
+              data: {
+                type: 'chat_message',
+                chatId,
+                messageId: normalizedMessage.id,
+                url: `/dashboard/chat?chatId=${chatId}`,
+              },
+            },
+            android: {
+              priority: 'high' as const,
+              notification: { sound: 'default' },
+              data: {
+                type: 'chat_message',
+                chatId,
+                messageId: normalizedMessage.id,
+                url: `/dashboard/chat?chatId=${chatId}`,
+              },
+            },
+            apns: {
+              payload: { aps: { sound: 'default' } },
+              data: {
+                type: 'chat_message',
+                chatId,
+                messageId: normalizedMessage.id,
+                url: `/dashboard/chat?chatId=${chatId}`,
+              },
+            },
+            tokens: fcmTokens,
+          };
+
+          await messaging.sendEachForMulticast(notificationMessage).catch(err => {
+            console.error('[chat/attachments] Error sending Firebase push notification:', err);
+          });
+        }
+      }
+    } catch (notifError) {
+      console.error('[chat/attachments] Error preparing push notifications:', notifError);
+    }
+
+    return NextResponse.json({ message: normalizedMessage });
   } catch (error: any) {
     console.error("[chat/attachments] Error:", error);
     return NextResponse.json(

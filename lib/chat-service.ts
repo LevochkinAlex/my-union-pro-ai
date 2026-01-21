@@ -8,6 +8,8 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeUserAvatar, normalizeUsersAvatars } from "@/lib/api-helpers";
 import { Prisma } from "@prisma/client";
+import { cacheGet, cacheSet } from "@/lib/cache";
+import { invalidateUserChatsCache, invalidateChatCache } from "@/lib/chat-redis";
 
 // ============================================================================
 // ТИПЫ
@@ -151,6 +153,18 @@ export async function getUserChats(
   userId: string,
   filter?: ChatFilter
 ): Promise<ChatInfo[]> {
+  // Кэшируем списки чатов для масштабирования (TTL: 30 секунд)
+  const cacheKey = `user:chats:${userId}:${JSON.stringify(filter || {})}`;
+  
+  try {
+    const cached = await cacheGet<ChatInfo[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  } catch (error) {
+    // Игнорируем ошибки кэша, продолжаем с БД
+    console.warn('[chat-service] Cache read error:', error);
+  }
   // Строим условие WHERE
   const whereConditions: Prisma.ChatWhereInput[] = [];
 
@@ -223,6 +237,14 @@ export async function getUserChats(
           },
         },
       },
+      lastMessage: {
+        select: {
+          id: true,
+          content: true,
+          createdAt: true,
+          messageType: true,
+        },
+      },
       _count: {
         select: {
           participants: true,
@@ -242,7 +264,17 @@ export async function getUserChats(
   );
 
   // Форматируем чаты
-  return chats.map((chat) => formatChatInfo(chat, userId, unreadCounts.get(chat.id) || 0));
+  const formattedChats = chats.map((chat) => formatChatInfo(chat, userId, unreadCounts.get(chat.id) || 0));
+  
+  // Сохраняем в кэш (TTL: 30 секунд)
+  try {
+    await cacheSet(cacheKey, formattedChats, 30);
+  } catch (error) {
+    // Игнорируем ошибки кэша
+    console.warn('[chat-service] Cache write error:', error);
+  }
+  
+  return formattedChats;
 }
 
 /**
@@ -391,6 +423,12 @@ export async function getOrCreatePrivateChat(
       },
     });
     console.log(`[chat-service] Successfully created chat ${chat.id}`);
+    
+    // Инвалидируем кэш для обоих пользователей
+    await Promise.all([
+      invalidateUserChatsCache(firstUserId),
+      invalidateUserChatsCache(secondUserId),
+    ]).catch(err => console.warn('[chat-service] Cache invalidation error:', err));
   } catch (error: any) {
     console.error('[chat-service] Error creating chat:', {
       message: error?.message,
@@ -453,6 +491,11 @@ export async function createGroupChat(
       },
     },
   });
+
+  // Инвалидируем кэш для всех участников
+  await Promise.all(
+    allParticipantIds.map(id => invalidateUserChatsCache(id))
+  ).catch(err => console.warn('[chat-service] Cache invalidation error:', err));
 
   return chat;
 }
@@ -771,6 +814,21 @@ export function formatChatInfo(
     user: p.user ? normalizeUserAvatar(p.user) : null,
   }));
 
+  // Получаем последнее сообщение из relation
+  let lastMessage: string | null = null;
+  if (chat.lastMessage) {
+    // lastMessage - это объект ChatMessage из relation
+    if (typeof chat.lastMessage === 'object' && 'content' in chat.lastMessage) {
+      lastMessage = chat.lastMessage.content || null;
+      // Обрезаем длинные сообщения для preview
+      if (lastMessage && lastMessage.length > 100) {
+        lastMessage = lastMessage.substring(0, 100) + '...';
+      }
+    } else if (typeof chat.lastMessage === 'string') {
+      lastMessage = chat.lastMessage;
+    }
+  }
+
   return {
     id: chat.id,
     type: chat.type as ChatType,
@@ -778,7 +836,7 @@ export function formatChatInfo(
     description: chat.description,
     iconUrl: chat.iconUrl,
     isPublic: chat.isPublic ?? true,
-    lastMessage: chat.lastMessage,
+    lastMessage: lastMessage,
     lastMessageAt: chat.lastMessageAt,
     unreadCount,
     createdAt: chat.createdAt,
@@ -843,6 +901,11 @@ export async function updateChatLastMessage(
       ...(messageId && { lastMessageId: messageId }),
     },
   });
+
+  // Инвалидируем кэш чата
+  await invalidateChatCache(chatId).catch(err => 
+    console.warn('[chat-service] Cache invalidation error:', err)
+  );
 }
 
 /**
