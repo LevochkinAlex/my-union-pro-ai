@@ -16,6 +16,7 @@ import EmptyChatState from "./EmptyChatState";
 import GroupChatModal from "./GroupChatModal";
 import ThreadView from "./ThreadView";
 import ImageModal from "./ImageModal";
+import ChannelPostModal from "./ChannelPostModal";
 import {
   Users,
   Settings,
@@ -237,6 +238,7 @@ export default function SlackStyleChat({
   const [showChatView, setShowChatView] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [groupModalMode, setGroupModalMode] = useState<'create' | 'edit'>('create');
+  const [showChannelPostModal, setShowChannelPostModal] = useState(false);
   const [showParticipantsPanel, setShowParticipantsPanel] = useState(false);
   const [activeThread, setActiveThread] = useState<Message | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -550,6 +552,7 @@ export default function SlackStyleChat({
                     currentUserId={currentUserId || ""}
                     typingUsers={new Set(typingUsers?.map((u) => typeof u === "string" ? u : (u as any).userId) || [])}
                     isTicketChat={!!selectedChat.ticketId}
+                    chatId={selectedChat?.id}
                     onReply={(msg) => setReplyingTo(msg as any)}
                     onStartThread={(msg) => {
                       // Открываем тред для этого сообщения
@@ -560,6 +563,10 @@ export default function SlackStyleChat({
                     onReaction={(id, emoji) => toggleReaction(id, emoji)}
                     onOpenThread={(msg) => setActiveThread(msg as any)}
                     onImageClick={(url, name) => setSelectedImage({ url, name })}
+                    onPollVote={async (pollId, optionId) => {
+                      // Обновляем сообщения после голосования
+                      await loadChats();
+                    }}
                   />
 
                   {/* Для каналов: только админ может создавать посты, остальные только в тредах */}
@@ -570,6 +577,18 @@ export default function SlackStyleChat({
                       <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
                         В каналах только председатель может создавать посты. Вы можете комментировать посты в тредах.
                       </p>
+                    </div>
+                  ) : selectedChat.type === 'CHANNEL' && selectedChat.participants?.some(
+                    p => p.userId === currentUserId && p.role === 'admin'
+                  ) && !activeThread ? (
+                    // Для админов канала показываем кнопку создания поста
+                    <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+                      <button
+                        onClick={() => setShowChannelPostModal(true)}
+                        className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                      >
+                        📢 Создать пост в канале
+                      </button>
                     </div>
                   ) : (
                     <ChatInput
@@ -589,8 +608,6 @@ export default function SlackStyleChat({
                       placeholder={
                         selectedChat.type === 'CHANNEL' && activeThread
                           ? "Напишите комментарий в треде..."
-                          : selectedChat.type === 'CHANNEL'
-                          ? "Создайте пост в канале..."
                           : "Напишите сообщение..."
                       }
                     />
@@ -648,6 +665,34 @@ export default function SlackStyleChat({
         imageUrl={selectedImage?.url || ""}
         imageName={selectedImage?.name}
         onClose={() => setSelectedImage(null)}
+      />
+
+      <ChannelPostModal
+        isOpen={showChannelPostModal}
+        onClose={() => setShowChannelPostModal(false)}
+        onSubmit={async (data) => {
+          if (!selectedChat) return;
+          
+          try {
+            const response = await fetch(`/api/chat/${selectedChat.id}/posts`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(data),
+            });
+
+            if (response.ok) {
+              showToast("Пост создан", "success");
+              await loadChats();
+            } else {
+              const error = await response.json();
+              showToast(error.error || "Ошибка создания поста", "error");
+            }
+          } catch (error) {
+            console.error("Failed to create post:", error);
+            showToast("Ошибка создания поста", "error");
+          }
+        }}
+        chatId={selectedChat?.id || ""}
       />
 
       <AlertDialog

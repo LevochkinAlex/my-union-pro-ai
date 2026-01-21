@@ -162,6 +162,125 @@ export async function GET(
       .map(p => p.userId)
       .filter(id => id !== userId);
 
+    // Получаем ID постов из сообщений типа channel_post
+    const postIds: string[] = [];
+    resultMessages.forEach((msg: any) => {
+      if (msg.messageType === 'channel_post') {
+        try {
+          const postData = JSON.parse(msg.content);
+          if (postData.postId) {
+            postIds.push(postData.postId);
+          }
+        } catch (e) {
+          // Игнорируем ошибки парсинга
+        }
+      }
+    });
+
+    // Загружаем данные постов одним запросом
+    const postsMap = new Map<string, any>();
+    if (postIds.length > 0) {
+      const posts = await prisma.newsPost.findMany({
+        where: { id: { in: postIds } },
+        include: {
+          author: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+            },
+          },
+          polls: {
+            include: {
+              _count: {
+                select: {
+                  votes: true,
+                },
+              },
+            },
+          },
+          _count: {
+            select: {
+              likes: true,
+              comments: true,
+            },
+          },
+        },
+      });
+
+      // Получаем голоса пользователя в опросах
+      const pollIds = posts.flatMap(p => p.polls.map(poll => poll.id));
+      let userPollVotes: Record<string, string> = {};
+      if (pollIds.length > 0 && userId) {
+        const votes = await prisma.newsPollVote.findMany({
+          where: {
+            userId,
+            pollId: { in: pollIds },
+          },
+          select: {
+            pollId: true,
+            optionId: true,
+          },
+        });
+        userPollVotes = votes.reduce(
+          (acc, vote) => {
+            acc[vote.pollId] = vote.optionId;
+            return acc;
+          },
+          {} as Record<string, string>
+        );
+      }
+
+      // Получаем статистику голосов для каждого опроса
+      for (const post of posts) {
+        const pollsWithStats = await Promise.all(
+          post.polls.map(async (poll) => {
+            const votes = await prisma.newsPollVote.groupBy({
+              by: ["optionId"],
+              where: {
+                pollId: poll.id,
+              },
+              _count: {
+                optionId: true,
+              },
+            });
+
+            const totalVotes = votes.reduce((sum, v) => sum + v._count.optionId, 0);
+            const options = poll.options as Array<{ id: string; text: string }>;
+            const optionsWithStats = options.map((option) => {
+              const voteCount = votes.find((v) => v.optionId === option.id)?._count.optionId || 0;
+              const percentage = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 1000) / 10 : 0;
+
+              return {
+                ...option,
+                voteCount,
+                percentage,
+              };
+            });
+
+            return {
+              id: poll.id,
+              question: poll.question,
+              options: optionsWithStats,
+              totalVotes,
+              userVote: userPollVotes[poll.id] || null,
+              isClosed: poll.isClosed,
+            };
+          })
+        );
+
+        postsMap.set(post.id, {
+          id: post.id,
+          title: post.title,
+          content: post.content,
+          coverImage: post.coverImage,
+          polls: pollsWithStats,
+          _count: post._count,
+        });
+      }
+    }
+
     // Форматируем сообщения
     const formattedMessages = resultMessages.map((msg: any) => {
       // Проверяем что sender существует
@@ -177,6 +296,20 @@ export async function GET(
       if (isOwnMessage && otherParticipantIds.length > 0) {
         const readByUserIds = (msg.readBy || []).map((r: any) => r.userId);
         isRead = otherParticipantIds.every(id => readByUserIds.includes(id));
+      }
+
+      // Парсим данные поста для сообщений типа channel_post
+      let postData: any = null;
+      if (msg.messageType === 'channel_post') {
+        try {
+          const parsed = JSON.parse(msg.content);
+          const postId = parsed.postId;
+          if (postId && postsMap.has(postId)) {
+            postData = postsMap.get(postId);
+          }
+        } catch (e) {
+          // Игнорируем ошибки парсинга
+        }
       }
       
       return {
@@ -225,6 +358,8 @@ export async function GET(
         height: att.height,
       })),
       threadRepliesCount: msg._count?.threadReplies || 0,
+      // Данные поста для channel_post
+      post: postData,
       };
     }).filter((msg: any) => msg !== null);
 

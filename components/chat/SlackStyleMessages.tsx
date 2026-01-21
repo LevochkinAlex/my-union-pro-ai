@@ -22,8 +22,12 @@ import {
   ExternalLink,
   Smile,
   Image as ImageIcon,
+  Heart,
+  MessageCircle,
+  Eye,
 } from "lucide-react";
 import EmojiPicker from "./EmojiPicker";
+import clsx from "clsx";
 
 // ============================================================================
 // ТИПЫ
@@ -90,6 +94,29 @@ export interface Message {
   activityType?: string;
   activityData?: any;
   isRead?: boolean; // Прочитано ли сообщение другими участниками (для своих сообщений)
+  post?: {
+    id: string;
+    title: string;
+    content: string;
+    coverImage: string | null;
+    polls: Array<{
+      id: string;
+      question: string;
+      options: Array<{
+        id: string;
+        text: string;
+        voteCount?: number;
+        percentage?: number;
+      }>;
+      totalVotes: number;
+      userVote: string | null;
+      isClosed: boolean;
+    }>;
+    _count: {
+      likes: number;
+      comments: number;
+    };
+  } | null;
 }
 
 export interface SlackStyleMessagesProps {
@@ -106,6 +133,8 @@ export interface SlackStyleMessagesProps {
   onOpenThread?: (message: Message) => void;
   onForward?: (message: Message) => void;
   onImageClick?: (url: string, name?: string) => void;
+  onPollVote?: (pollId: string, optionId: string) => void;
+  chatId?: string;
 }
 
 // ============================================================================
@@ -560,6 +589,194 @@ function AttachmentsDisplay({ attachments, isOwn, onImageClick }: AttachmentsDis
 }
 
 // ============================================================================
+// КОМПОНЕНТ ПОСТА КАНАЛА
+// ============================================================================
+
+interface ChannelPostDisplayProps {
+  post: Message['post'];
+  isOwn: boolean;
+  onPollVote?: (pollId: string, optionId: string) => void;
+  onImageClick?: (url: string, name?: string) => void;
+}
+
+function ChannelPostDisplay({ post, isOwn, onPollVote, onImageClick }: ChannelPostDisplayProps) {
+  if (!post) return null;
+
+  const handlePollVote = async (pollId: string, optionId: string) => {
+    if (!onPollVote) return;
+    try {
+      const response = await fetch(`/api/news/polls/${pollId}/vote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ optionId }),
+      });
+
+      if (response.ok) {
+        onPollVote(pollId, optionId);
+      }
+    } catch (error) {
+      console.error("Error voting:", error);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Cover Image */}
+      {post.coverImage && (
+        <div className="rounded-xl overflow-hidden">
+          <button
+            onClick={() => onImageClick?.(post.coverImage!, post.title)}
+            className="w-full"
+          >
+            <img
+              src={post.coverImage}
+              alt={post.title}
+              className="w-full max-h-96 object-cover rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
+              loading="lazy"
+            />
+          </button>
+        </div>
+      )}
+
+      {/* Title */}
+      <h3 className={`text-lg font-bold ${isOwn ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
+        {post.title}
+      </h3>
+
+      {/* Content */}
+      <div
+        className={`
+          text-sm leading-relaxed break-words
+          ${isOwn ? 'text-white/90' : 'text-gray-700 dark:text-gray-300'}
+          prose prose-sm max-w-none
+          ${isOwn 
+            ? 'prose-invert [&_*]:!text-white/90' 
+            : '[&_p]:text-gray-700 dark:[&_p]:text-gray-300'
+          }
+        `}
+        dangerouslySetInnerHTML={{ __html: post.content }}
+      />
+
+      {/* Polls */}
+      {post.polls && post.polls.length > 0 && (
+        <div className="space-y-3 mt-3">
+          {post.polls.map((poll) => (
+            <div
+              key={poll.id}
+              className={`
+                rounded-lg border p-3
+                ${isOwn 
+                  ? 'border-white/30 bg-white/10' 
+                  : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50'
+                }
+              `}
+            >
+              <h4 className={`text-sm font-semibold mb-2 ${isOwn ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
+                {poll.question}
+              </h4>
+              <div className="space-y-2">
+                {poll.options.map((option) => {
+                  const isVoted = poll.userVote === option.id;
+                  const percentage = option.percentage || 0;
+                  const voteCount = option.voteCount || 0;
+
+                  return (
+                    <button
+                      key={option.id}
+                      onClick={() => {
+                        if (!poll.isClosed && !poll.userVote) {
+                          handlePollVote(poll.id, option.id);
+                        }
+                      }}
+                      disabled={poll.isClosed || !!poll.userVote}
+                      className={clsx(
+                        "relative w-full rounded-lg border p-2.5 text-left text-sm transition-all",
+                        isVoted
+                          ? isOwn
+                            ? "border-white/50 bg-white/20"
+                            : "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20"
+                          : poll.userVote
+                          ? isOwn
+                            ? "border-white/20 bg-white/5"
+                            : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+                          : isOwn
+                          ? "border-white/20 bg-white/5 hover:bg-white/10"
+                          : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-600",
+                        (poll.isClosed || poll.userVote) && "cursor-default"
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={clsx(
+                          "font-medium text-xs",
+                          isOwn ? 'text-white' : 'text-gray-900 dark:text-white'
+                        )}>
+                          {option.text}
+                        </span>
+                        {poll.totalVotes > 0 && (
+                          <span className={clsx(
+                            "text-xs",
+                            isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
+                          )}>
+                            {percentage}% ({voteCount})
+                          </span>
+                        )}
+                      </div>
+                      {poll.totalVotes > 0 && (
+                        <div className={clsx(
+                          "h-1.5 w-full overflow-hidden rounded-full",
+                          isOwn ? 'bg-white/20' : 'bg-gray-200 dark:bg-gray-700'
+                        )}>
+                          <div
+                            className={clsx(
+                              "h-full transition-all",
+                              isOwn ? 'bg-white/50' : 'bg-blue-500 dark:bg-blue-400'
+                            )}
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {poll.totalVotes > 0 && (
+                <p className={clsx(
+                  "mt-2 text-xs",
+                  isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
+                )}>
+                  Всего голосов: {poll.totalVotes}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Stats */}
+      <div className={clsx(
+        "flex items-center gap-4 pt-2 border-t",
+        isOwn ? 'border-white/20' : 'border-gray-200 dark:border-gray-700'
+      )}>
+        <div className={clsx(
+          "flex items-center gap-1.5 text-xs",
+          isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
+        )}>
+          <Heart className="w-3.5 h-3.5" />
+          <span>{post._count.likes}</span>
+        </div>
+        <div className={clsx(
+          "flex items-center gap-1.5 text-xs",
+          isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
+        )}>
+          <MessageCircle className="w-3.5 h-3.5" />
+          <span>{post._count.comments}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // КОМПОНЕНТ СООБЩЕНИЯ
 // ============================================================================
 
@@ -573,6 +790,7 @@ interface MessageBubbleProps {
   onReaction?: (emoji: string) => void;
   onOpenThread?: () => void;
   onImageClick?: (url: string, name?: string) => void;
+  onPollVote?: (pollId: string, optionId: string) => void;
   isGroupChat?: boolean;
 }
 
@@ -586,9 +804,11 @@ function MessageBubble({
   onReaction,
   onOpenThread,
   onImageClick,
+  onPollVote,
   isGroupChat = false,
 }: MessageBubbleProps) {
   const isDeleted = !!message.deletedAt;
+  const isChannelPost = message.messageType === 'channel_post' && message.post;
 
   return (
     <div 
@@ -664,6 +884,14 @@ function MessageBubble({
             <div className={`italic text-sm opacity-70 ${isOwn ? 'text-white' : 'text-gray-600 dark:text-gray-400'}`}>
               Сообщение удалено
             </div>
+          ) : isChannelPost ? (
+            // Отображение поста канала
+            <ChannelPostDisplay 
+              post={message.post!} 
+              isOwn={isOwn}
+              onPollVote={onPollVote}
+              onImageClick={onImageClick}
+            />
           ) : (
             <>
               {/* Attachments */}
@@ -793,6 +1021,8 @@ export default function SlackStyleMessages({
   onOpenThread,
   onForward,
   onImageClick,
+  onPollVote,
+  chatId,
 }: SlackStyleMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -884,6 +1114,7 @@ export default function SlackStyleMessages({
                   onReaction={(emoji) => onReaction?.(message.id, emoji)}
                   onOpenThread={() => onOpenThread?.(message)}
                   onImageClick={onImageClick}
+                  onPollVote={onPollVote}
                   isGroupChat={isGroupChat}
                 />
               </div>
