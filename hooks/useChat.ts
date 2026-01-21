@@ -199,7 +199,7 @@ export function useChat(options: UseChatOptions = {}) {
   const loadMessages = useCallback(async (chatId: string) => {
     setLoadingMessages(true);
     try {
-      const data = await fetchJsonWithRetry<{ messages: Message[]; hasMore: boolean }>(
+      const data = await fetchJsonWithRetry<{ messages: Message[]; hasMore: boolean; pagination?: { hasMore: boolean; oldestMessageId: string | null } }>(
         `/api/chat/${chatId}?limit=50&t=${Date.now()}`,
         {
           method: "GET",
@@ -209,7 +209,7 @@ export function useChat(options: UseChatOptions = {}) {
       
       if (data) {
         setMessages(data.messages || []);
-        setHasMore(data.pagination?.hasMore || false);
+        setHasMore(data.pagination?.hasMore ?? data.hasMore ?? false);
         setOldestMessageId(data.pagination?.oldestMessageId || null);
 
         // Помечаем как прочитанные
