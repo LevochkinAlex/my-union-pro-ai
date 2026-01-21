@@ -4,16 +4,18 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 
 /**
- * Хук для проверки онлайн статуса пользователей
+ * Хук для проверки онлайн статуса пользователей и времени последней активности
  */
 export function useOnlineStatus(userIds: string[]) {
   const { data: session } = useSession();
   const [statuses, setStatuses] = useState<Record<string, boolean>>({});
+  const [lastSeenAt, setLastSeenAt] = useState<Record<string, Date | null>>({});
   const [loading, setLoading] = useState(true);
 
   const checkStatuses = useCallback(async () => {
     if (!userIds || userIds.length === 0) {
       setStatuses({});
+      setLastSeenAt({});
       setLoading(false);
       return;
     }
@@ -22,6 +24,7 @@ export function useOnlineStatus(userIds: string[]) {
     const validUserIds = userIds.filter(id => id && typeof id === 'string');
     if (validUserIds.length === 0) {
       setStatuses({});
+      setLastSeenAt({});
       setLoading(false);
       return;
     }
@@ -33,6 +36,14 @@ export function useOnlineStatus(userIds: string[]) {
       if (response.ok) {
         const data = await response.json();
         setStatuses(data.statuses || {});
+        // Преобразуем строки в Date объекты
+        const lastSeen: Record<string, Date | null> = {};
+        if (data.lastSeenAt) {
+          Object.keys(data.lastSeenAt).forEach(userId => {
+            lastSeen[userId] = data.lastSeenAt[userId] ? new Date(data.lastSeenAt[userId]) : null;
+          });
+        }
+        setLastSeenAt(lastSeen);
       } else {
         // Если ошибка - просто игнорируем, не ломаем UI
         console.warn("[useOnlineStatus] Failed to fetch statuses:", response.status);
@@ -58,5 +69,9 @@ export function useOnlineStatus(userIds: string[]) {
     return statuses[userId] ?? false;
   }, [statuses]);
 
-  return { statuses, isOnline, loading };
+  const getLastSeenAt = useCallback((userId: string): Date | null => {
+    return lastSeenAt[userId] ?? null;
+  }, [lastSeenAt]);
+
+  return { statuses, isOnline, lastSeenAt, getLastSeenAt, loading };
 }

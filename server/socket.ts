@@ -2,8 +2,7 @@ import { Server as HttpServer } from "http";
 import { Server as SocketServer, Socket } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { verify } from "jsonwebtoken";
-import { Redis } from "ioredis";
-import { getRedisOptions } from "@/lib/redis";
+import type { Redis } from "ioredis";
 
 // Типы событий
 export interface ServerToClientEvents {
@@ -49,6 +48,9 @@ export async function initSocketServer(httpServer: HttpServer) {
 
   // Инициализируем Redis клиенты для adapter
   try {
+    // Динамический импорт Redis только в runtime
+    const { default: Redis } = await import("ioredis");
+    const { getRedisOptions } = await import("@/lib/redis");
     const redisOptions = getRedisOptions();
     pubClient = new Redis(redisOptions);
     subClient = pubClient.duplicate();

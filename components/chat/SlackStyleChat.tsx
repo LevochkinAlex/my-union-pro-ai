@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { formatLastSeen } from "@/lib/format-last-seen";
 import { useToast } from "@/components/ui/Toast";
 import { useChat } from "@/hooks/useChat";
 import { Chat, Message } from "@/types/chat";
@@ -97,15 +98,18 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
   
   // Проверяем онлайн статус для личных чатов
   const otherUserId = !isGroup && !isAI && chat.otherUser?.id ? [chat.otherUser.id] : [];
-  const { isOnline } = useOnlineStatus(otherUserId);
+  const { isOnline, getLastSeenAt } = useOnlineStatus(otherUserId);
   const isOtherUserOnline = otherUserId.length > 0 ? isOnline(otherUserId[0]) : false;
+  const lastSeenAt = otherUserId.length > 0 ? getLastSeenAt(otherUserId[0]) : null;
   
   // Обновляем subtitle с реальным статусом
   // ИИ помощник всегда онлайн
   const statusSubtitle = isAI 
     ? "Всегда онлайн"
     : !isGroup 
-      ? (isOtherUserOnline ? "Онлайн" : "Офлайн")
+      ? (isOtherUserOnline 
+          ? "Онлайн" 
+          : formatLastSeen(lastSeenAt, false))
       : subtitle;
 
   return (

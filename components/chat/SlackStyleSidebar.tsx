@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { formatLastSeen } from "@/lib/format-last-seen";
 import {
   Search,
   Plus,
@@ -377,8 +378,14 @@ function ChatListItem({ chat, isSelected, currentUserId, onClick }: ChatListItem
   
   // Проверяем онлайн статус для личных чатов
   const otherUserId = !isGroup && !isAI && chat.otherUser?.id ? [chat.otherUser.id] : [];
-  const { isOnline } = useOnlineStatus(otherUserId);
+  const { isOnline, getLastSeenAt } = useOnlineStatus(otherUserId);
   const isOtherUserOnline = otherUserId.length > 0 ? isOnline(otherUserId[0]) : false;
+  const lastSeenAt = otherUserId.length > 0 ? getLastSeenAt(otherUserId[0]) : null;
+  
+  // Форматируем время последней активности для отображения в списке
+  const lastSeenText = !isGroup && !isAI && !isOtherUserOnline && lastSeenAt
+    ? formatLastSeen(lastSeenAt, false)
+    : null;
 
   return (
     <button
@@ -447,9 +454,16 @@ function ChatListItem({ chat, isSelected, currentUserId, onClick }: ChatListItem
         </div>
         
         <div className="flex items-center justify-between">
-          <span className={`text-sm truncate ${hasUnread ? 'text-gray-700 dark:text-gray-300 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
-            {chat.lastMessage || (isGroup ? `${chat.participantsCount || 0} участников` : "Нет сообщений")}
-          </span>
+          <div className="flex-1 min-w-0">
+            <span className={`text-sm truncate block ${hasUnread ? 'text-gray-700 dark:text-gray-300 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
+              {chat.lastMessage || (isGroup ? `${chat.participantsCount || 0} участников` : "Нет сообщений")}
+            </span>
+            {lastSeenText && (
+              <span className="text-xs text-gray-400 dark:text-gray-500 truncate block">
+                {lastSeenText}
+              </span>
+            )}
+          </div>
           
           {hasUnread && (
             <span className="flex-shrink-0 ml-2 w-5 h-5 flex items-center justify-center text-xs font-bold bg-blue-500 text-white rounded-full">

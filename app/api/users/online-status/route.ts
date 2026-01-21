@@ -67,15 +67,19 @@ export async function GET(request: NextRequest) {
     const ONLINE_THRESHOLD = 3 * 60 * 1000; // 3 минуты (более строгий порог)
 
     const statuses: Record<string, boolean> = {};
+    const lastSeenAt: Record<string, string | null> = {};
+    
     for (const user of users) {
       if (!user.updatedAt) {
         statuses[user.id] = false;
+        lastSeenAt[user.id] = null;
         continue;
       }
       
       const timeSinceUpdate = now.getTime() - new Date(user.updatedAt).getTime();
       // Онлайн если активность была менее 3 минут назад
       statuses[user.id] = timeSinceUpdate >= 0 && timeSinceUpdate < ONLINE_THRESHOLD;
+      lastSeenAt[user.id] = user.updatedAt.toISOString();
     }
     
     // Добавляем статусы для пользователей, которых не нашли (offline)
@@ -83,9 +87,12 @@ export async function GET(request: NextRequest) {
       if (!statuses[userId]) {
         statuses[userId] = false;
       }
+      if (!lastSeenAt[userId]) {
+        lastSeenAt[userId] = null;
+      }
     }
 
-    return NextResponse.json({ statuses });
+    return NextResponse.json({ statuses, lastSeenAt });
   } catch (error) {
     console.error('[online-status] GET Error:', error);
     return NextResponse.json({ error: 'Ошибка получения статусов' }, { status: 500 });
