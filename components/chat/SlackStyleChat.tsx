@@ -378,7 +378,7 @@ export default function SlackStyleChat({
     if (!selectedChat || selectedChat.type !== 'GROUP') return;
 
     try {
-      const response = await fetch(`/api/ppo-head/chats/groups/${selectedChat.id}`, {
+      const response = await fetch(`/api/chat/${selectedChat.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -394,6 +394,7 @@ export default function SlackStyleChat({
         }
       } else {
         const error = await response.json();
+        console.error("Failed to update group:", error);
         showToast(error.error || "Ошибка обновления группы", "error");
       }
     } catch (error) {

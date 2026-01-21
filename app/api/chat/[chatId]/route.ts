@@ -6,6 +6,7 @@ import { requireChatAccess, ChatAccessError } from '@/lib/chat-service';
 import { normalizeUserAvatar } from '@/lib/api-helpers';
 import * as Sentry from '@sentry/nextjs';
 import { sendUserNotification } from '@/lib/notifications';
+import { invalidateChatCache, invalidateUserChatsCache } from '@/lib/chat-redis';
 // Динамический импорт для избежания проблем при сборке
 // Кэшируем модуль для производительности
 let socketModule: typeof import('@/server/socket') | null = null;
@@ -673,6 +674,237 @@ export async function POST(
         error: error?.message || 'Internal server error',
         details: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
       },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * PATCH /api/chat/[chatId]
+ * Обновить групповой чат (название, описание, иконка, участники, админ)
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { chatId: string } | Promise<{ chatId: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Не авторизован' }, { status: 401 });
+    }
+
+    const resolvedParams = await Promise.resolve(params);
+    const chatId = resolvedParams.chatId;
+
+    // Проверяем, что чат существует и является групповым
+    const chat = await prisma.chat.findUnique({
+      where: { id: chatId },
+      include: {
+        participants: {
+          where: { leftAt: null },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
+    if (!chat) {
+      return NextResponse.json({ error: 'Чат не найден' }, { status: 404 });
+    }
+
+    if (chat.type !== 'GROUP') {
+      return NextResponse.json(
+        { error: 'Можно редактировать только групповые чаты' },
+        { status: 400 }
+      );
+    }
+
+    // Проверяем, что пользователь является админом
+    const currentParticipant = chat.participants.find(
+      (p) => p.userId === session.user.id && p.role === 'admin'
+    );
+
+    if (!currentParticipant) {
+      return NextResponse.json(
+        { error: 'Только администратор может редактировать группу' },
+        { status: 403 }
+      );
+    }
+
+    const { name, description, iconUrl, participantIds, adminId } = await request.json();
+
+    // Обновляем базовую информацию
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name.trim();
+    if (description !== undefined) updateData.description = description?.trim() || null;
+    if (iconUrl !== undefined) updateData.iconUrl = iconUrl || null;
+
+    if (Object.keys(updateData).length > 0) {
+      await prisma.chat.update({
+        where: { id: chatId },
+        data: updateData,
+      });
+    }
+
+    // Обновляем участников если нужно
+    if (participantIds && Array.isArray(participantIds)) {
+      const currentParticipantIds = chat.participants.map((p) => p.userId);
+      const newParticipantIds = [...new Set(participantIds)];
+
+      // Добавляем новых участников
+      const toAdd = newParticipantIds.filter((id) => !currentParticipantIds.includes(id));
+      if (toAdd.length > 0) {
+        const newMembers = await prisma.user.findMany({
+          where: { id: { in: toAdd } },
+          select: { id: true, firstName: true, lastName: true },
+        });
+
+        await prisma.chatParticipant.createMany({
+          data: toAdd.map((userId: string) => ({
+            chatId,
+            userId,
+            role: 'member',
+            invitedById: session.user.id,
+          })),
+        });
+
+        // Отправляем уведомления новым участникам
+        const creatorName = chat.createdBy
+          ? `${chat.createdBy.firstName || ''} ${chat.createdBy.lastName || ''}`.trim() || 'Пользователь'
+          : 'Пользователь';
+        const chatName = updateData.name || chat.name || 'группу';
+        const notificationUrl = `/dashboard/chat?chatId=${chatId}`;
+
+        await Promise.allSettled(
+          newMembers.map(async (member) => {
+            try {
+              await sendUserNotification({
+                userId: member.id,
+                type: 'chat_message',
+                title: '👥 Вас добавили в группу',
+                body: `${creatorName} добавил вас в "${chatName}"`,
+                url: notificationUrl,
+                senderName: creatorName,
+              });
+            } catch (err) {
+              console.error(`[chat] Error sending notification to user ${member.id}:`, err);
+            }
+          })
+        );
+      }
+
+      // Удаляем участников (кроме админа)
+      const toRemove = currentParticipantIds.filter(
+        (id) => !newParticipantIds.includes(id) && id !== adminId
+      );
+      if (toRemove.length > 0) {
+        await prisma.chatParticipant.updateMany({
+          where: {
+            chatId,
+            userId: { in: toRemove },
+            role: { not: 'admin' }, // Не удаляем админа
+          },
+          data: {
+            leftAt: new Date(),
+          },
+        });
+      }
+    }
+
+    // Меняем админа если нужно
+    if (adminId && adminId !== currentParticipant.userId) {
+      const newAdmin = chat.participants.find((p) => p.userId === adminId);
+      if (newAdmin) {
+        // Старый админ становится участником
+        await prisma.chatParticipant.updateMany({
+          where: {
+            chatId,
+            userId: currentParticipant.userId,
+            role: 'admin',
+          },
+          data: {
+            role: 'member',
+          },
+        });
+
+        // Новый админ
+        await prisma.chatParticipant.updateMany({
+          where: {
+            chatId,
+            userId: adminId,
+          },
+          data: {
+            role: 'admin',
+          },
+        });
+      }
+    }
+
+    // Инвалидируем кэш чата и списка чатов для всех участников
+    await invalidateChatCache(chatId).catch(err => 
+      console.warn('[chat] Cache invalidation error:', err)
+    );
+    
+    const allParticipantIds = chat.participants.map(p => p.userId);
+    if (participantIds && Array.isArray(participantIds)) {
+      const newParticipantIds = [...new Set(participantIds)];
+      const allIds = [...new Set([...allParticipantIds, ...newParticipantIds])];
+      await Promise.allSettled(
+        allIds.map(id => invalidateUserChatsCache(id))
+      ).catch(err => console.warn('[chat] Cache invalidation error:', err));
+    } else {
+      await Promise.allSettled(
+        allParticipantIds.map(id => invalidateUserChatsCache(id))
+      ).catch(err => console.warn('[chat] Cache invalidation error:', err));
+    }
+
+    // Возвращаем обновленный чат
+    const updatedChat = await prisma.chat.findUnique({
+      where: { id: chatId },
+      include: {
+        participants: {
+          where: { leftAt: null },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json({ chat: updatedChat });
+  } catch (error: any) {
+    console.error('[chat] PATCH Error:', error);
+    return NextResponse.json(
+      { error: error?.message || 'Ошибка обновления группы' },
       { status: 500 }
     );
   }

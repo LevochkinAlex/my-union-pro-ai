@@ -8,6 +8,8 @@ import {
   getOrCreatePrivateChat,
   ChatFilter 
 } from "@/lib/chat-service";
+import { sendUserNotification } from "@/lib/notifications";
+import { invalidateChatCache, invalidateUserChatsCache } from "@/lib/chat-redis";
 import { withCache, getCacheKey } from "@/lib/cache";
 import * as Sentry from "@sentry/nextjs";
 
@@ -303,9 +305,49 @@ export async function POST(request: NextRequest) {
                 },
               },
             },
+            createdBy: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
           },
         });
         isNew = true;
+
+        // Инвалидируем кэш для всех участников
+        const allParticipantIds = [userId, ...participantIds];
+        await Promise.allSettled([
+          invalidateChatCache(chat.id),
+          ...allParticipantIds.map(id => invalidateUserChatsCache(id)),
+        ]).catch(err => console.warn('[chat] Cache invalidation error:', err));
+
+        // Отправляем уведомления добавленным участникам
+        if (participantIds.length > 0) {
+          const creatorName = chat.createdBy 
+            ? `${chat.createdBy.firstName || ''} ${chat.createdBy.lastName || ''}`.trim() || 'Пользователь'
+            : 'Пользователь';
+          const chatName = chat.name || 'группу';
+          const notificationUrl = `/dashboard/chat?chatId=${chat.id}`;
+
+          await Promise.allSettled(
+            participantIds.map(async (participantId: string) => {
+              try {
+                await sendUserNotification({
+                  userId: participantId,
+                  type: 'chat_message',
+                  title: '👥 Вас добавили в группу',
+                  body: `${creatorName} добавил вас в "${chatName}"`,
+                  url: notificationUrl,
+                  senderName: creatorName,
+                });
+              } catch (err) {
+                console.error(`[chat] Error sending notification to user ${participantId}:`, err);
+              }
+            })
+          );
+        }
       }
     } else {
       return NextResponse.json(
