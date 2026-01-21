@@ -12,8 +12,9 @@ const AI_BOT_ID = "ai-assistant-bot"; // Виртуальный ID бота
  * Получить или создать чат с ИИ-ассистентом
  */
 export async function GET() {
+  let session: any = null;
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
@@ -153,7 +154,7 @@ export async function GET() {
       extra: { userId: session?.user?.id },
     });
     
-    const statusCode = error?.statusCode || 500;
+    const statusCode = (error as any)?.statusCode || (error as any)?.status || 500;
     return NextResponse.json(
       {
         error: "Ошибка при получении чата с ИИ",
@@ -169,15 +170,19 @@ export async function GET() {
  * Отправить сообщение в чат с ИИ и получить ответ
  */
 export async function POST(request: NextRequest) {
+  let session = null;
+  let chatId: string | undefined;
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
     const userId = session.user.id;
-    const { content, chatId } = await request.json();
+    const body = await request.json();
+    const { content, chatId: bodyChatId } = body;
+    chatId = bodyChatId;
 
     if (!content?.trim()) {
       return NextResponse.json({ error: "Сообщение не может быть пустым" }, { status: 400 });
@@ -337,7 +342,7 @@ export async function POST(request: NextRequest) {
       extra: { userId: session?.user?.id, chatId },
     });
     
-    const statusCode = error?.statusCode || 500;
+    const statusCode = (error as any)?.statusCode || (error as any)?.status || 500;
     return NextResponse.json(
       {
         error: "Ошибка при отправке сообщения",

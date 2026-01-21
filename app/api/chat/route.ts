@@ -154,8 +154,10 @@ function formatAIChat(aiChat: any, userId: string) {
  * Получить список чатов пользователя
  */
 export async function GET(request: NextRequest) {
+  let session: any = null;
+  let filter: ChatFilter = {};
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
@@ -164,7 +166,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
 
     // Получаем параметры фильтрации
-    const filter: ChatFilter = {};
+    filter = {};
     
     const typeParam = searchParams.get("type");
     if (typeParam === "PRIVATE" || typeParam === "GROUP") {
@@ -224,7 +226,7 @@ export async function GET(request: NextRequest) {
       extra: { userId: session?.user?.id, filter },
     });
     
-    const statusCode = (error as any)?.statusCode || 500;
+    const statusCode = (error as any)?.statusCode || (error as any)?.status || 500;
     return NextResponse.json(
       { 
         error: "Ошибка при загрузке чатов",
@@ -240,8 +242,9 @@ export async function GET(request: NextRequest) {
  * Создать новый чат
  */
 export async function POST(request: NextRequest) {
+  let session = null;
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }

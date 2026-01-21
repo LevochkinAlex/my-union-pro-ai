@@ -12,8 +12,9 @@ import * as Sentry from '@sentry/nextjs';
  * РЕФАКТОРИНГ: Теперь использует единый chat-service вместо дублирования логики
  */
 export async function GET() {
+  let session = null;
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -51,7 +52,7 @@ export async function GET() {
     
     // Более информативное сообщение об ошибке
     const errorMessage = error?.message || 'Failed to fetch rooms';
-    const statusCode = error?.statusCode || 500;
+    const statusCode = (error as any)?.statusCode || (error as any)?.status || 500;
     
     return NextResponse.json(
       { 
