@@ -47,28 +47,29 @@ export async function initSocketServer(httpServer: HttpServer) {
 
   // Инициализируем Redis клиенты для adapter
   // Используем динамические импорты для избежания проблем при сборке
-  try {
-    if (typeof window === "undefined") {
-      // Только на сервере
-      const Redis = (await import("ioredis")).default;
-      const { getRedisOptions } = await import("@/lib/redis");
-      const redisOptions = getRedisOptions();
-      pubClient = new Redis(redisOptions);
-      subClient = pubClient.duplicate();
+  // Временно отключено для стабильности сборки
+  // try {
+  //   if (typeof window === "undefined") {
+  //     // Только на сервере
+  //     const Redis = (await import("ioredis")).default;
+  //     const { getRedisOptions } = await import("@/lib/redis");
+  //     const redisOptions = getRedisOptions();
+  //     pubClient = new Redis(redisOptions);
+  //     subClient = pubClient.duplicate();
 
-    pubClient.on("error", (err) => {
-      console.error("[Socket Redis] Pub client error:", err);
-    });
+  //     pubClient.on("error", (err) => {
+  //       console.error("[Socket Redis] Pub client error:", err);
+  //     });
 
-    subClient.on("error", (err) => {
-      console.error("[Socket Redis] Sub client error:", err);
-    });
+  //     subClient.on("error", (err) => {
+  //       console.error("[Socket Redis] Sub client error:", err);
+  //     });
 
-      console.log("[Socket] ✅ Redis clients initialized for adapter");
-    }
-  } catch (error) {
-    console.warn("[Socket] ⚠️ Redis adapter initialization failed, using in-memory mode:", error);
-  }
+  //     console.log("[Socket] ✅ Redis clients initialized for adapter");
+  //   }
+  // } catch (error) {
+  //   console.warn("[Socket] ⚠️ Redis adapter initialization failed, using in-memory mode:", error);
+  // }
 
   io = new SocketServer<ClientToServerEvents, ServerToClientEvents, {}, SocketData>(httpServer, {
     path: "/api/socket",
@@ -86,16 +87,17 @@ export async function initSocketServer(httpServer: HttpServer) {
   });
 
   // Настраиваем Redis adapter если клиенты доступны
-  if (pubClient && subClient) {
-    try {
-      // Динамический импорт adapter только в runtime
-      const { createAdapter } = await import("@socket.io/redis-adapter");
-      io.adapter(createAdapter(pubClient, subClient));
-      console.log("[Socket] ✅ Redis adapter configured for horizontal scaling");
-    } catch (error) {
-      console.warn("[Socket] ⚠️ Failed to configure Redis adapter:", error);
-    }
-  }
+  // Временно отключено для стабильности сборки
+  // if (pubClient && subClient) {
+  //   try {
+  //     // Динамический импорт adapter только в runtime
+  //     const { createAdapter } = await import("@socket.io/redis-adapter");
+  //     io.adapter(createAdapter(pubClient, subClient));
+  //     console.log("[Socket] ✅ Redis adapter configured for horizontal scaling");
+  //   } catch (error) {
+  //     console.warn("[Socket] ⚠️ Failed to configure Redis adapter:", error);
+  //   }
+  // }
 
   // Rate limiting: храним количество соединений на пользователя
   const userConnections = new Map<string, number>();
