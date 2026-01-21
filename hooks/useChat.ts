@@ -209,8 +209,8 @@ export function useChat(options: UseChatOptions = {}) {
       
       if (data) {
         setMessages(data.messages || []);
-        setHasMore(data.pagination?.hasMore ?? data.hasMore ?? false);
-        setOldestMessageId(data.pagination?.oldestMessageId || null);
+        setHasMore((data as any).pagination?.hasMore ?? (data as any).hasMore ?? false);
+        setOldestMessageId((data as any).pagination?.oldestMessageId || null);
 
         // Помечаем как прочитанные
         try {
