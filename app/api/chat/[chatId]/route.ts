@@ -480,11 +480,12 @@ export async function GET(
       );
 
       return NextResponse.json({
+        chat,
         messages: allMessages,
-        hasMore,
         pagination: {
           hasMore,
           oldestMessageId: allMessages.length > 0 ? allMessages[0].id : null,
+          newestMessageId: allMessages.length > 0 ? allMessages[allMessages.length - 1].id : null,
         },
       });
     }
