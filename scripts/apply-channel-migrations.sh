@@ -1,21 +1,37 @@
 #!/bin/bash
 # Скрипт для применения миграций каналов на продакшн сервере
 
-set -e
+# Не используем set -e, чтобы скрипт продолжал работу при ошибках
+set +e
 
 echo "🔧 Применение миграций для каналов..."
 
-# Применяем миграцию для добавления CHANNEL типа
+# Применяем миграцию для добавления CHANNEL типа (безопасная версия с проверкой)
 echo "📝 Применяем миграцию: add_channel_chat_type"
 npx prisma db execute --file prisma/migrations/20260121000000_add_channel_chat_type/migration.sql --schema prisma/schema.prisma
+if [ $? -eq 0 ]; then
+    echo "✅ Миграция add_channel_chat_type применена"
+else
+    echo "⚠️  Миграция add_channel_chat_type уже применена или произошла ошибка (продолжаем...)"
+fi
 
 # Применяем миграцию для связи Chat с NewsChannel
 echo "📝 Применяем миграцию: link_chat_news_channel"
 npx prisma db execute --file prisma/migrations/20260121000001_link_chat_news_channel/migration.sql --schema prisma/schema.prisma
+if [ $? -eq 0 ]; then
+    echo "✅ Миграция link_chat_news_channel применена"
+else
+    echo "⚠️  Миграция link_chat_news_channel уже применена или произошла ошибка (продолжаем...)"
+fi
 
 # Применяем миграцию для исправления структуры ChatMessageAttachment
 echo "📝 Применяем миграцию: fix_chat_message_attachment_columns"
 npx prisma db execute --file prisma/migrations/20260121130000_fix_chat_message_attachment_columns/migration.sql --schema prisma/schema.prisma
+if [ $? -eq 0 ]; then
+    echo "✅ Миграция fix_chat_message_attachment_columns применена"
+else
+    echo "⚠️  Миграция fix_chat_message_attachment_columns уже применена или произошла ошибка (продолжаем...)"
+fi
 
 # Помечаем миграции как примененные
 echo "✅ Помечаем миграции как примененные..."
