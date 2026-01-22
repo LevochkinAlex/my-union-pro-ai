@@ -82,7 +82,8 @@ function getChatAvatar(chat: Chat): string | null {
 }
 
 function isWorkChat(chat: Chat): boolean {
-  return (chat.type === "GROUP" || chat.type === "CHANNEL") && (!!chat.ticketId || !!chat.ticketPublicId);
+  // Рабочие чаты: каналы ИЛИ обращения (любой тип с ticketId)
+  return chat.type === 'CHANNEL' || !!chat.ticketId || !!chat.ticketPublicId;
 }
 
 function isAIChat(chat: Chat): boolean {
@@ -657,17 +658,19 @@ export default function SlackStyleSidebar({
         continue; // Явно пропускаем, чтобы не попало в personal
       }
       
-      // Каналы отдельно
-      if (chat.type === 'CHANNEL') {
-        channelList.push(chat);
-      } else if (isWorkChat(chat)) {
+      // Рабочие чаты: каналы и обращения
+      if (isWorkChat(chat)) {
         work.push(chat);
-      } else {
-        // Дополнительная проверка: убеждаемся, что это точно не AI чат
-        // (на случай, если isAIChat вернул false, но мы хотим быть уверены)
-        if (!isAIChat(chat)) {
-          personal.push(chat);
+        // Каналы также добавляем в отдельный список для отображения
+        if (chat.type === 'CHANNEL') {
+          channelList.push(chat);
         }
+      } else if (chat.type === 'PRIVATE') {
+        // Личные чаты: только приватные чаты без ticketId
+        personal.push(chat);
+      } else {
+        // Групповые чаты без ticketId тоже идут в личные
+        personal.push(chat);
       }
     }
 
@@ -676,9 +679,15 @@ export default function SlackStyleSidebar({
 
   const displayedChats = useMemo(() => {
     switch (activeTab) {
-      case "work": return { work: workChats, personal: [], channels: [], ai: null };
-      case "personal": return { work: [], personal: personalChats, channels: [], ai: null };
-      default: return { work: workChats, personal: personalChats, channels: channels, ai: aiChat };
+      case "work": 
+        // В "Рабочие" включаем обращения и каналы
+        return { work: workChats, personal: [], channels: channels, ai: null };
+      case "personal": 
+        // В "Личные" только приватные чаты
+        return { work: [], personal: personalChats, channels: [], ai: null };
+      default: 
+        // "Все" - показываем всё
+        return { work: workChats, personal: personalChats, channels: channels, ai: aiChat };
     }
   }, [activeTab, workChats, personalChats, channels, aiChat]);
 
