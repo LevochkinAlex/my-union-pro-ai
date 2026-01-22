@@ -120,18 +120,36 @@ export async function POST(
       return NextResponse.json({ error: "Необходимо указать userIds" }, { status: 400 });
     }
 
+    // Валидация формата userIds
+    const validUserIds = userIds.filter((id: any) => 
+      typeof id === 'string' && id.trim().length > 0 && id.length <= 100
+    );
+
+    if (validUserIds.length === 0) {
+      return NextResponse.json({ error: "Некорректный формат userIds" }, { status: 400 });
+    }
+
+    if (validUserIds.length !== userIds.length) {
+      return NextResponse.json({ error: "Некоторые userIds имеют некорректный формат" }, { status: 400 });
+    }
+
+    // Ограничение на количество добавляемых участников за раз
+    if (validUserIds.length > 50) {
+      return NextResponse.json({ error: "Можно добавить не более 50 участников за раз" }, { status: 400 });
+    }
+
     // Получаем существующих участников
     const existingParticipants = await prisma.chatParticipant.findMany({
       where: {
         chatId,
-        userId: { in: userIds },
+        userId: { in: validUserIds },
         leftAt: null,
       },
       select: { userId: true },
     });
 
     const existingUserIds = existingParticipants.map(p => p.userId);
-    const newUserIds = userIds.filter((id: string) => !existingUserIds.includes(id));
+    const newUserIds = validUserIds.filter((id: string) => !existingUserIds.includes(id));
 
     if (newUserIds.length === 0) {
       return NextResponse.json({ 
@@ -152,11 +170,11 @@ export async function POST(
 
     // Добавляем участников
     await prisma.chatParticipant.createMany({
-      data: newUserIds.map((userId: string) => ({
+      data: newUserIds.map((newUserId: string) => ({
         chatId,
-        userId,
+        userId: newUserId,
         role: 'member',
-        invitedById: userId,
+        invitedById: userId, // Текущий пользователь (админ) приглашает
       })),
     });
 
