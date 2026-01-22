@@ -184,8 +184,9 @@ export async function getUserChats(
   }
 
   // Фильтр по наличию обращения (проверяем связь с Ticket через chatId)
+  // Также исключаем чаты, связанные с удаленными обращениями
   if (filter?.hasTicket !== undefined) {
-    // Получаем все chatId из тикетов
+    // Получаем все chatId из существующих (не удаленных) тикетов
     const tickets = await prisma.ticket.findMany({
       where: { chatId: { not: null } },
       select: { chatId: true },
@@ -195,7 +196,7 @@ export async function getUserChats(
       .filter((id): id is string => typeof id === 'string' && id.length > 0);
     
     if (filter.hasTicket) {
-      // Только чаты, которые связаны с обращениями (есть Ticket с таким chatId)
+      // Только чаты, которые связаны с существующими обращениями (есть Ticket с таким chatId)
       if (ticketChatIds.length > 0) {
         whereConditions.push({
           id: { in: ticketChatIds },
@@ -207,7 +208,7 @@ export async function getUserChats(
         });
       }
     } else {
-      // Все чаты, кроме связанных с обращениями
+      // Все чаты, кроме связанных с существующими обращениями
       if (ticketChatIds.length > 0) {
         whereConditions.push({
           id: { notIn: ticketChatIds },
@@ -215,6 +216,33 @@ export async function getUserChats(
       }
     }
   }
+  
+  // Исключаем чаты, связанные с удаленными обращениями
+  // Получаем все chatId из существующих тикетов
+  const existingTickets = await prisma.ticket.findMany({
+    where: { chatId: { not: null } },
+    select: { chatId: true },
+  });
+  const existingTicketChatIds = existingTickets
+    .map(t => t.chatId)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+  
+  // Исключаем только чаты, которые связаны с удаленными обращениями
+  // Логика: если чат имеет ticket relation, но его chatId нет в списке существующих обращений,
+  // значит обращение было удалено - такой чат нужно исключить
+  // НО: чаты без ticket relation (личные, каналы) должны проходить всегда
+  // Поэтому условие: либо ticket null (не связан с обращением), либо chatId в списке существующих
+  if (existingTicketChatIds.length > 0) {
+    whereConditions.push({
+      OR: [
+        // Чат не связан с обращением (личные, каналы, обычные группы) - всегда показываем
+        { ticket: null },
+        // Или чат связан с существующим обращением (chatId есть в списке существующих)
+        { id: { in: existingTicketChatIds } },
+      ],
+    });
+  }
+  // Если existingTicketChatIds пустой, не добавляем фильтр - показываем все чаты
 
   // Получаем чаты
   const chats = await prisma.chat.findMany({
@@ -283,7 +311,7 @@ export async function getUserChats(
     // Продолжаем с пустым Map - все чаты будут показаны как прочитанные
   }
 
-  // Форматируем чаты
+  // Форматируем чаты и фильтруем чаты с удаленными обращениями
   const formattedChats: ChatInfo[] = [];
   for (const chat of chats) {
     try {
@@ -291,6 +319,23 @@ export async function getUserChats(
         console.warn('[chat-service] Skipping invalid chat:', chat);
         continue;
       }
+      
+      // Дополнительная проверка: если чат имеет имя "Обращение", но ticket relation null,
+      // проверяем, не было ли обращение удалено
+      // Это защита от случая, когда обращение удалено, но чат остался
+      if (chat.ticket === null && chat.name?.includes('Обращение')) {
+        const ticketExists = await prisma.ticket.findFirst({
+          where: { chatId: chat.id },
+          select: { id: true },
+        });
+        
+        // Если обращение не найдено, значит оно удалено - пропускаем этот чат
+        if (!ticketExists) {
+          console.log(`[chat-service] Skipping chat ${chat.id} - ticket was deleted`);
+          continue;
+        }
+      }
+      // Для остальных чатов (личные, каналы, группы без обращений) - продолжаем нормально
       
       const formatted = formatChatInfo(chat, userId, unreadCounts.get(chat.id) || 0);
       if (formatted) {
@@ -912,9 +957,10 @@ export function formatChatInfo(
   }
 
   // Получаем данные об обращении, если чат связан с обращением
-  const ticketId = chat.ticket?.id || null;
-  const ticketPublicId = chat.ticket?.publicId || null;
-  const ticketTitle = chat.ticket?.title || null;
+  const ticket = chat.ticket;
+  const ticketId = ticket?.id || null;
+  const ticketPublicId = ticket?.publicId || null;
+  const ticketTitle = ticket?.title || null;
 
   return {
     id: chat.id,

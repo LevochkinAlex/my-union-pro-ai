@@ -27,6 +27,20 @@ export async function POST(
       return NextResponse.json({ error: "Эмодзи не указан" }, { status: 400 });
     }
 
+    // Получаем сообщение для проверки типа (канал или обычный чат)
+    const message = await prisma.chatMessage.findUnique({
+      where: { id: messageId },
+      select: {
+        id: true,
+        messageType: true,
+        content: true,
+      },
+    });
+
+    if (!message) {
+      return NextResponse.json({ error: "Сообщение не найдено" }, { status: 404 });
+    }
+
     // Проверяем, есть ли уже такая реакция от этого пользователя
     const existingReaction = await prisma.chatMessageReaction.findUnique({
       where: {
@@ -38,6 +52,17 @@ export async function POST(
       },
     });
 
+    // Для каналов: если реакция ❤️, синхронизируем с NewsLike
+    let newsPostId: string | null = null;
+    if (message.messageType === 'channel_post') {
+      try {
+        const postData = JSON.parse(message.content);
+        newsPostId = postData.postId || null;
+      } catch (e) {
+        // Игнорируем ошибки парсинга
+      }
+    }
+
     if (existingReaction) {
       // Удаляем реакцию
       await prisma.chatMessageReaction.delete({
@@ -45,6 +70,20 @@ export async function POST(
           id: existingReaction.id,
         },
       });
+
+      // Если это канал и реакция ❤️, удаляем лайк из новостной ленты
+      if (newsPostId && emoji === '❤️') {
+        try {
+          await prisma.newsLike.deleteMany({
+            where: {
+              newsPostId,
+              userId,
+            },
+          });
+        } catch (err) {
+          console.error('[reactions] Error removing news like:', err);
+        }
+      }
     } else {
       // Добавляем реакцию
       await prisma.chatMessageReaction.create({
@@ -54,6 +93,27 @@ export async function POST(
           emoji,
         },
       });
+
+      // Если это канал и реакция ❤️, добавляем лайк в новостную ленту
+      if (newsPostId && emoji === '❤️') {
+        try {
+          await prisma.newsLike.upsert({
+            where: {
+              newsPostId_userId: {
+                newsPostId,
+                userId,
+              },
+            },
+            create: {
+              newsPostId,
+              userId,
+            },
+            update: {},
+          });
+        } catch (err) {
+          console.error('[reactions] Error adding news like:', err);
+        }
+      }
     }
 
     // Получаем все реакции для этого сообщения

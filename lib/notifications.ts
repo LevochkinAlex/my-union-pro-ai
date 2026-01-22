@@ -6,6 +6,7 @@ export type NotificationType =
   | "post_comment" // Комментарий к посту
   | "comment_reply" // Ответ на комментарий
   | "chat_message" // Новое сообщение в чате
+  | "chat_mention" // Упоминание в чате
   | "user_post" // Новый пост пользователя
   | "documents_ready" // Документы готовы
   | "ticket_response" // Ответ на обращение
@@ -194,6 +195,7 @@ function getShouldSendEmail(
       // Используем настройку emailAppealNotifications для комментариев
       return user.emailAppealNotifications;
     case "chat_message":
+    case "chat_mention":
       // Используем настройку emailBotNotifications для чата
       return user.emailBotNotifications;
     case "documents_ready":
@@ -223,6 +225,8 @@ function getEmailSubject(type: NotificationType, senderName?: string): string {
       return `${senderName || "Пользователь"} ответил на ваш комментарий`;
     case "chat_message":
       return `Новое сообщение от ${senderName || "пользователя"}`;
+    case "chat_mention":
+      return `${senderName || "Пользователь"} упомянул вас в чате`;
     case "user_post":
       return `Новый пост от ${senderName || "пользователя"}`;
     case "documents_ready":
@@ -262,6 +266,9 @@ function getEmailBody(
       break;
     case "chat_message":
       message = `${senderName || "Пользователь"} отправил вам сообщение:\n\n"${body}"\n\n`;
+      break;
+    case "chat_mention":
+      message = `${senderName || "Пользователь"} упомянул вас в чате:\n\n"${body}"\n\n`;
       break;
     case "user_post":
       message = `${senderName || "Пользователь"} опубликовал новый пост:\n\n"${body}"\n\n`;

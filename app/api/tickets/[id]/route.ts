@@ -98,6 +98,8 @@ export async function GET(
         updatedAt: ticket.updatedAt,
         attachments: ticket.attachments,
         chatId: ticket.chatId,
+        userId: ticket.userId,
+        organizationId: ticket.organizationId,
         rejectionReason: ticket.rejectionReason,
         helpfulRating: ticket.helpfulRating,
         helpfulRatingComment: ticket.helpfulRatingComment,
@@ -287,25 +289,24 @@ export async function DELETE(
       },
     });
 
-    // Отправляем сообщение в чат обращения об удалении
+    // Удаляем связанный чат, если он существует
     if (ticket.chatId) {
       try {
-        const deleteMessage = `🗑️ Обращение удалено пользователем`;
-        await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/api/chat/${ticket.chatId}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Internal-Token': process.env.INTERNAL_API_TOKEN || '',
-          },
-          body: JSON.stringify({
-            content: deleteMessage,
-            senderUserId: session.user.id,
-          }),
-        }).catch(err => {
-          console.error('[tickets] Error sending delete message:', err);
+        // Удаляем всех участников из чата
+        await prisma.chatParticipant.updateMany({
+          where: { chatId: ticket.chatId },
+          data: { leftAt: new Date() },
         });
-      } catch (err) {
-        console.error('[tickets] Error:', err);
+        
+        // Удаляем чат (каскадно удалятся сообщения и участники)
+        await prisma.chat.delete({
+          where: { id: ticket.chatId },
+        });
+        
+        console.log(`[tickets] ✅ Удален чат обращения: ${ticket.chatId}`);
+      } catch (chatError) {
+        console.error('[tickets] Error deleting chat:', chatError);
+        // Продолжаем удаление обращения даже если не удалось удалить чат
       }
     }
 

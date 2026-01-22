@@ -72,6 +72,40 @@ export async function GET(
             },
           },
         },
+        ticket: {
+          select: {
+            id: true,
+            publicId: true,
+            title: true,
+            status: true,
+            userId: true,
+            organizationId: true,
+            type: true,
+            priority: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                avatarUrl: true,
+                email: true,
+              },
+            },
+            organization: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            participants: true,
+          },
+        },
       } as any,
     });
 
@@ -281,6 +315,22 @@ export async function GET(
         );
       }
 
+      // Получаем лайки пользователя для постов
+      const likedPostIds = posts.map(p => p.id);
+      let userLikes: Set<string> = new Set();
+      if (likedPostIds.length > 0 && userId) {
+        const likes = await prisma.newsLike.findMany({
+          where: {
+            userId,
+            newsPostId: { in: likedPostIds },
+          },
+          select: {
+            newsPostId: true,
+          },
+        });
+        userLikes = new Set(likes.map(like => like.newsPostId));
+      }
+
       // Получаем статистику голосов для каждого опроса
       for (const post of posts) {
         const pollsWithStats = await Promise.all(
@@ -326,6 +376,7 @@ export async function GET(
           coverImage: post.coverImage,
           polls: pollsWithStats,
           _count: post._count,
+          isLiked: userLikes.has(post.id),
         });
       }
     }
@@ -551,7 +602,7 @@ export async function POST(
       );
     }
 
-    const { content, replyToId, threadRootId, attachments } = body;
+    const { content, replyToId, threadRootId, attachments, mentionedUserIds } = body;
 
     if (!content || typeof content !== 'string' || !content.trim()) {
       return NextResponse.json(
@@ -903,6 +954,62 @@ export async function POST(
       } catch (wsError) {
         console.error('[chat] Error emitting message via WebSocket:', wsError);
         // Не прерываем выполнение, WebSocket - это дополнение
+      }
+
+      // Отправляем уведомления упомянутым пользователям
+      const mentionedIds = Array.isArray(mentionedUserIds) ? mentionedUserIds : [];
+      if (mentionedIds.length > 0) {
+        try {
+          const mentionedUsers = await prisma.user.findMany({
+            where: {
+              id: { in: mentionedIds },
+            },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+            },
+          });
+
+          const chatInfo = await prisma.chat.findUnique({
+            where: { id: chatId },
+            select: {
+              name: true,
+              type: true,
+            },
+          });
+
+          const chatName = chatInfo?.name || 'Чат';
+          const senderName = [sender.firstName, sender.lastName].filter(Boolean).join(' ') || 'Пользователь';
+          const notificationContent = content.length > 100 ? content.substring(0, 100) + '...' : content;
+          // URL с переходом к конкретному сообщению
+          const notificationUrl = `/dashboard/chat?chatId=${chatId}&messageId=${normalizedMessage.id}`;
+
+          await Promise.allSettled(
+            mentionedUsers.map(async (user) => {
+              if (user.id === userId) return; // Не отправляем уведомление себе
+              try {
+                await sendUserNotification({
+                  userId: user.id,
+                  type: 'chat_mention',
+                  title: `@${senderName} упомянул вас в "${chatName}"`,
+                  body: notificationContent,
+                  url: notificationUrl,
+                  senderName: senderName,
+                  metadata: {
+                    chatId,
+                    messageId: normalizedMessage.id,
+                    mentioned: true,
+                  },
+                });
+              } catch (err) {
+                console.error(`[chat] Error sending mention notification to user ${user.id}:`, err);
+              }
+            })
+          );
+        } catch (mentionError) {
+          console.error('[chat] Error processing mentions:', mentionError);
+        }
       }
 
       // Отправляем уведомления другим участникам (push + запись в БД для раздела уведомлений)

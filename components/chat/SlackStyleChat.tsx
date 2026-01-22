@@ -7,18 +7,23 @@ import dynamic from "next/dynamic";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { formatLastSeen } from "@/lib/format-last-seen";
 import { safeJsonParse } from "@/lib/api-client";
+import { normalizeUserAvatar } from "@/lib/api-helpers";
 import { useToast } from "@/components/ui/Toast";
 import { useChat } from "@/hooks/useChat";
 import { Chat, Message } from "@/types/chat";
+import clsx from "clsx";
 import SlackStyleSidebar from "./SlackStyleSidebar";
 import SlackStyleMessages from "./SlackStyleMessages";
 import ChatInput from "./ChatInput";
 import EmptyChatState from "./EmptyChatState";
 import GroupChatModal from "./GroupChatModal";
 import ThreadView from "./ThreadView";
+import ChannelThreadView from "./ChannelThreadView";
 import ImageModal from "./ImageModal";
 import ChannelPostModal from "./ChannelPostModal";
 import CloseAppealModal from "@/components/appeals/CloseAppealModal";
+import ParticipantsPanel from "./ParticipantsPanel";
+import AddParticipantModal from "./AddParticipantModal";
 import {
   Users,
   Settings,
@@ -53,9 +58,38 @@ export interface SlackStyleChatProps {
 // ХЕЛПЕРЫ
 // ============================================================================
 
+// Форматирование даты создания канала
+function formatChannelCreatedDate(createdAt: Date | string | null | undefined): string {
+  if (!createdAt) return "";
+  
+  const date = typeof createdAt === 'string' ? new Date(createdAt) : createdAt;
+  if (isNaN(date.getTime())) return "";
+  
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const months = Math.floor(days / 30);
+  const years = Math.floor(days / 365);
+  
+  if (years > 0) {
+    return `Создан ${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'} назад`;
+  } else if (months > 0) {
+    return `Создан ${months} ${months === 1 ? 'месяц' : months < 5 ? 'месяца' : 'месяцев'} назад`;
+  } else if (days > 0) {
+    return `Создан ${days} ${days === 1 ? 'день' : days < 5 ? 'дня' : 'дней'} назад`;
+  } else {
+    // Если создан сегодня, показываем дату
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `Создан ${day}.${month}.${year}`;
+  }
+}
+
 function getChatDisplayInfo(chat: Chat, currentUserId: string | null) {
   const isAI = chat.name === "ИИ-Ассистент";
-  const isGroup = chat.type === "GROUP";
+  const isGroup = chat.type === "GROUP" || chat.type === "CHANNEL";
+  const isChannel = chat.type === "CHANNEL";
   const isTicketChat = !!chat.ticketId || !!chat.ticketPublicId;
 
   let displayName = "Чат";
@@ -68,7 +102,20 @@ function getChatDisplayInfo(chat: Chat, currentUserId: string | null) {
   } else if (isGroup) {
     displayName = chat.name || "Групповой чат";
     avatarUrl = chat.iconUrl || null;
-    subtitle = `${chat.participantsCount || chat._count?.participants || 0} участников`;
+    const participantsCount = chat.participantsCount || chat._count?.participants || 0;
+    
+    if (isChannel) {
+      // Для каналов показываем дату создания
+      const createdDate = formatChannelCreatedDate(chat.createdAt);
+      if (createdDate) {
+        subtitle = createdDate;
+      } else {
+        subtitle = `${participantsCount} участников`;
+      }
+    } else {
+      subtitle = `${participantsCount} участников`;
+    }
+    
     if (isTicketChat && chat.ticketPublicId) {
       subtitle = `Обращение #${chat.ticketPublicId} · ${subtitle}`;
     }
@@ -76,7 +123,9 @@ function getChatDisplayInfo(chat: Chat, currentUserId: string | null) {
     displayName = [chat.otherUser.lastName, chat.otherUser.firstName]
       .filter(Boolean)
       .join(" ") || "Пользователь";
-    avatarUrl = chat.otherUser.avatarUrl || null;
+    // Нормализуем аватар через normalizeUserAvatar для правильного отображения
+    const normalized = normalizeUserAvatar(chat.otherUser);
+    avatarUrl = normalized.avatarUrl || null;
     subtitle = chat.otherUser.jobTitle || chat.otherUser.profession || "Онлайн";
   }
 
@@ -101,6 +150,22 @@ interface ChatHeaderProps {
 function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditGroup, isCurrentUserAdmin, ticketId, onCloseAppeal }: ChatHeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
   const { displayName, avatarUrl, subtitle, isAI, isGroup, isTicketChat } = getChatDisplayInfo(chat, currentUserId);
+  const { showToast } = useToast();
+  
+  // Закрываем меню при клике вне его
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (showMenu && !target.closest('.relative') && !target.closest('.absolute')) {
+        setShowMenu(false);
+      }
+    };
+    
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showMenu]);
   
   // Проверяем онлайн статус для личных чатов
   const otherUserId = !isGroup && !isAI && chat.otherUser?.id ? [chat.otherUser.id] : [];
@@ -110,13 +175,16 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
   
   // Обновляем subtitle с реальным статусом
   // ИИ помощник всегда онлайн
+  // Для каналов используем subtitle из getChatDisplayInfo (дата создания)
+  // Для групповых чатов используем subtitle из getChatDisplayInfo (количество участников)
+  // Для личных чатов показываем онлайн статус
   const statusSubtitle = isAI 
     ? "Всегда онлайн"
-    : !isGroup 
-      ? (isOtherUserOnline 
+    : isGroup
+      ? subtitle // Для групп и каналов используем subtitle (дата создания для каналов, количество участников для групп)
+      : (isOtherUserOnline 
           ? "Онлайн" 
-          : formatLastSeen(lastSeenAt, false))
-      : subtitle;
+          : formatLastSeen(lastSeenAt, false));
 
   return (
     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
@@ -141,9 +209,24 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
             </div>
           )
         ) : avatarUrl ? (
-          <img src={avatarUrl} alt={displayName} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+          <img 
+            src={avatarUrl} 
+            alt={displayName} 
+            className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+            onError={(e) => {
+              // Если аватар не загрузился, скрываем img и показываем плейсхолдер
+              e.currentTarget.style.display = 'none';
+              const parent = e.currentTarget.parentElement;
+              if (parent && !parent.querySelector('.avatar-fallback')) {
+                const fallback = document.createElement('div');
+                fallback.className = 'avatar-fallback w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-medium flex-shrink-0';
+                fallback.textContent = displayName[0]?.toUpperCase() || "?";
+                parent.appendChild(fallback);
+              }
+            }}
+          />
         ) : (
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white font-medium flex-shrink-0">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-medium flex-shrink-0">
             {displayName[0]?.toUpperCase() || "?"}
           </div>
         )}
@@ -200,28 +283,100 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
                   <>
                     <button 
                       onClick={() => { onEditGroup(); setShowMenu(false); }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      className="w-full flex items-center justify-start gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
                       <Settings className="w-4 h-4" />
-                      Редактировать группу
+                      Редактировать
                     </button>
                     <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
                   </>
                 )}
-                <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+                <button 
+                  onClick={() => {
+                    setShowMenu(false);
+                    if (isTicketChat || ticketId) {
+                      // Для обращений открываем страницу обращения
+                      const ticketIdToUse = ticketId || chat.ticketId || chat.ticketPublicId;
+                      if (ticketIdToUse) {
+                        window.open(`/dashboard/appeals?ticketId=${ticketIdToUse}`, '_blank');
+                      }
+                    } else {
+                      // Для обычных чатов можно показать информацию о чате
+                      showToast('Информация о чате: ' + displayName, 'info');
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
                   <Info className="w-4 h-4" />
                   Подробности
                 </button>
-                <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+                <button 
+                  onClick={() => {
+                    setShowMenu(false);
+                    showToast('Настройки уведомлений для чата', 'info');
+                    // TODO: Реализовать модальное окно с настройками уведомлений
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
                   <Bell className="w-4 h-4" />
                   Уведомления
                 </button>
                 <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
-                <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
-                  <Archive className="w-4 h-4" />
-                  Архивировать
-                </button>
-                <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
+                {isGroup && (
+                  <button 
+                    onClick={async () => {
+                      setShowMenu(false);
+                      if (confirm('Вы уверены, что хотите архивировать этот чат?')) {
+                        try {
+                          const response = await fetch(`/api/chat/${chat.id}/archive`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ archive: true }),
+                          });
+                          if (response.ok) {
+                            showToast('Чат архивирован', 'success');
+                            setTimeout(() => window.location.reload(), 1000);
+                          } else {
+                            const error = await safeJsonParse(response);
+                            showToast(error?.error || 'Ошибка архивации', 'error');
+                          }
+                        } catch (error) {
+                          console.error('Error archiving chat:', error);
+                          showToast('Ошибка архивации чата', 'error');
+                        }
+                      }
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <Archive className="w-4 h-4" />
+                    Архивировать
+                  </button>
+                )}
+                <button 
+                  onClick={async () => {
+                    setShowMenu(false);
+                    if (confirm('Вы уверены, что хотите очистить историю сообщений? Это действие нельзя отменить.')) {
+                      try {
+                        const response = await fetch(`/api/chat/${chat.id}/clear`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ mode: 'all' }),
+                        });
+                        if (response.ok) {
+                          showToast('История сообщений очищена', 'success');
+                          setTimeout(() => window.location.reload(), 1000);
+                        } else {
+                          const error = await safeJsonParse(response);
+                          showToast(error?.error || 'Ошибка очистки истории', 'error');
+                        }
+                      } catch (error) {
+                        console.error('Error clearing history:', error);
+                        showToast('Ошибка очистки истории', 'error');
+                      }
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                >
                   <Trash2 className="w-4 h-4" />
                   Очистить историю
                 </button>
@@ -257,12 +412,14 @@ export default function SlackStyleChat({
   const [showChannelPostModal, setShowChannelPostModal] = useState(false);
   const [showParticipantsPanel, setShowParticipantsPanel] = useState(false);
   const [activeThread, setActiveThread] = useState<Message | null>(null);
+  const [activeChannelThread, setActiveChannelThread] = useState<{ postId: string; messageId: string } | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ url: string; name?: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; messageId: string | null }>({ isOpen: false, messageId: null });
   const [showCloseAppealModal, setShowCloseAppealModal] = useState(false);
-  const [ticketInfo, setTicketInfo] = useState<{ id: string; publicId: string; status: string } | null>(null);
+  const [ticketInfo, setTicketInfo] = useState<{ id: string; publicId: string; status: string; userId: string } | null>(null);
+  const [showAddParticipantModal, setShowAddParticipantModal] = useState(false);
 
   const handleError = useCallback((error: string) => {
     showToast(error, "error");
@@ -292,11 +449,15 @@ export default function SlackStyleChat({
           id: data.ticket.id,
           publicId: data.ticket.publicId,
           status: data.ticket.status,
+          userId: data.ticket.userId || data.ticket.user?.id || ticketInfo?.userId || '',
         });
       }
     } catch (error) {
       console.error('[SlackStyleChat] Error closing appeal:', error);
-      showToast(error instanceof Error ? error.message : 'Ошибка закрытия обращения', 'error');
+      const errorMessage = error instanceof Error ? error.message : 'Ошибка закрытия обращения';
+      showToast(errorMessage, 'error');
+      // Пробрасываем ошибку, чтобы модальное окно не закрывалось
+      throw error;
     }
   }, [ticketInfo, showToast]);
 
@@ -339,9 +500,24 @@ export default function SlackStyleChat({
   
   // Get ticket info when ticketId is available
   useEffect(() => {
+    // Используем информацию об обращении из selectedChat, если она есть
+    if (selectedChat?.ticket) {
+      setTicketInfo({
+        id: selectedChat.ticket.id,
+        publicId: selectedChat.ticket.publicId,
+        status: selectedChat.ticket.status,
+        userId: selectedChat.ticket.userId || selectedChat.ticket.user?.id || '',
+      });
+      return;
+    }
+
+    // Если информации нет в чате, загружаем отдельно
     const fetchTicketInfo = async () => {
       const ticketIdToUse = ticketIdFromUrl || selectedChat?.ticketId;
-      if (!ticketIdToUse) return;
+      if (!ticketIdToUse) {
+        setTicketInfo(null);
+        return;
+      }
       
       try {
         // Пытаемся получить по ID или publicId
@@ -353,18 +529,24 @@ export default function SlackStyleChat({
               id: data.ticket.id,
               publicId: data.ticket.publicId,
               status: data.ticket.status,
+              userId: data.ticket.userId || data.ticket.user?.id || '',
             });
           }
+        } else {
+          setTicketInfo(null);
         }
       } catch (error) {
         console.error('[SlackStyleChat] Error fetching ticket info:', error);
+        setTicketInfo(null);
       }
     };
     
     if (mounted && (ticketIdFromUrl || selectedChat?.ticketId)) {
       fetchTicketInfo();
+    } else {
+      setTicketInfo(null);
     }
-  }, [mounted, ticketIdFromUrl, selectedChat?.ticketId]);
+  }, [mounted, ticketIdFromUrl, selectedChat?.ticketId, selectedChat?.ticket]);
 
   // Handle URL params
   useEffect(() => {
@@ -385,13 +567,19 @@ export default function SlackStyleChat({
       if (chat) {
         selectChat(chat);
         setShowChatView(true);
-        // Не удаляем ticketId из URL, чтобы кнопка закрытия работала
-        if (!ticketIdFromUrl) {
-          router.replace(baseUrl, { scroll: false });
-        }
+        // Сохраняем ticketId и messageId в URL
+        const ticketId = searchParams.get("ticketId");
+        const messageId = searchParams.get("messageId");
+        const urlParams = new URLSearchParams();
+        urlParams.set("chatId", chatId);
+        if (ticketId) urlParams.set("ticketId", ticketId);
+        if (messageId) urlParams.set("messageId", messageId);
+        router.replace(`${baseUrl}?${urlParams.toString()}`, { scroll: false });
+        
+        // Прокрутка к сообщению будет обработана в отдельном useEffect
       }
     }
-  }, [mounted, loading, searchParams, chats.length]);
+  }, [mounted, loading, searchParams, chats.length, router, baseUrl]);
 
   useEffect(() => {
     if (selectedChat) {
@@ -399,12 +587,54 @@ export default function SlackStyleChat({
     }
   }, [selectedChat]);
 
+  // Обработка прокрутки к сообщению при наличии messageId в URL
+  useEffect(() => {
+    const messageId = searchParams.get("messageId");
+    if (messageId && selectedChat && messages.length > 0) {
+      // Ждем рендеринга сообщений (увеличиваем задержку для надежности)
+      const scrollTimeout = setTimeout(() => {
+        const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (messageElement) {
+          messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Подсвечиваем сообщение
+          messageElement.classList.add('ring-2', 'ring-blue-500', 'ring-opacity-50', 'rounded-lg', 'transition-all', 'p-1', '-m-1');
+          setTimeout(() => {
+            messageElement.classList.remove('ring-2', 'ring-blue-500', 'ring-opacity-50', 'p-1', '-m-1');
+          }, 3000);
+          
+          // Убираем messageId из URL после прокрутки
+          const urlParams = new URLSearchParams(window.location.search);
+          urlParams.delete('messageId');
+          const newUrl = urlParams.toString() 
+            ? `${window.location.pathname}?${urlParams.toString()}`
+            : window.location.pathname;
+          router.replace(newUrl, { scroll: false });
+        } else {
+          // Если сообщение не найдено сразу, пробуем еще раз через 1 секунду
+          setTimeout(() => {
+            const retryElement = document.querySelector(`[data-message-id="${messageId}"]`);
+            if (retryElement) {
+              retryElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              retryElement.classList.add('ring-2', 'ring-blue-500', 'ring-opacity-50', 'rounded-lg', 'transition-all', 'p-1', '-m-1');
+              setTimeout(() => {
+                retryElement.classList.remove('ring-2', 'ring-blue-500', 'ring-opacity-50', 'p-1', '-m-1');
+              }, 3000);
+            }
+          }, 1000);
+        }
+      }, 800);
+      
+      return () => clearTimeout(scrollTimeout);
+    }
+  }, [selectedChat?.id, messages.length, searchParams, router]);
+
   // Handlers
   const handleSelectChat = useCallback((chat: Chat) => {
     selectChat(chat);
     setReplyingTo(null);
     setEditingMessage(null);
     setActiveThread(null);
+    setActiveChannelThread(null);
   }, [selectChat]);
 
   const handleOpenAIChat = useCallback(async () => {
@@ -501,7 +731,7 @@ export default function SlackStyleChat({
     }
   }, [selectedChat, loadChats, selectChat, showToast]);
 
-  const handleSendMessage = useCallback(async (content: string, files?: File[], replyToId?: string, threadRootId?: string) => {
+  const handleSendMessage = useCallback(async (content: string, files?: File[], replyToId?: string, threadRootId?: string, mentionedUserIds?: string[]) => {
     if (editingMessage) {
       const success = await editMessage(editingMessage.id, content);
       if (success) {
@@ -521,6 +751,9 @@ export default function SlackStyleChat({
           formData.append("file", file);
           if (replyToId) formData.append("replyToId", replyToId);
           if (threadRootId) formData.append("threadRootId", threadRootId);
+          if (mentionedUserIds && mentionedUserIds.length > 0) {
+            formData.append("mentionedUserIds", JSON.stringify(mentionedUserIds));
+          }
 
           try {
             const response = await fetch(`/api/chat/${selectedChat.id}/attachments`, {
@@ -547,7 +780,17 @@ export default function SlackStyleChat({
         loadChats();
       } else {
         const currentThreadRootId = activeThread?.id || undefined;
-        const success = await sendMessage(content, undefined, replyToId || replyingTo?.id, currentThreadRootId);
+        // Парсим упоминания из контента
+        const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
+        const mentionedUserIds: string[] = [];
+        let match;
+        while ((match = mentionRegex.exec(content)) !== null) {
+          const userId = match[2];
+          if (userId && !mentionedUserIds.includes(userId)) {
+            mentionedUserIds.push(userId);
+          }
+        }
+        const success = await sendMessage(content, undefined, replyToId || replyingTo?.id, currentThreadRootId, mentionedUserIds.length > 0 ? mentionedUserIds : undefined);
         if (success) {
           setReplyingTo(null);
         }
@@ -628,15 +871,22 @@ export default function SlackStyleChat({
                   p => p.userId === currentUserId && p.role === 'admin'
                 )}
                 ticketId={ticketIdFromUrl || selectedChat?.ticketId || undefined}
-                onCloseAppeal={() => {
-                  if (ticketInfo && ticketInfo.status !== 'CLOSED' && ticketInfo.status !== 'RESOLVED') {
-                    setShowCloseAppealModal(true);
-                  }
-                }}
+                onCloseAppeal={
+                  // Показываем кнопку закрытия только для создателя обращения
+                  ticketInfo && 
+                  ticketInfo.userId === currentUserId && 
+                  ticketInfo.status !== 'CLOSED' && 
+                  ticketInfo.status !== 'RESOLVED'
+                    ? () => setShowCloseAppealModal(true)
+                    : undefined
+                }
               />
 
               <div className="flex-1 flex overflow-hidden relative">
-                <div className="flex-1 flex flex-col min-w-0">
+                      <div className={clsx(
+                        "flex flex-col min-w-0 transition-all duration-300",
+                        "flex-1",
+                      )}>
                   <SlackStyleMessages
                     isGroupChat={selectedChat?.type === 'GROUP' || selectedChat?.type === 'CHANNEL'}
                     messages={formattedMessages}
@@ -653,7 +903,14 @@ export default function SlackStyleChat({
                     onEdit={(msg) => setEditingMessage(msg as any)}
                     onDelete={(id) => setDeleteConfirm({ isOpen: true, messageId: id })}
                     onReaction={(id, emoji) => toggleReaction(id, emoji)}
-                    onOpenThread={(msg) => setActiveThread(msg as any)}
+                    onOpenThread={(msg) => {
+                      // Для каналов открываем тред канала, для обычных чатов - обычный тред
+                      if (selectedChat?.type === 'CHANNEL' && msg.post) {
+                        setActiveChannelThread({ postId: msg.post.id, messageId: msg.id });
+                      } else {
+                        setActiveThread(msg as any);
+                      }
+                    }}
                     onImageClick={(url, name) => setSelectedImage({ url, name })}
                     onPollVote={async (pollId, optionId) => {
                       // Обновляем сообщения после голосования
@@ -672,7 +929,7 @@ export default function SlackStyleChat({
                     </div>
                   ) : selectedChat.type === 'CHANNEL' && selectedChat.participants?.some(
                     p => p.userId === currentUserId && p.role === 'admin'
-                  ) && !activeThread ? (
+                  ) && !activeThread && !activeChannelThread ? (
                     // Для админов канала показываем кнопку создания поста
                     <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
                       <button
@@ -702,21 +959,18 @@ export default function SlackStyleChat({
                           ? "Напишите комментарий в треде..."
                           : "Напишите сообщение..."
                       }
+                      participants={selectedChat.participants?.map(p => ({
+                        id: p.userId,
+                        firstName: p.user?.firstName || null,
+                        lastName: p.user?.lastName || null,
+                        middleName: p.user?.middleName || null,
+                        avatarUrl: p.user?.avatarUrl || null,
+                      })) || []}
+                      currentUserId={currentUserId || ''}
                     />
                   )}
                 </div>
 
-                {/* Thread panel */}
-                {activeThread && selectedChat && (
-                  <div className="hidden lg:flex w-96 border-l border-gray-200 dark:border-gray-700">
-                    <ThreadView
-                      threadRootId={activeThread.id}
-                      chatId={selectedChat.id}
-                      currentUserId={currentUserId || ""}
-                      onClose={() => setActiveThread(null)}
-                    />
-                  </div>
-                )}
               </div>
             </>
           ) : (
@@ -806,16 +1060,127 @@ export default function SlackStyleChat({
         onCancel={() => setDeleteConfirm({ isOpen: false, messageId: null })}
       />
 
-      {/* Mobile thread view */}
-      {activeThread && selectedChat && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-white dark:bg-gray-900">
-          <ThreadView
-            threadRootId={activeThread.id}
-            chatId={selectedChat.id}
-            currentUserId={currentUserId || ""}
-            onClose={() => setActiveThread(null)}
-          />
-        </div>
+                      {/* Thread drawer - Overlay для всех устройств */}
+                      {activeChannelThread && selectedChat && selectedChat.type === 'CHANNEL' ? (
+                        <>
+                          {/* Затемнение фона */}
+                          <div 
+                            className="fixed inset-0 bg-black/50 dark:bg-black/70 z-40 transition-opacity duration-300"
+                            onClick={() => setActiveChannelThread(null)}
+                          />
+                          {/* Drawer */}
+                          <div className="fixed right-0 top-0 h-full w-full sm:w-96 lg:w-[28rem] bg-white dark:bg-gray-900 shadow-2xl z-50 transform transition-transform duration-300 ease-out">
+                            <ChannelThreadView
+                              postId={activeChannelThread.postId}
+                              messageId={activeChannelThread.messageId}
+                              chatId={selectedChat.id}
+                              currentUserId={currentUserId || ""}
+                              onClose={() => setActiveChannelThread(null)}
+                              onReplyToChannel={async (content) => {
+                                await handleSendMessage(content);
+                              }}
+                            />
+                          </div>
+                        </>
+                      ) : activeThread && selectedChat ? (
+                        <>
+                          {/* Затемнение фона */}
+                          <div 
+                            className="fixed inset-0 bg-black/50 dark:bg-black/70 z-40 transition-opacity duration-300"
+                            onClick={() => setActiveThread(null)}
+                          />
+                          {/* Drawer */}
+                          <div className="fixed right-0 top-0 h-full w-full sm:w-96 lg:w-[28rem] bg-white dark:bg-gray-900 shadow-2xl z-50 transform transition-transform duration-300 ease-out">
+                            <ThreadView
+                              threadRootId={activeThread.id}
+                              chatId={selectedChat.id}
+                              currentUserId={currentUserId || ""}
+                              onClose={() => setActiveThread(null)}
+                            />
+                          </div>
+                        </>
+                      ) : null}
+
+      {/* Participants Panel */}
+      {selectedChat && (
+        <ParticipantsPanel
+          isOpen={showParticipantsPanel}
+          onClose={() => setShowParticipantsPanel(false)}
+          chatId={selectedChat.id}
+          currentUserId={currentUserId || ""}
+          isAdmin={(selectedChat.type === 'GROUP' || selectedChat.type === 'CHANNEL') && selectedChat.participants?.some(
+            p => p.userId === currentUserId && p.role === 'admin'
+          )}
+          onAddParticipant={
+            // Показываем кнопку добавления участника только для админов
+            (selectedChat.type === 'GROUP' || selectedChat.type === 'CHANNEL') && selectedChat.participants?.some(
+              p => p.userId === currentUserId && p.role === 'admin'
+            )
+              ? () => {
+                  setShowParticipantsPanel(false);
+                  setShowAddParticipantModal(true);
+                }
+              : undefined
+          }
+          onRemoveParticipant={(userId) => {
+            // Обновляем список чатов после удаления участника
+            loadChats();
+          }}
+          onChangeRole={(userId, role) => {
+            // Обновляем список чатов после изменения роли
+            loadChats();
+          }}
+        />
+      )}
+
+      {/* Add Participant Modal */}
+      {selectedChat && (
+        <AddParticipantModal
+          isOpen={showAddParticipantModal}
+          onClose={() => setShowAddParticipantModal(false)}
+          chatId={selectedChat.id}
+          currentParticipantIds={selectedChat.participants?.map(p => p.userId) || []}
+          onAdd={async (userIds: string[]) => {
+            try {
+              const response = await fetch(`/api/chat/${selectedChat.id}/participants`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userIds }),
+              });
+
+              if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Не удалось добавить участников');
+              }
+
+              // Обновляем список чатов
+              await loadChats();
+              
+              // Обновляем выбранный чат, чтобы обновить список участников
+              // Перезагружаем чат через API для получения обновленного списка участников
+              try {
+                const chatResponse = await fetch(`/api/chat/${selectedChat.id}`);
+                if (chatResponse.ok) {
+                  const chatData = await safeJsonParse(chatResponse);
+                  if (chatData?.chat) {
+                    selectChat(chatData.chat);
+                  }
+                }
+              } catch (err) {
+                console.error('Failed to reload chat:', err);
+              }
+              
+              showToast(`Добавлено участников: ${userIds.length}`, 'success');
+              
+              // Открываем панель участников снова, чтобы показать обновленный список
+              setShowParticipantsPanel(true);
+            } catch (error) {
+              console.error('Failed to add participants:', error);
+              showToast(error instanceof Error ? error.message : 'Ошибка при добавлении участников', 'error');
+              throw error;
+            }
+          }}
+        />
       )}
     </div>
   );

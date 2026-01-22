@@ -40,9 +40,12 @@ export default function CloseAppealModal({
       setLoading(true);
       try {
         await onForceClose(reason.trim());
+        // Закрываем модальное окно только при успешном выполнении
         handleClose();
       } catch (error) {
         console.error('Error force closing appeal:', error);
+        // Ошибка уже обработана в onForceClose (показан toast)
+        // Не закрываем модальное окно, чтобы пользователь мог исправить и повторить
       } finally {
         setLoading(false);
       }
@@ -54,9 +57,12 @@ export default function CloseAppealModal({
       setLoading(true);
       try {
         await onConfirm(rating, comment.trim());
+        // Закрываем модальное окно только при успешном выполнении
         handleClose();
       } catch (error) {
         console.error('Error closing appeal:', error);
+        // Ошибка уже обработана в onConfirm (показан toast)
+        // Не закрываем модальное окно, чтобы пользователь мог исправить и повторить
       } finally {
         setLoading(false);
       }

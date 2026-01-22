@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Reply, Send } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import clsx from 'clsx';
 import { safeJsonParse } from "@/lib/api-client";
 
 interface ThreadMessage {
@@ -143,31 +144,34 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
 
   if (loading) {
     return (
-      <div className="fixed right-0 top-0 h-full w-96 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-xl z-50 flex items-center justify-center">
+      <div className="h-full bg-white dark:bg-gray-900 flex items-center justify-center">
         <div className="text-gray-500">Загрузка треда...</div>
       </div>
     );
   }
 
   return (
-    <div className="fixed right-0 top-0 h-full w-96 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-xl z-50 flex flex-col">
+    <div className="h-full bg-white dark:bg-gray-900 flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
         <div className="flex items-center gap-2">
           <Reply className="w-4 h-4 text-gray-500" />
           <h3 className="font-semibold text-gray-900 dark:text-white">Тред</h3>
-          <span className="text-sm text-gray-500">({messages.length} ответов)</span>
+          <span className="text-sm text-gray-500">
+            ({messages.length} {messages.length === 1 ? 'ответ' : messages.length < 5 ? 'ответа' : 'ответов'})
+          </span>
         </div>
         <button
           onClick={onClose}
-          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+          aria-label="Закрыть тред"
         >
           <X className="w-5 h-5 text-gray-500" />
         </button>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
         {/* Root message */}
         {rootMessage && (
           <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -257,7 +261,7 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-gray-200 dark:border-gray-800">
+      <div className="p-4 border-t border-gray-200 dark:border-gray-800 flex-shrink-0">
         <div className="flex gap-2">
           <textarea
             value={newMessage}

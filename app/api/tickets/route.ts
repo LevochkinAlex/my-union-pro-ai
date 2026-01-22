@@ -3,9 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateAppealPublicId, formatAppealId } from "@/lib/appeal-id";
-// Matrix удален - создаем чаты напрямую
 import { saveTicketToKnowledgeBase } from "@/lib/user-knowledge-base";
-import { createGroupChat } from "@/lib/chat-service";
+import { sendUserNotification } from "@/lib/notifications";
 
 /**
  * GET /api/tickets - Получить тикеты пользователя
@@ -24,6 +23,22 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
 
+    // Получаем информацию о пользователе и его организации
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        id: true,
+        organizationId: true,
+        role: true,
+        isPPOHead: true,
+        ppoHeadOrganizationId: true,
+      },
+    });
+
+    // Проверяем, является ли пользователь председателем
+    const isPPOHead = user?.role === "PPO_HEAD" || user?.isPPOHead === true;
+    const chairmanOrgId = user?.ppoHeadOrganizationId || user?.organizationId;
+
     // Получаем чаты, в которых пользователь является участником
     const userChats = await prisma.chat.findMany({
       where: {
@@ -39,15 +54,43 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Обращения, созданные пользователем ИЛИ связанные с чатами, в которых пользователь участвует
     const userChatIds = userChats.map(chat => chat.id);
 
-    const where: any = {
-      OR: [
-        { userId: session.user.id },
-        ...(userChatIds.length > 0 ? [{ chatId: { in: userChatIds } }] : []),
-      ],
-    };
+    // Формируем условия фильтрации
+    // Если пользователь председатель - показываем все обращения из его организации
+    // Иначе показываем обращения, созданные пользователем, связанные с чатами или из той же организации
+    const where: any = {};
+
+    if (isPPOHead && chairmanOrgId) {
+      // Председатель видит все обращения из своей организации
+      where.organizationId = chairmanOrgId;
+    } else {
+      // Обычный пользователь видит свои обращения, обращения из чатов и из своей организации
+      // Также показываем обращения без organizationId, если они созданы пользователем или связаны с чатами
+      const orConditions: any[] = [
+        { userId: session.user.id }, // Свои обращения
+      ];
+
+      // Обращения из чатов пользователя
+      if (userChatIds.length > 0) {
+        orConditions.push({ chatId: { in: userChatIds } });
+      }
+
+      // Обращения из той же организации
+      if (user?.organizationId) {
+        orConditions.push({ organizationId: user.organizationId });
+      }
+
+      // Обращения без organizationId, если они созданы пользователем (для старых обращений)
+      orConditions.push({
+        AND: [
+          { userId: session.user.id },
+          { organizationId: null },
+        ],
+      });
+
+      where.OR = orConditions;
+    }
 
     if (status && status !== "all") {
       where.status = status;
@@ -190,6 +233,8 @@ export async function POST(request: NextRequest) {
       select: {
         id: true,
         organizationId: true,
+        firstName: true,
+        lastName: true,
       },
     });
 
@@ -230,6 +275,28 @@ export async function POST(request: NextRequest) {
       if (!appealChat) {
         // Создаем новый Chat для обращения
         // Председатель всегда админ и создатель чата
+        // Создаем массив участников
+        const participantsToCreate: Array<{
+          userId: string;
+          role: "admin" | "member";
+          invitedById: string;
+        }> = [
+          {
+            userId: chairmanId,
+            role: "admin", // Председатель - админ треда
+            invitedById: session.user.id,
+          },
+        ];
+        
+        // Добавляем создателя обращения как участника (если это не председатель)
+        if (chairmanId !== session.user.id) {
+          participantsToCreate.push({
+            userId: session.user.id,
+            role: "member",
+            invitedById: session.user.id,
+          });
+        }
+        
         appealChat = await prisma.chat.create({
           data: {
             type: "GROUP",
@@ -238,29 +305,27 @@ export async function POST(request: NextRequest) {
             createdById: chairmanId, // Председатель - создатель чата
             isPublic: false,
             participants: {
-              create: [
-                {
-                  userId: chairmanId,
-                  role: "admin", // Председатель - админ треда
-                  invitedById: session.user.id,
-                },
-                // Добавляем создателя обращения как участника (если это не председатель)
-                ...(chairmanId !== session.user.id ? [{
-                  userId: session.user.id,
-                  role: "member",
-                  invitedById: session.user.id,
-                }] : []),
-              ],
+              create: participantsToCreate,
             },
           },
           include: {
             participants: {
               where: { leftAt: null },
-              select: { userId: true },
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    middleName: true,
+                    avatarUrl: true,
+                  },
+                },
+              },
             },
           },
         });
-        console.log(`[tickets] ✅ Создан Chat для обращения: ${appealChat.id}, председатель (${chairmanId}) - админ`);
+        console.log(`[tickets] ✅ Создан Chat для обращения: ${appealChat.id}, участников: ${appealChat.participants.length} (председатель: ${chairmanId}, создатель: ${session.user.id})`);
       } else {
         // Чат уже существует, проверяем участников
         const existingUserIds = appealChat.participants.map(p => p.userId);
@@ -307,15 +372,19 @@ export async function POST(request: NextRequest) {
       filePath: string;
       fileSize: number;
       mimeType: string;
+      ticketPath?: string; // Путь для тикета
     }> = [];
 
     if (files && files.length > 0) {
       const fs = await import("fs/promises");
       const path = await import("path");
-      const uploadDir = path.join(process.cwd(), "public", "uploads", "tickets");
+      // Сохраняем файлы в директорию для чатов, чтобы они были доступны в чате
+      const chatUploadDir = path.join(process.cwd(), "public", "uploads", "chat");
+      const ticketUploadDir = path.join(process.cwd(), "public", "uploads", "tickets");
 
       try {
-        await fs.mkdir(uploadDir, { recursive: true });
+        await fs.mkdir(chatUploadDir, { recursive: true });
+        await fs.mkdir(ticketUploadDir, { recursive: true });
       } catch (error) {
         // Директория уже существует
       }
@@ -330,17 +399,23 @@ export async function POST(request: NextRequest) {
 
         const buffer = Buffer.from(await file.arrayBuffer());
         const fileName = `${Date.now()}-${file.name}`;
-        const filePath = path.join(uploadDir, fileName);
-        const relativePath = `/uploads/tickets/${fileName}`;
+        
+        // Сохраняем в обе директории: для тикета и для чата
+        const chatFilePath = path.join(chatUploadDir, fileName);
+        const ticketFilePath = path.join(ticketUploadDir, fileName);
+        const chatRelativePath = `/uploads/chat/${fileName}`;
+        const ticketRelativePath = `/uploads/tickets/${fileName}`;
 
-        await fs.writeFile(filePath, buffer);
+        await fs.writeFile(chatFilePath, buffer);
+        await fs.writeFile(ticketFilePath, buffer); // Дублируем для тикета
 
         uploadedFiles.push({
           fileName: fileName,
           originalName: file.name,
-          filePath: relativePath,
+          filePath: chatRelativePath, // Используем путь для чата
           fileSize: buffer.length,
           mimeType: file.type || "application/octet-stream",
+          ticketPath: ticketRelativePath, // Сохраняем путь для тикета
         });
       }
 
@@ -349,7 +424,7 @@ export async function POST(request: NextRequest) {
           data: uploadedFiles.map(f => ({
             ticketId: ticket.id,
             fileName: f.originalName,
-            filePath: f.filePath,
+            filePath: (f as any).ticketPath, // Для тикета используем путь тикета
             fileSize: f.fileSize,
             mimeType: f.mimeType,
           })),
@@ -357,28 +432,102 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Если чат создан и есть файлы, отправляем информацию о файлах в чат
-    if (appealChat && uploadedFiles.length > 0) {
+    // Если чат создан, отправляем начальное сообщение с текстом обращения
+    if (appealChat) {
       try {
-        const filesList = uploadedFiles.map((f, i) => `${i + 1}. ${f.originalName}`).join('\n');
-        const filesMessage = `📎 **Прикрепленные файлы:**\n${filesList}`;
+        // Создаем начальное сообщение с текстом обращения
+        const initialMessage = `**Обращение #${publicId}**\n\n**${title}**\n\n${content}`;
         
-        // Отправляем сообщение в чат через наш API
-        await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/api/chat/${appealChat.id}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Internal-Token': process.env.INTERNAL_API_TOKEN || '',
+        // Определяем тип сообщения и вложения
+        const hasImages = uploadedFiles.some(f => f.mimeType?.startsWith('image/'));
+        const hasFiles = uploadedFiles.some(f => !f.mimeType?.startsWith('image/'));
+        const messageType = hasImages ? 'image' : hasFiles ? 'file' : 'text';
+        
+        // Отправляем начальное сообщение в чат
+        const createdMessage = await prisma.chatMessage.create({
+          data: {
+            chatId: appealChat.id,
+            senderId: session.user.id,
+            content: initialMessage,
+            messageType: messageType,
+            attachments: uploadedFiles.length > 0 ? {
+              create: uploadedFiles.map(file => {
+                const isImage = file.mimeType?.startsWith('image/');
+                return {
+                  type: isImage ? 'image' : 'file',
+                  url: file.filePath, // Путь уже правильный для чата
+                  name: file.originalName,
+                  size: file.fileSize,
+                  mimeType: file.mimeType || 'application/octet-stream',
+                };
+              }),
+            } : undefined,
           },
-          body: JSON.stringify({
-            content: filesMessage,
-            senderUserId: session.user.id,
-          }),
-        }).catch(err => {
-          console.error('[tickets] Error sending files message to chat:', err);
         });
+
+        // Обновляем lastMessageId в чате
+        await prisma.chat.update({
+          where: { id: appealChat.id },
+          data: {
+            lastMessageId: createdMessage.id,
+            lastMessageAt: createdMessage.createdAt,
+          },
+        });
+
+        // Отправляем уведомления участникам чата (кроме создателя обращения)
+        try {
+          const participants = await prisma.chatParticipant.findMany({
+            where: {
+              chatId: appealChat.id,
+              userId: { not: session.user.id },
+              leftAt: null,
+            },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                },
+              },
+            },
+          });
+
+          if (participants.length > 0) {
+            const senderName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Пользователь';
+            const notificationContent = title.length > 100 ? title.substring(0, 100) + '...' : title;
+            const notificationUrl = `/dashboard/chat?chatId=${appealChat.id}`;
+
+            await Promise.allSettled(
+              participants.map(async (participant) => {
+                try {
+                  await sendUserNotification({
+                    userId: participant.userId,
+                    type: 'ticket_response',
+                    title: `Новое обращение: ${title}`,
+                    body: notificationContent,
+                    url: notificationUrl,
+                    senderName: senderName,
+                    metadata: {
+                      chatId: appealChat.id,
+                      messageId: createdMessage.id,
+                      ticketId: ticket.id,
+                      ticketPublicId: ticket.publicId,
+                    },
+                  });
+                } catch (err) {
+                  console.error(`[tickets] Error sending notification to user ${participant.userId}:`, err);
+                }
+              })
+            );
+          }
+        } catch (notifError) {
+          console.error('[tickets] Error sending notifications:', notifError);
+          // Не прерываем создание обращения, если не удалось отправить уведомления
+        }
       } catch (err) {
-        console.error('[tickets] Error sending files message:', err);
+        console.error('[tickets] Error sending initial message to chat:', err);
+        // Не прерываем создание обращения, если не удалось отправить сообщение
       }
     }
 

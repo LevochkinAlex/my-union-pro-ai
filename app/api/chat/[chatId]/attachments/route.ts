@@ -78,6 +78,16 @@ export async function POST(
     const file = formData.get("file") as File;
     const content = (formData.get("content") as string) || "";
     const replyToId = (formData.get("replyToId") as string) || null;
+    const threadRootId = (formData.get("threadRootId") as string) || null;
+    const mentionedUserIdsStr = formData.get("mentionedUserIds") as string | null;
+    let mentionedUserIds: string[] = [];
+    if (mentionedUserIdsStr) {
+      try {
+        mentionedUserIds = JSON.parse(mentionedUserIdsStr);
+      } catch (e) {
+        console.warn('[chat/attachments] Failed to parse mentionedUserIds:', e);
+      }
+    }
 
     if (!file || file.size === 0) {
       return NextResponse.json({ error: "Файл не предоставлен" }, { status: 400 });
@@ -321,6 +331,60 @@ export async function POST(
       console.log('[chat/attachments] Message emitted via WebSocket to room:', chatId, normalizedMessage.id);
     } catch (wsError) {
       console.error('[chat/attachments] Error emitting message via WebSocket:', wsError);
+    }
+
+    // Отправляем уведомления упомянутым пользователям (если есть упоминания)
+    if (mentionedUserIds.length > 0) {
+      try {
+        const mentionedUsers = await prisma.user.findMany({
+          where: {
+            id: { in: mentionedUserIds },
+          },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        });
+
+        const chatInfo = await prisma.chat.findUnique({
+          where: { id: chatId },
+          select: {
+            name: true,
+            type: true,
+          },
+        });
+
+        const chatName = chatInfo?.name || 'Чат';
+        const senderName = `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || 'Пользователь';
+        const notificationContent = attachmentText.length > 100 ? attachmentText.substring(0, 100) + '...' : attachmentText;
+        const notificationUrl = `/dashboard/chat?chatId=${chatId}&messageId=${normalizedMessage.id}`;
+
+        await Promise.allSettled(
+          mentionedUsers.map(async (user) => {
+            if (user.id === userId) return; // Не отправляем уведомление себе
+            try {
+              await sendUserNotification({
+                userId: user.id,
+                type: 'chat_message',
+                title: `@${senderName} упомянул вас в "${chatName}"`,
+                body: notificationContent,
+                url: notificationUrl,
+                senderName: senderName,
+                metadata: {
+                  chatId,
+                  messageId: normalizedMessage.id,
+                  mentioned: true,
+                },
+              });
+            } catch (err) {
+              console.error(`[chat/attachments] Error sending mention notification to user ${user.id}:`, err);
+            }
+          })
+        );
+      } catch (mentionError) {
+        console.error('[chat/attachments] Error processing mentions:', mentionError);
+      }
     }
 
     // Отправляем уведомления другим участникам (push + запись в БД для раздела уведомлений)

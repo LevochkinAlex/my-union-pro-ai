@@ -44,6 +44,29 @@ export interface Chat {
   ticketId?: string | null;
   ticketPublicId?: string | null;
   ticketTitle?: string | null;
+  ticket?: {
+    id: string;
+    publicId: string;
+    title: string;
+    status: string;
+    userId: string;
+    organizationId?: string | null;
+    type?: string;
+    priority?: string;
+    createdAt?: string;
+    user?: {
+      id: string;
+      firstName: string | null;
+      lastName: string | null;
+      middleName: string | null;
+      avatarUrl: string | null;
+      email: string;
+    };
+    organization?: {
+      id: string;
+      name: string;
+    };
+  } | null;
 }
 
 export interface MessageAttachment {

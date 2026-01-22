@@ -379,9 +379,21 @@ export async function setupForegroundMessageHandler() {
             const baseUrl = window.location.origin;
             switch (payload.data.type) {
               case "chat_message":
-                targetUrl = payload.data.senderId
-                  ? `${baseUrl}/dashboard/chat?userId=${payload.data.senderId}`
-                  : `${baseUrl}/dashboard/chat`;
+                // Для сообщений чата используем chatId если есть
+                if (payload.data.chatId) {
+                  // Если есть messageId, добавляем его для перехода к конкретному сообщению
+                  const messageId = payload.data.messageId;
+                  if (messageId) {
+                    targetUrl = `${baseUrl}/dashboard/chat?chatId=${payload.data.chatId}&messageId=${messageId}`;
+                  } else {
+                    targetUrl = `${baseUrl}/dashboard/chat?chatId=${payload.data.chatId}`;
+                  }
+                } else if (payload.data.senderId) {
+                  // Fallback на senderId для обратной совместимости
+                  targetUrl = `${baseUrl}/dashboard/chat?userId=${payload.data.senderId}`;
+                } else {
+                  targetUrl = `${baseUrl}/dashboard/chat`;
+                }
                 break;
               case "news_published":
                 targetUrl = payload.data.newsId

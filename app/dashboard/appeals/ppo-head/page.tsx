@@ -183,7 +183,10 @@ export default function PPOHeadAppealsPage() {
       await loadTickets();
     } catch (err) {
       console.error("Error force closing ticket:", err);
-      alertError(err instanceof Error ? err.message : "Не удалось закрыть обращение");
+      const errorMessage = err instanceof Error ? err.message : "Не удалось закрыть обращение";
+      alertError(errorMessage);
+      // Пробрасываем ошибку, чтобы модальное окно не закрывалось
+      throw err;
     }
   };
 

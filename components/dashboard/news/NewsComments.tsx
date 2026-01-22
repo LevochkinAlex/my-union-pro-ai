@@ -277,23 +277,80 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
     </div>
   );
 
+  // Получаем участников треда для отображения мини-аватарок
+  const getThreadParticipants = (comment: Comment): Array<{ id: string; avatarUrl: string | null }> => {
+    const participants = new Map<string, { id: string; avatarUrl: string | null }>();
+    
+    // Добавляем автора комментария
+    if (comment.user.avatarUrl) {
+      participants.set(comment.user.id, {
+        id: comment.user.id,
+        avatarUrl: comment.user.avatarUrl,
+      });
+    }
+
+    // Добавляем авторов ответов
+    comment.replies.forEach(reply => {
+      if (reply.user.avatarUrl && !participants.has(reply.user.id)) {
+        participants.set(reply.user.id, {
+          id: reply.user.id,
+          avatarUrl: reply.user.avatarUrl,
+        });
+      }
+    });
+
+    return Array.from(participants.values()).slice(0, 5); // Максимум 5 аватарок
+  };
+
   const CommentsList = ({ items, showAll = false }: { items: Comment[]; showAll?: boolean }) => {
     const visibleComments = showAll ? items : items.slice(0, VISIBLE_COMMENTS_LIMIT);
     
     return (
       <div className="space-y-4">
-        {visibleComments.map((comment) => (
-          <div key={comment.id} className="space-y-3">
-            <CommentItem comment={comment} />
-            {comment.replies.length > 0 && (
-              <div className="ml-11 space-y-3 border-l-2 border-gray-200 pl-4 dark:border-gray-700">
-                {comment.replies.map((reply) => (
-                  <CommentItem key={reply.id} comment={reply} isReply />
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+        {visibleComments.map((comment) => {
+          const participants = getThreadParticipants(comment);
+          const totalReplies = comment.replies.length || comment._count.replies || 0;
+          const hasReplies = totalReplies > 0;
+
+          return (
+            <div key={comment.id} className="space-y-3">
+              <CommentItem comment={comment} />
+              {hasReplies && (
+                <>
+                  {/* Мини-аватарки участников треда и количество ответов */}
+                  <div className="ml-11 flex items-center gap-2">
+                    {participants.length > 0 && (
+                      <div className="flex -space-x-1.5">
+                        {participants.slice(0, 3).map((participant, idx) => (
+                          <img
+                            key={participant.id}
+                            src={participant.avatarUrl || "/default-avatar.png"}
+                            alt=""
+                            className="w-5 h-5 rounded-full border-2 border-white dark:border-gray-900"
+                            style={{ zIndex: 10 - idx }}
+                          />
+                        ))}
+                        {participants.length > 3 && (
+                          <div className="w-5 h-5 rounded-full border-2 border-white dark:border-gray-900 flex items-center justify-center text-[10px] font-medium bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                            +{participants.length - 3}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {totalReplies} {totalReplies === 1 ? 'ответ' : totalReplies < 5 ? 'ответа' : 'ответов'}
+                    </span>
+                  </div>
+                  <div className="ml-11 space-y-3 border-l-2 border-gray-200 pl-4 dark:border-gray-700">
+                    {comment.replies.map((reply) => (
+                      <CommentItem key={reply.id} comment={reply} isReply />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   };

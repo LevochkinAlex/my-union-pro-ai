@@ -4,44 +4,6 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { sendMassNotification } from '@/lib/notifications';
 
-// Helper to send message to Matrix room
-async function sendMatrixMessage(roomId: string, message: string) {
-  const MATRIX_BOT_USER_ID = process.env.MATRIX_BOT_USER_ID;
-  const MATRIX_BOT_ACCESS_TOKEN = process.env.MATRIX_BOT_ACCESS_TOKEN;
-  const MATRIX_SERVER_URL = process.env.NEXT_PUBLIC_MATRIX_SERVER_URL || 'https://matrix.myunion.pro';
-
-  if (!MATRIX_BOT_ACCESS_TOKEN) {
-    console.warn('[tickets/close] Matrix bot token not configured');
-    return;
-  }
-
-  try {
-    const txnId = `close_${Date.now()}`;
-    const response = await fetch(
-      `${MATRIX_SERVER_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${MATRIX_BOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          msgtype: 'm.notice',
-          body: message,
-          format: 'org.matrix.custom.html',
-          formatted_body: `<strong>🎉 ${message}</strong>`,
-        }),
-      }
-    );
-    
-    if (!response.ok) {
-      console.error('[tickets/close] Failed to send Matrix message:', await response.text());
-    }
-  } catch (error) {
-    console.error('[tickets/close] Error sending Matrix message:', error);
-  }
-}
-
 /**
  * POST /api/tickets/[id]/close
  * Close a ticket with rating and comment
@@ -122,21 +84,32 @@ export async function POST(
     if (ticket.chatId) {
       const closeMessage = `Обращение закрыто пользователем ${userName}.\n\nОценка: ${ratingStars} (${rating}/5)${comment ? `\nКомментарий: ${comment}` : ''}`;
       try {
-        await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/api/chat/${ticket.chatId}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Internal-Token': process.env.INTERNAL_API_TOKEN || '',
-          },
-          body: JSON.stringify({
+        await prisma.chatMessage.create({
+          data: {
+            chatId: ticket.chatId,
+            senderId: session.user.id,
             content: closeMessage,
-            senderUserId: session.user.id,
-          }),
-        }).catch(err => {
-          console.error('[tickets/close] Error sending close message:', err);
+            messageType: 'text',
+          },
         });
+
+        // Обновляем lastMessageId в чате
+        const lastMessage = await prisma.chatMessage.findFirst({
+          where: { chatId: ticket.chatId },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        if (lastMessage) {
+          await prisma.chat.update({
+            where: { id: ticket.chatId },
+            data: {
+              lastMessageId: lastMessage.id,
+              lastMessageAt: lastMessage.createdAt,
+            },
+          });
+        }
       } catch (err) {
-        console.error('[tickets/close] Error:', err);
+        console.error('[tickets/close] Error sending close message:', err);
       }
     }
 

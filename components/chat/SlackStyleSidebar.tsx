@@ -82,9 +82,20 @@ function getChatAvatar(chat: Chat): string | null {
 }
 
 function isWorkChat(chat: Chat): boolean {
-  // Рабочие чаты: каналы ИЛИ обращения (любой тип с ticketId или ticket)
+  // Рабочие чаты: только обращения (любой тип с ticketId или ticket, но НЕ каналы)
   const hasTicket = !!(chat.ticketId || chat.ticketPublicId || (chat as any).ticket);
-  return chat.type === 'CHANNEL' || hasTicket;
+  // Исключаем каналы - они в отдельной секции
+  return hasTicket && chat.type !== 'CHANNEL';
+}
+
+// Вспомогательная функция для проверки наличия обращения
+function hasTicket(chat: Chat): boolean {
+  return !!(chat.ticketId || chat.ticketPublicId || (chat as any).ticket);
+}
+
+function isChannelChat(chat: Chat): boolean {
+  // Каналы: только CHANNEL тип
+  return chat.type === 'CHANNEL';
 }
 
 function isAIChat(chat: Chat): boolean {
@@ -659,30 +670,30 @@ export default function SlackStyleSidebar({
         continue; // Явно пропускаем, чтобы не попало в personal
       }
       
-      // Рабочие чаты: каналы и обращения
-      if (isWorkChat(chat)) {
+      // Каналы - отдельная секция (обрабатываем первыми)
+      if (isChannelChat(chat)) {
+        channelList.push(chat);
+        continue; // Каналы не должны попадать в другие категории
+      }
+      
+      // Проверяем наличие обращения (ticketId) - проверяем все возможные варианты
+      // Данные могут быть в chat.ticketId, chat.ticketPublicId или в chat.ticket (объект из relation)
+      const hasTicket = !!(
+        chat.ticketId || 
+        chat.ticketPublicId || 
+        (chat as any).ticket?.id ||
+        (chat as any).ticket?.publicId
+      );
+      
+      // Рабочие чаты: обращения (любой тип с ticketId, кроме каналов)
+      if (hasTicket) {
         work.push(chat);
-        // Каналы также добавляем в отдельный список для отображения
-        if (chat.type === 'CHANNEL') {
-          channelList.push(chat);
-        }
       } else if (chat.type === 'PRIVATE') {
         // Личные чаты: только приватные чаты без ticketId
-        // Проверяем, что это не обращение
-        if (!chat.ticketId && !chat.ticketPublicId) {
-          personal.push(chat);
-        } else {
-          // Если это приватный чат с обращением, он должен быть в рабочих
-          work.push(chat);
-        }
+        personal.push(chat);
       } else {
-        // Групповые чаты без ticketId тоже идут в личные
-        // Но если есть ticketId, то в рабочие
-        if (chat.ticketId || chat.ticketPublicId) {
-          work.push(chat);
-        } else {
-          personal.push(chat);
-        }
+        // Групповые чаты без ticketId идут в личные
+        personal.push(chat);
       }
     }
 
@@ -837,15 +848,39 @@ export default function SlackStyleSidebar({
         </button>
 
         {/* Work Chats */}
-        {isChairman && (activeTab === "all" || activeTab === "work") && displayedChats.work.length > 0 && (
-          <ChatSection
-            title="Рабочие чаты"
-            icon={<Briefcase className="w-4 h-4" />}
-            chats={displayedChats.work}
-            selectedChat={selectedChat}
-            currentUserId={currentUserId}
-            onSelectChat={onSelectChat}
-          />
+        {isChairman && (activeTab === "all" || activeTab === "work") && (
+          <>
+            {displayedChats.work.length > 0 ? (
+              <ChatSection
+                title="Рабочие чаты"
+                icon={<Briefcase className="w-4 h-4" />}
+                chats={displayedChats.work}
+                selectedChat={selectedChat}
+                currentUserId={currentUserId}
+                onSelectChat={onSelectChat}
+              />
+            ) : activeTab === "work" ? (
+              <div className="mb-4 px-3">
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <Briefcase className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    Рабочие чаты
+                  </h3>
+                </div>
+                <div className="rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-6 text-center">
+                  <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                    <Briefcase className="w-6 h-6 text-gray-400 dark:text-gray-500" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Нет обращений
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500">
+                    Обращения от членов профсоюза будут отображаться здесь
+                  </p>
+                </div>
+              </div>
+            ) : null}
+          </>
         )}
 
         {/* Personal Chats */}

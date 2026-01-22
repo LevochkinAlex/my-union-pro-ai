@@ -211,7 +211,12 @@ export function useChat(options: UseChatOptions = {}) {
   const loadMessages = useCallback(async (chatId: string) => {
     setLoadingMessages(true);
     try {
-      const data = await fetchJsonWithRetry<{ messages: Message[]; hasMore: boolean; pagination?: { hasMore: boolean; oldestMessageId: string | null } }>(
+      const data = await fetchJsonWithRetry<{ 
+        messages: Message[]; 
+        hasMore: boolean; 
+        chat?: Chat;
+        pagination?: { hasMore: boolean; oldestMessageId: string | null } 
+      }>(
         `/api/chat/${chatId}?limit=50&t=${Date.now()}`,
         {
           method: "GET",
@@ -223,6 +228,14 @@ export function useChat(options: UseChatOptions = {}) {
         setMessages(data.messages || []);
         setHasMore((data as any).pagination?.hasMore ?? (data as any).hasMore ?? false);
         setOldestMessageId((data as any).pagination?.oldestMessageId || null);
+
+        // Обновляем информацию о чате, если она пришла (включая информацию об обращении)
+        if (data.chat) {
+          setSelectedChat(prev => prev?.id === chatId ? { ...prev, ...data.chat } : prev);
+          setChats(prev => prev.map(chat =>
+            chat.id === chatId ? { ...chat, ...data.chat } : chat
+          ));
+        }
 
         // Помечаем как прочитанные
         try {
@@ -338,7 +351,8 @@ export function useChat(options: UseChatOptions = {}) {
     content: string,
     file?: File,
     replyToId?: string,
-    threadRootId?: string
+    threadRootId?: string,
+    mentionedUserIds?: string[]
   ): Promise<boolean> => {
     if (!selectedChat) return false;
 
@@ -446,7 +460,12 @@ export function useChat(options: UseChatOptions = {}) {
             const response = await fetch(`/api/chat/${selectedChat.id}`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ content, replyToId, threadRootId }),
+              body: JSON.stringify({ 
+                content, 
+                replyToId, 
+                threadRootId,
+                mentionedUserIds: mentionedUserIds || undefined,
+              }),
             });
 
             if (response.ok) {

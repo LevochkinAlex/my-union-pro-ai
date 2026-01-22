@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-// import { sendChatMessage } from "@/lib/chat-server-utils"; // TODO: Переделать на Matrix API
 import { sendUserNotification } from "@/lib/notifications";
 
 /**
@@ -105,14 +104,42 @@ export async function POST(
       },
     });
 
-    // TODO: Отправляем сообщение в тред обращения через Matrix API
+    // Отправляем сообщение в чат обращения
     if (ticket.chatId) {
       const ratingStars = "⭐".repeat(rating);
       let message = `📊 Оценка полезности ответа: ${ratingStars} (${rating}/5)`;
       if (comment) {
         message += `\n\nКомментарий: ${comment}`;
       }
-      // await sendMatrixMessage(...);
+      
+      try {
+        await prisma.chatMessage.create({
+          data: {
+            chatId: ticket.chatId,
+            senderId: session.user.id,
+            content: message,
+            messageType: 'text',
+          },
+        });
+
+        // Обновляем lastMessageId в чате
+        const lastMessage = await prisma.chatMessage.findFirst({
+          where: { chatId: ticket.chatId },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        if (lastMessage) {
+          await prisma.chat.update({
+            where: { id: ticket.chatId },
+            data: {
+              lastMessageId: lastMessage.id,
+              lastMessageAt: lastMessage.createdAt,
+            },
+          });
+        }
+      } catch (err) {
+        console.error('[tickets/rate] Error sending rating message:', err);
+      }
     }
 
     // Уведомляем Председателя об оценке

@@ -15,9 +15,10 @@ import {
   StopCircle,
 } from 'lucide-react';
 import EmojiPicker from './EmojiPicker';
+import MentionAutocomplete, { Participant } from './MentionAutocomplete';
 
 interface ChatInputProps {
-  onSend: (content: string, files?: File[], replyToId?: string, threadRootId?: string) => void;
+  onSend: (content: string, files?: File[], replyToId?: string, threadRootId?: string, mentionedUserIds?: string[]) => void;
   disabled?: boolean;
   replyTo?: {
     id: string;
@@ -29,6 +30,8 @@ interface ChatInputProps {
   onCancelReply?: () => void;
   onCancelEdit?: () => void;
   placeholder?: string;
+  participants?: Participant[]; // Участники чата для упоминаний
+  currentUserId?: string; // ID текущего пользователя
 }
 
 // Поддерживаемые форматы изображений
@@ -69,12 +72,19 @@ export default function ChatInput({
   editingMessage,
   onCancelReply,
   onCancelEdit,
-  placeholder = "Напишите сообщение..."
+  placeholder = "Напишите сообщение...",
+  participants = [],
+  currentUserId = '',
 }: ChatInputProps) {
   const [content, setContent] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  
+  // Состояние для упоминаний
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionPosition, setMentionPosition] = useState<{ top: number; left: number } | null>(null);
+  const [mentionStartIndex, setMentionStartIndex] = useState<number | null>(null);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -98,19 +108,47 @@ export default function ChatInput({
     }
   }, [content]);
 
+  // Парсим упоминания из контента
+  const parseMentions = useCallback((text: string): string[] => {
+    const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
+    const mentionedIds: string[] = [];
+    let match;
+    
+    while ((match = mentionRegex.exec(text)) !== null) {
+      const userId = match[2];
+      if (userId && !mentionedIds.includes(userId)) {
+        mentionedIds.push(userId);
+      }
+    }
+    
+    return mentionedIds;
+  }, []);
+
   const handleSend = useCallback(() => {
     const trimmedContent = content.trim();
     if ((!trimmedContent && attachedFiles.length === 0) || disabled) return;
     
-    onSend(trimmedContent, attachedFiles.length > 0 ? attachedFiles : undefined, replyTo?.id, threadRootId || undefined);
+    // Парсим упоминания из контента
+    const mentionedUserIds = parseMentions(trimmedContent);
+    
+    onSend(
+      trimmedContent, 
+      attachedFiles.length > 0 ? attachedFiles : undefined, 
+      replyTo?.id, 
+      threadRootId || undefined,
+      mentionedUserIds.length > 0 ? mentionedUserIds : undefined
+    );
     setContent('');
     setAttachedFiles([]);
+    setMentionQuery('');
+    setMentionPosition(null);
+    setMentionStartIndex(null);
     
     // Сброс высоты textarea
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [content, attachedFiles, disabled, onSend, replyTo?.id, threadRootId]);
+  }, [content, attachedFiles, disabled, onSend, replyTo?.id, threadRootId, parseMentions]);
 
   const handleCancel = useCallback(() => {
     if (editingMessage && onCancelEdit) {
@@ -121,15 +159,89 @@ export default function ChatInput({
     }
   }, [editingMessage, onCancelEdit, replyTo, onCancelReply]);
 
+  // Обработка ввода текста для упоминаний
+  const handleContentChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newContent = e.target.value;
+    const cursorPosition = e.target.selectionStart;
+    
+    setContent(newContent);
+    
+    // Проверяем, есть ли упоминание в позиции курсора
+    const textBeforeCursor = newContent.substring(0, cursorPosition);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtIndex !== -1) {
+      // Проверяем, что после @ нет пробела или переноса строки
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+      if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n') && !textAfterAt.includes('[')) {
+        // Показываем автодополнение
+        const query = textAfterAt.toLowerCase();
+        setMentionQuery(query);
+        setMentionStartIndex(lastAtIndex);
+        
+        // Вычисляем позицию для автодополнения
+        if (textareaRef.current) {
+          const textarea = textareaRef.current;
+          const rect = textarea.getBoundingClientRect();
+          const scrollTop = textarea.scrollTop;
+          
+          // Создаем временный элемент для измерения позиции
+          const tempDiv = document.createElement('div');
+          tempDiv.style.position = 'absolute';
+          tempDiv.style.visibility = 'hidden';
+          tempDiv.style.whiteSpace = 'pre-wrap';
+          tempDiv.style.font = window.getComputedStyle(textarea).font;
+          tempDiv.style.padding = window.getComputedStyle(textarea).padding;
+          tempDiv.style.width = textarea.offsetWidth + 'px';
+          tempDiv.textContent = textBeforeCursor;
+          document.body.appendChild(tempDiv);
+          
+          const textBeforeAt = textBeforeCursor.substring(0, lastAtIndex);
+          const lines = textBeforeAt.split('\n');
+          const lineHeight = parseFloat(window.getComputedStyle(textarea).lineHeight) || 20;
+          
+          setMentionPosition({
+            top: rect.top + (lines.length - 1) * lineHeight + lineHeight + scrollTop - 10,
+            left: rect.left + 10,
+          });
+          
+          document.body.removeChild(tempDiv);
+        }
+      } else {
+        // Скрываем автодополнение
+        setMentionQuery('');
+        setMentionPosition(null);
+        setMentionStartIndex(null);
+      }
+    } else {
+      // Скрываем автодополнение
+      setMentionQuery('');
+      setMentionPosition(null);
+      setMentionStartIndex(null);
+    }
+  }, []);
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Если открыто автодополнение, не обрабатываем Enter здесь
+    if (mentionPosition && (e.key === 'Enter' || e.key === 'Tab' || e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      // Эти клавиши обрабатываются в MentionAutocomplete
+      return;
+    }
+    
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
     if (e.key === 'Escape') {
-      handleCancel();
+      if (mentionPosition) {
+        setMentionQuery('');
+        setMentionPosition(null);
+        setMentionStartIndex(null);
+      } else {
+        handleCancel();
+      }
     }
-  }, [handleSend, handleCancel]);
+  }, [handleSend, handleCancel, mentionPosition]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -162,6 +274,31 @@ export default function ChatInput({
     }
     setShowEmojiPicker(false);
   }, [content]);
+
+  // Обработка выбора участника из автодополнения
+  const handleMentionSelect = useCallback((participant: Participant) => {
+    const textarea = textareaRef.current;
+    if (!textarea || mentionStartIndex === null) return;
+    
+    const name = [participant.firstName, participant.lastName].filter(Boolean).join(' ') || 'Пользователь';
+    const mentionText = `@[${name}](${participant.id}) `;
+    
+    const textBefore = content.substring(0, mentionStartIndex);
+    const textAfter = content.substring(textarea.selectionStart);
+    const newContent = textBefore + mentionText + textAfter;
+    
+    setContent(newContent);
+    setMentionQuery('');
+    setMentionPosition(null);
+    setMentionStartIndex(null);
+    
+    // Устанавливаем курсор после упоминания
+    setTimeout(() => {
+      textarea.focus();
+      const newCursorPos = mentionStartIndex + mentionText.length;
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  }, [content, mentionStartIndex]);
 
   // Drag and drop
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -369,11 +506,11 @@ export default function ChatInput({
           </div>
 
           {/* Text input */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 relative">
             <textarea
               ref={textareaRef}
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={handleContentChange}
               onKeyDown={handleKeyDown}
               placeholder={isEditing ? "Редактировать сообщение..." : placeholder}
               disabled={disabled}
@@ -381,6 +518,22 @@ export default function ChatInput({
               className="w-full resize-none bg-transparent border-none outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-[15px] leading-relaxed py-1"
               style={{ maxHeight: '200px' }}
             />
+            
+            {/* Mention Autocomplete */}
+            {participants.length > 0 && currentUserId && (
+              <MentionAutocomplete
+                participants={participants}
+                currentUserId={currentUserId}
+                query={mentionQuery}
+                position={mentionPosition}
+                onSelect={handleMentionSelect}
+                onClose={() => {
+                  setMentionQuery('');
+                  setMentionPosition(null);
+                  setMentionStartIndex(null);
+                }}
+              />
+            )}
           </div>
 
           {/* Send button */}

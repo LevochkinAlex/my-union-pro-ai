@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { normalizeUserAvatar } from "@/lib/api-helpers";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -26,6 +27,7 @@ import {
   MessageCircle,
   Eye,
 } from "lucide-react";
+import ChannelComments from "./ChannelComments";
 import EmojiPicker from "./EmojiPicker";
 import clsx from "clsx";
 
@@ -39,6 +41,8 @@ export interface MessageSender {
   lastName?: string | null;
   middleName?: string | null;
   avatarUrl?: string | null;
+  jobTitle?: string | null;
+  profession?: string | null;
 }
 
 export interface MessageReply {
@@ -118,6 +122,7 @@ export interface Message {
       likes: number;
       comments: number;
     };
+    isLiked?: boolean;
   } | null;
 }
 
@@ -358,13 +363,16 @@ function ContextMenu({
 
       {/* Menu items */}
       <div className="py-1">
-        <button
-          onClick={() => { onReply?.(); onClose(); }}
-          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-        >
-          <Reply className="w-4 h-4" />
-          Ответить
-        </button>
+        {/* Скрываем "Ответить" для постов в каналах - там можно только комментировать в тредах */}
+        {!(message.messageType === 'channel_post' && message.post) && onReply && (
+          <button
+            onClick={() => { onReply?.(); onClose(); }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            <Reply className="w-4 h-4" />
+            Ответить
+          </button>
+        )}
         
         {isGroupChat && onStartThread && (
           <button
@@ -926,9 +934,69 @@ interface ChannelPostDisplayProps {
   isOwn: boolean;
   onPollVote?: (pollId: string, optionId: string) => void;
   onImageClick?: (url: string, name?: string) => void;
+  messageId?: string;
+  messageReactions?: MessageReactions;
+  onReaction?: (messageId: string, emoji: string) => void;
+  currentUserId?: string;
+  onOpenThread?: () => void;
+  commentsCount?: number;
+  threadParticipants?: Array<{ id: string; avatarUrl: string | null }>;
 }
 
-function ChannelPostDisplay({ post, isOwn, onPollVote, onImageClick }: ChannelPostDisplayProps) {
+function ChannelPostDisplay({ 
+  post, 
+  isOwn, 
+  onPollVote, 
+  onImageClick,
+  messageId,
+  messageReactions,
+  onReaction,
+  currentUserId = '',
+  onOpenThread,
+  commentsCount = 0,
+  threadParticipants = [],
+}: ChannelPostDisplayProps) {
+  const [participants, setParticipants] = useState<Array<{ id: string; avatarUrl: string | null }>>(threadParticipants);
+  
+  // Загружаем участников треда для мини-аватарок
+  useEffect(() => {
+    if (commentsCount > 0 && participants.length === 0) {
+      const loadParticipants = async () => {
+        try {
+          const response = await fetch(`/api/news/${post.id}/comments`);
+          if (response.ok) {
+            const data = await response.json();
+            const allParticipants = new Map<string, { id: string; avatarUrl: string | null }>();
+            
+            (data.comments || []).forEach((comment: any) => {
+              const normalized = normalizeUserAvatar(comment.user);
+              if (normalized.avatarUrl) {
+                allParticipants.set(comment.user.id, {
+                  id: comment.user.id,
+                  avatarUrl: normalized.avatarUrl,
+                });
+              }
+              (comment.replies || []).forEach((reply: any) => {
+                const normalizedReply = normalizeUserAvatar(reply.user);
+                if (normalizedReply.avatarUrl && !allParticipants.has(reply.user.id)) {
+                  allParticipants.set(reply.user.id, {
+                    id: reply.user.id,
+                    avatarUrl: normalizedReply.avatarUrl,
+                  });
+                }
+              });
+            });
+            
+            setParticipants(Array.from(allParticipants.values()).slice(0, 5));
+          }
+        } catch (err) {
+          console.error('Failed to load thread participants:', err);
+        }
+      };
+      loadParticipants();
+    }
+  }, [post.id, commentsCount, participants.length]);
+
   if (!post) return null;
 
   const handlePollVote = async (pollId: string, optionId: string) => {
@@ -948,8 +1016,9 @@ function ChannelPostDisplay({ post, isOwn, onPollVote, onImageClick }: ChannelPo
     }
   };
 
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 relative">
       {/* Cover Image */}
       {post.coverImage && (
         <div className="rounded-xl overflow-hidden">
@@ -1089,41 +1158,68 @@ function ChannelPostDisplay({ post, isOwn, onPollVote, onImageClick }: ChannelPo
         </div>
       )}
 
-      {/* Stats */}
-      <div className={clsx(
-        "flex items-center gap-4 pt-2 border-t",
-        isOwn ? 'border-white/20' : 'border-gray-200 dark:border-gray-700'
-      )}>
-        <button
-          onClick={async () => {
-            try {
-              const response = await fetch(`/api/news/${post.id}/like`, {
-                method: "POST",
-              });
-              if (response.ok) {
-                // Обновление будет через WebSocket или перезагрузка
-                window.location.reload();
+      {/* Reactions - как в обычных сообщениях, абсолютное позиционирование */}
+      {messageReactions && Object.keys(messageReactions).length > 0 && (
+        <div className={clsx(
+          "absolute bottom-2.5 flex flex-wrap gap-0.5 z-20",
+          isOwn ? 'right-2' : 'left-2'
+        )}>
+          <MessageReactionsDisplay
+            reactions={messageReactions}
+            currentUserId={currentUserId || ''}
+            onToggle={(emoji) => {
+              if (onReaction && messageId) {
+                onReaction(messageId, emoji);
               }
-            } catch (error) {
-              console.error("Error toggling like:", error);
-            }
-          }}
+            }}
+            isGroupChat={true}
+          />
+        </div>
+      )}
+
+      {/* Thread indicator with mini-avatars - как в Slack */}
+      {commentsCount > 0 && (
+        <button
+          onClick={onOpenThread}
           className={clsx(
-            "flex items-center gap-1.5 text-xs transition-colors",
+            "mt-2 flex items-center gap-2 text-xs transition-colors group",
             isOwn ? 'text-white/70 hover:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
           )}
         >
-          <Heart className="w-3.5 h-3.5" />
-          <span>{post._count.likes}</span>
-        </button>
-        <div className={clsx(
-          "flex items-center gap-1.5 text-xs",
-          isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
-        )}>
+          {participants.length > 0 && (
+            <div className="flex -space-x-1.5">
+              {participants.slice(0, 3).map((participant, idx) => (
+                <img
+                  key={participant.id}
+                  src={participant.avatarUrl || "/default-avatar.png"}
+                  alt=""
+                  className={clsx(
+                    "rounded-full border",
+                    isOwn 
+                      ? "w-4 h-4 border-white/30" 
+                      : "w-4 h-4 border-white dark:border-gray-900"
+                  )}
+                  style={{ zIndex: 10 - idx }}
+                />
+              ))}
+              {participants.length > 3 && (
+                <div className={clsx(
+                  "rounded-full border flex items-center justify-center text-[9px] font-medium",
+                  isOwn
+                    ? "w-4 h-4 border-white/30 bg-white/20 text-white"
+                    : "w-4 h-4 border-white dark:border-gray-900 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                )}>
+                  +{participants.length - 3}
+                </div>
+              )}
+            </div>
+          )}
           <MessageCircle className="w-3.5 h-3.5" />
-          <span>{post._count.comments}</span>
-        </div>
-      </div>
+          <span>
+            {commentsCount} {commentsCount === 1 ? 'ответ' : commentsCount < 5 ? 'ответа' : 'ответов'}
+          </span>
+        </button>
+      )}
     </div>
   );
 }
@@ -1164,6 +1260,7 @@ function MessageBubble({
 
   return (
     <div 
+      data-message-id={message.id}
       className={`flex gap-2 ${isOwn ? 'flex-row-reverse' : ''}`}
       onContextMenu={(e) => onContextMenu(e, message)}
     >
@@ -1197,13 +1294,6 @@ function MessageBubble({
 
       {/* Message content */}
       <div className={`max-w-[70%] ${isOwn ? 'items-end' : 'items-start'}`}>
-        {/* Sender name */}
-        {showName && !isOwn && (
-          <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 ml-1">
-            {getSenderName(message.sender)}
-          </div>
-        )}
-
         {/* Reply preview */}
         {message.replyTo && (
           <div className={`
@@ -1224,14 +1314,26 @@ function MessageBubble({
 
         {/* Bubble */}
         <div className={`
-          group relative rounded-2xl px-4 py-2.5
-          ${message.reactions && Object.keys(message.reactions).length > 0 ? 'pb-8' : 'pb-2.5'}
+          group relative rounded-2xl px-4 py-2.5 flex flex-col
           ${isOwn 
             ? 'bg-blue-500 text-white rounded-br-md' 
             : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-bl-md'
           }
           ${isDeleted ? 'opacity-60' : ''}
         `}>
+          {/* 1-й ряд: Имя и должность (только для групп) */}
+          {isGroupChat && showName && !isOwn && (
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className={`text-xs font-medium ${isOwn ? 'text-blue-100' : 'text-gray-700 dark:text-gray-300'}`}>
+                {getSenderName(message.sender)}
+              </span>
+              {(message.sender.jobTitle || message.sender.profession) && (
+                <span className={`text-[10px] ${isOwn ? 'text-blue-100/70' : 'text-gray-500 dark:text-gray-400'}`}>
+                  – {message.sender.jobTitle || message.sender.profession}
+                </span>
+              )}
+            </div>
+          )}
           {isDeleted ? (
             <div className={`italic text-sm opacity-70 ${isOwn ? 'text-white' : 'text-gray-600 dark:text-gray-400'}`}>
               Сообщение удалено
@@ -1243,6 +1345,18 @@ function MessageBubble({
               isOwn={isOwn}
               onPollVote={onPollVote}
               onImageClick={onImageClick}
+              messageId={message.id}
+              messageReactions={message.reactions || undefined}
+              onReaction={(msgId, emoji) => {
+                // onReaction в MessageBubble принимает только emoji, messageId уже известен
+                if (onReaction) {
+                  onReaction(emoji);
+                }
+              }}
+              currentUserId={currentUserId}
+              onOpenThread={onOpenThread}
+              commentsCount={message.post?._count.comments || 0}
+              threadParticipants={[]} // Загружается внутри компонента
             />
           ) : (
             <>
@@ -1258,61 +1372,128 @@ function MessageBubble({
               )}
 
               {/* Text content with markdown */}
-              {message.content && (
-                <>
-                  <div className={`
-                    text-[15px] leading-relaxed break-words
-                    ${isOwn ? '!text-white' : 'text-gray-900 dark:text-gray-100'}
-                    prose prose-sm max-w-none
-                    ${isOwn 
-                      ? 'prose-invert [&_*]:!text-white [&_p]:!text-white [&_strong]:!text-white [&_em]:!text-white [&_li]:!text-white [&_h1]:!text-white [&_h2]:!text-white [&_h3]:!text-white [&_h4]:!text-white [&_h5]:!text-white [&_h6]:!text-white [&_blockquote]:!text-white [&_blockquote]:border-blue-300 [&_a]:!text-blue-200 [&_a]:underline hover:[&_a]:!text-blue-100 [&_code]:!text-blue-100 [&_code]:bg-blue-400/30 [&_pre]:bg-blue-400/20 [&_pre]:!text-white' 
-                      : '[&_p]:text-gray-900 dark:[&_p]:text-gray-100 [&_strong]:text-gray-900 dark:[&_strong]:text-gray-100 [&_em]:text-gray-900 dark:[&_em]:text-gray-100 [&_li]:text-gray-900 dark:[&_li]:text-gray-100 [&_h1]:text-gray-900 dark:[&_h1]:text-gray-100 [&_h2]:text-gray-900 dark:[&_h2]:text-gray-100 [&_h3]:text-gray-900 dark:[&_h3]:text-gray-100 [&_h4]:text-gray-900 dark:[&_h4]:text-gray-100 [&_h5]:text-gray-900 dark:[&_h5]:text-gray-100 [&_h6]:text-gray-900 dark:[&_h6]:text-gray-100 [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_code]:text-gray-900 dark:[&_code]:text-gray-100'
-                    }
-                  `}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {message.content}
-                    </ReactMarkdown>
-                  </div>
-                  
-                  {/* Link previews */}
-                  <LinkPreviews content={message.content} isOwn={isOwn} />
-                </>
-              )}
+              {message.content && (() => {
+                // Обрабатываем упоминания ДО передачи в ReactMarkdown
+                // Заменяем @[Name](userId) на специальные плейсхолдеры, чтобы ReactMarkdown не интерпретировал их как ссылки
+                const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
+                const mentionPlaceholders: Map<string, { name: string; userId: string }> = new Map();
+                let processedContent = message.content;
+                let placeholderIndex = 0;
+                
+                processedContent = processedContent.replace(mentionRegex, (match, name, userId) => {
+                  const placeholder = `__MENTION_PLACEHOLDER_${placeholderIndex}__`;
+                  mentionPlaceholders.set(placeholder, { name, userId });
+                  placeholderIndex++;
+                  return placeholder;
+                });
+
+                return (
+                  <>
+                    <div className={`
+                      text-[15px] leading-relaxed break-words
+                      ${isOwn ? '!text-white' : 'text-gray-900 dark:text-gray-100'}
+                      prose prose-sm max-w-none
+                      ${isOwn 
+                        ? 'prose-invert [&_*]:!text-white [&_p]:!text-white [&_strong]:!text-white [&_em]:!text-white [&_li]:!text-white [&_h1]:!text-white [&_h2]:!text-white [&_h3]:!text-white [&_h4]:!text-white [&_h5]:!text-white [&_h6]:!text-white [&_blockquote]:!text-white [&_blockquote]:border-blue-300 [&_a]:!text-blue-200 [&_a]:underline hover:[&_a]:!text-blue-100 [&_code]:!text-blue-100 [&_code]:bg-blue-400/30 [&_pre]:bg-blue-400/20 [&_pre]:!text-white' 
+                        : '[&_p]:text-gray-900 dark:[&_p]:text-gray-100 [&_strong]:text-gray-900 dark:[&_strong]:text-gray-100 [&_em]:text-gray-900 dark:[&_em]:text-gray-100 [&_li]:text-gray-900 dark:[&_li]:text-gray-100 [&_h1]:text-gray-900 dark:[&_h1]:text-gray-100 [&_h2]:text-gray-900 dark:[&_h2]:text-gray-100 [&_h3]:text-gray-900 dark:[&_h3]:text-gray-100 [&_h4]:text-gray-900 dark:[&_h4]:text-gray-100 [&_h5]:text-gray-900 dark:[&_h5]:text-gray-100 [&_h6]:text-gray-900 dark:[&_h6]:text-gray-100 [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_code]:text-gray-900 dark:[&_code]:text-gray-100'
+                      }
+                    `}>
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          // Заменяем плейсхолдеры на стилизованные упоминания
+                          p: ({ children }) => {
+                            const content = String(children);
+                            const parts: React.ReactNode[] = [];
+                            let lastIndex = 0;
+                            
+                            // Ищем все плейсхолдеры и заменяем их на стилизованные упоминания
+                            for (const [placeholder, { name, userId }] of mentionPlaceholders.entries()) {
+                              const index = content.indexOf(placeholder, lastIndex);
+                              if (index !== -1) {
+                                // Добавляем текст до плейсхолдера
+                                if (index > lastIndex) {
+                                  parts.push(content.substring(lastIndex, index));
+                                }
+                                
+                                // Добавляем стилизованное упоминание
+                                parts.push(
+                                  <span
+                                    key={`mention-${userId}-${index}`}
+                                    className={`
+                                      font-medium px-1.5 py-0.5 rounded
+                                      ${isOwn 
+                                        ? 'bg-white/20 text-white' 
+                                        : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                      }
+                                    `}
+                                    title={`@${name}`}
+                                  >
+                                    @{name}
+                                  </span>
+                                );
+                                
+                                lastIndex = index + placeholder.length;
+                              }
+                            }
+                            
+                            // Добавляем оставшийся текст
+                            if (lastIndex < content.length) {
+                              parts.push(content.substring(lastIndex));
+                            }
+                            
+                            // Если упоминаний не найдено, возвращаем оригинальный контент
+                            if (parts.length === 0) {
+                              return <p>{children}</p>;
+                            }
+                            
+                            return <p>{parts}</p>;
+                          },
+                        }}
+                      >
+                        {processedContent}
+                      </ReactMarkdown>
+                    </div>
+                    
+                    {/* Link previews */}
+                    <LinkPreviews content={message.content} isOwn={isOwn} />
+                  </>
+                );
+              })()}
             </>
           )}
 
-          {/* Time and status */}
-          <div className={`
-            flex items-center gap-1 mt-1 text-[10px] relative z-10
-            ${isOwn ? 'text-blue-100/70 justify-end' : 'text-gray-400 dark:text-gray-500'}
-            ${message.reactions && Object.keys(message.reactions).length > 0 ? (isOwn ? 'mr-16' : 'ml-16') : ''}
-          `}>
-            <span>{formatMessageTime(new Date(message.createdAt))}</span>
-            {message.editedAt && <span>(ред.)</span>}
-            {isOwn && (
-              // Одна галочка - отправлено, две галочки - прочитано
-              message.isRead ? (
-                <CheckCheck className="w-3.5 h-3.5" />
-              ) : (
-                <Check className="w-3.5 h-3.5 opacity-70" />
-              )
+          {/* 3-й ряд: Реакции (слева) и время (справа) */}
+          <div className="flex items-center justify-between gap-2 mt-1.5 pt-1">
+            {/* Reactions - слева */}
+            {!isDeleted && message.reactions && Object.keys(message.reactions).length > 0 && (
+              <div className="flex flex-wrap gap-0.5">
+                <MessageReactionsDisplay
+                  reactions={message.reactions}
+                  currentUserId={currentUserId}
+                  onToggle={(emoji) => onReaction?.(emoji)}
+                  isGroupChat={isGroupChat}
+                />
+              </div>
             )}
-          </div>
-
-          {/* Reactions - абсолютное позиционирование внутри бабла, как в Telegram/WhatsApp */}
-          {!isDeleted && message.reactions && (
+            
+            {/* Time and status - справа */}
             <div className={`
-              absolute bottom-2.5 flex flex-wrap gap-0.5 z-20
-              ${isOwn ? 'right-2' : 'left-2'}
+              flex items-center gap-1 text-[10px] shrink-0
+              ${isOwn ? 'text-blue-100/70' : 'text-gray-400 dark:text-gray-500'}
             `}>
-              <MessageReactionsDisplay
-                reactions={message.reactions}
-                currentUserId={currentUserId}
-                onToggle={(emoji) => onReaction?.(emoji)}
-                isGroupChat={isGroupChat}
-              />
+              <span>{formatMessageTime(new Date(message.createdAt))}</span>
+              {message.editedAt && <span>(ред.)</span>}
+              {isOwn && (
+                // Одна галочка - отправлено, две галочки - прочитано
+                message.isRead ? (
+                  <CheckCheck className="w-3.5 h-3.5" />
+                ) : (
+                  <Check className="w-3.5 h-3.5 opacity-70" />
+                )
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         {/* Thread indicator */}
