@@ -258,13 +258,30 @@ export async function getUserChats(
   });
 
   // Получаем количество непрочитанных сообщений для всех чатов одним запросом
-  const unreadCounts = await getUnreadCountsForChats(
-    chats.map((c) => c.id),
-    userId
-  );
+  let unreadCounts = new Map<string, number>();
+  try {
+    unreadCounts = await getUnreadCountsForChats(
+      chats.map((c) => c.id),
+      userId
+    );
+  } catch (error) {
+    console.error('[chat-service] Error getting unread counts:', error);
+    // Продолжаем с пустым Map - все чаты будут показаны как прочитанные
+  }
 
   // Форматируем чаты
-  const formattedChats = chats.map((chat) => formatChatInfo(chat, userId, unreadCounts.get(chat.id) || 0));
+  const formattedChats: ChatInfo[] = [];
+  for (const chat of chats) {
+    try {
+      const formatted = formatChatInfo(chat, userId, unreadCounts.get(chat.id) || 0);
+      if (formatted) {
+        formattedChats.push(formatted);
+      }
+    } catch (error) {
+      console.error(`[chat-service] Error formatting chat ${chat.id}:`, error);
+      // Пропускаем проблемный чат, но продолжаем обработку остальных
+    }
+  }
   
   // Сохраняем в кэш (TTL: 30 секунд)
   try {
