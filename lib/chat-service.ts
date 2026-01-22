@@ -245,6 +245,13 @@ export async function getUserChats(
           messageType: true,
         },
       },
+      newsChannel: {
+        select: {
+          id: true,
+          name: true,
+          iconUrl: true,
+        },
+      },
       _count: {
         select: {
           participants: true,
@@ -331,6 +338,13 @@ export async function getChatById(
               phone: true,
             },
           },
+        },
+      },
+      newsChannel: {
+        select: {
+          id: true,
+          name: true,
+          iconUrl: true,
         },
       },
       _count: {
@@ -794,6 +808,7 @@ export function formatChatInfo(
   }
   
   const isGroup = chat.type === "GROUP";
+  const isChannel = chat.type === "CHANNEL";
   const participantsCount = chat._count?.participants || chat.participants?.length || 0;
 
   // Находим другого участника
@@ -807,7 +822,20 @@ export function formatChatInfo(
   let displayAvatar: string | null;
   let otherUser: OtherUserInfo;
 
-  if (isGroup) {
+  if (isChannel) {
+    // Для каналов используем данные из NewsChannel или Chat
+    displayName = chat.newsChannel?.name || chat.name || "Канал";
+    displayAvatar = chat.newsChannel?.iconUrl || chat.iconUrl || null;
+    otherUser = {
+      id: chat.id,
+      firstName: null,
+      lastName: displayName,
+      middleName: null,
+      avatarUrl: displayAvatar,
+      isGroup: true,
+      participantsCount,
+    };
+  } else if (isGroup) {
     displayName = chat.name || "Групповой чат";
     displayAvatar = chat.iconUrl || null;
     otherUser = {
