@@ -988,22 +988,24 @@ function ChannelPostDisplay({ post, isOwn, onPollVote, onImageClick }: ChannelPo
 
       {/* Polls */}
       {post.polls && post.polls.length > 0 && (
-        <div className="space-y-3 mt-3">
+        <div className="space-y-4 mt-4">
           {post.polls.map((poll) => (
             <div
               key={poll.id}
-              className={`
-                rounded-lg border p-3
-                ${isOwn 
-                  ? 'border-white/30 bg-white/10' 
-                  : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50'
-                }
-              `}
+              className={clsx(
+                "rounded-xl border p-4",
+                isOwn 
+                  ? 'border-white/20 bg-white/5 backdrop-blur-sm' 
+                  : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 shadow-sm'
+              )}
             >
-              <h4 className={`text-sm font-semibold mb-2 ${isOwn ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
+              <h4 className={clsx(
+                "text-sm font-semibold mb-3",
+                isOwn ? 'text-white' : 'text-gray-900 dark:text-white'
+              )}>
                 {poll.question}
               </h4>
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {poll.options.map((option) => {
                   const isVoted = poll.userVote === option.id;
                   const percentage = option.percentage || 0;
@@ -1019,46 +1021,51 @@ function ChannelPostDisplay({ post, isOwn, onPollVote, onImageClick }: ChannelPo
                       }}
                       disabled={poll.isClosed || !!poll.userVote}
                       className={clsx(
-                        "relative w-full rounded-lg border p-2.5 text-left text-sm transition-all",
+                        "group relative w-full rounded-lg p-3 text-left transition-all duration-200",
+                        "focus:outline-none focus:ring-2 focus:ring-offset-1",
                         isVoted
                           ? isOwn
-                            ? "border-white/50 bg-white/20"
-                            : "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20"
+                            ? "bg-white/15 border border-white/30"
+                            : "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800"
                           : poll.userVote
                           ? isOwn
-                            ? "border-white/20 bg-white/5"
-                            : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+                            ? "bg-white/5 border border-white/10"
+                            : "bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700"
                           : isOwn
-                          ? "border-white/20 bg-white/5 hover:bg-white/10"
-                          : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-600",
+                          ? "bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20"
+                          : "bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600",
                         (poll.isClosed || poll.userVote) && "cursor-default"
                       )}
                     >
-                      <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center justify-between gap-3 mb-2">
                         <span className={clsx(
-                          "font-medium text-xs",
+                          "text-sm font-medium flex-1",
                           isOwn ? 'text-white' : 'text-gray-900 dark:text-white'
                         )}>
                           {option.text}
                         </span>
                         {poll.totalVotes > 0 && (
                           <span className={clsx(
-                            "text-xs",
-                            isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
+                            "text-xs font-medium whitespace-nowrap",
+                            isOwn ? 'text-white/80' : 'text-gray-600 dark:text-gray-400'
                           )}>
-                            {percentage}% ({voteCount})
+                            {percentage}% • {voteCount}
                           </span>
                         )}
                       </div>
                       {poll.totalVotes > 0 && (
                         <div className={clsx(
                           "h-1.5 w-full overflow-hidden rounded-full",
-                          isOwn ? 'bg-white/20' : 'bg-gray-200 dark:bg-gray-700'
+                          isOwn ? 'bg-white/15' : 'bg-gray-200 dark:bg-gray-700'
                         )}>
                           <div
                             className={clsx(
-                              "h-full transition-all",
-                              isOwn ? 'bg-white/50' : 'bg-blue-500 dark:bg-blue-400'
+                              "h-full rounded-full transition-all duration-500 ease-out",
+                              isOwn 
+                                ? 'bg-white/60' 
+                                : isVoted
+                                ? 'bg-blue-500 dark:bg-blue-400'
+                                : 'bg-blue-400 dark:bg-blue-500'
                             )}
                             style={{ width: `${percentage}%` }}
                           />
@@ -1070,7 +1077,7 @@ function ChannelPostDisplay({ post, isOwn, onPollVote, onImageClick }: ChannelPo
               </div>
               {poll.totalVotes > 0 && (
                 <p className={clsx(
-                  "mt-2 text-xs",
+                  "mt-3 text-xs font-medium",
                   isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
                 )}>
                   Всего голосов: {poll.totalVotes}
