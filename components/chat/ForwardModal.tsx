@@ -31,7 +31,7 @@ export default function ForwardModal({
       onClick={onClose}
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md max-h-[70vh] flex flex-col shadow-xl"
+        className="bg-white dark:bg-gray-900 rounded-xl w-full max-w-md max-h-[70vh] flex flex-col shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Заголовок */}
@@ -68,7 +68,7 @@ export default function ForwardModal({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Поиск чата..."
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-colors text-sm"
           />
         </div>
 

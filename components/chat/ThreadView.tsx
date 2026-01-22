@@ -302,7 +302,7 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
 
       {/* Input */}
       <div className="p-4 border-t border-gray-200 dark:border-gray-800 flex-shrink-0">
-        <div className="relative">
+        <div className="relative border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 dark:focus-within:border-blue-500">
           <textarea
             ref={textareaRef}
             value={newMessage}
@@ -321,14 +321,20 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
               }
             }}
             placeholder="Напишите ответ в треде..."
-            className="w-full px-3 py-2 pr-12 border border-gray-300 dark:border-gray-700 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-[15px] leading-relaxed"
+            className="w-full px-3 py-2 pr-12 bg-transparent border-none outline-none resize-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-[15px] leading-relaxed"
             rows={1}
             style={{ maxHeight: '200px', minHeight: '42px' }}
           />
           <button
             onClick={handleSend}
             disabled={!newMessage.trim() || sending}
-            className="absolute right-2 bottom-2 w-8 h-8 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-all duration-200 disabled:hover:bg-blue-600"
+            className={`
+              absolute right-2 bottom-2 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200
+              ${newMessage.trim() && !sending
+                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+              }
+            `}
             type="button"
           >
             <Send className="w-4 h-4" />

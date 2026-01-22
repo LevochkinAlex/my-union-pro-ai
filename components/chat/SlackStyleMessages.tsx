@@ -1180,7 +1180,7 @@ function ChannelPostDisplay({
       )}
 
       {/* Reactions - как в обычных сообщениях, абсолютное позиционирование */}
-      {messageReactions && Object.keys(messageReactions).length > 0 && (
+      {messageReactions && Object.keys(messageReactions).length > 0 ? (
         <div className={clsx(
           "absolute bottom-2.5 flex flex-wrap gap-0.5 z-20",
           isOwn ? 'right-2' : 'left-2'
@@ -1196,7 +1196,7 @@ function ChannelPostDisplay({
             isGroupChat={true}
           />
         </div>
-      )}
+      ) : null}
 
       {/* Thread indicator with mini-avatars - как в Slack */}
       {commentsCount > 0 && (

@@ -526,8 +526,31 @@ export async function GET(
             });
 
             if (postRecord) {
+              // Загружаем реакции для виртуального сообщения поста
+              // Реакции хранятся в ChatMessage, нужно найти сообщение по postId
+              const postMessage = await prisma.chatMessage.findFirst({
+                where: {
+                  chatId: chatId,
+                  messageType: 'channel_post',
+                  content: { contains: postId },
+                },
+                include: {
+                  reactions: true,
+                },
+              });
+
+              // Форматируем реакции
+              const virtualReactions = (postMessage?.reactions || []).reduce((acc: any, r: any) => {
+                if (!acc[r.emoji]) {
+                  acc[r.emoji] = { count: 0, userIds: [] };
+                }
+                acc[r.emoji].count!++;
+                acc[r.emoji].userIds.push(r.userId);
+                return acc;
+              }, {} as Record<string, { count?: number; userIds: string[] }>);
+
               virtualMessages.push({
-                id: `virtual_${postId}`, // Виртуальный ID
+                id: postMessage?.id || `virtual_${postId}`, // Используем реальный ID если есть
                 chatId: chatId,
                 senderId: postAuthor.id,
                 content: JSON.stringify({ postId }),
@@ -543,7 +566,7 @@ export async function GET(
                   avatarUrl: normalizeUserAvatar(postAuthor)?.avatarUrl || null,
                 },
                 replyTo: null,
-                reactions: {},
+                reactions: virtualReactions,
                 attachments: [],
                 threadRepliesCount: 0,
                 threadLastReplyAt: null,
