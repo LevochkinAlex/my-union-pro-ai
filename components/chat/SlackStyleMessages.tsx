@@ -1019,6 +1019,27 @@ function ChannelPostDisplay({
 
   return (
     <div className="space-y-3 relative">
+      {/* Информация о пересылке и канале */}
+      {(post as any).forwarded && (post as any).channelName && (
+        <div className={clsx(
+          "flex items-center gap-2 text-xs",
+          isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
+        )}>
+          <span>Переслано из канала</span>
+          <a
+            href={`/dashboard/news/channel/${(post as any).channelId}`}
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
+            className={clsx(
+              "font-medium hover:underline",
+              isOwn ? 'text-white/90' : 'text-blue-600 dark:text-blue-400'
+            )}
+          >
+            {(post as any).channelName}
+          </a>
+        </div>
+      )}
       {/* Cover Image */}
       {post.coverImage && (
         <div className="rounded-xl overflow-hidden">

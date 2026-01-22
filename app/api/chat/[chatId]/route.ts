@@ -218,6 +218,22 @@ export async function GET(
       }
     });
 
+    // Также собираем ID постов из пересланных сообщений (если они есть)
+    resultMessages.forEach((msg: any) => {
+      if (msg.messageType === 'channel_post') {
+        try {
+          const postData = JSON.parse(msg.content);
+          // Для пересланных постов также нужно загрузить данные поста
+          if (postData.postId && !existingPostIds.has(postData.postId)) {
+            postIds.push(postData.postId);
+            existingPostIds.add(postData.postId);
+          }
+        } catch (e) {
+          // Игнорируем ошибки парсинга
+        }
+      }
+    });
+
     // Если это канал, загружаем все опубликованные посты из NewsChannel
     // Получаем newsChannelId отдельным запросом, если нужно
     let newsChannelId: string | null = null;
@@ -406,6 +422,15 @@ export async function GET(
           const postId = parsed.postId;
           if (postId && postsMap.has(postId)) {
             postData = postsMap.get(postId);
+            // Добавляем информацию о пересылке, если есть
+            if (parsed.forwarded) {
+              postData.forwarded = true;
+              postData.originalChatId = parsed.originalChatId;
+              if (parsed.channelId && parsed.channelName) {
+                postData.channelId = parsed.channelId;
+                postData.channelName = parsed.channelName;
+              }
+            }
           }
         } catch (e) {
           // Игнорируем ошибки парсинга
