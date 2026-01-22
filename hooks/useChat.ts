@@ -183,18 +183,21 @@ export function useChat(options: UseChatOptions = {}) {
       });
       
       if (data?.chats) {
-        console.log("[useChat] Loaded chats:", data.chats.length);
+        console.log("[useChat] ✅ Loaded chats:", data.chats.length);
         setChats(data.chats);
+      } else if (data === null) {
+        // Если data null, значит была ошибка при запросе
+        console.error("[useChat] ❌ Failed to load chats - data is null (request failed)");
+        options.onError?.("Ошибка загрузки чатов");
+        // Не обновляем чаты, чтобы сохранить существующие при временных ошибках
+      } else if (data && !data.chats) {
+        // Если data есть, но chats нет - устанавливаем пустой массив
+        console.warn("[useChat] ⚠️ Response received but no chats field:", data);
+        setChats([]);
       } else {
-        console.warn("[useChat] No chats in response or data is null:", data);
-        // Если data null, значит была ошибка, но не устанавливаем пустой массив
-        // чтобы не скрыть существующие чаты при временных ошибках
-        if (data === null) {
-          options.onError?.("Ошибка загрузки чатов");
-        } else {
-          // Если data есть, но chats нет - устанавливаем пустой массив
-          setChats([]);
-        }
+        // Неожиданный случай
+        console.error("[useChat] ❌ Unexpected response format:", data);
+        options.onError?.("Ошибка загрузки чатов");
       }
     } catch (error) {
       console.error("[useChat] Error loading chats:", error);
