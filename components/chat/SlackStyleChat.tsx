@@ -588,7 +588,7 @@ export default function SlackStyleChat({
                         onClick={() => setShowChannelPostModal(true)}
                         className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                       >
-                        📢 Создать пост в канале
+                        Создать пост в канале
                       </button>
                     </div>
                   ) : (

@@ -72,6 +72,11 @@ export async function GET(
             },
           },
         },
+        newsChannel: {
+          select: {
+            id: true,
+          },
+        },
       },
     });
 
@@ -164,14 +169,19 @@ export async function GET(
       .map(p => p.userId)
       .filter(id => id !== userId);
 
-    // Получаем ID постов из сообщений типа channel_post
+    // Для каналов: загружаем все опубликованные посты из NewsChannel
+    // и добавляем их как виртуальные сообщения, если их еще нет в чате
     const postIds: string[] = [];
+    const existingPostIds = new Set<string>();
+    
+    // Собираем ID постов из существующих сообщений
     resultMessages.forEach((msg: any) => {
       if (msg.messageType === 'channel_post') {
         try {
           const postData = JSON.parse(msg.content);
           if (postData.postId) {
             postIds.push(postData.postId);
+            existingPostIds.add(postData.postId);
           }
         } catch (e) {
           // Игнорируем ошибки парсинга
@@ -179,8 +189,33 @@ export async function GET(
       }
     });
 
+    // Если это канал, загружаем все опубликованные посты из NewsChannel
+    if (chat.type === 'CHANNEL' && chat.newsChannelId) {
+      const channelPosts = await prisma.newsPost.findMany({
+        where: {
+          channelId: chat.newsChannelId,
+          isPublished: true,
+        },
+        select: {
+          id: true,
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      // Добавляем посты, которых еще нет в сообщениях
+      for (const post of channelPosts) {
+        if (!existingPostIds.has(post.id)) {
+          postIds.push(post.id);
+        }
+      }
+    }
+
     // Загружаем данные постов одним запросом
     const postsMap = new Map<string, any>();
+    const postsAuthorsMap = new Map<string, any>(); // Отдельная карта для авторов
     if (postIds.length > 0) {
       const posts = await prisma.newsPost.findMany({
         where: { id: { in: postIds } },
@@ -190,6 +225,7 @@ export async function GET(
               id: true,
               firstName: true,
               lastName: true,
+              middleName: true,
               avatarUrl: true,
             },
           },
@@ -209,6 +245,13 @@ export async function GET(
             },
           },
         },
+      });
+
+      // Сохраняем авторов отдельно
+      posts.forEach(post => {
+        if (post.author) {
+          postsAuthorsMap.set(post.id, post.author);
+        }
       });
 
       // Получаем голоса пользователя в опросах
@@ -371,6 +414,80 @@ export async function GET(
       post: postData,
       };
     }).filter((msg: any) => msg !== null);
+
+    // Для каналов: добавляем виртуальные сообщения для постов из NewsChannel,
+    // которые еще не созданы как сообщения в чате
+    if (chat.type === 'CHANNEL' && chat.newsChannelId && postsMap.size > 0) {
+      const virtualMessages: any[] = [];
+      
+      for (const [postId, postData] of postsMap.entries()) {
+        // Проверяем, есть ли уже сообщение для этого поста
+        const hasMessage = formattedMessages.some((msg: any) => {
+          if (msg.messageType === 'channel_post') {
+            try {
+              const parsed = JSON.parse(msg.content);
+              return parsed.postId === postId;
+            } catch (e) {
+              return false;
+            }
+          }
+          return false;
+        });
+
+        // Если сообщения нет, создаем виртуальное
+        if (!hasMessage && postData) {
+          const postAuthor = postsAuthorsMap.get(postId);
+          
+          if (postAuthor) {
+            // Получаем дату создания поста
+            const postRecord = await prisma.newsPost.findUnique({
+              where: { id: postId },
+              select: { createdAt: true },
+            });
+
+            if (postRecord) {
+              virtualMessages.push({
+                id: `virtual_${postId}`, // Виртуальный ID
+                chatId: chatId,
+                senderId: postAuthor.id,
+                content: JSON.stringify({ postId }),
+                messageType: 'channel_post',
+                createdAt: postRecord.createdAt,
+                editedAt: null,
+                isRead: false,
+                sender: {
+                  id: postAuthor.id,
+                  firstName: postAuthor.firstName,
+                  lastName: postAuthor.lastName,
+                  middleName: postAuthor.middleName,
+                  avatarUrl: normalizeUserAvatar(postAuthor)?.avatarUrl || null,
+                },
+                replyTo: null,
+                reactions: {},
+                attachments: [],
+                threadRepliesCount: 0,
+                threadLastReplyAt: null,
+                post: postData,
+              });
+            }
+          }
+        }
+      }
+
+      // Объединяем реальные и виртуальные сообщения, сортируем по дате
+      const allMessages = [...formattedMessages, ...virtualMessages].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+
+      return NextResponse.json({
+        messages: allMessages,
+        hasMore,
+        pagination: {
+          hasMore,
+          oldestMessageId: allMessages.length > 0 ? allMessages[0].id : null,
+        },
+      });
+    }
 
     return NextResponse.json({
       chat,
