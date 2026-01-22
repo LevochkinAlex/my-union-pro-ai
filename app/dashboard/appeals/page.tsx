@@ -277,7 +277,7 @@ export default function AppealsPage() {
                 <div className="flex-shrink-0 sm:ml-4 flex gap-2">
                   {ticket.chatId && (
                     <Link
-                      href={`/dashboard/chat?chatId=${ticket.chatId}`}
+                      href={`/dashboard/chat?chatId=${ticket.chatId}&ticketId=${ticket.id}`}
                       className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700"
                       title="Открыть чат обращения"
                     >

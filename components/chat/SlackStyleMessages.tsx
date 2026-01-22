@@ -127,6 +127,7 @@ export interface SlackStyleMessagesProps {
   typingUsers: Set<string>;
   isTicketChat?: boolean;
   isGroupChat?: boolean; // Для определения типа чата (групповой или приватный)
+  ticketId?: string; // ID обращения для отображения кнопки закрытия
   onReply?: (message: Message) => void;
   onStartThread?: (message: Message) => void;
   onEdit?: (message: Message) => void;
@@ -1369,6 +1370,7 @@ export default function SlackStyleMessages({
   typingUsers,
   isTicketChat = false,
   isGroupChat = false,
+  ticketId,
   onReply,
   onStartThread,
   onEdit,

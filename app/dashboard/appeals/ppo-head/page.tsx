@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
+import CloseAppealModal from "@/components/appeals/CloseAppealModal";
 
 interface Ticket {
   id: string;
@@ -93,6 +94,7 @@ export default function PPOHeadAppealsPage() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [showForceCloseModal, setShowForceCloseModal] = useState(false);
 
   // Подсчёт по статусам
   const statusCounts = tickets.reduce((acc, ticket) => {
@@ -154,6 +156,34 @@ export default function PPOHeadAppealsPage() {
     } catch (err) {
       console.error("Error rejecting ticket:", err);
       alertError(err instanceof Error ? err.message : "Не удалось отклонить обращение");
+    }
+  };
+
+  const handleForceClose = async (reason: string) => {
+    if (!selectedTicket) return;
+
+    try {
+      const response = await fetch(
+        `/api/ppo-head/appeals/${selectedTicket.publicId}/force-close`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Ошибка при закрытии обращения");
+      }
+
+      alertSuccess("Обращение закрыто");
+      setShowForceCloseModal(false);
+      setSelectedTicket(null);
+      await loadTickets();
+    } catch (err) {
+      console.error("Error force closing ticket:", err);
+      alertError(err instanceof Error ? err.message : "Не удалось закрыть обращение");
     }
   };
 
@@ -334,7 +364,7 @@ export default function PPOHeadAppealsPage() {
                   {/* Кнопка чата */}
                   {ticket.chatId && (
                     <Link
-                      href={`/dashboard/chats/ppo-head?chatId=${ticket.chatId}`}
+                      href={`/dashboard/chat?chatId=${ticket.chatId}&ticketId=${ticket.id}`}
                       onClick={(e) => e.stopPropagation()}
                       className="w-8 h-8 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 flex items-center justify-center hover:bg-green-500/20 transition-colors"
                       title="Открыть чат"
@@ -345,6 +375,22 @@ export default function PPOHeadAppealsPage() {
                     </Link>
                   )}
 
+                  {/* Кнопка принудительного закрытия */}
+                  {ticket.status !== "REJECTED" && ticket.status !== "CLOSED" && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedTicket(ticket);
+                        setShowForceCloseModal(true);
+                      }}
+                      className="w-8 h-8 rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center hover:bg-orange-500/20 transition-colors"
+                      title="Закрыть обращение"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
                   {/* Кнопка отклонения */}
                   {ticket.status !== "REJECTED" && ticket.status !== "CLOSED" && (
                     <button
@@ -376,6 +422,21 @@ export default function PPOHeadAppealsPage() {
             );
           })}
         </div>
+      )}
+
+      {/* Force Close Modal */}
+      {showForceCloseModal && selectedTicket && (
+        <CloseAppealModal
+          isOpen={showForceCloseModal}
+          onClose={() => {
+            setShowForceCloseModal(false);
+            setSelectedTicket(null);
+          }}
+          onForceClose={handleForceClose}
+          isForceClose={true}
+          ticketId={selectedTicket.id}
+          ticketPublicId={selectedTicket.publicId}
+        />
       )}
 
       {/* Reject Modal */}

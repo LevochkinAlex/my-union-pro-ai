@@ -18,6 +18,7 @@ import GroupChatModal from "./GroupChatModal";
 import ThreadView from "./ThreadView";
 import ImageModal from "./ImageModal";
 import ChannelPostModal from "./ChannelPostModal";
+import CloseAppealModal from "@/components/appeals/CloseAppealModal";
 import {
   Users,
   Settings,
@@ -31,6 +32,7 @@ import {
   Archive,
   Trash2,
   X,
+  CheckCircle,
 } from "lucide-react";
 
 const AlertDialog = dynamic(() => import("@/components/ui/AlertDialog"), {
@@ -92,11 +94,13 @@ interface ChatHeaderProps {
   onManageParticipants?: () => void;
   onEditGroup?: () => void;
   isCurrentUserAdmin?: boolean;
+  ticketId?: string | null;
+  onCloseAppeal?: () => void;
 }
 
-function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditGroup, isCurrentUserAdmin }: ChatHeaderProps) {
+function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditGroup, isCurrentUserAdmin, ticketId, onCloseAppeal }: ChatHeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
-  const { displayName, avatarUrl, subtitle, isAI, isGroup } = getChatDisplayInfo(chat, currentUserId);
+  const { displayName, avatarUrl, subtitle, isAI, isGroup, isTicketChat } = getChatDisplayInfo(chat, currentUserId);
   
   // Проверяем онлайн статус для личных чатов
   const otherUserId = !isGroup && !isAI && chat.otherUser?.id ? [chat.otherUser.id] : [];
@@ -159,6 +163,17 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
       </div>
 
       <div className="flex items-center gap-1">
+        {/* Кнопка закрытия обращения */}
+        {(isTicketChat || ticketId) && onCloseAppeal && (
+          <button
+            onClick={onCloseAppeal}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl text-green-600 dark:text-green-400"
+            title="Закрыть обращение"
+          >
+            <CheckCircle className="w-5 h-5" />
+          </button>
+        )}
+        
         {isGroup && !isAI && (
           <button
             onClick={onManageParticipants}
@@ -246,10 +261,44 @@ export default function SlackStyleChat({
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ url: string; name?: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; messageId: string | null }>({ isOpen: false, messageId: null });
+  const [showCloseAppealModal, setShowCloseAppealModal] = useState(false);
+  const [ticketInfo, setTicketInfo] = useState<{ id: string; publicId: string; status: string } | null>(null);
 
   const handleError = useCallback((error: string) => {
     showToast(error, "error");
   }, [showToast]);
+
+  const handleCloseAppeal = useCallback(async (rating: number, comment: string) => {
+    if (!ticketInfo) return;
+    
+    try {
+      const response = await fetch(`/api/tickets/${ticketInfo.publicId}/close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating, comment }),
+      });
+      
+      if (!response.ok) {
+        const error = await safeJsonParse(response);
+        throw new Error(error?.error || 'Ошибка закрытия обращения');
+      }
+      
+      showToast('Обращение успешно закрыто', 'success');
+      setShowCloseAppealModal(false);
+      // Обновляем информацию об обращении
+      const data = await safeJsonParse(response);
+      if (data?.ticket) {
+        setTicketInfo({
+          id: data.ticket.id,
+          publicId: data.ticket.publicId,
+          status: data.ticket.status,
+        });
+      }
+    } catch (error) {
+      console.error('[SlackStyleChat] Error closing appeal:', error);
+      showToast(error instanceof Error ? error.message : 'Ошибка закрытия обращения', 'error');
+    }
+  }, [ticketInfo, showToast]);
 
   // Chat hook
   const {
@@ -285,6 +334,38 @@ export default function SlackStyleChat({
     }
   }, []);
 
+  // Get ticketId from URL
+  const ticketIdFromUrl = searchParams.get("ticketId");
+  
+  // Get ticket info when ticketId is available
+  useEffect(() => {
+    const fetchTicketInfo = async () => {
+      const ticketIdToUse = ticketIdFromUrl || selectedChat?.ticketId;
+      if (!ticketIdToUse) return;
+      
+      try {
+        // Пытаемся получить по ID или publicId
+        const response = await fetch(`/api/tickets/${ticketIdToUse}`);
+        if (response.ok) {
+          const data = await safeJsonParse(response);
+          if (data?.ticket) {
+            setTicketInfo({
+              id: data.ticket.id,
+              publicId: data.ticket.publicId,
+              status: data.ticket.status,
+            });
+          }
+        }
+      } catch (error) {
+        console.error('[SlackStyleChat] Error fetching ticket info:', error);
+      }
+    };
+    
+    if (mounted && (ticketIdFromUrl || selectedChat?.ticketId)) {
+      fetchTicketInfo();
+    }
+  }, [mounted, ticketIdFromUrl, selectedChat?.ticketId]);
+
   // Handle URL params
   useEffect(() => {
     if (!mounted || loading) return;
@@ -304,7 +385,10 @@ export default function SlackStyleChat({
       if (chat) {
         selectChat(chat);
         setShowChatView(true);
-        router.replace(baseUrl, { scroll: false });
+        // Не удаляем ticketId из URL, чтобы кнопка закрытия работала
+        if (!ticketIdFromUrl) {
+          router.replace(baseUrl, { scroll: false });
+        }
       }
     }
   }, [mounted, loading, searchParams, chats.length]);
@@ -543,6 +627,12 @@ export default function SlackStyleChat({
                 isCurrentUserAdmin={(selectedChat.type === 'GROUP' || selectedChat.type === 'CHANNEL') && selectedChat.participants?.some(
                   p => p.userId === currentUserId && p.role === 'admin'
                 )}
+                ticketId={ticketIdFromUrl || selectedChat?.ticketId || undefined}
+                onCloseAppeal={() => {
+                  if (ticketInfo && ticketInfo.status !== 'CLOSED' && ticketInfo.status !== 'RESOLVED') {
+                    setShowCloseAppealModal(true);
+                  }
+                }}
               />
 
               <div className="flex-1 flex overflow-hidden relative">
@@ -552,7 +642,8 @@ export default function SlackStyleChat({
                     messages={formattedMessages}
                     currentUserId={currentUserId || ""}
                     typingUsers={new Set(typingUsers?.map((u) => typeof u === "string" ? u : (u as any).userId) || [])}
-                    isTicketChat={!!selectedChat.ticketId}
+                    isTicketChat={!!selectedChat.ticketId || !!ticketIdFromUrl}
+                    ticketId={ticketIdFromUrl || selectedChat?.ticketId || undefined}
                     chatId={selectedChat?.id}
                     onReply={(msg) => setReplyingTo(msg as any)}
                     onStartThread={(msg) => {
@@ -635,6 +726,16 @@ export default function SlackStyleChat({
       </div>
 
       {/* Modals */}
+      {showCloseAppealModal && ticketInfo && (
+        <CloseAppealModal
+          isOpen={showCloseAppealModal}
+          onClose={() => setShowCloseAppealModal(false)}
+          onConfirm={handleCloseAppeal}
+          ticketId={ticketInfo.id}
+          ticketPublicId={ticketInfo.publicId}
+        />
+      )}
+
       <GroupChatModal
         isOpen={showGroupModal}
         onClose={() => {
