@@ -72,12 +72,7 @@ export async function GET(
             },
           },
         },
-        newsChannel: {
-          select: {
-            id: true,
-          },
-        },
-      },
+      } as any,
     });
 
     if (!chat) {
@@ -190,10 +185,19 @@ export async function GET(
     });
 
     // Если это канал, загружаем все опубликованные посты из NewsChannel
-    if (chat.type === 'CHANNEL' && chat.newsChannelId) {
+    // Получаем newsChannelId отдельным запросом, если нужно
+    let newsChannelId: string | null = null;
+    if ((chat.type as string) === 'CHANNEL') {
+      const channelWithNews = await prisma.$queryRaw<Array<{ newsChannelId: string | null }>>`
+        SELECT "newsChannelId" FROM "Chat" WHERE id = ${chatId}
+      `;
+      newsChannelId = channelWithNews[0]?.newsChannelId || null;
+    }
+    
+    if ((chat.type as string) === 'CHANNEL' && newsChannelId) {
       const channelPosts = await prisma.newsPost.findMany({
         where: {
-          channelId: chat.newsChannelId,
+          channelId: newsChannelId,
           isPublished: true,
         },
         select: {
@@ -417,7 +421,7 @@ export async function GET(
 
     // Для каналов: добавляем виртуальные сообщения для постов из NewsChannel,
     // которые еще не созданы как сообщения в чате
-    if (chat.type === 'CHANNEL' && chat.newsChannelId && postsMap.size > 0) {
+    if ((chat.type as string) === 'CHANNEL' && newsChannelId && postsMap.size > 0) {
       const virtualMessages: any[] = [];
       
       for (const [postId, postData] of postsMap.entries()) {
