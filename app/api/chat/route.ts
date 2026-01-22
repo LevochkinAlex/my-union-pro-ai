@@ -182,6 +182,37 @@ export async function GET(request: NextRequest) {
 
     const includeAI = searchParams.get("includeAI") !== "false"; // По умолчанию включаем ИИ
 
+    // Автоматическая синхронизация каналов для председателей
+    // Проверяем, является ли пользователь председателем и есть ли у него каналы без Chat
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          isPPOHead: true,
+          ppoHeadOrganizationId: true,
+          isMPOHead: true,
+          mpoHeadOrganizationId: true,
+          isRPOHead: true,
+          rpoHeadOrganizationId: true,
+        },
+      });
+
+      if (user && (user.isPPOHead || user.isMPOHead || user.isRPOHead)) {
+        const organizationId = user.ppoHeadOrganizationId || user.mpoHeadOrganizationId || user.rpoHeadOrganizationId;
+        if (organizationId) {
+          // Импортируем функцию синхронизации динамически, чтобы избежать проблем с зависимостями
+          const { syncAllOrganizationChannels } = await import("@/lib/channel-sync");
+          // Синхронизируем каналы в фоне (не блокируем ответ)
+          syncAllOrganizationChannels(organizationId).catch((error) => {
+            console.warn("[chat] Background channel sync error:", error);
+          });
+        }
+      }
+    } catch (syncError) {
+      // Игнорируем ошибки синхронизации, не блокируем загрузку чатов
+      console.warn("[chat] Channel sync check error:", syncError);
+    }
+
     // Кешируем список чатов на короткое время (15 сек)
     let chats: any[] = [];
     try {
