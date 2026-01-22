@@ -14,10 +14,10 @@ const TextArea: React.FC<TextareaProps> = ({
   hint = "",
   ...props
 }) => {
-  // Base Classes
-  const baseClasses = "w-full rounded-lg border appearance-none px-4 py-2.5 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:bg-gray-800 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:ring-offset-gray-800";
+  // Base Classes - используем единую дизайн-систему
+  const baseClasses = "w-full rounded-lg border appearance-none px-4 py-2.5 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:bg-gray-800 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:ring-offset-gray-800 transition-colors";
 
-  // State Classes
+  // State Classes - единый цвет blue вместо indigo
   let stateClasses = "";
   if (disabled) {
     stateClasses = `text-gray-500 border-gray-300 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600`;
@@ -26,7 +26,7 @@ const TextArea: React.FC<TextareaProps> = ({
   } else if (success) {
     stateClasses = `border-green-500 focus:ring-green-500 dark:border-green-500`;
   } else {
-    stateClasses = `text-gray-800 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:text-white/90`;
+    stateClasses = `text-gray-800 border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:text-white/90`;
   }
 
   return (

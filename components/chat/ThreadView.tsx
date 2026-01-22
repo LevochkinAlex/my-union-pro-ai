@@ -46,6 +46,7 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     loadThread();
@@ -63,20 +64,33 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
     try {
       setLoading(true);
       
-      // Загружаем корневое сообщение
-      const rootResponse = await fetch(`/api/chat/${chatId}/messages?threadRootId=${threadRootId}&limit=1`);
-      if (rootResponse.ok) {
-        const rootData = await safeJsonParse(rootResponse);
-        if (rootData?.messages && rootData.messages.length > 0) {
-          setRootMessage(rootData.messages[0]);
+      // Загружаем корневое сообщение из основного списка сообщений чата
+      // (корневое сообщение имеет id === threadRootId и threadRootId === null)
+      const chatResponse = await fetch(`/api/chat/${chatId}`);
+      if (chatResponse.ok) {
+        const chatData = await safeJsonParse(chatResponse);
+        const rootMsg = chatData?.messages?.find((m: any) => m.id === threadRootId);
+        if (rootMsg) {
+          setRootMessage(rootMsg);
         }
       }
 
-      // Загружаем ответы в треде
+      // Загружаем ответы в треде (сообщения с threadRootId === threadRootId)
       const response = await fetch(`/api/chat/${chatId}/messages?threadRootId=${threadRootId}`);
       if (response.ok) {
         const data = await safeJsonParse(response);
-        setMessages(data?.messages || []);
+        // Фильтруем, чтобы исключить корневое сообщение из списка ответов (на случай если оно попало)
+        const replies = (data?.messages || []).filter((msg: any) => msg.id !== threadRootId);
+        // Преобразуем формат реакций из объекта в массив для совместимости с ThreadMessage
+        const formattedReplies = replies.map((msg: any) => ({
+          ...msg,
+          reactions: msg.reactions ? Object.entries(msg.reactions).map(([emoji, data]: [string, any]) => ({
+            emoji,
+            count: data.count || 0,
+            users: data.userIds || [],
+          })) : [],
+        }));
+        setMessages(formattedReplies);
       }
     } catch (error) {
       console.error('Failed to load thread:', error);
@@ -103,19 +117,45 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
       });
 
       if (!response.ok) {
-        throw new Error('Ошибка отправки сообщения');
+        const errorData = await response.json().catch(() => ({ error: 'Ошибка отправки сообщения' }));
+        throw new Error(errorData.error || 'Ошибка отправки сообщения');
       }
 
       const data = await safeJsonParse(response);
       if (data?.message) {
-        setMessages(prev => [...prev, data.message]);
+        // Преобразуем формат реакций из объекта в массив для совместимости с ThreadMessage
+        const formattedMessage = {
+          ...data.message,
+          reactions: data.message.reactions 
+            ? Object.entries(data.message.reactions).map(([emoji, data]: [string, any]) => ({
+                emoji,
+                count: data.count || 0,
+                users: data.userIds || [],
+              }))
+            : [],
+        };
+        
+        // Добавляем сообщение в список сразу для оптимистичного обновления
+        setMessages(prev => [...prev, formattedMessage]);
+        
+        // Сброс высоты textarea
+        if (textareaRef.current) {
+          textareaRef.current.style.height = 'auto';
+        }
+        
+        // Перезагружаем тред для синхронизации (с небольшой задержкой для БД)
+        setTimeout(async () => {
+          await loadThread();
+        }, 300);
+      } else {
+        // Если сообщение не вернулось, перезагружаем тред
+        await loadThread();
       }
-
-      // Перезагружаем тред для синхронизации
-      await loadThread();
     } catch (error) {
       console.error('Send error:', error);
       setNewMessage(content);
+      // Показываем ошибку пользователю
+      alert(error instanceof Error ? error.message : 'Ошибка отправки сообщения');
     } finally {
       setSending(false);
     }
@@ -262,10 +302,18 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
 
       {/* Input */}
       <div className="p-4 border-t border-gray-200 dark:border-gray-800 flex-shrink-0">
-        <div className="flex gap-2">
+        <div className="relative">
           <textarea
+            ref={textareaRef}
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={(e) => {
+              setNewMessage(e.target.value);
+              // Автоматическое изменение высоты textarea
+              const textarea = e.target as HTMLTextAreaElement;
+              textarea.style.height = 'auto';
+              const newHeight = Math.min(textarea.scrollHeight, 200); // Максимум 200px
+              textarea.style.height = `${newHeight}px`;
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -273,13 +321,15 @@ export default function ThreadView({ threadRootId, chatId, onClose, currentUserI
               }
             }}
             placeholder="Напишите ответ в треде..."
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
-            rows={2}
+            className="w-full px-3 py-2 pr-12 border border-gray-300 dark:border-gray-700 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-[15px] leading-relaxed"
+            rows={1}
+            style={{ maxHeight: '200px', minHeight: '42px' }}
           />
           <button
             onClick={handleSend}
             disabled={!newMessage.trim() || sending}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="absolute right-2 bottom-2 w-8 h-8 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-all duration-200 disabled:hover:bg-blue-600"
+            type="button"
           >
             <Send className="w-4 h-4" />
           </button>
