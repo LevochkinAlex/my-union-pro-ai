@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import { MembershipGate } from "@/components/MembershipGate";
+import { safeJsonParse } from "@/lib/api-client";
 
 // Lazy load SlackStyleChat компонент
 const SlackStyleChat = dynamic(() => import("@/components/chat/SlackStyleChat"), {
@@ -27,9 +28,59 @@ function ChatSkeleton() {
 
 function ChatContent() {
   const { data: session } = useSession();
-  
-  // Обычные члены профсоюза - не председатели
-  const isChairman = false;
+  const [isChairman, setIsChairman] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function checkChairmanStatus() {
+      if (!session?.user?.id) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Проверяем флаги из сессии
+        const user = session.user as any;
+        const isPPOHead = user.isPPOHead;
+        const isMPOHead = user.isMPOHead;
+        const isRPOHead = user.isRPOHead;
+
+        // Если в сессии есть флаги, используем их
+        if (isPPOHead || isMPOHead || isRPOHead) {
+          setIsChairman(true);
+          setLoading(false);
+          return;
+        }
+
+        // Если в сессии нет данных, запрашиваем из API
+        const response = await fetch("/api/user/view-mode");
+        if (response.ok) {
+          const data = await safeJsonParse(response);
+          if (data) {
+            const viewMode = data.viewMode;
+            setIsChairman(
+              viewMode === "PPO_HEAD" || 
+              viewMode === "MPO_HEAD" || 
+              viewMode === "RPO_HEAD" ||
+              data.isPPOHead ||
+              data.isMPOHead ||
+              data.isRPOHead
+            );
+          }
+        }
+      } catch (error) {
+        console.error("[chat/page] Error checking chairman status:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    checkChairmanStatus();
+  }, [session]);
+
+  if (loading) {
+    return <ChatSkeleton />;
+  }
 
   return (
     <div className="fixed inset-0 top-16 md:top-0 md:left-64 right-0 bottom-0">
