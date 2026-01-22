@@ -43,3 +43,29 @@ export function normalizeUsersAvatars<T extends { avatarUrl?: string | null }>(u
   return users.map(normalizeUserAvatar);
 }
 
+/**
+ * Безопасный парсинг JSON из Response
+ * Проверяет Content-Type и обрабатывает ошибки
+ */
+export async function safeJsonParse<T = any>(response: Response): Promise<T | null> {
+  try {
+    const contentType = response.headers.get('content-type');
+    
+    // Проверяем, что ответ действительно JSON
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error('[safeJsonParse] Response is not JSON:', {
+        status: response.status,
+        statusText: response.statusText,
+        contentType,
+        preview: text.substring(0, 100),
+      });
+      return null;
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('[safeJsonParse] Failed to parse JSON:', error);
+    return null;
+  }
+}

@@ -35,8 +35,13 @@ export async function fetchWithRetry(
         signal: AbortSignal.timeout(30000), // 30 секунд таймаут
       });
 
-      // Если успешный ответ или не повторяемый статус - возвращаем сразу
-      if (response.ok || !config.retryableStatuses.includes(response.status)) {
+      // Если успешный ответ - возвращаем сразу
+      if (response.ok) {
+        return response;
+      }
+
+      // Если это не повторяемый статус (например, 401, 403, 404) - возвращаем сразу
+      if (!config.retryableStatuses.includes(response.status)) {
         return response;
       }
 
@@ -118,18 +123,38 @@ export async function fetchJsonWithRetry<T = any>(
     const response = await fetchWithRetry(url, options, retryOptions);
     
     if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown error');
+      // Пытаемся получить JSON с ошибкой, если это возможно
+      let errorData: any = null;
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType?.includes('application/json')) {
+          errorData = await response.json();
+        } else {
+          const errorText = await response.text();
+          errorData = { error: errorText.substring(0, 200) };
+        }
+      } catch {
+        errorData = { error: 'Unknown error' };
+      }
+      
       console.error(`[fetchJsonWithRetry] Request failed: ${response.status} ${response.statusText}`, {
         url,
         status: response.status,
-        error: errorText.substring(0, 200),
+        error: errorData,
       });
       return null;
     }
 
-    return await safeJsonParse<T>(response);
+    const result = await safeJsonParse<T>(response);
+    
+    // Логируем успешные ответы для отладки (только в dev режиме)
+    if (process.env.NODE_ENV === 'development' && result === null) {
+      console.warn('[fetchJsonWithRetry] Parsed result is null for successful response:', url);
+    }
+    
+    return result;
   } catch (error) {
-    console.error('[fetchJsonWithRetry] Request error:', error);
+    console.error('[fetchJsonWithRetry] Request error:', error, { url });
     return null;
   }
 }

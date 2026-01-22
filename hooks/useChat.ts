@@ -183,9 +183,18 @@ export function useChat(options: UseChatOptions = {}) {
       });
       
       if (data?.chats) {
+        console.log("[useChat] Loaded chats:", data.chats.length);
         setChats(data.chats);
       } else {
-        options.onError?.("Ошибка загрузки чатов");
+        console.warn("[useChat] No chats in response or data is null:", data);
+        // Если data null, значит была ошибка, но не устанавливаем пустой массив
+        // чтобы не скрыть существующие чаты при временных ошибках
+        if (data === null) {
+          options.onError?.("Ошибка загрузки чатов");
+        } else {
+          // Если data есть, но chats нет - устанавливаем пустой массив
+          setChats([]);
+        }
       }
     } catch (error) {
       console.error("[useChat] Error loading chats:", error);
