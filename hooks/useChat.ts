@@ -626,15 +626,34 @@ export function useChat(options: UseChatOptions = {}) {
       });
 
       if (response.ok) {
-        await loadChats();
-        return true;
+        const data = await response.json();
+        if (data.success) {
+          // Обновляем список чатов и сообщения в целевом чате
+          await loadChats();
+          // Если целевой чат открыт, обновляем его сообщения
+          if (selectedChatRef.current?.otherUser?.id === targetUserId) {
+            await loadMessages(selectedChatRef.current.id);
+          }
+          return true;
+        } else {
+          const errorMsg = data.error || "Ошибка пересылки";
+          console.error("[useChat] Forward error:", errorMsg);
+          options.onError?.(errorMsg);
+          return false;
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({ error: "Ошибка пересылки" }));
+        const errorMsg = errorData.error || `Ошибка ${response.status}`;
+        console.error("[useChat] Forward HTTP error:", response.status, errorMsg);
+        options.onError?.(errorMsg);
+        return false;
       }
     } catch (error) {
       console.error("[useChat] Error forwarding:", error);
       options.onError?.("Ошибка пересылки");
+      return false;
     }
-    return false;
-  }, [loadChats, options]);
+  }, [loadChats, loadMessages, options]);
 
   // Хранение позиций скролла
   const scrollPositionsRef = useRef<Map<string, number>>(new Map());

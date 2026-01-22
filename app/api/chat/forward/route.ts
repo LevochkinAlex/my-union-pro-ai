@@ -33,7 +33,10 @@ export async function POST(request: NextRequest) {
 
     const { messageId, targetUserId } = await request.json();
 
+    console.log('[chat/forward] Request:', { messageId, targetUserId });
+
     if (!messageId || !targetUserId) {
+      console.error('[chat/forward] Missing parameters');
       return NextResponse.json(
         { error: "Необходимо указать messageId и targetUserId" },
         { status: 400 }
@@ -43,6 +46,7 @@ export async function POST(request: NextRequest) {
     const userId = session.user.id;
 
     if (userId === targetUserId) {
+      console.error('[chat/forward] Cannot forward to self');
       return NextResponse.json(
         { error: "Нельзя переслать сообщение самому себе" },
         { status: 400 }
@@ -92,7 +96,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Создаем или получаем личный чат с получателем
+    console.log('[chat/forward] Getting or creating private chat with:', targetUserId);
     const { chat: targetChat } = await getOrCreatePrivateChat(userId, targetUserId);
+    console.log('[chat/forward] Target chat:', targetChat.id);
 
     // Обрабатываем разные типы сообщений
     let forwardedContent = sourceMessage.content;
@@ -187,6 +193,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Создаем пересланное сообщение
+    console.log('[chat/forward] Creating forwarded message in chat:', targetChat.id);
     const forwardedMessage = await prisma.chatMessage.create({
       data: {
         chatId: targetChat.id,
@@ -258,6 +265,7 @@ export async function POST(request: NextRequest) {
       attachments: forwardedMessage.attachments,
     });
 
+    console.log('[chat/forward] ✅ Message forwarded successfully:', forwardedMessage.id);
     return NextResponse.json({
       success: true,
       message: {
