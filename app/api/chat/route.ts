@@ -183,34 +183,58 @@ export async function GET(request: NextRequest) {
     const includeAI = searchParams.get("includeAI") !== "false"; // По умолчанию включаем ИИ
 
     // Кешируем список чатов на короткое время (15 сек)
-    const cacheKey = getCacheKey(`user:chats:${userId}`, filter);
-    
-    const chats = await Sentry.startSpan(
-      {
-        op: "db.query",
-        name: "GET /api/chat - getUserChats",
-      },
-      async (span) => {
-        span.setAttribute("userId", userId);
-        span.setAttribute("filter", JSON.stringify(filter));
-        
-        return await withCache(cacheKey, async () => {
-          return await getUserChats(userId, filter);
-        }, 15);
+    let chats: any[] = [];
+    try {
+      const cacheKey = getCacheKey(`user:chats:${userId}`, filter);
+      
+      const result = await Sentry.startSpan(
+        {
+          op: "db.query",
+          name: "GET /api/chat - getUserChats",
+        },
+        async (span) => {
+          span.setAttribute("userId", userId);
+          span.setAttribute("filter", JSON.stringify(filter));
+          
+          try {
+            return await withCache(cacheKey, async () => {
+              return await getUserChats(userId, filter);
+            }, 15);
+          } catch (cacheError) {
+            console.error("[chat] Cache error, trying direct call:", cacheError);
+            // Если кеш не работает, пробуем напрямую
+            return await getUserChats(userId, filter);
+          }
+        }
+      );
+      
+      // Убеждаемся, что результат - массив
+      if (Array.isArray(result)) {
+        chats = result;
+      } else {
+        console.error("[chat] getUserChats returned non-array:", typeof result, result);
+        chats = [];
       }
-    );
+    } catch (dbError: any) {
+      console.error("[chat] Database query error:", dbError);
+      console.error("[chat] Error stack:", dbError?.stack);
+      // Если запрос к БД не удался, возвращаем пустой массив
+      chats = [];
+    }
 
     // Фильтруем ИИ чат из основного списка (он будет добавлен отдельно)
-    const filteredChats = chats.filter((c: any) => c.name !== AI_CHAT_NAME);
+    const filteredChats = Array.isArray(chats) ? chats.filter((c: any) => c && c.name !== AI_CHAT_NAME) : [];
 
     // Добавляем ИИ чат, если нужно
     let finalChats = filteredChats;
     if (includeAI && !filter.hasTicket) {
       try {
         const aiChat = await getOrCreateAIChat(userId);
-        const formattedAIChat = formatAIChat(aiChat, userId);
-        // ИИ чат добавляем в начало списка
-        finalChats = [formattedAIChat, ...filteredChats];
+        if (aiChat) {
+          const formattedAIChat = formatAIChat(aiChat, userId);
+          // ИИ чат добавляем в начало списка
+          finalChats = [formattedAIChat, ...filteredChats];
+        }
       } catch (aiError) {
         console.error("[chat] Error loading AI chat:", aiError);
         // Продолжаем без ИИ чата
@@ -218,7 +242,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ chats: finalChats });
+    return NextResponse.json({ chats: finalChats || [] });
   } catch (error: any) {
     console.error("[chat] GET Error:", error);
     Sentry.captureException(error, {
