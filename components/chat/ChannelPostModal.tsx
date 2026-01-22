@@ -3,11 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, Image as ImageIcon, Plus, X as XIcon } from 'lucide-react';
 import { safeJsonParse } from "@/lib/api-client";
-import dynamic from 'next/dynamic';
-
-const TinyMCE = dynamic(() => import('@tinymce/tinymce-react').then(mod => mod.Editor), {
-  ssr: false,
-});
+import RichTextEditor from "@/components/admin/RichTextEditor";
 
 interface PollOption {
   id: string;
@@ -289,26 +285,11 @@ export default function ChannelPostModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Содержание *
             </label>
-            <div className="border border-gray-300 dark:border-gray-700 rounded-lg">
-              <TinyMCE
-                value={content}
-                onEditorChange={setContent}
-                init={{
-                  height: 300,
-                  menubar: false,
-                  plugins: [
-                    'advlist', 'autolink', 'lists', 'link', 'image', 'charmap',
-                    'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
-                    'insertdatetime', 'media', 'table', 'preview', 'help', 'wordcount'
-                  ],
-                  toolbar: 'undo redo | blocks | ' +
-                    'bold italic forecolor | alignleft aligncenter ' +
-                    'alignright alignjustify | bullist numlist outdent indent | ' +
-                    'removeformat | help',
-                  content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }',
-                }}
-              />
-            </div>
+            <RichTextEditor
+              value={content}
+              onChange={setContent}
+              placeholder="Введите содержание поста..."
+            />
           </div>
 
           {/* Polls */}
