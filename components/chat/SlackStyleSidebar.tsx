@@ -82,8 +82,9 @@ function getChatAvatar(chat: Chat): string | null {
 }
 
 function isWorkChat(chat: Chat): boolean {
-  // Рабочие чаты: каналы ИЛИ обращения (любой тип с ticketId)
-  return chat.type === 'CHANNEL' || !!chat.ticketId || !!chat.ticketPublicId;
+  // Рабочие чаты: каналы ИЛИ обращения (любой тип с ticketId или ticket)
+  const hasTicket = !!(chat.ticketId || chat.ticketPublicId || (chat as any).ticket);
+  return chat.type === 'CHANNEL' || hasTicket;
 }
 
 function isAIChat(chat: Chat): boolean {
@@ -667,10 +668,21 @@ export default function SlackStyleSidebar({
         }
       } else if (chat.type === 'PRIVATE') {
         // Личные чаты: только приватные чаты без ticketId
-        personal.push(chat);
+        // Проверяем, что это не обращение
+        if (!chat.ticketId && !chat.ticketPublicId) {
+          personal.push(chat);
+        } else {
+          // Если это приватный чат с обращением, он должен быть в рабочих
+          work.push(chat);
+        }
       } else {
         // Групповые чаты без ticketId тоже идут в личные
-        personal.push(chat);
+        // Но если есть ticketId, то в рабочие
+        if (chat.ticketId || chat.ticketPublicId) {
+          work.push(chat);
+        } else {
+          personal.push(chat);
+        }
       }
     }
 

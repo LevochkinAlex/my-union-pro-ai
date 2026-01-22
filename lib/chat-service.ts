@@ -252,6 +252,13 @@ export async function getUserChats(
           iconUrl: true,
         },
       },
+      ticket: {
+        select: {
+          id: true,
+          publicId: true,
+          title: true,
+        },
+      },
       _count: {
         select: {
           participants: true,
@@ -345,6 +352,13 @@ export async function getChatById(
           id: true,
           name: true,
           iconUrl: true,
+        },
+      },
+      ticket: {
+        select: {
+          id: true,
+          publicId: true,
+          title: true,
         },
       },
       _count: {
@@ -897,6 +911,11 @@ export function formatChatInfo(
     }
   }
 
+  // Получаем данные об обращении, если чат связан с обращением
+  const ticketId = chat.ticket?.id || null;
+  const ticketPublicId = chat.ticket?.publicId || null;
+  const ticketTitle = chat.ticket?.title || null;
+
   return {
     id: chat.id,
     type: chat.type as ChatType,
@@ -912,9 +931,9 @@ export function formatChatInfo(
     displayAvatar,
     participants,
     participantsCount: chat._count?.participants || participants.length,
-    ticketId: null,
-    ticketPublicId: null,
-    ticketTitle: null,
+    ticketId,
+    ticketPublicId,
+    ticketTitle,
     otherUser,
   };
 }
