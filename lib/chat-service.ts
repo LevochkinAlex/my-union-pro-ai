@@ -273,12 +273,19 @@ export async function getUserChats(
   const formattedChats: ChatInfo[] = [];
   for (const chat of chats) {
     try {
+      if (!chat || !chat.id) {
+        console.warn('[chat-service] Skipping invalid chat:', chat);
+        continue;
+      }
+      
       const formatted = formatChatInfo(chat, userId, unreadCounts.get(chat.id) || 0);
       if (formatted) {
         formattedChats.push(formatted);
+      } else {
+        console.warn(`[chat-service] formatChatInfo returned null for chat ${chat.id}`);
       }
     } catch (error) {
-      console.error(`[chat-service] Error formatting chat ${chat.id}:`, error);
+      console.error(`[chat-service] Error formatting chat ${chat?.id || 'unknown'}:`, error);
       // Пропускаем проблемный чат, но продолжаем обработку остальных
     }
   }
@@ -727,32 +734,43 @@ async function getUnreadCountsForChats(
   // Для чатов где readAt = null, считаем все сообщения от других
   const unreadChats = chatIds.filter(id => !readAtMap.get(id));
   if (unreadChats.length > 0) {
-    const counts = await prisma.chatMessage.groupBy({
-      by: ['chatId'],
-      where: {
-        chatId: { in: unreadChats },
-        senderId: { not: userId },
-      },
-      _count: true,
-    });
-    
-    for (const item of counts) {
-      results.set(item.chatId, item._count);
+    try {
+      const counts = await prisma.chatMessage.groupBy({
+        by: ['chatId'],
+        where: {
+          chatId: { in: unreadChats },
+          senderId: { not: userId },
+        },
+        _count: true,
+      });
+      
+      for (const item of counts) {
+        results.set(item.chatId, item._count);
+      }
+    } catch (error) {
+      console.error('[chat-service] Error counting unread messages (groupBy):', error);
+      // Продолжаем с нулевыми значениями
     }
   }
 
   // Для чатов с readAt считаем сообщения после этого времени
   const readChats = chatIds.filter(id => readAtMap.get(id));
   for (const chatId of readChats) {
-    const readAt = readAtMap.get(chatId)!;
-    const count = await prisma.chatMessage.count({
-      where: {
-        chatId,
-        senderId: { not: userId },
-        createdAt: { gt: readAt },
-      },
-    });
-    results.set(chatId, count);
+    try {
+      const readAt = readAtMap.get(chatId)!;
+      const count = await prisma.chatMessage.count({
+        where: {
+          chatId,
+          senderId: { not: userId },
+          createdAt: { gt: readAt },
+        },
+      });
+      results.set(chatId, count);
+    } catch (error) {
+      console.error(`[chat-service] Error counting unread messages for chat ${chatId}:`, error);
+      // Продолжаем с нулевым значением для этого чата
+      results.set(chatId, 0);
+    }
   }
 
   return results;
@@ -769,7 +787,12 @@ export function formatChatInfo(
   chat: any,
   currentUserId: string,
   unreadCount: number
-): ChatInfo {
+): ChatInfo | null {
+  if (!chat || !chat.id) {
+    console.error('[chat-service] formatChatInfo: invalid chat object', chat);
+    return null;
+  }
+  
   const isGroup = chat.type === "GROUP";
   const participantsCount = chat._count?.participants || chat.participants?.length || 0;
 
