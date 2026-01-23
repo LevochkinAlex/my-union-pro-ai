@@ -80,7 +80,15 @@ export default function ChatMessages({ messages, currentUserId, typingUsers, onF
 
   const handleContextMenu = (e: React.MouseEvent, message: Message) => {
     e.preventDefault();
-    setContextMenu({ message, x: e.clientX, y: e.clientY });
+    e.stopPropagation();
+    
+    // Позиционируем меню так, чтобы оно не выходило за границы экрана
+    const menuWidth = 150;
+    const menuHeight = 50;
+    const x = Math.min(e.clientX, window.innerWidth - menuWidth - 10);
+    const y = Math.min(e.clientY, window.innerHeight - menuHeight - 10);
+    
+    setContextMenu({ message, x, y });
   };
 
   return (
