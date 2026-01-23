@@ -25,35 +25,41 @@ export async function GET(request: NextRequest) {
       where.readAt = null;
     }
 
-    // ОПТИМИЗАЦИЯ: Добавляем таймаут для запросов к БД (10 секунд)
-    const dbQueryTimeout = 10000; // 10 секунд
+    // ОПТИМИЗАЦИЯ: Добавляем таймаут для запросов к БД (8 секунд)
+    const dbQueryTimeout = 8000; // 8 секунд
     
-    const [notifications, total, unreadCountResult] = await Promise.race([
-      Promise.all([
-        prisma.userNotification.findMany({
-          where,
-          orderBy: {
-            createdAt: "desc",
-          },
-          skip,
-          take: limit,
-        }),
-        prisma.userNotification.count({ where }),
-        prisma.userNotification.count({
-          where: {
-            userId: session.user.id,
-            readAt: null,
-          },
-        }),
-      ]),
-      new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Database query timeout')), dbQueryTimeout)
-      ),
-    ]).catch((error) => {
+    let notifications, total, unreadCountResult;
+    
+    try {
+      [notifications, total, unreadCountResult] = await Promise.race([
+        Promise.all([
+          prisma.userNotification.findMany({
+            where,
+            orderBy: {
+              createdAt: "desc",
+            },
+            skip,
+            take: limit,
+          }),
+          prisma.userNotification.count({ where }),
+          prisma.userNotification.count({
+            where: {
+              userId: session.user.id,
+              readAt: null,
+            },
+          }),
+        ]),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Database query timeout')), dbQueryTimeout)
+        ),
+      ]);
+    } catch (error: any) {
       console.error("[api/notifications] Database query timeout or error:", error);
-      // Возвращаем пустой результат при таймауте
-      return [[], 0, 0] as const;
-    });
+      // При таймауте возвращаем пустой результат, но не 503
+      notifications = [];
+      total = 0;
+      unreadCountResult = 0;
+    }
     
     const unreadCount = unreadCountResult;
 
