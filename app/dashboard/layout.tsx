@@ -31,7 +31,15 @@ export default async function DashboardLayout({
   
     // Получаем дополнительные данные пользователя из БД (viewMode, isPPOHead, isMPOHead, isRPOHead)
     // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убираем Promise.race - он вызывает 503 ошибки
-    let userData: Awaited<ReturnType<typeof prisma.user.findUnique>> | null = null;
+    let userData: {
+      viewMode: string;
+      isPPOHead: boolean;
+      ppoHeadOrganizationId: string | null;
+      isMPOHead: boolean;
+      mpoHeadOrganizationId: string | null;
+      isRPOHead: boolean;
+      rpoHeadOrganizationId: string | null;
+    } | null = null;
     try {
       userData = await prisma.user.findUnique({
         where: { id: session.user.id },
