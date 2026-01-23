@@ -219,13 +219,13 @@ export async function GET(request: NextRequest) {
             helpfulRating: ticket.helpfulRating,
             helpfulRatingComment: ticket.helpfulRatingComment,
             helpfulRatingAt: ticket.helpfulRatingAt?.toISOString() || null,
-            // Информация о сроках ответа
-            responseDeadline: ticket.responseDeadline?.toISOString() || null,
-            lastResponseAt: ticket.lastResponseAt?.toISOString() || null,
-            lastUserResponseAt: ticket.lastUserResponseAt?.toISOString() || null,
-            userResponseDeadline: ticket.userResponseDeadline?.toISOString() || null,
-            isOverdue: ticket.isOverdue || false,
-            autoClosedAt: ticket.autoClosedAt?.toISOString() || null,
+            // Информация о сроках ответа (проверяем наличие полей для обратной совместимости)
+            responseDeadline: (ticket as any).responseDeadline ? new Date((ticket as any).responseDeadline).toISOString() : null,
+            lastResponseAt: (ticket as any).lastResponseAt ? new Date((ticket as any).lastResponseAt).toISOString() : null,
+            lastUserResponseAt: (ticket as any).lastUserResponseAt ? new Date((ticket as any).lastUserResponseAt).toISOString() : null,
+            userResponseDeadline: (ticket as any).userResponseDeadline ? new Date((ticket as any).userResponseDeadline).toISOString() : null,
+            isOverdue: (ticket as any).isOverdue ?? false,
+            autoClosedAt: (ticket as any).autoClosedAt ? new Date((ticket as any).autoClosedAt).toISOString() : null,
           };
         } catch (mapError: any) {
           console.error(`[ppo-head/appeals] Error mapping ticket ${ticket.id}:`, mapError);

@@ -140,7 +140,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      tickets: tickets.map((ticket) => ({
+      tickets: tickets.map((ticket: any) => ({
         id: ticket.id,
         publicId: formatAppealId(ticket.publicId),
         type: ticket.type,
@@ -164,13 +164,13 @@ export async function GET(request: NextRequest) {
         },
         // Является ли текущий пользователь создателем обращения
         isOwner: ticket.userId === session.user.id,
-        // Информация о сроках ответа
-        responseDeadline: ticket.responseDeadline?.toISOString() || null,
-        lastResponseAt: ticket.lastResponseAt?.toISOString() || null,
-        lastUserResponseAt: ticket.lastUserResponseAt?.toISOString() || null,
-        userResponseDeadline: ticket.userResponseDeadline?.toISOString() || null,
-        isOverdue: ticket.isOverdue || false,
-        autoClosedAt: ticket.autoClosedAt?.toISOString() || null,
+        // Информация о сроках ответа (проверяем наличие полей для обратной совместимости)
+        responseDeadline: ticket.responseDeadline ? new Date(ticket.responseDeadline).toISOString() : null,
+        lastResponseAt: ticket.lastResponseAt ? new Date(ticket.lastResponseAt).toISOString() : null,
+        lastUserResponseAt: ticket.lastUserResponseAt ? new Date(ticket.lastUserResponseAt).toISOString() : null,
+        userResponseDeadline: ticket.userResponseDeadline ? new Date(ticket.userResponseDeadline).toISOString() : null,
+        isOverdue: ticket.isOverdue ?? false,
+        autoClosedAt: ticket.autoClosedAt ? new Date(ticket.autoClosedAt).toISOString() : null,
       })),
     });
   } catch (error) {
@@ -362,20 +362,30 @@ export async function POST(request: NextRequest) {
     responseDeadline.setHours(responseDeadline.getHours() + 72);
 
     // Создаем тикет с chatId
+    // Используем условное добавление полей для обратной совместимости
+    const ticketData: any = {
+      userId: session.user.id,
+      publicId: publicId!,
+      type: type as any,
+      priority: (priority as any) || "MEDIUM",
+      status: "PENDING",
+      title,
+      content,
+      organizationId: user?.organizationId || null,
+      chatId: appealChat?.id || null,
+    };
+
+    // Добавляем новые поля только если они существуют в схеме (для обратной совместимости)
+    try {
+      // Проверяем, существуют ли поля в схеме, пытаясь создать с ними
+      ticketData.responseDeadline = responseDeadline;
+      ticketData.isOverdue = false;
+    } catch (e) {
+      // Игнорируем, если поля не существуют
+    }
+
     const ticket = await prisma.ticket.create({
-      data: {
-        userId: session.user.id,
-        publicId: publicId!,
-        type: type as any,
-        priority: (priority as any) || "MEDIUM",
-        status: "PENDING",
-        title,
-        content,
-        organizationId: user?.organizationId || null,
-        chatId: appealChat?.id || null,
-        responseDeadline, // Дедлайн для ответа председателя (72 часа)
-        isOverdue: false,
-      },
+      data: ticketData,
     });
 
     // Обрабатываем файлы

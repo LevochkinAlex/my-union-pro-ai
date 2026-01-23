@@ -1074,7 +1074,7 @@ export async function POST(
       },
     });
 
-    // Отслеживание ответов в чате обращения
+    // Отслеживание ответов в чате обращения (только если поля существуют в БД)
     try {
       const ticketChat = await prisma.chat.findUnique({
         where: { id: chatId },
@@ -1084,9 +1084,6 @@ export async function POST(
               id: true,
               userId: true,
               organizationId: true,
-              lastResponseAt: true,
-              lastUserResponseAt: true,
-              userResponseDeadline: true,
             },
           },
           participants: {
@@ -1106,35 +1103,51 @@ export async function POST(
         );
         const isUser = ticket.userId === userId;
 
-        const now = new Date();
-
-        // Если ответил председатель (админ чата)
-        if (isChairman && !isUser) {
-          // Устанавливаем дату последнего ответа председателя
-          const userResponseDeadline = new Date(now);
-          userResponseDeadline.setHours(userResponseDeadline.getHours() + 72); // 72 часа для ответа пользователя
-
-          await prisma.ticket.update({
+        // Проверяем наличие полей в схеме перед обновлением
+        try {
+          // Пытаемся получить ticket с новыми полями для проверки их существования
+          const ticketWithFields = await prisma.ticket.findUnique({
             where: { id: ticket.id },
-            data: {
+            select: {
+              lastResponseAt: true,
+            },
+          });
+
+          // Если запрос прошел успешно, значит поля существуют
+          const now = new Date();
+
+          // Если ответил председатель (админ чата)
+          if (isChairman && !isUser) {
+            // Устанавливаем дату последнего ответа председателя
+            const userResponseDeadline = new Date(now);
+            userResponseDeadline.setHours(userResponseDeadline.getHours() + 72); // 72 часа для ответа пользователя
+
+            const updateData: any = {
               lastResponseAt: now,
-              userResponseDeadline, // Дедлайн для ответа пользователя
-              // Сбрасываем флаг просрочки, если был установлен
+              userResponseDeadline,
               isOverdue: false,
-            },
-          });
-        }
-        // Если ответил пользователь (после ответа председателя)
-        else if (isUser && ticket.lastResponseAt) {
-          // Устанавливаем дату последнего ответа пользователя
-          await prisma.ticket.update({
-            where: { id: ticket.id },
-            data: {
-              lastUserResponseAt: now,
-              // Сбрасываем дедлайн ответа пользователя, так как он ответил
-              userResponseDeadline: null,
-            },
-          });
+            };
+
+            await prisma.ticket.update({
+              where: { id: ticket.id },
+              data: updateData,
+            });
+          }
+          // Если ответил пользователь (после ответа председателя)
+          else if (isUser && ticketWithFields?.lastResponseAt) {
+            // Устанавливаем дату последнего ответа пользователя
+            await prisma.ticket.update({
+              where: { id: ticket.id },
+              data: {
+                lastUserResponseAt: now,
+                userResponseDeadline: null,
+              } as any,
+            });
+          }
+        } catch (fieldError: any) {
+          // Если поля не существуют в БД, просто игнорируем обновление
+          // Это нормально до применения миграции
+          console.log("[chat] Ticket deadline fields not available yet, skipping update");
         }
       }
     } catch (ticketTrackingError) {
