@@ -17,22 +17,29 @@ export async function GET() {
       );
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        role: true,
-        isPPOHead: true,
-        viewMode: true,
-        ppoHeadOrganizationId: true,
-        ppoHeadOrganization: {
-          select: {
-            id: true,
-            name: true,
-          }
+    // ОПТИМИЗАЦИЯ: Таймаут для запроса к БД (10 секунд)
+    // ОПТИМИЗАЦИЯ: Таймаут для запроса к БД (10 секунд)
+    const user = await Promise.race([
+      prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          id: true,
+          role: true,
+          isPPOHead: true,
+          viewMode: true,
+          ppoHeadOrganizationId: true,
+          ppoHeadOrganization: {
+            select: {
+              id: true,
+              name: true,
+            }
+          },
         },
-      },
-    });
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Database query timeout')), 10000)
+      ),
+    ]) as any;
 
     if (!user) {
       return NextResponse.json(
@@ -102,10 +109,32 @@ export async function GET() {
       availableModes,
       canSwitch: availableModes.length > 1,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[user/view-mode] GET Error:", error);
+    
+    // Если таймаут или ошибка БД, возвращаем fallback с данными из сессии
+    if (error?.message === 'Database query timeout' || error?.code === 'P1001') {
+      console.warn("[user/view-mode] Database timeout, using session fallback");
+      const user = (session as any)?.user;
+      if (user) {
+        return NextResponse.json({
+          currentMode: user.viewMode || "MEMBER",
+          availableModes: [
+            { mode: "MEMBER", label: "Член профсоюза" },
+            ...(user.isPPOHead || user.isMPOHead || user.isRPOHead 
+              ? [{ mode: "PPO_HEAD", label: "Председатель ППО" }] 
+              : [])
+          ],
+          canSwitch: (user.isPPOHead || user.isMPOHead || user.isRPOHead) && user.viewMode !== "MEMBER",
+        });
+      }
+    }
+    
     return NextResponse.json(
-      { error: "Ошибка получения режима просмотра" },
+      { 
+        error: "Ошибка получения режима просмотра",
+        details: process.env.NODE_ENV === "development" ? error?.message : undefined,
+      },
       { status: 500 }
     );
   }
