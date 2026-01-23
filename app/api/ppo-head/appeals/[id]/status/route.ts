@@ -144,8 +144,7 @@ export async function PUT(
       } catch (err) {
         console.error('[appeals/status] Error:', err);
       }
-      // const chairman = await prisma.user.findUnique({...});
-      // await sendMatrixMessage(chairman.matrixAccessToken, ticket.matrixRoomId, systemMessage);
+      // TODO: Отправить системное сообщение в чат обращения
       
       // Обновляем lastMessageAt в чате
       if (ticket.chatId) {

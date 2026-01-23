@@ -93,10 +93,16 @@ export async function POST(
       return NextResponse.json({ error: "Файл не предоставлен" }, { status: 400 });
     }
 
-    // TODO: Проверка replyToId теперь через Matrix API
-    // if (replyToId) {
-    //   // Проверка через Matrix API
-    // }
+    // Проверка replyToId если указан
+    if (replyToId) {
+      const replyToMessage = await prisma.chatMessage.findUnique({
+        where: { id: replyToId },
+        select: { chatId: true },
+      });
+      if (!replyToMessage || replyToMessage.chatId !== chatId) {
+        return NextResponse.json({ error: "Сообщение для ответа не найдено" }, { status: 404 });
+      }
+    }
 
     // Создаем директорию для загрузок
     await mkdir(UPLOAD_DIR, { recursive: true });

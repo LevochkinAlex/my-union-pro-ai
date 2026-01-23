@@ -7,7 +7,6 @@ import { saveChatConversationToKnowledgeBase } from "@/lib/chat-knowledge-learni
 import { saveUserInteractionToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { enhancedSearch, formatSearchResultsForPrompt } from "@/lib/chat-enhanced-search";
 import { getOrCreatePrivateChat } from "@/lib/chat-service";
-// Matrix больше не используется - работаем через WebSocket и базу данных
 import type { ChatBot, ApiProvider } from "@prisma/client";
 
 /**

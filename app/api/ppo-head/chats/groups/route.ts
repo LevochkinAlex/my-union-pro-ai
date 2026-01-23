@@ -5,8 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { getPPOHead, isMemberOfOrganization } from "@/lib/ppo-head-utils";
 import { sendPushNotification } from "@/lib/push-notifications";
 
-// Matrix удален
-
 /**
  * POST /api/ppo-head/chats/groups
  * Создать групповой чат
@@ -74,14 +72,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get all participants' Matrix IDs for room creation
+    // Получаем всех участников
     const allParticipantIds = [chairman.id, ...filteredParticipantIds];
     const users = await prisma.user.findMany({
       where: { id: { in: allParticipantIds } },
       select: { id: true }
     });
-
-    // Matrix удален - создаем чат напрямую
 
     // Создаем групповой чат
     const chat = await prisma.chat.create({
@@ -132,7 +128,7 @@ export async function POST(request: NextRequest) {
         _count: {
           select: {
             participants: true,
-            // messages: true, // Модель ChatMessage удалена - все сообщения в Matrix
+            messages: true,
           },
         },
       },

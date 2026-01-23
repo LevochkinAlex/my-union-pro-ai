@@ -62,10 +62,21 @@ export async function POST(request: NextRequest) {
       itemsToProcess.push(...postAttachments.map(a => ({ ...a, _type: "post" as const })));
     }
 
-    // ChatMessageAttachment удалена - все сообщения теперь в Matrix
-    // if (type === "all" || type === "chat") {
-    //   const chatAttachments = await prisma.chatMessageAttachment.findMany({...});
-    // }
+    // Оптимизация вложений чатов
+    if (type === "all" || type === "chat") {
+      const chatAttachments = await prisma.chatMessageAttachment.findMany({
+        where: {
+          url: { not: "" },
+        },
+        select: {
+          id: true,
+          url: true,
+          type: true,
+        },
+        take: limit,
+      });
+      itemsToProcess.push(...chatAttachments.map(a => ({ ...a, _type: "chat" as const })));
+    }
 
     if (type === "all" || type === "news") {
       const newsPosts = await prisma.newsPost.findMany({
@@ -218,7 +229,9 @@ export async function GET() {
           filePath: { not: "" },
         },
       }),
-      Promise.resolve(0), // ChatMessageAttachment удалена - все сообщения в Matrix
+      prisma.chatMessageAttachment.count({
+        where: { url: { not: "" } },
+      }),
       prisma.newsPost.count({
         where: {
           coverImage: { not: "" },

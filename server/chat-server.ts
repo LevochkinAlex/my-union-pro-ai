@@ -1,7 +1,6 @@
 /**
  * Chat WebSocket Server
- * Простой WebSocket сервер для чатов с поддержкой тредов (как Slack)
- * Заменяет Matrix полностью
+ * WebSocket сервер для чатов с поддержкой тредов (как Slack)
  */
 
 import { createServer } from "http";
@@ -383,7 +382,7 @@ io.on("connection", (socket) => {
             'X-Internal-Token': process.env.INTERNAL_API_TOKEN || '',
           },
           body: JSON.stringify({
-            roomId: chatId, // Используем chatId вместо matrixRoomId
+            roomId: chatId,
             message: content,
             senderUserId: userId,
           }),

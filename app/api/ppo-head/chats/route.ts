@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
       description: chat.description || chat.ticketTitle,
       iconUrl: chat.displayAvatar,
       isPublic: chat.isPublic,
-      // lastMessage: chat.lastMessage, // Поле удалено, сообщения в Matrix
+      lastMessage: chat.lastMessage || null,
       lastMessageAt: chat.lastMessageAt?.toISOString() || null,
       unreadCount: chat.unreadCount,
       createdAt: chat.createdAt,

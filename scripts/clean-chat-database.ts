@@ -1,6 +1,6 @@
 /**
  * Script to clean up chat-related data from the database
- * This removes all old chat data that was using Matrix
+ * This removes old chat data
  */
 
 import { PrismaClient } from '@prisma/client';

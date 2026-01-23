@@ -250,9 +250,10 @@ export async function DELETE(
       if (userChats.length > 0) {
         const chatIds = userChats.map(c => c.id);
         
-        // ChatMessage и ChatMessageAttachment удалены - сообщения теперь в Matrix
-        // await tx.chatMessageAttachment.deleteMany({...});
-        // await tx.chatMessage.deleteMany({...});
+        // Удаляем сообщения пользователя в чатах
+        await tx.chatMessage.deleteMany({
+          where: { chatId: { in: chatIds } },
+        });
         
         // Удаляем участников групповых чатов
         await tx.chatParticipant.deleteMany({
@@ -270,9 +271,10 @@ export async function DELETE(
         where: { userId },
       });
 
-      // ChatMessage и ChatMessageAttachment удалены - сообщения теперь в Matrix
-      // await tx.chatMessageAttachment.deleteMany({...});
-      // await tx.chatMessage.deleteMany({...});
+      // Удаляем сообщения пользователя
+      await tx.chatMessage.deleteMany({
+        where: { senderId: userId },
+      });
 
       // Удаляем посты пользователя и связанные данные
       const userPosts = await tx.userPost.findMany({

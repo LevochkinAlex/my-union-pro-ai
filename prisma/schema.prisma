@@ -2049,7 +2049,7 @@ model ChatParticipant {
   @@index([userId, leftAt]) // ОПТИМИЗАЦИЯ: Для быстрого поиска чатов пользователя
 }
 
-// Сообщения чатов (заменили Matrix на собственный сервер)
+// Сообщения чатов
 model ChatMessage {
   id          String @id @default(cuid())
   chatId      String

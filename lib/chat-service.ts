@@ -302,7 +302,7 @@ export async function getUserChats(
       _count: {
         select: {
           participants: true,
-          // messages: true, // Модель ChatMessage удалена - все сообщения в Matrix
+          messages: true,
         },
       },
     },
