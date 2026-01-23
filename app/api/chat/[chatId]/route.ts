@@ -808,7 +808,32 @@ export async function GET(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
       
+      console.log(`[chat/${chatId}] ========== MESSAGES LOADING DEBUG ==========`);
+      console.log(`[chat/${chatId}] User: ${session.user.id}, Chat type: ${chat.type}`);
       console.log(`[chat/${chatId}] Total messages: ${allMessages.length} (${formattedMessages.length} real, ${virtualMessages.length} virtual posts, ${activityMessages.length} activity)`);
+      console.log(`[chat/${chatId}] Messages breakdown:`, {
+        real: formattedMessages.length,
+        virtual: virtualMessages.length,
+        activity: activityMessages.length,
+        total: allMessages.length,
+        hasMore,
+        limit,
+        direction,
+      });
+      if (formattedMessages.length > 0) {
+        console.log(`[chat/${chatId}] First message:`, {
+          id: formattedMessages[0]?.id,
+          senderId: formattedMessages[0]?.senderId,
+          content: formattedMessages[0]?.content?.substring(0, 50),
+          createdAt: formattedMessages[0]?.createdAt,
+        });
+        console.log(`[chat/${chatId}] Last message:`, {
+          id: formattedMessages[formattedMessages.length - 1]?.id,
+          senderId: formattedMessages[formattedMessages.length - 1]?.senderId,
+          content: formattedMessages[formattedMessages.length - 1]?.content?.substring(0, 50),
+          createdAt: formattedMessages[formattedMessages.length - 1]?.createdAt,
+        });
+      }
 
       // Кэшируем сообщения для следующих запросов
       await cacheChatMessages(chatId, formattedMessages, cursor || undefined, direction).catch(err =>
