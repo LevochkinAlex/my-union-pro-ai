@@ -6,9 +6,6 @@ import { useSession } from "next-auth/react";
 import { MembershipGate } from "@/components/MembershipGate";
 import { safeJsonParse } from "@/lib/api-client";
 
-// Явно указываем, что страница динамическая
-export const dynamic = 'force-dynamic';
-
 // Lazy load SlackStyleChat компонент
 const SlackStyleChat = dynamic(() => import("@/components/chat/SlackStyleChat"), {
   ssr: false,
@@ -43,19 +40,11 @@ function ChatContent() {
 
       try {
         // Запрашиваем viewMode из API для точной проверки
-        // Добавляем таймаут 5 секунд
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        
-        const response = await fetch("/api/user/view-mode", {
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        
+        const response = await fetch("/api/user/view-mode");
         if (response.ok) {
           const data = await safeJsonParse(response);
           if (data) {
-            const viewMode = data.currentMode || data.viewMode;
+            const viewMode = data.viewMode;
             // isChairman = true только если viewMode === "PPO_HEAD" (не MEMBER)
             // Даже если есть флаги isPPOHead, но viewMode === "MEMBER", то isChairman = false
             setIsChairman(
@@ -65,7 +54,6 @@ function ChatContent() {
             );
           }
         } else {
-          console.warn("[chat/page] view-mode API returned non-OK status:", response.status);
           // Fallback: проверяем флаги из сессии, но только если viewMode не MEMBER
           const user = session.user as any;
           const isPPOHead = user.isPPOHead;
@@ -82,22 +70,10 @@ function ChatContent() {
             setIsChairman(false);
           }
         }
-      } catch (error: any) {
+      } catch (error) {
         console.error("[chat/page] Error checking chairman status:", error);
-        // При ошибке (таймаут, 503 и т.д.) используем fallback из сессии
-        const user = session.user as any;
-        const isPPOHead = user.isPPOHead;
-        const isMPOHead = user.isMPOHead;
-        const isRPOHead = user.isRPOHead;
-        const viewMode = user.viewMode;
-
-        if (viewMode === "MEMBER") {
-          setIsChairman(false);
-        } else if (isPPOHead || isMPOHead || isRPOHead) {
-          setIsChairman(true);
-        } else {
-          setIsChairman(false);
-        }
+        // При ошибке считаем участником
+        setIsChairman(false);
       } finally {
         setLoading(false);
       }
