@@ -473,6 +473,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Если чат создан, отправляем начальное сообщение с текстом обращения
+    console.log(`[tickets] ========== INITIAL MESSAGE CREATION ==========`);
+    console.log(`[tickets] appealChat exists: ${!!appealChat}, appealChat.id: ${appealChat?.id || 'N/A'}`);
+    console.log(`[tickets] chairmanId: ${chairmanId}, session.user.id: ${session.user.id}`);
+    
     if (appealChat) {
       try {
         // Форматируем дату создания

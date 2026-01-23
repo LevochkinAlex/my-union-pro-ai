@@ -305,6 +305,34 @@ export async function GET(
     });
     console.log(`[chat/${chatId}] Root messages (no thread): ${rootMessagesCount}`);
     
+    // КРИТИЧЕСКАЯ ДИАГНОСТИКА: Показать ВСЕ сообщения в чате с их threadRootId
+    if (totalMessagesCount > 0 && rootMessagesCount === 0) {
+      console.error(`[chat/${chatId}] ⚠️ ALL messages have threadRootId! This is likely a bug.`);
+      const allMessagesDebug = await prisma.chatMessage.findMany({
+        where: { chatId },
+        select: {
+          id: true,
+          content: true,
+          threadRootId: true,
+          senderId: true,
+          createdAt: true,
+        },
+        take: 10,
+      });
+      console.error(`[chat/${chatId}] First 10 messages:`, allMessagesDebug.map(m => ({
+        id: m.id,
+        threadRootId: m.threadRootId,
+        senderId: m.senderId,
+        contentPreview: m.content?.substring(0, 50),
+      })));
+    }
+    
+    // Для чатов обращений: дополнительная проверка
+    if (chat.ticket && totalMessagesCount === 0) {
+      console.error(`[chat/${chatId}] ⚠️ TICKET CHAT HAS NO MESSAGES! Ticket ID: ${chat.ticket.id}, Public ID: ${chat.ticket.publicId}`);
+      console.error(`[chat/${chatId}] This means the initial message was not created when the ticket was created.`);
+    }
+    
     // КРИТИЧЕСКАЯ ПРОВЕРКА: Для чатов обращений проверяем наличие начального сообщения
     if (chat.ticket) {
       const initialMessages = await prisma.chatMessage.findMany({
