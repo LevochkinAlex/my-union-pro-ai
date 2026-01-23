@@ -1779,6 +1779,65 @@ export default function SlackStyleMessages({
     };
   }, [saveScrollPosition]);
 
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Выносим useMemo на верхний уровень компонента
+  // useMemo НЕ может быть вызван внутри JSX или условного рендеринга
+  const renderedMessages = useMemo(() => {
+    return messages.map((message, index) => {
+      const previousMessage = index > 0 ? messages[index - 1] : undefined;
+      const showDate = shouldShowDateSeparator(message, previousMessage);
+      const isOwn = message.senderId === currentUserId;
+      
+      // Показываем аватар и имя если это первое сообщение или от другого отправителя
+      const showAvatar = !previousMessage || 
+        previousMessage.senderId !== message.senderId ||
+        showDate;
+      const showName = showAvatar;
+
+      if (message.isActivity) {
+        return (
+          <div key={message.id}>
+            {showDate && (
+              <div className="flex items-center justify-center my-4">
+                <div className="px-4 py-1.5 bg-white dark:bg-gray-800 rounded-full text-xs font-medium text-gray-500 dark:text-gray-400 shadow-sm">
+                  {formatMessageDate(new Date(message.createdAt))}
+                </div>
+              </div>
+            )}
+            <ActivityMessage message={message} />
+          </div>
+        );
+      }
+
+      return (
+        <div key={message.id}>
+          {showDate && (
+            <div className="flex items-center justify-center my-4">
+              <div className="px-4 py-1.5 bg-white dark:bg-gray-800 rounded-full text-xs font-medium text-gray-500 dark:text-gray-400 shadow-sm">
+                {formatMessageDate(new Date(message.createdAt))}
+              </div>
+            </div>
+          )}
+          
+          <div className={`py-1 ${showAvatar ? 'mt-3' : ''}`}>
+            <MessageBubble
+              message={message}
+              isOwn={isOwn}
+              showAvatar={showAvatar}
+              showName={showName}
+              currentUserId={currentUserId}
+              onContextMenu={handleContextMenu}
+              onReaction={onReaction ? (msgId, emoji) => onReaction(msgId, emoji) : undefined}
+              onOpenThread={() => onOpenThread?.(message)}
+              onImageClick={onImageClick}
+              onPollVote={onPollVote}
+              isGroupChat={isGroupChat}
+            />
+          </div>
+        </div>
+      );
+    });
+  }, [messages, currentUserId, handleContextMenu, onReaction, onOpenThread, onImageClick, onPollVote, isGroupChat, isTicketChat, ticketId]);
+
   return (
     <div
       ref={containerRef}
@@ -1791,60 +1850,7 @@ export default function SlackStyleMessages({
             <AIChatWelcome onQuestionClick={onQuestionClick} />
           </div>
         ) : (
-          useMemo(() => messages.map((message, index) => {
-          const previousMessage = index > 0 ? messages[index - 1] : undefined;
-          const showDate = shouldShowDateSeparator(message, previousMessage);
-          const isOwn = message.senderId === currentUserId;
-          
-          // Показываем аватар и имя если это первое сообщение или от другого отправителя
-          const showAvatar = !previousMessage || 
-            previousMessage.senderId !== message.senderId ||
-            showDate;
-          const showName = showAvatar;
-
-          if (message.isActivity) {
-            return (
-              <div key={message.id}>
-                {showDate && (
-                  <div className="flex items-center justify-center my-4">
-                    <div className="px-4 py-1.5 bg-white dark:bg-gray-800 rounded-full text-xs font-medium text-gray-500 dark:text-gray-400 shadow-sm">
-                      {formatMessageDate(new Date(message.createdAt))}
-                    </div>
-                  </div>
-                )}
-                <ActivityMessage message={message} />
-              </div>
-            );
-          }
-
-          return (
-            <div key={message.id}>
-              {showDate && (
-                <div className="flex items-center justify-center my-4">
-                  <div className="px-4 py-1.5 bg-white dark:bg-gray-800 rounded-full text-xs font-medium text-gray-500 dark:text-gray-400 shadow-sm">
-                    {formatMessageDate(new Date(message.createdAt))}
-                  </div>
-                </div>
-              )}
-              
-              <div className={`py-1 ${showAvatar ? 'mt-3' : ''}`}>
-                <MessageBubble
-                  message={message}
-                  isOwn={isOwn}
-                  showAvatar={showAvatar}
-                  showName={showName}
-                  currentUserId={currentUserId}
-                  onContextMenu={handleContextMenu}
-                  onReaction={onReaction ? (msgId, emoji) => onReaction(msgId, emoji) : undefined}
-                  onOpenThread={() => onOpenThread?.(message)}
-                  onImageClick={onImageClick}
-                  onPollVote={onPollVote}
-                  isGroupChat={isGroupChat}
-                />
-              </div>
-            </div>
-          );
-        }), [messages, currentUserId, handleContextMenu, onReaction, onOpenThread, onImageClick, onPollVote, isGroupChat, isTicketChat, ticketId])
+          renderedMessages
         )}
 
         {/* Typing indicator */}
