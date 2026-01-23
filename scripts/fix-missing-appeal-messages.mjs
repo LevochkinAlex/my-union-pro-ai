@@ -80,8 +80,20 @@ async function fixMissingAppealMessages() {
         // Подготавливаем вложения
         let messageAttachments = undefined;
         if (ticket.attachments && ticket.attachments.length > 0) {
-          // Импортируем getFileUrlWithCDN для правильных URL
-          const { getFileUrlWithCDN } = await import('../lib/cdn.js');
+          // Функция для получения URL файла с CDN
+          const getFileUrlWithCDN = (filePath) => {
+            if (!filePath) return '';
+            // Если путь уже полный URL, возвращаем как есть
+            if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+              return filePath;
+            }
+            // Если путь начинается с /uploads/, преобразуем в /api/uploads/
+            if (filePath.startsWith('/uploads/')) {
+              return filePath.replace('/uploads/', '/api/uploads/');
+            }
+            // Иначе добавляем /api/uploads/
+            return `/api/uploads${filePath.startsWith('/') ? '' : '/'}${filePath}`;
+          };
           
           messageAttachments = {
             create: ticket.attachments.map(att => {
