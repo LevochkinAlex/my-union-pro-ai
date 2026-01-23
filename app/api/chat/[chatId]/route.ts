@@ -59,7 +59,16 @@ export async function GET(
       chatAccess = await requireChatAccess(chatId, session.user.id);
       console.log(`[chat/${chatId}] ========== MESSAGES LOADING DEBUG ==========`);
       console.log(`[chat/${chatId}] Access granted for user ${session.user.id}, chat type: ${chatAccess.chat?.type}`);
-      console.log(`[chat/${chatId}] Chat participants:`, chatAccess.chat?.participants?.length || 0);
+      
+      // Получаем всех участников чата для логирования
+      const allParticipants = await prisma.chatParticipant.findMany({
+        where: { chatId, leftAt: null },
+        select: { userId: true, role: true },
+      });
+      
+      console.log(`[chat/${chatId}] Chat participants (${allParticipants.length}):`, 
+        allParticipants.map(p => ({ userId: p.userId, role: p.role }))
+      );
     } catch (error) {
       if (error instanceof ChatAccessError) {
         console.warn(`[chat/${chatId}] Access denied for user ${session.user.id}: ${error.message}`);
