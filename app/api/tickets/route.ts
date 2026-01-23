@@ -620,12 +620,22 @@ export async function POST(request: NextRequest) {
         
         // Отправляем начальное сообщение в чат
         // Тип всегда 'text', чтобы сообщение отображалось как обычное сообщение с текстом и вложениями
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Гарантируем что content - строка, не объект
         const messageData: any = {
           chatId: appealChat.id,
           senderId: session.user.id,
-          content: initialMessage,
+          content: String(initialMessage || ''), // Явно преобразуем в строку
           messageType: 'text', // Всегда 'text', чтобы отображалось как обычное сообщение
         };
+        
+        // Дополнительная проверка - если content не строка, логируем и исправляем
+        if (typeof messageData.content !== 'string') {
+          console.error('[tickets] ❌ CRITICAL: content is not a string!', {
+            type: typeof messageData.content,
+            value: messageData.content,
+          });
+          messageData.content = JSON.stringify(messageData.content) || '';
+        }
 
         // Добавляем вложения только если они есть и валидны
         if (messageAttachments) {
@@ -663,10 +673,22 @@ export async function POST(request: NextRequest) {
         });
 
         // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем транзакцию для гарантии сохранения
+        // Дополнительная проверка перед сохранением
+        if (typeof messageData.content !== 'string') {
+          console.error('[tickets] ❌ CRITICAL: content is still not a string before create!', {
+            type: typeof messageData.content,
+            content: messageData.content,
+          });
+          messageData.content = String(messageData.content || '');
+        }
+        
         const createdMessage = await prisma.$transaction(async (tx) => {
           // Создаем сообщение
           const message = await tx.chatMessage.create({
-            data: messageData,
+            data: {
+              ...messageData,
+              content: String(messageData.content || ''), // Финальная проверка
+            },
             include: {
               attachments: {
                 select: {
