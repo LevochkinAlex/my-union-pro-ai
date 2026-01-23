@@ -120,18 +120,23 @@ export async function GET() {
     // Если таймаут или ошибка БД, возвращаем fallback с данными из сессии
     if (error?.message === 'Database query timeout' || error?.code === 'P1001') {
       console.warn("[user/view-mode] Database timeout, using session fallback");
-      const user = (session as any)?.user;
-      if (user) {
-        return NextResponse.json({
-          currentMode: user.viewMode || "MEMBER",
-          availableModes: [
-            { mode: "MEMBER", label: "Член профсоюза" },
-            ...(user.isPPOHead || user.isMPOHead || user.isRPOHead 
-              ? [{ mode: "PPO_HEAD", label: "Председатель ППО" }] 
-              : [])
-          ],
-          canSwitch: (user.isPPOHead || user.isMPOHead || user.isRPOHead) && user.viewMode !== "MEMBER",
-        });
+      try {
+        const fallbackSession = await getServerSession(authOptions);
+        const user = (fallbackSession as any)?.user;
+        if (user) {
+          return NextResponse.json({
+            currentMode: user.viewMode || "MEMBER",
+            availableModes: [
+              { mode: "MEMBER", label: "Член профсоюза" },
+              ...(user.isPPOHead || user.isMPOHead || user.isRPOHead 
+                ? [{ mode: "PPO_HEAD", label: "Председатель ППО" }] 
+                : [])
+            ],
+            canSwitch: (user.isPPOHead || user.isMPOHead || user.isRPOHead) && user.viewMode !== "MEMBER",
+          });
+        }
+      } catch (fallbackError) {
+        console.error("[user/view-mode] Fallback also failed:", fallbackError);
       }
     }
     
