@@ -17,6 +17,9 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
     const unreadOnly = searchParams.get("unreadOnly") === "true";
 
+    console.log(`[api/notifications] ========== LOADING NOTIFICATIONS ==========`);
+    console.log(`[api/notifications] User: ${session.user.id}, page: ${page}, limit: ${limit}, unreadOnly: ${unreadOnly}`);
+
     const where: any = {
       userId: session.user.id,
     };
@@ -47,8 +50,18 @@ export async function GET(request: NextRequest) {
           },
         }),
       ]);
+      
+      console.log(`[api/notifications] ✅ Loaded: ${notifications.length} notifications, total: ${total}, unread: ${unreadCountResult}`);
+      if (notifications.length > 0) {
+        console.log(`[api/notifications] Latest notification:`, {
+          id: notifications[0].id,
+          type: notifications[0].type,
+          title: notifications[0].title,
+          createdAt: notifications[0].createdAt,
+        });
+      }
     } catch (error: any) {
-      console.error("[api/notifications] Database query error:", error);
+      console.error("[api/notifications] ❌ Database query error:", error);
       // При ошибке возвращаем пустой результат, но не 503
       notifications = [];
       total = 0;
