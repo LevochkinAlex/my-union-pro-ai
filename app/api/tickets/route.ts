@@ -24,16 +24,18 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status");
 
     // Получаем информацию о пользователе и его организации
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        organizationId: true,
-        role: true,
-        isPPOHead: true,
-        ppoHeadOrganizationId: true,
-        viewMode: true, // Режим просмотра (MEMBER или PPO_HEAD)
-      },
+    const user = await withPrismaRetry(async () => {
+      return await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          id: true,
+          organizationId: true,
+          role: true,
+          isPPOHead: true,
+          ppoHeadOrganizationId: true,
+          viewMode: true, // Режим просмотра (MEMBER или PPO_HEAD)
+        },
+      });
     });
 
     // Проверяем, является ли пользователь председателем И находится ли он в режиме председателя
@@ -41,18 +43,20 @@ export async function GET(request: NextRequest) {
     const chairmanOrgId = user?.ppoHeadOrganizationId || user?.organizationId;
 
     // Получаем чаты, в которых пользователь является участником
-    const userChats = await prisma.chat.findMany({
-      where: {
-        participants: {
-          some: {
-            userId: session.user.id,
-            leftAt: null,
+    const userChats = await withPrismaRetry(async () => {
+      return await prisma.chat.findMany({
+        where: {
+          participants: {
+            some: {
+              userId: session.user.id,
+              leftAt: null,
+            },
           },
         },
-      },
-      select: {
-        id: true,
-      },
+        select: {
+          id: true,
+        },
+      });
     });
 
     const userChatIds = userChats.map(chat => chat.id);
@@ -174,7 +178,13 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error: any) {
-    console.error("[tickets] Error retrieving tickets:", error);
+    console.error("[tickets] GET Error retrieving tickets:", error);
+    console.error("[tickets] Error details:", {
+      code: error?.code,
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack?.substring(0, 500),
+    });
     
     // Проверяем, является ли это ошибкой подключения к БД
     const isConnectionError = 
@@ -182,13 +192,26 @@ export async function GET(request: NextRequest) {
       error?.code === 'P1002' || // Database server doesn't accept connections
       error?.code === 'P1008' || // Operations timed out
       error?.code === 'P1017' || // Server has closed the connection
+      error?.code === 'P2002' || // Unique constraint violation (может быть связано с проблемами БД)
       error?.message?.includes('timeout') ||
-      error?.message?.includes('ECONNREFUSED');
+      error?.message?.includes('ECONNREFUSED') ||
+      error?.message?.includes('ENOTFOUND') ||
+      error?.message?.includes('Connection') ||
+      error?.message?.includes('connect');
     
     if (isConnectionError) {
+      console.error("[tickets] Database connection error detected, returning 503");
       return NextResponse.json(
-        { error: "Сервис временно недоступен. Попробуйте позже." },
-        { status: 503 }
+        { 
+          error: "Сервис временно недоступен. Попробуйте позже.",
+          retryAfter: 5, // Подсказка клиенту подождать 5 секунд
+        },
+        { 
+          status: 503,
+          headers: {
+            'Retry-After': '5',
+          },
+        }
       );
     }
     

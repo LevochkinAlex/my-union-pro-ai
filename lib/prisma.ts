@@ -44,30 +44,43 @@ if (typeof process !== 'undefined') {
  */
 export async function withPrismaRetry<T>(
   operation: () => Promise<T>,
-  maxRetries: number = 2,
-  delay: number = 1000
+  maxRetries: number = 3, // Увеличено до 3 попыток
+  delay: number = 500 // Уменьшена задержка до 500мс
 ): Promise<T> {
   let lastError: any;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      return await operation();
+      // Добавляем таймаут для операции (30 секунд)
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Operation timeout after 30s')), 30000);
+      });
+      
+      return await Promise.race([operation(), timeoutPromise]);
     } catch (error: any) {
       lastError = error;
       
-      // Проверяем, является ли это ошибкой подключения
+      // Проверяем, является ли это ошибкой подключения или таймаутом
       const isConnectionError = 
         error?.code === 'P1001' || // Can't reach database server
         error?.code === 'P1002' || // Database server doesn't accept connections
         error?.code === 'P1008' || // Operations timed out
         error?.code === 'P1017' || // Server has closed the connection
+        error?.code === 'P2002' || // Unique constraint violation (может быть связано с проблемами БД)
         error?.message?.includes('timeout') ||
         error?.message?.includes('ECONNREFUSED') ||
-        error?.message?.includes('ENOTFOUND');
+        error?.message?.includes('ENOTFOUND') ||
+        error?.message?.includes('Connection') ||
+        error?.message?.includes('connect') ||
+        error?.message === 'Operation timeout after 30s';
       
       if (isConnectionError && attempt < maxRetries) {
-        console.warn(`[prisma] Connection error (attempt ${attempt + 1}/${maxRetries + 1}), retrying...`, error?.code);
-        await new Promise(resolve => setTimeout(resolve, delay * (attempt + 1)));
+        const retryDelay = delay * Math.pow(2, attempt); // Exponential backoff
+        console.warn(`[prisma] Connection error (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${retryDelay}ms...`, {
+          code: error?.code,
+          message: error?.message?.substring(0, 100),
+        });
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
         continue;
       }
       
