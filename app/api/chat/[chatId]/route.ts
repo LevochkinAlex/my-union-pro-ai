@@ -57,7 +57,9 @@ export async function GET(
     let chatAccess: { chat: any; participant: any } | null = null;
     try {
       chatAccess = await requireChatAccess(chatId, session.user.id);
+      console.log(`[chat/${chatId}] ========== MESSAGES LOADING DEBUG ==========`);
       console.log(`[chat/${chatId}] Access granted for user ${session.user.id}, chat type: ${chatAccess.chat?.type}`);
+      console.log(`[chat/${chatId}] Chat participants:`, chatAccess.chat?.participants?.length || 0);
     } catch (error) {
       if (error instanceof ChatAccessError) {
         console.warn(`[chat/${chatId}] Access denied for user ${session.user.id}: ${error.message}`);
@@ -267,6 +269,23 @@ export async function GET(
 
     // Загружаем сообщения с оптимизированными полями
     // ВАЖНО: Используем include для совместимости с форматированием сообщений
+    console.log(`[chat/${chatId}] Loading messages with whereClause:`, JSON.stringify(whereClause, null, 2));
+    console.log(`[chat/${chatId}] Query params: limit=${limit}, direction=${direction}, cursor=${cursor || 'none'}`);
+    
+    // Сначала проверяем, есть ли вообще сообщения в этом чате
+    const totalMessagesCount = await prisma.chatMessage.count({
+      where: { chatId },
+    });
+    console.log(`[chat/${chatId}] Total messages in chat (all): ${totalMessagesCount}`);
+    
+    const rootMessagesCount = await prisma.chatMessage.count({
+      where: { 
+        chatId,
+        threadRootId: null,
+      },
+    });
+    console.log(`[chat/${chatId}] Root messages (no thread): ${rootMessagesCount}`);
+    
     const messages = await prisma.chatMessage.findMany({
       where: whereClause,
       take: limit + 1, // +1 для проверки hasMore
@@ -1044,6 +1063,16 @@ export async function POST(
     }
 
     // Создаем сообщение
+    console.log(`[chat/${chatId}] ========== MESSAGE CREATION DEBUG ==========`);
+    console.log(`[chat/${chatId}] Creating message:`, {
+      chatId,
+      userId,
+      contentLength: content.length,
+      hasReplyTo: !!replyToId,
+      hasThreadRoot: !!threadRootId,
+      hasAttachments: !!attachments,
+    });
+    
     const messageData: any = {
       chatId,
       senderId: userId,
@@ -1129,6 +1158,14 @@ export async function POST(
         },
         attachments: true,
       },
+    });
+    
+    console.log(`[chat/${chatId}] ✅ Message created successfully:`, {
+      messageId: message.id,
+      chatId: message.chatId,
+      senderId: message.senderId,
+      contentLength: message.content.length,
+      createdAt: message.createdAt,
     });
 
     // Обновляем последнее сообщение в чате и онлайн статус отправителя
