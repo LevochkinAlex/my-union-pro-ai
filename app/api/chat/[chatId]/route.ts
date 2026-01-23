@@ -335,6 +335,7 @@ export async function GET(
     
     // КРИТИЧЕСКАЯ ПРОВЕРКА: Для чатов обращений проверяем наличие начального сообщения
     if (chat.ticket) {
+      // Проверяем ВСЕ сообщения от создателя обращения (не только первые 5)
       const initialMessages = await prisma.chatMessage.findMany({
         where: {
           chatId,
@@ -349,12 +350,16 @@ export async function GET(
           _count: { select: { attachments: true } },
         },
         orderBy: { createdAt: 'asc' },
-        take: 5, // Первые 5 сообщений
+        // Берем все сообщения, не только первые 5
       });
       
-      console.log(`[chat/${chatId}] Initial messages from ticket creator (${chat.ticket.userId}):`, 
+      console.log(`[chat/${chatId}] ========== INITIAL MESSAGES CHECK ==========`);
+      console.log(`[chat/${chatId}] Ticket ID: ${chat.ticket.id}, Public ID: ${chat.ticket.publicId}`);
+      console.log(`[chat/${chatId}] Ticket creator (senderId): ${chat.ticket.userId}`);
+      console.log(`[chat/${chatId}] Found ${initialMessages.length} messages from ticket creator:`, 
         initialMessages.map(m => ({
           id: m.id,
+          contentPreview: m.content?.substring(0, 100) || 'NO CONTENT',
           contentLength: m.content?.length || 0,
           messageType: m.messageType,
           attachmentsCount: m._count.attachments,
@@ -362,8 +367,21 @@ export async function GET(
         }))
       );
       
+      // Проверяем, есть ли сообщение с текстом обращения (должно содержать "Обращение #" и текст)
+      const hasInitialAppealMessage = initialMessages.some(m => 
+        m.content?.includes('**Обращение #') || 
+        m.content?.includes('Текст обращения:')
+      );
+      
+      if (!hasInitialAppealMessage && initialMessages.length > 0) {
+        console.error(`[chat/${chatId}] ❌ CRITICAL: Found ${initialMessages.length} messages from creator, but NONE contain appeal text!`);
+        console.error(`[chat/${chatId}] Message contents:`, initialMessages.map(m => m.content?.substring(0, 200)));
+      }
+      
       if (initialMessages.length === 0) {
-        console.warn(`[chat/${chatId}] ⚠️ WARNING: No initial message found for ticket chat! Ticket ID: ${chat.ticket.id}`);
+        console.error(`[chat/${chatId}] ❌ CRITICAL: No initial message found for ticket chat! Ticket ID: ${chat.ticket.id}`);
+        console.error(`[chat/${chatId}] This means the initial message was NOT created when the ticket was created.`);
+        console.error(`[chat/${chatId}] Ticket created at: ${chat.ticket.createdAt}`);
       }
     }
     
