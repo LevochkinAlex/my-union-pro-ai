@@ -150,7 +150,10 @@ export async function GET(
     // Если есть cursor, всегда загружаем из БД для актуальности
     const cachedMessages = cursor ? null : await getCachedChatMessages(chatId, cursor || undefined, direction);
     
-    if (cachedMessages && cachedMessages.length > 0) {
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Если кэш вернул пустой массив [], это может быть кэшированный пустой результат
+    // В этом случае нужно проверить БД, чтобы убедиться что сообщений действительно нет
+    // Используем кэш ТОЛЬКО если он вернул не-null И не пустой массив
+    if (cachedMessages !== null && cachedMessages.length > 0) {
       console.log(`[chat/${chatId}] Using cached messages: ${cachedMessages.length} messages`);
       // Если есть кэш, возвращаем его (но все равно загружаем историю операций если нужно)
       let activityMessages: any[] = [];
@@ -298,6 +301,40 @@ export async function GET(
       },
     });
     console.log(`[chat/${chatId}] Root messages (no thread): ${rootMessagesCount}`);
+    
+    // КРИТИЧЕСКАЯ ПРОВЕРКА: Для чатов обращений проверяем наличие начального сообщения
+    if (chat.ticket) {
+      const initialMessages = await prisma.chatMessage.findMany({
+        where: {
+          chatId,
+          threadRootId: null,
+          senderId: chat.ticket.userId, // Сообщения от создателя обращения
+        },
+        select: {
+          id: true,
+          content: true,
+          createdAt: true,
+          messageType: true,
+          _count: { select: { attachments: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+        take: 5, // Первые 5 сообщений
+      });
+      
+      console.log(`[chat/${chatId}] Initial messages from ticket creator (${chat.ticket.userId}):`, 
+        initialMessages.map(m => ({
+          id: m.id,
+          contentLength: m.content?.length || 0,
+          messageType: m.messageType,
+          attachmentsCount: m._count.attachments,
+          createdAt: m.createdAt,
+        }))
+      );
+      
+      if (initialMessages.length === 0) {
+        console.warn(`[chat/${chatId}] ⚠️ WARNING: No initial message found for ticket chat! Ticket ID: ${chat.ticket.id}`);
+      }
+    }
     
     // Если в БД есть сообщения, но кэш был пустым - это проблема кэша
     if (totalMessagesCount > 0 && cachedMessages && cachedMessages.length === 0) {

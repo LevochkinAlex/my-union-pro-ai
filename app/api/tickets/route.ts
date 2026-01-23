@@ -497,18 +497,26 @@ export async function POST(request: NextRequest) {
         let messageAttachments: any = undefined;
         if (uploadedFiles.length > 0) {
           try {
+            // Импортируем getFileUrlWithCDN для правильных URL
+            const { getFileUrlWithCDN } = await import('@/lib/cdn');
+            
             messageAttachments = {
               create: uploadedFiles.map(file => {
                 const isImage = file.mimeType?.startsWith('image/');
+                // Используем CDN URL для вложений
+                const fileUrl = getFileUrlWithCDN(file.filePath);
+                
                 return {
                   type: isImage ? 'image' : 'file',
-                  url: file.filePath, // Путь уже правильный для чата
+                  url: fileUrl, // CDN URL
                   name: file.originalName,
                   size: file.fileSize,
                   mimeType: file.mimeType || 'application/octet-stream',
                 };
               }),
             };
+            
+            console.log(`[tickets] Prepared ${uploadedFiles.length} attachments for initial message`);
           } catch (attachError) {
             console.error('[tickets] Error preparing attachments for message:', attachError);
             // Продолжаем без вложений, если есть проблема
@@ -531,6 +539,16 @@ export async function POST(request: NextRequest) {
 
         const createdMessage = await prisma.chatMessage.create({
           data: messageData,
+          include: {
+            attachments: {
+              select: {
+                id: true,
+                type: true,
+                url: true,
+                name: true,
+              },
+            },
+          },
         });
 
         // Обновляем lastMessageId в чате
@@ -542,7 +560,33 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        console.log(`[tickets] ✅ Создано начальное сообщение обращения: ${createdMessage.id}, тип: ${createdMessage.messageType}, вложений: ${uploadedFiles.length}, senderId: ${createdMessage.senderId}, chatId: ${appealChat.id}, content length: ${initialMessage.length}`);
+        console.log(`[tickets] ✅ Создано начальное сообщение обращения:`, {
+          messageId: createdMessage.id,
+          messageType: createdMessage.messageType,
+          senderId: createdMessage.senderId,
+          chatId: appealChat.id,
+          contentLength: initialMessage.length,
+          attachmentsCount: createdMessage.attachments.length,
+          attachments: createdMessage.attachments.map(a => ({ id: a.id, type: a.type, name: a.name })),
+          threadRootId: createdMessage.threadRootId, // Должно быть null
+        });
+        
+        // КРИТИЧЕСКАЯ ПРОВЕРКА: Убеждаемся, что сообщение действительно сохранено
+        const verifyMessage = await prisma.chatMessage.findUnique({
+          where: { id: createdMessage.id },
+          select: { id: true, content: true, chatId: true, senderId: true },
+        });
+        
+        if (!verifyMessage) {
+          console.error(`[tickets] ❌ CRITICAL: Initial message ${createdMessage.id} was not found in DB after creation!`);
+        } else {
+          console.log(`[tickets] ✅ Initial message verified in DB:`, {
+            id: verifyMessage.id,
+            contentLength: verifyMessage.content?.length || 0,
+            chatId: verifyMessage.chatId,
+            senderId: verifyMessage.senderId,
+          });
+        }
 
         // Отправляем уведомления участникам чата (кроме создателя обращения)
         try {
