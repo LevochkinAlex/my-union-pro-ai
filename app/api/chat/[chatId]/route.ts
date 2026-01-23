@@ -265,11 +265,24 @@ export async function GET(
       }
     }
 
+    // ОПТИМИЗАЦИЯ: Загружаем только необходимые поля для сообщений
     const messages = await prisma.chatMessage.findMany({
       where: whereClause,
       take: limit + 1, // +1 для проверки hasMore
       orderBy: { createdAt: direction === 'older' ? 'desc' : 'asc' },
-      include: {
+      select: {
+        id: true,
+        chatId: true,
+        senderId: true,
+        content: true,
+        messageType: true,
+        replyToId: true,
+        threadRootId: true,
+        editedAt: true,
+        threadRepliesCount: true,
+        threadLastReplyAt: true,
+        createdAt: true,
+        updatedAt: true,
         sender: {
           select: {
             id: true,
@@ -280,7 +293,9 @@ export async function GET(
           },
         },
         replyTo: {
-          include: {
+          select: {
+            id: true,
+            content: true,
             sender: {
               select: {
                 id: true,
@@ -291,8 +306,28 @@ export async function GET(
             },
           },
         },
-        reactions: true,
-        attachments: true,
+        reactions: {
+          select: {
+            id: true,
+            userId: true,
+            emoji: true,
+            createdAt: true,
+          },
+        },
+        attachments: {
+          select: {
+            id: true,
+            type: true,
+            url: true,
+            name: true,
+            size: true,
+            mimeType: true,
+            thumbnailUrl: true,
+            width: true,
+            height: true,
+            createdAt: true,
+          },
+        },
         readBy: {
           select: {
             userId: true,
@@ -388,6 +423,8 @@ export async function GET(
     if ((chat.type as string) === 'CHANNEL' && newsChannelId) {
       console.log(`[chat/${chatId}] Loading published posts for channel ${newsChannelId} (user: ${session.user.id})`);
       
+      // ОПТИМИЗАЦИЯ: Ограничиваем количество постов для загрузки (пагинация)
+      const MAX_CHANNEL_POSTS = 50; // Загружаем только последние 50 постов
       const channelPosts = await prisma.newsPost.findMany({
         where: {
           channelId: newsChannelId,
@@ -400,6 +437,7 @@ export async function GET(
         orderBy: {
           createdAt: 'desc',
         },
+        take: MAX_CHANNEL_POSTS, // ОПТИМИЗАЦИЯ: Ограничение количества
       });
 
       console.log(`[chat/${chatId}] Found ${channelPosts.length} published posts in channel ${newsChannelId}`);
@@ -507,19 +545,39 @@ export async function GET(
         userLikes = new Set(likes.map(like => like.newsPostId));
       }
 
-      // Получаем статистику голосов для каждого опроса
+      // ОПТИМИЗАЦИЯ: Загружаем статистику голосов для всех опросов одним запросом
+      const allPollIds = posts.flatMap(p => p.polls.map(poll => poll.id));
+      const allVotesMap = new Map<string, Map<string, number>>(); // pollId -> optionId -> count
+      
+      if (allPollIds.length > 0) {
+        const allVotes = await prisma.newsPollVote.groupBy({
+          by: ["pollId", "optionId"],
+          where: {
+            pollId: { in: allPollIds },
+          },
+          _count: {
+            optionId: true,
+          },
+        });
+
+        // Группируем по pollId
+        for (const vote of allVotes) {
+          if (!allVotesMap.has(vote.pollId)) {
+            allVotesMap.set(vote.pollId, new Map());
+          }
+          allVotesMap.get(vote.pollId)!.set(vote.optionId, vote._count.optionId);
+        }
+      }
+
+      // Получаем статистику голосов для каждого опроса (используем предзагруженные данные)
       for (const post of posts) {
         const pollsWithStats = await Promise.all(
           post.polls.map(async (poll) => {
-            const votes = await prisma.newsPollVote.groupBy({
-              by: ["optionId"],
-              where: {
-                pollId: poll.id,
-              },
-              _count: {
-                optionId: true,
-              },
-            });
+            const votesMap = allVotesMap.get(poll.id) || new Map();
+            const votes = Array.from(votesMap.entries()).map(([optionId, count]) => ({
+              optionId,
+              _count: { optionId: count },
+            }));
 
             const totalVotes = votes.reduce((sum, v) => sum + v._count.optionId, 0);
             const options = poll.options as Array<{ id: string; text: string }>;

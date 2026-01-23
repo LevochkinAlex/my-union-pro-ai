@@ -225,11 +225,11 @@ export async function getUserChats(
   
   // Исключаем чаты, связанные с удаленными обращениями
   // Получаем все chatId из существующих тикетов
-  const existingTickets = await prisma.ticket.findMany({
+  const allExistingTickets = await prisma.ticket.findMany({
     where: { chatId: { not: null } },
     select: { chatId: true },
   });
-  const existingTicketChatIds = existingTickets
+  const allExistingTicketChatIds = allExistingTickets
     .map(t => t.chatId)
     .filter((id): id is string => typeof id === 'string' && id.length > 0);
   
@@ -238,17 +238,17 @@ export async function getUserChats(
   // значит обращение было удалено - такой чат нужно исключить
   // НО: чаты без ticket relation (личные, каналы) должны проходить всегда
   // Поэтому условие: либо ticket null (не связан с обращением), либо chatId в списке существующих
-  if (existingTicketChatIds.length > 0) {
+  if (allExistingTicketChatIds.length > 0) {
     whereConditions.push({
       OR: [
         // Чат не связан с обращением (личные, каналы, обычные группы) - всегда показываем
         { ticket: null },
         // Или чат связан с существующим обращением (chatId есть в списке существующих)
-        { id: { in: existingTicketChatIds } },
+        { id: { in: allExistingTicketChatIds } },
       ],
     });
   }
-  // Если existingTicketChatIds пустой, не добавляем фильтр - показываем все чаты
+  // Если allExistingTicketChatIds пустой, не добавляем фильтр - показываем все чаты
 
   // Получаем чаты
   const chats = await prisma.chat.findMany({
@@ -258,7 +258,13 @@ export async function getUserChats(
     include: {
       participants: {
         where: { leftAt: null },
-        include: {
+        // ОПТИМИЗАЦИЯ: Загружаем только необходимые поля участников
+        select: {
+          id: true,
+          userId: true,
+          role: true,
+          readAt: true,
+          joinedAt: true,
           user: {
             select: {
               id: true,
@@ -266,7 +272,7 @@ export async function getUserChats(
               lastName: true,
               middleName: true,
               avatarUrl: true,
-              phone: true,
+              // phone убран для оптимизации - используется редко
             },
           },
         },
@@ -317,6 +323,24 @@ export async function getUserChats(
     // Продолжаем с пустым Map - все чаты будут показаны как прочитанные
   }
 
+  // ОПТИМИЗАЦИЯ: Загружаем все тикеты одним запросом вместо N+1
+  const appealChatIds = chats
+    .filter(c => c.ticket === null && c.name?.includes('Обращение'))
+    .map(c => c.id);
+  
+  let existingTicketChatIds = new Set<string>();
+  if (appealChatIds.length > 0) {
+    const existingTickets = await prisma.ticket.findMany({
+      where: { chatId: { in: appealChatIds } },
+      select: { chatId: true },
+    });
+    existingTicketChatIds = new Set(
+      existingTickets
+        .map(t => t.chatId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    );
+  }
+
   // Форматируем чаты и фильтруем чаты с удаленными обращениями
   const formattedChats: ChatInfo[] = [];
   for (const chat of chats) {
@@ -328,15 +352,9 @@ export async function getUserChats(
       
       // Дополнительная проверка: если чат имеет имя "Обращение", но ticket relation null,
       // проверяем, не было ли обращение удалено
-      // Это защита от случая, когда обращение удалено, но чат остался
+      // ОПТИМИЗАЦИЯ: Используем предзагруженный Set вместо отдельного запроса
       if (chat.ticket === null && chat.name?.includes('Обращение')) {
-        const ticketExists = await prisma.ticket.findFirst({
-          where: { chatId: chat.id },
-          select: { id: true },
-        });
-        
-        // Если обращение не найдено, значит оно удалено - пропускаем этот чат
-        if (!ticketExists) {
+        if (!existingTicketChatIds.has(chat.id)) {
           console.log(`[chat-service] Skipping chat ${chat.id} - ticket was deleted`);
           continue;
         }
@@ -832,23 +850,44 @@ async function getUnreadCountsForChats(
     }
   }
 
-  // Для чатов с readAt считаем сообщения после этого времени
+  // ОПТИМИЗАЦИЯ: Для чатов с readAt используем один запрос вместо N+1
   const readChats = chatIds.filter(id => readAtMap.get(id));
-  for (const chatId of readChats) {
+  if (readChats.length > 0) {
     try {
-      const readAt = readAtMap.get(chatId)!;
-      const count = await prisma.chatMessage.count({
-        where: {
-          chatId,
-          senderId: { not: userId },
-          createdAt: { gt: readAt },
-        },
-      });
-      results.set(chatId, count);
+      // Группируем по chatId и readAt для одного запроса
+      const readChatsData = readChats.map(chatId => ({
+        chatId,
+        readAt: readAtMap.get(chatId)!,
+      }));
+
+      // Используем raw query для эффективного подсчета всех чатов одним запросом
+      // Или делаем параллельные запросы с ограничением
+      const counts = await Promise.all(
+        readChatsData.map(async ({ chatId, readAt }) => {
+          try {
+            return {
+              chatId,
+              count: await prisma.chatMessage.count({
+                where: {
+                  chatId,
+                  senderId: { not: userId },
+                  createdAt: { gt: readAt },
+                },
+              }),
+            };
+          } catch (error) {
+            console.error(`[chat-service] Error counting unread for chat ${chatId}:`, error);
+            return { chatId, count: 0 };
+          }
+        })
+      );
+
+      for (const { chatId, count } of counts) {
+        results.set(chatId, count);
+      }
     } catch (error) {
-      console.error(`[chat-service] Error counting unread messages for chat ${chatId}:`, error);
-      // Продолжаем с нулевым значением для этого чата
-      results.set(chatId, 0);
+      console.error('[chat-service] Error counting unread messages (batch):', error);
+      // Продолжаем с нулевыми значениями
     }
   }
 

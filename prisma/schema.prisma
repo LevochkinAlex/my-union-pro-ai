@@ -2049,6 +2049,8 @@ model ChatParticipant {
   @@index([chatId])
   @@index([userId])
   @@index([role])
+  @@index([chatId, leftAt]) // ОПТИМИЗАЦИЯ: Для быстрой фильтрации активных участников
+  @@index([userId, leftAt]) // ОПТИМИЗАЦИЯ: Для быстрого поиска чатов пользователя
 }
 
 // Сообщения чатов (заменили Matrix на собственный сервер)
@@ -2098,6 +2100,7 @@ model ChatMessage {
   @@index([senderId])
   @@index([replyToId])
   @@index([threadRootId])
+  @@index([chatId, senderId, createdAt]) // ОПТИМИЗАЦИЯ: Для подсчета непрочитанных сообщений
 }
 
 model ChatMessageAttachment {
