@@ -901,6 +901,7 @@ export default function SlackStyleChat({
                       )}>
                   <SlackStyleMessages
                     isGroupChat={selectedChat?.type === 'GROUP' || selectedChat?.type === 'CHANNEL'}
+                    isAIChat={selectedChat?.name === "ИИ-Ассистент"}
                     messages={formattedMessages}
                     currentUserId={currentUserId || ""}
                     typingUsers={new Set(typingUsers?.map((u) => typeof u === "string" ? u : (u as any).userId) || [])}
@@ -927,6 +928,10 @@ export default function SlackStyleChat({
                     onPollVote={async (pollId, optionId) => {
                       // Обновляем сообщения после голосования
                       await loadChats();
+                    }}
+                    onQuestionClick={(question) => {
+                      // Отправляем вопрос как сообщение
+                      handleSendMessage(question);
                     }}
                   />
 

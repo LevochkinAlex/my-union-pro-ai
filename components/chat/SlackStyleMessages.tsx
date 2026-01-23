@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import { normalizeUserAvatar } from "@/lib/api-helpers";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import AIChatWelcome from "./AIChatWelcome";
 import {
   MoreHorizontal,
   Reply,
@@ -132,6 +133,7 @@ export interface SlackStyleMessagesProps {
   typingUsers: Set<string>;
   isTicketChat?: boolean;
   isGroupChat?: boolean; // Для определения типа чата (групповой или приватный)
+  isAIChat?: boolean; // Для определения ИИ чата
   ticketId?: string; // ID обращения для отображения кнопки закрытия
   onReply?: (message: Message) => void;
   onStartThread?: (message: Message) => void;
@@ -142,6 +144,7 @@ export interface SlackStyleMessagesProps {
   onForward?: (message: Message) => void;
   onImageClick?: (url: string, name?: string) => void;
   onPollVote?: (pollId: string, optionId: string) => void;
+  onQuestionClick?: (question: string) => void; // Для обработки клика на вопрос из приветствия
   chatId?: string;
 }
 
@@ -1566,6 +1569,7 @@ export default function SlackStyleMessages({
   typingUsers,
   isTicketChat = false,
   isGroupChat = false,
+  isAIChat = false,
   ticketId,
   onReply,
   onStartThread,
@@ -1576,6 +1580,7 @@ export default function SlackStyleMessages({
   onForward,
   onImageClick,
   onPollVote,
+  onQuestionClick,
   chatId,
 }: SlackStyleMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1781,7 +1786,12 @@ export default function SlackStyleMessages({
       onScroll={handleScroll}
     >
       <div className="py-4 px-4 space-y-1 min-h-full">
-        {useMemo(() => messages.map((message, index) => {
+        {isAIChat && messages.length === 0 && onQuestionClick ? (
+          <div className="flex items-center justify-center h-full">
+            <AIChatWelcome onQuestionClick={onQuestionClick} />
+          </div>
+        ) : (
+          useMemo(() => messages.map((message, index) => {
           const previousMessage = index > 0 ? messages[index - 1] : undefined;
           const showDate = shouldShowDateSeparator(message, previousMessage);
           const isOwn = message.senderId === currentUserId;
@@ -1834,7 +1844,8 @@ export default function SlackStyleMessages({
               </div>
             </div>
           );
-        }), [messages, currentUserId, handleContextMenu, onReaction, onOpenThread, onImageClick, onPollVote, isGroupChat, isTicketChat, ticketId])}
+        }), [messages, currentUserId, handleContextMenu, onReaction, onOpenThread, onImageClick, onPollVote, isGroupChat, isTicketChat, ticketId])
+        )}
 
         {/* Typing indicator */}
         {typingUsers.size > 0 && (
