@@ -357,12 +357,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Устанавливаем дедлайн ответа председателя (72 часа с момента создания)
-    const responseDeadline = new Date();
-    responseDeadline.setHours(responseDeadline.getHours() + 72);
-
     // Создаем тикет с chatId
-    // Используем условное добавление полей для обратной совместимости
     const ticketData: any = {
       userId: session.user.id,
       publicId: publicId!,
@@ -375,13 +370,16 @@ export async function POST(request: NextRequest) {
       chatId: appealChat?.id || null,
     };
 
+    // Устанавливаем дедлайн ответа председателя (72 часа с момента создания)
     // Добавляем новые поля только если они существуют в схеме (для обратной совместимости)
     try {
-      // Проверяем, существуют ли поля в схеме, пытаясь создать с ними
+      const responseDeadline = new Date();
+      responseDeadline.setHours(responseDeadline.getHours() + 72);
       ticketData.responseDeadline = responseDeadline;
       ticketData.isOverdue = false;
     } catch (e) {
-      // Игнорируем, если поля не существуют
+      // Игнорируем, если поля не существуют в БД (до применения миграции)
+      console.log("[tickets] Deadline fields not available, skipping");
     }
 
     const ticket = await prisma.ticket.create({
