@@ -25,7 +25,7 @@ interface ServerToClientEvents {
 interface ClientToServerEvents {
   "chat:join": (chatId: string) => void;
   "chat:leave": (chatId: string) => void;
-  "message:send": (data: { chatId: string; content: string; replyToId?: string }, callback: (response: any) => void) => void;
+  "message:send": (data: { chatId: string; content: string; replyToId?: string; threadRootId?: string }, callback: (response: any) => void) => void;
   "typing:start": (chatId: string) => void;
   "typing:stop": (chatId: string) => void;
 }
