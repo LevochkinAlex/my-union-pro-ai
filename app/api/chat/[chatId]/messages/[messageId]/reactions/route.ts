@@ -27,9 +27,84 @@ export async function POST(
       return NextResponse.json({ error: "Эмодзи не указан" }, { status: 400 });
     }
 
+    // Обработка виртуальных сообщений (для постов канала, которые еще не созданы как ChatMessage)
+    let actualMessageId = messageId;
+    if (messageId.startsWith('virtual_')) {
+      const postId = messageId.replace('virtual_', '');
+      // Ищем реальное сообщение для этого поста
+      const channelPostMessages = await prisma.chatMessage.findMany({
+        where: {
+          chatId: chatId,
+          messageType: 'channel_post',
+        },
+        select: {
+          id: true,
+          content: true,
+        },
+      });
+
+      // Находим сообщение с нужным postId
+      for (const msg of channelPostMessages) {
+        try {
+          const parsed = JSON.parse(msg.content);
+          if (parsed.postId === postId) {
+            actualMessageId = msg.id;
+            break;
+          }
+        } catch (e) {
+          // Игнорируем ошибки парсинга
+        }
+      }
+
+      // Если не нашли реальное сообщение, создаем его
+      if (actualMessageId === messageId) {
+        // Получаем пост из NewsPost
+        const newsPost = await prisma.newsPost.findUnique({
+          where: { id: postId },
+          include: {
+            author: {
+              select: {
+                id: true,
+              },
+            },
+            polls: {
+              select: {
+                id: true,
+              },
+            },
+          },
+        });
+
+        if (!newsPost) {
+          return NextResponse.json({ error: "Пост не найден" }, { status: 404 });
+        }
+
+        // Создаем ChatMessage для поста
+        const messageContent = JSON.stringify({
+          type: "channel_post",
+          postId: newsPost.id,
+          title: newsPost.title,
+          content: newsPost.content,
+          coverImage: newsPost.coverImage,
+          hasPolls: (newsPost.polls?.length || 0) > 0,
+        });
+
+        const newMessage = await prisma.chatMessage.create({
+          data: {
+            chatId,
+            senderId: newsPost.authorId,
+            content: messageContent,
+            messageType: "channel_post",
+          },
+        });
+
+        actualMessageId = newMessage.id;
+      }
+    }
+
     // Получаем сообщение для проверки типа (канал или обычный чат)
     const message = await prisma.chatMessage.findUnique({
-      where: { id: messageId },
+      where: { id: actualMessageId },
       select: {
         id: true,
         messageType: true,
@@ -45,7 +120,7 @@ export async function POST(
     const existingReaction = await prisma.chatMessageReaction.findUnique({
       where: {
         messageId_userId_emoji: {
-          messageId,
+          messageId: actualMessageId,
           userId,
           emoji,
         },
@@ -88,7 +163,7 @@ export async function POST(
       // Добавляем реакцию
       await prisma.chatMessageReaction.create({
         data: {
-          messageId,
+          messageId: actualMessageId,
           userId,
           emoji,
         },
@@ -118,7 +193,7 @@ export async function POST(
 
     // Получаем все реакции для этого сообщения
     const reactions = await prisma.chatMessageReaction.findMany({
-      where: { messageId },
+      where: { messageId: actualMessageId },
       include: {
         user: {
           select: {

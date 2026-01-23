@@ -592,6 +592,53 @@ export function useChat(options: UseChatOptions = {}) {
   ): Promise<boolean> => {
     if (!selectedChat) return false;
 
+    // Оптимистичное обновление - сразу обновляем UI
+    setMessages(prev => prev.map(m => {
+      if (m.id === messageId) {
+        const currentReactions = m.reactions || {};
+        const emojiReactions = currentReactions[emoji] || { userIds: [] };
+        const userId = session?.user?.id;
+        const currentUserIds = emojiReactions.userIds || [];
+        const currentCount = ('count' in emojiReactions && typeof emojiReactions.count === 'number') 
+          ? emojiReactions.count 
+          : currentUserIds.length;
+        
+        // Проверяем, есть ли уже реакция от текущего пользователя
+        const hasReaction = userId && currentUserIds.includes(userId);
+        
+        let newReactions: Record<string, { count?: number; userIds: string[] }>;
+        if (hasReaction) {
+          // Удаляем реакцию
+          const newUserIds = currentUserIds.filter(id => id !== userId);
+          if (newUserIds.length === 0) {
+            // Удаляем эмодзи, если больше нет реакций
+            const { [emoji]: _, ...rest } = currentReactions;
+            newReactions = rest as Record<string, { count?: number; userIds: string[] }>;
+          } else {
+            newReactions = {
+              ...currentReactions,
+              [emoji]: {
+                count: currentCount - 1,
+                userIds: newUserIds,
+              },
+            };
+          }
+        } else {
+          // Добавляем реакцию
+          newReactions = {
+            ...currentReactions,
+            [emoji]: {
+              count: currentCount + 1,
+              userIds: userId ? [...currentUserIds, userId] : currentUserIds,
+            },
+          };
+        }
+        
+        return { ...m, reactions: newReactions };
+      }
+      return m;
+    }));
+
     try {
       const response = await fetch(`/api/chat/${selectedChat.id}/messages/${messageId}/reactions`, {
         method: "POST",
@@ -601,17 +648,23 @@ export function useChat(options: UseChatOptions = {}) {
 
       if (response.ok) {
         const data = await response.json();
+        // Синхронизируем с сервером (на случай если что-то пошло не так)
         setMessages(prev => prev.map(m =>
           m.id === messageId ? { ...m, reactions: data.reactions } : m
         ));
         return true;
+      } else {
+        // Если ошибка, откатываем оптимистичное обновление
+        loadMessages(selectedChat.id);
       }
     } catch (error) {
       console.error("[useChat] Error toggling reaction:", error);
+      // Откатываем оптимистичное обновление при ошибке
+      loadMessages(selectedChat.id);
       options.onError?.("Ошибка реакции");
     }
     return false;
-  }, [selectedChat, options]);
+  }, [selectedChat, session?.user?.id, loadMessages, options]);
 
   // Пересылка сообщения
   const forwardMessage = useCallback(async (

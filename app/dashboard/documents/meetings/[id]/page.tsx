@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 import Link from "next/link";
+import { Modal } from "@/components/ui/modal";
 
 interface Participant {
   id: string;
@@ -96,8 +97,15 @@ const DOC_STATUS_LABELS: Record<string, string> = {
   GENERATED: "Сформирован",
   PENDING_REVIEW: "На рассмотрении",
   PENDING_APPROVAL: "На согласовании",
-  APPROVED: "Утверждён",
   COMPLETED: "Утверждён",
+};
+
+const DOC_STATUS_COLORS: Record<string, string> = {
+  DRAFT: "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
+  GENERATED: "bg-blue-200 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  PENDING_REVIEW: "bg-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+  PENDING_APPROVAL: "bg-orange-200 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+  COMPLETED: "bg-green-200 text-green-800 dark:bg-green-900/30 dark:text-green-400",
 };
 
 export default function MeetingDetailPage({
@@ -110,7 +118,7 @@ export default function MeetingDetailPage({
   const router = useRouter();
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"info" | "agenda" | "protocol">("info");
+  const [activeTab, setActiveTab] = useState<"info" | "agenda" | "protocol" | "resolutions" | "extracts">("info");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -118,6 +126,9 @@ export default function MeetingDetailPage({
   const [protocolData, setProtocolData] = useState<Record<string, any>>({});
   const [members, setMembers] = useState<any[]>([]);
   const [isSendingNotifications, setIsSendingNotifications] = useState(false);
+  const [isSendingForApproval, setIsSendingForApproval] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     loadMeeting();
@@ -385,10 +396,39 @@ export default function MeetingDetailPage({
         </div>
       </div>
 
-      {/* Статус документов */}
+      {/* Табы - НАВИГАЦИЯ ПО ДОКУМЕНТАМ */}
+      <div className="mt-6 mb-4 rounded-lg border-2 border-blue-300 dark:border-blue-600 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 shadow-lg p-4">
+        <h2 className="mb-3 text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Навигация по документам</h2>
+        <nav className="flex flex-wrap gap-2">
+          {[
+            { id: "info", label: "Информация", icon: "📋" },
+            { id: "agenda", label: `Повестка${meeting.agendaDocument ? ` (${meeting.agendaDocument.regNumber})` : ""}`, icon: "📄" },
+            { id: "protocol", label: `Протокол${meeting.protocolDocument ? ` (${meeting.protocolDocument.regNumber})` : ""}`, icon: "📝" },
+            { id: "resolutions", label: `Постановления (${meeting.resolutions.length})`, icon: "📋" },
+            { id: "extracts", label: `Выписки (${meeting.extracts.length})`, icon: "📄" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold transition-all transform hover:scale-105 ${
+                activeTab === tab.id
+                  ? "bg-blue-600 text-white shadow-lg ring-2 ring-blue-400"
+                  : "bg-white text-gray-700 hover:bg-blue-100 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 shadow"
+              }`}
+            >
+              <span className="text-lg">{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Краткая информация о документах - быстрый доступ */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* Повестка */}
-        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+        <div 
+          onClick={() => setActiveTab("agenda")}
+          className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+        >
           <div className="flex items-center justify-between">
             <h3 className="font-medium text-gray-900 dark:text-white">Повестка дня</h3>
             {meeting.agendaDocument && (
@@ -396,55 +436,23 @@ export default function MeetingDetailPage({
             )}
           </div>
           {meeting.agendaDocument ? (
-            <div className="mt-3 space-y-3">
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {meeting.agendaDocument.regNumber}
-                </p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {DOC_STATUS_LABELS[meeting.agendaDocument.status]}
-                </p>
-              </div>
-              <div className="flex flex-col gap-2">
-                {meeting.agendaDocument.filePath && (
-                  <a
-                    href={meeting.agendaDocument.filePath}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Скачать PDF
-                  </a>
-                )}
-                <button
-                  onClick={handleSendForReview}
-                  disabled={isSendingNotifications || meeting.status !== "DRAFT"}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
-                  title={meeting.status !== "DRAFT" ? "Уведомления уже отправлены" : "Отправить участникам для ознакомления"}
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                  {isSendingNotifications ? "Отправка..." : "Разослать участникам"}
-                </button>
-              </div>
+            <div className="mt-2">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                {meeting.agendaDocument.regNumber}
+              </p>
+              <span className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${DOC_STATUS_COLORS[meeting.agendaDocument.status] || DOC_STATUS_COLORS.DRAFT}`}>
+                {DOC_STATUS_LABELS[meeting.agendaDocument.status] || "Черновик"}
+              </span>
             </div>
           ) : (
-            <button
-              onClick={() => handleGenerateDocument("AGENDA")}
-              disabled={isGenerating || meeting.agendaItems.length === 0}
-              className="mt-2 text-sm text-blue-600 hover:underline disabled:opacity-50"
-            >
-              {isGenerating ? "Формирование..." : "Сформировать"}
-            </button>
+            <p className="mt-2 text-sm text-gray-500">Не создана</p>
           )}
         </div>
 
-        {/* Протокол */}
-        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+        <div 
+          onClick={() => setActiveTab("protocol")}
+          className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+        >
           <div className="flex items-center justify-between">
             <h3 className="font-medium text-gray-900 dark:text-white">Протокол</h3>
             {meeting.protocolDocument && (
@@ -452,77 +460,23 @@ export default function MeetingDetailPage({
             )}
           </div>
           {meeting.protocolDocument ? (
-            <div className="mt-3 space-y-3">
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {meeting.protocolDocument.regNumber}
-                </p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {DOC_STATUS_LABELS[meeting.protocolDocument.status]}
-                </p>
-              </div>
-              <div className="flex flex-col gap-2">
-                {meeting.protocolDocument.filePath && (
-                  <a
-                    href={meeting.protocolDocument.filePath}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Скачать PDF
-                  </a>
-                )}
-                <button
-                  onClick={async () => {
-                    try {
-                      setIsSendingNotifications(true);
-                      const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/notify-participants`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ type: "protocol_review" }),
-                      });
-
-                      if (!response.ok) {
-                        const error = await response.json();
-                        throw new Error(error.error || "Ошибка отправки");
-                      }
-
-                      const data = await response.json();
-                      alertSuccess(data.message || `Уведомления отправлены ${data.sentCount} участникам`);
-                      loadMeeting();
-                    } catch (error) {
-                      alertError(error instanceof Error ? error.message : "Не удалось отправить уведомления");
-                    } finally {
-                      setIsSendingNotifications(false);
-                    }
-                  }}
-                  disabled={isSendingNotifications}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                  {isSendingNotifications ? "Отправка..." : "Разослать протокол"}
-                </button>
-              </div>
+            <div className="mt-2">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                {meeting.protocolDocument.regNumber}
+              </p>
+              <span className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${DOC_STATUS_COLORS[meeting.protocolDocument.status] || DOC_STATUS_COLORS.DRAFT}`}>
+                {DOC_STATUS_LABELS[meeting.protocolDocument.status] || "Черновик"}
+              </span>
             </div>
           ) : (
-            <button
-              onClick={() => setActiveTab("protocol")}
-              disabled={!meeting.agendaDocument}
-              className="mt-2 text-sm text-blue-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-              title={!meeting.agendaDocument ? "Сначала сформируйте повестку" : ""}
-            >
-              Заполнить протокол →
-            </button>
+            <p className="mt-2 text-sm text-gray-500">Не создан</p>
           )}
         </div>
 
-        {/* Постановления */}
-        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+        <div 
+          onClick={() => setActiveTab("resolutions")}
+          className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+        >
           <h3 className="font-medium text-gray-900 dark:text-white">Постановления</h3>
           <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
             {meeting.resolutions.length}
@@ -530,37 +484,16 @@ export default function MeetingDetailPage({
           <p className="text-xs text-gray-500">документов</p>
         </div>
 
-        {/* Выписки */}
-        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+        <div 
+          onClick={() => setActiveTab("extracts")}
+          className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+        >
           <h3 className="font-medium text-gray-900 dark:text-white">Выписки</h3>
           <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
             {meeting.extracts.length}
           </p>
           <p className="text-xs text-gray-500">документов</p>
         </div>
-      </div>
-
-      {/* Табы */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-8">
-          {[
-            { id: "info", label: "Информация" },
-            { id: "agenda", label: `Повестка (${meeting.agendaItems.length})` },
-            { id: "protocol", label: "Протокол" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
       </div>
 
       {/* Контент табов */}
@@ -682,86 +615,368 @@ export default function MeetingDetailPage({
       )}
 
       {activeTab === "agenda" && (
-        <div className="space-y-4">
-          {meeting.agendaItems.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              Нет пунктов в повестке
-            </div>
-          ) : (
-            meeting.agendaItems.map((item) => (
-              <div
-                key={item.id}
-                className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
-              >
-                <div className="flex items-start gap-3">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-200 text-sm font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                    {item.orderNumber}
+        <div className="space-y-6">
+          {/* Документ повестки */}
+          {meeting.agendaDocument ? (
+            <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Повестка дня {meeting.agendaDocument.regNumber}
+                  </h3>
+                  <span className={`mt-2 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${DOC_STATUS_COLORS[meeting.agendaDocument.status] || DOC_STATUS_COLORS.DRAFT}`}>
+                    {DOC_STATUS_LABELS[meeting.agendaDocument.status] || "Черновик"}
                   </span>
-                  <div className="flex-1">
-                    <h4 className="font-medium text-gray-900 dark:text-white">{item.title}</h4>
-                    {item.description && (
-                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{item.description}</p>
-                    )}
-                    {(item.speakerName || item.speaker) && (
-                      <p className="mt-2 text-sm text-gray-500">
-                        <strong>Докладчик:</strong>{" "}
-                        {item.speakerName || [item.speaker?.lastName, item.speaker?.firstName].filter(Boolean).join(" ")}
-                      </p>
-                    )}
-                  </div>
                 </div>
               </div>
-            ))
+
+              <div className="flex flex-wrap gap-2">
+                {meeting.agendaDocument.filePath && (
+                  <>
+                    <button
+                      onClick={() => setPdfPreviewUrl(meeting.agendaDocument!.filePath!)}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      Просмотреть PDF
+                    </button>
+                    <a
+                      href={meeting.agendaDocument.filePath}
+                      download
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Скачать
+                    </a>
+                  </>
+                )}
+                {meeting.agendaDocument.status === "DRAFT" && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        setIsSendingForApproval(true);
+                        const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/documents/${meeting.agendaDocument!.id}/send-for-approval`, {
+                          method: "POST",
+                        });
+
+                        if (!response.ok) {
+                          const error = await response.json();
+                          throw new Error(error.error || "Ошибка отправки");
+                        }
+
+                        const data = await response.json();
+                        alertSuccess(data.message || "Документ отправлен на согласование");
+                        loadMeeting();
+                      } catch (error) {
+                        alertError(error instanceof Error ? error.message : "Не удалось отправить на согласование");
+                      } finally {
+                        setIsSendingForApproval(false);
+                      }
+                    }}
+                    disabled={isSendingForApproval}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-orange-700 dark:bg-orange-900/30 dark:text-orange-300 dark:hover:bg-orange-900/50"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                    {isSendingForApproval ? "Отправка..." : "Отправить на согласование"}
+                  </button>
+                )}
+                {meeting.agendaDocument.status === "PENDING_APPROVAL" && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        setIsApproving(true);
+                        const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/documents/${meeting.agendaDocument!.id}/final-approve`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                        });
+
+                        if (!response.ok) {
+                          const error = await response.json();
+                          throw new Error(error.error || "Ошибка утверждения");
+                        }
+
+                        const data = await response.json();
+                        alertSuccess(data.message || "Документ утвержден");
+                        loadMeeting();
+                      } catch (error) {
+                        alertError(error instanceof Error ? error.message : "Не удалось утвердить документ");
+                      } finally {
+                        setIsApproving(false);
+                      }
+                    }}
+                    disabled={isApproving}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {isApproving ? "Утверждение..." : "Утвердить документ"}
+                  </button>
+                )}
+                <button
+                  onClick={handleSendForReview}
+                  disabled={isSendingNotifications || meeting.agendaDocument.status !== "COMPLETED"}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
+                  title={meeting.agendaDocument.status !== "COMPLETED" ? "Сначала утвердите документ" : "Отправить участникам для ознакомления"}
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                  {isSendingNotifications ? "Отправка..." : "Разослать участникам"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Повестка дня не создана</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Сформируйте повестку дня на основе пунктов повестки
+              </p>
+              {meeting.agendaItems.length > 0 && (
+                <button
+                  onClick={() => handleGenerateDocument("AGENDA")}
+                  disabled={isGenerating}
+                  className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {isGenerating ? "Формирование..." : "Сформировать повестку дня"}
+                </button>
+              )}
+            </div>
           )}
 
-          {!meeting.agendaDocument && meeting.agendaItems.length > 0 && (
-            <button
-              onClick={() => handleGenerateDocument("AGENDA")}
-              disabled={isGenerating}
-              className="w-full rounded-lg bg-blue-600 py-3 text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {isGenerating ? "Формирование..." : "Сформировать повестку дня"}
-            </button>
-          )}
+          {/* Пункты повестки */}
+          <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+              Пункты повестки дня ({meeting.agendaItems.length})
+            </h3>
+            {meeting.agendaItems.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                Нет пунктов в повестке
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {meeting.agendaItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-200 text-sm font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                        {item.orderNumber}
+                      </span>
+                      <div className="flex-1">
+                        <h4 className="font-medium text-gray-900 dark:text-white">{item.title}</h4>
+                        {item.description && (
+                          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{item.description}</p>
+                        )}
+                        {(item.speakerName || item.speaker) && (
+                          <p className="mt-2 text-sm text-gray-500">
+                            <strong>Докладчик:</strong>{" "}
+                            {item.speakerName || [item.speaker?.lastName, item.speaker?.firstName].filter(Boolean).join(" ")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {activeTab === "protocol" && (
         <div className="space-y-6">
-          {/* Статус протокола */}
-          <div className="flex items-center justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
-            <div>
-              <h3 className="font-semibold">Статус документа</h3>
-              <div className="mt-2 flex items-center gap-4">
-                {["Черновик", "На согласовании", "Утверждено"].map((status, i) => (
-                  <div key={status} className="flex items-center gap-2">
-                    <span className={`h-3 w-3 rounded-full ${
-                      i === 0 ? "bg-blue-500" : "bg-gray-300 dark:bg-gray-600"
-                    }`} />
-                    <span className={i === 0 ? "font-medium" : "text-gray-500"}>{status}</span>
-                  </div>
-                ))}
+          {/* Документ протокола */}
+          {meeting.protocolDocument ? (
+            <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Протокол {meeting.protocolDocument.regNumber}
+                  </h3>
+                  <span className={`mt-2 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${DOC_STATUS_COLORS[meeting.protocolDocument.status] || DOC_STATUS_COLORS.DRAFT}`}>
+                    {DOC_STATUS_LABELS[meeting.protocolDocument.status] || "Черновик"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {meeting.protocolDocument.filePath && (
+                  <>
+                    <button
+                      onClick={() => setPdfPreviewUrl(meeting.protocolDocument!.filePath!)}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      Просмотреть PDF
+                    </button>
+                    <a
+                      href={meeting.protocolDocument.filePath}
+                      download
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Скачать
+                    </a>
+                  </>
+                )}
+                {meeting.protocolDocument.status === "DRAFT" && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        setIsSendingForApproval(true);
+                        const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/documents/${meeting.protocolDocument!.id}/send-for-approval`, {
+                          method: "POST",
+                        });
+
+                        if (!response.ok) {
+                          const error = await response.json();
+                          throw new Error(error.error || "Ошибка отправки");
+                        }
+
+                        const data = await response.json();
+                        alertSuccess(data.message || "Документ отправлен на согласование");
+                        loadMeeting();
+                      } catch (error) {
+                        alertError(error instanceof Error ? error.message : "Не удалось отправить на согласование");
+                      } finally {
+                        setIsSendingForApproval(false);
+                      }
+                    }}
+                    disabled={isSendingForApproval}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-orange-700 dark:bg-orange-900/30 dark:text-orange-300 dark:hover:bg-orange-900/50"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                    {isSendingForApproval ? "Отправка..." : "Отправить на согласование"}
+                  </button>
+                )}
+                {meeting.protocolDocument.status === "PENDING_APPROVAL" && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        setIsApproving(true);
+                        const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/documents/${meeting.protocolDocument!.id}/final-approve`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                        });
+
+                        if (!response.ok) {
+                          const error = await response.json();
+                          throw new Error(error.error || "Ошибка утверждения");
+                        }
+
+                        const data = await response.json();
+                        alertSuccess(data.message || "Документ утвержден");
+                        loadMeeting();
+                      } catch (error) {
+                        alertError(error instanceof Error ? error.message : "Не удалось утвердить документ");
+                      } finally {
+                        setIsApproving(false);
+                      }
+                    }}
+                    disabled={isApproving}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {isApproving ? "Утверждение..." : "Утвердить документ"}
+                  </button>
+                )}
+                <button
+                  onClick={async () => {
+                    try {
+                      setIsSendingNotifications(true);
+                      const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/notify-participants`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ type: "protocol_review" }),
+                      });
+
+                      if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || "Ошибка отправки");
+                      }
+
+                      const data = await response.json();
+                      alertSuccess(data.message || `Уведомления отправлены ${data.sentCount} участникам`);
+                      loadMeeting();
+                    } catch (error) {
+                      alertError(error instanceof Error ? error.message : "Не удалось отправить уведомления");
+                    } finally {
+                      setIsSendingNotifications(false);
+                    }
+                  }}
+                  disabled={isSendingNotifications || meeting.protocolDocument.status !== "COMPLETED"}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
+                  title={meeting.protocolDocument.status !== "COMPLETED" ? "Сначала утвердите документ" : "Отправить участникам для ознакомления"}
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                  {isSendingNotifications ? "Отправка..." : "Разослать протокол"}
+                </button>
               </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={saveProtocolData}
-                disabled={isSaving}
-                className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:hover:bg-gray-700"
-              >
-                {isSaving ? "Сохранение..." : "Сохранить"}
-              </button>
-              {!meeting.protocolDocument && (
-                <button
-                  onClick={() => handleGenerateDocument("PROTOCOL")}
-                  disabled={isGenerating}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {isGenerating ? "Формирование..." : "Сформировать протокол"}
-                </button>
-              )}
+          ) : (
+            <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Протокол не создан</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Заполните протокол на основе повестки дня и сформируйте документ
+              </p>
             </div>
-          </div>
+          )}
+
+          {/* Форма заполнения протокола */}
+          {meeting.agendaDocument && (
+            <>
+              <div className="flex items-center justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+                <div>
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Заполнение протокола</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Заполните данные по каждому вопросу повестки дня
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={saveProtocolData}
+                    disabled={isSaving}
+                    className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                  >
+                    {isSaving ? "Сохранение..." : "Сохранить черновик"}
+                  </button>
+                  {!meeting.protocolDocument && (
+                    <button
+                      onClick={() => handleGenerateDocument("PROTOCOL")}
+                      disabled={isGenerating}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {isGenerating ? "Формирование..." : "Сформировать протокол"}
+                    </button>
+                  )}
+                </div>
+              </div>
 
           {/* Вопросы с формами */}
           {meeting.agendaItems.map((item) => (
@@ -967,35 +1182,264 @@ export default function MeetingDetailPage({
             </div>
           ))}
 
-          {/* Кнопки внизу */}
-          <div className="flex justify-between">
-            <button
-              onClick={() => setActiveTab("agenda")}
-              className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
-            >
-              ← Назад к повестке
-            </button>
-            <div className="flex gap-2">
-              <button
-                onClick={saveProtocolData}
-                disabled={isSaving}
-                className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:hover:bg-gray-700"
-              >
-                {isSaving ? "Сохранение..." : "Сохранить черновик"}
-              </button>
-              {!meeting.protocolDocument && (
+              {/* Кнопки внизу */}
+              <div className="flex justify-between mt-6">
                 <button
-                  onClick={() => handleGenerateDocument("PROTOCOL")}
-                  disabled={isGenerating}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+                  onClick={() => setActiveTab("agenda")}
+                  className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
                 >
-                  {isGenerating ? "Формирование..." : "Сформировать протокол"}
+                  ← Назад к повестке
                 </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={saveProtocolData}
+                    disabled={isSaving}
+                    className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                  >
+                    {isSaving ? "Сохранение..." : "Сохранить черновик"}
+                  </button>
+                  {!meeting.protocolDocument && (
+                    <button
+                      onClick={() => handleGenerateDocument("PROTOCOL")}
+                      disabled={isGenerating}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {isGenerating ? "Формирование..." : "Сформировать протокол"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {activeTab === "resolutions" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Постановления ({meeting.resolutions.length})
+            </h3>
+            {meeting.protocolDocument && meeting.protocolDocument.status === "COMPLETED" && (
+              <button
+                onClick={() => {
+                  // TODO: Добавить функционал создания постановления
+                  alertError("Функция создания постановления будет добавлена");
+                }}
+                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Создать постановление
+              </button>
+            )}
+          </div>
+
+          {meeting.resolutions.length === 0 ? (
+            <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Нет постановлений</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {meeting.protocolDocument && meeting.protocolDocument.status === "COMPLETED"
+                  ? "Создайте постановление на основании протокола"
+                  : "Сначала нужно утвердить протокол заседания"}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {meeting.resolutions.map((resolution: any) => (
+                <div
+                  key={resolution.id}
+                  className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+                          {resolution.title || `Постановление ${resolution.regNumber || ""}`}
+                        </h4>
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${DOC_STATUS_COLORS[resolution.status] || DOC_STATUS_COLORS.DRAFT}`}>
+                          {DOC_STATUS_LABELS[resolution.status] || "Черновик"}
+                        </span>
+                      </div>
+                      {resolution.regNumber && (
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          № {resolution.regNumber}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      {resolution.filePath && (
+                        <>
+                          <button
+                            onClick={() => setPdfPreviewUrl(resolution.filePath!)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                          >
+                            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            Просмотр
+                          </button>
+                          <a
+                            href={resolution.filePath}
+                            download
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                          >
+                            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Скачать
+                          </a>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "extracts" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Выписки из протокола ({meeting.extracts.length})
+            </h3>
+            {meeting.protocolDocument && meeting.protocolDocument.status === "COMPLETED" && (
+              <button
+                onClick={() => {
+                  // TODO: Добавить функционал создания выписки
+                  alertError("Функция создания выписки будет добавлена");
+                }}
+                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Создать выписку
+              </button>
+            )}
+          </div>
+
+          {meeting.extracts.length === 0 ? (
+            <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Нет выписок</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {meeting.protocolDocument && meeting.protocolDocument.status === "COMPLETED"
+                  ? "Создайте выписку из протокола при необходимости"
+                  : "Сначала нужно утвердить протокол заседания"}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {meeting.extracts.map((extract: any) => (
+                <div
+                  key={extract.id}
+                  className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+                          {extract.title || `Выписка ${extract.regNumber || ""}`}
+                        </h4>
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${DOC_STATUS_COLORS[extract.status] || DOC_STATUS_COLORS.DRAFT}`}>
+                          {DOC_STATUS_LABELS[extract.status] || "Черновик"}
+                        </span>
+                      </div>
+                      {extract.regNumber && (
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          № {extract.regNumber}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      {extract.filePath && (
+                        <>
+                          <button
+                            onClick={() => setPdfPreviewUrl(extract.filePath!)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                          >
+                            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            Просмотр
+                          </button>
+                          <a
+                            href={extract.filePath}
+                            download
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                          >
+                            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Скачать
+                          </a>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Модальное окно для превью PDF */}
+      <Modal
+        isOpen={!!pdfPreviewUrl}
+        onClose={() => setPdfPreviewUrl(null)}
+        className="max-w-6xl w-full"
+        isFullscreen={false}
+      >
+        <div className="p-4">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Просмотр документа
+            </h3>
+            <div className="flex gap-2">
+              {pdfPreviewUrl && (
+                <a
+                  href={pdfPreviewUrl}
+                  download
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Скачать
+                </a>
               )}
             </div>
           </div>
+          {pdfPreviewUrl && (
+            <div className="w-full h-[80vh] border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-900">
+              <iframe
+                src={`${pdfPreviewUrl}#toolbar=1&navpanes=1&scrollbar=1`}
+                className="w-full h-full"
+                title="PDF Preview"
+                style={{ minHeight: '600px' }}
+              />
+              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
+                Если PDF не отображается, используйте кнопку "Скачать" для просмотра в браузере
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

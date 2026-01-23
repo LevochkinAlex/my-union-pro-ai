@@ -30,9 +30,14 @@ export async function POST(
       );
     }
 
-    // Получаем обращение
-    const ticket = await prisma.ticket.findUnique({
-      where: { id },
+    // Получаем обращение (может быть передан как id или publicId)
+    const ticket = await prisma.ticket.findFirst({
+      where: { 
+        OR: [
+          { id },
+          { publicId: id },
+        ],
+      },
       include: {
         user: {
           select: { id: true, firstName: true, lastName: true },

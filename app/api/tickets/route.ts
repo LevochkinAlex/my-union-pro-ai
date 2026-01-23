@@ -435,21 +435,32 @@ export async function POST(request: NextRequest) {
     // Если чат создан, отправляем начальное сообщение с текстом обращения
     if (appealChat) {
       try {
-        // Создаем начальное сообщение с текстом обращения
-        const initialMessage = `**Обращение #${publicId}**\n\n**${title}**\n\n${content}`;
+        // Форматируем дату создания
+        const createdAt = new Date();
+        const dateStr = createdAt.toLocaleDateString('ru-RU', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        });
+        const timeStr = createdAt.toLocaleTimeString('ru-RU', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
         
-        // Определяем тип сообщения и вложения
-        const hasImages = uploadedFiles.some(f => f.mimeType?.startsWith('image/'));
-        const hasFiles = uploadedFiles.some(f => !f.mimeType?.startsWith('image/'));
-        const messageType = hasImages ? 'image' : hasFiles ? 'file' : 'text';
+        // Создаем начальное сообщение с полной информацией об обращении
+        let initialMessage = `**Обращение #${publicId}**\n\n`;
+        initialMessage += `**Тема:** ${title}\n\n`;
+        initialMessage += `**Текст обращения:**\n${content}\n\n`;
+        initialMessage += `**Дата и время создания:** ${dateStr} в ${timeStr}`;
         
         // Отправляем начальное сообщение в чат
+        // Тип всегда 'text', чтобы сообщение отображалось как обычное сообщение с текстом и вложениями
         const createdMessage = await prisma.chatMessage.create({
           data: {
             chatId: appealChat.id,
             senderId: session.user.id,
             content: initialMessage,
-            messageType: messageType,
+            messageType: 'text', // Всегда 'text', чтобы отображалось как обычное сообщение
             attachments: uploadedFiles.length > 0 ? {
               create: uploadedFiles.map(file => {
                 const isImage = file.mimeType?.startsWith('image/');
@@ -473,6 +484,8 @@ export async function POST(request: NextRequest) {
             lastMessageAt: createdMessage.createdAt,
           },
         });
+
+        console.log(`[tickets] ✅ Создано начальное сообщение обращения: ${createdMessage.id}, тип: ${createdMessage.messageType}, вложений: ${uploadedFiles.length}, senderId: ${createdMessage.senderId}, chatId: ${appealChat.id}`);
 
         // Отправляем уведомления участникам чата (кроме создателя обращения)
         try {

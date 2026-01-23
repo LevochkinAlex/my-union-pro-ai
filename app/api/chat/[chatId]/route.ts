@@ -7,7 +7,14 @@ import { normalizeUserAvatar } from '@/lib/api-helpers';
 import { getFileUrlWithCDN } from '@/lib/cdn';
 import * as Sentry from '@sentry/nextjs';
 import { sendUserNotification } from '@/lib/notifications';
-import { invalidateChatCache, invalidateUserChatsCache } from '@/lib/chat-redis';
+import { 
+  invalidateChatCache, 
+  invalidateUserChatsCache,
+  cacheChatMessages,
+  getCachedChatMessages,
+  cacheChatData,
+  getCachedChatData,
+} from '@/lib/chat-redis';
 import { ChatType } from '@prisma/client';
 // Динамический импорт для избежания проблем при сборке
 // Кэшируем модуль для производительности
@@ -55,8 +62,12 @@ export async function GET(
       throw error;
     }
 
-    // Загружаем чат
-    const chat = await prisma.chat.findUnique({
+    // Пытаемся получить кэшированные данные чата
+    let chat = await getCachedChatData(chatId);
+    
+    if (!chat) {
+      // Загружаем чат из БД
+      chat = await prisma.chat.findUnique({
       where: { id: chatId },
       include: {
         participants: {
@@ -107,10 +118,128 @@ export async function GET(
           },
         },
       } as any,
-    });
+      });
+    }
 
     if (!chat) {
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
+    }
+
+    // Кэшируем данные чата для следующих запросов
+    await cacheChatData(chatId, chat).catch(err => 
+      console.warn('[chat] Cache error:', err)
+    );
+
+    // Пытаемся получить кэшированные сообщения
+    const cachedMessages = await getCachedChatMessages(chatId, cursor || undefined, direction);
+    
+    if (cachedMessages) {
+      // Если есть кэш, возвращаем его (но все равно загружаем историю операций если нужно)
+      let activityMessages: any[] = [];
+      if (chat.ticket) {
+        const actionLogs = await prisma.ticketActionLog.findMany({
+          where: { ticketId: chat.ticket.id },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        activityMessages = actionLogs.map((log) => ({
+          id: `activity_${log.id}`,
+          chatId,
+          senderId: log.userId,
+          content: log.description || `Операция: ${log.actionType}`,
+          messageType: 'activity',
+          createdAt: log.createdAt,
+          editedAt: null,
+          isRead: false,
+          isActivity: true,
+          activityType: log.actionType === 'created' ? 'status_changed' : 
+                       log.actionType === 'status_changed' ? 'status_changed' :
+                       log.actionType === 'comment_added' ? 'message_edited' :
+                       'file_attached',
+          activityData: log.metadata,
+          sender: {
+            id: log.user.id,
+            firstName: log.user.firstName,
+            lastName: log.user.lastName,
+            middleName: null,
+            avatarUrl: normalizeUserAvatar(log.user)?.avatarUrl || null,
+          },
+          reactions: {},
+          attachments: [],
+          threadRepliesCount: 0,
+        }));
+      }
+
+      const allMessages = [...cachedMessages, ...activityMessages].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+
+      return NextResponse.json({
+        chat,
+        messages: allMessages,
+        pagination: {
+          hasMore: false, // Из кэша не знаем hasMore
+          oldestMessageId: allMessages.length > 0 ? allMessages[0].id : null,
+          newestMessageId: allMessages.length > 0 ? allMessages[allMessages.length - 1].id : null,
+        },
+        cached: true, // Флаг что данные из кэша
+      });
+    }
+
+    // Загружаем историю операций обращения, если это чат обращения
+    let activityMessages: any[] = [];
+    if (chat.ticket) {
+      const actionLogs = await prisma.ticketActionLog.findMany({
+        where: { ticketId: chat.ticket.id },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      activityMessages = actionLogs.map((log) => ({
+        id: `activity_${log.id}`,
+        chatId,
+        senderId: log.userId,
+        content: log.description || `Операция: ${log.actionType}`,
+        messageType: 'activity',
+        createdAt: log.createdAt,
+        editedAt: null,
+        isRead: false,
+        isActivity: true,
+        activityType: log.actionType === 'created' ? 'status_changed' : 
+                     log.actionType === 'status_changed' ? 'status_changed' :
+                     log.actionType === 'comment_added' ? 'message_edited' :
+                     'file_attached',
+        activityData: log.metadata,
+        sender: {
+          id: log.user.id,
+          firstName: log.user.firstName,
+          lastName: log.user.lastName,
+          middleName: null,
+          avatarUrl: normalizeUserAvatar(log.user)?.avatarUrl || null,
+        },
+        reactions: {},
+        attachments: [],
+        threadRepliesCount: 0,
+      }));
     }
 
     // Загружаем сообщения
@@ -528,16 +657,30 @@ export async function GET(
             if (postRecord) {
               // Загружаем реакции для виртуального сообщения поста
               // Реакции хранятся в ChatMessage, нужно найти сообщение по postId
-              const postMessage = await prisma.chatMessage.findFirst({
+              // Ищем все сообщения типа channel_post и фильтруем по postId в JSON
+              const channelPostMessages = await prisma.chatMessage.findMany({
                 where: {
                   chatId: chatId,
                   messageType: 'channel_post',
-                  content: { contains: postId },
                 },
                 include: {
                   reactions: true,
                 },
               });
+
+              // Находим сообщение с нужным postId, парся JSON content
+              let postMessage = null;
+              for (const msg of channelPostMessages) {
+                try {
+                  const parsed = JSON.parse(msg.content);
+                  if (parsed.postId === postId) {
+                    postMessage = msg;
+                    break;
+                  }
+                } catch (e) {
+                  // Игнорируем ошибки парсинга
+                }
+              }
 
               // Форматируем реакции
               const virtualReactions = (postMessage?.reactions || []).reduce((acc: any, r: any) => {
@@ -577,9 +720,14 @@ export async function GET(
         }
       }
 
-      // Объединяем реальные и виртуальные сообщения, сортируем по дате
-      const allMessages = [...formattedMessages, ...virtualMessages].sort(
+      // Объединяем реальные, виртуальные и системные сообщения, сортируем по дате
+      const allMessages = [...formattedMessages, ...virtualMessages, ...activityMessages].sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+
+      // Кэшируем сообщения для следующих запросов
+      await cacheChatMessages(chatId, formattedMessages, cursor || undefined, direction).catch(err =>
+        console.warn('[chat] Cache error:', err)
       );
 
       return NextResponse.json({
@@ -593,13 +741,28 @@ export async function GET(
       });
     }
 
+    // Объединяем реальные и системные сообщения, сортируем по дате
+    const allMessages = [...formattedMessages, ...activityMessages].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+
+    // Кэшируем сообщения для следующих запросов
+    await cacheChatMessages(chatId, formattedMessages, cursor || undefined, direction).catch(err =>
+      console.warn('[chat] Cache error:', err)
+    );
+
+    // Логируем для отладки обращений
+    if (chat.ticket) {
+      console.log(`[chat] Загружено сообщений для обращения ${chat.ticket.publicId}: обычных: ${formattedMessages.length}, системных: ${activityMessages.length}, всего: ${allMessages.length}`);
+    }
+
     return NextResponse.json({
       chat,
-      messages: formattedMessages,
+      messages: allMessages,
       pagination: {
         hasMore,
-        oldestMessageId: formattedMessages.length > 0 ? formattedMessages[0].id : null,
-        newestMessageId: formattedMessages.length > 0 ? formattedMessages[formattedMessages.length - 1].id : null,
+        oldestMessageId: allMessages.length > 0 ? allMessages[0].id : null,
+        newestMessageId: allMessages.length > 0 ? allMessages[allMessages.length - 1].id : null,
       },
     });
   } catch (error: any) {

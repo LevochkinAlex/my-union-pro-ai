@@ -190,10 +190,11 @@ export async function POST(
     }
 
     // Создание документа в БД
+    // Статус DRAFT - документ создан, но еще не отправлен на согласование
     const document = await prisma.document.create({
       data: {
         type: documentType as DocumentType,
-        status: DocumentStatus.GENERATED,
+        status: DocumentStatus.DRAFT, // Черновик - согласно алгоритму
         category: DocumentCategory.INTERNAL,
         title: documentTitle,
         content: htmlContent,
@@ -219,40 +220,22 @@ export async function POST(
       });
 
       // Назначаем повестку дня всем участникам заседания для ознакомления
-      const participantsWithUserId = meeting.participants.filter(p => p.user?.id);
+      // Согласно алгоритму: Шаг 3. Ознакомление/согласование повестки
+      // Примечание: документ создается в статусе DRAFT, отправка на согласование происходит отдельно
+      const participantsWithUserId = meeting.participants.filter(p => p.user?.id && p.role !== "CHAIRMAN");
       
       if (participantsWithUserId.length > 0) {
-        // Создаем копии документа для каждого участника с assignedToId
-        const assignedDocuments = await Promise.all(
-          participantsWithUserId.map(participant => 
-            prisma.document.create({
-              data: {
-                type: documentType as DocumentType,
-                status: DocumentStatus.GENERATED,
-                category: DocumentCategory.INTERNAL,
-                title: documentTitle,
-                content: htmlContent,
-                regNumber: `${regNumber}-${participant.user!.id.slice(0, 4)}`, // Уникальный номер для копии
-                regDate: new Date(),
-                filePath,
-                fileName: filePath ? filePath.split("/").pop() : null,
-                userId: session.user.id, // Создатель - председатель
-                organizationId: meeting.organizationId,
-                assignedToId: participant.user!.id, // Назначено участнику
-                assignedAt: new Date(),
-                metadata: {
-                  meetingId: meeting.id,
-                  meetingNumber: meeting.number,
-                  meetingDate: meeting.scheduledDate.toISOString(),
-                  isCopy: true,
-                  originalDocumentId: document.id,
-                },
-              },
-            })
-          )
-        );
+        // Назначаем документ первому участнику для отображения в его списке документов
+        // Остальные участники получат доступ через систему согласований
+        await prisma.document.update({
+          where: { id: document.id },
+          data: {
+            assignedToId: participantsWithUserId[0].user!.id,
+            assignedAt: new Date(),
+          },
+        });
 
-        console.log(`[generate-document] Повестка дня назначена ${assignedDocuments.length} участникам`);
+        console.log(`[generate-document] Повестка дня создана. Для отправки на согласование используйте функцию "Отправить на согласование"`);
       }
     } else {
       await prisma.meeting.update({
@@ -261,40 +244,22 @@ export async function POST(
       });
 
       // Назначаем протокол всем участникам заседания для ознакомления
-      const participantsWithUserId = meeting.participants.filter(p => p.user?.id);
+      // Согласно алгоритму: Шаг 5. Оформление протокола
+      // Примечание: документ создается в статусе DRAFT, отправка на согласование происходит отдельно
+      const participantsWithUserId = meeting.participants.filter(p => p.user?.id && p.role !== "CHAIRMAN");
       
       if (participantsWithUserId.length > 0) {
-        // Создаем копии документа для каждого участника с assignedToId
-        const assignedDocuments = await Promise.all(
-          participantsWithUserId.map(participant => 
-            prisma.document.create({
-              data: {
-                type: documentType as DocumentType,
-                status: DocumentStatus.GENERATED,
-                category: DocumentCategory.INTERNAL,
-                title: documentTitle,
-                content: htmlContent,
-                regNumber: `${regNumber}-${participant.user!.id.slice(0, 4)}`, // Уникальный номер для копии
-                regDate: new Date(),
-                filePath,
-                fileName: filePath ? filePath.split("/").pop() : null,
-                userId: session.user.id, // Создатель - председатель
-                organizationId: meeting.organizationId,
-                assignedToId: participant.user!.id, // Назначено участнику
-                assignedAt: new Date(),
-                metadata: {
-                  meetingId: meeting.id,
-                  meetingNumber: meeting.number,
-                  meetingDate: meeting.scheduledDate.toISOString(),
-                  isCopy: true,
-                  originalDocumentId: document.id,
-                },
-              },
-            })
-          )
-        );
+        // Назначаем документ первому участнику для отображения в его списке документов
+        // Остальные участники получат доступ через систему согласований
+        await prisma.document.update({
+          where: { id: document.id },
+          data: {
+            assignedToId: participantsWithUserId[0].user!.id,
+            assignedAt: new Date(),
+          },
+        });
 
-        console.log(`[generate-document] Протокол назначен ${assignedDocuments.length} участникам`);
+        console.log(`[generate-document] Протокол создан. Для отправки на согласование используйте функцию "Отправить на согласование"`);
       }
     }
 

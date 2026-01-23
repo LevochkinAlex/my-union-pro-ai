@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import { normalizeUserAvatar } from "@/lib/api-helpers";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -1018,7 +1018,7 @@ function ChannelPostDisplay({
 
 
   return (
-    <div className="space-y-3 relative">
+    <div className="space-y-3 relative break-words overflow-wrap-anywhere min-w-0 w-full">
       {/* Информация о пересылке и канале */}
       {(post as any).forwarded && (post as any).channelName && (
         <div className={clsx(
@@ -1066,13 +1066,14 @@ function ChannelPostDisplay({
       {/* Content */}
       <div
         className={`
-          text-sm leading-relaxed break-words
+          text-sm leading-relaxed break-words overflow-wrap-anywhere word-break-break-word
           ${isOwn ? 'text-white/90' : 'text-gray-700 dark:text-gray-300'}
           prose prose-sm max-w-none
           ${isOwn 
             ? 'prose-invert [&_*]:!text-white/90' 
             : '[&_p]:text-gray-700 dark:[&_p]:text-gray-300'
           }
+          [&_p]:break-words [&_p]:overflow-wrap-anywhere [&_p]:word-break-break-word
         `}
         dangerouslySetInnerHTML={{ __html: post.content }}
       />
@@ -1179,24 +1180,6 @@ function ChannelPostDisplay({
         </div>
       )}
 
-      {/* Reactions - как в обычных сообщениях, абсолютное позиционирование */}
-      {messageReactions && Object.keys(messageReactions).length > 0 ? (
-        <div className={clsx(
-          "absolute bottom-2.5 flex flex-wrap gap-0.5 z-20",
-          isOwn ? 'right-2' : 'left-2'
-        )}>
-          <MessageReactionsDisplay
-            reactions={messageReactions}
-            currentUserId={currentUserId || ''}
-            onToggle={(emoji) => {
-              if (onReaction && messageId) {
-                onReaction(messageId, emoji);
-              }
-            }}
-            isGroupChat={true}
-          />
-        </div>
-      ) : null}
 
       {/* Thread indicator with mini-avatars - как в Slack */}
       {commentsCount > 0 && (
@@ -1256,14 +1239,14 @@ interface MessageBubbleProps {
   showName: boolean;
   currentUserId: string;
   onContextMenu: (e: React.MouseEvent, message: Message) => void;
-  onReaction?: (emoji: string) => void;
+  onReaction?: (messageId: string, emoji: string) => void;
   onOpenThread?: () => void;
   onImageClick?: (url: string, name?: string) => void;
   onPollVote?: (pollId: string, optionId: string) => void;
   isGroupChat?: boolean;
 }
 
-function MessageBubble({
+const MessageBubble = memo(function MessageBubble({
   message,
   isOwn,
   showAvatar,
@@ -1314,7 +1297,7 @@ function MessageBubble({
       </div>
 
       {/* Message content */}
-      <div className={`max-w-[70%] ${isOwn ? 'items-end' : 'items-start'}`}>
+      <div className={`max-w-[70%] min-w-0 ${isOwn ? 'items-end' : 'items-start'} ${isChannelPost ? 'max-w-[85%] sm:max-w-[75%]' : ''}`}>
         {/* Reply preview */}
         {message.replyTo && (
           <div className={`
@@ -1335,7 +1318,7 @@ function MessageBubble({
 
         {/* Bubble */}
         <div className={`
-          group relative rounded-2xl px-4 py-2.5 flex flex-col
+          group relative rounded-2xl px-4 py-2.5 flex flex-col min-w-0 w-full
           ${isOwn 
             ? 'bg-blue-500 text-white rounded-br-md' 
             : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-bl-md'
@@ -1369,9 +1352,9 @@ function MessageBubble({
               messageId={message.id}
               messageReactions={message.reactions || undefined}
               onReaction={(msgId, emoji) => {
-                // onReaction в MessageBubble принимает только emoji, messageId уже известен
+                // Передаем messageId и emoji в родительский обработчик
                 if (onReaction) {
-                  onReaction(emoji);
+                  onReaction(msgId, emoji);
                 }
               }}
               currentUserId={currentUserId}
@@ -1492,7 +1475,7 @@ function MessageBubble({
                 <MessageReactionsDisplay
                   reactions={message.reactions}
                   currentUserId={currentUserId}
-                  onToggle={(emoji) => onReaction?.(emoji)}
+                  onToggle={(emoji) => onReaction?.(message.id, emoji)}
                   isGroupChat={isGroupChat}
                 />
               </div>
@@ -1532,7 +1515,18 @@ function MessageBubble({
       </div>
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // Кастомная функция сравнения для оптимизации
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.reactions === nextProps.message.reactions &&
+    prevProps.message.threadRepliesCount === nextProps.message.threadRepliesCount &&
+    prevProps.isOwn === nextProps.isOwn &&
+    prevProps.showAvatar === nextProps.showAvatar &&
+    prevProps.showName === nextProps.showName
+  );
+});
 
 // ============================================================================
 // СИСТЕМНОЕ СООБЩЕНИЕ
@@ -1587,6 +1581,8 @@ export default function SlackStyleMessages({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isRestoringScrollRef = useRef(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -1599,26 +1595,184 @@ export default function SlackStyleMessages({
     });
   }, []);
 
-  useEffect(() => {
-    if (isAtBottom) {
-      scrollToBottom();
-    }
-  }, [messages.length, isAtBottom, scrollToBottom]);
-
-  const handleScroll = useCallback(() => {
-    if (!containerRef.current) return;
+  // Сохранение позиции скролла (относительно низа контейнера для стабильности)
+  const saveScrollPosition = useCallback(() => {
+    if (!containerRef.current || !chatId || isRestoringScrollRef.current) return;
+    
     const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-    setIsAtBottom(scrollHeight - scrollTop - clientHeight < 100);
-  }, []);
+    // Сохраняем расстояние от низа, а не от верха - это более стабильно при изменении высоты контента
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    
+    // Находим ID последнего видимого сообщения для более точного восстановления
+    const visibleMessages = messages.filter((msg, idx) => {
+      const element = document.querySelector(`[data-message-id="${msg.id}"]`);
+      if (!element) return false;
+      const rect = element.getBoundingClientRect();
+      const containerRect = containerRef.current!.getBoundingClientRect();
+      return rect.top >= containerRect.top && rect.top <= containerRect.bottom;
+    });
+    
+    const lastVisibleMessageId = visibleMessages.length > 0 
+      ? visibleMessages[visibleMessages.length - 1].id 
+      : messages.length > 0 ? messages[messages.length - 1].id : null;
+    
+    if (distanceFromBottom > 0 || lastVisibleMessageId) {
+      // Сохраняем в localStorage для персистентности
+      try {
+        localStorage.setItem(`chat_scroll_${chatId}`, JSON.stringify({
+          distanceFromBottom,
+          lastVisibleMessageId,
+          scrollTop, // Сохраняем и абсолютную позицию для совместимости
+        }));
+      } catch (e) {
+        // Игнорируем ошибки localStorage
+      }
+    }
+  }, [chatId, messages]);
+
+  // Восстановление позиции скролла
+  const restoreScrollPosition = useCallback(() => {
+    if (!containerRef.current || !chatId || messages.length === 0) return;
+    
+    try {
+      const savedData = localStorage.getItem(`chat_scroll_${chatId}`);
+      if (!savedData) return;
+      
+      const saved = JSON.parse(savedData);
+      const { distanceFromBottom, lastVisibleMessageId, scrollTop: savedScrollTop } = saved || {};
+      
+      isRestoringScrollRef.current = true;
+      
+      // Используем двойной requestAnimationFrame для гарантии полного рендера
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!containerRef.current) {
+            isRestoringScrollRef.current = false;
+            return;
+          }
+          
+          // Приоритет 1: Восстановление по ID последнего видимого сообщения (самый точный способ)
+          if (lastVisibleMessageId) {
+            const messageElement = document.querySelector(`[data-message-id="${lastVisibleMessageId}"]`) as HTMLElement;
+            if (messageElement) {
+              // Скроллим к сообщению, выравнивая по верху видимой области
+              messageElement.scrollIntoView({ behavior: 'auto', block: 'start' });
+              // Добавляем небольшой отступ от верха
+              containerRef.current.scrollTop = Math.max(0, containerRef.current.scrollTop - 20);
+              setTimeout(() => {
+                isRestoringScrollRef.current = false;
+              }, 200);
+              return;
+            }
+          }
+          
+          // Приоритет 2: Восстановление по расстоянию от низа (более стабильно при изменении высоты)
+          if (distanceFromBottom !== undefined && distanceFromBottom > 0) {
+            const { scrollHeight, clientHeight } = containerRef.current;
+            const targetScrollTop = scrollHeight - clientHeight - distanceFromBottom;
+            if (targetScrollTop > 0) {
+              containerRef.current.scrollTop = targetScrollTop;
+              setTimeout(() => {
+                isRestoringScrollRef.current = false;
+              }, 200);
+              return;
+            }
+          }
+          
+          // Приоритет 3: Восстановление по абсолютной позиции (fallback)
+          if (savedScrollTop && savedScrollTop > 0) {
+            containerRef.current.scrollTop = savedScrollTop;
+            setTimeout(() => {
+              isRestoringScrollRef.current = false;
+            }, 200);
+            return;
+          }
+          
+          isRestoringScrollRef.current = false;
+        });
+      });
+    } catch (e) {
+      // Игнорируем ошибки localStorage
+      isRestoringScrollRef.current = false;
+    }
+  }, [chatId, messages]);
+
+  // Восстанавливаем позицию при загрузке сообщений
+  useEffect(() => {
+    if (messages.length > 0 && chatId) {
+      // Проверяем, был ли пользователь внизу
+      const wasAtBottom = localStorage.getItem(`chat_at_bottom_${chatId}`) === 'true';
+      
+      if (wasAtBottom) {
+        // Если был внизу, скроллим вниз
+        setTimeout(() => {
+          scrollToBottom(false);
+        }, 100);
+      } else {
+        // Если не был внизу, восстанавливаем позицию
+        const timer = setTimeout(() => {
+          restoreScrollPosition();
+        }, 200);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [messages.length, chatId, restoreScrollPosition, scrollToBottom]);
+
+  // Автоматический скролл вниз только если пользователь был внизу и не восстанавливаем позицию
+  useEffect(() => {
+    if (isAtBottom && !isRestoringScrollRef.current) {
+      // Проверяем, что пользователь действительно был внизу (не восстанавливаем позицию)
+      const wasAtBottom = localStorage.getItem(`chat_at_bottom_${chatId}`) === 'true';
+      if (wasAtBottom) {
+        scrollToBottom();
+      }
+    }
+  }, [messages.length, isAtBottom, scrollToBottom, chatId]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, message: Message) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY, message });
   }, []);
 
+  const handleScroll = useCallback(() => {
+    if (!containerRef.current || isRestoringScrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const atBottom = distanceFromBottom < 100;
+    setIsAtBottom(atBottom);
+    
+    // Сохраняем флаг, был ли пользователь внизу
+    if (chatId) {
+      try {
+        localStorage.setItem(`chat_at_bottom_${chatId}`, String(atBottom));
+      } catch (e) {
+        // Игнорируем ошибки localStorage
+      }
+    }
+    
+    // Debounce сохранения позиции скролла
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    scrollTimeoutRef.current = setTimeout(() => {
+      saveScrollPosition();
+    }, 150);
+  }, [saveScrollPosition, chatId]);
+
   const handleCopy = useCallback((message: Message) => {
     navigator.clipboard.writeText(message.content);
   }, []);
+
+  // Очистка при размонтировании
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      // Сохраняем позицию при размонтировании
+      saveScrollPosition();
+    };
+  }, [saveScrollPosition]);
 
   return (
     <div
@@ -1627,7 +1781,7 @@ export default function SlackStyleMessages({
       onScroll={handleScroll}
     >
       <div className="py-4 px-4 space-y-1 min-h-full">
-        {messages.map((message, index) => {
+        {useMemo(() => messages.map((message, index) => {
           const previousMessage = index > 0 ? messages[index - 1] : undefined;
           const showDate = shouldShowDateSeparator(message, previousMessage);
           const isOwn = message.senderId === currentUserId;
@@ -1671,7 +1825,7 @@ export default function SlackStyleMessages({
                   showName={showName}
                   currentUserId={currentUserId}
                   onContextMenu={handleContextMenu}
-                  onReaction={(emoji) => onReaction?.(message.id, emoji)}
+                  onReaction={onReaction ? (msgId, emoji) => onReaction(msgId, emoji) : undefined}
                   onOpenThread={() => onOpenThread?.(message)}
                   onImageClick={onImageClick}
                   onPollVote={onPollVote}
@@ -1680,7 +1834,7 @@ export default function SlackStyleMessages({
               </div>
             </div>
           );
-        })}
+        }), [messages, currentUserId, handleContextMenu, onReaction, onOpenThread, onImageClick, onPollVote, isGroupChat, isTicketChat, ticketId])}
 
         {/* Typing indicator */}
         {typingUsers.size > 0 && (

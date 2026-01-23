@@ -228,6 +228,17 @@ export async function invalidateChatCache(chatId: string): Promise<void> {
   if (!client) return;
 
   try {
+    // Инвалидируем кэш сообщений чата
+    const messageCacheKey = `chat:messages:${chatId}:*`;
+    const messageKeys = await client.keys(messageCacheKey);
+    if (messageKeys.length > 0) {
+      await client.del(...messageKeys);
+    }
+
+    // Инвалидируем кэш данных чата
+    const chatDataKey = `chat:data:${chatId}`;
+    await client.del(chatDataKey);
+
     // Инвалидируем кэш для всех участников чата
     const chat = await import("@/lib/prisma").then(m => m.prisma.chat.findUnique({
       where: { id: chatId },
@@ -246,4 +257,97 @@ export async function invalidateChatCache(chatId: string): Promise<void> {
   } catch (error) {
     console.error("[chat-redis] Error invalidating chat cache:", error);
   }
+}
+
+// ============================================================================
+// MESSAGE CACHE
+// ============================================================================
+
+/**
+ * Кэширует сообщения чата в Redis
+ * TTL: 5 минут (сообщения могут обновляться часто)
+ */
+export async function cacheChatMessages(
+  chatId: string,
+  messages: any[],
+  cursor?: string,
+  direction?: string
+): Promise<void> {
+  const client = await getRedisClient();
+  if (!client) return;
+
+  try {
+    const cacheKey = `chat:messages:${chatId}:${cursor || 'latest'}:${direction || 'newer'}`;
+    const value = JSON.stringify(messages);
+    
+    // Кэшируем на 5 минут
+    await client.setex(cacheKey, 300, value);
+  } catch (error) {
+    console.error("[chat-redis] Error caching messages:", error);
+  }
+}
+
+/**
+ * Получает кэшированные сообщения чата из Redis
+ */
+export async function getCachedChatMessages(
+  chatId: string,
+  cursor?: string,
+  direction?: string
+): Promise<any[] | null> {
+  const client = await getRedisClient();
+  if (!client) return null;
+
+  try {
+    const cacheKey = `chat:messages:${chatId}:${cursor || 'latest'}:${direction || 'newer'}`;
+    const value = await client.get(cacheKey);
+    
+    if (value) {
+      return JSON.parse(value);
+    }
+  } catch (error) {
+    console.error("[chat-redis] Error getting cached messages:", error);
+  }
+
+  return null;
+}
+
+/**
+ * Кэширует данные чата (без сообщений)
+ * TTL: 10 минут (данные чата меняются реже)
+ */
+export async function cacheChatData(chatId: string, chatData: any): Promise<void> {
+  const client = await getRedisClient();
+  if (!client) return;
+
+  try {
+    const cacheKey = `chat:data:${chatId}`;
+    const value = JSON.stringify(chatData);
+    
+    // Кэшируем на 10 минут
+    await client.setex(cacheKey, 600, value);
+  } catch (error) {
+    console.error("[chat-redis] Error caching chat data:", error);
+  }
+}
+
+/**
+ * Получает кэшированные данные чата из Redis
+ */
+export async function getCachedChatData(chatId: string): Promise<any | null> {
+  const client = await getRedisClient();
+  if (!client) return null;
+
+  try {
+    const cacheKey = `chat:data:${chatId}`;
+    const value = await client.get(cacheKey);
+    
+    if (value) {
+      return JSON.parse(value);
+    }
+  } catch (error) {
+    console.error("[chat-redis] Error getting cached chat data:", error);
+  }
+
+  return null;
 }

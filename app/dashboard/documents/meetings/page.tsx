@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { alertSuccess, alertError } from "@/lib/alert";
 import Link from "next/link";
+import { Modal } from "@/components/ui/modal";
 
 interface Meeting {
   id: string;
@@ -73,6 +74,8 @@ export default function MeetingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [activeTab, setActiveTab] = useState<"all" | "agenda" | "protocol" | "resolutions" | "extracts">("all");
+  const [isAlgorithmExpanded, setIsAlgorithmExpanded] = useState(false);
 
   const [formData, setFormData] = useState({
     type: "COMMITTEE",
@@ -328,25 +331,152 @@ export default function MeetingsPage() {
         </button>
       </div>
 
-      {/* Информационный блок с алгоритмом */}
-      <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
-        <h3 className="mb-2 font-semibold text-blue-700 dark:text-blue-400">
-          Алгоритм проведения заседания:
-        </h3>
-        <ol className="list-decimal list-inside space-y-1 text-sm text-blue-600 dark:text-blue-400">
-          <li>Создайте заседание с повесткой дня</li>
-          <li>Сформируйте документ <strong>«Повестка дня»</strong> и отправьте участникам</li>
-          <li>Проведите заседание (очно или онлайн)</li>
-          <li>Создайте <strong>«Протокол»</strong> с результатами голосования по каждому вопросу</li>
-          <li>На основании протокола сформируйте <strong>«Постановление»</strong></li>
-          <li>При необходимости создайте <strong>«Выписку из протокола»</strong></li>
-        </ol>
+      {/* Табы */}
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab("all")}
+            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+              activeTab === "all"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Все заседания
+            {meetings.length > 0 && (
+              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                {meetings.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("agenda")}
+            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+              activeTab === "agenda"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Повестки
+            {meetings.filter(m => m.agendaDocument).length > 0 && (
+              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                {meetings.filter(m => m.agendaDocument).length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("protocol")}
+            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+              activeTab === "protocol"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Протоколы
+            {meetings.filter(m => m.protocolDocument).length > 0 && (
+              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                {meetings.filter(m => m.protocolDocument).length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("resolutions")}
+            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+              activeTab === "resolutions"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Постановления
+            {meetings.reduce((sum, m) => sum + (m._count?.resolutions || 0), 0) > 0 && (
+              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                {meetings.reduce((sum, m) => sum + (m._count?.resolutions || 0), 0)}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("extracts")}
+            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+              activeTab === "extracts"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Выписки
+            {meetings.reduce((sum, m) => sum + (m._count?.extracts || 0), 0) > 0 && (
+              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                {meetings.reduce((sum, m) => sum + (m._count?.extracts || 0), 0)}
+              </span>
+            )}
+          </button>
+        </nav>
       </div>
 
-      {/* Форма создания заседания */}
-      {showCreateForm && (
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <h2 className="mb-4 text-xl font-semibold">Новое заседание</h2>
+      {/* Информационный блок с алгоритмом - сворачиваемый */}
+      <div className="rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-900/20">
+        <button
+          onClick={() => setIsAlgorithmExpanded(!isAlgorithmExpanded)}
+          className="flex w-full items-center justify-between p-4 text-left hover:bg-blue-100/50 dark:hover:bg-blue-900/30"
+        >
+          <h3 className="font-semibold text-blue-700 dark:text-blue-400">
+            Алгоритм проведения заседания (согласно требованиям)
+          </h3>
+          <svg
+            className={`h-5 w-5 text-blue-700 transition-transform dark:text-blue-400 ${
+              isAlgorithmExpanded ? "rotate-180" : ""
+            }`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {isAlgorithmExpanded && (
+          <div className="border-t border-blue-200 p-4 dark:border-blue-800">
+            <ol className="list-decimal list-inside space-y-2 text-sm text-blue-600 dark:text-blue-400">
+              <li><strong>Шаг 1:</strong> Создайте заседание с повесткой дня</li>
+              <li><strong>Шаг 2:</strong> Сформируйте документ <strong>«Повестка дня»</strong> (статус: Черновик)</li>
+              <li><strong>Шаг 3:</strong> Отправьте повестку на согласование участникам (статус: На согласовании)</li>
+              <li><strong>Шаг 4:</strong> После согласования всеми участниками утвердите повестку председателем (статус: Утверждено)</li>
+              <li><strong>Шаг 5:</strong> Проведите заседание (очно или онлайн)</li>
+              <li><strong>Шаг 6:</strong> Создайте <strong>«Протокол»</strong> с результатами голосования (статус: Черновик)</li>
+              <li><strong>Шаг 7:</strong> Отправьте протокол на согласование участникам (статус: На согласовании)</li>
+              <li><strong>Шаг 8:</strong> После согласования утвердите протокол председателем (статус: Утверждено)</li>
+              <li><strong>Шаг 9:</strong> На основании протокола сформируйте <strong>«Постановление»</strong></li>
+              <li><strong>Шаг 10:</strong> При необходимости создайте <strong>«Выписку из протокола»</strong></li>
+            </ol>
+            <div className="mt-3 rounded bg-blue-100/50 p-2 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+              <strong>Важно:</strong> Документооборот проходит через этапы: Черновик → На согласовании → Утверждено
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Модальное окно создания заседания */}
+      <Modal
+        isOpen={showCreateForm}
+        onClose={() => {
+          setShowCreateForm(false);
+          // Сброс формы при закрытии
+          setFormData({
+            type: "COMMITTEE",
+            format: "OFFLINE",
+            title: "",
+            scheduledDate: "",
+            scheduledTime: "",
+            location: "",
+            onlineLink: "",
+            secretaryId: "",
+            participantIds: [],
+            externalParticipants: [],
+            agendaItems: [{ title: "", description: "", speakerId: "", speakerName: "" }],
+          });
+        }}
+        className="max-w-4xl w-full"
+      >
+        <div className="p-6 max-h-[90vh] overflow-y-auto">
+          <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Новое заседание</h2>
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
@@ -698,28 +828,47 @@ export default function MeetingsPage() {
             </button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Список заседаний */}
-      {meetings.length === 0 && !showCreateForm ? (
-        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Нет заседаний</h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Начните с создания нового заседания профкома
-          </p>
-          <button
-            onClick={() => setShowCreateForm(true)}
-            className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-          >
-            Создать заседание
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {meetings.map((meeting) => (
+      {(() => {
+        // Фильтрация заседаний по активному табу
+        const filteredMeetings = activeTab === "all" ? meetings :
+          activeTab === "agenda" ? meetings.filter(m => m.agendaDocument) :
+          activeTab === "protocol" ? meetings.filter(m => m.protocolDocument) :
+          activeTab === "resolutions" ? meetings.filter(m => (m._count?.resolutions || 0) > 0) :
+          activeTab === "extracts" ? meetings.filter(m => (m._count?.extracts || 0) > 0) :
+          meetings;
+
+        if (filteredMeetings.length === 0 && !showCreateForm) {
+          return (
+            <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Нет заседаний</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {activeTab === "all" ? "Начните с создания нового заседания профкома" : 
+                 activeTab === "agenda" ? "Нет заседаний с повестками" :
+                 activeTab === "protocol" ? "Нет заседаний с протоколами" :
+                 activeTab === "resolutions" ? "Нет заседаний с постановлениями" :
+                 "Нет заседаний с выписками"}
+              </p>
+              {activeTab === "all" && (
+                <button
+                  onClick={() => setShowCreateForm(true)}
+                  className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                >
+                  Создать заседание
+                </button>
+              )}
+            </div>
+          );
+        }
+
+        return (
+          <div className="space-y-4">
+            {filteredMeetings.map((meeting) => (
             <div
               key={meeting.id}
               className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
@@ -786,7 +935,8 @@ export default function MeetingsPage() {
             </div>
           ))}
         </div>
-      )}
+      );
+      })()}
     </div>
   );
 }

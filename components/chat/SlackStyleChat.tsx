@@ -144,11 +144,13 @@ interface ChatHeaderProps {
   onEditGroup?: () => void;
   isCurrentUserAdmin?: boolean;
   ticketId?: string | null;
+  ticketPublicId?: string | null;
   onCloseAppeal?: () => void;
 }
 
-function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditGroup, isCurrentUserAdmin, ticketId, onCloseAppeal }: ChatHeaderProps) {
+function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditGroup, isCurrentUserAdmin, ticketId, ticketPublicId, onCloseAppeal }: ChatHeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const router = useRouter();
   const { displayName, avatarUrl, subtitle, isAI, isGroup, isTicketChat } = getChatDisplayInfo(chat, currentUserId);
   const { showToast } = useToast();
   
@@ -294,11 +296,13 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
                 <button 
                   onClick={() => {
                     setShowMenu(false);
-                    if (isTicketChat || ticketId) {
+                    if (isTicketChat || ticketId || ticketPublicId) {
                       // Для обращений открываем страницу обращения
-                      const ticketIdToUse = ticketId || chat.ticketId || chat.ticketPublicId;
+                      const ticketIdToUse = ticketPublicId || ticketId || chat.ticketPublicId || chat.ticketId;
                       if (ticketIdToUse) {
-                        window.open(`/dashboard/appeals?ticketId=${ticketIdToUse}`, '_blank');
+                        router.push(`/dashboard/appeals?ticketId=${ticketIdToUse}`);
+                      } else {
+                        showToast('Не удалось найти обращение', 'error');
                       }
                     } else {
                       // Для обычных чатов можно показать информацию о чате
@@ -871,6 +875,7 @@ export default function SlackStyleChat({
                   p => p.userId === currentUserId && p.role === 'admin'
                 )}
                 ticketId={ticketIdFromUrl || selectedChat?.ticketId || undefined}
+                ticketPublicId={ticketInfo?.publicId || selectedChat?.ticket?.publicId || selectedChat?.ticketPublicId || undefined}
                 onCloseAppeal={
                   // Показываем кнопку закрытия только для создателя обращения
                   ticketInfo && 

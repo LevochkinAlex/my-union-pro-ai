@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireChatAccess } from "@/lib/chat-service";
+import { normalizeUserAvatar } from "@/lib/api-helpers";
 
 // PATCH - редактирование сообщения
 export async function PATCH(
@@ -79,22 +80,6 @@ export async function PATCH(
       },
     });
 
-    // Нормализуем avatarUrl для sender
-    const normalizeUserAvatar = (user: any) => {
-      if (!user?.avatarUrl) return null;
-      try {
-        const url = user.avatarUrl;
-        if (url.startsWith('http://') || url.startsWith('https://')) {
-          return url;
-        }
-        if (url.startsWith('/')) {
-          return url;
-        }
-        return `/${url}`;
-      } catch {
-        return null;
-      }
-    };
 
     return NextResponse.json({
       message: {
