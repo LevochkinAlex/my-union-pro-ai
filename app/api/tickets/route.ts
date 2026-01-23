@@ -24,8 +24,11 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status");
 
     // Получаем информацию о пользователе и его организации
-    const user = await withPrismaRetry(async () => {
-      return await prisma.user.findUnique({
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем прямой запрос с обработкой ошибок
+    // withPrismaRetry может вызывать проблемы, если БД временно недоступна
+    let user;
+    try {
+      user = await prisma.user.findUnique({
         where: { id: session.user.id },
         select: {
           id: true,
@@ -36,15 +39,25 @@ export async function GET(request: NextRequest) {
           viewMode: true, // Режим просмотра (MEMBER или PPO_HEAD)
         },
       });
-    });
+    } catch (userError: any) {
+      console.error("[tickets] Error fetching user:", userError);
+      // Если не удалось получить пользователя, возвращаем пустой массив
+      return NextResponse.json({
+        success: true,
+        tickets: [],
+        error: "Ошибка при загрузке данных пользователя. Попробуйте обновить страницу.",
+      });
+    }
 
     // Проверяем, является ли пользователь председателем И находится ли он в режиме председателя
     const isPPOHead = (user?.role === "PPO_HEAD" || user?.isPPOHead === true) && user?.viewMode === "PPO_HEAD";
     const chairmanOrgId = user?.ppoHeadOrganizationId || user?.organizationId;
 
     // Получаем чаты, в которых пользователь является участником
-    const userChats = await withPrismaRetry(async () => {
-      return await prisma.chat.findMany({
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем прямой запрос с обработкой ошибок
+    let userChats = [];
+    try {
+      userChats = await prisma.chat.findMany({
         where: {
           participants: {
             some: {
@@ -57,7 +70,11 @@ export async function GET(request: NextRequest) {
           id: true,
         },
       });
-    });
+    } catch (chatError: any) {
+      console.error("[tickets] Error fetching user chats:", chatError);
+      // Продолжаем с пустым массивом чатов
+      userChats = [];
+    }
 
     const userChatIds = userChats.map(chat => chat.id);
 
@@ -99,9 +116,10 @@ export async function GET(request: NextRequest) {
 
     // Получаем обращения, не запрашивая новые поля явно (для обратной совместимости)
     // Prisma автоматически вернет их, если они есть в БД
-    // Используем withPrismaRetry для критичных запросов
-    const tickets = await withPrismaRetry(async () => {
-      return await prisma.ticket.findMany({
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем прямой запрос с обработкой ошибок
+    let tickets = [];
+    try {
+      tickets = await prisma.ticket.findMany({
         where,
         include: {
           user: {
@@ -142,7 +160,15 @@ export async function GET(request: NextRequest) {
           createdAt: "desc",
         },
       });
-    });
+    } catch (ticketsError: any) {
+      console.error("[tickets] Error fetching tickets:", ticketsError);
+      // Возвращаем пустой массив вместо ошибки
+      return NextResponse.json({
+        success: true,
+        tickets: [],
+        error: "Ошибка при загрузке обращений. Попробуйте обновить страницу.",
+      });
+    }
 
     return NextResponse.json({
       success: true,
@@ -193,34 +219,28 @@ export async function GET(request: NextRequest) {
       error?.code === 'P1001' || // Can't reach database server
       error?.code === 'P1002' || // Database server doesn't accept connections
       error?.code === 'P1008' || // Operations timed out
-      error?.code === 'P1017' || // Server has closed the connection
-      error?.code === 'P2002' || // Unique constraint violation (может быть связано с проблемами БД)
-      error?.message?.includes('timeout') ||
-      error?.message?.includes('ECONNREFUSED') ||
-      error?.message?.includes('ENOTFOUND') ||
-      error?.message?.includes('Connection') ||
-      error?.message?.includes('connect');
+      error?.code === 'P1017'; // Server has closed the connection
     
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Не возвращаем 503 для всех ошибок БД
+    // Вместо этого возвращаем пустой массив, чтобы пользователь мог работать
+    // 503 должен возвращаться только при реальной недоступности сервиса
     if (isConnectionError) {
-      console.error("[tickets] Database connection error detected, returning 503");
-      return NextResponse.json(
-        { 
-          error: "Сервис временно недоступен. Попробуйте позже.",
-          retryAfter: 5, // Подсказка клиенту подождать 5 секунд
-        },
-        { 
-          status: 503,
-          headers: {
-            'Retry-After': '5',
-          },
-        }
-      );
+      console.error("[tickets] Database connection error detected, returning empty array instead of 503");
+      // Возвращаем пустой массив вместо 503, чтобы не блокировать UI
+      return NextResponse.json({
+        success: true,
+        tickets: [],
+        error: "Временные проблемы с подключением к базе данных. Попробуйте обновить страницу.",
+      });
     }
     
-    return NextResponse.json(
-      { error: "Ошибка при загрузке тикетов" },
-      { status: 500 }
-    );
+    // Для других ошибок также возвращаем пустой массив с предупреждением
+    console.error("[tickets] Unknown error, returning empty array");
+    return NextResponse.json({
+      success: true,
+      tickets: [],
+      error: "Ошибка при загрузке обращений. Попробуйте обновить страницу.",
+    });
   }
 }
 
