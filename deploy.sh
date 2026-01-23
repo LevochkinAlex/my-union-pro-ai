@@ -30,10 +30,10 @@ echo "📦 Устанавливаем зависимости..."
 pnpm install
 
 echo "🗄️  Применяем миграции базы данных..."
-npx prisma db push --accept-data-loss
+pnpm prisma migrate deploy
 
 echo "🔧 Генерируем Prisma клиент..."
-npx prisma generate
+pnpm prisma generate
 
 echo "🏗️  Собираем проект..."
 pnpm build
