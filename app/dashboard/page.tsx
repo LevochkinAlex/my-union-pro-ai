@@ -365,6 +365,8 @@ export default async function DashboardPage() {
         role: {
           not: "SUPER_ADMIN",
         },
+        // ВАЖНО: Показываем только одобренных членов профсоюза
+        membershipStatus: "APPROVED",
         // Фильтруем по организации пользователя
         ...(userOrganizationId ? {
           organizationId: userOrganizationId,

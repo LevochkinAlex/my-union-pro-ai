@@ -164,6 +164,13 @@ export async function GET(request: NextRequest) {
         },
         // Является ли текущий пользователь создателем обращения
         isOwner: ticket.userId === session.user.id,
+        // Информация о сроках ответа
+        responseDeadline: ticket.responseDeadline?.toISOString() || null,
+        lastResponseAt: ticket.lastResponseAt?.toISOString() || null,
+        lastUserResponseAt: ticket.lastUserResponseAt?.toISOString() || null,
+        userResponseDeadline: ticket.userResponseDeadline?.toISOString() || null,
+        isOverdue: ticket.isOverdue || false,
+        autoClosedAt: ticket.autoClosedAt?.toISOString() || null,
       })),
     });
   } catch (error) {
@@ -350,6 +357,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Устанавливаем дедлайн ответа председателя (72 часа с момента создания)
+    const responseDeadline = new Date();
+    responseDeadline.setHours(responseDeadline.getHours() + 72);
+
     // Создаем тикет с chatId
     const ticket = await prisma.ticket.create({
       data: {
@@ -362,6 +373,8 @@ export async function POST(request: NextRequest) {
         content,
         organizationId: user?.organizationId || null,
         chatId: appealChat?.id || null,
+        responseDeadline, // Дедлайн для ответа председателя (72 часа)
+        isOverdue: false,
       },
     });
 

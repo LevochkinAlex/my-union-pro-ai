@@ -35,6 +35,8 @@ export async function GET(request: NextRequest) {
       role: {
         not: "SUPER_ADMIN",
       },
+      // ВАЖНО: Показываем только одобренных членов профсоюза
+      membershipStatus: "APPROVED",
       // ВАЖНО: Показываем только пользователей из той же организации
       ...(userOrganizationId ? {
         organizationId: userOrganizationId,

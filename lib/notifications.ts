@@ -11,6 +11,8 @@ export type NotificationType =
   | "documents_ready" // Документы готовы
   | "ticket_response" // Ответ на обращение
   | "ticket_rated" // Оценка обращения
+  | "ticket_overdue" // Просрочено обращение
+  | "ticket_reminder" // Напоминание об обращении
   | "document_regeneration_required" // Требуется перегенерация документов
   | "news_published" // Опубликована новость
   | "mass_notification" // Массовое уведомление
@@ -200,6 +202,8 @@ function getShouldSendEmail(
       return user.emailBotNotifications;
     case "documents_ready":
     case "ticket_response":
+    case "ticket_overdue":
+    case "ticket_reminder":
     case "document_regeneration_required":
     case "news_published":
     case "mass_notification":
@@ -233,6 +237,10 @@ function getEmailSubject(type: NotificationType, senderName?: string): string {
       return "Документы готовы для подписания";
     case "ticket_response":
       return "Получен ответ на ваше обращение";
+    case "ticket_overdue":
+      return "⚠️ Просрочено обращение";
+    case "ticket_reminder":
+      return "📋 Напоминание об обращении";
     case "document_regeneration_required":
       return "Требуется перегенерация документов";
     case "news_published":

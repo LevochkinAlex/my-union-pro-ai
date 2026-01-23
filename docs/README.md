@@ -11,6 +11,8 @@
 | [meeting-document-workflow.md](./meeting-document-workflow.md) | ⭐ **Документооборот заседаний** |
 | [chat-performance-optimization.md](./chat-performance-optimization.md) | ⭐ **Оптимизация производительности чата** |
 | [BESTBENEFITS_SYSTEM.md](./BESTBENEFITS_SYSTEM.md) | **Система скидок BestBenefits** |
+| [APPEALS_SYSTEM.md](./APPEALS_SYSTEM.md) | ⭐ **Модуль обращений (Tickets/Appeals)** |
+| [TICKET_DEADLINE_SYSTEM.md](./TICKET_DEADLINE_SYSTEM.md) | ⭐ **Система отслеживания сроков ответа на обращения** |
 | [AI_BOT_ARCHITECTURE.md](./AI_BOT_ARCHITECTURE.md) | Архитектура AI-бота |
 | [DOCUMENT_TEMPLATES_GUIDE.md](./DOCUMENT_TEMPLATES_GUIDE.md) | Шаблоны документов |
 | [LOGGING_GUIDE.md](./LOGGING_GUIDE.md) | Логирование |

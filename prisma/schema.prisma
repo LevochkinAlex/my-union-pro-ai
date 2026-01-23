@@ -490,11 +490,41 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Связь с местами работы (для автоматического определения ППО)
+  workplaceMappings WorkplacePPOMapping[] @relation("WorkplacePPOMapping")
+
   @@index([type])
   @@index([parentId])
   @@index([inn])
   @@index([level])
   @@index([sortOrder])
+}
+
+// Справочник связи мест работы с ППО
+// Используется для автоматического определения ППО по месту работы (название + ИНН)
+model WorkplacePPOMapping {
+  id String @id @default(cuid())
+
+  // Место работы (идентифицируется по названию и ИНН)
+  workplaceName String // Название организации места работы
+  workplaceInn  String // ИНН организации места работы
+
+  // Связь с ППО
+  ppoOrganizationId String
+  ppoOrganization   Organization @relation("WorkplacePPOMapping", fields: [ppoOrganizationId], references: [id], onDelete: Cascade)
+
+  // Метаданные
+  source   String? // Источник данных: "manual" (ручное добавление), "minjust" (из Минюста), "dadata" (из DaData)
+  verified Boolean @default(false) // Проверено администратором
+  notes    String? @db.Text // Примечания
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workplaceName, workplaceInn]) // Одна организация места работы может быть связана только с одним ППО
+  @@index([workplaceInn])
+  @@index([ppoOrganizationId])
+  @@index([workplaceName])
 }
 
 // Типы документов
@@ -1346,6 +1376,16 @@ model Ticket {
   organizationId String?
   organization   Organization? @relation("OrganizationTickets", fields: [organizationId], references: [id], onDelete: SetNull)
 
+  // Отслеживание сроков ответа
+  responseDeadline     DateTime? // Дедлайн для ответа председателя (72 часа с момента создания)
+  lastResponseAt       DateTime? // Дата последнего ответа председателя
+  lastUserResponseAt   DateTime? // Дата последнего ответа пользователя (после ответа председателя)
+  userResponseDeadline DateTime? // Дедлайн для ответа пользователя (72 часа после ответа председателя)
+  isOverdue            Boolean   @default(false) // Просрочено ли обращение
+  overdueReportedAt    DateTime? // Когда последний раз было отправлено уведомление о просрочке
+  lastReminderSentAt   DateTime? // Когда последний раз было отправлено напоминание (ежедневно в 9:00 МСК)
+  autoClosedAt         DateTime? // Дата автоматического закрытия (если пользователь не ответил в течение 72 часов)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1355,6 +1395,9 @@ model Ticket {
   @@index([status])
   @@index([priority])
   @@index([createdAt])
+  @@index([responseDeadline])
+  @@index([isOverdue])
+  @@index([userResponseDeadline])
 }
 
 // Вложения к тикету
@@ -1961,7 +2004,7 @@ model Chat {
   ticket Ticket? @relation("TicketChat")
 
   // Канал новостей (для CHANNEL типа чата)
-  newsChannelId String? @unique
+  newsChannelId String?      @unique
   newsChannel   NewsChannel? @relation("ChatNewsChannel", fields: [newsChannelId], references: [id], onDelete: SetNull)
 
   // Архивирован ли чат

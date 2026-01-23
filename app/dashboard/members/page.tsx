@@ -66,7 +66,7 @@ interface MemberDetails extends Member {
   organization: { id: string; name: string } | null;
 }
 
-type DetailTab = "profile" | "work" | "family" | "education" | "awards" | "membership" | "documents";
+type DetailTab = "profile" | "work" | "family" | "education" | "awards" | "membership" | "documents" | "appeals";
 
 // Маппинг типов документов
 const DOCUMENT_TYPE_MAP: Record<string, string> = {
@@ -169,6 +169,8 @@ export default function MembersPage() {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailTab, setDetailTab] = useState<DetailTab>("profile");
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [appeals, setAppeals] = useState<any[]>([]);
+  const [loadingAppeals, setLoadingAppeals] = useState(false);
   
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -282,12 +284,103 @@ export default function MembersPage() {
 
       const data = await response.json();
       setMemberDetails(data.member);
+      
+      // Загружаем обращения пользователя заранее
+      loadMemberAppeals(memberId);
     } catch (err) {
       console.error("Error loading member details:", err);
       alertError("Не удалось загрузить данные члена профсоюза");
       setShowDetailModal(false);
     } finally {
       setLoadingDetails(false);
+    }
+  };
+
+  // Загружаем обращения при открытии карточки или переключении на таб "appeals"
+  useEffect(() => {
+    if (memberDetails && !loadingAppeals) {
+      // Загружаем обращения сразу при открытии карточки, чтобы счетчик в табе был актуальным
+      if (appeals.length === 0) {
+        loadMemberAppeals(memberDetails.id);
+      }
+    }
+  }, [memberDetails?.id]);
+  
+  // Перезагружаем обращения при переключении на таб "appeals" (на случай, если они не загрузились)
+  useEffect(() => {
+    if (detailTab === "appeals" && memberDetails && appeals.length === 0 && !loadingAppeals) {
+      loadMemberAppeals(memberDetails.id);
+    }
+  }, [detailTab]);
+
+  const loadMemberAppeals = async (memberId: string) => {
+    try {
+      setLoadingAppeals(true);
+      console.log(`[loadMemberAppeals] Loading appeals for user ${memberId}`);
+      
+      // Загружаем обращения через API председателя с фильтром по userId
+      const url = `/api/ppo-head/appeals?userId=${encodeURIComponent(memberId)}`;
+      console.log(`[loadMemberAppeals] Request URL:`, url);
+      
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      
+      console.log(`[loadMemberAppeals] Response status:`, response.status, response.statusText);
+      
+      if (!response.ok) {
+        let errorData;
+        try {
+          const errorText = await response.text();
+          console.error("[loadMemberAppeals] Error response text:", errorText);
+          errorData = JSON.parse(errorText);
+        } catch (parseError) {
+          console.error("[loadMemberAppeals] Failed to parse error response:", parseError);
+          errorData = { 
+            error: `Ошибка ${response.status}: ${response.statusText}`,
+            message: "Не удалось обработать ответ сервера",
+          };
+        }
+        
+        console.error("[loadMemberAppeals] API error details:", {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData,
+        });
+        
+        const errorMessage = errorData.message || errorData.error || `Ошибка ${response.status}: ${response.statusText}`;
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      console.log(`[loadMemberAppeals] Response data:`, data);
+      
+      if (!data.success) {
+        console.error("[loadMemberAppeals] API returned success: false", data);
+        throw new Error(data.error || "Ошибка при получении обращений");
+      }
+      
+      console.log(`[loadMemberAppeals] Loaded ${data.tickets?.length || 0} appeals for user ${memberId}`);
+      
+      if (data.tickets && data.tickets.length > 0) {
+        console.log(`[loadMemberAppeals] Appeals data:`, data.tickets);
+      } else {
+        console.warn(`[loadMemberAppeals] No appeals found for user ${memberId}. Response:`, data);
+      }
+      
+      setAppeals(data.tickets || []);
+    } catch (err) {
+      console.error("[loadMemberAppeals] Error:", err);
+      const errorMessage = err instanceof Error 
+        ? err.message 
+        : "Не удалось загрузить обращения. Проверьте консоль для деталей.";
+      alertError(errorMessage);
+      setAppeals([]);
+    } finally {
+      setLoadingAppeals(false);
     }
   };
 
@@ -821,6 +914,8 @@ export default function MembersPage() {
             onClick={() => {
               setShowDetailModal(false);
               setMemberDetails(null);
+              setAppeals([]); // Очищаем обращения при закрытии
+              setDetailTab("profile"); // Сбрасываем таб
             }}
           />
           
@@ -860,6 +955,8 @@ export default function MembersPage() {
                     onClick={() => {
                       setShowDetailModal(false);
                       setMemberDetails(null);
+                      setAppeals([]); // Очищаем обращения при закрытии
+                      setDetailTab("profile"); // Сбрасываем таб
                     }}
                     className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
                   >
@@ -955,6 +1052,7 @@ export default function MembersPage() {
                           { key: "awards", label: "Награды" },
                           { key: "membership", label: "Членство" },
                           { key: "documents", label: `Документы (${memberDetails.documents?.length || 0})` },
+                          { key: "appeals", label: `Обращения (${appeals.length})` },
                         ].map((tab) => (
                           <button
                             key={tab.key}
@@ -1218,6 +1316,170 @@ export default function MembersPage() {
                                       </span>
                                     )}
                                   </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+
+                    {detailTab === "appeals" && (
+                      <div className="space-y-3">
+                        {loadingAppeals ? (
+                          <div className="flex items-center justify-center py-8">
+                            <div className="text-center">
+                              <div className="mb-4 inline-block h-6 w-6 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">Загрузка обращений...</p>
+                            </div>
+                          </div>
+                        ) : appeals.length === 0 ? (
+                          <p className="text-gray-500 dark:text-gray-400 text-center py-8">Обращений нет</p>
+                        ) : (
+                          appeals.map((appeal) => {
+                            const statusColors: Record<string, string> = {
+                              PENDING: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+                              IN_PROGRESS: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+                              RESOLVED: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+                              REJECTED: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+                              CLOSED: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
+                            };
+                            
+                            const statusLabels: Record<string, string> = {
+                              PENDING: "Ожидание",
+                              IN_PROGRESS: "В работе",
+                              RESOLVED: "Решено",
+                              REJECTED: "Отклонено",
+                              CLOSED: "Закрыто",
+                            };
+
+                            const typeLabels: Record<string, string> = {
+                              LEGAL: "Юридическое",
+                              ACCOUNTING: "Бухгалтерское",
+                              TECHNICAL: "Техническое",
+                              HR: "Кадровое",
+                              OTHER: "Прочее",
+                            };
+
+                            const priorityColors: Record<string, string> = {
+                              LOW: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
+                              MEDIUM: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+                              HIGH: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+                              URGENT: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+                            };
+
+                            const priorityLabels: Record<string, string> = {
+                              LOW: "Низкая",
+                              MEDIUM: "Средняя",
+                              HIGH: "Высокая",
+                              URGENT: "Срочная",
+                            };
+
+                            // Извлекаем текст из HTML для предпросмотра
+                            const getTextFromHtml = (html: string) => {
+                              if (!html) return "";
+                              const div = document.createElement("div");
+                              div.innerHTML = html;
+                              return div.textContent || div.innerText || "";
+                            };
+
+                            return (
+                              <div key={appeal.id} className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 hover:shadow-md transition-shadow">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center flex-wrap gap-2 mb-2">
+                                      <Link 
+                                        href={`/dashboard/appeals/ppo-head?id=${appeal.publicId}`}
+                                        className="text-sm font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                                      >
+                                        #{appeal.publicId}
+                                      </Link>
+                                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusColors[appeal.status] || "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"}`}>
+                                        {statusLabels[appeal.status] || appeal.status}
+                                      </span>
+                                      {appeal.type && (
+                                        <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded">
+                                          {typeLabels[appeal.type] || appeal.type}
+                                        </span>
+                                      )}
+                                      {appeal.priority && (
+                                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${priorityColors[appeal.priority] || "bg-gray-100 text-gray-800"}`}>
+                                          {priorityLabels[appeal.priority] || appeal.priority}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+                                      {appeal.title}
+                                    </h4>
+                                    {appeal.content && (
+                                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-3">
+                                        {getTextFromHtml(appeal.content)}
+                                      </div>
+                                    )}
+                                    <div className="flex items-center flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                      <span className="flex items-center gap-1">
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                        {new Date(appeal.createdAt).toLocaleDateString("ru-RU", {
+                                          day: "2-digit",
+                                          month: "2-digit",
+                                          year: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </span>
+                                      {appeal.helpfulRating && (
+                                        <span className="flex items-center gap-1">
+                                          <span className="text-yellow-500">{"⭐".repeat(appeal.helpfulRating)}</span>
+                                          <span className="font-medium text-gray-700 dark:text-gray-300">{appeal.helpfulRating}/5</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                    {appeal.helpfulRatingComment && (
+                                      <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-700 rounded text-xs text-gray-600 dark:text-gray-400 italic border-l-2 border-yellow-400">
+                                        "{appeal.helpfulRatingComment}"
+                                      </div>
+                                    )}
+                                    {appeal.rejectionReason && (
+                                      <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded text-xs text-red-700 dark:text-red-400 border-l-2 border-red-400">
+                                        <strong>Причина отклонения:</strong> {appeal.rejectionReason}
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2 mt-3">
+                                      {appeal.chatId && (
+                                        <Link
+                                          href={`/dashboard/chat?chatId=${appeal.chatId}&ticketId=${appeal.publicId}`}
+                                          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
+                                        >
+                                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                          </svg>
+                                          Открыть чат
+                                        </Link>
+                                      )}
+                                      <Link
+                                        href={`/dashboard/appeals/ppo-head?id=${appeal.publicId}`}
+                                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                                      >
+                                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                        Подробнее
+                                      </Link>
+                                    </div>
+                                  </div>
+                                  {appeal.helpfulRating && (
+                                    <div className="shrink-0">
+                                      <div className="flex flex-col items-center gap-1 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-2">
+                                        <div className="text-xl leading-none">{"⭐".repeat(appeal.helpfulRating)}</div>
+                                        <div className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                          {appeal.helpfulRating}/5
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             );

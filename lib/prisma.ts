@@ -5,13 +5,12 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL environment variable is not set');
+  }
+  
   return new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL,
-      },
-    },
   });
 }
 
@@ -28,9 +27,11 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Graceful shutdown
-process.on('beforeExit', async () => {
-  await prismaInstance.$disconnect();
-});
+if (typeof process !== 'undefined') {
+  process.on('beforeExit', async () => {
+    await prismaInstance.$disconnect();
+  });
+}
 
 export const prisma = prismaInstance;
 

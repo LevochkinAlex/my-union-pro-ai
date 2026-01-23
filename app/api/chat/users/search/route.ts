@@ -23,6 +23,8 @@ export async function GET(request: NextRequest) {
       ? {
           AND: [
             { id: { not: session.user.id } },
+            // ВАЖНО: Показываем только одобренных членов профсоюза
+            { membershipStatus: 'APPROVED' as const },
             {
               OR: [
                 { firstName: { contains: q, mode: 'insensitive' as const } },

@@ -1074,6 +1074,74 @@ export async function POST(
       },
     });
 
+    // Отслеживание ответов в чате обращения
+    try {
+      const ticketChat = await prisma.chat.findUnique({
+        where: { id: chatId },
+        include: {
+          ticket: {
+            select: {
+              id: true,
+              userId: true,
+              organizationId: true,
+              lastResponseAt: true,
+              lastUserResponseAt: true,
+              userResponseDeadline: true,
+            },
+          },
+          participants: {
+            where: { leftAt: null },
+            select: {
+              userId: true,
+              role: true,
+            },
+          },
+        },
+      });
+
+      if (ticketChat?.ticket) {
+        const ticket = ticketChat.ticket;
+        const isChairman = ticketChat.participants.some(
+          (p) => p.userId === userId && p.role === "admin"
+        );
+        const isUser = ticket.userId === userId;
+
+        const now = new Date();
+
+        // Если ответил председатель (админ чата)
+        if (isChairman && !isUser) {
+          // Устанавливаем дату последнего ответа председателя
+          const userResponseDeadline = new Date(now);
+          userResponseDeadline.setHours(userResponseDeadline.getHours() + 72); // 72 часа для ответа пользователя
+
+          await prisma.ticket.update({
+            where: { id: ticket.id },
+            data: {
+              lastResponseAt: now,
+              userResponseDeadline, // Дедлайн для ответа пользователя
+              // Сбрасываем флаг просрочки, если был установлен
+              isOverdue: false,
+            },
+          });
+        }
+        // Если ответил пользователь (после ответа председателя)
+        else if (isUser && ticket.lastResponseAt) {
+          // Устанавливаем дату последнего ответа пользователя
+          await prisma.ticket.update({
+            where: { id: ticket.id },
+            data: {
+              lastUserResponseAt: now,
+              // Сбрасываем дедлайн ответа пользователя, так как он ответил
+              userResponseDeadline: null,
+            },
+          });
+        }
+      }
+    } catch (ticketTrackingError) {
+      // Не прерываем выполнение, логируем ошибку
+      console.error("[chat] Error tracking ticket response:", ticketTrackingError);
+    }
+
     // Форматируем ответ
     if (!message.sender) {
       console.error('[chat] Message created but sender is missing:', message.id);

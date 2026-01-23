@@ -17,6 +17,8 @@ export async function GET(request: NextRequest) {
 
     const where: any = {
       id: { not: session.user.id }, // Исключаем текущего пользователя
+      // ВАЖНО: По умолчанию показываем только одобренных членов профсоюза
+      membershipStatus: "APPROVED",
     };
 
     // Поиск по имени или email
@@ -28,9 +30,9 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Фильтр по статусу (если нужен)
-    if (status === "approved") {
-      where.membershipStatus = "APPROVED";
+    // Фильтр по статусу (если нужен, можно переопределить)
+    if (status && status !== "approved") {
+      where.membershipStatus = status.toUpperCase();
     }
 
     const users = await prisma.user.findMany({
