@@ -65,13 +65,34 @@ export async function POST(request: NextRequest) {
     });
 
     if (!bot) {
-      console.log("[assistant/chat] No active bot found");
+      console.error("[assistant/chat] ❌ No active bot found in database!");
+      console.error("[assistant/chat] Check: SELECT * FROM ChatBot WHERE isActive = true");
       return NextResponse.json(
-        { error: "Бот не настроен" },
+        { error: "Бот не настроен. Обратитесь к администратору." },
         { status: 500 }
       );
     }
-    console.log("[assistant/chat] Bot found:", bot.name, "model:", bot.model);
+    
+    console.log("[assistant/chat] ✅ Bot found:", {
+      id: bot.id,
+      name: bot.name,
+      model: bot.model,
+      hasApiProvider: !!bot.apiProvider,
+      apiProviderName: bot.apiProvider?.name || 'none',
+      hasApiKey: !!(bot.apiProvider?.apiKey || process.env.OPENROUTER_API_KEY),
+    });
+    
+    // Проверяем наличие API ключа
+    const apiKey = bot.apiProvider?.apiKey || process.env.OPENROUTER_API_KEY || "";
+    if (!apiKey) {
+      console.error("[assistant/chat] ❌ No API key configured!");
+      console.error("[assistant/chat] Bot apiProvider:", bot.apiProvider?.name);
+      console.error("[assistant/chat] OPENROUTER_API_KEY env:", process.env.OPENROUTER_API_KEY ? "set" : "NOT SET");
+      return NextResponse.json(
+        { error: "API ключ не настроен. Обратитесь к администратору." },
+        { status: 500 }
+      );
+    }
 
     // Расширенный поиск информации из всех источников (включая персональную базу знаний пользователя)
     console.log("[assistant/chat] Performing enhanced search...");
@@ -170,14 +191,37 @@ export async function POST(request: NextRequest) {
     ];
 
     // Отправляем запрос к AI с обновленной историей
-    console.log("[assistant/chat] Calling AI...");
+    console.log("[assistant/chat] ========== CALLING AI ==========");
+    console.log("[assistant/chat] Messages count:", messages.length);
+    console.log("[assistant/chat] Bot model:", bot.model);
+    console.log("[assistant/chat] API provider:", bot.apiProvider?.name || "openrouter");
+    
     let aiResponse;
     try {
       aiResponse = await callAI(bot, messages);
-      console.log("[assistant/chat] AI response received, length:", aiResponse?.length);
-    } catch (aiError) {
-      console.error("[assistant/chat] Error calling AI:", aiError);
-      throw aiError;
+      console.log("[assistant/chat] ✅ AI response received, length:", aiResponse?.length);
+      if (!aiResponse || aiResponse.trim().length === 0) {
+        console.error("[assistant/chat] ❌ AI returned empty response!");
+        aiResponse = "Извините, не удалось получить ответ от ИИ. Попробуйте позже.";
+      }
+    } catch (aiError: any) {
+      console.error("[assistant/chat] ❌ Error calling AI:", {
+        message: aiError?.message,
+        stack: aiError?.stack?.substring(0, 500),
+        name: aiError?.name,
+        code: aiError?.code,
+      });
+      
+      // Возвращаем понятное сообщение об ошибке
+      const errorMessage = aiError?.message?.includes("401") || aiError?.message?.includes("Unauthorized")
+        ? "Ошибка авторизации API. Проверьте API ключ."
+        : aiError?.message?.includes("429") || aiError?.message?.includes("rate limit")
+        ? "Превышен лимит запросов. Попробуйте позже."
+        : aiError?.message?.includes("timeout")
+        ? "Превышено время ожидания ответа. Попробуйте позже."
+        : "Ошибка при обращении к ИИ. Попробуйте позже.";
+      
+      throw new Error(errorMessage);
     }
 
     // Сохраняем ответ бота в БД
@@ -255,10 +299,19 @@ export async function POST(request: NextRequest) {
         createdAt: botMessage.createdAt,
       },
     });
-  } catch (error) {
-    console.error("[assistant/chat] Error:", error);
+  } catch (error: any) {
+    console.error("[assistant/chat] ❌ ========== FATAL ERROR ==========");
+    console.error("[assistant/chat] Error type:", error?.name);
+    console.error("[assistant/chat] Error message:", error?.message);
+    console.error("[assistant/chat] Error stack:", error?.stack?.substring(0, 1000));
+    
+    const errorMessage = error?.message || "Ошибка при обработке запроса";
+    
     return NextResponse.json(
-      { error: "Ошибка при обработке запроса" },
+      { 
+        error: errorMessage,
+        details: process.env.NODE_ENV === "development" ? error?.stack : undefined,
+      },
       { status: 500 }
     );
   }
@@ -661,24 +714,64 @@ export async function callAI(bot: ChatBot & { apiProvider: ApiProvider | null },
     };
   }
 
+  console.log(`[callAI] ========== SENDING REQUEST TO ${providerName} ==========`);
+  console.log(`[callAI] URL: ${responseUrl}`);
+  console.log(`[callAI] Model: ${model}`);
+  console.log(`[callAI] Messages count: ${messages.length}`);
+  console.log(`[callAI] Has API key: ${!!apiKey}`);
+
   const response = await fetch(responseUrl, {
     method: "POST",
     headers,
     body: JSON.stringify(requestBody),
   });
 
+  console.log(`[callAI] Response status: ${response.status} ${response.statusText}`);
+
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("[assistant/chat] AI API error:", errorText);
-    throw new Error(`AI API error: ${response.status}`);
+    console.error(`[callAI] ❌ AI API error (${response.status}):`, errorText);
+    
+    // Пробуем распарсить JSON ошибки
+    let errorDetails = errorText;
+    try {
+      const errorJson = JSON.parse(errorText);
+      errorDetails = JSON.stringify(errorJson, null, 2);
+      console.error(`[callAI] Error details:`, errorJson);
+    } catch {
+      // Не JSON, используем как есть
+    }
+    
+    // Формируем понятное сообщение об ошибке
+    let errorMessage = `AI API error: ${response.status}`;
+    if (response.status === 401) {
+      errorMessage = "Ошибка авторизации API. Проверьте API ключ.";
+    } else if (response.status === 429) {
+      errorMessage = "Превышен лимит запросов. Попробуйте позже.";
+    } else if (response.status === 500 || response.status >= 502) {
+      errorMessage = "Сервис ИИ временно недоступен. Попробуйте позже.";
+    }
+    
+    throw new Error(errorMessage);
   }
 
   const data = await response.json();
+  console.log(`[callAI] ✅ Response received, keys:`, Object.keys(data));
 
+  let aiResponse: string;
   if (providerName === "anthropic") {
-    return data.content?.[0]?.text || "Извините, не удалось получить ответ.";
+    aiResponse = data.content?.[0]?.text || "";
   } else {
-    return data.choices?.[0]?.message?.content || "Извините, не удалось получить ответ.";
+    aiResponse = data.choices?.[0]?.message?.content || "";
   }
+
+  if (!aiResponse || aiResponse.trim().length === 0) {
+    console.error(`[callAI] ❌ Empty response from AI!`);
+    console.error(`[callAI] Response data:`, JSON.stringify(data, null, 2).substring(0, 500));
+    throw new Error("ИИ вернул пустой ответ");
+  }
+
+  console.log(`[callAI] ✅ AI response length: ${aiResponse.length}`);
+  return aiResponse;
 }
 

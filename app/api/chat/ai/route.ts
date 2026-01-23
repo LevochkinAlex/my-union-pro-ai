@@ -242,6 +242,9 @@ export async function POST(request: NextRequest) {
     let aiResponse = "Извините, произошла ошибка при обработке вашего запроса. Пожалуйста, попробуйте позже.";
 
     try {
+      console.log(`[chat/ai] ========== CALLING AI API ==========`);
+      console.log(`[chat/ai] Chat ID: ${chat.id}, User ID: ${userId}`);
+      
       // Получаем историю сообщений для контекста
       const history = await prisma.chatMessage.findMany({
         where: { chatId: chat.id },
@@ -254,6 +257,8 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      console.log(`[chat/ai] History loaded: ${history.length} messages`);
+
       const messagesForAI = history
         .reverse()
         .filter(m => m.messageType !== "system")
@@ -262,28 +267,48 @@ export async function POST(request: NextRequest) {
           content: m.content,
         }));
 
+      console.log(`[chat/ai] Messages for AI: ${messagesForAI.length} (filtered from ${history.length})`);
+
+      const apiUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"}/api/assistant/chat`;
+      console.log(`[chat/ai] Calling AI API: ${apiUrl}`);
+
       // Вызываем ИИ API
-      const aiApiResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004"}/api/assistant/chat`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Cookie: request.headers.get("cookie") || "",
-          },
-          body: JSON.stringify({
-            messages: messagesForAI,
-            stream: false,
-          }),
-        }
-      );
+      // ВАЖНО: /api/assistant/chat ожидает { message: string }, а не { messages: array }
+      const aiApiResponse = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: request.headers.get("cookie") || "",
+        },
+        body: JSON.stringify({
+          message: content.trim(), // Отправляем текущее сообщение пользователя
+        }),
+      });
+
+      console.log(`[chat/ai] AI API response status: ${aiApiResponse.status}`);
 
       if (aiApiResponse.ok) {
         const aiData = await aiApiResponse.json();
-        aiResponse = aiData.response || aiData.content || aiResponse;
+        console.log(`[chat/ai] AI API response keys:`, Object.keys(aiData));
+        aiResponse = aiData.message || aiData.response || aiData.content || aiResponse;
+        console.log(`[chat/ai] ✅ AI response received, length: ${aiResponse.length}`);
+      } else {
+        const errorText = await aiApiResponse.text();
+        console.error(`[chat/ai] ❌ AI API error: ${aiApiResponse.status}`, errorText);
+        // Пробуем распарсить JSON ошибки
+        try {
+          const errorData = JSON.parse(errorText);
+          console.error(`[chat/ai] Error details:`, errorData);
+        } catch {
+          // Не JSON, просто текст
+        }
       }
-    } catch (aiError) {
-      console.error("[chat/ai] AI API error:", aiError);
+    } catch (aiError: any) {
+      console.error("[chat/ai] ❌ AI API exception:", {
+        message: aiError?.message,
+        stack: aiError?.stack?.substring(0, 500),
+        name: aiError?.name,
+      });
     }
 
     // Сохраняем ответ ИИ
