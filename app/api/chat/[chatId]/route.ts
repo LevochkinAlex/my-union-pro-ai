@@ -1388,10 +1388,15 @@ export async function POST(
       // Отправляем сообщение через WebSocket другим участникам
       try {
         // Используем формат комнаты chatId (без префикса chat:)
+        console.log(`[chat/${chatId}] Emitting message via WebSocket:`, {
+          messageId: normalizedMessage.id,
+          chatId: normalizedMessage.chatId,
+          senderId: normalizedMessage.senderId,
+        });
         await emitNewMessage(chatId, normalizedMessage);
-        console.log('[chat] Message emitted via WebSocket to room:', chatId, normalizedMessage.id);
+        console.log(`[chat/${chatId}] ✅ Message emitted via WebSocket to room: ${chatId}, messageId: ${normalizedMessage.id}`);
       } catch (wsError) {
-        console.error('[chat] Error emitting message via WebSocket:', wsError);
+        console.error(`[chat/${chatId}] ❌ Error emitting message via WebSocket:`, wsError);
         // Не прерываем выполнение, WebSocket - это дополнение
       }
 
@@ -1497,6 +1502,12 @@ export async function POST(
         // Не прерываем выполнение
       }
 
+      console.log(`[chat/${chatId}] ✅ Returning created message to client:`, {
+        messageId: normalizedMessage.id,
+        chatId: normalizedMessage.chatId,
+        senderId: normalizedMessage.senderId,
+        contentLength: normalizedMessage.content.length,
+      });
       console.log(`[chat/${chatId}] ✅ Returning created message to client:`, {
         messageId: normalizedMessage.id,
         chatId: normalizedMessage.chatId,
