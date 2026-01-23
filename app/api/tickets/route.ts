@@ -666,15 +666,6 @@ export async function POST(request: NextRequest) {
           return message;
         });
 
-        // Обновляем lastMessageId в чате
-        await prisma.chat.update({
-          where: { id: appealChat.id },
-          data: {
-            lastMessageId: createdMessage.id,
-            lastMessageAt: createdMessage.createdAt,
-          },
-        });
-
         // Инвалидируем кэш чата, чтобы новое сообщение сразу отображалось
         try {
           const { invalidateChatCache } = await import('@/lib/chat-redis');
