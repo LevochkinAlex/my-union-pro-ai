@@ -132,7 +132,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Отправляем magic link для входа вместо пароля
-    const crypto = require("crypto");
     const loginToken = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 минут
 
