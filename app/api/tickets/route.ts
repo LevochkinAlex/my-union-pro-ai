@@ -32,11 +32,12 @@ export async function GET(request: NextRequest) {
         role: true,
         isPPOHead: true,
         ppoHeadOrganizationId: true,
+        viewMode: true, // Режим просмотра (MEMBER или PPO_HEAD)
       },
     });
 
-    // Проверяем, является ли пользователь председателем
-    const isPPOHead = user?.role === "PPO_HEAD" || user?.isPPOHead === true;
+    // Проверяем, является ли пользователь председателем И находится ли он в режиме председателя
+    const isPPOHead = (user?.role === "PPO_HEAD" || user?.isPPOHead === true) && user?.viewMode === "PPO_HEAD";
     const chairmanOrgId = user?.ppoHeadOrganizationId || user?.organizationId;
 
     // Получаем чаты, в которых пользователь является участником
@@ -65,20 +66,15 @@ export async function GET(request: NextRequest) {
       // Председатель видит все обращения из своей организации
       where.organizationId = chairmanOrgId;
     } else {
-      // Обычный пользователь видит свои обращения, обращения из чатов и из своей организации
-      // Также показываем обращения без organizationId, если они созданы пользователем или связаны с чатами
+      // Обычный пользователь (в режиме MEMBER) видит ТОЛЬКО свои обращения
+      // И обращения из чатов, в которых он участвует
       const orConditions: any[] = [
         { userId: session.user.id }, // Свои обращения
       ];
 
-      // Обращения из чатов пользователя
+      // Обращения из чатов пользователя (где он является участником)
       if (userChatIds.length > 0) {
         orConditions.push({ chatId: { in: userChatIds } });
-      }
-
-      // Обращения из той же организации
-      if (user?.organizationId) {
-        orConditions.push({ organizationId: user.organizationId });
       }
 
       // Обращения без organizationId, если они созданы пользователем (для старых обращений)
