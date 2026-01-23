@@ -492,15 +492,11 @@ export async function POST(request: NextRequest) {
         initialMessage += `**Текст обращения:**\n${content}\n\n`;
         initialMessage += `**Дата и время создания:** ${dateStr} в ${timeStr}`;
         
-        // Отправляем начальное сообщение в чат
-        // Тип всегда 'text', чтобы сообщение отображалось как обычное сообщение с текстом и вложениями
-        const createdMessage = await prisma.chatMessage.create({
-          data: {
-            chatId: appealChat.id,
-            senderId: session.user.id,
-            content: initialMessage,
-            messageType: 'text', // Всегда 'text', чтобы отображалось как обычное сообщение
-            attachments: uploadedFiles.length > 0 ? {
+        // Подготавливаем вложения для сообщения
+        let messageAttachments: any = undefined;
+        if (uploadedFiles.length > 0) {
+          try {
+            messageAttachments = {
               create: uploadedFiles.map(file => {
                 const isImage = file.mimeType?.startsWith('image/');
                 return {
@@ -511,8 +507,29 @@ export async function POST(request: NextRequest) {
                   mimeType: file.mimeType || 'application/octet-stream',
                 };
               }),
-            } : undefined,
-          },
+            };
+          } catch (attachError) {
+            console.error('[tickets] Error preparing attachments for message:', attachError);
+            // Продолжаем без вложений, если есть проблема
+          }
+        }
+        
+        // Отправляем начальное сообщение в чат
+        // Тип всегда 'text', чтобы сообщение отображалось как обычное сообщение с текстом и вложениями
+        const messageData: any = {
+          chatId: appealChat.id,
+          senderId: session.user.id,
+          content: initialMessage,
+          messageType: 'text', // Всегда 'text', чтобы отображалось как обычное сообщение
+        };
+
+        // Добавляем вложения только если они есть и валидны
+        if (messageAttachments) {
+          messageData.attachments = messageAttachments;
+        }
+
+        const createdMessage = await prisma.chatMessage.create({
+          data: messageData,
         });
 
         // Обновляем lastMessageId в чате
@@ -524,7 +541,7 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        console.log(`[tickets] ✅ Создано начальное сообщение обращения: ${createdMessage.id}, тип: ${createdMessage.messageType}, вложений: ${uploadedFiles.length}, senderId: ${createdMessage.senderId}, chatId: ${appealChat.id}`);
+        console.log(`[tickets] ✅ Создано начальное сообщение обращения: ${createdMessage.id}, тип: ${createdMessage.messageType}, вложений: ${uploadedFiles.length}, senderId: ${createdMessage.senderId}, chatId: ${appealChat.id}, content length: ${initialMessage.length}`);
 
         // Отправляем уведомления участникам чата (кроме создателя обращения)
         try {
@@ -577,9 +594,47 @@ export async function POST(request: NextRequest) {
           console.error('[tickets] Error sending notifications:', notifError);
           // Не прерываем создание обращения, если не удалось отправить уведомления
         }
-      } catch (err) {
-        console.error('[tickets] Error sending initial message to chat:', err);
-        // Не прерываем создание обращения, если не удалось отправить сообщение
+      } catch (err: any) {
+        // Критическая ошибка - логируем детально
+        console.error('[tickets] ❌ КРИТИЧЕСКАЯ ОШИБКА при создании начального сообщения в чат:', {
+          error: err?.message,
+          code: err?.code,
+          meta: err?.meta,
+          stack: err?.stack,
+          chatId: appealChat.id,
+          ticketId: ticket.id,
+          publicId: ticket.publicId,
+          senderId: session.user.id,
+          filesCount: uploadedFiles.length,
+        });
+        
+        // Пытаемся создать сообщение хотя бы с текстом, без вложений
+        try {
+          const fallbackMessage = await prisma.chatMessage.create({
+            data: {
+              chatId: appealChat.id,
+              senderId: session.user.id,
+              content: `**Обращение #${publicId}**\n\n**Тема:** ${title}\n\n**Текст обращения:**\n${content}`,
+              messageType: 'text',
+            },
+          });
+          console.log(`[tickets] ✅ Создано резервное сообщение (без вложений): ${fallbackMessage.id}`);
+          
+          // Обновляем lastMessageId в чате
+          await prisma.chat.update({
+            where: { id: appealChat.id },
+            data: {
+              lastMessageId: fallbackMessage.id,
+              lastMessageAt: fallbackMessage.createdAt,
+            },
+          });
+        } catch (fallbackError: any) {
+          console.error('[tickets] ❌ Не удалось создать даже резервное сообщение:', {
+            error: fallbackError?.message,
+            code: fallbackError?.code,
+          });
+          // Это критическая ошибка, но не прерываем создание обращения
+        }
       }
     }
 
