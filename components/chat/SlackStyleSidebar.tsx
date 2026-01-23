@@ -701,6 +701,12 @@ export default function SlackStyleSidebar({
   }, [chats, searchQuery, currentUserId]);
 
   const displayedChats = useMemo(() => {
+    // Для участников (не председателей) всегда показываем все чаты без фильтрации по табам
+    if (!isChairman) {
+      return { work: workChats, personal: personalChats, channels: channels, ai: aiChat };
+    }
+    
+    // Для председателей применяем фильтрацию по табам
     switch (activeTab) {
       case "work": 
         // В "Рабочие" включаем обращения и каналы
@@ -712,7 +718,7 @@ export default function SlackStyleSidebar({
         // "Все" - показываем всё
         return { work: workChats, personal: personalChats, channels: channels, ai: aiChat };
     }
-  }, [activeTab, workChats, personalChats, channels, aiChat]);
+  }, [activeTab, workChats, personalChats, channels, aiChat, isChairman]);
 
   const handleAIChatClick = useCallback(() => {
     if (aiChat) {
@@ -797,26 +803,28 @@ export default function SlackStyleSidebar({
         </div>
 
         {/* Tabs for Chairman */}
-        {/* Табы фильтрации - показываем всегда, но в режиме участника "Рабочие" показывает только свои обращения */}
-        <div className="flex mt-3 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
-          {[
-            { key: "all", label: "Все" },
-            { key: "work", label: isChairman ? "Рабочие" : "Обращения" },
-            { key: "personal", label: "Личные" },
-          ].map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key as any)}
-              className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-all ${
-                activeTab === key
-                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* Табы фильтрации - показываем только для председателей */}
+        {isChairman && (
+          <div className="flex mt-3 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+            {[
+              { key: "all", label: "Все" },
+              { key: "work", label: "Рабочие" },
+              { key: "personal", label: "Личные" },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key as any)}
+                className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-all ${
+                  activeTab === key
+                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Chat List */}
@@ -846,8 +854,8 @@ export default function SlackStyleSidebar({
           <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
         </button>
 
-        {/* Work Chats - показываем в режиме председателя или если есть свои обращения в режиме участника */}
-        {(activeTab === "all" || activeTab === "work") && (
+        {/* Work Chats - для председателей показываем по табам, для участников всегда показываем если есть */}
+        {((isChairman && (activeTab === "all" || activeTab === "work")) || (!isChairman && displayedChats.work.length > 0)) && (
           <>
             {displayedChats.work.length > 0 ? (
               <ChatSection
@@ -858,12 +866,12 @@ export default function SlackStyleSidebar({
                 currentUserId={currentUserId}
                 onSelectChat={onSelectChat}
               />
-            ) : activeTab === "work" ? (
+            ) : isChairman && activeTab === "work" ? (
               <div className="mb-4 px-3">
                 <div className="flex items-center gap-2 mb-2 px-1">
                   <Briefcase className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                   <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    {isChairman ? "Рабочие чаты" : "Мои обращения"}
+                    Рабочие чаты
                   </h3>
                 </div>
                 <div className="rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-6 text-center">
@@ -871,12 +879,10 @@ export default function SlackStyleSidebar({
                     <Briefcase className="w-6 h-6 text-gray-400 dark:text-gray-500" />
                   </div>
                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                    {isChairman ? "Нет обращений" : "Нет ваших обращений"}
+                    Нет обращений
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-500">
-                    {isChairman 
-                      ? "Обращения от членов профсоюза будут отображаться здесь"
-                      : "Создайте обращение, и оно появится здесь"}
+                    Обращения от членов профсоюза будут отображаться здесь
                   </p>
                 </div>
               </div>
@@ -884,8 +890,8 @@ export default function SlackStyleSidebar({
           </>
         )}
 
-        {/* Personal Chats */}
-        {(activeTab === "all" || activeTab === "personal") && displayedChats.personal.length > 0 && (
+        {/* Personal Chats - для председателей по табам, для участников всегда если есть */}
+        {((isChairman && (activeTab === "all" || activeTab === "personal")) || !isChairman) && displayedChats.personal.length > 0 && (
           <ChatSection
             title={isChairman ? "Личные чаты" : "Чаты"}
             icon={<MessageCircle className="w-4 h-4" />}
@@ -896,8 +902,8 @@ export default function SlackStyleSidebar({
           />
         )}
 
-        {/* Channels - показываем в режиме председателя и участника (для просмотра и комментирования) */}
-        {(activeTab === "all" || activeTab === "work") && displayedChats.channels.length > 0 && (
+        {/* Channels - показываем всегда если есть (для председателей по табам, для участников всегда) */}
+        {((isChairman && (activeTab === "all" || activeTab === "work")) || !isChairman) && displayedChats.channels.length > 0 && (
           <ChatSection
             title="Каналы"
             icon={<Hash className="w-4 h-4" />}
