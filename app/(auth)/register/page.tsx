@@ -70,28 +70,29 @@ export default function RegisterPage() {
         return;
       }
 
-      if (!data?.temporaryPassword) {
-        setError(
-          "Регистрация прошла, но не удалось получить временный пароль. Проверьте почту и войдите вручную.",
-        );
-        return;
-      }
-
-      const signInResult = await signIn("credentials", {
-        email,
-        password: data.temporaryPassword,
-        redirect: false,
+      // После подтверждения email пользователь должен войти через magic link
+      // Отправляем magic link на email для входа
+      const magicLinkResponse = await fetch("/api/auth/email/send-magic-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
       });
 
-      if (signInResult?.error || !signInResult?.ok) {
+      const magicLinkData = await magicLinkResponse.json();
+
+      if (!magicLinkResponse.ok || !magicLinkData.success) {
         setError(
-          "Регистрация прошла, но не удалось выполнить вход. Проверьте почту и войдите вручную.",
+          "Регистрация прошла, но не удалось отправить ссылку для входа. Проверьте почту и войдите вручную.",
         );
         return;
       }
 
-      router.push("/dashboard");
-      router.refresh();
+      // Показываем сообщение об успешной регистрации
+      setError("");
+      setStep("verify");
+      
+      // Перенаправляем на страницу логина с сообщением
+      router.push("/login?registered=true&email=" + encodeURIComponent(email));
     } catch {
       setError("Произошла ошибка");
     } finally {

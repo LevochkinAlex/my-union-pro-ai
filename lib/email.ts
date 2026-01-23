@@ -308,10 +308,13 @@ export async function sendVerificationEmail(
  */
 export async function sendWelcomeEmail(
   email: string,
-  password: string
+  password?: string,
+  magicLink?: string
 ): Promise<SendEmailResult> {
   try {
     const subject = "Добро пожаловать в МойСоюз!";
+    
+    // Если есть magic link - используем его, иначе пароль
     const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -329,6 +332,23 @@ export async function sendWelcomeEmail(
       <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
         Ваш аккаунт успешно создан!
       </p>
+      ${magicLink ? `
+      <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
+        Перейдите по ссылке ниже, чтобы войти в свой личный кабинет.
+      </p>
+      <div style="text-align: center; margin: 40px 0;">
+        <a href="${magicLink}"
+           style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600;">
+          Войти в личный кабинет
+        </a>
+      </div>
+      <p style="margin: 30px 0 10px; font-size: 14px; color: #666666;">
+        Или скопируйте ссылку: ${magicLink}
+      </p>
+      <p style="margin: 0 0 30px; font-size: 14px; color: #666666;">
+        Ссылка действительна 15 минут.
+      </p>
+      ` : password ? `
       <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #333333;">
         Ваш временный пароль: <strong>${password}</strong>
       </p>
@@ -341,11 +361,18 @@ export async function sendWelcomeEmail(
           Войти в аккаунт
         </a>
       </div>
+      ` : ''}
     </div>
   </div>
 </body>
 </html>
     `.trim();
+
+    const textContent = magicLink 
+      ? `Ваш аккаунт успешно создан!\n\nПерейдите по ссылке ниже, чтобы войти в свой личный кабинет:\n\n${magicLink}\n\nСсылка действительна 15 минут.`
+      : password
+      ? `Ваш аккаунт успешно создан!\n\nВаш временный пароль: ${password}\n\nРекомендуем изменить пароль после первого входа.\n\nВойти в аккаунт: ${process.env.NEXT_PUBLIC_APP_URL || 'https://myunion.pro'}/login`
+      : `Ваш аккаунт успешно создан!\n\nВойти в аккаунт: ${process.env.NEXT_PUBLIC_APP_URL || 'https://myunion.pro'}/login`;
 
     console.log("[Email] Welcome email готов к отправке:", email);
     
@@ -355,7 +382,7 @@ export async function sendWelcomeEmail(
         to: email,
         subject,
         html: htmlContent,
-        text: `Ваш аккаунт успешно создан!\n\nВаш временный пароль: ${password}\n\nРекомендуем изменить пароль после первого входа.\n\nВойти в аккаунт: ${process.env.NEXT_PUBLIC_APP_URL || 'https://myunion.pro'}/login`,
+        text: textContent,
       });
       
       return {

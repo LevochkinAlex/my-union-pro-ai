@@ -18,6 +18,67 @@ function normalizePhone(phone: string): string {
   return cleaned;
 }
 
+/**
+ * Парсинг ФИО из данных Яндекс API
+ * Приоритет: first_name/last_name > real_name (с умным парсингом)
+ */
+function parseYandexName(yandexUserInfo: {
+  first_name?: string;
+  last_name?: string;
+  real_name?: string;
+}): { firstName?: string; lastName?: string; middleName?: string } {
+  const result: { firstName?: string; lastName?: string; middleName?: string } = {};
+
+  // Приоритет: используем first_name и last_name из Yandex API (наиболее надежно)
+  if (yandexUserInfo.first_name || yandexUserInfo.last_name) {
+    if (yandexUserInfo.first_name) {
+      result.firstName = yandexUserInfo.first_name.trim();
+    }
+    if (yandexUserInfo.last_name) {
+      result.lastName = yandexUserInfo.last_name.trim();
+    }
+    return result;
+  }
+
+  // Fallback: парсим real_name
+  // Формат может быть: "Фамилия Имя Отчество" или "Имя Фамилия" или другой
+  if (yandexUserInfo.real_name) {
+    const realName = yandexUserInfo.real_name.trim();
+    const nameParts = realName.split(/\s+/).filter(p => p.length > 0);
+    
+    if (nameParts.length >= 2) {
+      // Пробуем определить формат по длине и окончанию
+      // Если первое слово длиннее и заканчивается на -ов/-ев/-ин - скорее всего фамилия
+      const firstPart = nameParts[0];
+      const secondPart = nameParts[1];
+      const isLikelySurnameFirst = 
+        firstPart.length > secondPart.length ||
+        /[-ов|-ев|-ин|-ая|-ий]$/i.test(firstPart);
+      
+      if (isLikelySurnameFirst) {
+        // Формат: "Фамилия Имя Отчество"
+        result.lastName = firstPart;
+        result.firstName = secondPart;
+        if (nameParts.length >= 3) {
+          result.middleName = nameParts.slice(2).join(" ");
+        }
+      } else {
+        // Формат: "Имя Фамилия" или другой
+        result.firstName = firstPart;
+        result.lastName = secondPart;
+        if (nameParts.length >= 3) {
+          result.middleName = nameParts.slice(2).join(" ");
+        }
+      }
+    } else if (nameParts.length === 1) {
+      // Только одно слово - используем как имя
+      result.firstName = nameParts[0];
+    }
+  }
+
+  return result;
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     // Яндекс ID провайдер
@@ -76,6 +137,66 @@ export const authOptions: NextAuthOptions = {
           };
         } catch (error) {
           console.error("[Auth] Ошибка при авторизации по токену:", error);
+          return null;
+        }
+      },
+    }),
+    // Email/Password авторизация (для супер-админа и пользователей с паролем)
+    CredentialsProvider({
+      id: "email-password",
+      name: "EmailPassword",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials): Promise<User | null> {
+        if (!credentials?.email || !credentials?.password) {
+          console.log("[NextAuth] Email/Password: отсутствуют email или password");
+          return null;
+        }
+
+        try {
+          const email = credentials.email.trim().toLowerCase();
+          
+          // Ищем пользователя по email
+          const user = await prisma.user.findUnique({
+            where: { email },
+          });
+
+          if (!user) {
+            console.log("[NextAuth] Email/Password: пользователь не найден:", email);
+            return null;
+          }
+
+          // Проверяем, что у пользователя есть пароль
+          if (!user.password) {
+            console.log("[NextAuth] Email/Password: у пользователя нет пароля:", email);
+            return null;
+          }
+
+          // Проверяем пароль
+          const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
+          
+          if (!isPasswordValid) {
+            console.log("[NextAuth] Email/Password: неверный пароль для:", email);
+            return null;
+          }
+
+          console.log("[NextAuth] ✅ Email/Password: успешный вход для:", email, "роль:", user.role);
+
+          // Возвращаем пользователя
+          return {
+            id: user.id,
+            email: user.email || undefined,
+            name: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || undefined,
+            role: user.role,
+            membershipStatus: user.membershipStatus,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            avatarUrl: user.avatarUrl,
+          };
+        } catch (error) {
+          console.error("[NextAuth] Email/Password: ошибка при авторизации:", error);
           return null;
         }
       },
@@ -169,12 +290,15 @@ export const authOptions: NextAuthOptions = {
 
           if (!user) {
             // Создаем нового пользователя при первом успешном входе
+            // ВАЖНО: НЕ устанавливаем emailVerified автоматически
+            // Валидация email должна происходить в анкете после первого входа
             user = await prisma.user.create({
               data: {
                 phone: normalizedPhone,
                 authPhone: normalizedPhone, // Устанавливаем authPhone при первой SMS авторизации
                 role: "PENDING_MEMBER",
                 membershipStatus: "PROFILE_INCOMPLETE",
+                emailVerified: null, // Email не верифицирован до валидации в анкете
               },
             });
             console.log("[NextAuth] ✅ Создан новый пользователь при первом входе:", {
@@ -500,28 +624,16 @@ export const authOptions: NextAuthOptions = {
             }
 
             // Обновляем имя и фамилию, если их нет
-            // Используем first_name и last_name из Yandex API, если доступны (более надежно)
-            if (yandexUserInfo.first_name || yandexUserInfo.last_name) {
-              if (!existingUser.firstName && yandexUserInfo.first_name) {
-                updateData.firstName = yandexUserInfo.first_name;
-              }
-              if (!existingUser.lastName && yandexUserInfo.last_name) {
-                updateData.lastName = yandexUserInfo.last_name;
-              }
-            } else if (yandexUserInfo.real_name) {
-              // Fallback: парсим real_name (формат: "Фамилия Имя Отчество")
-              const nameParts = yandexUserInfo.real_name.trim().split(/\s+/);
-              if (nameParts.length >= 2) {
-                if (!existingUser.firstName) {
-                  updateData.firstName = nameParts[1]; // Имя
-                }
-                if (!existingUser.lastName) {
-                  updateData.lastName = nameParts[0]; // Фамилия
-                }
-                if (nameParts.length >= 3 && !existingUser.middleName) {
-                  updateData.middleName = nameParts.slice(2).join(" "); // Отчество
-                }
-              }
+            // ВАЖНО: НЕ перезаписываем существующие данные
+            const parsedName = parseYandexName(yandexUserInfo);
+            if (!existingUser.firstName && parsedName.firstName) {
+              updateData.firstName = parsedName.firstName;
+            }
+            if (!existingUser.lastName && parsedName.lastName) {
+              updateData.lastName = parsedName.lastName;
+            }
+            if (!existingUser.middleName && parsedName.middleName) {
+              updateData.middleName = parsedName.middleName;
             }
 
             // Обновляем аватар, если его нет
@@ -598,25 +710,16 @@ export const authOptions: NextAuthOptions = {
               membershipStatus: "PROFILE_INCOMPLETE",
             };
 
-            // Парсим имя
-            // Используем first_name и last_name из Yandex API, если доступны (более надежно)
-            if (yandexUserInfo.first_name || yandexUserInfo.last_name) {
-              if (yandexUserInfo.first_name) {
-                newUserData.firstName = yandexUserInfo.first_name;
-              }
-              if (yandexUserInfo.last_name) {
-                newUserData.lastName = yandexUserInfo.last_name;
-              }
-            } else if (yandexUserInfo.real_name) {
-              // Fallback: парсим real_name (формат: "Фамилия Имя Отчество")
-              const nameParts = yandexUserInfo.real_name.trim().split(/\s+/);
-              if (nameParts.length >= 2) {
-                newUserData.firstName = nameParts[1]; // Имя
-                newUserData.lastName = nameParts[0]; // Фамилия
-                if (nameParts.length >= 3) {
-                  newUserData.middleName = nameParts.slice(2).join(" "); // Отчество
-                }
-              }
+            // Парсим имя из данных Яндекс
+            const parsedName = parseYandexName(yandexUserInfo);
+            if (parsedName.firstName) {
+              newUserData.firstName = parsedName.firstName;
+            }
+            if (parsedName.lastName) {
+              newUserData.lastName = parsedName.lastName;
+            }
+            if (parsedName.middleName) {
+              newUserData.middleName = parsedName.middleName;
             }
 
             // Аватар
@@ -715,6 +818,7 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id;
+        // Временно используем значения из токена (fallback)
         session.user.role = token.role;
         session.user.membershipStatus = token.membershipStatus;
         session.user.firstName = token.firstName;
@@ -722,12 +826,15 @@ export const authOptions: NextAuthOptions = {
         // avatarUrl не хранится в токене (слишком длинный URL), будет получаться из БД при необходимости
         session.user.avatarUrl = undefined;
         
-        // Получаем актуальные viewMode и isPPOHead из БД
-        // Это важно для корректного переключения режимов
+        // Получаем актуальные данные из БД при каждом запросе сессии
+        // Это важно для корректного отображения статуса членства и роли
+        // Особенно важно при изменении статуса администратором или при одобрении документов
         try {
           const userData = await prisma.user.findUnique({
             where: { id: token.id as string },
             select: {
+              role: true,
+              membershipStatus: true,
               viewMode: true,
               isPPOHead: true,
               ppoHeadOrganizationId: true,
@@ -735,12 +842,18 @@ export const authOptions: NextAuthOptions = {
           });
           
           if (userData) {
+            // Обновляем role и membershipStatus из БД (актуальные данные)
+            session.user.role = userData.role;
+            session.user.membershipStatus = userData.membershipStatus;
+            
+            // Обновляем viewMode и isPPOHead
             (session.user as any).viewMode = userData.viewMode || "MEMBER";
             (session.user as any).isPPOHead = userData.isPPOHead || false;
             (session.user as any).ppoHeadOrganizationId = userData.ppoHeadOrganizationId || null;
           }
         } catch (error) {
-          console.error("[Auth] Error fetching viewMode:", error);
+          console.error("[Auth] Error fetching user data from DB:", error);
+          // В случае ошибки используем значения из токена
           (session.user as any).viewMode = "MEMBER";
           (session.user as any).isPPOHead = false;
         }

@@ -34,7 +34,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { update: updateSession } = useSession();
-  const [loginMethod, setLoginMethod] = useState<"sms" | "email">("sms"); // Вкладка: SMS или Email
+  const [loginMethod, setLoginMethod] = useState<"sms" | "email">("sms"); // Вкладка: SMS или Email (magic link)
   const [input, setInput] = useState(""); // Универсальное поле: телефон или email
   const [inputType, setInputType] = useState<"phone" | "email" | null>(null);
   const [pinCode, setPinCode] = useState("");
@@ -195,7 +195,7 @@ function LoginForm() {
       // Определяем тип ввода на основе выбранного метода
       const type = loginMethod === "email" ? "email" : "phone";
       
-      // Если это EMAIL
+      // Если это EMAIL (magic link)
       if (type === "email") {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(input)) {
@@ -554,6 +554,7 @@ function LoginForm() {
                       setLoginMethod("sms");
                       setInput("");
                       setInputType("phone");
+                      setPassword("");
                       setError("");
                     }}
                     className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${

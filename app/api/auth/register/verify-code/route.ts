@@ -131,13 +131,33 @@ export async function POST(request: NextRequest) {
       // Don't fail registration if charter document creation fails
     }
 
-    // Отправляем приветственное письмо с паролем
-    await sendWelcomeEmail(email, generatedPassword);
+    // Отправляем magic link для входа вместо пароля
+    const crypto = require("crypto");
+    const loginToken = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 минут
+
+    await prisma.loginToken.create({
+      data: {
+        token: loginToken,
+        userId: updatedUser.id,
+        expiresAt,
+      },
+    });
+
+    // Формируем magic link
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                    process.env.NEXTAUTH_URL || 
+                    "https://myunion.pro";
+    const magicLink = `${baseUrl.replace(/^http:/, "https:")}/api/auth/email/verify?token=${loginToken}`;
+
+    // Отправляем приветственное письмо с magic link
+    const { sendWelcomeEmail } = await import("@/lib/email");
+    await sendWelcomeEmail(email, undefined, magicLink);
 
     return NextResponse.json({
       success: true,
-      message: "Email подтвержден. Пароль отправлен на вашу почту.",
-      temporaryPassword: generatedPassword,
+      message: "Email подтвержден. Ссылка для входа отправлена на вашу почту.",
+      magicLink: process.env.NODE_ENV === "development" ? magicLink : undefined,
     });
   } catch (error) {
     console.error("Verification error:", error);
