@@ -138,51 +138,6 @@ export async function GET(request: NextRequest) {
       });
     });
 
-    // Используем withPrismaRetry для критичных запросов
-    const tickets = await withPrismaRetry(async () => {
-      return await prisma.ticket.findMany({
-        where,
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              middleName: true,
-              email: true,
-            },
-          },
-          attachments: {
-            select: {
-              id: true,
-              fileName: true,
-              fileSize: true,
-              mimeType: true,
-            },
-          },
-          comments: {
-            select: {
-              id: true,
-              createdAt: true,
-            },
-            orderBy: {
-              createdAt: "desc",
-            },
-            take: 1,
-          },
-          _count: {
-            select: {
-              comments: true,
-              attachments: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
-    });
-
     return NextResponse.json({
       success: true,
       tickets: tickets.map((ticket: any) => ({
