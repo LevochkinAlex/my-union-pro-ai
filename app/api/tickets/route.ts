@@ -358,33 +358,49 @@ export async function POST(request: NextRequest) {
     }
 
     // Создаем тикет с chatId
-    const ticketData: any = {
-      userId: session.user.id,
-      publicId: publicId!,
-      type: type as any,
-      priority: (priority as any) || "MEDIUM",
-      status: "PENDING",
-      title,
-      content,
-      organizationId: user?.organizationId || null,
-      chatId: appealChat?.id || null,
-    };
-
     // Устанавливаем дедлайн ответа председателя (72 часа с момента создания)
-    // Добавляем новые поля только если они существуют в схеме (для обратной совместимости)
-    try {
-      const responseDeadline = new Date();
-      responseDeadline.setHours(responseDeadline.getHours() + 72);
-      ticketData.responseDeadline = responseDeadline;
-      ticketData.isOverdue = false;
-    } catch (e) {
-      // Игнорируем, если поля не существуют в БД (до применения миграции)
-      console.log("[tickets] Deadline fields not available, skipping");
-    }
+    const responseDeadline = new Date();
+    responseDeadline.setHours(responseDeadline.getHours() + 72);
 
-    const ticket = await prisma.ticket.create({
-      data: ticketData,
-    });
+    // Пытаемся создать с новыми полями, если не получится - создаем без них (для обратной совместимости)
+    let ticket;
+    try {
+      ticket = await prisma.ticket.create({
+        data: {
+          userId: session.user.id,
+          publicId: publicId!,
+          type: type as any,
+          priority: (priority as any) || "MEDIUM",
+          status: "PENDING",
+          title,
+          content,
+          organizationId: user?.organizationId || null,
+          chatId: appealChat?.id || null,
+          responseDeadline, // Дедлайн для ответа председателя (72 часа)
+          isOverdue: false,
+        },
+      });
+    } catch (error: any) {
+      // Если поля не существуют в БД (миграция не применена), создаем без них
+      if (error?.code === 'P2002' || error?.message?.includes('column') || error?.message?.includes('does not exist')) {
+        console.log("[tickets] Deadline fields not available in DB, creating ticket without them");
+        ticket = await prisma.ticket.create({
+          data: {
+            userId: session.user.id,
+            publicId: publicId!,
+            type: type as any,
+            priority: (priority as any) || "MEDIUM",
+            status: "PENDING",
+            title,
+            content,
+            organizationId: user?.organizationId || null,
+            chatId: appealChat?.id || null,
+          },
+        });
+      } else {
+        throw error;
+      }
+    }
 
     // Обрабатываем файлы
     const uploadedFiles: Array<{
