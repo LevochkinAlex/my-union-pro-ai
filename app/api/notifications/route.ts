@@ -25,23 +25,35 @@ export async function GET(request: NextRequest) {
       where.readAt = null;
     }
 
-    const [notifications, total, unreadCountResult] = await Promise.all([
-      prisma.userNotification.findMany({
-        where,
-        orderBy: {
-          createdAt: "desc",
-        },
-        skip,
-        take: limit,
-      }),
-      prisma.userNotification.count({ where }),
-      prisma.userNotification.count({
-        where: {
-          userId: session.user.id,
-          readAt: null,
-        },
-      }),
-    ]);
+    // ОПТИМИЗАЦИЯ: Добавляем таймаут для запросов к БД (10 секунд)
+    const dbQueryTimeout = 10000; // 10 секунд
+    
+    const [notifications, total, unreadCountResult] = await Promise.race([
+      Promise.all([
+        prisma.userNotification.findMany({
+          where,
+          orderBy: {
+            createdAt: "desc",
+          },
+          skip,
+          take: limit,
+        }),
+        prisma.userNotification.count({ where }),
+        prisma.userNotification.count({
+          where: {
+            userId: session.user.id,
+            readAt: null,
+          },
+        }),
+      ]),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Database query timeout')), dbQueryTimeout)
+      ),
+    ]).catch((error) => {
+      console.error("[api/notifications] Database query timeout or error:", error);
+      // Возвращаем пустой результат при таймауте
+      return [[], 0, 0] as const;
+    });
     
     const unreadCount = unreadCountResult;
 
