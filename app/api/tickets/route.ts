@@ -459,6 +459,12 @@ export async function POST(request: NextRequest) {
         await fs.writeFile(chatFilePath, buffer);
         await fs.writeFile(ticketFilePath, buffer); // Дублируем для тикета
 
+        // Проверяем, что файл действительно сохранен
+        const chatFileExists = await fs.access(chatFilePath).then(() => true).catch(() => false);
+        if (!chatFileExists) {
+          console.error(`[tickets] ❌ Failed to save file to chat directory: ${chatFilePath}`);
+        }
+
         uploadedFiles.push({
           fileName: fileName,
           originalName: file.name,
@@ -467,6 +473,8 @@ export async function POST(request: NextRequest) {
           mimeType: file.type || "application/octet-stream",
           ticketPath: ticketRelativePath, // Сохраняем путь для тикета
         });
+
+        console.log(`[tickets] ✅ File saved: ${file.name} -> ${chatRelativePath} (${buffer.length} bytes, exists: ${chatFileExists})`);
       }
 
       if (uploadedFiles.length > 0) {
