@@ -93,46 +93,94 @@ export async function GET(request: NextRequest) {
 
     // Получаем обращения, не запрашивая новые поля явно (для обратной совместимости)
     // Prisma автоматически вернет их, если они есть в БД
-    const tickets = await prisma.ticket.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            middleName: true,
-            email: true,
+    // Используем withPrismaRetry для критичных запросов
+    const tickets = await withPrismaRetry(async () => {
+      return await prisma.ticket.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+              email: true,
+            },
+          },
+          attachments: {
+            select: {
+              id: true,
+              fileName: true,
+              fileSize: true,
+              mimeType: true,
+            },
+          },
+          comments: {
+            select: {
+              id: true,
+              createdAt: true,
+            },
+            orderBy: {
+              createdAt: "desc",
+            },
+            take: 1,
+          },
+          _count: {
+            select: {
+              comments: true,
+              attachments: true,
+            },
           },
         },
-        attachments: {
-          select: {
-            id: true,
-            fileName: true,
-            fileSize: true,
-            mimeType: true,
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+    });
+
+    // Используем withPrismaRetry для критичных запросов
+    const tickets = await withPrismaRetry(async () => {
+      return await prisma.ticket.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+              email: true,
+            },
+          },
+          attachments: {
+            select: {
+              id: true,
+              fileName: true,
+              fileSize: true,
+              mimeType: true,
+            },
+          },
+          comments: {
+            select: {
+              id: true,
+              createdAt: true,
+            },
+            orderBy: {
+              createdAt: "desc",
+            },
+            take: 1,
+          },
+          _count: {
+            select: {
+              comments: true,
+              attachments: true,
+            },
           },
         },
-        comments: {
-          select: {
-            id: true,
-            createdAt: true,
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-          take: 1,
+        orderBy: {
+          createdAt: "desc",
         },
-        _count: {
-          select: {
-            comments: true,
-            attachments: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
+      });
     });
 
     return NextResponse.json({
