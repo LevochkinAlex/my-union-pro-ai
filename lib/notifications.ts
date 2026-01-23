@@ -110,20 +110,33 @@ export async function sendUserNotification(data: NotificationData) {
         id: notificationRecord.id,
         type: notificationRecord.type,
         title: notificationRecord.title,
+        url: notificationRecord.url,
+        createdAt: notificationRecord.createdAt,
       });
     } catch (error) {
       console.error("[notifications] ❌ Error saving notification to DB:", error);
+      console.error("[notifications] Error details:", {
+        userId: data.userId,
+        type: data.type,
+        title: cleanTitle,
+        url: data.url,
+      });
       // Продолжаем отправку даже если не удалось сохранить в БД
     }
 
     // Отправляем Push уведомление
     if (user.pushNotificationsEnabled && user.pushSubscriptions.length > 0) {
       try {
+        console.log(`[notifications] 📱 Sending push to ${user.pushSubscriptions.length} device(s) for user ${data.userId}`);
         await Promise.all(
           user.pushSubscriptions.map(async (sub) => {
             try {
-              if (!sub.fcmToken) return { success: false };
-              await messaging.send({
+              if (!sub.fcmToken) {
+                console.warn(`[notifications] ⚠️ Empty FCM token for user ${data.userId}`);
+                return { success: false };
+              }
+              
+              const pushPayload = {
                 token: sub.fcmToken,
                 notification: {
                   title: cleanTitle,
@@ -149,10 +162,23 @@ export async function sendUserNotification(data: NotificationData) {
                     },
                   },
                 },
+              };
+              
+              console.log(`[notifications] 📤 Sending FCM push:`, {
+                token: sub.fcmToken.substring(0, 20) + '...',
+                title: cleanTitle,
+                type: data.type,
+                url: data.url,
               });
+              
+              await messaging.send(pushPayload);
               results.push = true;
-            } catch (error) {
-              console.error(`[notifications] Failed to send push to token ${sub.fcmToken}:`, error);
+              console.log(`[notifications] ✅ Push sent successfully to token ${sub.fcmToken.substring(0, 20)}...`);
+            } catch (error: any) {
+              console.error(`[notifications] ❌ Failed to send push to token ${sub.fcmToken?.substring(0, 20)}...:`, {
+                error: error?.message || String(error),
+                code: error?.code,
+              });
             }
           })
         );
@@ -163,10 +189,13 @@ export async function sendUserNotification(data: NotificationData) {
             where: { id: notificationRecord.id },
             data: { pushSent: true },
           });
+          console.log(`[notifications] ✅ Updated notification ${notificationRecord.id} pushSent=true`);
         }
       } catch (error) {
-        console.error("[notifications] Error sending push notifications:", error);
+        console.error("[notifications] ❌ Error sending push notifications:", error);
       }
+    } else {
+      console.log(`[notifications] ⏭️ Skipping push: enabled=${user.pushNotificationsEnabled}, subscriptions=${user.pushSubscriptions.length}`);
     }
 
     // Отправляем Email уведомление
