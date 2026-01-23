@@ -18,28 +18,33 @@ export async function GET() {
     }
 
     // ОПТИМИЗАЦИЯ: Таймаут для запроса к БД (10 секунд)
-    // ОПТИМИЗАЦИЯ: Таймаут для запроса к БД (10 секунд)
-    const user = await Promise.race([
-      prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: {
-          id: true,
-          role: true,
-          isPPOHead: true,
-          viewMode: true,
-          ppoHeadOrganizationId: true,
-          ppoHeadOrganization: {
-            select: {
-              id: true,
-              name: true,
-            }
+    let user: any;
+    try {
+      user = await Promise.race([
+        prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: {
+            id: true,
+            role: true,
+            isPPOHead: true,
+            viewMode: true,
+            ppoHeadOrganizationId: true,
+            ppoHeadOrganization: {
+              select: {
+                id: true,
+                name: true,
+              }
+            },
           },
-        },
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Database query timeout')), 10000)
-      ),
-    ]) as any;
+        }),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Database query timeout')), 10000)
+        ),
+      ]);
+    } catch (timeoutError) {
+      // Если таймаут, используем fallback из сессии
+      throw timeoutError;
+    }
 
     if (!user) {
       return NextResponse.json(
