@@ -80,6 +80,9 @@ async function fixMissingAppealMessages() {
         // Подготавливаем вложения
         let messageAttachments = undefined;
         if (ticket.attachments && ticket.attachments.length > 0) {
+          // Импортируем getFileUrlWithCDN для правильных URL
+          const { getFileUrlWithCDN } = await import('../lib/cdn.js');
+          
           messageAttachments = {
             create: ticket.attachments.map(att => {
               // Преобразуем путь тикета в путь чата
@@ -89,9 +92,12 @@ async function fixMissingAppealMessages() {
               }
 
               const isImage = att.mimeType?.startsWith('image/');
+              // Используем CDN URL для вложений
+              const fileUrl = getFileUrlWithCDN(chatPath);
+              
               return {
                 type: isImage ? 'image' : 'file',
-                url: chatPath,
+                url: fileUrl, // CDN URL
                 name: att.fileName,
                 size: att.fileSize,
                 mimeType: att.mimeType || 'application/octet-stream',
@@ -100,29 +106,45 @@ async function fixMissingAppealMessages() {
           };
         }
 
-        // Создаем сообщение
-        const messageData = {
-          chatId: ticket.chatId!,
-          senderId: ticket.userId,
-          content: initialMessage,
-          messageType: 'text',
-          ...(messageAttachments && { attachments: messageAttachments }),
-        };
+        // Создаем сообщение в транзакции для гарантии сохранения
+        const createdMessage = await prisma.$transaction(async (tx) => {
+          const messageData = {
+            chatId: ticket.chatId!,
+            senderId: ticket.userId,
+            content: initialMessage,
+            messageType: 'text',
+            threadRootId: null, // Явно устанавливаем null
+            replyToId: null,
+            ...(messageAttachments && { attachments: messageAttachments }),
+          };
 
-        const createdMessage = await prisma.chatMessage.create({
-          data: messageData,
+          const message = await tx.chatMessage.create({
+            data: messageData,
+            include: {
+              attachments: {
+                select: {
+                  id: true,
+                  type: true,
+                  url: true,
+                  name: true,
+                },
+              },
+            },
+          });
+          
+          // Обновляем чат в той же транзакции
+          await tx.chat.update({
+            where: { id: ticket.chatId! },
+            data: {
+              lastMessageId: message.id,
+              lastMessageAt: message.createdAt,
+            },
+          });
+          
+          return message;
         });
 
-        // Обновляем lastMessageId в чате
-        await prisma.chat.update({
-          where: { id: ticket.chatId! },
-          data: {
-            lastMessageId: createdMessage.id,
-            lastMessageAt: createdMessage.createdAt,
-          },
-        });
-
-        console.log(`✅ Исправлено обращение #${ticket.publicId}: создано сообщение ${createdMessage.id} с ${ticket.attachments?.length || 0} вложениями`);
+        console.log(`✅ Исправлено обращение #${ticket.publicId}: создано сообщение ${createdMessage.id} с ${createdMessage.attachments?.length || 0} вложениями`);
         fixed++;
       } catch (error) {
         console.error(`❌ Ошибка при исправлении обращения #${ticket.publicId}:`, error.message);
