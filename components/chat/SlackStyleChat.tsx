@@ -260,7 +260,8 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
           </button>
         )}
         
-        {isGroup && !isAI && (
+        {/* Кнопка "Участники" - только для групп и каналов, и только если есть обработчик */}
+        {isGroup && !isAI && onManageParticipants && (
           <button
             onClick={onManageParticipants}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl"
