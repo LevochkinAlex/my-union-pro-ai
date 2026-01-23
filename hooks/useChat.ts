@@ -446,7 +446,18 @@ export function useChat(options: UseChatOptions = {}) {
     threadRootId?: string,
     mentionedUserIds?: string[]
   ): Promise<boolean> => {
-    if (!selectedChat) return false;
+    console.log(`[useChat] ========== SEND MESSAGE ==========`);
+    console.log(`[useChat] selectedChat:`, selectedChat ? {
+      id: selectedChat.id,
+      type: selectedChat.type,
+      name: selectedChat.name,
+    } : 'NO SELECTED CHAT');
+    console.log(`[useChat] content length: ${content.length}, hasFile: ${!!file}`);
+    
+    if (!selectedChat) {
+      console.error(`[useChat] ❌ Cannot send message - no chat selected!`);
+      return false;
+    }
 
     setSending(true);
 
@@ -547,9 +558,12 @@ export function useChat(options: UseChatOptions = {}) {
           });
         } else {
           // Fallback на HTTP если WebSocket не подключен
-          console.log("[useChat] Using HTTP fallback for message send");
+          console.log(`[useChat] Using HTTP fallback for message send to chat: ${selectedChat.id}`);
           try {
-            const response = await fetch(`/api/chat/${selectedChat.id}`, {
+            const url = `/api/chat/${selectedChat.id}`;
+            console.log(`[useChat] POST ${url}`);
+            
+            const response = await fetch(url, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ 
@@ -560,8 +574,16 @@ export function useChat(options: UseChatOptions = {}) {
               }),
             });
 
+            console.log(`[useChat] POST response status: ${response.status}`);
+
             if (response.ok) {
               const data = await response.json();
+              console.log(`[useChat] ✅ Message created:`, data.message ? {
+                id: data.message.id,
+                chatId: data.message.chatId,
+                contentLength: data.message.content?.length,
+              } : 'NO MESSAGE IN RESPONSE');
+              
               if (data.message) {
                 setMessages(prev => {
                   if (prev.some(m => m.id === data.message.id)) return prev;
@@ -571,12 +593,13 @@ export function useChat(options: UseChatOptions = {}) {
                 loadChats();
                 return true;
               } else {
-                console.error("[useChat] Response OK but no message:", data);
+                console.error("[useChat] ❌ Response OK but no message:", data);
                 options.onError?.("Сообщение не было создано");
                 return false;
               }
             } else {
               const errorText = await response.text();
+              console.error(`[useChat] ❌ POST failed: ${response.status}`, errorText);
               let errorData;
               try {
                 errorData = JSON.parse(errorText);
