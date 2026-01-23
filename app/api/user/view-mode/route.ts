@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
 // GET /api/user/view-mode
@@ -18,11 +18,11 @@ export async function GET() {
       );
     }
 
-    // ОПТИМИЗАЦИЯ: Таймаут для запроса к БД (10 секунд)
+    // Используем withPrismaRetry для обработки ошибок подключения
     let user: any;
     try {
-      user = await Promise.race([
-        prisma.user.findUnique({
+      user = await withPrismaRetry(async () => {
+        return await prisma.user.findUnique({
           where: { id: session.user.id },
           select: {
             id: true,
@@ -37,14 +37,11 @@ export async function GET() {
               }
             },
           },
-        }),
-        new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Database query timeout')), 10000)
-        ),
-      ]);
-    } catch (timeoutError) {
-      // Если таймаут, используем fallback из сессии
-      throw timeoutError;
+        });
+      });
+    } catch (dbError) {
+      // Если ошибка БД, используем fallback из сессии
+      throw dbError;
     }
 
     if (!user) {
@@ -118,8 +115,17 @@ export async function GET() {
   } catch (error: any) {
     console.error("[user/view-mode] GET Error:", error);
     
+    // Проверяем, является ли это ошибкой подключения к БД
+    const isConnectionError = 
+      error?.code === 'P1001' || // Can't reach database server
+      error?.code === 'P1002' || // Database server doesn't accept connections
+      error?.code === 'P1008' || // Operations timed out
+      error?.code === 'P1017' || // Server has closed the connection
+      error?.message?.includes('timeout') ||
+      error?.message?.includes('ECONNREFUSED');
+    
     // Если таймаут или ошибка БД, возвращаем fallback с данными из сессии
-    if (error?.message === 'Database query timeout' || error?.code === 'P1001') {
+    if (isConnectionError) {
       console.warn("[user/view-mode] Database timeout, using session fallback");
       try {
         if (!session) {

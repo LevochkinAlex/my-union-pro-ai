@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { invalidateUsersCache } from "@/lib/cache-invalidation";
 import { cacheDeletePattern } from "@/lib/cache";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
@@ -51,9 +51,10 @@ export async function GET() {
     const user = await withCache(
       cacheKey,
       async () => {
-        return await prisma.user.findUnique({
-          where: { id: session.user.id },
-          select: {
+        return await withPrismaRetry(async () => {
+          return await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: {
             id: true,
             email: true,
             emailVerified: true,
@@ -97,6 +98,7 @@ export async function GET() {
               },
             },
           },
+        });
         });
       },
       10 // Кеш на 10 секунд (уменьшено для более быстрого обновления)
@@ -159,8 +161,25 @@ export async function GET() {
       viewMode: user.viewMode,
       isPPOHead: user.isPPOHead,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[profile] GET error:", error);
+    
+    // Проверяем, является ли это ошибкой подключения к БД
+    const isConnectionError = 
+      error?.code === 'P1001' || // Can't reach database server
+      error?.code === 'P1002' || // Database server doesn't accept connections
+      error?.code === 'P1008' || // Operations timed out
+      error?.code === 'P1017' || // Server has closed the connection
+      error?.message?.includes('timeout') ||
+      error?.message?.includes('ECONNREFUSED');
+    
+    if (isConnectionError) {
+      return NextResponse.json(
+        { error: "Сервис временно недоступен. Попробуйте позже." },
+        { status: 503 },
+      );
+    }
+    
     return NextResponse.json(
       { error: "Не удалось загрузить профиль" },
       { status: 500 },

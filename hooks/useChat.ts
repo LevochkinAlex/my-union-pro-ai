@@ -351,6 +351,16 @@ export function useChat(options: UseChatOptions = {}) {
 
   // Выбор чата
   const selectChat = useCallback((chat: Chat | null) => {
+    console.log(`[useChat] ========== SELECT CHAT ==========`);
+    console.log(`[useChat] Selected chat:`, chat ? {
+      id: chat.id,
+      type: chat.type,
+      name: chat.name,
+      displayName: (chat as any).displayName,
+      otherUserId: chat.otherUser?.id,
+      otherUserName: chat.otherUser ? `${chat.otherUser.firstName} ${chat.otherUser.lastName}` : null,
+    } : null);
+    
     // Покидаем предыдущий чат
     if (selectedChatRef.current && socketRef.current) {
       socketRef.current.emit("chat:leave", selectedChatRef.current.id);
@@ -367,6 +377,7 @@ export function useChat(options: UseChatOptions = {}) {
       if (socketRef.current?.connected) {
         socketRef.current.emit("chat:join", chat.id);
       }
+      console.log(`[useChat] Loading messages for chat.id: ${chat.id}`);
       loadMessages(chat.id);
     }
   }, [loadMessages]);
