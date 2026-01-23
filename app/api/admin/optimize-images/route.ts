@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
           url: true,
           type: true,
         },
-        take: limit,
+        take: type === "chat" ? batchSize : 1000,
       });
       itemsToProcess.push(...chatAttachments.map(a => ({ ...a, _type: "chat" as const })));
     }
