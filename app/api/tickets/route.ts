@@ -885,20 +885,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Логируем создание
-    await prisma.ticketActionLog.create({
-      data: {
-        ticketId: ticket.id,
-        userId: session.user.id,
-        actionType: "created",
-        description: `Создано обращение: ${title}`,
-        metadata: {
-          type,
-          priority,
-          filesCount: uploadedFiles.length,
-        },
-      },
-    });
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: TicketActionLog создаем ПОСЛЕ начального сообщения
+    // чтобы начальное сообщение было первым в чате
+    // (TicketActionLog будет создан после блока создания начального сообщения)
 
     // Сохраняем в базу знаний
     saveTicketToKnowledgeBase(

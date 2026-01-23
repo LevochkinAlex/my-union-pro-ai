@@ -455,22 +455,54 @@ export async function GET(
     // КРИТИЧЕСКОЕ ЛОГИРОВАНИЕ: Проверяем что вернулось из БД
     console.log(`[chat/${chatId}] ========== DB QUERY RESULT ==========`);
     console.log(`[chat/${chatId}] Loaded ${messages.length} messages from DB`);
+    console.log(`[chat/${chatId}] whereClause:`, JSON.stringify(whereClause, null, 2));
+    
     if (messages.length > 0) {
       console.log(`[chat/${chatId}] First message:`, {
         id: messages[0].id,
         senderId: messages[0].senderId,
-        content: messages[0].content?.substring(0, 50),
+        content: messages[0].content?.substring(0, 100) || 'NO CONTENT',
+        messageType: messages[0].messageType,
+        threadRootId: messages[0].threadRootId,
+        attachmentsCount: messages[0].attachments?.length || 0,
         createdAt: messages[0].createdAt,
       });
       console.log(`[chat/${chatId}] Last message:`, {
         id: messages[messages.length - 1].id,
         senderId: messages[messages.length - 1].senderId,
-        content: messages[messages.length - 1].content?.substring(0, 50),
+        content: messages[messages.length - 1].content?.substring(0, 100) || 'NO CONTENT',
+        messageType: messages[messages.length - 1].messageType,
+        threadRootId: messages[messages.length - 1].threadRootId,
+        attachmentsCount: messages[messages.length - 1].attachments?.length || 0,
         createdAt: messages[messages.length - 1].createdAt,
       });
+      
+      // КРИТИЧЕСКАЯ ПРОВЕРКА: Для чатов обращений проверяем наличие начального сообщения с текстом
+      if (chat.ticket) {
+        const hasInitialAppealMessage = messages.some(m => 
+          m.content?.includes('**Обращение #') || 
+          m.content?.includes('Текст обращения:')
+        );
+        
+        if (!hasInitialAppealMessage) {
+          console.error(`[chat/${chatId}] ❌ CRITICAL: Loaded ${messages.length} messages, but NONE contain appeal text!`);
+          console.error(`[chat/${chatId}] Message types:`, messages.map(m => ({ 
+            id: m.id, 
+            type: m.messageType, 
+            contentPreview: m.content?.substring(0, 50) 
+          })));
+        } else {
+          console.log(`[chat/${chatId}] ✅ Found initial appeal message in loaded messages`);
+        }
+      }
     } else {
       console.warn(`[chat/${chatId}] ⚠️ NO MESSAGES LOADED FROM DB!`);
       console.warn(`[chat/${chatId}] whereClause was:`, JSON.stringify(whereClause));
+      
+      // Для чатов обращений это критическая проблема
+      if (chat.ticket) {
+        console.error(`[chat/${chatId}] ❌ CRITICAL: Ticket chat has NO messages! Ticket ID: ${chat.ticket.id}`);
+      }
     }
 
     // Проверяем есть ли еще сообщения
