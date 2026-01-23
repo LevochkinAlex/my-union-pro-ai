@@ -137,9 +137,12 @@ export async function GET(
     );
 
     // Пытаемся получить кэшированные сообщения
-    const cachedMessages = await getCachedChatMessages(chatId, cursor || undefined, direction);
+    // ВАЖНО: Проверяем кэш только если нет cursor (первая загрузка)
+    // Если есть cursor, всегда загружаем из БД для актуальности
+    const cachedMessages = cursor ? null : await getCachedChatMessages(chatId, cursor || undefined, direction);
     
-    if (cachedMessages) {
+    if (cachedMessages && cachedMessages.length > 0) {
+      console.log(`[chat/${chatId}] Using cached messages: ${cachedMessages.length} messages`);
       // Если есть кэш, возвращаем его (но все равно загружаем историю операций если нужно)
       let activityMessages: any[] = [];
       if (chat.ticket) {
@@ -269,6 +272,7 @@ export async function GET(
 
     // Загружаем сообщения с оптимизированными полями
     // ВАЖНО: Используем include для совместимости с форматированием сообщений
+    console.log(`[chat/${chatId}] Loading messages from DB (bypassing cache or cache miss)`);
     console.log(`[chat/${chatId}] Loading messages with whereClause:`, JSON.stringify(whereClause, null, 2));
     console.log(`[chat/${chatId}] Query params: limit=${limit}, direction=${direction}, cursor=${cursor || 'none'}`);
     
@@ -285,6 +289,11 @@ export async function GET(
       },
     });
     console.log(`[chat/${chatId}] Root messages (no thread): ${rootMessagesCount}`);
+    
+    // Если в БД есть сообщения, но кэш был пустым - это проблема кэша
+    if (totalMessagesCount > 0 && cachedMessages && cachedMessages.length === 0) {
+      console.warn(`[chat/${chatId}] ⚠️ CACHE INCONSISTENCY: DB has ${totalMessagesCount} messages but cache was empty!`);
+    }
     
     const messages = await prisma.chatMessage.findMany({
       where: whereClause,
@@ -1160,17 +1169,37 @@ export async function POST(
       },
     });
     
-    console.log(`[chat/${chatId}] ✅ Message created successfully:`, {
+    console.log(`[chat/${chatId}] ✅ Message created successfully in DB:`, {
       messageId: message.id,
       chatId: message.chatId,
       senderId: message.senderId,
       contentLength: message.content.length,
       createdAt: message.createdAt,
     });
+    
+    // КРИТИЧЕСКАЯ ПРОВЕРКА: Убеждаемся, что сообщение действительно сохранено в БД
+    const verifyMessage = await prisma.chatMessage.findUnique({
+      where: { id: message.id },
+      select: { id: true, chatId: true, senderId: true, content: true },
+    });
+    
+    if (!verifyMessage) {
+      console.error(`[chat/${chatId}] ❌ CRITICAL: Message ${message.id} was not found in DB after creation!`);
+      return NextResponse.json(
+        { error: 'Сообщение не было сохранено в базе данных' },
+        { status: 500 }
+      );
+    }
+    
+    console.log(`[chat/${chatId}] ✅ Message verified in DB:`, {
+      messageId: verifyMessage.id,
+      chatId: verifyMessage.chatId,
+      contentLength: verifyMessage.content.length,
+    });
 
     // Обновляем последнее сообщение в чате и онлайн статус отправителя
     try {
-      await Promise.allSettled([
+      const updateResult = await Promise.allSettled([
         prisma.chat.update({
           where: { id: chatId },
           data: {
@@ -1186,9 +1215,14 @@ export async function POST(
           },
         }),
       ]);
+      
+      console.log(`[chat/${chatId}] Chat and user updated:`, {
+        chatUpdated: updateResult[0].status === 'fulfilled',
+        userUpdated: updateResult[1].status === 'fulfilled',
+      });
     } catch (updateError) {
       // Логируем но не прерываем выполнение
-      console.warn('[chat] Error updating chat/user:', updateError);
+      console.warn(`[chat/${chatId}] Error updating chat/user:`, updateError);
     }
 
     // Если это ответ в треде, обновляем метрики
@@ -1508,11 +1542,23 @@ export async function POST(
         senderId: normalizedMessage.senderId,
         contentLength: normalizedMessage.content.length,
       });
-      // Инвалидируем кэш чата и списка чатов участников
-      console.log(`[chat/${chatId}] Invalidating cache after message creation`);
+      // КРИТИЧЕСКИ ВАЖНО: Инвалидируем кэш сообщений и чата
+      console.log(`[chat/${chatId}] Invalidating ALL cache after message creation`);
+      
+      // Инвалидируем кэш сообщений (чтобы новые сообщения загружались из БД)
       await invalidateChatCache(chatId).catch(err => 
-        console.warn(`[chat/${chatId}] Cache invalidation error:`, err)
+        console.warn(`[chat/${chatId}] Chat cache invalidation error:`, err)
       );
+      
+      // Инвалидируем кэш сообщений через паттерн (все варианты cursor/direction)
+      try {
+        const { cacheDeletePattern } = await import('@/lib/cache');
+        await cacheDeletePattern(`chat:messages:${chatId}:*`).catch(err =>
+          console.warn(`[chat/${chatId}] Messages cache pattern deletion error:`, err)
+        );
+      } catch (err) {
+        console.warn(`[chat/${chatId}] Error invalidating messages cache:`, err);
+      }
       
       // Инвалидируем кэш списка чатов для всех участников
       const chatParticipants = await prisma.chatParticipant.findMany({
@@ -1520,10 +1566,10 @@ export async function POST(
         select: { userId: true },
       });
       
-      console.log(`[chat/${chatId}] Invalidating cache for ${chatParticipants.length} participants`);
+      console.log(`[chat/${chatId}] Invalidating chat list cache for ${chatParticipants.length} participants`);
       await Promise.allSettled(
         chatParticipants.map(p => invalidateUserChatsCache(p.userId))
-      ).catch(err => console.warn(`[chat/${chatId}] Cache invalidation error:`, err));
+      ).catch(err => console.warn(`[chat/${chatId}] User chats cache invalidation error:`, err));
 
       console.log(`[chat/${chatId}] ✅ Returning created message to client:`, {
         messageId: normalizedMessage.id,

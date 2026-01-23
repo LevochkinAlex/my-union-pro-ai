@@ -226,8 +226,29 @@ function stopTyping(chatId: string, userId: string, socket: Socket) {
 
 // Функция для отправки сообщения из API routes
 export function emitNewMessage(chatId: string, message: any) {
-  if (io) {
+  if (!io) {
+    console.warn(`[Socket] ❌ Cannot emit message: Socket.io server not initialized`);
+    return;
+  }
+  
+  try {
+    // Получаем количество подключенных клиентов в комнате
+    const room = io.sockets.adapter.rooms.get(chatId);
+    const clientsCount = room ? room.size : 0;
+    
+    console.log(`[Socket] Emitting message:new to room ${chatId}:`, {
+      messageId: message.id,
+      chatId: message.chatId,
+      senderId: message.senderId,
+      clientsInRoom: clientsCount,
+    });
+    
+    // Отправляем сообщение всем в комнате чата
     io.to(chatId).emit("message:new", message);
+    
+    console.log(`[Socket] ✅ Message emitted to ${clientsCount} clients in room ${chatId}`);
+  } catch (error) {
+    console.error(`[Socket] ❌ Error emitting message to room ${chatId}:`, error);
   }
 }
 
