@@ -625,20 +625,45 @@ export async function POST(request: NextRequest) {
           attachmentsCount: messageData.attachments?.create?.length || 0,
         });
 
-        const createdMessage = await prisma.chatMessage.create({
-          data: messageData,
-          include: {
-            attachments: {
-              select: {
-                id: true,
-                type: true,
-                url: true,
-                name: true,
-                size: true,
-                mimeType: true,
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем транзакцию для гарантии сохранения
+        const createdMessage = await prisma.$transaction(async (tx) => {
+          // Создаем сообщение
+          const message = await tx.chatMessage.create({
+            data: messageData,
+            include: {
+              attachments: {
+                select: {
+                  id: true,
+                  type: true,
+                  url: true,
+                  name: true,
+                  size: true,
+                  mimeType: true,
+                },
               },
             },
-          },
+          });
+          
+          // КРИТИЧЕСКАЯ ПРОВЕРКА: Сразу проверяем в той же транзакции
+          const verifyMessage = await tx.chatMessage.findUnique({
+            where: { id: message.id },
+            select: { id: true, chatId: true, senderId: true, content: true },
+          });
+          
+          if (!verifyMessage) {
+            throw new Error(`Message ${message.id} was not found in DB after creation within transaction!`);
+          }
+          
+          // Обновляем чат в той же транзакции
+          await tx.chat.update({
+            where: { id: appealChat.id },
+            data: {
+              lastMessageId: message.id,
+              lastMessageAt: message.createdAt,
+            },
+          });
+          
+          return message;
         });
 
         // Обновляем lastMessageId в чате
