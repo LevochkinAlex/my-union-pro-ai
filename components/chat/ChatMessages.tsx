@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTheme } from 'next-themes';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -11,7 +11,7 @@ import {
   Chip,
   ScrollShadow,
 } from '@heroui/react';
-import { Check, CheckCheck } from 'lucide-react';
+import { Check, CheckCheck, Forward, MoreVertical } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -48,11 +48,13 @@ interface ChatMessagesProps {
   messages: Message[];
   currentUserId: string;
   typingUsers: Set<string>;
+  onForward?: (message: Message) => void;
 }
 
-export default function ChatMessages({ messages, currentUserId, typingUsers }: ChatMessagesProps) {
+export default function ChatMessages({ messages, currentUserId, typingUsers, onForward }: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { resolvedTheme } = useTheme();
+  const [contextMenu, setContextMenu] = useState<{ message: Message; x: number; y: number } | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -62,8 +64,23 @@ export default function ChatMessages({ messages, currentUserId, typingUsers }: C
     scrollToBottom();
   }, [messages]);
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (contextMenu && !(e.target as Element).closest('.context-menu')) {
+        setContextMenu(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [contextMenu]);
+
   const getSenderName = (sender: Message['sender']) => {
     return [sender.firstName, sender.lastName].filter(Boolean).join(' ') || 'Пользователь';
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, message: Message) => {
+    e.preventDefault();
+    setContextMenu({ message, x: e.clientX, y: e.clientY });
   };
 
   return (
@@ -76,7 +93,8 @@ export default function ChatMessages({ messages, currentUserId, typingUsers }: C
           return (
             <div
               key={message.id}
-              className={`flex gap-3 ${isOwn ? 'flex-row-reverse' : ''}`}
+              className={`flex gap-3 ${isOwn ? 'flex-row-reverse' : ''} relative group`}
+              onContextMenu={(e) => handleContextMenu(e, message)}
             >
               {/* Avatar */}
               {!isOwn && (
@@ -204,9 +222,47 @@ export default function ChatMessages({ messages, currentUserId, typingUsers }: C
                   )}
                 </div>
               </div>
+
+              {/* Context menu button */}
+              {onForward && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleContextMenu(e, message);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-default-200 dark:hover:bg-default-100"
+                  title="Переслать"
+                >
+                  <MoreVertical className="w-4 h-4 text-foreground-400" />
+                </button>
+              )}
             </div>
           );
         })}
+
+        {/* Context menu */}
+        {contextMenu && (
+          <div
+            className="context-menu fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[150px]"
+            style={{
+              left: `${contextMenu.x}px`,
+              top: `${contextMenu.y}px`,
+            }}
+          >
+            {onForward && (
+              <button
+                onClick={() => {
+                  onForward(contextMenu.message);
+                  setContextMenu(null);
+                }}
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <Forward className="w-4 h-4" />
+                Переслать
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Typing indicator */}
         {typingUsers.size > 0 && (

@@ -405,6 +405,10 @@ export function ChatPageBase({
                       ) || []
                     )
                   }
+                  onForward={(message) => {
+                    console.log("[ChatPageBase] onForward called with message:", message.id);
+                    setForwardingMessage(message);
+                  }}
                 />
               </div>
 
