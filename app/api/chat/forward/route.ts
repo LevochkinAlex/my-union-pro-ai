@@ -101,7 +101,24 @@ export async function POST(request: NextRequest) {
     console.log('[chat/forward] Target chat:', targetChat.id);
 
     // Обрабатываем разные типы сообщений
-    let forwardedContent = sourceMessage.content;
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Гарантируем что content - строка
+    let forwardedContent: string;
+    if (typeof sourceMessage.content === 'string') {
+      forwardedContent = sourceMessage.content;
+    } else if (sourceMessage.content && typeof sourceMessage.content === 'object') {
+      // Если content - объект, пытаемся извлечь текст или преобразовать в JSON
+      console.warn('[chat/forward] ⚠️ Source message has object content, converting to string:', {
+        messageId: sourceMessage.id,
+        contentType: typeof sourceMessage.content,
+      });
+      forwardedContent = (sourceMessage.content as any).text || 
+                        (sourceMessage.content as any).content || 
+                        (sourceMessage.content as any).body ||
+                        JSON.stringify(sourceMessage.content);
+    } else {
+      forwardedContent = String(sourceMessage.content || '');
+    }
+    
     let forwardedMessageType = sourceMessage.messageType;
     let forwardedAttachments: any[] = [];
 
@@ -193,12 +210,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Создаем пересланное сообщение
-    console.log('[chat/forward] Creating forwarded message in chat:', targetChat.id);
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Финальная проверка что content - строка
+    const finalContent = typeof forwardedContent === 'string' 
+      ? forwardedContent 
+      : String(forwardedContent || '');
+    
+    console.log('[chat/forward] Creating forwarded message in chat:', {
+      chatId: targetChat.id,
+      contentLength: finalContent.length,
+      messageType: forwardedMessageType,
+      attachmentsCount: forwardedAttachments.length,
+    });
+    
     const forwardedMessage = await prisma.chatMessage.create({
       data: {
         chatId: targetChat.id,
         senderId: userId,
-        content: forwardedContent,
+        content: finalContent,
         messageType: forwardedMessageType,
         attachments: forwardedAttachments.length > 0 ? {
           create: forwardedAttachments,
