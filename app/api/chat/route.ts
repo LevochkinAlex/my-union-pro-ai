@@ -6,6 +6,7 @@ import { normalizeUserAvatar } from "@/lib/api-helpers";
 import { 
   getUserChats, 
   getOrCreatePrivateChat,
+  getChatById,
   ChatFilter 
 } from "@/lib/chat-service";
 import { sendUserNotification } from "@/lib/notifications";
