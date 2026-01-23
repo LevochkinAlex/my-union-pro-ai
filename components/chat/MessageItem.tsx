@@ -189,9 +189,13 @@ export default function MessageItem({
             </div>
           ) : (
             <div className="text-sm text-gray-700 dark:text-gray-300">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {message.content}
-              </ReactMarkdown>
+              {message.content ? (
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {String(message.content)}
+                </ReactMarkdown>
+              ) : (
+                <span className="text-gray-400 italic">Сообщение пусто</span>
+              )}
             </div>
           )}
 

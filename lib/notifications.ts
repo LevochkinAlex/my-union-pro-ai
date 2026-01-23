@@ -181,7 +181,7 @@ export async function sendUserNotification(data: NotificationData) {
           to: user.email,
           subject: emailSubject,
           text: emailBody,
-          html: getEmailHtml(data.type, data.senderName, data.body, data.url, user.firstName),
+          html: getEmailHtml(data.type, cleanSenderName, cleanBody, data.url, user.firstName),
         });
         results.email = true;
         
@@ -438,6 +438,10 @@ export async function sendMassNotification(data: {
   email: boolean;
 }> {
   try {
+    // Очищаем HTML из title и body
+    const cleanTitle = stripHtml(data.title);
+    const cleanBody = stripHtml(data.body);
+    
     let pushSent = false;
     let emailSent = false;
 
@@ -506,8 +510,8 @@ export async function sendMassNotification(data: {
                   await messaging.send({
                     token: sub.fcmToken,
                     notification: {
-                      title: data.title,
-                      body: data.body,
+                      title: cleanTitle,
+                      body: cleanBody,
                     },
                     data: {
                       url: data.url,
@@ -545,8 +549,8 @@ export async function sendMassNotification(data: {
             try {
               await sendEmail({
                 to: user.email,
-                subject: data.title,
-                text: `${data.body}\n\nПерейти: ${data.url}`,
+                subject: cleanTitle,
+                text: `${cleanBody}\n\nПерейти: ${data.url}`,
                 html: `
 <!DOCTYPE html>
 <html>
@@ -570,7 +574,7 @@ export async function sendMassNotification(data: {
     <div class="content">
       <p>Здравствуйте, ${user.firstName || ""}!</p>
       <div class="message">
-        <p>${data.body}</p>
+        <p>${cleanBody}</p>
       </div>
       <a href="${data.url}" class="button">Перейти</a>
       <div class="footer">
