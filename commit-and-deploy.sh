@@ -14,6 +14,16 @@ git push
 echo "✅ Changes pushed"
 echo ""
 
+echo "🧪 Step 2.5: Running pre-deploy checks..."
+cd /Users/renatusmanov/my-union-pro-ai
+if pnpm pre-deploy; then
+  echo "✅ Pre-deploy checks passed"
+else
+  echo "❌ Pre-deploy checks failed! Aborting deployment."
+  exit 1
+fi
+echo ""
+
 echo "📥 Step 3: Deploying to server..."
 sshpass -p 'wu,iMrZj6goZh?' ssh -o StrictHostKeyChecking=no root@194.87.49.210 << 'EOF'
 cd /opt/my-union-pro

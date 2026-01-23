@@ -7,6 +7,16 @@ set -e
 
 echo "🚀 Начинаем деплой на сервер..."
 
+# Запускаем проверки перед деплоем
+echo "🧪 Запуск pre-deploy проверок..."
+if pnpm pre-deploy; then
+  echo "✅ Pre-deploy проверки пройдены"
+else
+  echo "❌ Pre-deploy проверки не пройдены! Прерываем деплой."
+  exit 1
+fi
+echo ""
+
 SERVER="root@194.87.49.210"
 PROJECT_PATH="/opt/my-union-pro"
 
