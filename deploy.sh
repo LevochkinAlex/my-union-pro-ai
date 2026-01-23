@@ -41,6 +41,12 @@ pnpm build
 echo "🔄 Перезапускаем приложение..."
 pm2 restart my-union-pro
 
+echo "🔄 Перезапускаем socket-server..."
+pm2 restart my-union-socket
+
+echo "📋 Статус сервисов:"
+pm2 status
+
 echo "📋 Последние логи:"
 pm2 logs my-union-pro --lines 30 --nostream
 

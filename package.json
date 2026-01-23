@@ -33,6 +33,7 @@
     "sync:promo-codes": "dotenv -e .env.local -- tsx scripts/sync-all-users-promo-codes.ts",
     "socket": "dotenv -e .env.local -- tsx server/socket-server.ts",
     "socket:chat": "dotenv -e .env.local -- tsx server/chat-server.ts",
+    "socket:build": "npx esbuild server/socket-server.ts --bundle --platform=node --outfile=dist/server/socket-server.js --external:@prisma/client --external:prisma",
     "socket:prod": "node dist/server/socket-server.js"
   },
   "dependencies": {
@@ -117,6 +118,7 @@
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
     "dotenv-cli": "^11.0.0",
+    "esbuild": "^0.27.2",
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.1.3",
     "rimraf": "^6.1.2",

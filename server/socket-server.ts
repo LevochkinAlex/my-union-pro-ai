@@ -134,14 +134,6 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Сообщения теперь отправляются через Matrix API
-      // TODO: Интегрировать отправку сообщений через Matrix API
-      // const { sendMatrixMessage } = await import('@/lib/matrix-messages');
-      // const senderUser = await prisma.user.findUnique({ where: { id: userId }, select: { matrixAccessToken: true } });
-      // if (senderUser?.matrixAccessToken && chat?.matrixRoomId) {
-      //   await sendMatrixMessage(senderUser.matrixAccessToken, chat.matrixRoomId, content);
-      // }
-
       // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Сохраняем сообщение в БД через транзакцию
       const message = await prisma.$transaction(async (tx) => {
         // Создаем сообщение в БД
