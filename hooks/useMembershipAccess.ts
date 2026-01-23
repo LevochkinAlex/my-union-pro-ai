@@ -80,7 +80,18 @@ export function useMembershipAccess(): MembershipAccessResult {
     }
 
     // Проверяем статусы членства
-    if (membershipStatus === "APPROVED" || unionMembershipStatus === "ACCEPTED") {
+    // ВАЖНО: Заглушки должны видеть только невалидированные пользователи
+    // Валидированные пользователи (с любым статусом кроме PENDING_VERIFICATION и PROFILE_INCOMPLETE) имеют доступ
+    
+    // Полный доступ имеют:
+    // 1. Одобренные члены (APPROVED)
+    // 2. Пользователи с документами на проверке (DOCUMENTS_PENDING) - уже валидированы председателем
+    // 3. Пользователи с принятым членством в профсоюзе (ACCEPTED)
+    if (
+      membershipStatus === "APPROVED" || 
+      membershipStatus === "DOCUMENTS_PENDING" || // Документы отправлены - уже валидирован
+      unionMembershipStatus === "ACCEPTED"
+    ) {
       return "approved";
     }
 
@@ -92,7 +103,8 @@ export function useMembershipAccess(): MembershipAccessResult {
       return "incomplete";
     }
 
-    // Все остальные статусы — ожидание
+    // PENDING_VERIFICATION - еще не валидирован, должен видеть заглушку
+    // Все остальные статусы (SUSPENDED, EXCLUDED) - тоже не имеют доступа
     return "pending";
   };
 

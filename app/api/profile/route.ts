@@ -44,7 +44,8 @@ export async function GET() {
 
     console.log("[profile] GET: Fetching user data for ID:", session.user.id);
 
-    // Кешируем профиль на 30 секунд для уменьшения нагрузки на БД
+    // Кешируем профиль на 10 секунд для уменьшения нагрузки на БД
+    // Уменьшено с 30 до 10 секунд для более быстрого обновления статуса членства
     const cacheKey = getCacheKey("profile", { userId: session.user.id });
     
     const user = await withCache(
@@ -80,6 +81,7 @@ export async function GET() {
             spouseInfo: true,
             additionalInfo: true,
             membershipStatus: true,
+            unionMembershipStatus: true, // Добавляем для проверки ACCEPTED
             organizationId: true,
             profileChangedAfterDocuments: true,
             profileLastModified: true,
@@ -97,7 +99,7 @@ export async function GET() {
           },
         });
       },
-      30 // Кеш на 30 секунд
+      10 // Кеш на 10 секунд (уменьшено для более быстрого обновления)
     );
 
     if (!user) {
@@ -143,6 +145,7 @@ export async function GET() {
         spouseInfo: user.spouseInfo,
         additionalInfo: user.additionalInfo,
         membershipStatus: user.membershipStatus, // Статус верификации (PENDING_VERIFICATION, APPROVED и т.д.)
+        unionMembershipStatus: user.unionMembershipStatus, // Статус членства в профсоюзе (ACCEPTED, NOT_ACCEPTED и т.д.)
         organizationId: user.organizationId, // Добавляем organizationId для удобства
         organization: user.organization,
         profileChangedAfterDocuments: user.profileChangedAfterDocuments,
