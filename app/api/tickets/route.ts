@@ -864,11 +864,16 @@ export async function POST(request: NextRequest) {
         
         // Пытаемся создать сообщение хотя бы с текстом, без вложений
         try {
+          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Гарантируем что все значения - строки
+          const safePublicId = String(publicId || '');
+          const safeTitle = String(title || '');
+          const safeContent = String(content || '');
+          
           const fallbackMessage = await prisma.chatMessage.create({
             data: {
               chatId: appealChat.id,
               senderId: session.user.id,
-              content: `**Обращение #${publicId}**\n\n**Тема:** ${title}\n\n**Текст обращения:**\n${content}`,
+              content: `**Обращение #${safePublicId}**\n\n**Тема:** ${safeTitle}\n\n**Текст обращения:**\n${safeContent}`,
               messageType: 'text',
             },
           });

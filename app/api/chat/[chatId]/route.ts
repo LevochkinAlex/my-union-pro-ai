@@ -878,7 +878,7 @@ export async function GET(
       },
       replyTo: msg.replyTo && msg.replyTo.sender ? {
         id: msg.replyTo.id,
-        content: msg.replyTo.content,
+        content: typeof msg.replyTo.content === 'string' ? msg.replyTo.content : String(msg.replyTo.content || ''),
         sender: {
           id: msg.replyTo.sender.id,
           firstName: msg.replyTo.sender.firstName,
