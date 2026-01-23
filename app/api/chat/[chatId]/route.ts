@@ -1508,6 +1508,23 @@ export async function POST(
         senderId: normalizedMessage.senderId,
         contentLength: normalizedMessage.content.length,
       });
+      // Инвалидируем кэш чата и списка чатов участников
+      console.log(`[chat/${chatId}] Invalidating cache after message creation`);
+      await invalidateChatCache(chatId).catch(err => 
+        console.warn(`[chat/${chatId}] Cache invalidation error:`, err)
+      );
+      
+      // Инвалидируем кэш списка чатов для всех участников
+      const chatParticipants = await prisma.chatParticipant.findMany({
+        where: { chatId, leftAt: null },
+        select: { userId: true },
+      });
+      
+      console.log(`[chat/${chatId}] Invalidating cache for ${chatParticipants.length} participants`);
+      await Promise.allSettled(
+        chatParticipants.map(p => invalidateUserChatsCache(p.userId))
+      ).catch(err => console.warn(`[chat/${chatId}] Cache invalidation error:`, err));
+
       console.log(`[chat/${chatId}] ✅ Returning created message to client:`, {
         messageId: normalizedMessage.id,
         chatId: normalizedMessage.chatId,
