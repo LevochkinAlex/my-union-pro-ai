@@ -218,8 +218,25 @@ export async function GET(request: NextRequest) {
         autoClosedAt: ticket.autoClosedAt ? new Date(ticket.autoClosedAt).toISOString() : null,
       })),
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[tickets] Error retrieving tickets:", error);
+    
+    // Проверяем, является ли это ошибкой подключения к БД
+    const isConnectionError = 
+      error?.code === 'P1001' || // Can't reach database server
+      error?.code === 'P1002' || // Database server doesn't accept connections
+      error?.code === 'P1008' || // Operations timed out
+      error?.code === 'P1017' || // Server has closed the connection
+      error?.message?.includes('timeout') ||
+      error?.message?.includes('ECONNREFUSED');
+    
+    if (isConnectionError) {
+      return NextResponse.json(
+        { error: "Сервис временно недоступен. Попробуйте позже." },
+        { status: 503 }
+      );
+    }
+    
     return NextResponse.json(
       { error: "Ошибка при загрузке тикетов" },
       { status: 500 }
