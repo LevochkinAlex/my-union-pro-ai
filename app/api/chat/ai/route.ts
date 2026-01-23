@@ -100,11 +100,8 @@ export async function GET() {
       });
 
       // Отправляем приветственное сообщение от бота
-      await prisma.chatMessage.create({
-        data: {
-          chatId: aiChat.id,
-          senderId: userId, // Временно используем userId, так как у бота нет реального user
-          content: `Здравствуйте! Я ИИ-Ассистент МойСоюз. 
+      // ВАЖНО: Используем специальный формат для ИИ-сообщений
+      const welcomeMessage = `Здравствуйте! Я ИИ-Ассистент МойСоюз.
 
 Я помогу вам с вопросами о:
 - Профсоюзном членстве и взносах
@@ -113,8 +110,14 @@ export async function GET() {
 - Льготах и скидках для членов профсоюза
 - Работе приложения МойСоюз
 
-Задайте свой вопрос, и я постараюсь помочь!`,
-          messageType: "system",
+Задайте свой вопрос, и я постараюсь помочь!`;
+
+      await prisma.chatMessage.create({
+        data: {
+          chatId: aiChat.id,
+          senderId: userId, // Используем userId, но помечаем как assistant
+          content: welcomeMessage,
+          messageType: "assistant", // Помечаем как сообщение от ассистента
         },
       });
     }

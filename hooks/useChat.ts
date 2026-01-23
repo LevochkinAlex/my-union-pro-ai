@@ -459,9 +459,56 @@ export function useChat(options: UseChatOptions = {}) {
       return false;
     }
 
+    // Проверяем, является ли это ИИ-чатом
+    const isAIChat = selectedChat.name === "ИИ-Ассистент" || (selectedChat as any).isAIChat || (selectedChat as any).otherUser?.id === "ai-assistant-bot";
+    
     setSending(true);
 
     try {
+      // Для ИИ-чата используем специальный endpoint
+      if (isAIChat && !file) {
+        console.log(`[useChat] Sending message to AI chat via /api/chat/ai`);
+        try {
+          const response = await fetch("/api/chat/ai", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+              content, 
+              chatId: selectedChat.id,
+            }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            // Добавляем оба сообщения (пользователя и бота)
+            setMessages(prev => {
+              const newMessages = [...prev];
+              if (data.userMessage && !newMessages.some(m => m.id === data.userMessage.id)) {
+                newMessages.push(data.userMessage);
+              }
+              if (data.botMessage && !newMessages.some(m => m.id === data.botMessage.id)) {
+                newMessages.push(data.botMessage);
+              }
+              return newMessages;
+            });
+            loadChats();
+            setSending(false);
+            return true;
+          } else {
+            const errorText = await response.text();
+            console.error(`[useChat] ❌ AI chat POST failed: ${response.status}`, errorText);
+            options.onError?.("Ошибка отправки сообщения ИИ");
+            setSending(false);
+            return false;
+          }
+        } catch (error) {
+          console.error(`[useChat] ❌ AI chat POST error:`, error);
+          options.onError?.("Ошибка отправки сообщения ИИ");
+          setSending(false);
+          return false;
+        }
+      }
+
       // Для файлов используем HTTP
       if (file) {
         const formData = new FormData();

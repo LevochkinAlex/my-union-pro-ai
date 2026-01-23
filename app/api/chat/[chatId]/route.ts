@@ -752,15 +752,31 @@ export async function GET(
 
     // Форматируем сообщения
     const formattedMessages = resultMessages.map((msg: any) => {
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обработка сообщений от ИИ-ассистента
+      const isAIMessage = msg.messageType === 'assistant' || msg.messageType === 'system';
+      const AI_BOT_ID = 'ai-assistant-bot';
+      
+      // Для сообщений от ИИ используем виртуального бота
+      let sender = msg.sender;
+      if (isAIMessage && (!sender || sender.id === userId)) {
+        sender = {
+          id: AI_BOT_ID,
+          firstName: 'ИИ',
+          lastName: 'Ассистент',
+          middleName: null,
+          avatarUrl: null,
+        };
+      }
+      
       // Проверяем что sender существует
-      if (!msg.sender) {
+      if (!sender) {
         console.error('[chat] Message without sender:', msg.id);
         return null;
       }
       
       // Проверяем, прочитано ли сообщение другими участниками
       // Для своих сообщений: прочитано, если все другие участники прочитали
-      const isOwnMessage = msg.senderId === userId;
+      const isOwnMessage = msg.senderId === userId && !isAIMessage;
       let isRead = false;
       if (isOwnMessage && otherParticipantIds.length > 0) {
         const readByUserIds = (msg.readBy || []).map((r: any) => r.userId);
@@ -793,18 +809,18 @@ export async function GET(
       return {
       id: msg.id,
       chatId: msg.chatId,
-      senderId: msg.senderId,
-      content: msg.content,
+      senderId: isAIMessage ? AI_BOT_ID : msg.senderId, // Для ИИ используем виртуальный ID
+      content: msg.content || '', // Гарантируем что content всегда строка
       messageType: msg.messageType,
       createdAt: msg.createdAt,
       editedAt: msg.editedAt,
       isRead, // Статус прочтения для своих сообщений
       sender: {
-        id: msg.sender.id,
-        firstName: msg.sender.firstName,
-        lastName: msg.sender.lastName,
-        middleName: msg.sender.middleName,
-        avatarUrl: normalizeUserAvatar(msg.sender)?.avatarUrl || null,
+        id: sender.id,
+        firstName: sender.firstName,
+        lastName: sender.lastName,
+        middleName: sender.middleName,
+        avatarUrl: isAIMessage ? null : (normalizeUserAvatar(sender)?.avatarUrl || null),
       },
       replyTo: msg.replyTo && msg.replyTo.sender ? {
         id: msg.replyTo.id,
