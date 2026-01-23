@@ -66,26 +66,30 @@ export async function GET(request: NextRequest) {
       // Председатель видит все обращения из своей организации
       where.organizationId = chairmanOrgId;
     } else {
-      // Обычный пользователь (в режиме MEMBER) видит ТОЛЬКО свои обращения
-      // И обращения из чатов, в которых он участвует
-      const orConditions: any[] = [
-        { userId: session.user.id }, // Свои обращения
-      ];
+      // Обычный пользователь (в режиме MEMBER) видит ТОЛЬКО свои личные обращения
+      // (без organizationId - не адресованные в ППО) и обращения из чатов
+      const orConditions: any[] = [];
 
-      // Обращения из чатов пользователя (где он является участником)
-      if (userChatIds.length > 0) {
-        orConditions.push({ chatId: { in: userChatIds } });
-      }
-
-      // Обращения без organizationId, если они созданы пользователем (для старых обращений)
+      // Свои личные обращения (без organizationId - не адресованные в ППО)
       orConditions.push({
         AND: [
           { userId: session.user.id },
-          { organizationId: null },
+          { organizationId: null }, // Только личные обращения, не адресованные в ППО
         ],
       });
 
-      where.OR = orConditions;
+      // Обращения из чатов пользователя (где он является участником)
+      // Это позволяет видеть обращения, в которых пользователь участвует через чат
+      if (userChatIds.length > 0) {
+        orConditions.push({ 
+          AND: [
+            { chatId: { in: userChatIds } },
+            { userId: session.user.id }, // Только свои обращения в этих чатах
+          ],
+        });
+      }
+
+      where.OR = orConditions.length > 0 ? orConditions : { userId: 'never-match' }; // Если нет условий, возвращаем пустой результат
     }
 
     if (status && status !== "all") {
