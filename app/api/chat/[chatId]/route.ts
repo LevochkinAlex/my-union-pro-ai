@@ -990,7 +990,11 @@ export async function POST(
       where: { id: chatId },
       include: {
         participants: {
-          where: { userId, leftAt: null },
+          where: { leftAt: null },
+          select: {
+            userId: true,
+            role: true,
+          },
         },
       },
     });
@@ -1001,6 +1005,22 @@ export async function POST(
         { status: 404 }
       );
     }
+    
+    // Проверяем, что отправитель является участником чата
+    const senderParticipant = chat.participants.find(p => p.userId === userId);
+    if (!senderParticipant) {
+      console.error(`[chat/${chatId}] ❌ User ${userId} is not a participant of chat ${chatId}`);
+      return NextResponse.json(
+        { error: 'Вы не являетесь участником этого чата' },
+        { status: 403 }
+      );
+    }
+    
+    console.log(`[chat/${chatId}] Chat participants:`, {
+      total: chat.participants.length,
+      participantIds: chat.participants.map(p => p.userId),
+      senderIsParticipant: !!senderParticipant,
+    });
 
     // Логика для каналов (CHANNEL): только председатель/админ может создавать посты
     // Используем приведение типа, так как Prisma Client может не экспортировать enum значения напрямую
@@ -1501,6 +1521,11 @@ export async function POST(
           select: {
             userId: true,
           },
+        });
+
+        console.log(`[chat/${chatId}] Sending notifications to ${participants.length} participants:`, {
+          participantIds: participants.map(p => p.userId),
+          messageId: normalizedMessage.id,
         });
 
         if (participants.length > 0) {
