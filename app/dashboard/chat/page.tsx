@@ -6,6 +6,9 @@ import { useSession } from "next-auth/react";
 import { MembershipGate } from "@/components/MembershipGate";
 import { safeJsonParse } from "@/lib/api-client";
 
+// Явно указываем, что страница динамическая
+export const dynamic = 'force-dynamic';
+
 // Lazy load SlackStyleChat компонент
 const SlackStyleChat = dynamic(() => import("@/components/chat/SlackStyleChat"), {
   ssr: false,
