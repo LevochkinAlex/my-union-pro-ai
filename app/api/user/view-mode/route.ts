@@ -149,6 +149,17 @@ export async function GET() {
       }
     }
     
+    // Если это ошибка подключения, возвращаем 503
+    if (isConnectionError) {
+      return NextResponse.json(
+        { 
+          error: "Сервис временно недоступен. Попробуйте позже.",
+          details: process.env.NODE_ENV === "development" ? error?.message : undefined,
+        },
+        { status: 503 }
+      );
+    }
+    
     return NextResponse.json(
       { 
         error: "Ошибка получения режима просмотра",
