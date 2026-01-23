@@ -371,6 +371,11 @@ export async function GET(
         SELECT "newsChannelId" FROM "Chat" WHERE id = ${chatId}
       `;
       newsChannelId = channelWithNews[0]?.newsChannelId || null;
+      
+      // Логируем для диагностики
+      if (!newsChannelId) {
+        console.warn(`[chat/${chatId}] Channel has no newsChannelId`);
+      }
     }
     
     if ((chat.type as string) === 'CHANNEL' && newsChannelId) {
@@ -388,18 +393,35 @@ export async function GET(
         },
       });
 
+      console.log(`[chat/${chatId}] Found ${channelPosts.length} published posts in channel ${newsChannelId}`);
+      
+      if (channelPosts.length === 0) {
+        console.warn(`[chat/${chatId}] No published posts found in channel ${newsChannelId}. Checking all posts...`);
+        // Проверяем, есть ли вообще посты в канале (даже неопубликованные)
+        const allPosts = await prisma.newsPost.findMany({
+          where: { channelId: newsChannelId },
+          select: { id: true, isPublished: true, createdAt: true },
+        });
+        console.log(`[chat/${chatId}] Total posts in channel: ${allPosts.length} (published: ${allPosts.filter(p => p.isPublished).length})`);
+      }
+
       // Добавляем посты, которых еще нет в сообщениях
       for (const post of channelPosts) {
         if (!existingPostIds.has(post.id)) {
           postIds.push(post.id);
         }
       }
+      
+      console.log(`[chat/${chatId}] Added ${postIds.length} post IDs to load (${postIds.length - existingPostIds.size} new)`);
+    } else if ((chat.type as string) === 'CHANNEL' && !newsChannelId) {
+      console.warn(`[chat/${chatId}] Channel has no newsChannelId - posts will not be loaded`);
     }
 
     // Загружаем данные постов одним запросом
     const postsMap = new Map<string, any>();
     const postsAuthorsMap = new Map<string, any>(); // Отдельная карта для авторов
     if (postIds.length > 0) {
+      console.log(`[chat/${chatId}] Loading ${postIds.length} posts data`);
       const posts = await prisma.newsPost.findMany({
         where: { id: { in: postIds } },
         include: {
@@ -524,6 +546,10 @@ export async function GET(
           isLiked: userLikes.has(post.id),
         });
       }
+      
+      console.log(`[chat/${chatId}] Loaded ${postsMap.size} posts into postsMap`);
+    } else if (postIds.length === 0 && (chat.type as string) === 'CHANNEL') {
+      console.warn(`[chat/${chatId}] No post IDs to load for channel`);
     }
 
     // Форматируем сообщения
@@ -626,7 +652,10 @@ export async function GET(
 
     // Для каналов: добавляем виртуальные сообщения для постов из NewsChannel,
     // которые еще не созданы как сообщения в чате
+    // ВАЖНО: Посты показываются всем участникам канала, независимо от viewMode
+    // Это позволяет председателю в режиме участника видеть посты в своих каналах
     if ((chat.type as string) === 'CHANNEL' && newsChannelId && postsMap.size > 0) {
+      console.log(`[chat/${chatId}] Creating virtual messages for ${postsMap.size} posts`);
       const virtualMessages: any[] = [];
       
       for (const [postId, postData] of postsMap.entries()) {
@@ -724,6 +753,8 @@ export async function GET(
       const allMessages = [...formattedMessages, ...virtualMessages, ...activityMessages].sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
+      
+      console.log(`[chat/${chatId}] Total messages: ${allMessages.length} (${formattedMessages.length} real, ${virtualMessages.length} virtual posts, ${activityMessages.length} activity)`);
 
       // Кэшируем сообщения для следующих запросов
       await cacheChatMessages(chatId, formattedMessages, cursor || undefined, direction).catch(err =>
