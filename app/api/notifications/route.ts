@@ -25,37 +25,31 @@ export async function GET(request: NextRequest) {
       where.readAt = null;
     }
 
-    // ОПТИМИЗАЦИЯ: Добавляем таймаут для запросов к БД (8 секунд)
-    const dbQueryTimeout = 8000; // 8 секунд
-    
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убираем таймаут Promise.race - он вызывает 503 ошибки
+    // Вместо этого используем прямой запрос с обработкой ошибок
     let notifications, total, unreadCountResult;
     
     try {
-      [notifications, total, unreadCountResult] = await Promise.race([
-        Promise.all([
-          prisma.userNotification.findMany({
-            where,
-            orderBy: {
-              createdAt: "desc",
-            },
-            skip,
-            take: limit,
-          }),
-          prisma.userNotification.count({ where }),
-          prisma.userNotification.count({
-            where: {
-              userId: session.user.id,
-              readAt: null,
-            },
-          }),
-        ]),
-        new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Database query timeout')), dbQueryTimeout)
-        ),
+      [notifications, total, unreadCountResult] = await Promise.all([
+        prisma.userNotification.findMany({
+          where,
+          orderBy: {
+            createdAt: "desc",
+          },
+          skip,
+          take: limit,
+        }),
+        prisma.userNotification.count({ where }),
+        prisma.userNotification.count({
+          where: {
+            userId: session.user.id,
+            readAt: null,
+          },
+        }),
       ]);
     } catch (error: any) {
-      console.error("[api/notifications] Database query timeout or error:", error);
-      // При таймауте возвращаем пустой результат, но не 503
+      console.error("[api/notifications] Database query error:", error);
+      // При ошибке возвращаем пустой результат, но не 503
       notifications = [];
       total = 0;
       unreadCountResult = 0;
