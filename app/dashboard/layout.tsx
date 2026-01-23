@@ -30,28 +30,26 @@ export default async function DashboardLayout({
   const isImpersonating = session.user.isImpersonating || false;
   
     // Получаем дополнительные данные пользователя из БД (viewMode, isPPOHead, isMPOHead, isRPOHead)
-    // Добавляем таймаут для запроса к БД
-    const userData = await Promise.race([
-      prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: {
-      viewMode: true,
-      isPPOHead: true,
-      ppoHeadOrganizationId: true,
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убираем Promise.race - он вызывает 503 ошибки
+    let userData: Awaited<ReturnType<typeof prisma.user.findUnique>> | null = null;
+    try {
+      userData = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          viewMode: true,
+          isPPOHead: true,
+          ppoHeadOrganizationId: true,
           isMPOHead: true,
           mpoHeadOrganizationId: true,
           isRPOHead: true,
           rpoHeadOrganizationId: true,
-    },
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Database query timeout")), 10000)
-      )
-    ]).catch((error) => {
+        },
+      });
+    } catch (error) {
       console.error("[dashboard/layout] Database query error:", error);
       // Возвращаем значения по умолчанию при ошибке
-      return null;
-    }) as Awaited<ReturnType<typeof prisma.user.findUnique>> | null;
+      userData = null;
+    }
   
   const viewMode = userData?.viewMode || "MEMBER";
   const isPPOHead = userData?.isPPOHead || false;

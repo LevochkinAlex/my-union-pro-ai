@@ -35,9 +35,10 @@ export default async function DashboardPage() {
     console.log("[dashboard/page] ✅ Rendering dashboard for user:", userId);
 
     // Получаем роль и режим просмотра пользователя
-    // Добавляем таймаут для запроса к БД
-    const userRole = await Promise.race([
-      prisma.user.findUnique({
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убираем Promise.race - он вызывает 503 ошибки
+    let userRole;
+    try {
+      userRole = await prisma.user.findUnique({
         where: { id: userId },
         select: {
           role: true,
@@ -63,15 +64,14 @@ export default async function DashboardPage() {
             },
           },
         },
-      }),
-      new Promise<null>((_, reject) => 
-        setTimeout(() => reject(new Error("Database query timeout")), 10000)
-      )
-    ]).catch((error) => {
+      });
+    } catch (error) {
       console.error("[dashboard/page] Database query error:", error);
       // Возвращаем null при ошибке, чтобы использовать значения по умолчанию
-      return null;
-    }) as {
+      userRole = null;
+    }
+    
+    const userRoleTyped = (userRole || null) as {
       role: string;
       firstName: string | null;
       lastName: string | null;
