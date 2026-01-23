@@ -619,10 +619,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Для приватного чата нужно загрузить полную информацию через formatChatInfo
+    if (chat.type === 'PRIVATE') {
+      try {
+        const formattedChat = await getChatById(chat.id, userId);
+        if (formattedChat) {
+          return NextResponse.json({
+            chat: formattedChat,
+            isNew,
+          });
+        }
+      } catch (formatError) {
+        console.error('[chat] Error formatting private chat:', formatError);
+        // Продолжаем с базовым форматом
+      }
+    }
+
     // Получаем информацию о другом пользователе для личного чата
     let otherUser = null;
-    if (chat.type === 'PRIVATE') {
-      const otherParticipant = chat.participants.find(p => p.userId !== userId);
+    if (chat.type === 'PRIVATE' && chat.participants) {
+      const otherParticipant = chat.participants.find((p: any) => p.userId !== userId);
       if (otherParticipant?.user) {
         otherUser = normalizeUserAvatar(otherParticipant.user);
       }

@@ -321,27 +321,49 @@ export function useChat(options: UseChatOptions = {}) {
         return existingChat;
       }
 
+      console.log('[useChat] Creating chat with userId:', userId);
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ participantId: userId }),
+        body: JSON.stringify({ targetUserId: userId }), // ИСПРАВЛЕНО: было participantId, должно быть targetUserId
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        const newChat = data.chat;
+      console.log('[useChat] Response status:', response.status);
 
-        setChats(prev => {
-          const exists = prev.some(c => c.id === newChat.id);
-          return exists ? prev : [newChat, ...prev];
-        });
-
-        selectChat(newChat);
-        return newChat;
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || 'Unknown error' };
+        }
+        console.error('[useChat] Chat creation failed:', response.status, errorData);
+        options.onError?.(errorData.error || `Ошибка создания чата: ${response.status}`);
+        return null;
       }
+
+      const data = await response.json();
+      console.log('[useChat] Chat created successfully:', data);
+      
+      if (!data.chat) {
+        console.error('[useChat] No chat in response:', data);
+        options.onError?.("Сервер не вернул данные чата");
+        return null;
+      }
+
+      const newChat = data.chat;
+
+      setChats(prev => {
+        const exists = prev.some(c => c.id === newChat.id);
+        return exists ? prev : [newChat, ...prev];
+      });
+
+      selectChat(newChat);
+      return newChat;
     } catch (error) {
       console.error("[useChat] Error creating chat:", error);
-      options.onError?.("Ошибка создания чата");
+      options.onError?.("Ошибка создания чата: " + (error instanceof Error ? error.message : 'Unknown error'));
     }
     return null;
   }, [chats, selectChat, options]);
