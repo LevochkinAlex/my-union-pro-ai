@@ -184,6 +184,19 @@ export async function GET(request: NextRequest) {
       (user?.isPPOHead && !user?.viewMode) || // Обратная совместимость
       (user?.isMPOHead && !user?.viewMode) ||
       (user?.isRPOHead && !user?.viewMode);
+    
+    // ВАЖНО: Для участников всегда инвалидируем кэш, чтобы получить актуальные данные
+    // Это гарантирует, что личные чаты будут видны после переключения режима
+    if (isMemberMode) {
+      try {
+        const { invalidateUserChatsCache } = await import('@/lib/chat-redis');
+        await invalidateUserChatsCache(userId).catch(err => 
+          console.warn('[chat] Cache invalidation error for MEMBER mode:', err)
+        );
+      } catch (err) {
+        // Игнорируем ошибки инвалидации кэша
+      }
+    }
 
     // Получаем параметры фильтрации
     filter = {};
