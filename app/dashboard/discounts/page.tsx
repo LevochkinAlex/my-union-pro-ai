@@ -6,6 +6,9 @@ import { prisma } from "@/lib/prisma";
 import DiscountsPageWrapper from "@/components/dashboard/DiscountsPageWrapper";
 import type { DiscountPreferenceResponse } from "@/types/discounts";
 
+// Указываем, что страница динамическая (использует getServerSession)
+export const dynamic = 'force-dynamic';
+
 export default async function DiscountsPage() {
   const session = await getServerSession(authOptions);
   

@@ -13,6 +13,9 @@ import OrgHeadDashboard from "@/components/dashboard/OrgHeadDashboard";
 import { calculateProfileProgress } from "@/lib/profile-progress";
 import MembershipProtectedSection from "@/components/dashboard/MembershipProtectedSection";
 
+// Указываем, что страница динамическая (использует getServerSession)
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardPage() {
   try {
     const session = await getServerSession(authOptions);

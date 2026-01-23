@@ -8,6 +8,9 @@ import MiniChatWrapperConditional from "@/components/dashboard/MiniChatWrapperCo
 import MobileLayout from "@/components/dashboard/MobileLayout";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 
+// Указываем, что layout динамический (использует getServerSession)
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardLayout({
   children,
 }: {

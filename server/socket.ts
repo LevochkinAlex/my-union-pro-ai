@@ -85,17 +85,13 @@ export async function initSocketServer(httpServer: HttpServer) {
     allowEIO3: true,
   });
 
-  // Настраиваем Redis adapter если клиенты доступны
-  if (pubClient && subClient) {
-    try {
-      // Используем require для динамического импорта, чтобы обойти статический анализ Next.js
-      const redisAdapter = require("@socket.io/redis-adapter");
-      io.adapter(redisAdapter.createAdapter(pubClient, subClient));
-      console.log("[Socket] ✅ Redis adapter configured for horizontal scaling");
-    } catch (error) {
-      console.warn("[Socket] ⚠️ Failed to configure Redis adapter:", error);
-    }
-  }
+  // Redis adapter удален, так как пакет @socket.io/redis-adapter не установлен
+  // Для горизонтального масштабирования нужно установить пакет: pnpm add @socket.io/redis-adapter
+  // После установки можно добавить:
+  // if (pubClient && subClient) {
+  //   const redisAdapter = await import("@socket.io/redis-adapter");
+  //   io.adapter(redisAdapter.createAdapter(pubClient, subClient));
+  // }
 
   // Rate limiting: храним количество соединений на пользователя
   const userConnections = new Map<string, number>();
