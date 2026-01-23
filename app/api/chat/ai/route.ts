@@ -239,7 +239,9 @@ export async function POST(request: NextRequest) {
     });
 
     // Получаем ответ от ИИ через существующий API
-    let aiResponse = "Извините, произошла ошибка при обработке вашего запроса. Пожалуйста, попробуйте позже.";
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: НЕ устанавливаем дефолтное сообщение об ошибке заранее
+    // Если произойдет ошибка, она должна быть проброшена дальше
+    let aiResponse: string;
 
     try {
       console.log(`[chat/ai] ========== CALLING AI API ==========`);
@@ -290,25 +292,44 @@ export async function POST(request: NextRequest) {
       if (aiApiResponse.ok) {
         const aiData = await aiApiResponse.json();
         console.log(`[chat/ai] AI API response keys:`, Object.keys(aiData));
-        aiResponse = aiData.message || aiData.response || aiData.content || aiResponse;
+        console.log(`[chat/ai] AI API response data:`, JSON.stringify(aiData, null, 2).substring(0, 500));
+        
+        // Извлекаем ответ из разных возможных полей
+        aiResponse = aiData.message || aiData.response || aiData.content || "";
+        
+        if (!aiResponse || aiResponse.trim().length === 0) {
+          console.error(`[chat/ai] ❌ CRITICAL: AI returned empty response!`);
+          console.error(`[chat/ai] Full response data:`, JSON.stringify(aiData, null, 2));
+          throw new Error("ИИ вернул пустой ответ");
+        }
+        
         console.log(`[chat/ai] ✅ AI response received, length: ${aiResponse.length}`);
       } else {
         const errorText = await aiApiResponse.text();
-        console.error(`[chat/ai] ❌ AI API error: ${aiApiResponse.status}`, errorText);
+        console.error(`[chat/ai] ❌ AI API HTTP error: ${aiApiResponse.status} ${aiApiResponse.statusText}`);
+        console.error(`[chat/ai] Error response body:`, errorText.substring(0, 500));
+        
         // Пробуем распарсить JSON ошибки
+        let errorMessage = `Ошибка API: ${aiApiResponse.status}`;
         try {
           const errorData = JSON.parse(errorText);
           console.error(`[chat/ai] Error details:`, errorData);
+          errorMessage = errorData.error || errorData.message || errorMessage;
         } catch {
-          // Не JSON, просто текст
+          // Не JSON, используем текст
+          errorMessage = errorText.substring(0, 200) || errorMessage;
         }
+        
+        throw new Error(errorMessage);
       }
     } catch (aiError: any) {
-      console.error("[chat/ai] ❌ AI API exception:", {
-        message: aiError?.message,
-        stack: aiError?.stack?.substring(0, 500),
-        name: aiError?.name,
-      });
+      console.error("[chat/ai] ❌ ========== AI API EXCEPTION ==========");
+      console.error("[chat/ai] Error type:", aiError?.name);
+      console.error("[chat/ai] Error message:", aiError?.message);
+      console.error("[chat/ai] Error stack:", aiError?.stack?.substring(0, 1000));
+      
+      // НЕ используем дефолтное сообщение - пробрасываем ошибку дальше
+      throw aiError;
     }
 
     // Сохраняем ответ ИИ
@@ -364,16 +385,24 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error("[chat/ai] POST error:", error);
+    console.error("[chat/ai] ❌ ========== POST FATAL ERROR ==========");
+    console.error("[chat/ai] Error type:", error?.name);
+    console.error("[chat/ai] Error message:", error?.message);
+    console.error("[chat/ai] Error stack:", error?.stack?.substring(0, 1000));
+    console.error("[chat/ai] User ID:", session?.user?.id);
+    console.error("[chat/ai] Chat ID:", chatId);
+    
     Sentry.captureException(error, {
       tags: { endpoint: 'POST /api/chat/ai' },
       extra: { userId: session?.user?.id, chatId },
     });
     
     const statusCode = (error as any)?.statusCode || (error as any)?.status || 500;
+    const errorMessage = error?.message || "Ошибка при отправке сообщения";
+    
     return NextResponse.json(
       {
-        error: "Ошибка при отправке сообщения",
+        error: errorMessage,
         details: process.env.NODE_ENV === "development" ? error.message : undefined,
       },
       { status: statusCode }
