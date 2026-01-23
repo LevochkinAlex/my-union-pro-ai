@@ -797,27 +797,26 @@ export default function SlackStyleSidebar({
         </div>
 
         {/* Tabs for Chairman */}
-        {isChairman && (
-          <div className="flex mt-3 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
-            {[
-              { key: "all", label: "Все" },
-              { key: "work", label: "Рабочие" },
-              { key: "personal", label: "Личные" },
-            ].map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key as any)}
-                className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-all ${
-                  activeTab === key
-                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
-                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Табы фильтрации - показываем всегда, но в режиме участника "Рабочие" показывает только свои обращения */}
+        <div className="flex mt-3 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+          {[
+            { key: "all", label: "Все" },
+            { key: "work", label: isChairman ? "Рабочие" : "Обращения" },
+            { key: "personal", label: "Личные" },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key as any)}
+              className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-all ${
+                activeTab === key
+                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Chat List */}
@@ -847,12 +846,12 @@ export default function SlackStyleSidebar({
           <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
         </button>
 
-        {/* Work Chats */}
-        {isChairman && (activeTab === "all" || activeTab === "work") && (
+        {/* Work Chats - показываем в режиме председателя или если есть свои обращения в режиме участника */}
+        {(activeTab === "all" || activeTab === "work") && (
           <>
             {displayedChats.work.length > 0 ? (
               <ChatSection
-                title="Рабочие чаты"
+                title={isChairman ? "Рабочие чаты" : "Мои обращения"}
                 icon={<Briefcase className="w-4 h-4" />}
                 chats={displayedChats.work}
                 selectedChat={selectedChat}
@@ -864,7 +863,7 @@ export default function SlackStyleSidebar({
                 <div className="flex items-center gap-2 mb-2 px-1">
                   <Briefcase className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                   <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    Рабочие чаты
+                    {isChairman ? "Рабочие чаты" : "Мои обращения"}
                   </h3>
                 </div>
                 <div className="rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-6 text-center">
@@ -872,10 +871,12 @@ export default function SlackStyleSidebar({
                     <Briefcase className="w-6 h-6 text-gray-400 dark:text-gray-500" />
                   </div>
                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                    Нет обращений
+                    {isChairman ? "Нет обращений" : "Нет ваших обращений"}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-500">
-                    Обращения от членов профсоюза будут отображаться здесь
+                    {isChairman 
+                      ? "Обращения от членов профсоюза будут отображаться здесь"
+                      : "Создайте обращение, и оно появится здесь"}
                   </p>
                 </div>
               </div>
@@ -895,8 +896,8 @@ export default function SlackStyleSidebar({
           />
         )}
 
-        {/* Channels */}
-        {isChairman && (activeTab === "all" || activeTab === "work") && displayedChats.channels.length > 0 && (
+        {/* Channels - показываем в режиме председателя и участника (для просмотра и комментирования) */}
+        {(activeTab === "all" || activeTab === "work") && displayedChats.channels.length > 0 && (
           <ChatSection
             title="Каналы"
             icon={<Hash className="w-4 h-4" />}

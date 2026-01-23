@@ -59,6 +59,30 @@ export async function POST(
       );
     }
 
+    // Проверяем viewMode пользователя - в режиме участника нельзя создавать посты
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        viewMode: true,
+        isPPOHead: true,
+        isMPOHead: true,
+        isRPOHead: true,
+      },
+    });
+
+    const isMemberMode = user?.viewMode === "MEMBER";
+    const isPPOHeadMode = user?.viewMode === "PPO_HEAD" || 
+      (user?.isPPOHead && !user?.viewMode) || // Обратная совместимость
+      (user?.isMPOHead && !user?.viewMode) ||
+      (user?.isRPOHead && !user?.viewMode);
+
+    if (isMemberMode) {
+      return NextResponse.json(
+        { error: "В режиме участника нельзя создавать посты в каналах. Переключитесь в режим председателя." },
+        { status: 403 }
+      );
+    }
+
     // Проверяем, что пользователь - админ канала
     const participant = chat.participants[0];
     if (!participant || participant.role !== "admin") {

@@ -934,8 +934,9 @@ export default function SlackStyleChat({
                     </div>
                   ) : selectedChat.type === 'CHANNEL' && selectedChat.participants?.some(
                     p => p.userId === currentUserId && p.role === 'admin'
-                  ) && !activeThread && !activeChannelThread ? (
-                    // Для админов канала показываем кнопку создания поста
+                  ) && isChairman && !activeThread && !activeChannelThread ? (
+                    // Для админов канала в режиме председателя показываем кнопку создания поста
+                    // В режиме участника (MEMBER) кнопка скрыта
                     <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
                       <button
                         onClick={() => setShowChannelPostModal(true)}

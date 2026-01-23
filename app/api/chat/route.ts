@@ -165,6 +165,26 @@ export async function GET(request: NextRequest) {
     const userId = session.user.id;
     const { searchParams } = new URL(request.url);
 
+    // Получаем viewMode пользователя для фильтрации чатов
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        viewMode: true,
+        isPPOHead: true,
+        ppoHeadOrganizationId: true,
+        isMPOHead: true,
+        mpoHeadOrganizationId: true,
+        isRPOHead: true,
+        rpoHeadOrganizationId: true,
+      },
+    });
+
+    const isMemberMode = user?.viewMode === "MEMBER";
+    const isPPOHeadMode = user?.viewMode === "PPO_HEAD" || 
+      (user?.isPPOHead && !user?.viewMode) || // Обратная совместимость
+      (user?.isMPOHead && !user?.viewMode) ||
+      (user?.isRPOHead && !user?.viewMode);
+
     // Получаем параметры фильтрации
     filter = {};
     
@@ -254,7 +274,43 @@ export async function GET(request: NextRequest) {
     }
 
     // Фильтруем ИИ чат из основного списка (он будет добавлен отдельно)
-    const filteredChats = Array.isArray(chats) ? chats.filter((c: any) => c && c.name !== AI_CHAT_NAME) : [];
+    let filteredChats = Array.isArray(chats) ? chats.filter((c: any) => c && c.name !== AI_CHAT_NAME) : [];
+
+    // В режиме участника (MEMBER) фильтруем чаты:
+    // - Только личные чаты (PRIVATE)
+    // - Свои обращения (где userId === session.user.id)
+    // - Каналы (CHANNEL) - только для просмотра и комментирования
+    if (isMemberMode) {
+      // Получаем ID своих обращений
+      const userTickets = await prisma.ticket.findMany({
+        where: { userId },
+        select: { chatId: true },
+      });
+      const userTicketChatIds = userTickets
+        .map(t => t.chatId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+      filteredChats = filteredChats.filter((chat: any) => {
+        // Личные чаты - всегда показываем
+        if (chat.type === "PRIVATE") {
+          return true;
+        }
+        
+        // Свои обращения - показываем
+        if (chat.ticketId && userTicketChatIds.includes(chat.id)) {
+          return true;
+        }
+        
+        // Каналы - показываем только те, где пользователь участник
+        // (каналы председателя автоматически подписывают всех членов организации)
+        if (chat.type === "CHANNEL") {
+          return true; // Уже отфильтровано по участию в getUserChats
+        }
+        
+        // Групповые чаты (не обращения) - скрываем в режиме участника
+        return false;
+      });
+    }
 
     // Добавляем ИИ чат, если нужно
     let finalChats = filteredChats;
