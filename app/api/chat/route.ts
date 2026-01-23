@@ -189,12 +189,21 @@ export async function GET(request: NextRequest) {
     // Это гарантирует, что личные чаты будут видны после переключения режима
     if (isMemberMode) {
       try {
-        const { invalidateUserChatsCache } = await import('@/lib/chat-redis');
+        // Инвалидируем все варианты кэша для этого пользователя через Redis
         await invalidateUserChatsCache(userId).catch(err => 
-          console.warn('[chat] Cache invalidation error for MEMBER mode:', err)
+          console.warn('[chat] Redis cache invalidation error for MEMBER mode:', err)
         );
+        
+        // Также инвалидируем кэш через общий cache.ts (на случай если используется другой механизм)
+        const { cacheDeletePattern } = await import('@/lib/cache');
+        await cacheDeletePattern(`user:chats:${userId}:*`).catch(err => 
+          console.warn('[chat] Cache pattern deletion error:', err)
+        );
+        
+        console.log(`[chat] Cache invalidated for MEMBER mode user ${userId}`);
       } catch (err) {
-        // Игнорируем ошибки инвалидации кэша
+        // Игнорируем ошибки инвалидации кэша, но логируем
+        console.warn('[chat] Cache invalidation error:', err);
       }
     }
 
@@ -259,6 +268,13 @@ export async function GET(request: NextRequest) {
         async (span) => {
           span.setAttribute("userId", userId);
           span.setAttribute("filter", JSON.stringify(filter));
+          span.setAttribute("isMemberMode", isMemberMode);
+          
+          // Для участников не используем кэш, чтобы гарантировать актуальные данные
+          if (isMemberMode) {
+            console.log(`[chat] MEMBER mode: bypassing cache, fetching directly from DB`);
+            return await getUserChats(userId, filter);
+          }
           
           try {
             return await withCache(cacheKey, async () => {
