@@ -980,7 +980,7 @@ export default function SlackStyleChat({
               </div>
             </>
           ) : (
-            <EmptyChatState />
+            <EmptyChatState isChairman={isChairman} />
           )}
         </div>
       </div>

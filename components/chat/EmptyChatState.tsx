@@ -2,7 +2,11 @@
 
 import { MessageCircle, Bot, Users, Search } from "lucide-react";
 
-export default function EmptyChatState() {
+interface EmptyChatStateProps {
+  isChairman?: boolean;
+}
+
+export default function EmptyChatState({ isChairman = false }: EmptyChatStateProps) {
   return (
     <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       <div className="text-center p-8 max-w-md">
@@ -52,15 +56,18 @@ export default function EmptyChatState() {
             </div>
           </div>
           
-          <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm">
-            <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center flex-shrink-0">
-              <Users className="w-5 h-5 text-green-500" />
+          {/* Групповые чаты - только для председателей */}
+          {isChairman && (
+            <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm">
+              <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center flex-shrink-0">
+                <Users className="w-5 h-5 text-green-500" />
+              </div>
+              <div>
+                <div className="text-sm font-medium text-gray-900 dark:text-white">Групповые чаты</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Обсуждайте темы в командах</div>
+              </div>
             </div>
-            <div>
-              <div className="text-sm font-medium text-gray-900 dark:text-white">Групповые чаты</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">Обсуждайте темы в командах</div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

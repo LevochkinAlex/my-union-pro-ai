@@ -375,6 +375,30 @@ export async function POST(request: NextRequest) {
     } 
     // Создаем групповой чат
     else if (participantIds && Array.isArray(participantIds) && participantIds.length > 0) {
+      // Проверяем viewMode пользователя - только председатели могут создавать группы и каналы
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          viewMode: true,
+          isPPOHead: true,
+          isMPOHead: true,
+          isRPOHead: true,
+        },
+      });
+
+      const isMemberMode = user?.viewMode === "MEMBER";
+      const isPPOHeadMode = user?.viewMode === "PPO_HEAD" || 
+        (user?.isPPOHead && !user?.viewMode) || // Обратная совместимость
+        (user?.isMPOHead && !user?.viewMode) ||
+        (user?.isRPOHead && !user?.viewMode);
+
+      if (isMemberMode) {
+        return NextResponse.json(
+          { error: "В режиме участника нельзя создавать группы и каналы. Переключитесь в режим председателя." },
+          { status: 403 }
+        );
+      }
+
       console.log('[chat] Creating group chat:', { 
         name, 
         participantIds: participantIds.length, 

@@ -39,37 +39,41 @@ function ChatContent() {
       }
 
       try {
-        // Проверяем флаги из сессии
-        const user = session.user as any;
-        const isPPOHead = user.isPPOHead;
-        const isMPOHead = user.isMPOHead;
-        const isRPOHead = user.isRPOHead;
-
-        // Если в сессии есть флаги, используем их
-        if (isPPOHead || isMPOHead || isRPOHead) {
-          setIsChairman(true);
-          setLoading(false);
-          return;
-        }
-
-        // Если в сессии нет данных, запрашиваем из API
+        // Запрашиваем viewMode из API для точной проверки
         const response = await fetch("/api/user/view-mode");
         if (response.ok) {
           const data = await safeJsonParse(response);
           if (data) {
             const viewMode = data.viewMode;
+            // isChairman = true только если viewMode === "PPO_HEAD" (не MEMBER)
+            // Даже если есть флаги isPPOHead, но viewMode === "MEMBER", то isChairman = false
             setIsChairman(
               viewMode === "PPO_HEAD" || 
               viewMode === "MPO_HEAD" || 
-              viewMode === "RPO_HEAD" ||
-              data.isPPOHead ||
-              data.isMPOHead ||
-              data.isRPOHead
+              viewMode === "RPO_HEAD"
             );
+          }
+        } else {
+          // Fallback: проверяем флаги из сессии, но только если viewMode не MEMBER
+          const user = session.user as any;
+          const isPPOHead = user.isPPOHead;
+          const isMPOHead = user.isMPOHead;
+          const isRPOHead = user.isRPOHead;
+          const viewMode = user.viewMode;
+
+          // Если viewMode === "MEMBER", то isChairman = false
+          if (viewMode === "MEMBER") {
+            setIsChairman(false);
+          } else if (isPPOHead || isMPOHead || isRPOHead) {
+            setIsChairman(true);
+          } else {
+            setIsChairman(false);
           }
         }
       } catch (error) {
         console.error("[chat/page] Error checking chairman status:", error);
+        // При ошибке считаем участником
+        setIsChairman(false);
       } finally {
         setLoading(false);
       }
