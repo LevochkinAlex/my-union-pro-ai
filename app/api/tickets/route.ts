@@ -250,6 +250,9 @@ export async function POST(request: NextRequest) {
 
     // Находим Председателя организации
     let chairmanId: string | null = null;
+    console.log(`[tickets] ========== FINDING CHAIRMAN ==========`);
+    console.log(`[tickets] User organizationId: ${user?.organizationId || 'N/A'}`);
+    
     if (user?.organizationId) {
       const chairman = await prisma.user.findFirst({
         where: {
@@ -259,15 +262,19 @@ export async function POST(request: NextRequest) {
             { organizationId: user.organizationId, isPPOHead: true },
           ],
         },
-        select: { id: true },
+        select: { id: true, firstName: true, lastName: true },
       });
       chairmanId = chairman?.id || null;
+      console.log(`[tickets] Found chairman: ${chairman?.id || 'NOT FOUND'} (${chairman?.firstName} ${chairman?.lastName})`);
+    } else {
+      console.warn(`[tickets] ⚠️ User has no organizationId, cannot find chairman!`);
     }
 
     // Создаем чат для обращения
     let appealChat = null;
     // Создаем чат если есть председатель (даже если это сам создатель обращения)
     if (chairmanId) {
+      console.log(`[tickets] Chairman found, creating chat...`);
       // Проверяем, не существует ли уже чат для этого обращения
       appealChat = await prisma.chat.findFirst({
         where: {
@@ -358,6 +365,9 @@ export async function POST(request: NextRequest) {
           console.log(`[tickets] ✅ Добавлены участники в Chat обращения: ${appealChat.id}`);
         }
       }
+    } else {
+      console.error(`[tickets] ⚠️ Chairman NOT FOUND! Chat will NOT be created for this ticket.`);
+      console.error(`[tickets] User: ${session.user.id}, organizationId: ${user?.organizationId || 'N/A'}`);
     }
 
     // Создаем тикет с chatId
@@ -504,11 +514,26 @@ export async function POST(request: NextRequest) {
             // Импортируем getFileUrlWithCDN для правильных URL
             const { getFileUrlWithCDN } = await import('@/lib/cdn');
             
+            console.log(`[tickets] Preparing ${uploadedFiles.length} attachments:`, uploadedFiles.map(f => ({
+              originalName: f.originalName,
+              filePath: f.filePath,
+              size: f.fileSize,
+              mimeType: f.mimeType,
+            })));
+            
             messageAttachments = {
-              create: uploadedFiles.map(file => {
+              create: uploadedFiles.map((file, index) => {
                 const isImage = file.mimeType?.startsWith('image/');
                 // Используем CDN URL для вложений
                 const fileUrl = getFileUrlWithCDN(file.filePath);
+                
+                console.log(`[tickets] Attachment ${index + 1}:`, {
+                  originalName: file.originalName,
+                  filePath: file.filePath,
+                  fileUrl: fileUrl,
+                  type: isImage ? 'image' : 'file',
+                  size: file.fileSize,
+                });
                 
                 return {
                   type: isImage ? 'image' : 'file',
@@ -520,11 +545,18 @@ export async function POST(request: NextRequest) {
               }),
             };
             
-            console.log(`[tickets] Prepared ${uploadedFiles.length} attachments for initial message`);
+            console.log(`[tickets] ✅ Prepared ${uploadedFiles.length} attachments for initial message`);
           } catch (attachError) {
-            console.error('[tickets] Error preparing attachments for message:', attachError);
+            console.error('[tickets] ❌ Error preparing attachments for message:', attachError);
+            console.error('[tickets] Error details:', {
+              message: attachError instanceof Error ? attachError.message : String(attachError),
+              stack: attachError instanceof Error ? attachError.stack : undefined,
+              uploadedFilesCount: uploadedFiles.length,
+            });
             // Продолжаем без вложений, если есть проблема
           }
+        } else {
+          console.log(`[tickets] No attachments to add (uploadedFiles.length = ${uploadedFiles.length})`);
         }
         
         // Отправляем начальное сообщение в чат
@@ -539,7 +571,22 @@ export async function POST(request: NextRequest) {
         // Добавляем вложения только если они есть и валидны
         if (messageAttachments) {
           messageData.attachments = messageAttachments;
+          console.log(`[tickets] Adding attachments to message data:`, {
+            attachmentsCount: messageAttachments.create.length,
+            firstAttachment: messageAttachments.create[0],
+          });
+        } else {
+          console.log(`[tickets] No attachments to add to message data`);
         }
+
+        console.log(`[tickets] Creating message with data:`, {
+          chatId: messageData.chatId,
+          senderId: messageData.senderId,
+          contentLength: messageData.content.length,
+          messageType: messageData.messageType,
+          hasAttachments: !!messageData.attachments,
+          attachmentsCount: messageData.attachments?.create?.length || 0,
+        });
 
         const createdMessage = await prisma.chatMessage.create({
           data: messageData,
@@ -550,6 +597,8 @@ export async function POST(request: NextRequest) {
                 type: true,
                 url: true,
                 name: true,
+                size: true,
+                mimeType: true,
               },
             },
           },
@@ -570,8 +619,16 @@ export async function POST(request: NextRequest) {
           senderId: createdMessage.senderId,
           chatId: appealChat.id,
           contentLength: initialMessage.length,
+          contentPreview: initialMessage.substring(0, 100) + '...',
           attachmentsCount: createdMessage.attachments.length,
-          attachments: createdMessage.attachments.map(a => ({ id: a.id, type: a.type, name: a.name })),
+          attachments: createdMessage.attachments.map(a => ({ 
+            id: a.id, 
+            type: a.type, 
+            name: a.name,
+            url: a.url,
+            size: a.size,
+            mimeType: a.mimeType,
+          })),
           threadRootId: createdMessage.threadRootId, // Должно быть null
         });
         
