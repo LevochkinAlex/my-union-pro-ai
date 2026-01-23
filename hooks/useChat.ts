@@ -226,19 +226,30 @@ export function useChat(options: UseChatOptions = {}) {
   // Загрузка сообщений чата (HTTP - для первоначальной загрузки)
   const loadMessages = useCallback(async (chatId: string) => {
     setLoadingMessages(true);
+    console.log(`[useChat] ========== LOADING MESSAGES FOR CHAT ${chatId} ==========`);
     try {
+      const url = `/api/chat/${chatId}?limit=50&t=${Date.now()}`;
+      console.log(`[useChat] Fetching: ${url}`);
+      
       const data = await fetchJsonWithRetry<{ 
         messages: Message[]; 
         hasMore: boolean; 
         chat?: Chat;
         pagination?: { hasMore: boolean; oldestMessageId: string | null } 
       }>(
-        `/api/chat/${chatId}?limit=50&t=${Date.now()}`,
+        url,
         {
           method: "GET",
           headers: { "Content-Type": "application/json" },
         }
       );
+      
+      console.log(`[useChat] API response:`, {
+        hasData: !!data,
+        messagesCount: data?.messages?.length ?? 'N/A',
+        hasChat: !!data?.chat,
+        hasPagination: !!data?.pagination,
+      });
       
       if (data) {
         const messages = data.messages || [];
@@ -287,10 +298,17 @@ export function useChat(options: UseChatOptions = {}) {
         } catch (e) {
           console.error("[useChat] Error marking as read:", e);
         }
+      } else {
+        console.error(`[useChat] ❌ API returned null/empty data for chat ${chatId}`);
+        console.error(`[useChat] This usually means the request failed or returned non-JSON response`);
+        // Устанавливаем пустой массив, чтобы UI знал что загрузка завершена
+        setMessages([]);
       }
     } catch (error) {
-      console.error("[useChat] Error loading messages:", error);
+      console.error("[useChat] ❌ Error loading messages:", error);
       options.onError?.("Ошибка загрузки сообщений");
+      // Устанавливаем пустой массив при ошибке
+      setMessages([]);
     } finally {
       setLoadingMessages(false);
     }
