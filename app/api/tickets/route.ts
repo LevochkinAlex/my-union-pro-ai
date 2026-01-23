@@ -79,12 +79,13 @@ export async function GET(request: NextRequest) {
       });
 
       // Обращения из чатов пользователя (где он является участником)
-      // Это позволяет видеть обращения, в которых пользователь участвует через чат
+      // НО только если они не адресованы в ППО (без organizationId)
       if (userChatIds.length > 0) {
         orConditions.push({ 
           AND: [
             { chatId: { in: userChatIds } },
             { userId: session.user.id }, // Только свои обращения в этих чатах
+            { organizationId: null }, // Только личные обращения, не адресованные в ППО
           ],
         });
       }
