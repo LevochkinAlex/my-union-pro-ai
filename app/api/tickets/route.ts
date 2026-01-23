@@ -66,27 +66,21 @@ export async function GET(request: NextRequest) {
       // Председатель видит все обращения из своей организации
       where.organizationId = chairmanOrgId;
     } else {
-      // Обычный пользователь (в режиме MEMBER) видит ТОЛЬКО свои личные обращения
-      // (без organizationId - не адресованные в ППО) и обращения из чатов
+      // Обычный пользователь (в режиме MEMBER) видит ВСЕ свои обращения
+      // (и личные, и адресованные в ППО) и обращения из чатов, где он участник
       const orConditions: any[] = [];
 
-      // Свои личные обращения (без organizationId - не адресованные в ППО)
+      // ВСЕ свои обращения (независимо от organizationId)
+      // Пользователь должен видеть все обращения, которые он создал
       orConditions.push({
-        AND: [
-          { userId: session.user.id },
-          { organizationId: null }, // Только личные обращения, не адресованные в ППО
-        ],
+        userId: session.user.id,
       });
 
       // Обращения из чатов пользователя (где он является участником)
-      // НО только если они не адресованы в ППО (без organizationId)
+      // Показываем все обращения из чатов, где пользователь участник
       if (userChatIds.length > 0) {
         orConditions.push({ 
-          AND: [
-            { chatId: { in: userChatIds } },
-            { userId: session.user.id }, // Только свои обращения в этих чатах
-            { organizationId: null }, // Только личные обращения, не адресованные в ППО
-          ],
+          chatId: { in: userChatIds },
         });
       }
 
