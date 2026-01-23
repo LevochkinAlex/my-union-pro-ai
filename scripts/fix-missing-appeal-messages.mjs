@@ -107,9 +107,15 @@ async function fixMissingAppealMessages() {
         }
 
         // Создаем сообщение в транзакции для гарантии сохранения
+        if (!ticket.chatId) {
+          console.error(`❌ Ошибка: у обращения #${ticket.publicId} нет chatId`);
+          errors++;
+          continue;
+        }
+
         const createdMessage = await prisma.$transaction(async (tx) => {
           const messageData = {
-            chatId: ticket.chatId!,
+            chatId: ticket.chatId,
             senderId: ticket.userId,
             content: initialMessage,
             messageType: 'text',
@@ -134,7 +140,7 @@ async function fixMissingAppealMessages() {
           
           // Обновляем чат в той же транзакции
           await tx.chat.update({
-            where: { id: ticket.chatId! },
+            where: { id: ticket.chatId },
             data: {
               lastMessageId: message.id,
               lastMessageAt: message.createdAt,
