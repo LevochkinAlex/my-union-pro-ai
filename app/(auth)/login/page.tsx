@@ -554,7 +554,6 @@ function LoginForm() {
                       setLoginMethod("sms");
                       setInput("");
                       setInputType("phone");
-                      setPassword("");
                       setError("");
                     }}
                     className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
