@@ -265,24 +265,13 @@ export async function GET(
       }
     }
 
-    // ОПТИМИЗАЦИЯ: Загружаем только необходимые поля для сообщений
+    // Загружаем сообщения с оптимизированными полями
+    // ВАЖНО: Используем include для совместимости с форматированием сообщений
     const messages = await prisma.chatMessage.findMany({
       where: whereClause,
       take: limit + 1, // +1 для проверки hasMore
       orderBy: { createdAt: direction === 'older' ? 'desc' : 'asc' },
-      select: {
-        id: true,
-        chatId: true,
-        senderId: true,
-        content: true,
-        messageType: true,
-        replyToId: true,
-        threadRootId: true,
-        editedAt: true,
-        threadRepliesCount: true,
-        threadLastReplyAt: true,
-        createdAt: true,
-        updatedAt: true,
+      include: {
         sender: {
           select: {
             id: true,
@@ -293,9 +282,7 @@ export async function GET(
           },
         },
         replyTo: {
-          select: {
-            id: true,
-            content: true,
+          include: {
             sender: {
               select: {
                 id: true,
