@@ -53,15 +53,14 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
   // Автоматическая адаптация высоты textarea
   const autoResizeTextarea = (textarea: HTMLTextAreaElement | null) => {
     if (textarea) {
+      // Сохраняем позицию курсора
+      const cursorPosition = textarea.selectionStart;
       textarea.style.height = 'auto';
       textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+      // Восстанавливаем позицию курсора
+      textarea.setSelectionRange(cursorPosition, cursorPosition);
     }
   };
-
-  // Обновляем высоту при изменении текста комментария
-  useEffect(() => {
-    autoResizeTextarea(commentTextareaRef.current);
-  }, [newComment]);
 
   // Загружаем avatarUrl текущего пользователя из профиля
   useEffect(() => {

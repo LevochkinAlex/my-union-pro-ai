@@ -6,7 +6,10 @@
 
 | Файл | Описание |
 |------|----------|
+| [DOCUMENTATION_STATUS.md](./DOCUMENTATION_STATUS.md) | ⭐ **Финальный статус документации** |
 | [SYSTEM_OVERVIEW.md](./SYSTEM_OVERVIEW.md) | Общий обзор системы |
+| [meeting-document-workflow.md](./meeting-document-workflow.md) | ⭐ **Документооборот заседаний** |
+| [chat-performance-optimization.md](./chat-performance-optimization.md) | ⭐ **Оптимизация производительности чата** |
 | [BESTBENEFITS_SYSTEM.md](./BESTBENEFITS_SYSTEM.md) | **Система скидок BestBenefits** |
 | [AI_BOT_ARCHITECTURE.md](./AI_BOT_ARCHITECTURE.md) | Архитектура AI-бота |
 | [DOCUMENT_TEMPLATES_GUIDE.md](./DOCUMENT_TEMPLATES_GUIDE.md) | Шаблоны документов |
