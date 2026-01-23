@@ -241,7 +241,32 @@ export function useChat(options: UseChatOptions = {}) {
       );
       
       if (data) {
-        setMessages(data.messages || []);
+        const messages = data.messages || [];
+        console.log(`[useChat] ========== CLIENT MESSAGES LOADING ==========`);
+        console.log(`[useChat] ✅ Loaded ${messages.length} messages for chat ${chatId}`);
+        console.log(`[useChat] Messages breakdown:`, {
+          total: messages.length,
+          hasActivity: messages.filter((m: any) => m.isActivity).length,
+          hasChannelPosts: messages.filter((m: any) => m.messageType === 'channel_post').length,
+          hasRegular: messages.filter((m: any) => !m.isActivity && m.messageType !== 'channel_post').length,
+        });
+        if (messages.length > 0) {
+          console.log(`[useChat] First message:`, {
+            id: messages[0]?.id,
+            type: messages[0]?.messageType,
+            senderId: messages[0]?.senderId,
+            content: messages[0]?.content?.substring(0, 50),
+          });
+          console.log(`[useChat] Last message:`, {
+            id: messages[messages.length - 1]?.id,
+            type: messages[messages.length - 1]?.messageType,
+            senderId: messages[messages.length - 1]?.senderId,
+            content: messages[messages.length - 1]?.content?.substring(0, 50),
+          });
+        } else {
+          console.warn(`[useChat] ⚠️ No messages loaded for chat ${chatId}`);
+        }
+        setMessages(messages);
         setHasMore((data as any).pagination?.hasMore ?? (data as any).hasMore ?? false);
         setOldestMessageId((data as any).pagination?.oldestMessageId || null);
 
