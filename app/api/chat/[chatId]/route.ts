@@ -937,7 +937,39 @@ export async function GET(
 
     // Логируем для отладки обращений
     if (chat.ticket) {
-      console.log(`[chat] Загружено сообщений для обращения ${chat.ticket.publicId}: обычных: ${formattedMessages.length}, системных: ${activityMessages.length}, всего: ${allMessages.length}`);
+      console.log(`[chat/${chatId}] Загружено сообщений для обращения ${chat.ticket.publicId}:`, {
+        обычных: formattedMessages.length,
+        системных: activityMessages.length,
+        всего: allMessages.length,
+        ticketCreatorId: chat.ticket.userId,
+      });
+      
+      // Проверяем, есть ли начальное сообщение от создателя обращения
+      const initialMessage = formattedMessages.find((msg: any) => 
+        msg.senderId === chat.ticket.userId && 
+        msg.content?.includes('Обращение #')
+      );
+      
+      if (!initialMessage) {
+        console.warn(`[chat/${chatId}] ⚠️ WARNING: Initial message from ticket creator not found in formatted messages!`);
+        console.warn(`[chat/${chatId}] Formatted messages from ticket creator:`, 
+          formattedMessages
+            .filter((msg: any) => msg.senderId === chat.ticket.userId)
+            .map((msg: any) => ({
+              id: msg.id,
+              contentLength: msg.content?.length || 0,
+              messageType: msg.messageType,
+              createdAt: msg.createdAt,
+            }))
+        );
+      } else {
+        console.log(`[chat/${chatId}] ✅ Initial message found:`, {
+          id: initialMessage.id,
+          contentLength: initialMessage.content?.length || 0,
+          attachmentsCount: initialMessage.attachments?.length || 0,
+          createdAt: initialMessage.createdAt,
+        });
+      }
     }
 
     return NextResponse.json({
