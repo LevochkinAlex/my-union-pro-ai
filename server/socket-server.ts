@@ -113,7 +113,15 @@ io.on("connection", (socket) => {
 
   // Отправка сообщения через WebSocket
   socket.on("message:send", async (data, callback) => {
-    const { chatId, content, replyToId } = data;
+    const { chatId, content, replyToId, threadRootId } = data;
+
+    console.log(`[Socket] message:send received:`, {
+      chatId,
+      userId,
+      contentLength: content?.length,
+      hasReplyTo: !!replyToId,
+      hasThreadRoot: !!threadRootId,
+    });
 
     try {
       // Проверяем доступ
@@ -134,42 +142,57 @@ io.on("connection", (socket) => {
       //   await sendMatrixMessage(senderUser.matrixAccessToken, chat.matrixRoomId, content);
       // }
 
-      // Получаем информацию об отправителе для возврата
-      const sender = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          middleName: true,
-          avatarUrl: true,
-        },
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Сохраняем сообщение в БД через транзакцию
+      const message = await prisma.$transaction(async (tx) => {
+        // Создаем сообщение в БД
+        const createdMessage = await tx.chatMessage.create({
+          data: {
+            chatId,
+            senderId: userId,
+            content,
+            messageType: 'text',
+            replyToId: replyToId || null,
+            threadRootId: threadRootId || null,
+          },
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                avatarUrl: true,
+              },
+            },
+            replyTo: {
+              include: {
+                sender: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    avatarUrl: true,
+                  },
+                },
+              },
+            },
+            attachments: true,
+          },
+        });
+
+        // Обновляем чат с lastMessageId
+        await tx.chat.update({
+          where: { id: chatId },
+          data: {
+            lastMessageId: createdMessage.id,
+            lastMessageAt: createdMessage.createdAt,
+          },
+        });
+
+        return createdMessage;
       });
 
-      // Создаем временный объект сообщения для обратной совместимости
-      const message = {
-        id: `temp_${Date.now()}`,
-        chatId,
-        senderId: userId,
-        content,
-        replyToId: replyToId || null,
-        createdAt: new Date(),
-        sender: sender || {
-          id: userId,
-          firstName: null,
-          lastName: null,
-          middleName: null,
-          avatarUrl: null,
-        },
-        replyTo: null,
-        attachments: [],
-      };
-
-      // Обновляем чат
-      await prisma.chat.update({
-        where: { id: chatId },
-        data: { lastMessageAt: new Date() },
-      });
+      console.log(`[Socket] ✅ Message saved to DB: ${message.id} in chat ${chatId}`);
 
       // Отправляем всем в чате (включая отправителя)
       io.to(chatId).emit("message:new", message);
