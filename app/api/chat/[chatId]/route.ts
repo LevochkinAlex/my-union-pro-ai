@@ -406,6 +406,27 @@ export async function GET(
       },
     });
 
+    // КРИТИЧЕСКОЕ ЛОГИРОВАНИЕ: Проверяем что вернулось из БД
+    console.log(`[chat/${chatId}] ========== DB QUERY RESULT ==========`);
+    console.log(`[chat/${chatId}] Loaded ${messages.length} messages from DB`);
+    if (messages.length > 0) {
+      console.log(`[chat/${chatId}] First message:`, {
+        id: messages[0].id,
+        senderId: messages[0].senderId,
+        content: messages[0].content?.substring(0, 50),
+        createdAt: messages[0].createdAt,
+      });
+      console.log(`[chat/${chatId}] Last message:`, {
+        id: messages[messages.length - 1].id,
+        senderId: messages[messages.length - 1].senderId,
+        content: messages[messages.length - 1].content?.substring(0, 50),
+        createdAt: messages[messages.length - 1].createdAt,
+      });
+    } else {
+      console.warn(`[chat/${chatId}] ⚠️ NO MESSAGES LOADED FROM DB!`);
+      console.warn(`[chat/${chatId}] whereClause was:`, JSON.stringify(whereClause));
+    }
+
     // Проверяем есть ли еще сообщения
     const hasMore = messages.length > limit;
     const resultMessages = hasMore ? messages.slice(0, limit) : messages;
@@ -935,10 +956,16 @@ export async function GET(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
 
-    // Кэшируем сообщения для следующих запросов
-    await cacheChatMessages(chatId, formattedMessages, cursor || undefined, direction).catch(err =>
-      console.warn('[chat] Cache error:', err)
-    );
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: КЭШ ОТКЛЮЧЕН - не сохраняем сообщения в кэш
+    // await cacheChatMessages(chatId, formattedMessages, cursor || undefined, direction).catch(err =>
+    //   console.warn('[chat] Cache error:', err)
+    // );
+
+    // КРИТИЧЕСКОЕ ЛОГИРОВАНИЕ: Проверяем что будет отправлено клиенту
+    console.log(`[chat/${chatId}] ========== RESPONSE TO CLIENT ==========`);
+    console.log(`[chat/${chatId}] formattedMessages: ${formattedMessages.length}`);
+    console.log(`[chat/${chatId}] activityMessages: ${activityMessages.length}`);
+    console.log(`[chat/${chatId}] allMessages (total): ${allMessages.length}`);
 
     // Логируем для отладки обращений
     if (chat.ticket) {
