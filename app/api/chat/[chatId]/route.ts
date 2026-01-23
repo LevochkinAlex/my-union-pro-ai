@@ -1497,6 +1497,12 @@ export async function POST(
         // Не прерываем выполнение
       }
 
+      console.log(`[chat/${chatId}] ✅ Returning created message to client:`, {
+        messageId: normalizedMessage.id,
+        chatId: normalizedMessage.chatId,
+        senderId: normalizedMessage.senderId,
+        contentLength: normalizedMessage.content.length,
+      });
       return NextResponse.json({ message: normalizedMessage });
     } catch (formatError: any) {
       console.error('[chat] Error formatting message:', formatError);
