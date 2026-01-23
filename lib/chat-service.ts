@@ -151,19 +151,25 @@ export class ChatAccessError extends Error {
  */
 export async function getUserChats(
   userId: string,
-  filter?: ChatFilter
+  filter?: ChatFilter,
+  bypassCache: boolean = false
 ): Promise<ChatInfo[]> {
   // Кэшируем списки чатов для масштабирования (TTL: 30 секунд)
+  // НО: для участников обходим кэш, чтобы гарантировать актуальные данные
   const cacheKey = `user:chats:${userId}:${JSON.stringify(filter || {})}`;
   
-  try {
-    const cached = await cacheGet<ChatInfo[]>(cacheKey);
-    if (cached) {
-      return cached;
+  if (!bypassCache) {
+    try {
+      const cached = await cacheGet<ChatInfo[]>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    } catch (error) {
+      // Игнорируем ошибки кэша, продолжаем с БД
+      console.warn('[chat-service] Cache read error:', error);
     }
-  } catch (error) {
-    // Игнорируем ошибки кэша, продолжаем с БД
-    console.warn('[chat-service] Cache read error:', error);
+  } else {
+    console.log(`[chat-service] Bypassing cache for user ${userId}`);
   }
   // Строим условие WHERE
   const whereConditions: Prisma.ChatWhereInput[] = [];

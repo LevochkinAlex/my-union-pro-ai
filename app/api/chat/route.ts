@@ -273,7 +273,7 @@ export async function GET(request: NextRequest) {
           // Для участников не используем кэш, чтобы гарантировать актуальные данные
           if (isMemberMode) {
             console.log(`[chat] MEMBER mode: bypassing cache, fetching directly from DB`);
-            return await getUserChats(userId, filter);
+            return await getUserChats(userId, filter, true); // bypassCache = true
           }
           
           try {
@@ -307,6 +307,11 @@ export async function GET(request: NextRequest) {
 
     console.log(`[chat] Total chats from getUserChats: ${chats.length}, after AI filter: ${filteredChats.length}`);
     console.log(`[chat] User viewMode: ${isMemberMode ? 'MEMBER' : 'PPO_HEAD'}, userId: ${userId}`);
+    console.log(`[chat] Chat types breakdown:`, {
+      PRIVATE: filteredChats.filter((c: any) => c?.type === "PRIVATE").length,
+      GROUP: filteredChats.filter((c: any) => c?.type === "GROUP").length,
+      CHANNEL: filteredChats.filter((c: any) => c?.type === "CHANNEL").length,
+    });
 
     // В режиме участника (MEMBER) фильтруем чаты:
     // - Только личные чаты (PRIVATE)
@@ -322,33 +327,50 @@ export async function GET(request: NextRequest) {
         .map(t => t.chatId)
         .filter((id): id is string => typeof id === 'string' && id.length > 0);
 
+      console.log(`[chat] User ticket chat IDs: ${userTicketChatIds.length}`, userTicketChatIds);
+
       const privateChatsCount = filteredChats.filter((c: any) => c.type === "PRIVATE").length;
       console.log(`[chat] Private chats before filtering: ${privateChatsCount}`);
 
       filteredChats = filteredChats.filter((chat: any) => {
+        if (!chat || !chat.id) {
+          console.warn(`[chat] Skipping invalid chat:`, chat);
+          return false;
+        }
+
         // Личные чаты - всегда показываем (ВАЖНО: они уже отфильтрованы по участию в getUserChats)
         if (chat.type === "PRIVATE") {
+          console.log(`[chat] Including PRIVATE chat: ${chat.id} (${chat.displayName || chat.name})`);
           return true;
         }
         
         // Свои обращения - показываем
         if (chat.ticketId && userTicketChatIds.includes(chat.id)) {
+          console.log(`[chat] Including TICKET chat: ${chat.id} (${chat.ticketPublicId || chat.ticketId})`);
           return true;
         }
         
         // Каналы - показываем только те, где пользователь участник
         // (каналы председателя автоматически подписывают всех членов организации)
         if (chat.type === "CHANNEL") {
+          console.log(`[chat] Including CHANNEL chat: ${chat.id} (${chat.displayName || chat.name})`);
           return true; // Уже отфильтровано по участию в getUserChats
         }
         
         // Групповые чаты (не обращения) - скрываем в режиме участника
+        console.log(`[chat] Excluding GROUP chat: ${chat.id} (${chat.displayName || chat.name})`);
         return false;
       });
       
       const privateChatsAfterFilter = filteredChats.filter((c: any) => c.type === "PRIVATE").length;
-      console.log(`[chat] Private chats after filtering: ${privateChatsAfterFilter}`);
-      console.log(`[chat] Total chats after filtering for MEMBER: ${filteredChats.length}`);
+      const channelChatsAfterFilter = filteredChats.filter((c: any) => c.type === "CHANNEL").length;
+      const ticketChatsAfterFilter = filteredChats.filter((c: any) => c.ticketId).length;
+      console.log(`[chat] After filtering for MEMBER:`, {
+        private: privateChatsAfterFilter,
+        channels: channelChatsAfterFilter,
+        tickets: ticketChatsAfterFilter,
+        total: filteredChats.length,
+      });
     }
 
     // Добавляем ИИ чат, если нужно

@@ -53,10 +53,14 @@ export async function GET(
     const cursor = searchParams.get('cursor');
     const direction = searchParams.get('direction') || 'newer';
 
+    // Проверяем доступ к чату
+    let chatAccess: { chat: any; participant: any } | null = null;
     try {
-      await requireChatAccess(chatId, session.user.id);
+      chatAccess = await requireChatAccess(chatId, session.user.id);
+      console.log(`[chat/${chatId}] Access granted for user ${session.user.id}, chat type: ${chatAccess.chat?.type}`);
     } catch (error) {
       if (error instanceof ChatAccessError) {
+        console.warn(`[chat/${chatId}] Access denied for user ${session.user.id}: ${error.message}`);
         return NextResponse.json({ error: error.message }, { status: 403 });
       }
       throw error;
@@ -364,6 +368,7 @@ export async function GET(
     });
 
     // Если это канал, загружаем все опубликованные посты из NewsChannel
+    // ВАЖНО: Посты загружаются для ВСЕХ участников канала, независимо от viewMode
     // Получаем newsChannelId отдельным запросом, если нужно
     let newsChannelId: string | null = null;
     if ((chat.type as string) === 'CHANNEL') {
@@ -372,13 +377,17 @@ export async function GET(
       `;
       newsChannelId = channelWithNews[0]?.newsChannelId || null;
       
+      console.log(`[chat/${chatId}] Channel detected, newsChannelId: ${newsChannelId}, userId: ${session.user.id}`);
+      
       // Логируем для диагностики
       if (!newsChannelId) {
-        console.warn(`[chat/${chatId}] Channel has no newsChannelId`);
+        console.warn(`[chat/${chatId}] Channel has no newsChannelId - posts will not be loaded`);
       }
     }
     
     if ((chat.type as string) === 'CHANNEL' && newsChannelId) {
+      console.log(`[chat/${chatId}] Loading published posts for channel ${newsChannelId} (user: ${session.user.id})`);
+      
       const channelPosts = await prisma.newsPost.findMany({
         where: {
           channelId: newsChannelId,
@@ -412,7 +421,7 @@ export async function GET(
         }
       }
       
-      console.log(`[chat/${chatId}] Added ${postIds.length} post IDs to load (${postIds.length - existingPostIds.size} new)`);
+      console.log(`[chat/${chatId}] Added ${postIds.length} post IDs to load (${postIds.length - existingPostIds.size} new posts, ${existingPostIds.size} already in messages)`);
     } else if ((chat.type as string) === 'CHANNEL' && !newsChannelId) {
       console.warn(`[chat/${chatId}] Channel has no newsChannelId - posts will not be loaded`);
     }
