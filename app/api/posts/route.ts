@@ -593,11 +593,11 @@ export async function POST(request: NextRequest) {
 
       if (subscribers.length > 0) {
         const { sendUserNotification } = await import("@/lib/notifications");
-        const authorName = `${post.author.firstName || ""} ${post.author.middleName || ""} ${post.author.lastName || ""}`.trim() || "Пользователь";
-
+        
         // Функция для очистки HTML тегов
         const stripHtml = (html: string): string => {
-          return html
+          if (!html) return '';
+          return String(html)
             .replace(/<[^>]*>/g, '') // Удаляем все HTML теги
             .replace(/&nbsp;/g, ' ') // Заменяем &nbsp; на пробел
             .replace(/&amp;/g, '&') // Заменяем &amp; на &
@@ -605,9 +605,15 @@ export async function POST(request: NextRequest) {
             .replace(/&gt;/g, '>') // Заменяем &gt; на >
             .replace(/&quot;/g, '"') // Заменяем &quot; на "
             .replace(/&#39;/g, "'") // Заменяем &#39; на '
+            .replace(/&#x27;/g, "'") // Заменяем &#x27; на '
+            .replace(/&#x2F;/g, '/') // Заменяем &#x2F; на /
             .replace(/\s+/g, ' ') // Убираем множественные пробелы
             .trim();
         };
+
+        // Очищаем имя автора от HTML
+        const rawAuthorName = `${post.author.firstName || ""} ${post.author.middleName || ""} ${post.author.lastName || ""}`.trim() || "Пользователь";
+        const authorName = stripHtml(rawAuthorName);
 
         for (const subscription of subscribers) {
           const rawText = content.trim() || (attachments.length > 0 ? "Новое изображение" : "Новый пост");

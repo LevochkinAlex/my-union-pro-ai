@@ -192,6 +192,88 @@ io.on("connection", (socket) => {
       // Останавливаем typing
       clearTyping(chatId, userId, socket);
 
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Создаем уведомления для участников чата
+      try {
+        // Получаем информацию о чате и участниках
+        const chat = await prisma.chat.findUnique({
+          where: { id: chatId },
+          select: {
+            id: true,
+            type: true,
+            name: true,
+            ticket: {
+              select: {
+                publicId: true,
+                title: true,
+              },
+            },
+          },
+        });
+
+        const participants = await prisma.chatParticipant.findMany({
+          where: {
+            chatId,
+            leftAt: null,
+            userId: { not: userId }, // Исключаем отправителя
+          },
+          select: {
+            userId: true,
+          },
+        });
+
+        if (participants.length > 0) {
+          // Динамически импортируем sendUserNotification
+          const { sendUserNotification } = await import('@/lib/notifications');
+          
+          const senderName = `${message.sender.firstName || ''} ${message.sender.lastName || ''}`.trim() || 'Пользователь';
+          const notificationContent = content.length > 100 ? content.substring(0, 100) + '...' : content;
+          
+          // Определяем имя чата
+          let chatName = chat?.name || '';
+          if (!chatName && chat?.type === 'PRIVATE') {
+            // Для приватных чатов имя формируется из другого участника
+            chatName = senderName;
+          } else if (chat?.ticket) {
+            chatName = `Обращение #${chat.ticket.publicId}`;
+          }
+          
+          const notificationUrl = `/dashboard/chat?chatId=${chatId}`;
+
+          console.log(`[Socket] 📬 Sending notifications to ${participants.length} participants`);
+
+          // Отправляем уведомления асинхронно (не блокируем ответ)
+          Promise.allSettled(
+            participants.map(async (participant) => {
+              try {
+                await sendUserNotification({
+                  userId: participant.userId,
+                  type: 'chat_message',
+                  title: chat?.type === 'CHANNEL' 
+                    ? `Новый пост в канале "${chatName}"`
+                    : chat?.ticket
+                    ? `Новое сообщение в обращении #${chat.ticket.publicId}`
+                    : `Новое сообщение от ${senderName}`,
+                  body: notificationContent,
+                  url: notificationUrl,
+                  senderName: senderName,
+                  metadata: {
+                    chatId,
+                    messageId: message.id,
+                  },
+                });
+              } catch (err) {
+                console.error(`[Socket] Error sending notification to user ${participant.userId}:`, err);
+              }
+            })
+          ).catch(err => {
+            console.error('[Socket] Error in notification batch:', err);
+          });
+        }
+      } catch (notifError) {
+        console.error('[Socket] Error preparing notifications:', notifError);
+        // Не прерываем выполнение - уведомления не критичны
+      }
+
       callback({ success: true, message });
 
       console.log(`[Socket] 📨 Сообщение от ${userName} в чат ${chatId}`);

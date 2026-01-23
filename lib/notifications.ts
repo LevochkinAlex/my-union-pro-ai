@@ -32,6 +32,25 @@ interface NotificationData {
 }
 
 /**
+ * Очищает HTML теги из текста
+ */
+function stripHtml(html: string): string {
+  if (!html) return '';
+  return String(html)
+    .replace(/<[^>]*>/g, '') // Удаляем все HTML теги
+    .replace(/&nbsp;/g, ' ') // Заменяем &nbsp; на пробел
+    .replace(/&amp;/g, '&') // Заменяем &amp; на &
+    .replace(/&lt;/g, '<') // Заменяем &lt; на <
+    .replace(/&gt;/g, '>') // Заменяем &gt; на >
+    .replace(/&quot;/g, '"') // Заменяем &quot; на "
+    .replace(/&#39;/g, "'") // Заменяем &#39; на '
+    .replace(/&#x27;/g, "'") // Заменяем &#x27; на '
+    .replace(/&#x2F;/g, '/') // Заменяем &#x2F; на /
+    .replace(/\s+/g, ' ') // Убираем множественные пробелы
+    .trim();
+}
+
+/**
  * Отправляет уведомление пользователю с учетом его настроек
  */
 export async function sendUserNotification(data: NotificationData) {
@@ -41,6 +60,11 @@ export async function sendUserNotification(data: NotificationData) {
       console.error(`[notifications] Invalid userId: ${data.userId}`);
       return { push: false, email: false };
     }
+
+    // Очищаем HTML из title и body
+    const cleanTitle = stripHtml(data.title);
+    const cleanBody = stripHtml(data.body);
+    const cleanSenderName = data.senderName ? stripHtml(data.senderName) : undefined;
 
     // Получаем настройки пользователя
     const user = await prisma.user.findUnique({
@@ -71,11 +95,11 @@ export async function sendUserNotification(data: NotificationData) {
         data: {
           userId: data.userId,
           type: data.type,
-          title: data.title,
-          body: data.body,
+          title: cleanTitle,
+          body: cleanBody,
           url: data.url,
           metadata: {
-            senderName: data.senderName,
+            senderName: cleanSenderName,
             ...(data.metadata || {}), // Сохраняем chatId, messageId и другие данные
           },
           pushSent: false,
@@ -102,8 +126,8 @@ export async function sendUserNotification(data: NotificationData) {
               await messaging.send({
                 token: sub.fcmToken,
                 notification: {
-                  title: data.title,
-                  body: data.body,
+                  title: cleanTitle,
+                  body: cleanBody,
                 },
                 data: {
                   url: data.url,
@@ -150,8 +174,8 @@ export async function sendUserNotification(data: NotificationData) {
     
     if (shouldSendEmail && user.email) {
       try {
-        const emailSubject = getEmailSubject(data.type, data.senderName);
-        const emailBody = getEmailBody(data.type, data.senderName, data.body, data.url, user.firstName);
+        const emailSubject = getEmailSubject(data.type, cleanSenderName);
+        const emailBody = getEmailBody(data.type, cleanSenderName, cleanBody, data.url, user.firstName);
 
         await sendEmail({
           to: user.email,
