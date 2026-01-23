@@ -554,10 +554,17 @@ export async function POST(request: NextRequest) {
         });
         
         // Создаем начальное сообщение с полной информацией об обращении
-        let initialMessage = `**Обращение #${publicId}**\n\n`;
-        initialMessage += `**Тема:** ${title}\n\n`;
-        initialMessage += `**Текст обращения:**\n${content}\n\n`;
-        initialMessage += `**Дата и время создания:** ${dateStr} в ${timeStr}`;
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Гарантируем что все значения - строки
+        const safePublicId = String(publicId || '');
+        const safeTitle = String(title || '');
+        const safeContent = String(content || '');
+        const safeDateStr = String(dateStr || '');
+        const safeTimeStr = String(timeStr || '');
+        
+        let initialMessage = `**Обращение #${safePublicId}**\n\n`;
+        initialMessage += `**Тема:** ${safeTitle}\n\n`;
+        initialMessage += `**Текст обращения:**\n${safeContent}\n\n`;
+        initialMessage += `**Дата и время создания:** ${safeDateStr} в ${safeTimeStr}`;
         
         // Подготавливаем вложения для сообщения
         let messageAttachments: any = undefined;

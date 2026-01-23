@@ -838,11 +838,33 @@ export async function GET(
         }
       }
       
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Нормализуем content - гарантируем что это строка
+      let normalizedContent = '';
+      if (msg.content) {
+        if (typeof msg.content === 'string') {
+          normalizedContent = msg.content;
+        } else if (typeof msg.content === 'object') {
+          // Если content - объект, пытаемся извлечь текст или преобразовать в JSON
+          console.error(`[chat/${chatId}] ⚠️ Message ${msg.id} has object content instead of string:`, {
+            messageId: msg.id,
+            contentType: typeof msg.content,
+            content: msg.content,
+          });
+          // Пытаемся найти текстовое поле в объекте
+          normalizedContent = (msg.content as any).text || 
+                             (msg.content as any).content || 
+                             (msg.content as any).body ||
+                             JSON.stringify(msg.content);
+        } else {
+          normalizedContent = String(msg.content);
+        }
+      }
+      
       return {
       id: msg.id,
       chatId: msg.chatId,
       senderId: isAIMessage ? AI_BOT_ID : msg.senderId, // Для ИИ используем виртуальный ID
-      content: msg.content || '', // Гарантируем что content всегда строка
+      content: normalizedContent, // Гарантируем что content всегда строка
       messageType: msg.messageType,
       createdAt: msg.createdAt,
       editedAt: msg.editedAt,
