@@ -588,6 +588,21 @@ export async function POST(request: NextRequest) {
           attachmentsCount: messageData.attachments?.create?.length || 0,
         });
 
+        // Убеждаемся, что threadRootId явно null (не undefined)
+        messageData.threadRootId = null;
+        messageData.replyToId = null;
+
+        console.log(`[tickets] Final messageData before create:`, {
+          chatId: messageData.chatId,
+          senderId: messageData.senderId,
+          contentLength: messageData.content.length,
+          messageType: messageData.messageType,
+          threadRootId: messageData.threadRootId,
+          replyToId: messageData.replyToId,
+          hasAttachments: !!messageData.attachments,
+          attachmentsCount: messageData.attachments?.create?.length || 0,
+        });
+
         const createdMessage = await prisma.chatMessage.create({
           data: messageData,
           include: {
