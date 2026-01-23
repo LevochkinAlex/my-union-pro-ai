@@ -912,10 +912,12 @@ export async function GET(
         });
       }
 
-      // Кэшируем сообщения для следующих запросов
-      await cacheChatMessages(chatId, formattedMessages, cursor || undefined, direction).catch(err =>
-        console.warn('[chat] Cache error:', err)
-      );
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: КЭШ ОТКЛЮЧЕН - не сохраняем сообщения в кэш
+      // Это гарантирует, что сообщения всегда загружаются из БД
+      // TODO: Восстановить кэш после полного исправления проблемы с пропаданием сообщений
+      // await cacheChatMessages(chatId, formattedMessages, cursor || undefined, direction).catch(err =>
+      //   console.warn('[chat] Cache error:', err)
+      // );
 
       return NextResponse.json({
         chat,
