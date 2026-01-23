@@ -68,9 +68,21 @@ export async function retrieveRelevantChunks(
           return null;
         }
 
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: убеждаемся что content - строка
+        let content = chunk.content;
+        if (typeof content !== 'string') {
+          console.warn(`[vector-search] ⚠️ Chunk content is not a string, type: ${typeof content}, chunkId: ${chunk.id}`);
+          // Если это объект или массив - сериализуем в JSON
+          if (content && typeof content === 'object') {
+            content = JSON.stringify(content, null, 2);
+          } else {
+            content = String(content || '');
+          }
+        }
+
         const similarity = cosineSimilarity(queryEmbedding, chunk.embedding);
         return {
-          content: chunk.content,
+          content,
           similarity,
           metadata: (chunk.metadata as Record<string, unknown>) || {},
           documentId: chunk.documentId || undefined,

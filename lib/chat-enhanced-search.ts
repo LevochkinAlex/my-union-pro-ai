@@ -330,11 +330,24 @@ export async function enhancedSearch(
 
     // 1. Поиск в базе знаний
     const chunks = await retrieveRelevantChunks(query, botId, 5);
-    result.knowledgeBaseChunks = chunks.map((chunk) => ({
-      content: chunk.content,
-      similarity: chunk.similarity,
-      metadata: chunk.metadata || {},
-    }));
+    result.knowledgeBaseChunks = chunks.map((chunk) => {
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: убеждаемся что content - строка
+      let content = chunk.content;
+      if (typeof content !== 'string') {
+        console.warn(`[enhanced-search] ⚠️ Chunk content is not a string, type: ${typeof content}`, content);
+        // Если это объект или массив - сериализуем в JSON
+        if (content && typeof content === 'object') {
+          content = JSON.stringify(content, null, 2);
+        } else {
+          content = String(content || '');
+        }
+      }
+      return {
+        content,
+        similarity: chunk.similarity,
+        metadata: chunk.metadata || {},
+      };
+    });
     console.log(`[enhanced-search] 📚 Found ${result.knowledgeBaseChunks.length} knowledge base chunks`);
 
     // 1.5. Поиск в персональной базе знаний пользователя (если userId передан)
@@ -345,15 +358,28 @@ export async function enhancedSearch(
         
         // Добавляем результаты пользователя к общим результатам с пометкой
         result.knowledgeBaseChunks.push(
-          ...userChunks.map((chunk) => ({
-            content: `[Персональная информация о пользователе]\n${chunk.content}`,
-            similarity: chunk.similarity,
-            metadata: {
-              ...chunk,
-              source: "user_knowledge_base",
-              type: chunk.type,
-            },
-          }))
+          ...userChunks.map((chunk) => {
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: убеждаемся что content - строка
+            let content = chunk.content;
+            if (typeof content !== 'string') {
+              console.warn(`[enhanced-search] ⚠️ User chunk content is not a string, type: ${typeof content}`, content);
+              // Если это объект или массив - сериализуем в JSON
+              if (content && typeof content === 'object') {
+                content = JSON.stringify(content, null, 2);
+              } else {
+                content = String(content || '');
+              }
+            }
+            return {
+              content: `[Персональная информация о пользователе]\n${content}`,
+              similarity: chunk.similarity,
+              metadata: {
+                ...chunk,
+                source: "user_knowledge_base",
+                type: chunk.type,
+              },
+            };
+          })
         );
 
         // Сортируем все chunks по релевантности
@@ -463,10 +489,19 @@ export function formatSearchResultsForPrompt(
   if (results.knowledgeBaseChunks.length > 0) {
     sections.push(
       "### ИНФОРМАЦИЯ ИЗ БАЗЫ ЗНАНИЙ:",
-      ...results.knowledgeBaseChunks.map(
-        (chunk, i) =>
-          `[Документ ${i + 1}] (релевантность: ${(chunk.similarity * 100).toFixed(0)}%)\n${chunk.content}`
-      )
+      ...results.knowledgeBaseChunks.map((chunk, i) => {
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: убеждаемся что content - строка перед форматированием
+        let content = chunk.content;
+        if (typeof content !== 'string') {
+          console.warn(`[formatSearchResults] ⚠️ Chunk content is not a string in format, type: ${typeof content}`);
+          if (content && typeof content === 'object') {
+            content = JSON.stringify(content, null, 2);
+          } else {
+            content = String(content || '');
+          }
+        }
+        return `[Документ ${i + 1}] (релевантность: ${(chunk.similarity * 100).toFixed(0)}%)\n${content}`;
+      })
     );
   }
 
