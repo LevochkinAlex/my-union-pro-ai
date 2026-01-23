@@ -183,7 +183,23 @@ export function useChat(options: UseChatOptions = {}) {
       });
       
       if (data?.chats) {
+        console.log("[useChat] ========== CLIENT CHAT LOADING ==========");
         console.log("[useChat] ✅ Loaded chats:", data.chats.length);
+        console.log("[useChat] Chats breakdown:", {
+          PRIVATE: data.chats.filter((c: Chat) => c.type === "PRIVATE").length,
+          GROUP: data.chats.filter((c: Chat) => c.type === "GROUP").length,
+          CHANNEL: data.chats.filter((c: Chat) => c.type === "CHANNEL").length,
+          AI: data.chats.filter((c: Chat) => c.name === "ИИ-Ассистент").length,
+        });
+        console.log("[useChat] Chats details:", data.chats.map((c: Chat) => ({
+          id: c.id,
+          type: c.type,
+          name: c.name || (c as any).displayName,
+          hasLastMessage: !!(c as any).lastMessage,
+          lastMessageAt: (c as any).lastMessageAt,
+          unreadCount: (c as any).unreadCount || 0,
+          otherUser: (c as any).otherUser?.id || null,
+        })));
         setChats(data.chats);
       } else if (data === null) {
         // Если data null, значит была ошибка при запросе
