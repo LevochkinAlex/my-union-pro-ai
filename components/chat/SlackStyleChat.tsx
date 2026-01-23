@@ -146,9 +146,10 @@ interface ChatHeaderProps {
   ticketId?: string | null;
   ticketPublicId?: string | null;
   onCloseAppeal?: () => void;
+  isChairman?: boolean; // Для проверки прав доступа
 }
 
-function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditGroup, isCurrentUserAdmin, ticketId, ticketPublicId, onCloseAppeal }: ChatHeaderProps) {
+function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditGroup, isCurrentUserAdmin, ticketId, ticketPublicId, onCloseAppeal, isChairman = false }: ChatHeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
   const router = useRouter();
   const { displayName, avatarUrl, subtitle, isAI, isGroup, isTicketChat } = getChatDisplayInfo(chat, currentUserId);
@@ -326,7 +327,8 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
                   Уведомления
                 </button>
                 <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
-                {isGroup && (
+                {/* Архивировать - только для председателей и админов групп */}
+                {isGroup && isChairman && (isCurrentUserAdmin || chat.type === 'CHANNEL') && (
                   <button 
                     onClick={async () => {
                       setShowMenu(false);
@@ -356,34 +358,37 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
                     Архивировать
                   </button>
                 )}
-                <button 
-                  onClick={async () => {
-                    setShowMenu(false);
-                    if (confirm('Вы уверены, что хотите очистить историю сообщений? Это действие нельзя отменить.')) {
-                      try {
-                        const response = await fetch(`/api/chat/${chat.id}/clear`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ mode: 'all' }),
-                        });
-                        if (response.ok) {
-                          showToast('История сообщений очищена', 'success');
-                          setTimeout(() => window.location.reload(), 1000);
-                        } else {
-                          const error = await safeJsonParse(response);
-                          showToast(error?.error || 'Ошибка очистки истории', 'error');
+                {/* Очистить историю - только для председателей и админов групп */}
+                {isChairman && (isGroup ? isCurrentUserAdmin : true) && (
+                  <button 
+                    onClick={async () => {
+                      setShowMenu(false);
+                      if (confirm('Вы уверены, что хотите очистить историю сообщений? Это действие нельзя отменить.')) {
+                        try {
+                          const response = await fetch(`/api/chat/${chat.id}/clear`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ mode: 'all' }),
+                          });
+                          if (response.ok) {
+                            showToast('История сообщений очищена', 'success');
+                            setTimeout(() => window.location.reload(), 1000);
+                          } else {
+                            const error = await safeJsonParse(response);
+                            showToast(error?.error || 'Ошибка очистки истории', 'error');
+                          }
+                        } catch (error) {
+                          console.error('Error clearing history:', error);
+                          showToast('Ошибка очистки истории', 'error');
                         }
-                      } catch (error) {
-                        console.error('Error clearing history:', error);
-                        showToast('Ошибка очистки истории', 'error');
                       }
-                    }
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Очистить историю
-                </button>
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Очистить историю
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -885,6 +890,7 @@ export default function SlackStyleChat({
                     ? () => setShowCloseAppealModal(true)
                     : undefined
                 }
+                isChairman={isChairman}
               />
 
               <div className="flex-1 flex overflow-hidden relative">
