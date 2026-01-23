@@ -18,29 +18,29 @@ export async function GET() {
       );
     }
 
-    // Используем withPrismaRetry для обработки ошибок подключения
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убираем withPrismaRetry - он может вызывать 503
+    // Используем прямой запрос с обработкой ошибок
     let user: any;
     try {
-      user = await withPrismaRetry(async () => {
-        return await prisma.user.findUnique({
-          where: { id: session.user.id },
-          select: {
-            id: true,
-            role: true,
-            isPPOHead: true,
-            viewMode: true,
-            ppoHeadOrganizationId: true,
-            ppoHeadOrganization: {
-              select: {
-                id: true,
-                name: true,
-              }
-            },
+      user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          id: true,
+          role: true,
+          isPPOHead: true,
+          viewMode: true,
+          ppoHeadOrganizationId: true,
+          ppoHeadOrganization: {
+            select: {
+              id: true,
+              name: true,
+            }
           },
-        });
+        },
       });
     } catch (dbError) {
       // Если ошибка БД, используем fallback из сессии
+      console.error("[user/view-mode] Database error:", dbError);
       throw dbError;
     }
 
@@ -149,14 +149,18 @@ export async function GET() {
       }
     }
     
-    // Если это ошибка подключения, возвращаем 503
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: НЕ возвращаем 503 при ошибках БД
+    // Вместо этого используем fallback из сессии или возвращаем 500
+    // 503 должен возвращаться только при реальной недоступности сервиса
     if (isConnectionError) {
+      // Fallback уже обработан выше, если дошли сюда - fallback не сработал
+      // Возвращаем 500 вместо 503, чтобы не путать с реальной недоступностью
       return NextResponse.json(
         { 
-          error: "Сервис временно недоступен. Попробуйте позже.",
+          error: "Ошибка получения данных. Попробуйте позже.",
           details: process.env.NODE_ENV === "development" ? error?.message : undefined,
         },
-        { status: 503 }
+        { status: 500 }
       );
     }
     

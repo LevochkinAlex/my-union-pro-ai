@@ -41,38 +41,33 @@ if (typeof process !== 'undefined') {
 
 /**
  * Обертка для Prisma запросов с обработкой ошибок подключения
+ * КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убран Promise.race с таймаутом - он вызывал 503 ошибки
  */
 export async function withPrismaRetry<T>(
   operation: () => Promise<T>,
-  maxRetries: number = 3, // Увеличено до 3 попыток
-  delay: number = 500 // Уменьшена задержка до 500мс
+  maxRetries: number = 3,
+  delay: number = 500
 ): Promise<T> {
   let lastError: any;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      // Добавляем таймаут для операции (30 секунд)
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Operation timeout after 30s')), 30000);
-      });
-      
-      return await Promise.race([operation(), timeoutPromise]);
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убрали Promise.race с таймаутом
+      // Prisma сам управляет таймаутами через connection pool
+      return await operation();
     } catch (error: any) {
       lastError = error;
       
-      // Проверяем, является ли это ошибкой подключения или таймаутом
+      // Проверяем, является ли это ошибкой подключения
       const isConnectionError = 
         error?.code === 'P1001' || // Can't reach database server
         error?.code === 'P1002' || // Database server doesn't accept connections
         error?.code === 'P1008' || // Operations timed out
         error?.code === 'P1017' || // Server has closed the connection
-        error?.code === 'P2002' || // Unique constraint violation (может быть связано с проблемами БД)
-        error?.message?.includes('timeout') ||
         error?.message?.includes('ECONNREFUSED') ||
         error?.message?.includes('ENOTFOUND') ||
         error?.message?.includes('Connection') ||
-        error?.message?.includes('connect') ||
-        error?.message === 'Operation timeout after 30s';
+        error?.message?.includes('connect');
       
       if (isConnectionError && attempt < maxRetries) {
         const retryDelay = delay * Math.pow(2, attempt); // Exponential backoff
