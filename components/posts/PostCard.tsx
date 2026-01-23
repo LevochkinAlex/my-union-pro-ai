@@ -1878,14 +1878,19 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                     {editCoverImage && editFiles.length === 0 && (
                       <div className="relative">
                         <img
-                          src={editCoverImage.startsWith('http') ? editCoverImage : 
-                               editCoverImage.startsWith('/') ? editCoverImage :
-                               `/uploads/posts/${editCoverImage.split('/').pop()}`}
+                          src={getPreviewUrl(editCoverImage)}
                           alt="Текущее фото"
                           className="w-full max-h-64 object-contain rounded-lg border border-gray-200 dark:border-gray-700"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
+                            // Пробуем fallback через API, если CDN не работает
+                            const currentSrc = target.src;
+                            if (currentSrc && !currentSrc.includes('/api/uploads/') && !currentSrc.includes('data:')) {
+                              const filename = editCoverImage.split('/').pop() || editCoverImage;
+                              target.src = `/api/uploads/posts/${filename}`;
+                            } else {
+                              target.style.display = 'none';
+                            }
                           }}
                         />
                         <button
