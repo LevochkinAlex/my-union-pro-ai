@@ -7,8 +7,9 @@ import { revalidatePath } from "next/cache";
 // GET /api/user/view-mode
 // Получить текущий режим просмотра и доступные режимы
 export async function GET() {
+  let session: any;
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions);
     
     if (!session?.user) {
       return NextResponse.json(
@@ -121,8 +122,10 @@ export async function GET() {
     if (error?.message === 'Database query timeout' || error?.code === 'P1001') {
       console.warn("[user/view-mode] Database timeout, using session fallback");
       try {
-        const fallbackSession = await getServerSession(authOptions);
-        const user = (fallbackSession as any)?.user;
+        if (!session) {
+          session = await getServerSession(authOptions);
+        }
+        const user = (session as any)?.user;
         if (user) {
           return NextResponse.json({
             currentMode: user.viewMode || "MEMBER",
