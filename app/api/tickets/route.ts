@@ -613,6 +613,64 @@ export async function POST(request: NextRequest) {
           },
         });
 
+        // Инвалидируем кэш чата, чтобы новое сообщение сразу отображалось
+        try {
+          const { invalidateChatCache } = await import('@/lib/chat-redis');
+          await invalidateChatCache(appealChat.id);
+          console.log(`[tickets] ✅ Chat cache invalidated for chat ${appealChat.id}`);
+        } catch (cacheError) {
+          console.warn('[tickets] Failed to invalidate chat cache:', cacheError);
+          // Не критично, продолжаем
+        }
+
+        // Отправляем сообщение через WebSocket для обновления в реальном времени
+        try {
+          const socketModule = await import('@/server/socket');
+          const { emitNewMessage } = socketModule;
+          
+          // Форматируем сообщение для WebSocket
+          const sender = await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+            },
+          });
+
+          if (sender) {
+            const wsMessage = {
+              id: createdMessage.id,
+              chatId: createdMessage.chatId,
+              senderId: createdMessage.senderId,
+              content: createdMessage.content,
+              messageType: createdMessage.messageType,
+              createdAt: createdMessage.createdAt,
+              sender: {
+                id: sender.id,
+                firstName: sender.firstName,
+                lastName: sender.lastName,
+                avatarUrl: sender.avatarUrl,
+              },
+              attachments: createdMessage.attachments.map(a => ({
+                id: a.id,
+                type: a.type,
+                url: a.url,
+                name: a.name,
+                size: a.size,
+                mimeType: a.mimeType,
+              })),
+            };
+
+            await emitNewMessage(appealChat.id, wsMessage);
+            console.log(`[tickets] ✅ Message emitted via WebSocket to chat ${appealChat.id}`);
+          }
+        } catch (wsError) {
+          console.error('[tickets] Failed to emit message via WebSocket:', wsError);
+          // Не критично, продолжаем
+        }
+
         console.log(`[tickets] ✅ Создано начальное сообщение обращения:`, {
           messageId: createdMessage.id,
           messageType: createdMessage.messageType,
