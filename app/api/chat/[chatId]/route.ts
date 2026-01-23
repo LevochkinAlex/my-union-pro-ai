@@ -1330,6 +1330,44 @@ export async function POST(
       senderId: message.senderId,
       contentLength: message.content.length,
       createdAt: message.createdAt,
+      threadRootId: message.threadRootId, // ВАЖНО: должен быть null для обычных сообщений
+    });
+    
+    // КРИТИЧЕСКАЯ ПРОВЕРКА: Убеждаемся что сообщение сохранено с правильным chatId
+    if (message.chatId !== chatId) {
+      console.error(`[chat/${chatId}] ❌ CRITICAL: Message saved with wrong chatId! Expected: ${chatId}, Got: ${message.chatId}`);
+    }
+    
+    // КРИТИЧЕСКАЯ ПРОВЕРКА: Для обычных сообщений threadRootId должен быть null
+    if (message.threadRootId && !threadRootId) {
+      console.error(`[chat/${chatId}] ❌ CRITICAL: Message has unexpected threadRootId: ${message.threadRootId}`);
+    }
+    
+    // ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: Загружаем сообщение из БД отдельным запросом после транзакции
+    const finalVerify = await prisma.chatMessage.findUnique({
+      where: { id: message.id },
+      select: { 
+        id: true, 
+        chatId: true, 
+        senderId: true, 
+        content: true, 
+        threadRootId: true,
+        createdAt: true,
+      },
+    });
+    
+    if (!finalVerify) {
+      console.error(`[chat/${chatId}] ❌ CRITICAL: Message ${message.id} NOT FOUND in DB after transaction committed!`);
+      return NextResponse.json(
+        { error: 'Сообщение не было сохранено в базе данных после транзакции' },
+        { status: 500 }
+      );
+    }
+    
+    console.log(`[chat/${chatId}] ✅ Final verification - message exists in DB:`, {
+      id: finalVerify.id,
+      chatId: finalVerify.chatId,
+      threadRootId: finalVerify.threadRootId,
     });
 
     // Обновляем онлайн статус отправителя (чат уже обновлен в транзакции)
