@@ -293,10 +293,23 @@ export function ChatPageBase({
 
   const handleForwardToChat = useCallback(
     async (targetChat: Chat) => {
-      if (!forwardingMessage) return;
+      if (!forwardingMessage) {
+        console.error("[ChatPageBase] No message to forward");
+        return;
+      }
+
+      console.log("[ChatPageBase] Forwarding message:", {
+        messageId: forwardingMessage.id,
+        targetChat: {
+          id: targetChat.id,
+          type: targetChat.type,
+          otherUserId: targetChat.otherUser?.id,
+        },
+      });
 
       // Пересылка работает только в PRIVATE чаты
       if (targetChat.type !== "PRIVATE" || !targetChat.otherUser?.id) {
+        console.warn("[ChatPageBase] Cannot forward to non-private chat:", targetChat.type);
         showToast("Можно переслать только в личный чат", "error");
         return;
       }
@@ -304,9 +317,11 @@ export function ChatPageBase({
       const success = await forwardMessage(forwardingMessage.id, targetChat.otherUser.id);
 
       if (success) {
+        console.log("[ChatPageBase] ✅ Message forwarded successfully");
         showToast("Сообщение переслано", "success");
         setForwardingMessage(null);
       } else {
+        console.error("[ChatPageBase] ❌ Failed to forward message");
         showToast("Ошибка пересылки", "error");
       }
     },

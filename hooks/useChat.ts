@@ -834,25 +834,33 @@ export function useChat(options: UseChatOptions = {}) {
     targetUserId: string
   ): Promise<boolean> => {
     try {
+      console.log(`[useChat] 📤 Forwarding message ${messageId} to user ${targetUserId}`);
+      
       const response = await fetch("/api/chat/forward", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messageId, targetUserId }),
       });
 
+      console.log(`[useChat] Forward response status: ${response.status}`);
+
       if (response.ok) {
         const data = await response.json();
+        console.log(`[useChat] Forward response data:`, data);
+        
         if (data.success) {
+          console.log(`[useChat] ✅ Message forwarded successfully`);
           // Обновляем список чатов и сообщения в целевом чате
           await loadChats();
           // Если целевой чат открыт, обновляем его сообщения
           if (selectedChatRef.current?.otherUser?.id === targetUserId) {
+            console.log(`[useChat] Target chat is open, reloading messages`);
             await loadMessages(selectedChatRef.current.id);
           }
           return true;
         } else {
           const errorMsg = data.error || "Ошибка пересылки";
-          console.error("[useChat] Forward error:", errorMsg);
+          console.error("[useChat] ❌ Forward error:", errorMsg);
           options.onError?.(errorMsg);
           return false;
         }
