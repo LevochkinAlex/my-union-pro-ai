@@ -278,10 +278,6 @@ model User {
   agendaItemsSpeaker    MeetingAgendaItem[]  @relation("AgendaItemSpeaker")
   agendaVotes           MeetingAgendaVote[]  @relation("UserAgendaVotes")
 
-  // Matrix интеграция (чат)
-  matrixUserId      String? @unique // Matrix User ID (@username:matrix.myunion.pro)
-  matrixAccessToken String? @db.Text // Matrix Access Token для API
-
   @@index([email])
   @@index([phone])
   @@index([organizationId])

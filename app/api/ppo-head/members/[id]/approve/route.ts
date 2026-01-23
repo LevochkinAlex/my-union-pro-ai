@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendUserNotification } from "@/lib/notifications";
 import { getOrCreatePrivateChat } from "@/lib/chat-service";
-// import { sendChatMessage } from "@/lib/chat-server-utils"; // TODO: Переделать на Matrix API
 import { getPPOHead, isMemberOfOrganization } from "@/lib/ppo-head-utils";
 import { subscribeUserToOrganizationChannel } from "@/lib/channel-utils";
 
@@ -83,11 +82,6 @@ export async function POST(
 
     // Создаем сообщение с поздравлением
     const congratulationMessage = `Поздравляем! Ваша заявка на вступление в профсоюз "${chairman.organization?.name || "организацию"}" одобрена. Добро пожаловать в наш профсоюз!`;
-    
-    // TODO: Отправляем сообщение через Matrix API
-    // if (chat.matrixRoomId) {
-    //   await sendMatrixMessage(...);
-    // }
 
     // Отправляем уведомление
     await sendUserNotification({

@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendPushNotification } from "@/lib/push-notifications";
 import { sendEmail } from "@/lib/email";
-// import { sendChatMessage } from "@/lib/chat-server-utils"; // TODO: Переделать на Matrix API
 import { getPPOHead } from "@/lib/ppo-head-utils";
 
 /**
@@ -89,12 +88,6 @@ export async function POST(
         },
       },
     });
-
-    // TODO: Отправляем сообщение в тред обращения через Matrix API
-    // if (ticket.matrixRoomId) {
-    //   const rejectionMessage = `Ваше обращение отклонено.\n\nПричина: ${reason.trim()}`;
-    //   await sendMatrixMessage(...);
-    // }
 
     // Отправляем уведомления
     if (ticket.user.pushNotificationsEnabled) {
