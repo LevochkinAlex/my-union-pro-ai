@@ -123,7 +123,7 @@ async function generateMembershipApplicationHTML(
   <div class="header">
     Председателю ${ppoName}<br>
     от ${fullNameGenitive}.<br>
-    ${jobTitle}
+    ${jobTitle}${user.workplace ? `<br>${user.workplace}` : ""}
   </div>
   
   <div class="title">

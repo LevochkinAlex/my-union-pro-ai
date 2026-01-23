@@ -49,8 +49,14 @@ export async function generateMembershipApplication(userData: UserData): Promise
     .fontSize(14)
     .text(userData.jobTitle || "", { align: "right" });
   
-  // Добавляем название организации, если оно указано
-  if (userData.organizationName) {
+  // Добавляем название места работы, если оно указано (приоритет новому полю)
+  if (userData.workplace) {
+    doc
+      .moveDown(0.3)
+      .fontSize(14)
+      .text(userData.workplace, { align: "right" });
+  } else if (userData.organizationName) {
+    // Fallback на старое поле организации
     doc
       .moveDown(0.3)
       .fontSize(14)

@@ -559,7 +559,10 @@ export default function ProfilePage() {
 
         if (orgsRes.ok) {
           const data = await orgsRes.json();
-          setOrganizations(data.flatList || data.organizations || []);
+          const allOrgs = data.flatList || data.organizations || [];
+          // Фильтруем только ППО (тип PRIMARY)
+          const ppoOrgs = allOrgs.filter((org: any) => org.type === "PRIMARY");
+          setOrganizations(ppoOrgs);
         }
       } catch (error) {
         console.error("Failed to load dictionaries:", error);
@@ -1114,28 +1117,142 @@ export default function ProfilePage() {
         </div>
         
         <form onSubmit={handleProfileSubmit} className="mt-4 space-y-6">
-          {/* Организация профсоюза - ПЕРВОЕ ПОЛЕ, на всю ширину */}
+          {/* Место работы - ПЕРВОЕ ПОЛЕ, на всю ширину */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-              Организация профсоюза <span className="text-red-500">*</span>
-            </label>
-            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-              В какую организацию профсоюза вы хотите вступить?
-            </p>
-            <OrganizationAutocomplete
-              value={profileData.organizationId || ""}
-              onChange={(organizationId) => {
-                // Используем функциональное обновление для сохранения всех полей
-                setProfileData(prev => ({ ...prev, organizationId: organizationId || null }));
-                // Автосохранение при выборе организации
-                if (organizationId) {
-                  handleFieldBlur("organizationId", organizationId);
+            <WorkplaceSearch
+              value={profileData.workplace ? {
+                name: profileData.workplace,
+                inn: profileData.workplaceInn,
+                directorName: profileData.directorName,
+                directorPosition: profileData.directorPosition,
+              } : null}
+              onChange={async (workplace) => {
+                if (workplace) {
+                  // Обновляем данные места работы
+                  setProfileData(prev => ({
+                    ...prev,
+                    workplace: workplace.name,
+                    workplaceInn: workplace.inn,
+                    directorName: workplace.directorName,
+                    directorPosition: workplace.directorPosition,
+                  }));
+                  
+                  // Автосохранение места работы
+                  handleFieldBlur("workplace", workplace.name);
+                  
+                  // Автоматически определяем ППО по месту работы
+                  try {
+                    const response = await fetch(
+                      `/api/workplace/ppo?workplaceName=${encodeURIComponent(workplace.name)}&workplaceInn=${encodeURIComponent(workplace.inn)}`
+                    );
+                    
+                    if (response.ok) {
+                      const data = await response.json();
+                      if (data.success && data.found && data.ppoOrganization) {
+                        // Автоматически устанавливаем ППО
+                        setProfileData(prev => ({
+                          ...prev,
+                          organizationId: data.ppoOrganization.id,
+                        }));
+                        handleFieldBlur("organizationId", data.ppoOrganization.id);
+                        setMessage({
+                          type: "success",
+                          text: `Автоматически определена ППО: ${data.ppoOrganization.name}`,
+                        });
+                        setTimeout(() => setMessage(null), 5000);
+                      } else {
+                        // ППО не найдено - сбрасываем organizationId
+                        setProfileData(prev => ({
+                          ...prev,
+                          organizationId: null,
+                        }));
+                        setMessage({
+                          type: "error",
+                          text: "ППО для данного места работы не найдено. Пожалуйста, выберите ППО вручную ниже.",
+                        });
+                        setTimeout(() => setMessage(null), 8000);
+                      }
+                    }
+                  } catch (error) {
+                    console.error("Error finding PPO by workplace:", error);
+                    // При ошибке не блокируем, просто не устанавливаем ППО автоматически
+                  }
+                } else {
+                  // Очищаем данные места работы и ППО
+                  setProfileData(prev => ({
+                    ...prev,
+                    workplace: "",
+                    workplaceInn: "",
+                    directorName: "",
+                    directorPosition: "",
+                    organizationId: null,
+                  }));
                 }
               }}
-              options={organizations}
-              placeholder="Начните вводить название организации..."
+              required
             />
           </div>
+
+          {/* ППО (автоматически определяется или выбирается вручную) */}
+          {profileData.workplace && (
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Первичная профсоюзная организация (ППО) <span className="text-red-500">*</span>
+              </label>
+              <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                {profileData.organizationId 
+                  ? "ППО автоматически определена по месту работы. При необходимости вы можете изменить выбор."
+                  : "ППО не найдена автоматически. Пожалуйста, выберите ППО вручную. Согласно Уставу, сотрудник может вступить только в ППО по месту работы."}
+              </p>
+              <OrganizationAutocomplete
+                value={profileData.organizationId || ""}
+                onChange={async (organizationId) => {
+                  setProfileData(prev => ({ ...prev, organizationId: organizationId || null }));
+                  if (organizationId) {
+                    handleFieldBlur("organizationId", organizationId);
+                    
+                    // Валидация: проверяем соответствие места работы и ППО
+                    if (profileData.workplace && profileData.workplaceInn) {
+                      try {
+                        const response = await fetch(
+                          `/api/workplace/ppo?workplaceName=${encodeURIComponent(profileData.workplace)}&workplaceInn=${encodeURIComponent(profileData.workplaceInn)}`
+                        );
+                        
+                        if (response.ok) {
+                          const data = await response.json();
+                          if (data.success && data.found && data.ppoOrganization) {
+                            // Проверяем, совпадает ли выбранная ППО с найденной
+                            if (data.ppoOrganization.id !== organizationId) {
+                              setMessage({
+                                type: "error",
+                                text: `⚠️ Внимание: Для места работы "${profileData.workplace}" рекомендуется ППО "${data.ppoOrganization.name}". Согласно Уставу, сотрудник может вступить только в ППО по месту работы.`,
+                              });
+                              setTimeout(() => setMessage(null), 10000);
+                            } else {
+                              setMessage({
+                                type: "success",
+                                text: `✅ ППО соответствует месту работы`,
+                              });
+                              setTimeout(() => setMessage(null), 5000);
+                            }
+                          }
+                        }
+                      } catch (error) {
+                        console.error("Error validating workplace-PPO match:", error);
+                      }
+                    }
+                  }
+                }}
+                options={organizations.filter(org => org.type === "PRIMARY")} // Только ППО
+                placeholder="Начните вводить название ППО..."
+              />
+              {profileData.organizationId && profileData.workplace && (
+                <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ Согласно Уставу, сотрудник может вступить только в ППО по месту работы. Убедитесь, что выбранная ППО соответствует вашему месту работы.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
@@ -1215,45 +1332,6 @@ export default function ProfilePage() {
                 onBlur={() => handleFieldBlur("address", profileData.address)}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
-            </div>
-            <div>
-              <WorkplaceSearch
-                value={profileData.workplace ? {
-                  name: profileData.workplace,
-                  inn: profileData.workplaceInn,
-                  directorName: profileData.directorName,
-                  directorPosition: profileData.directorPosition,
-                } : null}
-                onChange={(workplace) => {
-                  if (workplace) {
-                    // Используем функциональное обновление для сохранения всех полей
-                    setProfileData(prev => ({
-                      ...prev,
-                      workplace: workplace.name,
-                      workplaceInn: workplace.inn,
-                      directorName: workplace.directorName,
-                      directorPosition: workplace.directorPosition,
-                    }));
-                    // Автосохранение
-                    handleFieldBlur("workplace", workplace.name);
-                  } else {
-                    // Используем функциональное обновление для сохранения всех полей
-                    setProfileData(prev => ({
-                      ...prev,
-                      workplace: "",
-                      workplaceInn: "",
-                      directorName: "",
-                      directorPosition: "",
-                    }));
-                  }
-                }}
-                required
-              />
-              {profileData.organizationId && profileData.workplace && (
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  💡 Место работы должно соответствовать организации профсоюза, в которую вы хотите вступить
-                </p>
-              )}
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
