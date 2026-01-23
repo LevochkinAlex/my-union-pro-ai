@@ -96,6 +96,8 @@ export async function GET(request: NextRequest) {
       where.status = status;
     }
 
+    // Получаем обращения, не запрашивая новые поля явно (для обратной совместимости)
+    // Prisma автоматически вернет их, если они есть в БД
     const tickets = await prisma.ticket.findMany({
       where,
       include: {
