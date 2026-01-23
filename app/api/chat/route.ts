@@ -276,6 +276,9 @@ export async function GET(request: NextRequest) {
     // Фильтруем ИИ чат из основного списка (он будет добавлен отдельно)
     let filteredChats = Array.isArray(chats) ? chats.filter((c: any) => c && c.name !== AI_CHAT_NAME) : [];
 
+    console.log(`[chat] Total chats from getUserChats: ${chats.length}, after AI filter: ${filteredChats.length}`);
+    console.log(`[chat] User viewMode: ${isMemberMode ? 'MEMBER' : 'PPO_HEAD'}, userId: ${userId}`);
+
     // В режиме участника (MEMBER) фильтруем чаты:
     // - Только личные чаты (PRIVATE)
     // - Свои обращения (где userId === session.user.id)
@@ -290,8 +293,11 @@ export async function GET(request: NextRequest) {
         .map(t => t.chatId)
         .filter((id): id is string => typeof id === 'string' && id.length > 0);
 
+      const privateChatsCount = filteredChats.filter((c: any) => c.type === "PRIVATE").length;
+      console.log(`[chat] Private chats before filtering: ${privateChatsCount}`);
+
       filteredChats = filteredChats.filter((chat: any) => {
-        // Личные чаты - всегда показываем
+        // Личные чаты - всегда показываем (ВАЖНО: они уже отфильтрованы по участию в getUserChats)
         if (chat.type === "PRIVATE") {
           return true;
         }
@@ -310,6 +316,10 @@ export async function GET(request: NextRequest) {
         // Групповые чаты (не обращения) - скрываем в режиме участника
         return false;
       });
+      
+      const privateChatsAfterFilter = filteredChats.filter((c: any) => c.type === "PRIVATE").length;
+      console.log(`[chat] Private chats after filtering: ${privateChatsAfterFilter}`);
+      console.log(`[chat] Total chats after filtering for MEMBER: ${filteredChats.length}`);
     }
 
     // Добавляем ИИ чат, если нужно
