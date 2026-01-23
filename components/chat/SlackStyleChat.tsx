@@ -283,7 +283,8 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
               <div className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-50">
-                {isGroup && isCurrentUserAdmin && onEditGroup && (
+                {/* Редактировать - только для председателей и админов групп/каналов */}
+                {isGroup && isCurrentUserAdmin && onEditGroup && isChairman && (
                   <>
                     <button 
                       onClick={() => { onEditGroup(); setShowMenu(false); }}
