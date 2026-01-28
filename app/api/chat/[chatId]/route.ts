@@ -437,6 +437,10 @@ export async function GET(
             height: true,
             createdAt: true,
           },
+          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убеждаемся что attachments загружаются
+          orderBy: {
+            createdAt: 'asc',
+          },
         },
         readBy: {
           select: {
@@ -913,23 +917,45 @@ export async function GET(
         return acc;
       }, {} as Record<string, { count?: number; userIds: string[] }>),
       attachments: (msg.attachments || []).map((att: any) => {
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Валидация attachment перед обработкой
+        if (!att || !att.id) {
+          console.warn(`[chat/${chatId}] Invalid attachment in message ${msg.id}:`, att);
+          return null;
+        }
+        
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверяем что URL существует
+        if (!att.url || typeof att.url !== 'string' || att.url.trim() === '') {
+          console.error(`[chat/${chatId}] ❌ Attachment ${att.id} has empty URL in message ${msg.id}:`, {
+            attachmentId: att.id,
+            attachmentName: att.name,
+            attachmentType: att.type,
+            messageId: msg.id,
+          });
+          // Не возвращаем null, но логируем ошибку - возможно URL будет восстановлен через CDN
+        }
+        
         // Определяем, является ли сообщение старым (старше 7 дней)
         const messageAge = Date.now() - new Date(msg.createdAt).getTime();
         const isOld = messageAge > 7 * 24 * 60 * 60 * 1000; // 7 дней
         
+        const attachmentUrl = att.url && att.url.trim() ? getFileUrlWithCDN(att.url, true) : '';
+        const attachmentThumbnailUrl = att.thumbnailUrl && att.thumbnailUrl.trim() 
+          ? getFileUrlWithCDN(att.thumbnailUrl, true) 
+          : undefined;
+        
         return {
           id: att.id,
           type: att.type,
-          url: getFileUrlWithCDN(att.url, true), // Используем CDN URL
-          name: att.name,
-          size: att.size,
-          mimeType: att.mimeType,
-          thumbnailUrl: att.thumbnailUrl ? getFileUrlWithCDN(att.thumbnailUrl, true) : undefined,
-          width: att.width,
-          height: att.height,
+          url: attachmentUrl, // Используем CDN URL
+          name: att.name || 'Файл',
+          size: att.size || 0,
+          mimeType: att.mimeType || null,
+          thumbnailUrl: attachmentThumbnailUrl,
+          width: att.width || undefined,
+          height: att.height || undefined,
           isOld, // Флаг для старых сообщений
         };
-      }),
+      }).filter((att: any) => att !== null), // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Фильтруем null attachments
       threadRepliesCount: msg._count?.threadReplies || 0,
       // Данные поста для channel_post
       post: postData,

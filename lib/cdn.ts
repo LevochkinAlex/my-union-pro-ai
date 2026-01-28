@@ -114,6 +114,18 @@ export function getFileUrlByCategory(
 }
 
 /**
+ * Возвращает URL через основной домен (API) для fallback при 404 с CDN.
+ * Например: https://cdn.myunion.pro/uploads/chat/file.png -> /api/uploads/chat/file.png
+ * На клиенте можно подставить origin: origin + result.
+ */
+export function getFallbackUrlForCDN(cdnOrFullUrl: string): string {
+  if (!cdnOrFullUrl) return "";
+  const match = cdnOrFullUrl.match(/\/uploads\/(.+)$/);
+  if (match) return `/api/uploads/${match[1]}`;
+  return cdnOrFullUrl;
+}
+
+/**
  * Извлекает путь к файлу из полного URL (CDN или API)
  * 
  * @param url - Полный URL файла
