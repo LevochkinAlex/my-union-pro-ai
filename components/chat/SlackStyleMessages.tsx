@@ -5,6 +5,7 @@ import { normalizeUserAvatar } from "@/lib/api-helpers";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import AIChatWelcome from "./AIChatWelcome";
+import AppealMessageCard from "./AppealMessageCard";
 import {
   MoreHorizontal,
   Reply,
@@ -1387,7 +1388,6 @@ const MessageBubble = memo(function MessageBubble({
                 
                 // Если это начальное сообщение обращения - используем специальный компонент
                 if (isAppealInitialMessage) {
-                  const AppealMessageCard = require('./AppealMessageCard').default;
                   return (
                     <>
                       <AppealMessageCard content={message.content} isOwn={isOwn} />
