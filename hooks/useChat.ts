@@ -208,24 +208,50 @@ export function useChat(options: UseChatOptions = {}) {
 
     // Новое сообщение
     socket.on("message:new", (message: Message) => {
+      const currentChatId = selectedChatRef.current?.id;
+      const isCurrentUser = session?.user?.id === message.senderId;
+      
       console.log("[useChat] 📨 New message via socket:", {
         messageId: message.id,
         chatId: message.chatId,
         senderId: message.senderId,
+        isCurrentUser,
         contentLength: message.content?.length || 0,
-        currentChatId: selectedChatRef.current?.id,
+        hasAttachments: !!(message.attachments && message.attachments.length > 0),
+        currentChatId,
+        isCurrentChat: currentChatId === message.chatId,
       });
       
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавляем сообщение в список только если это текущий открытый чат
-      const currentChatId = selectedChatRef.current?.id;
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавляем сообщение в список если это текущий открытый чат
       if (currentChatId === message.chatId) {
         setMessages(prev => {
-          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Удаляем оптимистичное сообщение если пришло реальное с тем же контентом
+          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Удаляем оптимистичное сообщение если пришло реальное
           const withoutOptimistic = prev.filter(m => !m.id.startsWith('temp-'));
           
+          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверяем по ID, а не по контенту
           if (withoutOptimistic.some(m => m.id === message.id)) {
             console.log("[useChat] ⚠️ Message already exists, skipping:", message.id);
             return prev;
+          }
+          
+          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Для отправителя - заменяем оптимистичное сообщение на реальное
+          // Если это сообщение от текущего пользователя и есть оптимистичное с похожим контентом
+          if (isCurrentUser) {
+            const optimisticIndex = prev.findIndex(m => 
+              m.id.startsWith('temp-') && 
+              m.chatId === message.chatId &&
+              (m.content === message.content || message.content?.includes('📷 Фото') || message.content?.includes('📎 Файл'))
+            );
+            
+            if (optimisticIndex !== -1) {
+              console.log("[useChat] ✅ Replacing optimistic message with real one from WebSocket:", {
+                tempId: prev[optimisticIndex].id,
+                realId: message.id,
+              });
+              const newMessages = [...prev];
+              newMessages[optimisticIndex] = message;
+              return newMessages.filter(m => !m.id.startsWith('temp-') || m.id === prev[optimisticIndex].id);
+            }
           }
           
           console.log("[useChat] ✅ Adding message to current chat:", {
@@ -235,10 +261,10 @@ export function useChat(options: UseChatOptions = {}) {
             attachments: message.attachments?.map(a => ({
               id: a.id,
               type: a.type,
-              fileName: a.fileName,
-              originalName: a.originalName,
-              filePath: a.filePath,
-              fileSize: a.fileSize,
+              fileName: a.fileName || a.name,
+              originalName: a.originalName || a.name,
+              filePath: a.filePath || a.url,
+              fileSize: a.fileSize || a.size,
               mimeType: a.mimeType,
             })),
           });
@@ -270,26 +296,44 @@ export function useChat(options: UseChatOptions = {}) {
               if (previewContent.length > 100) {
                 previewContent = previewContent.substring(0, 100) + '...';
               }
+            } else if (message.attachments && message.attachments.length > 0) {
+              // Если есть файлы, показываем тип файла
+              const firstAtt = message.attachments[0];
+              previewContent = firstAtt.type === 'image' ? '📷 Фото' : '📎 Файл';
             }
+            
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем unreadCount только для получателей (не для отправителя)
+            const isMessageFromCurrentUser = isCurrentUser;
+            const newUnreadCount = isMessageFromCurrentUser 
+              ? (chat.id === currentChatId ? 0 : (chat.unreadCount || 0)) // Для отправителя не увеличиваем
+              : (chat.id === currentChatId ? 0 : (chat.unreadCount || 0) + 1); // Для получателя увеличиваем
             
             console.log("[useChat] ✅ Updating chat preview:", {
               chatId: chat.id,
+              isCurrentUser,
+              isCurrentChat: chat.id === currentChatId,
               oldLastMessage: chat.lastMessage?.substring(0, 50),
               newLastMessage: previewContent.substring(0, 50),
+              oldUnreadCount: chat.unreadCount || 0,
+              newUnreadCount,
             });
             
             return {
               ...chat,
               lastMessage: previewContent,
               lastMessageAt: message.createdAt ? new Date(message.createdAt) : new Date(),
-              unreadCount: chat.id === currentChatId ? 0 : (chat.unreadCount || 0) + 1,
+              unreadCount: newUnreadCount,
             };
           }
           return chat;
         });
         
         // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных для обновления бейджа
-        const totalUnread = updated.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+        const totalUnread = updated.reduce((sum, c) => sum + Math.max(0, c.unreadCount || 0), 0);
+        console.log("[useChat] 📊 Total unread count after message:new:", {
+          totalUnread,
+          chatsWithUnread: updated.filter(c => (c.unreadCount || 0) > 0).length,
+        });
         window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
           detail: { totalUnread },
         }));
@@ -744,12 +788,24 @@ export function useChat(options: UseChatOptions = {}) {
             });
             
             // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Заменяем оптимистичное сообщение на реальное
+            // Но если WebSocket уже доставил сообщение, не дублируем
             setMessages(prev => {
+              // Проверяем, не пришло ли уже сообщение через WebSocket
+              const alreadyExists = prev.some(m => m.id === data.message.id && !m.id.startsWith('temp-'));
+              if (alreadyExists) {
+                console.log("[useChat] ⚠️ Message already exists from WebSocket, just removing optimistic:", {
+                  tempId: tempMessageId,
+                  realId: data.message.id,
+                });
+                // Просто удаляем оптимистичное сообщение
+                return prev.filter(m => m.id !== tempMessageId);
+              }
+              
               // Удаляем оптимистичное сообщение
               const withoutOptimistic = prev.filter(m => m.id !== tempMessageId);
               // Добавляем реальное сообщение
               if (!withoutOptimistic.some(m => m.id === data.message.id)) {
-                console.log("[useChat] ✅ Replacing optimistic message with real one:", {
+                console.log("[useChat] ✅ Replacing optimistic message with real one from API:", {
                   tempId: tempMessageId,
                   realId: data.message.id,
                 });
