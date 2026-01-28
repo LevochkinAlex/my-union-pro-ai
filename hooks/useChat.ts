@@ -511,8 +511,24 @@ export function useChat(options: UseChatOptions = {}) {
             );
             
             // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных сразу
-            const totalUnread = updated.reduce((sum, c) => sum + Math.max(0, c.unreadCount || 0), 0);
-            console.log(`[useChat] 📊 Optimistic total unread count after marking as read:`, totalUnread);
+            // Фильтруем чаты с unreadCount > 0 ПЕРЕД суммированием
+            const chatsWithUnread = updated.filter(c => {
+              const count = c.unreadCount || 0;
+              return count > 0;
+            });
+            const totalUnread = chatsWithUnread.reduce((sum, c) => {
+              const count = c.unreadCount || 0;
+              return sum + Math.max(0, count);
+            }, 0);
+            console.log(`[useChat] 📊 Optimistic total unread count after marking as read:`, {
+              totalUnread,
+              chatsWithUnreadCount: chatsWithUnread.length,
+              chatsWithUnread: JSON.stringify(chatsWithUnread.map(c => ({
+                id: c.id,
+                name: (c as any).name || (c as any).displayName,
+                unreadCount: c.unreadCount,
+              })), null, 2),
+            });
             window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
               detail: { totalUnread },
             }));
@@ -533,13 +549,21 @@ export function useChat(options: UseChatOptions = {}) {
             
             // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем с реальным значением с сервера
             setChats(prev => {
+              // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Сначала обновляем чат с новым unreadCount
               const updated = prev.map(chat =>
                 chat.id === chatId ? { ...chat, unreadCount: newUnreadCount } : chat
               );
               
               // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных
-              const chatsWithUnread = updated.filter(c => (c.unreadCount || 0) > 0);
-              const totalUnread = chatsWithUnread.reduce((sum, c) => sum + Math.max(0, c.unreadCount || 0), 0);
+              // Фильтруем чаты с unreadCount > 0 ПЕРЕД суммированием
+              const chatsWithUnread = updated.filter(c => {
+                const count = c.unreadCount || 0;
+                return count > 0;
+              });
+              const totalUnread = chatsWithUnread.reduce((sum, c) => {
+                const count = c.unreadCount || 0;
+                return sum + Math.max(0, count);
+              }, 0);
               console.log(`[useChat] 📊 Total unread count after marking as read (server):`, {
                 totalUnread,
                 chatId,
