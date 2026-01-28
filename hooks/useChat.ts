@@ -33,6 +33,7 @@ export function useChat(options: UseChatOptions = {}) {
   const messagesRef = useRef<Message[]>([]);
   const selectedChatRef = useRef<Chat | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reloadChatsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Синхронизация refs
   useEffect(() => {
@@ -421,6 +422,11 @@ export function useChat(options: UseChatOptions = {}) {
         socketRef.current = null;
         setIsConnected(false);
       }
+      // Cleanup reload timeout
+      if (reloadChatsTimeoutRef.current) {
+        clearTimeout(reloadChatsTimeoutRef.current);
+        reloadChatsTimeoutRef.current = null;
+      }
     };
   }, [session?.user?.id]); // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Только userId в зависимостях, не весь session и не loadChats
 
@@ -567,13 +573,16 @@ export function useChat(options: UseChatOptions = {}) {
               return updated;
             });
             
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Перезагружаем список чатов для получения актуальных unreadCount
-            // Это гарантирует, что общий счетчик будет правильным
-            setTimeout(() => {
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Перезагружаем список чатов с debounce для получения актуальных unreadCount
+            // Это гарантирует, что общий счетчик будет правильным, но не перезагружаем слишком часто
+            if (reloadChatsTimeoutRef.current) {
+              clearTimeout(reloadChatsTimeoutRef.current);
+            }
+            reloadChatsTimeoutRef.current = setTimeout(() => {
               console.log(`[useChat] 🔄 Reloading chats after marking as read to get accurate unreadCount`);
-              // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем обычную перезагрузку, которая уже обходит кэш через timestamp
               loadChats();
-            }, 1500);
+              reloadChatsTimeoutRef.current = null;
+            }, 2000); // Увеличиваем задержку и используем debounce
           } else {
             console.error("[useChat] ❌ Failed to mark as read:", readResponse.status);
             // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке все равно отправляем событие для обновления бейджа
