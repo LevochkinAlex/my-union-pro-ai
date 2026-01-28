@@ -220,16 +220,27 @@ export function useChat(options: UseChatOptions = {}) {
       const currentChatId = selectedChatRef.current?.id;
       if (currentChatId === message.chatId) {
         setMessages(prev => {
-          if (prev.some(m => m.id === message.id)) {
+          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Удаляем оптимистичное сообщение если пришло реальное с тем же контентом
+          const withoutOptimistic = prev.filter(m => !m.id.startsWith('temp-'));
+          
+          if (withoutOptimistic.some(m => m.id === message.id)) {
             console.log("[useChat] ⚠️ Message already exists, skipping:", message.id);
             return prev;
           }
+          
           console.log("[useChat] ✅ Adding message to current chat:", {
             messageId: message.id,
             hasAttachments: !!(message.attachments && message.attachments.length > 0),
             attachmentsCount: message.attachments?.length || 0,
+            attachments: message.attachments?.map(a => ({
+              id: a.id,
+              type: a.type,
+              url: a.url?.substring(0, 50) + '...',
+              name: a.name,
+            })),
           });
-          return [...prev, message];
+          
+          return [...withoutOptimistic, message];
         });
       } else {
         console.log("[useChat] 📬 Message for different chat, updating preview only");
@@ -639,70 +650,154 @@ export function useChat(options: UseChatOptions = {}) {
 
       // Для файлов используем HTTP
       if (file) {
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Оптимистичное обновление UI - показываем файл сразу
+        const tempMessageId = `temp-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+        const fileUrl = URL.createObjectURL(file);
+        const isImage = file.type.startsWith('image/');
+        
+        const optimisticMessage: Message = {
+          id: tempMessageId,
+          chatId: selectedChat.id,
+          senderId: session?.user?.id || '',
+          content: content || (isImage ? '📷 Фото' : '📎 Файл'),
+          messageType: 'text',
+          createdAt: new Date().toISOString(),
+          editedAt: null,
+          isRead: false,
+          sender: {
+            id: session?.user?.id || '',
+            firstName: session?.user?.firstName || null,
+            lastName: session?.user?.lastName || null,
+            middleName: session?.user?.middleName || null,
+            avatarUrl: session?.user?.avatarUrl || null,
+          },
+          replyTo: replyToId ? undefined : undefined, // TODO: загрузить replyTo если нужно
+          attachments: [{
+            id: `temp-attachment-${tempMessageId}`,
+            type: isImage ? 'image' : 'file',
+            url: fileUrl,
+            name: file.name,
+            size: file.size,
+            mimeType: file.type,
+            thumbnailUrl: isImage ? fileUrl : undefined,
+            width: undefined,
+            height: undefined,
+            isOld: false,
+          }],
+          reactions: {},
+          threadRepliesCount: 0,
+          threadLastReplyAt: null,
+        };
+        
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавляем оптимистичное сообщение сразу
+        console.log("[useChat] 📤 Adding optimistic message with file:", {
+          tempMessageId,
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+        });
+        setMessages(prev => [...prev, optimisticMessage]);
+        
         const formData = new FormData();
         formData.append("content", content);
         formData.append("file", file);
         if (replyToId) formData.append("replyToId", replyToId);
         if (threadRootId) formData.append("threadRootId", threadRootId);
+        if (mentionedUserIds && mentionedUserIds.length > 0) {
+          formData.append("mentionedUserIds", JSON.stringify(mentionedUserIds));
+        }
 
-        const response = await fetch(`/api/chat/${selectedChat.id}/attachments`, {
-          method: "POST",
-          body: formData,
-        });
+        try {
+          const response = await fetch(`/api/chat/${selectedChat.id}/attachments`, {
+            method: "POST",
+            body: formData,
+          });
 
-        if (response.ok) {
-          const data = await response.json();
-          console.log("[useChat] ✅ File uploaded, message created:", {
-            messageId: data.message.id,
-            hasAttachments: !!(data.message.attachments && data.message.attachments.length > 0),
-            attachmentsCount: data.message.attachments?.length || 0,
-          });
-          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Сообщение придёт через сокет, но для надёжности добавим сразу
-          setMessages(prev => {
-            if (prev.some(m => m.id === data.message.id)) {
-              console.log("[useChat] ⚠️ Message already exists after file upload");
-              return prev;
-            }
-            console.log("[useChat] ✅ Adding message with file to current chat");
-            return [...prev, data.message];
-          });
-          
-          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем превью чата после загрузки файла
-          if (data.message) {
-            let previewContent = data.message.content || "[Файл]";
-            if (typeof previewContent === 'string' && previewContent.length > 0) {
-              previewContent = previewContent
-                .replace(/\*\*(.*?)\*\*/g, '$1')
-                .replace(/\*(.*?)\*/g, '$1')
-                .replace(/#{1,6}\s+/g, '')
-                .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
-                .replace(/`([^`]+)`/g, '$1')
-                .replace(/```[\s\S]*?```/g, '')
-                .replace(/\n{2,}/g, ' ')
-                .trim();
-              
-              if (previewContent.length > 100) {
-                previewContent = previewContent.substring(0, 100) + '...';
+          if (response.ok) {
+            const data = await response.json();
+            console.log("[useChat] ✅ File uploaded, message created:", {
+              messageId: data.message.id,
+              hasAttachments: !!(data.message.attachments && data.message.attachments.length > 0),
+              attachmentsCount: data.message.attachments?.length || 0,
+            });
+            
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Заменяем оптимистичное сообщение на реальное
+            setMessages(prev => {
+              // Удаляем оптимистичное сообщение
+              const withoutOptimistic = prev.filter(m => m.id !== tempMessageId);
+              // Добавляем реальное сообщение
+              if (!withoutOptimistic.some(m => m.id === data.message.id)) {
+                console.log("[useChat] ✅ Replacing optimistic message with real one:", {
+                  tempId: tempMessageId,
+                  realId: data.message.id,
+                });
+                return [...withoutOptimistic, data.message];
               }
-            } else if (data.message.attachments && data.message.attachments.length > 0) {
-              // Если есть файлы, показываем тип файла
-              const firstAtt = data.message.attachments[0];
-              previewContent = firstAtt.type === 'image' ? '📷 Фото' : '📎 Файл';
+              return withoutOptimistic;
+            });
+            
+            // Освобождаем URL объекта
+            URL.revokeObjectURL(fileUrl);
+          
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем превью чата после загрузки файла
+            if (data.message) {
+              let previewContent = data.message.content || "[Файл]";
+              if (typeof previewContent === 'string' && previewContent.length > 0) {
+                previewContent = previewContent
+                  .replace(/\*\*(.*?)\*\*/g, '$1')
+                  .replace(/\*(.*?)\*/g, '$1')
+                  .replace(/#{1,6}\s+/g, '')
+                  .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+                  .replace(/`([^`]+)`/g, '$1')
+                  .replace(/```[\s\S]*?```/g, '')
+                  .replace(/\n{2,}/g, ' ')
+                  .trim();
+                
+                if (previewContent.length > 100) {
+                  previewContent = previewContent.substring(0, 100) + '...';
+                }
+              } else if (data.message.attachments && data.message.attachments.length > 0) {
+                // Если есть файлы, показываем тип файла
+                const firstAtt = data.message.attachments[0];
+                previewContent = firstAtt.type === 'image' ? '📷 Фото' : '📎 Файл';
+              }
+              
+              setChats(prev => prev.map(chat =>
+                chat.id === data.message.chatId
+                  ? {
+                      ...chat,
+                      lastMessage: previewContent,
+                      lastMessageAt: data.message.createdAt ? new Date(data.message.createdAt) : new Date(),
+                    }
+                  : chat
+              ));
             }
             
-            setChats(prev => prev.map(chat =>
-              chat.id === data.message.chatId
-                ? {
-                    ...chat,
-                    lastMessage: previewContent,
-                    lastMessageAt: data.message.createdAt ? new Date(data.message.createdAt) : new Date(),
-                  }
-                : chat
-            ));
+            return true;
+          } else {
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке удаляем оптимистичное сообщение
+            console.error("[useChat] ❌ File upload failed:", response.status);
+            setMessages(prev => prev.filter(m => m.id !== tempMessageId));
+            URL.revokeObjectURL(fileUrl);
+            const errorText = await response.text();
+            let errorData;
+            try {
+              errorData = JSON.parse(errorText);
+            } catch {
+              errorData = { error: errorText || 'Ошибка загрузки файла' };
+            }
+            options.onError?.(errorData.error || 'Ошибка загрузки файла');
+            return false;
           }
-          
-          return true;
+        } catch (error) {
+          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке удаляем оптимистичное сообщение
+          console.error("[useChat] ❌ File upload error:", error);
+          setMessages(prev => prev.filter(m => m.id !== tempMessageId));
+          URL.revokeObjectURL(fileUrl);
+          options.onError?.("Ошибка загрузки файла");
+          return false;
         }
+      }
       } else {
         // Для текста можно использовать сокет (быстрее) или HTTP
         if (socketRef.current?.connected) {

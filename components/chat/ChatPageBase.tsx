@@ -264,14 +264,16 @@ export function ChatPageBase({
   );
 
   const handleSendMessage = useCallback(
-    async (content: string, file?: File) => {
+    async (content: string, files?: File[], replyToId?: string, threadRootId?: string, mentionedUserIds?: string[]) => {
       if (editingMessage) {
         const success = await editMessage(editingMessage.id, content);
         if (success) {
           setEditingMessage(null);
         }
       } else {
-        const success = await sendMessage(content, file, replyingTo?.id);
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Поддерживаем массив файлов и передаем первый файл для обратной совместимости
+        const file = files && files.length > 0 ? files[0] : undefined;
+        const success = await sendMessage(content, file, replyToId || replyingTo?.id, threadRootId, mentionedUserIds);
         if (success) {
           setReplyingTo(null);
         }
@@ -426,12 +428,17 @@ export function ChatPageBase({
               </div>
 
               <ChatInput
-                onSend={(content) => handleSendMessage(content)}
+                onSend={(content, files, replyToId, threadRootId, mentionedUserIds) => 
+                  handleSendMessage(content, files, replyToId, threadRootId, mentionedUserIds)
+                }
                 replyTo={
                   replyingTo ? { id: replyingTo.id, content: replyingTo.content } : null
                 }
+                threadRootId={null}
                 onCancelReply={() => setReplyingTo(null)}
                 disabled={sending}
+                participants={selectedChat?.participants || []}
+                currentUserId={currentUserId || undefined}
               />
             </>
           ) : (
