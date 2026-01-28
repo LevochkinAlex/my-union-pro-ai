@@ -33,8 +33,9 @@ interface NotificationData {
 
 /**
  * Очищает HTML теги из текста
+ * Экспортируем для использования в других модулях
  */
-function stripHtml(html: string): string {
+export function stripHtml(html: string): string {
   if (!html) return '';
   return String(html)
     .replace(/<[^>]*>/g, '') // Удаляем все HTML теги

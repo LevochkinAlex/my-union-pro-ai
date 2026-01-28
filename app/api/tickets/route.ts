@@ -569,10 +569,12 @@ export async function POST(request: NextRequest) {
         });
         
         // Создаем начальное сообщение с полной информацией об обращении
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Гарантируем что все значения - строки
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Гарантируем что все значения - строки и очищаем HTML
+        const { stripHtml } = await import('@/lib/notifications');
+        
         const safePublicId = String(publicId || '');
-        const safeTitle = String(title || '');
-        const safeContent = String(content || '');
+        const safeTitle = stripHtml(String(title || '')); // Очищаем HTML из заголовка
+        const safeContent = stripHtml(String(content || '')); // КРИТИЧНО: Очищаем HTML из содержимого
         const safeDateStr = String(dateStr || '');
         const safeTimeStr = String(timeStr || '');
         
@@ -901,10 +903,12 @@ export async function POST(request: NextRequest) {
         
         // Пытаемся создать сообщение хотя бы с текстом, без вложений
         try {
-          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Гарантируем что все значения - строки
+          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Гарантируем что все значения - строки и очищаем HTML
+          const { stripHtml } = await import('@/lib/notifications');
+          
           const safePublicId = String(publicId || '');
-          const safeTitle = String(title || '');
-          const safeContent = String(content || '');
+          const safeTitle = stripHtml(String(title || '')); // Очищаем HTML из заголовка
+          const safeContent = stripHtml(String(content || '')); // КРИТИЧНО: Очищаем HTML из содержимого
           
           const fallbackMessage = await prisma.chatMessage.create({
             data: {
