@@ -524,7 +524,16 @@ export function useChat(options: UseChatOptions = {}) {
               
               // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных
               const totalUnread = updated.reduce((sum, c) => sum + Math.max(0, c.unreadCount || 0), 0);
-              console.log(`[useChat] 📊 Total unread count after marking as read (server):`, totalUnread);
+              console.log(`[useChat] 📊 Total unread count after marking as read (server):`, {
+                totalUnread,
+                chatId,
+                newUnreadCount,
+                chatsWithUnread: updated.filter(c => (c.unreadCount || 0) > 0).map(c => ({
+                  id: c.id,
+                  name: (c as any).name || (c as any).displayName,
+                  unreadCount: c.unreadCount,
+                })),
+              });
               window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
                 detail: { totalUnread },
               }));
@@ -536,6 +545,13 @@ export function useChat(options: UseChatOptions = {}) {
               
               return updated;
             });
+            
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Перезагружаем список чатов для получения актуальных unreadCount
+            // Это гарантирует, что общий счетчик будет правильным
+            setTimeout(() => {
+              console.log(`[useChat] 🔄 Reloading chats after marking as read to get accurate unreadCount`);
+              loadChats();
+            }, 1000);
           } else {
             console.error("[useChat] ❌ Failed to mark as read:", readResponse.status);
             // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке все равно отправляем событие для обновления бейджа

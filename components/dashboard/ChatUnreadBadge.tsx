@@ -89,10 +89,11 @@ export default function ChatUnreadBadge() {
       const chatId = customEvent?.detail?.chatId;
       console.log('[ChatUnreadBadge] Messages read event received:', { chatId });
       
-      // Обновляем счетчик с небольшой задержкой, чтобы дать время серверу обновить readAt
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем счетчик с задержкой, чтобы дать время серверу обновить readAt и перезагрузить чаты
       setTimeout(() => {
+        console.log('[ChatUnreadBadge] Fetching unread count after messages read');
         fetchUnreadCount();
-      }, 500);
+      }, 1500); // Увеличена задержка для синхронизации с перезагрузкой чатов
     };
     
     // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Слушаем события изменения unreadCount из useChat
