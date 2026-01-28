@@ -47,6 +47,17 @@ export default function ChatUnreadBadge() {
           id: r.id,
           name: r.name || r.displayName,
           unreadCount: r.unreadCount,
+          type: r.type,
+          isDirect: r.isDirect,
+          isGroup: r.isGroup,
+          isTicket: r.isTicket,
+        })),
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Показываем все чаты для диагностики
+        allRooms: rooms.map(r => ({
+          id: r.id,
+          name: r.name || r.displayName,
+          unreadCount: r.unreadCount,
+          type: r.type,
         })),
       });
       

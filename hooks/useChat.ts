@@ -109,6 +109,16 @@ export function useChat(options: UseChatOptions = {}) {
             id: c.id,
             name: (c as any).name || (c as any).displayName,
             unreadCount: (c as any).unreadCount,
+            type: c.type,
+            otherUserId: c.otherUser?.id,
+          })),
+          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Показываем все чаты для диагностики
+          allChats: data.chats.map((c: Chat) => ({
+            id: c.id,
+            name: (c as any).name || (c as any).displayName,
+            unreadCount: (c as any).unreadCount || 0,
+            type: c.type,
+            otherUserId: c.otherUser?.id,
           })),
         });
         
@@ -523,15 +533,26 @@ export function useChat(options: UseChatOptions = {}) {
               );
               
               // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных
-              const totalUnread = updated.reduce((sum, c) => sum + Math.max(0, c.unreadCount || 0), 0);
+              const chatsWithUnread = updated.filter(c => (c.unreadCount || 0) > 0);
+              const totalUnread = chatsWithUnread.reduce((sum, c) => sum + Math.max(0, c.unreadCount || 0), 0);
               console.log(`[useChat] 📊 Total unread count after marking as read (server):`, {
                 totalUnread,
                 chatId,
                 newUnreadCount,
-                chatsWithUnread: updated.filter(c => (c.unreadCount || 0) > 0).map(c => ({
+                chatsWithUnreadCount: chatsWithUnread.length,
+                chatsWithUnread: chatsWithUnread.map(c => ({
                   id: c.id,
                   name: (c as any).name || (c as any).displayName,
                   unreadCount: c.unreadCount,
+                  type: c.type,
+                  otherUserId: c.otherUser?.id,
+                })),
+                // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Показываем все чаты для диагностики
+                allChats: updated.map(c => ({
+                  id: c.id,
+                  name: (c as any).name || (c as any).displayName,
+                  unreadCount: c.unreadCount || 0,
+                  type: c.type,
                 })),
               });
               window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
