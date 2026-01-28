@@ -625,8 +625,21 @@ function LazyImage({
     return () => observer.disconnect();
   }, [isOld, shouldLoad]);
 
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убеждаемся что displaySrc не пустой
   const displaySrc = shouldLoad ? (cdnThumbnail || cdnSrc) : (blurPlaceholder || undefined);
   const showBlur = isOld && (!shouldLoad || !isLoaded);
+  
+  // Логируем для диагностики
+  if (!displaySrc && shouldLoad) {
+    console.warn('[LazyImage] No displaySrc available:', {
+      src,
+      cdnSrc,
+      cdnThumbnail,
+      thumbnail,
+      shouldLoad,
+      isOld,
+    });
+  }
 
   // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убеждаемся что src не пустой
   if (!src || src.trim() === '') {
