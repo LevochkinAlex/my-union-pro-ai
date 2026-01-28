@@ -19,6 +19,23 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем viewMode пользователя для правильной фильтрации
+    const { prisma } = await import('@/lib/prisma');
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        viewMode: true,
+        isPPOHead: true,
+        ppoHeadOrganizationId: true,
+        isMPOHead: true,
+        mpoHeadOrganizationId: true,
+        isRPOHead: true,
+        rpoHeadOrganizationId: true,
+      },
+    });
+
+    const isMemberMode = user?.viewMode === "MEMBER";
+
     // Убеждаемся что у пользователя есть чат с AI ботом
     try {
       const botUser = await getOrCreateAIBotUser();
@@ -27,11 +44,56 @@ export async function GET() {
       console.error('[chat/rooms] Error ensuring AI bot chat:', err);
     }
 
-    // Используем единый сервис для получения чатов
-    const chats = await getUserChats(session.user.id);
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем те же фильтры, что и /api/chat
+    // Для MEMBER mode обходим кэш для актуальных данных
+    const chats = await getUserChats(session.user.id, {}, isMemberMode);
+
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Применяем те же фильтры, что и /api/chat для MEMBER mode
+    let filteredChats = chats;
+    if (isMemberMode) {
+      // Получаем ID своих обращений
+      const userTickets = await prisma.ticket.findMany({
+        where: { userId: session.user.id },
+        select: { chatId: true },
+      });
+      const userTicketChatIds = userTickets
+        .map(t => t.chatId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+      filteredChats = chats.filter((chat: ChatInfo) => {
+        if (!chat || !chat.id) return false;
+
+        // Личные чаты - всегда показываем
+        if (chat.type === "PRIVATE") return true;
+        
+        // Свои обращения - показываем
+        if (chat.ticketId && userTicketChatIds.includes(chat.id)) return true;
+        
+        // Каналы - показываем только те, где пользователь участник
+        if (chat.type === "CHANNEL") return true;
+        
+        // Групповые чаты (не обращения) - скрываем в режиме участника
+        return false;
+      });
+    }
 
     // Преобразуем в формат, ожидаемый фронтендом
-    const rooms = chats.map((chat: ChatInfo) => formatRoomForUI(chat, session.user.id));
+    const rooms = filteredChats.map((chat: ChatInfo) => formatRoomForUI(chat, session.user.id));
+
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Детальное логирование для диагностики
+    const roomsWithUnread = rooms.filter(r => (r.unreadCount || 0) > 0);
+    const totalUnread = roomsWithUnread.reduce((sum, r) => sum + Math.max(0, r.unreadCount || 0), 0);
+    console.log(`[chat/rooms] Returning rooms:`, {
+      totalRooms: rooms.length,
+      totalUnread,
+      roomsWithUnreadCount: roomsWithUnread.length,
+      roomsWithUnread: roomsWithUnread.map(r => ({
+        id: r.id,
+        name: r.name || r.displayName,
+        unreadCount: r.unreadCount,
+        type: r.type,
+      })),
+    });
 
     // Сортируем: AI чат первый, затем по времени последнего сообщения
     const sortedRooms = rooms.sort((a, b) => {
