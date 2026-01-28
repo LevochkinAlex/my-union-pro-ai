@@ -392,6 +392,7 @@ export function useChat(options: UseChatOptions = {}) {
           hasActivity: messages.filter((m: any) => m.isActivity).length,
           hasChannelPosts: messages.filter((m: any) => m.messageType === 'channel_post').length,
           hasRegular: messages.filter((m: any) => !m.isActivity && m.messageType !== 'channel_post').length,
+          hasAttachments: messages.filter((m: any) => m.attachments && m.attachments.length > 0).length,
         });
         if (messages.length > 0) {
           console.log(`[useChat] First message:`, {
@@ -399,16 +400,21 @@ export function useChat(options: UseChatOptions = {}) {
             type: messages[0]?.messageType,
             senderId: messages[0]?.senderId,
             content: messages[0]?.content?.substring(0, 50),
+            attachmentsCount: messages[0]?.attachments?.length || 0,
           });
           console.log(`[useChat] Last message:`, {
             id: messages[messages.length - 1]?.id,
             type: messages[messages.length - 1]?.messageType,
             senderId: messages[messages.length - 1]?.senderId,
             content: messages[messages.length - 1]?.content?.substring(0, 50),
+            attachmentsCount: messages[messages.length - 1]?.attachments?.length || 0,
           });
         } else {
-          console.warn(`[useChat] ⚠️ No messages loaded for chat ${chatId}`);
+          console.warn(`[useChat] ⚠️ No messages loaded for chat ${chatId} - this might indicate a problem!`);
+          console.warn(`[useChat] ⚠️ Check server logs for why messages are not being returned`);
         }
+        
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убеждаемся что сообщения устанавливаются даже если их 0
         setMessages(messages);
         setHasMore((data as any).pagination?.hasMore ?? (data as any).hasMore ?? false);
         setOldestMessageId((data as any).pagination?.oldestMessageId || null);
