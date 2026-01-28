@@ -106,20 +106,20 @@ export function useChat(options: UseChatOptions = {}) {
         console.log(`[useChat] ========== LOAD CHATS UNREAD COUNT ==========`);
         console.log(`[useChat] Total unread:`, totalUnread);
         console.log(`[useChat] Chats with unread:`, chatsWithUnread.length);
-        console.log(`[useChat] Chats with unread details:`, chatsWithUnread.map((c: Chat) => ({
+        console.log(`[useChat] Chats with unread details:`, JSON.stringify(chatsWithUnread.map((c: Chat) => ({
           id: c.id,
           name: (c as any).name || (c as any).displayName,
           unreadCount: (c as any).unreadCount,
           type: c.type,
           otherUserId: c.otherUser?.id,
-        })));
-        console.log(`[useChat] ALL CHATS:`, data.chats.map((c: Chat) => ({
+        })), null, 2));
+        console.log(`[useChat] ALL CHATS:`, JSON.stringify(data.chats.map((c: Chat) => ({
           id: c.id,
           name: (c as any).name || (c as any).displayName,
           unreadCount: (c as any).unreadCount || 0,
           type: c.type,
           otherUserId: c.otherUser?.id,
-        })));
+        })), null, 2));
         console.log(`[useChat] ==============================================`);
         
         window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
@@ -545,20 +545,20 @@ export function useChat(options: UseChatOptions = {}) {
                 chatId,
                 newUnreadCount,
                 chatsWithUnreadCount: chatsWithUnread.length,
-                chatsWithUnread: chatsWithUnread.map(c => ({
+                chatsWithUnread: JSON.stringify(chatsWithUnread.map(c => ({
                   id: c.id,
                   name: (c as any).name || (c as any).displayName,
                   unreadCount: c.unreadCount,
                   type: c.type,
                   otherUserId: c.otherUser?.id,
-                })),
+                })), null, 2),
                 // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Показываем все чаты для диагностики
-                allChats: updated.map(c => ({
+                allChats: JSON.stringify(updated.map(c => ({
                   id: c.id,
                   name: (c as any).name || (c as any).displayName,
                   unreadCount: c.unreadCount || 0,
                   type: c.type,
-                })),
+                })), null, 2),
               });
               window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
                 detail: { totalUnread },

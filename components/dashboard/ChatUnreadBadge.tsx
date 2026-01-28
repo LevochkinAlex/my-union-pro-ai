@@ -43,7 +43,7 @@ export default function ChatUnreadBadge() {
       console.log('[ChatUnreadBadge] Total unread:', total);
       console.log('[ChatUnreadBadge] Rooms count:', rooms.length);
       console.log('[ChatUnreadBadge] Rooms with unread:', roomsWithUnread.length);
-      console.log('[ChatUnreadBadge] Rooms with unread details:', roomsWithUnread.map(r => ({
+      console.log('[ChatUnreadBadge] Rooms with unread details:', JSON.stringify(roomsWithUnread.map(r => ({
         id: r.id,
         name: r.name || r.displayName,
         unreadCount: r.unreadCount,
@@ -51,13 +51,13 @@ export default function ChatUnreadBadge() {
         isDirect: r.isDirect,
         isGroup: r.isGroup,
         isTicket: r.isTicket,
-      })));
-      console.log('[ChatUnreadBadge] ALL ROOMS:', rooms.map(r => ({
+      })), null, 2));
+      console.log('[ChatUnreadBadge] ALL ROOMS:', JSON.stringify(rooms.map(r => ({
         id: r.id,
         name: r.name || r.displayName,
         unreadCount: r.unreadCount || 0,
         type: r.type,
-      })));
+      })), null, 2));
       console.log('[ChatUnreadBadge] ==========================================');
       
       // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Всегда обновляем счетчик, даже если он 0
