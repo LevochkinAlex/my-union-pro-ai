@@ -758,6 +758,16 @@ export async function markAsRead(chatId: string, userId: string): Promise<void> 
 
   const isPrivateChat = chat?.type === 'PRIVATE';
 
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем текущее значение readAt перед обновлением
+  const beforeParticipant = await prisma.chatParticipant.findFirst({
+    where: {
+      chatId,
+      userId,
+      leftAt: null,
+    },
+    select: { readAt: true },
+  });
+
   // Обновляем через ChatParticipant
   const result = await prisma.chatParticipant.updateMany({
     where: {
@@ -770,13 +780,26 @@ export async function markAsRead(chatId: string, userId: string): Promise<void> 
     },
   });
 
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверяем что readAt действительно обновился
+  const afterParticipant = await prisma.chatParticipant.findFirst({
+    where: {
+      chatId,
+      userId,
+      leftAt: null,
+    },
+    select: { readAt: true },
+  });
+
   console.log(`[chat-service] markAsRead result:`, {
     chatId,
     userId,
     chatType: chat?.type,
     isPrivateChat,
     updatedCount: result.count,
-    readAt: now.toISOString(),
+    beforeReadAt: beforeParticipant?.readAt?.toISOString() || null,
+    afterReadAt: afterParticipant?.readAt?.toISOString() || null,
+    newReadAt: now.toISOString(),
+    readAtUpdated: afterParticipant?.readAt?.getTime() === now.getTime(),
   });
 
   // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Инвалидируем кэш чатов пользователя для обновления unreadCount
@@ -801,28 +824,47 @@ export async function getUnreadCount(
     select: { readAt: true },
   });
 
-  if (!participant) return 0;
+  if (!participant) {
+    console.log(`[chat-service] getUnreadCount: No participant found for chatId=${chatId}, userId=${userId}`);
+    return 0;
+  }
   
   const lastReadAt = participant.readAt;
 
-  // Если никогда не читал - считаем все сообщения
+  // Если никогда не читал - считаем все сообщения от других
   if (!lastReadAt) {
-    return await prisma.chatMessage.count({
+    const count = await prisma.chatMessage.count({
       where: {
         chatId,
         senderId: { not: userId },
       },
     });
+    console.log(`[chat-service] getUnreadCount: Never read, counting all messages:`, {
+      chatId,
+      userId,
+      count,
+    });
+    return count;
   }
 
   // Считаем сообщения после последнего прочтения
-  return await prisma.chatMessage.count({
+  const count = await prisma.chatMessage.count({
     where: {
       chatId,
       senderId: { not: userId },
       createdAt: { gt: lastReadAt },
     },
   });
+  
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Детальное логирование для диагностики
+  console.log(`[chat-service] getUnreadCount:`, {
+    chatId,
+    userId,
+    lastReadAt: lastReadAt.toISOString(),
+    unreadCount: count,
+  });
+  
+  return count;
 }
 
 /**
@@ -921,9 +963,34 @@ async function getUnreadCountsForChats(
             
             // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Детальное логирование для диагностики
             const chatType = chatTypeMap.get(chatId) || 'UNKNOWN';
+            
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем информацию о сообщениях для диагностики
+            const recentMessages = await prisma.chatMessage.findMany({
+              where: {
+                chatId,
+                senderId: { not: userId },
+                createdAt: { gt: readAt },
+              },
+              select: {
+                id: true,
+                senderId: true,
+                content: true,
+                createdAt: true,
+              },
+              take: 10,
+              orderBy: { createdAt: 'desc' },
+            });
+            
             console.log(`[chat-service] getUnreadCountsForChats: Chat ${chatId} (${chatType}):`, {
               readAt: readAt.toISOString(),
               unreadCount: count,
+              recentMessagesCount: recentMessages.length,
+              recentMessages: recentMessages.map(m => ({
+                id: m.id,
+                senderId: m.senderId,
+                content: m.content?.substring(0, 50),
+                createdAt: m.createdAt.toISOString(),
+              })),
             });
             
             return { chatId, count };
