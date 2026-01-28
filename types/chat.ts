@@ -83,6 +83,7 @@ export interface Message {
   id: string;
   content: string;
   senderId: string;
+  chatId?: string; // ID чата, к которому относится сообщение
   messageType: string; // Добавлено для совместимости
   createdAt: string;
   editedAt?: string | null;

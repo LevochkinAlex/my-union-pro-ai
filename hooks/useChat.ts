@@ -64,6 +64,55 @@ export function useChat(options: UseChatOptions = {}) {
     return () => clearInterval(interval);
   }, [session?.user?.id]);
 
+  // Загрузка списка чатов
+  const loadChats = useCallback(async () => {
+    try {
+      const data = await fetchJsonWithRetry<{ chats: Chat[] }>("/api/chat", {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+      
+      if (data?.chats) {
+        console.log("[useChat] ========== CLIENT CHAT LOADING ==========");
+        console.log("[useChat] ✅ Loaded chats:", data.chats.length);
+        console.log("[useChat] Chats breakdown:", {
+          PRIVATE: data.chats.filter((c: Chat) => c.type === "PRIVATE").length,
+          GROUP: data.chats.filter((c: Chat) => c.type === "GROUP").length,
+          CHANNEL: data.chats.filter((c: Chat) => c.type === "CHANNEL").length,
+          AI: data.chats.filter((c: Chat) => c.name === "ИИ-Ассистент").length,
+        });
+        console.log("[useChat] Chats details:", data.chats.map((c: Chat) => ({
+          id: c.id,
+          type: c.type,
+          name: c.name || (c as any).displayName,
+          hasLastMessage: !!(c as any).lastMessage,
+          lastMessageAt: (c as any).lastMessageAt,
+          unreadCount: (c as any).unreadCount || 0,
+          otherUser: (c as any).otherUser?.id || null,
+        })));
+        setChats(data.chats);
+      } else if (data === null) {
+        // Если data null, значит была ошибка при запросе
+        console.error("[useChat] ❌ Failed to load chats - data is null (request failed)");
+        options.onError?.("Ошибка загрузки чатов");
+        // Не обновляем чаты, чтобы сохранить существующие при временных ошибках
+      } else if (data && !data.chats) {
+        // Если data есть, но chats нет - устанавливаем пустой массив
+        console.warn("[useChat] ⚠️ Response received but no chats field:", data);
+        setChats([]);
+      } else {
+        // Неожиданный случай
+        console.error("[useChat] ❌ Unexpected response format:", data);
+        options.onError?.("Ошибка загрузки чатов");
+      }
+    } catch (error) {
+      console.error("[useChat] Error loading chats:", error);
+      options.onError?.("Ошибка загрузки чатов");
+    } finally {
+      setLoading(false);
+    }
+  }, [options]);
+
   // Инициализация WebSocket
   useEffect(() => {
     if (!session?.user) return;
@@ -244,55 +293,6 @@ export function useChat(options: UseChatOptions = {}) {
       socketRef.current = null;
     };
   }, [session, loadChats]); // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавлен loadChats в зависимости для перезагрузки при смене режима
-
-  // Загрузка списка чатов
-  const loadChats = useCallback(async () => {
-    try {
-      const data = await fetchJsonWithRetry<{ chats: Chat[] }>("/api/chat", {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
-      
-      if (data?.chats) {
-        console.log("[useChat] ========== CLIENT CHAT LOADING ==========");
-        console.log("[useChat] ✅ Loaded chats:", data.chats.length);
-        console.log("[useChat] Chats breakdown:", {
-          PRIVATE: data.chats.filter((c: Chat) => c.type === "PRIVATE").length,
-          GROUP: data.chats.filter((c: Chat) => c.type === "GROUP").length,
-          CHANNEL: data.chats.filter((c: Chat) => c.type === "CHANNEL").length,
-          AI: data.chats.filter((c: Chat) => c.name === "ИИ-Ассистент").length,
-        });
-        console.log("[useChat] Chats details:", data.chats.map((c: Chat) => ({
-          id: c.id,
-          type: c.type,
-          name: c.name || (c as any).displayName,
-          hasLastMessage: !!(c as any).lastMessage,
-          lastMessageAt: (c as any).lastMessageAt,
-          unreadCount: (c as any).unreadCount || 0,
-          otherUser: (c as any).otherUser?.id || null,
-        })));
-        setChats(data.chats);
-      } else if (data === null) {
-        // Если data null, значит была ошибка при запросе
-        console.error("[useChat] ❌ Failed to load chats - data is null (request failed)");
-        options.onError?.("Ошибка загрузки чатов");
-        // Не обновляем чаты, чтобы сохранить существующие при временных ошибках
-      } else if (data && !data.chats) {
-        // Если data есть, но chats нет - устанавливаем пустой массив
-        console.warn("[useChat] ⚠️ Response received but no chats field:", data);
-        setChats([]);
-      } else {
-        // Неожиданный случай
-        console.error("[useChat] ❌ Unexpected response format:", data);
-        options.onError?.("Ошибка загрузки чатов");
-      }
-    } catch (error) {
-      console.error("[useChat] Error loading chats:", error);
-      options.onError?.("Ошибка загрузки чатов");
-    } finally {
-      setLoading(false);
-    }
-  }, [options]);
 
   // Загрузка сообщений чата (HTTP - для первоначальной загрузки)
   const loadMessages = useCallback(async (chatId: string) => {

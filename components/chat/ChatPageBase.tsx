@@ -407,7 +407,20 @@ export function ChatPageBase({
                   }
                   onForward={(message) => {
                     console.log("[ChatPageBase] onForward called with message:", message.id);
-                    setForwardingMessage(message);
+                    // Преобразуем Date поля в строки для соответствия типу Message
+                    const normalizeDate = (date: any): string | null | undefined => {
+                      if (!date) return date;
+                      if (typeof date === 'string') return date;
+                      if (date instanceof Date) return date.toISOString();
+                      return new Date(date).toISOString();
+                    };
+                    const normalizedMessage = {
+                      ...message,
+                      createdAt: normalizeDate(message.createdAt) || new Date().toISOString(),
+                      editedAt: normalizeDate((message as any).editedAt),
+                      deletedAt: normalizeDate((message as any).deletedAt),
+                    } as Message;
+                    setForwardingMessage(normalizedMessage);
                   }}
                 />
               </div>
