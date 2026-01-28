@@ -245,13 +245,26 @@ function useCDNUrl(url: string | null | undefined): string {
 
 function getAttachmentUrl(att: MessageAttachment): string {
   const url = att.url || att.filePath || '';
-  if (!url) return '';
+  if (!url || url.trim() === '') {
+    console.warn('[getAttachmentUrl] Empty URL for attachment:', {
+      id: att.id,
+      name: att.name,
+      type: att.type,
+    });
+    return '';
+  }
+  
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Если это blob URL (от оптимистичного обновления), возвращаем как есть
+  if (url.startsWith('blob:')) {
+    return url;
+  }
   
   // Если это уже полный URL (CDN или внешний), возвращаем как есть
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
     return url;
   }
   
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Для относительных путей добавляем базовый URL если нужно
   // ВАЖНО: Для избежания hydration mismatch всегда возвращаем оригинальный URL
   // CDN трансформация будет применена на клиенте через useCDNUrl hook
   // Это гарантирует, что сервер и клиент рендерят одинаковые значения
@@ -581,6 +594,11 @@ interface LazyImageProps {
   className?: string;
 }
 
+/** CDN домен для определения fallback при 404 */
+const CDN_DOMAIN = typeof window !== "undefined" 
+  ? (process.env.NEXT_PUBLIC_CDN_URL || "https://cdn.myunion.pro") 
+  : "https://cdn.myunion.pro";
+
 function LazyImage({ 
   src, 
   thumbnail, 
@@ -592,12 +610,29 @@ function LazyImage({
 }: LazyImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [fallbackSrc, setFallbackSrc] = useState<string | null>(null); // При 404 с CDN пробуем основной домен
+  const [fallbackTried, setFallbackTried] = useState(false);
   const [shouldLoad, setShouldLoad] = useState(!isOld); // Для старых сообщений не загружаем сразу
 
   // Используем useCDNUrl hook для безопасного преобразования URL после гидратации
   // Это предотвращает hydration mismatch между сервером и клиентом
   const cdnSrc = useCDNUrl(src);
   const cdnThumbnail = useCDNUrl(thumbnail);
+
+  // Функция для преобразования CDN URL в основной домен URL (fallback)
+  const getFallbackUrl = useCallback((cdnUrl: string): string | null => {
+    if (!cdnUrl || typeof window === 'undefined') return null;
+    
+    // Если это CDN URL, преобразуем в основной домен
+    if (cdnUrl.includes('cdn.myunion.pro') || cdnUrl.includes('/uploads/')) {
+      const pathMatch = cdnUrl.match(/\/uploads\/(.+)$/);
+      if (pathMatch) {
+        const fallbackPath = `${window.location.origin}/api/uploads/${pathMatch[1]}`;
+        return fallbackPath;
+      }
+    }
+    return null;
+  }, []);
 
   // Для старых сообщений используем Intersection Observer
   const containerRef = useRef<HTMLButtonElement>(null);
@@ -625,8 +660,9 @@ function LazyImage({
     return () => observer.disconnect();
   }, [isOld, shouldLoad]);
 
-  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убеждаемся что displaySrc не пустой
-  const displaySrc = shouldLoad ? (cdnThumbnail || cdnSrc) : (blurPlaceholder || undefined);
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убеждаемся что displaySrc не пустой. При fallback используем URL основного домена.
+  const baseDisplaySrc = shouldLoad ? (cdnThumbnail || cdnSrc) : (blurPlaceholder || undefined);
+  const displaySrc = fallbackSrc ?? baseDisplaySrc;
   const showBlur = isOld && (!shouldLoad || !isLoaded);
   
   // Логируем для диагностики
@@ -643,9 +679,11 @@ function LazyImage({
 
   // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убеждаемся что src не пустой
   if (!src || src.trim() === '') {
+    console.warn('[LazyImage] Empty src provided:', { src, alt, className });
     return (
-      <div className={`relative overflow-hidden rounded-xl ${className} bg-gray-100 dark:bg-gray-800 flex items-center justify-center`}>
+      <div className={`relative overflow-hidden rounded-xl ${className} bg-gray-100 dark:bg-gray-800 flex items-center justify-center min-h-[100px]`}>
         <ImageIcon className="w-8 h-8 text-gray-400" />
+        <span className="text-xs text-gray-500 mt-2">Изображение недоступно</span>
       </div>
     );
   }
@@ -657,7 +695,7 @@ function LazyImage({
       className={`relative group overflow-hidden rounded-xl ${className} ${!onClick ? 'cursor-default' : 'cursor-pointer'}`}
       type="button"
     >
-      {displaySrc && (
+      {displaySrc && displaySrc.trim() !== '' ? (
         <img
           ref={imgRef}
           src={displaySrc}
@@ -678,21 +716,52 @@ function LazyImage({
                   imgRef.current.src = cdnSrc;
                 }
               };
+              fullImg.onerror = () => {
+                console.warn('[LazyImage] Failed to preload full image:', cdnSrc);
+              };
             } else if (!cdnThumbnail && shouldLoad) {
               // Если нет thumbnail, просто помечаем как загруженное
               setIsLoaded(true);
             }
           }}
           onError={(e) => {
-            console.error('[LazyImage] Failed to load image:', {
-              src: displaySrc,
-              cdnSrc,
-              cdnThumbnail,
-              originalSrc: src,
+            // Если CDN URL не загрузился, пробуем fallback на основной домен
+            if (!fallbackTried && (cdnSrc?.includes('cdn.myunion.pro') || displaySrc?.includes('cdn.myunion.pro'))) {
+              const fallbackUrl = getFallbackUrl(cdnSrc || displaySrc || '');
+              if (fallbackUrl) {
+                console.warn('[LazyImage] CDN failed, trying fallback:', {
+                  cdnUrl: cdnSrc?.substring(0, 100),
+                  fallbackUrl: fallbackUrl.substring(0, 100),
+                });
+                setFallbackTried(true);
+                setFallbackSrc(fallbackUrl);
+                setImageError(false); // Сбрасываем ошибку, чтобы попробовать снова
+                // Перезагружаем изображение с fallback URL
+                if (imgRef.current) {
+                  imgRef.current.src = fallbackUrl;
+                }
+                return;
+              }
+            }
+            
+            console.error('[LazyImage] ❌ Failed to load image:', {
+              displaySrc: displaySrc?.substring(0, 100),
+              cdnSrc: cdnSrc?.substring(0, 100),
+              cdnThumbnail: cdnThumbnail?.substring(0, 100),
+              fallbackSrc: fallbackSrc?.substring(0, 100),
+              originalSrc: src?.substring(0, 100),
+              isOld,
+              shouldLoad,
+              fallbackTried,
             });
             setImageError(true);
           }}
         />
+      ) : (
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Показываем плейсхолдер если displaySrc пустой
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-xl">
+          <ImageIcon className="w-8 h-8 text-gray-400" />
+        </div>
       )}
       
       {/* Blur overlay для старых сообщений */}
