@@ -322,9 +322,26 @@ export async function getUserChats(
     const totalUnread = Array.from(unreadCounts.values()).reduce((sum, count) => sum + Math.max(0, count), 0);
     const chatsWithUnread = Array.from(unreadCounts.entries()).filter(([_, count]) => count > 0);
     console.log(`[chat-service] getUserChats: Unread counts calculated:`, {
+      userId,
+      totalChats: chats.length,
       totalUnread,
       chatsWithUnreadCount: chatsWithUnread.length,
-      chatsWithUnread: chatsWithUnread.map(([chatId, count]) => ({ chatId, count })),
+      chatsWithUnread: chatsWithUnread.map(([chatId, count]) => {
+        const chat = chats.find(c => c.id === chatId);
+        return {
+          chatId,
+          count,
+          chatName: chat?.name || chat?.displayName || 'Unknown',
+          chatType: chat?.type,
+        };
+      }),
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Показываем все чаты с их unreadCount
+      allChatsUnreadCounts: chats.map(c => ({
+        id: c.id,
+        name: c.name || c.displayName || 'Unknown',
+        type: c.type,
+        unreadCount: unreadCounts.get(c.id) || 0,
+      })),
     });
   } catch (error) {
     console.error('[chat-service] Error getting unread counts:', error);
@@ -984,9 +1001,23 @@ async function getUnreadCountsForChats(
               orderBy: { createdAt: 'desc' },
             });
             
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем общее количество сообщений для диагностики
+            const totalMessages = await prisma.chatMessage.count({
+              where: { chatId },
+            });
+            const messagesFromOthers = await prisma.chatMessage.count({
+              where: {
+                chatId,
+                senderId: { not: userId },
+              },
+            });
+            
             console.log(`[chat-service] getUnreadCountsForChats: Chat ${chatId} (${chatType}):`, {
+              userId,
               readAt: readAt.toISOString(),
               unreadCount: count,
+              totalMessages,
+              messagesFromOthers,
               recentMessagesCount: recentMessages.length,
               recentMessages: recentMessages.map(m => ({
                 id: m.id,

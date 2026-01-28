@@ -45,7 +45,41 @@ export async function POST(
     const { getUnreadCount } = await import('@/lib/chat-service');
     const newUnreadCount = await getUnreadCount(chatId, userId);
     
-    console.log(`[chat/read] ✅ Marked as read: chatId=${chatId}, userId=${userId}, newUnreadCount=${newUnreadCount}`);
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем информацию о чате для диагностики
+    const { prisma } = await import('@/lib/prisma');
+    const chat = await prisma.chat.findUnique({
+      where: { id: chatId },
+      select: {
+        type: true,
+        name: true,
+        participants: {
+          where: { userId, leftAt: null },
+          select: { readAt: true },
+        },
+      },
+    });
+    
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем количество сообщений для диагностики
+    const totalMessages = await prisma.chatMessage.count({
+      where: { chatId },
+    });
+    const messagesFromOthers = await prisma.chatMessage.count({
+      where: {
+        chatId,
+        senderId: { not: userId },
+      },
+    });
+    
+    console.log(`[chat/read] ✅ Marked as read:`, {
+      chatId,
+      userId,
+      chatType: chat?.type,
+      chatName: chat?.name,
+      newUnreadCount,
+      readAt: chat?.participants[0]?.readAt?.toISOString() || null,
+      totalMessages,
+      messagesFromOthers,
+    });
 
     return NextResponse.json({ 
       success: true, 
