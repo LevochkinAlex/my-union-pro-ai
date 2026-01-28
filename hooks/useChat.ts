@@ -266,6 +266,10 @@ export function useChat(options: UseChatOptions = {}) {
               filePath: a.filePath || a.url,
               fileSize: a.fileSize || a.size,
               mimeType: a.mimeType,
+              url: a.url || a.filePath,
+              thumbnailUrl: a.thumbnailUrl,
+              width: a.width,
+              height: a.height,
             })),
           });
           
