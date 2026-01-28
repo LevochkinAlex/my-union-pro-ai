@@ -315,36 +315,37 @@ export async function getUserChats(
   let unreadCounts = new Map<string, number>();
   try {
     const chatIds = chats.map((c) => c.id);
+    console.log(`[chat-service] ========== GET UNREAD COUNTS ==========`);
     console.log(`[chat-service] getUserChats: Getting unread counts for ${chatIds.length} chats`);
+    console.log(`[chat-service] Chat IDs:`, chatIds);
     unreadCounts = await getUnreadCountsForChats(chatIds, userId);
     
     // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Детальное логирование для диагностики
     const totalUnread = Array.from(unreadCounts.values()).reduce((sum, count) => sum + Math.max(0, count), 0);
     const chatsWithUnread = Array.from(unreadCounts.entries()).filter(([_, count]) => count > 0);
-    console.log(`[chat-service] getUserChats: Unread counts calculated:`, {
-      userId,
-      totalChats: chats.length,
-      totalUnread,
-      chatsWithUnreadCount: chatsWithUnread.length,
-      chatsWithUnread: chatsWithUnread.map(([chatId, count]) => {
-        const chat = chats.find(c => c.id === chatId);
-        return {
-          chatId,
-          count,
-          chatName: chat?.name || chat?.displayName || 'Unknown',
-          chatType: chat?.type,
-        };
-      }),
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Показываем все чаты с их unreadCount
-      allChatsUnreadCounts: chats.map(c => ({
-        id: c.id,
-        name: c.name || c.displayName || 'Unknown',
-        type: c.type,
-        unreadCount: unreadCounts.get(c.id) || 0,
-      })),
-    });
+    console.log(`[chat-service] ========== UNREAD COUNTS RESULT ==========`);
+    console.log(`[chat-service] userId:`, userId);
+    console.log(`[chat-service] totalChats:`, chats.length);
+    console.log(`[chat-service] totalUnread:`, totalUnread);
+    console.log(`[chat-service] chatsWithUnreadCount:`, chatsWithUnread.length);
+    console.log(`[chat-service] chatsWithUnread:`, chatsWithUnread.map(([chatId, count]) => {
+      const chat = chats.find(c => c.id === chatId);
+      return {
+        chatId,
+        count,
+        chatName: chat?.name || chat?.displayName || 'Unknown',
+        chatType: chat?.type,
+      };
+    }));
+    console.log(`[chat-service] ALL CHATS UNREAD COUNTS:`, chats.map(c => ({
+      id: c.id,
+      name: c.name || c.displayName || 'Unknown',
+      type: c.type,
+      unreadCount: unreadCounts.get(c.id) || 0,
+    })));
+    console.log(`[chat-service] ==========================================`);
   } catch (error) {
-    console.error('[chat-service] Error getting unread counts:', error);
+    console.error('[chat-service] ❌ Error getting unread counts:', error);
     // Продолжаем с пустым Map - все чаты будут показаны как прочитанные
   }
 
@@ -1011,21 +1012,49 @@ async function getUnreadCountsForChats(
                 senderId: { not: userId },
               },
             });
-            
-            console.log(`[chat-service] getUnreadCountsForChats: Chat ${chatId} (${chatType}):`, {
-              userId,
-              readAt: readAt.toISOString(),
-              unreadCount: count,
-              totalMessages,
-              messagesFromOthers,
-              recentMessagesCount: recentMessages.length,
-              recentMessages: recentMessages.map(m => ({
-                id: m.id,
-                senderId: m.senderId,
-                content: m.content?.substring(0, 50),
-                createdAt: m.createdAt.toISOString(),
-              })),
+            const messagesFromUser = await prisma.chatMessage.count({
+              where: {
+                chatId,
+                senderId: userId,
+              },
             });
+            
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем все сообщения после readAt для диагностики
+            const allMessagesAfterReadAt = await prisma.chatMessage.findMany({
+              where: {
+                chatId,
+                createdAt: { gt: readAt },
+              },
+              select: {
+                id: true,
+                senderId: true,
+                createdAt: true,
+              },
+              orderBy: { createdAt: 'asc' },
+            });
+            
+            console.log(`[chat-service] ========== UNREAD COUNT FOR CHAT ==========`);
+            console.log(`[chat-service] Chat ID:`, chatId);
+            console.log(`[chat-service] Chat Type:`, chatType);
+            console.log(`[chat-service] User ID:`, userId);
+            console.log(`[chat-service] Read At:`, readAt.toISOString());
+            console.log(`[chat-service] Unread Count:`, count);
+            console.log(`[chat-service] Total Messages:`, totalMessages);
+            console.log(`[chat-service] Messages From Others:`, messagesFromOthers);
+            console.log(`[chat-service] Messages From User:`, messagesFromUser);
+            console.log(`[chat-service] Recent Unread Messages:`, recentMessages.map(m => ({
+              id: m.id,
+              senderId: m.senderId,
+              content: m.content?.substring(0, 50),
+              createdAt: m.createdAt.toISOString(),
+            })));
+            console.log(`[chat-service] ALL Messages After ReadAt:`, allMessagesAfterReadAt.map(m => ({
+              id: m.id,
+              senderId: m.senderId,
+              isFromUser: m.senderId === userId,
+              createdAt: m.createdAt.toISOString(),
+            })));
+            console.log(`[chat-service] ==========================================`);
             
             return { chatId, count };
           } catch (error) {
