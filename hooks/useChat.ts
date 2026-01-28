@@ -261,15 +261,11 @@ export function useChat(options: UseChatOptions = {}) {
             attachments: message.attachments?.map(a => ({
               id: a.id,
               type: a.type,
-              fileName: a.fileName || a.name,
-              originalName: a.originalName || a.name,
-              filePath: a.filePath || a.url,
-              fileSize: a.fileSize || a.size,
+              fileName: a.fileName,
+              originalName: a.originalName,
+              filePath: a.filePath,
+              fileSize: a.fileSize,
               mimeType: a.mimeType,
-              url: a.url || a.filePath,
-              thumbnailUrl: a.thumbnailUrl,
-              width: a.width,
-              height: a.height,
             })),
           });
           
