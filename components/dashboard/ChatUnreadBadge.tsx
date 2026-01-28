@@ -17,7 +17,8 @@ export default function ChatUnreadBadge() {
       const data = await fetchJsonWithRetry<{ rooms: any[] }>('/api/chat/rooms');
       
       if (!data || !data.rooms) {
-        console.warn('[ChatUnreadBadge] No rooms data received');
+        console.warn('[ChatUnreadBadge] No rooms data received, setting count to 0');
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке сбрасываем счетчик в 0, чтобы не показывать фейковую цифру
         setUnreadCount(0);
         setIsInitialized(true);
         return;
@@ -49,12 +50,13 @@ export default function ChatUnreadBadge() {
         })),
       });
       
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Всегда обновляем счетчик, даже если он 0
       setUnreadCount(total);
       setIsInitialized(true);
     } catch (err) {
       console.error('[ChatUnreadBadge] Failed to fetch unread count:', err);
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке не сбрасываем счетчик, чтобы не показывать фейковую цифру
-      // Просто не обновляем, оставляем последнее известное значение
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке сбрасываем счетчик в 0, чтобы не показывать фейковую цифру
+      setUnreadCount(0);
       setIsInitialized(true);
     }
   }, [session?.user?.id]);
@@ -121,7 +123,9 @@ export default function ChatUnreadBadge() {
     };
   }, [fetchUnreadCount]);
 
-  if (!isInitialized || unreadCount === 0) return null;
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Показываем бейдж только если есть непрочитанные и компонент инициализирован
+  if (!isInitialized) return null;
+  if (unreadCount === 0) return null;
 
   return (
     <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 text-[10px] font-medium bg-red-500 text-white rounded-full flex items-center justify-center">

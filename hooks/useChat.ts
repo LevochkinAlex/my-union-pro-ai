@@ -487,7 +487,24 @@ export function useChat(options: UseChatOptions = {}) {
         }
 
         // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Помечаем как прочитанные и получаем актуальный unreadCount
+        // Оптимистично обновляем счетчик сразу, даже если запрос не удался
         try {
+          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Оптимистично обновляем счетчик сразу
+          setChats(prev => {
+            const updated = prev.map(chat =>
+              chat.id === chatId ? { ...chat, unreadCount: 0 } : chat
+            );
+            
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных сразу
+            const totalUnread = updated.reduce((sum, c) => sum + Math.max(0, c.unreadCount || 0), 0);
+            console.log(`[useChat] 📊 Optimistic total unread count after marking as read:`, totalUnread);
+            window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
+              detail: { totalUnread },
+            }));
+            
+            return updated;
+          });
+          
           const readResponse = await fetch(`/api/chat/${chatId}/read`, { method: "POST" });
           if (readResponse.ok) {
             const readData = await readResponse.json();
@@ -499,6 +516,7 @@ export function useChat(options: UseChatOptions = {}) {
               readAt: readData.readAt,
             });
             
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем с реальным значением с сервера
             setChats(prev => {
               const updated = prev.map(chat =>
                 chat.id === chatId ? { ...chat, unreadCount: newUnreadCount } : chat
@@ -506,7 +524,7 @@ export function useChat(options: UseChatOptions = {}) {
               
               // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных
               const totalUnread = updated.reduce((sum, c) => sum + Math.max(0, c.unreadCount || 0), 0);
-              console.log(`[useChat] 📊 Total unread count after marking as read:`, totalUnread);
+              console.log(`[useChat] 📊 Total unread count after marking as read (server):`, totalUnread);
               window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
                 detail: { totalUnread },
               }));
@@ -520,9 +538,17 @@ export function useChat(options: UseChatOptions = {}) {
             });
           } else {
             console.error("[useChat] ❌ Failed to mark as read:", readResponse.status);
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке все равно отправляем событие для обновления бейджа
+            window.dispatchEvent(new CustomEvent('chat-messages-read', {
+              detail: { chatId },
+            }));
           }
         } catch (e) {
           console.error("[useChat] Error marking as read:", e);
+          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке все равно отправляем событие для обновления бейджа
+          window.dispatchEvent(new CustomEvent('chat-messages-read', {
+            detail: { chatId },
+          }));
         }
       } else {
         console.error(`[useChat] ❌ API returned null/empty data for chat ${chatId}`);
