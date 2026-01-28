@@ -741,6 +741,15 @@ export async function markAsRead(chatId: string, userId: string): Promise<void> 
 
   console.log(`[chat-service] markAsRead: chatId=${chatId}, userId=${userId}`);
 
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Для личных чатов (PRIVATE) readAt должен быть общим для всех режимов просмотра
+  // Получаем информацию о чате
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    select: { type: true },
+  });
+
+  const isPrivateChat = chat?.type === 'PRIVATE';
+
   // Обновляем через ChatParticipant
   const result = await prisma.chatParticipant.updateMany({
     where: {
@@ -756,6 +765,8 @@ export async function markAsRead(chatId: string, userId: string): Promise<void> 
   console.log(`[chat-service] markAsRead result:`, {
     chatId,
     userId,
+    chatType: chat?.type,
+    isPrivateChat,
     updatedCount: result.count,
     readAt: now.toISOString(),
   });
@@ -809,6 +820,8 @@ export async function getUnreadCount(
 /**
  * Получает количество непрочитанных для нескольких чатов одним запросом
  * Оптимизированная версия для batch-загрузки
+ * 
+ * КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Для личных чатов (PRIVATE) readAt общий для всех режимов просмотра
  */
 async function getUnreadCountsForChats(
   chatIds: string[],
@@ -825,6 +838,17 @@ async function getUnreadCountsForChats(
     results.set(chatId, 0);
   }
 
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем информацию о типах чатов для правильной обработки
+  const chats = await prisma.chat.findMany({
+    where: { id: { in: chatIds } },
+    select: { id: true, type: true },
+  });
+  
+  const chatTypeMap = new Map<string, string>();
+  for (const chat of chats) {
+    chatTypeMap.set(chat.id, chat.type);
+  }
+
   // Получаем участников для всех чатов
   const participants = await prisma.chatParticipant.findMany({
     where: {
@@ -836,6 +860,7 @@ async function getUnreadCountsForChats(
   });
 
   // Строим map с временем прочтения
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Для личных чатов (PRIVATE) readAt уже общий для всех режимов
   const readAtMap = new Map<string, Date | null>();
   for (const p of participants) {
     readAtMap.set(p.chatId, p.readAt);
