@@ -70,10 +70,16 @@ export default function ChatUnreadBadge() {
       }
     };
     
-    const handleMessagesRead = () => {
+    const handleMessagesRead = (e?: Event) => {
       // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При прочтении сообщений обновляем счетчик немедленно
-      console.log('[ChatUnreadBadge] Messages read event received, updating count');
-      fetchUnreadCount();
+      const customEvent = e as CustomEvent;
+      const chatId = customEvent?.detail?.chatId;
+      console.log('[ChatUnreadBadge] Messages read event received:', { chatId });
+      
+      // Обновляем счетчик с небольшой задержкой, чтобы дать время серверу обновить readAt
+      setTimeout(() => {
+        fetchUnreadCount();
+      }, 500);
     };
     
     // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Слушаем события изменения unreadCount из useChat

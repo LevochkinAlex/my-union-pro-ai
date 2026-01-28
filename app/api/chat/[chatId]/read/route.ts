@@ -36,10 +36,22 @@ export async function POST(
     // Используем сервис для пометки как прочитанное
     await markAsRead(chatId, userId);
 
-    // Инвалидируем кеш
-    await invalidateChatCache(userId);
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Инвалидируем кэш чатов пользователя для обновления unreadCount
+    await invalidateChatCache(userId).catch(err =>
+      console.warn('[chat/read] Cache invalidation error:', err)
+    );
 
-    return NextResponse.json({ success: true, readAt: new Date() });
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Пересчитываем unreadCount для этого чата
+    const { getUnreadCount } = await import('@/lib/chat-service');
+    const newUnreadCount = await getUnreadCount(chatId, userId);
+    
+    console.log(`[chat/read] ✅ Marked as read: chatId=${chatId}, userId=${userId}, newUnreadCount=${newUnreadCount}`);
+
+    return NextResponse.json({ 
+      success: true, 
+      readAt: new Date(),
+      unreadCount: newUnreadCount, // Возвращаем новый счетчик для обновления UI
+    });
   } catch (error) {
     console.error("[chat/read] Error:", error);
     return NextResponse.json(

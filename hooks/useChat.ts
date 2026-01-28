@@ -421,22 +421,41 @@ export function useChat(options: UseChatOptions = {}) {
           ));
         }
 
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Помечаем как прочитанные и отправляем событие для обновления бейджа
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Помечаем как прочитанные и получаем актуальный unreadCount
         try {
-          await fetch(`/api/chat/${chatId}/read`, { method: "POST" });
-          setChats(prev => {
-            const updated = prev.map(chat =>
-              chat.id === chatId ? { ...chat, unreadCount: 0 } : chat
-            );
+          const readResponse = await fetch(`/api/chat/${chatId}/read`, { method: "POST" });
+          if (readResponse.ok) {
+            const readData = await readResponse.json();
+            const newUnreadCount = readData.unreadCount || 0;
             
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных
-            const totalUnread = updated.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
-            window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
-              detail: { totalUnread },
-            }));
+            console.log(`[useChat] ✅ Messages marked as read:`, {
+              chatId,
+              newUnreadCount,
+              readAt: readData.readAt,
+            });
             
-            return updated;
-          });
+            setChats(prev => {
+              const updated = prev.map(chat =>
+                chat.id === chatId ? { ...chat, unreadCount: newUnreadCount } : chat
+              );
+              
+              // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных
+              const totalUnread = updated.reduce((sum, c) => sum + Math.max(0, c.unreadCount || 0), 0);
+              console.log(`[useChat] 📊 Total unread count after marking as read:`, totalUnread);
+              window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
+                detail: { totalUnread },
+              }));
+              
+              // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие для немедленного обновления бейджа
+              window.dispatchEvent(new CustomEvent('chat-messages-read', {
+                detail: { chatId },
+              }));
+              
+              return updated;
+            });
+          } else {
+            console.error("[useChat] ❌ Failed to mark as read:", readResponse.status);
+          }
         } catch (e) {
           console.error("[useChat] Error marking as read:", e);
         }

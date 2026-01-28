@@ -739,8 +739,10 @@ export async function removeParticipant(
 export async function markAsRead(chatId: string, userId: string): Promise<void> {
   const now = new Date();
 
+  console.log(`[chat-service] markAsRead: chatId=${chatId}, userId=${userId}`);
+
   // Обновляем через ChatParticipant
-  await prisma.chatParticipant.updateMany({
+  const result = await prisma.chatParticipant.updateMany({
     where: {
       chatId,
       userId,
@@ -751,6 +753,17 @@ export async function markAsRead(chatId: string, userId: string): Promise<void> 
     },
   });
 
+  console.log(`[chat-service] markAsRead result:`, {
+    chatId,
+    userId,
+    updatedCount: result.count,
+    readAt: now.toISOString(),
+  });
+
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Инвалидируем кэш чатов пользователя для обновления unreadCount
+  await invalidateUserChatsCache(userId).catch(err =>
+    console.warn('[chat-service] Cache invalidation error after markAsRead:', err)
+  );
 }
 
 /**
