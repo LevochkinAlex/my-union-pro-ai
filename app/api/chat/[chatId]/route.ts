@@ -6,7 +6,7 @@ import { requireChatAccess, ChatAccessError } from '@/lib/chat-service';
 import { normalizeUserAvatar } from '@/lib/api-helpers';
 import { getFileUrlWithCDN } from '@/lib/cdn';
 import * as Sentry from '@sentry/nextjs';
-import { sendUserNotification } from '@/lib/notifications';
+import { sendUserNotification, stripHtml } from '@/lib/notifications';
 import { 
   invalidateChatCache, 
   invalidateUserChatsCache,
@@ -862,8 +862,6 @@ export async function GET(
         // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Очищаем HTML теги из старых сообщений обращений
         // Проверяем, является ли это начальным сообщением обращения
         if (chat.ticket && normalizedContent.includes('Обращение #')) {
-          const { stripHtml } = await import('@/lib/notifications');
-          
           // Если есть HTML теги - очищаем их
           if (normalizedContent.includes('<')) {
             normalizedContent = stripHtml(normalizedContent);
