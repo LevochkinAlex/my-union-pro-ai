@@ -333,13 +333,13 @@ export async function getUserChats(
       return {
         chatId,
         count,
-        chatName: chat?.name || chat?.displayName || 'Unknown',
+        chatName: chat?.name || 'Unknown',
         chatType: chat?.type,
       };
     }));
     console.log(`[chat-service] ALL CHATS UNREAD COUNTS:`, chats.map(c => ({
       id: c.id,
-      name: c.name || c.displayName || 'Unknown',
+      name: c.name || 'Unknown',
       type: c.type,
       unreadCount: unreadCounts.get(c.id) || 0,
     })));
