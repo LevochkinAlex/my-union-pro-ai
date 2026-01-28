@@ -569,10 +569,54 @@ export function useChat(options: UseChatOptions = {}) {
             
             // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Перезагружаем список чатов для получения актуальных unreadCount
             // Это гарантирует, что общий счетчик будет правильным
-            setTimeout(() => {
+            // Используем bypassCache для принудительной перезагрузки
+            setTimeout(async () => {
               console.log(`[useChat] 🔄 Reloading chats after marking as read to get accurate unreadCount`);
-              loadChats();
-            }, 1000);
+              try {
+                // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Принудительно обходим кэш для получения актуальных данных
+                const { fetchJsonWithRetry } = await import('@/lib/api-client');
+                const data = await fetchJsonWithRetry<{ chats: Chat[] }>('/api/chat?bypassCache=true');
+                if (data?.chats) {
+                  setChats(data.chats.map((c: any) => ({
+                    id: c.id,
+                    type: c.type,
+                    name: c.name,
+                    displayName: c.displayName,
+                    otherUser: c.otherUser,
+                    unreadCount: (c as any).unreadCount || 0,
+                    otherUser: (c as any).otherUser?.id || null,
+                  })));
+                  
+                  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных
+                  const chatsWithUnread = data.chats.filter((c: Chat) => {
+                    const count = (c as any).unreadCount || 0;
+                    return count > 0;
+                  });
+                  const totalUnread = chatsWithUnread.reduce((sum: number, c: Chat) => {
+                    const count = (c as any).unreadCount || 0;
+                    return sum + Math.max(0, count);
+                  }, 0);
+                  
+                  console.log(`[useChat] 🔄 Reloaded chats after mark as read:`, {
+                    totalUnread,
+                    chatsWithUnreadCount: chatsWithUnread.length,
+                    chatsWithUnread: chatsWithUnread.map((c: Chat) => ({
+                      id: c.id,
+                      name: (c as any).name || (c as any).displayName,
+                      unreadCount: (c as any).unreadCount,
+                    })),
+                  });
+                  
+                  window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
+                    detail: { totalUnread },
+                  }));
+                }
+              } catch (error) {
+                console.error(`[useChat] ❌ Error reloading chats after mark as read:`, error);
+                // Fallback: используем обычную перезагрузку
+                loadChats();
+              }
+            }, 1500);
           } else {
             console.error("[useChat] ❌ Failed to mark as read:", readResponse.status);
             // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке все равно отправляем событие для обновления бейджа

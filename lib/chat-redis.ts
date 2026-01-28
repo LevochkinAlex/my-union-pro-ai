@@ -206,7 +206,10 @@ export async function getUsersOnlineStatus(userIds: string[]): Promise<Map<strin
  */
 export async function invalidateUserChatsCache(userId: string): Promise<void> {
   const client = await getRedisClient();
-  if (!client) return;
+  if (!client) {
+    console.warn(`[chat-redis] Cannot invalidate cache - Redis client not available`);
+    return;
+  }
 
   try {
     const pattern = `user:chats:${userId}:*`;
@@ -214,9 +217,13 @@ export async function invalidateUserChatsCache(userId: string): Promise<void> {
     
     if (keys.length > 0) {
       await client.del(...keys);
+      console.log(`[chat-redis] ✅ Invalidated ${keys.length} cache keys for user ${userId}:`, keys);
+    } else {
+      console.log(`[chat-redis] No cache keys found for user ${userId}`);
     }
   } catch (error) {
-    console.error("[chat-redis] Error invalidating chats cache:", error);
+    console.error("[chat-redis] ❌ Error invalidating chats cache:", error);
+    throw error; // Пробрасываем ошибку для обработки выше
   }
 }
 

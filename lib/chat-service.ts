@@ -803,9 +803,12 @@ export async function markAsRead(chatId: string, userId: string): Promise<void> 
   });
 
   // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Инвалидируем кэш чатов пользователя для обновления unreadCount
-  await invalidateUserChatsCache(userId).catch(err =>
-    console.warn('[chat-service] Cache invalidation error after markAsRead:', err)
-  );
+  try {
+    await invalidateUserChatsCache(userId);
+    console.log(`[chat-service] ✅ Cache invalidated for user ${userId} after markAsRead`);
+  } catch (err) {
+    console.error('[chat-service] ❌ Cache invalidation error after markAsRead:', err);
+  }
 }
 
 /**
