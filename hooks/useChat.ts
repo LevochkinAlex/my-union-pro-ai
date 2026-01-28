@@ -115,11 +115,32 @@ export function useChat(options: UseChatOptions = {}) {
 
   // Инициализация WebSocket
   useEffect(() => {
-    if (!session?.user) return;
+    if (!session?.user) {
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отключаем сокет если нет сессии
+      if (socketRef.current) {
+        console.log("[useChat] No session, disconnecting socket");
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setIsConnected(false);
+      }
+      return;
+    }
 
     const token = (session as any)?.accessToken;
     if (!token) {
       console.warn("[useChat] No access token, using polling mode");
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отключаем сокет если нет токена
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setIsConnected(false);
+      }
+      return;
+    }
+
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверяем, не подключен ли уже сокет с тем же токеном
+    if (socketRef.current?.connected) {
+      console.log("[useChat] Socket already connected, skipping reconnection");
       return;
     }
 
@@ -129,11 +150,12 @@ export function useChat(options: UseChatOptions = {}) {
     console.log("[useChat] Connecting to socket:", socketUrl, {
       userId: session.user.id,
       viewMode: (session.user as any).viewMode,
+      hasExistingSocket: !!socketRef.current,
     });
 
-    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отключаем старый сокет перед созданием нового
-    if (socketRef.current) {
-      console.log("[useChat] Disconnecting old socket before reconnecting");
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отключаем старый сокет только если он не подключен
+    if (socketRef.current && !socketRef.current.connected) {
+      console.log("[useChat] Disconnecting old disconnected socket");
       socketRef.current.disconnect();
       socketRef.current = null;
     }
@@ -144,6 +166,8 @@ export function useChat(options: UseChatOptions = {}) {
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
     });
 
     socketRef.current = socket;
@@ -155,14 +179,11 @@ export function useChat(options: UseChatOptions = {}) {
       });
       setIsConnected(true);
       
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Переподключаемся к текущему чату и перезагружаем список чатов
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Переподключаемся к текущему чату
       if (selectedChatRef.current) {
         console.log("[useChat] Rejoining chat after reconnect:", selectedChatRef.current.id);
         socket.emit("chat:join", selectedChatRef.current.id);
       }
-      
-      // Перезагружаем список чатов при переподключении (на случай смены режима)
-      loadChats();
     });
 
     socket.on("disconnect", () => {
@@ -194,7 +215,11 @@ export function useChat(options: UseChatOptions = {}) {
             console.log("[useChat] ⚠️ Message already exists, skipping:", message.id);
             return prev;
           }
-          console.log("[useChat] ✅ Adding message to current chat:", message.id);
+          console.log("[useChat] ✅ Adding message to current chat:", {
+            messageId: message.id,
+            hasAttachments: !!(message.attachments && message.attachments.length > 0),
+            attachmentsCount: message.attachments?.length || 0,
+          });
           return [...prev, message];
         });
       } else {
@@ -288,11 +313,18 @@ export function useChat(options: UseChatOptions = {}) {
     });
 
     return () => {
-      console.log("[useChat] Cleaning up socket connection");
-      socket.disconnect();
-      socketRef.current = null;
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отключаем только если это тот же сокет
+      if (socketRef.current === socket) {
+        console.log("[useChat] Cleaning up socket connection", {
+          socketId: socket.id,
+          connected: socket.connected,
+        });
+        socket.disconnect();
+        socketRef.current = null;
+        setIsConnected(false);
+      }
     };
-  }, [session, loadChats]); // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавлен loadChats в зависимости для перезагрузки при смене режима
+  }, [session?.user?.id]); // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Только userId в зависимостях, не весь session и не loadChats
 
   // Загрузка сообщений чата (HTTP - для первоначальной загрузки)
   const loadMessages = useCallback(async (chatId: string) => {
@@ -595,11 +627,55 @@ export function useChat(options: UseChatOptions = {}) {
 
         if (response.ok) {
           const data = await response.json();
-          // Сообщение придёт через сокет, но для надёжности добавим сразу
+          console.log("[useChat] ✅ File uploaded, message created:", {
+            messageId: data.message.id,
+            hasAttachments: !!(data.message.attachments && data.message.attachments.length > 0),
+            attachmentsCount: data.message.attachments?.length || 0,
+          });
+          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Сообщение придёт через сокет, но для надёжности добавим сразу
           setMessages(prev => {
-            if (prev.some(m => m.id === data.message.id)) return prev;
+            if (prev.some(m => m.id === data.message.id)) {
+              console.log("[useChat] ⚠️ Message already exists after file upload");
+              return prev;
+            }
+            console.log("[useChat] ✅ Adding message with file to current chat");
             return [...prev, data.message];
           });
+          
+          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем превью чата после загрузки файла
+          if (data.message) {
+            let previewContent = data.message.content || "[Файл]";
+            if (typeof previewContent === 'string' && previewContent.length > 0) {
+              previewContent = previewContent
+                .replace(/\*\*(.*?)\*\*/g, '$1')
+                .replace(/\*(.*?)\*/g, '$1')
+                .replace(/#{1,6}\s+/g, '')
+                .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+                .replace(/`([^`]+)`/g, '$1')
+                .replace(/```[\s\S]*?```/g, '')
+                .replace(/\n{2,}/g, ' ')
+                .trim();
+              
+              if (previewContent.length > 100) {
+                previewContent = previewContent.substring(0, 100) + '...';
+              }
+            } else if (data.message.attachments && data.message.attachments.length > 0) {
+              // Если есть файлы, показываем тип файла
+              const firstAtt = data.message.attachments[0];
+              previewContent = firstAtt.type === 'image' ? '📷 Фото' : '📎 Файл';
+            }
+            
+            setChats(prev => prev.map(chat =>
+              chat.id === data.message.chatId
+                ? {
+                    ...chat,
+                    lastMessage: previewContent,
+                    lastMessageAt: data.message.createdAt ? new Date(data.message.createdAt) : new Date(),
+                  }
+                : chat
+            ));
+          }
+          
           return true;
         }
       } else {
