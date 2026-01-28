@@ -26,16 +26,27 @@ export default function ChatUnreadBadge() {
       const rooms = data.rooms || [];
       
       // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Суммируем только валидные unreadCount
-      const total = rooms.reduce((sum: number, room: any) => {
+      const roomsWithUnread = rooms.filter(r => {
+        const count = typeof r.unreadCount === 'number' ? r.unreadCount : 0;
+        return count > 0;
+      });
+      
+      const total = roomsWithUnread.reduce((sum: number, room: any) => {
         const count = typeof room.unreadCount === 'number' ? room.unreadCount : 0;
         // Игнорируем отрицательные значения
         return sum + Math.max(0, count);
       }, 0);
       
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Детальное логирование для диагностики
       console.log('[ChatUnreadBadge] Fetched unread count:', {
         total,
         roomsCount: rooms.length,
-        roomsWithUnread: rooms.filter(r => (r.unreadCount || 0) > 0).length,
+        roomsWithUnreadCount: roomsWithUnread.length,
+        roomsWithUnread: roomsWithUnread.map(r => ({
+          id: r.id,
+          name: r.name || r.displayName,
+          unreadCount: r.unreadCount,
+        })),
       });
       
       setUnreadCount(total);
@@ -87,7 +98,13 @@ export default function ChatUnreadBadge() {
       const customEvent = e as CustomEvent;
       if (customEvent.detail?.totalUnread !== undefined) {
         const newCount = Math.max(0, customEvent.detail.totalUnread);
-        console.log('[ChatUnreadBadge] Unread count changed via event:', newCount);
+        const oldCount = unreadCount;
+        console.log('[ChatUnreadBadge] Unread count changed via event:', {
+          oldCount,
+          newCount,
+          difference: newCount - oldCount,
+          eventDetail: customEvent.detail,
+        });
         setUnreadCount(newCount);
         setIsInitialized(true);
       }

@@ -314,10 +314,18 @@ export async function getUserChats(
   // Получаем количество непрочитанных сообщений для всех чатов одним запросом
   let unreadCounts = new Map<string, number>();
   try {
-    unreadCounts = await getUnreadCountsForChats(
-      chats.map((c) => c.id),
-      userId
-    );
+    const chatIds = chats.map((c) => c.id);
+    console.log(`[chat-service] getUserChats: Getting unread counts for ${chatIds.length} chats`);
+    unreadCounts = await getUnreadCountsForChats(chatIds, userId);
+    
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Детальное логирование для диагностики
+    const totalUnread = Array.from(unreadCounts.values()).reduce((sum, count) => sum + Math.max(0, count), 0);
+    const chatsWithUnread = Array.from(unreadCounts.entries()).filter(([_, count]) => count > 0);
+    console.log(`[chat-service] getUserChats: Unread counts calculated:`, {
+      totalUnread,
+      chatsWithUnreadCount: chatsWithUnread.length,
+      chatsWithUnread: chatsWithUnread.map(([chatId, count]) => ({ chatId, count })),
+    });
   } catch (error) {
     console.error('[chat-service] Error getting unread counts:', error);
     // Продолжаем с пустым Map - все чаты будут показаны как прочитанные
@@ -903,16 +911,22 @@ async function getUnreadCountsForChats(
       const counts = await Promise.all(
         readChatsData.map(async ({ chatId, readAt }) => {
           try {
-            return {
-              chatId,
-              count: await prisma.chatMessage.count({
-                where: {
-                  chatId,
-                  senderId: { not: userId },
-                  createdAt: { gt: readAt },
-                },
-              }),
-            };
+            const count = await prisma.chatMessage.count({
+              where: {
+                chatId,
+                senderId: { not: userId },
+                createdAt: { gt: readAt },
+              },
+            });
+            
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Детальное логирование для диагностики
+            const chatType = chatTypeMap.get(chatId) || 'UNKNOWN';
+            console.log(`[chat-service] getUnreadCountsForChats: Chat ${chatId} (${chatType}):`, {
+              readAt: readAt.toISOString(),
+              unreadCount: count,
+            });
+            
+            return { chatId, count };
           } catch (error) {
             console.error(`[chat-service] Error counting unread for chat ${chatId}:`, error);
             return { chatId, count: 0 };
@@ -921,7 +935,8 @@ async function getUnreadCountsForChats(
       );
 
       for (const { chatId, count } of counts) {
-        results.set(chatId, count);
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убеждаемся что count не отрицательный
+        results.set(chatId, Math.max(0, count));
       }
     } catch (error) {
       console.error('[chat-service] Error counting unread messages (batch):', error);

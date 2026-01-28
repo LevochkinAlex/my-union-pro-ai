@@ -93,10 +93,25 @@ export function useChat(options: UseChatOptions = {}) {
         setChats(data.chats);
         
         // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных для обновления бейджа
-        const totalUnread = data.chats.reduce((sum: number, c: Chat) => {
+        const chatsWithUnread = data.chats.filter((c: Chat) => {
+          const count = (c as any).unreadCount || 0;
+          return count > 0;
+        });
+        const totalUnread = chatsWithUnread.reduce((sum: number, c: Chat) => {
           const count = (c as any).unreadCount || 0;
           return sum + Math.max(0, count);
         }, 0);
+        
+        console.log(`[useChat] loadChats: Total unread count:`, {
+          totalUnread,
+          chatsWithUnreadCount: chatsWithUnread.length,
+          chatsWithUnread: chatsWithUnread.map((c: Chat) => ({
+            id: c.id,
+            name: (c as any).name || (c as any).displayName,
+            unreadCount: (c as any).unreadCount,
+          })),
+        });
+        
         window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
           detail: { totalUnread },
         }));
