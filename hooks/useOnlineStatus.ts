@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { fetchJsonWithRetry } from "@/lib/api-client";
 
 /**
  * Хук для проверки онлайн статуса пользователей и времени последней активности
@@ -30,11 +31,24 @@ export function useOnlineStatus(userIds: string[]) {
     }
 
     try {
-      const response = await fetch(
-        `/api/users/online-status?userIds=${validUserIds.join(",")}`
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем fetchJsonWithRetry для обработки сетевых ошибок
+      const data = await fetchJsonWithRetry<{
+        statuses: Record<string, boolean>;
+        lastSeenAt: Record<string, string | null>;
+      }>(
+        `/api/users/online-status?userIds=${validUserIds.join(",")}`,
+        {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        },
+        {
+          maxRetries: 2, // Меньше попыток для онлайн статуса (не критично)
+          retryDelay: 500,
+          retryableStatuses: [500, 502, 503, 504], // Повторяем только при серверных ошибках
+        }
       );
-      if (response.ok) {
-        const data = await response.json();
+
+      if (data) {
         setStatuses(data.statuses || {});
         // Преобразуем строки в Date объекты
         const lastSeen: Record<string, Date | null> = {};
@@ -45,12 +59,25 @@ export function useOnlineStatus(userIds: string[]) {
         }
         setLastSeenAt(lastSeen);
       } else {
-        // Если ошибка - просто игнорируем, не ломаем UI
-        console.warn("[useOnlineStatus] Failed to fetch statuses:", response.status);
+        // Если data null - значит была ошибка, но не ломаем UI
+        console.warn("[useOnlineStatus] Failed to fetch statuses (data is null)");
+        // Оставляем предыдущие статусы, не сбрасываем их
       }
     } catch (error) {
-      console.error("[useOnlineStatus] Error:", error);
-      // Не устанавливаем ошибку, просто оставляем пустой статус
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обрабатываем различные типы ошибок
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Игнорируем SSL ошибки и сетевые ошибки - они не критичны для онлайн статуса
+      if (errorMessage.includes('SSL') || 
+          errorMessage.includes('Failed to fetch') ||
+          errorMessage.includes('NetworkError') ||
+          errorMessage.includes('handshake')) {
+        console.warn("[useOnlineStatus] Network/SSL error (non-critical):", errorMessage);
+        // Оставляем предыдущие статусы
+      } else {
+        console.error("[useOnlineStatus] Unexpected error:", error);
+        // Оставляем предыдущие статусы
+      }
     } finally {
       setLoading(false);
     }

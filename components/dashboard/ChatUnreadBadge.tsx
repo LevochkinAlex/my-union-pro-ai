@@ -12,21 +12,38 @@ export default function ChatUnreadBadge() {
     if (!session?.user?.id) return;
     
     try {
-      const response = await fetch('/api/chat/rooms');
-      if (!response.ok) return;
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем fetchJsonWithRetry для обработки сетевых ошибок
+      const { fetchJsonWithRetry } = await import('@/lib/api-client');
+      const data = await fetchJsonWithRetry<{ rooms: any[] }>('/api/chat/rooms');
       
-      const data = await response.json();
+      if (!data || !data.rooms) {
+        console.warn('[ChatUnreadBadge] No rooms data received');
+        setUnreadCount(0);
+        setIsInitialized(true);
+        return;
+      }
+      
       const rooms = data.rooms || [];
       
-      // Суммируем непрочитанные сообщения по всем чатам
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Суммируем только валидные unreadCount
       const total = rooms.reduce((sum: number, room: any) => {
-        return sum + (room.unreadCount || 0);
+        const count = typeof room.unreadCount === 'number' ? room.unreadCount : 0;
+        // Игнорируем отрицательные значения
+        return sum + Math.max(0, count);
       }, 0);
+      
+      console.log('[ChatUnreadBadge] Fetched unread count:', {
+        total,
+        roomsCount: rooms.length,
+        roomsWithUnread: rooms.filter(r => (r.unreadCount || 0) > 0).length,
+      });
       
       setUnreadCount(total);
       setIsInitialized(true);
     } catch (err) {
-      console.error('Failed to fetch unread count:', err);
+      console.error('[ChatUnreadBadge] Failed to fetch unread count:', err);
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке не сбрасываем счетчик, чтобы не показывать фейковую цифру
+      // Просто не обновляем, оставляем последнее известное значение
       setIsInitialized(true);
     }
   }, [session?.user?.id]);
@@ -54,16 +71,30 @@ export default function ChatUnreadBadge() {
     };
     
     const handleMessagesRead = () => {
-      // При прочтении сообщений обновляем счетчик
-      setTimeout(fetchUnreadCount, 1000);
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При прочтении сообщений обновляем счетчик немедленно
+      console.log('[ChatUnreadBadge] Messages read event received, updating count');
+      fetchUnreadCount();
+    };
+    
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Слушаем события изменения unreadCount из useChat
+    const handleUnreadCountChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.totalUnread !== undefined) {
+        const newCount = Math.max(0, customEvent.detail.totalUnread);
+        console.log('[ChatUnreadBadge] Unread count changed via event:', newCount);
+        setUnreadCount(newCount);
+        setIsInitialized(true);
+      }
     };
     
     window.addEventListener('chat-unread-updated', handleUnreadUpdate);
     window.addEventListener('chat-messages-read', handleMessagesRead);
+    window.addEventListener('chat-unread-count-changed', handleUnreadCountChange);
     
     return () => {
       window.removeEventListener('chat-unread-updated', handleUnreadUpdate);
       window.removeEventListener('chat-messages-read', handleMessagesRead);
+      window.removeEventListener('chat-unread-count-changed', handleUnreadCountChange);
     };
   }, [fetchUnreadCount]);
 

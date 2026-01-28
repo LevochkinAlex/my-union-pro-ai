@@ -91,6 +91,15 @@ export function useChat(options: UseChatOptions = {}) {
           otherUser: (c as any).otherUser?.id || null,
         })));
         setChats(data.chats);
+        
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных для обновления бейджа
+        const totalUnread = data.chats.reduce((sum: number, c: Chat) => {
+          const count = (c as any).unreadCount || 0;
+          return sum + Math.max(0, count);
+        }, 0);
+        window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
+          detail: { totalUnread },
+        }));
       } else if (data === null) {
         // Если data null, значит была ошибка при запросе
         console.error("[useChat] ❌ Failed to load chats - data is null (request failed)");
@@ -265,6 +274,12 @@ export function useChat(options: UseChatOptions = {}) {
           return chat;
         });
         
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных для обновления бейджа
+        const totalUnread = updated.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+        window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
+          detail: { totalUnread },
+        }));
+        
         // Если чат не найден в списке, возможно нужно перезагрузить список
         const chatExists = updated.some(c => c.id === message.chatId);
         if (!chatExists) {
@@ -392,12 +407,22 @@ export function useChat(options: UseChatOptions = {}) {
           ));
         }
 
-        // Помечаем как прочитанные
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Помечаем как прочитанные и отправляем событие для обновления бейджа
         try {
           await fetch(`/api/chat/${chatId}/read`, { method: "POST" });
-          setChats(prev => prev.map(chat =>
-            chat.id === chatId ? { ...chat, unreadCount: 0 } : chat
-          ));
+          setChats(prev => {
+            const updated = prev.map(chat =>
+              chat.id === chatId ? { ...chat, unreadCount: 0 } : chat
+            );
+            
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных
+            const totalUnread = updated.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+            window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
+              detail: { totalUnread },
+            }));
+            
+            return updated;
+          });
         } catch (e) {
           console.error("[useChat] Error marking as read:", e);
         }
