@@ -39,12 +39,21 @@ echo "=== Installing dependencies ==="
 pnpm install
 echo ""
 
+echo "=== Applying database migrations ==="
+pnpm prisma migrate deploy
+echo ""
+
+echo "=== Generating Prisma client ==="
+pnpm prisma generate
+echo ""
+
 echo "=== Building project ==="
 pnpm build
 echo ""
 
 echo "=== Restarting PM2 ==="
 pm2 restart my-union-pro
+pm2 restart my-union-socket
 sleep 2
 echo ""
 
