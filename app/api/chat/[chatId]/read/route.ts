@@ -41,6 +41,9 @@ export async function POST(
       console.warn('[chat/read] Cache invalidation error:', err)
     );
 
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Небольшая задержка перед пересчетом, чтобы дать время транзакции зафиксироваться
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Пересчитываем unreadCount для этого чата
     const { getUnreadCount } = await import('@/lib/chat-service');
     const newUnreadCount = await getUnreadCount(chatId, userId);

@@ -786,16 +786,42 @@ export async function markAsRead(chatId: string, userId: string): Promise<void> 
     select: { readAt: true },
   });
 
-  // Обновляем через ChatParticipant
-  const result = await prisma.chatParticipant.updateMany({
-    where: {
-      chatId,
-      userId,
-      leftAt: null,
-    },
-    data: {
-      readAt: now,
-    },
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем транзакцию для атомарного обновления
+  const result = await prisma.$transaction(async (tx) => {
+    // Обновляем через ChatParticipant
+    const updateResult = await tx.chatParticipant.updateMany({
+      where: {
+        chatId,
+        userId,
+        leftAt: null,
+      },
+      data: {
+        readAt: now,
+      },
+    });
+    
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверяем что обновление произошло
+    const verifyParticipant = await tx.chatParticipant.findFirst({
+      where: {
+        chatId,
+        userId,
+        leftAt: null,
+      },
+      select: { readAt: true },
+    });
+    
+    if (!verifyParticipant) {
+      console.error(`[chat-service] ❌ Participant not found after update for chatId=${chatId}, userId=${userId}`);
+    } else if (!verifyParticipant.readAt || verifyParticipant.readAt.getTime() !== now.getTime()) {
+      console.error(`[chat-service] ❌ readAt not updated correctly:`, {
+        expected: now.toISOString(),
+        actual: verifyParticipant.readAt?.toISOString() || null,
+      });
+    } else {
+      console.log(`[chat-service] ✅ readAt updated correctly in transaction`);
+    }
+    
+    return updateResult;
   });
 
   // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверяем что readAt действительно обновился
