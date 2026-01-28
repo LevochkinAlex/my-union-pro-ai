@@ -46,7 +46,7 @@ export async function GET() {
 
     // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем те же фильтры, что и /api/chat
     // Для MEMBER mode обходим кэш для актуальных данных
-    const chats = await getUserChats(session.user.id, {}, isMemberMode);
+    const chats = await getUserChats(session.user.id, {}, isMemberMode ? true : false);
 
     // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Применяем те же фильтры, что и /api/chat для MEMBER mode
     let filteredChats = chats;
