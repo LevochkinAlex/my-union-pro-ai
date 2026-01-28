@@ -858,6 +858,26 @@ export async function GET(
         } else {
           normalizedContent = String(msg.content);
         }
+        
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Очищаем HTML теги из старых сообщений обращений
+        // Проверяем, является ли это начальным сообщением обращения
+        if (chat.ticket && normalizedContent.includes('Обращение #')) {
+          const { stripHtml } = await import('@/lib/notifications');
+          
+          // Если есть HTML теги - очищаем их
+          if (normalizedContent.includes('<')) {
+            normalizedContent = stripHtml(normalizedContent);
+          }
+          
+          // Улучшаем форматирование старого сообщения для единообразия
+          // Проверяем, есть ли уже правильное форматирование
+          if (!normalizedContent.includes('**Обращение #') || !normalizedContent.includes('**Тема:**')) {
+            normalizedContent = normalizedContent
+              .replace(/Обращение\s*#?(\d+)/gi, '**Обращение #$1**')
+              .replace(/(?:Тема|Заголовок)[:：]?\s*/gi, '**Тема:** ')
+              .replace(/(?:Текст|Содержание|Сообщение)[:：]?\s*/gi, '**Текст обращения:**\n');
+          }
+        }
       }
       
       return {

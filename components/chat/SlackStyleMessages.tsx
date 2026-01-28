@@ -1380,6 +1380,23 @@ const MessageBubble = memo(function MessageBubble({
 
               {/* Text content with markdown */}
               {message.content && (() => {
+                // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверяем, является ли это начальным сообщением обращения
+                const isAppealInitialMessage = message.content.includes('**Обращение #') && 
+                                                message.content.includes('**Тема:**') &&
+                                                message.content.includes('**Текст обращения:**');
+                
+                // Если это начальное сообщение обращения - используем специальный компонент
+                if (isAppealInitialMessage) {
+                  const AppealMessageCard = require('./AppealMessageCard').default;
+                  return (
+                    <>
+                      <AppealMessageCard content={message.content} isOwn={isOwn} />
+                      {/* Link previews */}
+                      <LinkPreviews content={message.content} isOwn={isOwn} />
+                    </>
+                  );
+                }
+                
                 // Обрабатываем упоминания ДО передачи в ReactMarkdown
                 // Заменяем @[Name](userId) на специальные плейсхолдеры, чтобы ReactMarkdown не интерпретировал их как ссылки
                 const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;

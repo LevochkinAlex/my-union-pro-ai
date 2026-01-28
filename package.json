@@ -3,6 +3,7 @@
   "version": "1.8.0",
   "private": true,
   "scripts": {
+    "fix-appeal-messages": "tsx scripts/fix-appeal-messages.ts",
     "dev": "dotenv -e .env.local -- next dev -p 3004",
     "prebuild": "pnpm prisma:generate",
     "build": "dotenv -e .env.local -- next build",
