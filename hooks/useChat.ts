@@ -235,8 +235,11 @@ export function useChat(options: UseChatOptions = {}) {
             attachments: message.attachments?.map(a => ({
               id: a.id,
               type: a.type,
-              url: a.url?.substring(0, 50) + '...',
-              name: a.name,
+              fileName: a.fileName,
+              originalName: a.originalName,
+              filePath: a.filePath,
+              fileSize: a.fileSize,
+              mimeType: a.mimeType,
             })),
           });
           
@@ -663,30 +666,24 @@ export function useChat(options: UseChatOptions = {}) {
           messageType: 'text',
           createdAt: new Date().toISOString(),
           editedAt: null,
-          isRead: false,
           sender: {
             id: session?.user?.id || '',
             firstName: session?.user?.firstName || null,
             lastName: session?.user?.lastName || null,
-            middleName: session?.user?.middleName || null,
+            middleName: null,
             avatarUrl: session?.user?.avatarUrl || null,
           },
           replyTo: replyToId ? undefined : undefined, // TODO: загрузить replyTo если нужно
           attachments: [{
             id: `temp-attachment-${tempMessageId}`,
             type: isImage ? 'image' : 'file',
-            url: fileUrl,
-            name: file.name,
-            size: file.size,
+            fileName: file.name,
+            originalName: file.name,
+            filePath: fileUrl,
+            fileSize: file.size,
             mimeType: file.type,
-            thumbnailUrl: isImage ? fileUrl : undefined,
-            width: undefined,
-            height: undefined,
-            isOld: false,
           }],
           reactions: {},
-          threadRepliesCount: 0,
-          threadLastReplyAt: null,
         };
         
         // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавляем оптимистичное сообщение сразу
@@ -797,7 +794,6 @@ export function useChat(options: UseChatOptions = {}) {
           options.onError?.("Ошибка загрузки файла");
           return false;
         }
-      }
       } else {
         // Для текста можно использовать сокет (быстрее) или HTTP
         if (socketRef.current?.connected) {

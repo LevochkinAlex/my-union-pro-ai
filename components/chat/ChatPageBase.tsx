@@ -437,7 +437,12 @@ export function ChatPageBase({
                 threadRootId={null}
                 onCancelReply={() => setReplyingTo(null)}
                 disabled={sending}
-                participants={selectedChat?.participants || []}
+                participants={selectedChat?.participants?.map(p => ({
+                  id: p.userId,
+                  firstName: p.user.firstName,
+                  lastName: p.user.lastName,
+                  avatarUrl: p.user.avatarUrl,
+                })) || []}
                 currentUserId={currentUserId || undefined}
               />
             </>
