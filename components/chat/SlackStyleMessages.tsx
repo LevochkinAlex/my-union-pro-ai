@@ -628,6 +628,15 @@ function LazyImage({
   const displaySrc = shouldLoad ? (cdnThumbnail || cdnSrc) : (blurPlaceholder || undefined);
   const showBlur = isOld && (!shouldLoad || !isLoaded);
 
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убеждаемся что src не пустой
+  if (!src || src.trim() === '') {
+    return (
+      <div className={`relative overflow-hidden rounded-xl ${className} bg-gray-100 dark:bg-gray-800 flex items-center justify-center`}>
+        <ImageIcon className="w-8 h-8 text-gray-400" />
+      </div>
+    );
+  }
+
   return (
     <button
       ref={containerRef}
@@ -637,6 +646,7 @@ function LazyImage({
     >
       {displaySrc && (
         <img
+          ref={imgRef}
           src={displaySrc}
           alt={alt}
           className={`w-full h-full object-cover rounded-xl transition-all duration-300 ${
@@ -660,7 +670,15 @@ function LazyImage({
               setIsLoaded(true);
             }
           }}
-          onError={() => setImageError(true)}
+          onError={(e) => {
+            console.error('[LazyImage] Failed to load image:', {
+              src: displaySrc,
+              cdnSrc,
+              cdnThumbnail,
+              originalSrc: src,
+            });
+            setImageError(true);
+          }}
         />
       )}
       
@@ -688,6 +706,13 @@ function LazyImage({
       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-xl pointer-events-none" />
       
       {imageError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-xl">
+          <ImageIcon className="w-8 h-8 text-gray-400" />
+        </div>
+      )}
+      
+      {/* Показываем плейсхолдер пока изображение не загружено */}
+      {!displaySrc && !imageError && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-xl">
           <ImageIcon className="w-8 h-8 text-gray-400" />
         </div>
@@ -857,6 +882,14 @@ function AttachmentsDisplay({ attachments, isOwn, onImageClick }: AttachmentsDis
             const name = getAttachmentName(img);
             const isOld = img.isOld || false;
             const blurPlaceholder = img.blurPlaceholder || null;
+            
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Логируем URL для диагностики
+            if (!url || url.trim() === '') {
+              console.warn('[AttachmentsDisplay] Empty image URL:', {
+                attachment: img,
+                idx,
+              });
+            }
             
             return (
               <LazyImage

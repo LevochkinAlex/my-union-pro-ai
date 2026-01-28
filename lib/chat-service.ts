@@ -992,12 +992,43 @@ export function formatChatInfo(
     // lastMessage - это объект ChatMessage из relation
     if (typeof chat.lastMessage === 'object' && 'content' in chat.lastMessage) {
       lastMessage = chat.lastMessage.content || null;
-      // Обрезаем длинные сообщения для preview
-      if (lastMessage && lastMessage.length > 100) {
-        lastMessage = lastMessage.substring(0, 100) + '...';
+      
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Очищаем markdown разметку из preview
+      if (lastMessage) {
+        // Удаляем markdown разметку (**текст**, # заголовок, и т.д.)
+        lastMessage = lastMessage
+          .replace(/\*\*(.*?)\*\*/g, '$1') // Удаляем **жирный текст**
+          .replace(/\*(.*?)\*/g, '$1') // Удаляем *курсив*
+          .replace(/#{1,6}\s+/g, '') // Удаляем заголовки (# ## ###)
+          .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Удаляем ссылки [текст](url)
+          .replace(/`([^`]+)`/g, '$1') // Удаляем код `код`
+          .replace(/```[\s\S]*?```/g, '') // Удаляем блоки кода
+          .replace(/\n{2,}/g, ' ') // Заменяем множественные переносы на пробел
+          .trim();
+        
+        // Обрезаем длинные сообщения для preview
+        if (lastMessage.length > 100) {
+          lastMessage = lastMessage.substring(0, 100) + '...';
+        }
       }
     } else if (typeof chat.lastMessage === 'string') {
       lastMessage = chat.lastMessage;
+      // Очищаем markdown и из строки
+      if (lastMessage) {
+        lastMessage = lastMessage
+          .replace(/\*\*(.*?)\*\*/g, '$1')
+          .replace(/\*(.*?)\*/g, '$1')
+          .replace(/#{1,6}\s+/g, '')
+          .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+          .replace(/`([^`]+)`/g, '$1')
+          .replace(/```[\s\S]*?```/g, '')
+          .replace(/\n{2,}/g, ' ')
+          .trim();
+        
+        if (lastMessage.length > 100) {
+          lastMessage = lastMessage.substring(0, 100) + '...';
+        }
+      }
     }
   }
 
