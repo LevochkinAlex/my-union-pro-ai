@@ -77,7 +77,17 @@ export function useChat(options: UseChatOptions = {}) {
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 
       (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:3005` : "");
 
-    console.log("[useChat] Connecting to socket:", socketUrl);
+    console.log("[useChat] Connecting to socket:", socketUrl, {
+      userId: session.user.id,
+      viewMode: (session.user as any).viewMode,
+    });
+
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отключаем старый сокет перед созданием нового
+    if (socketRef.current) {
+      console.log("[useChat] Disconnecting old socket before reconnecting");
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
 
     const socket = io(socketUrl, {
       auth: { token },
@@ -90,13 +100,20 @@ export function useChat(options: UseChatOptions = {}) {
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      console.log("[useChat] ✅ Socket connected");
+      console.log("[useChat] ✅ Socket connected", {
+        socketId: socket.id,
+        userId: session.user.id,
+      });
       setIsConnected(true);
       
-      // Переподключаемся к текущему чату
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Переподключаемся к текущему чату и перезагружаем список чатов
       if (selectedChatRef.current) {
+        console.log("[useChat] Rejoining chat after reconnect:", selectedChatRef.current.id);
         socket.emit("chat:join", selectedChatRef.current.id);
       }
+      
+      // Перезагружаем список чатов при переподключении (на случай смены режима)
+      loadChats();
     });
 
     socket.on("disconnect", () => {
@@ -112,23 +129,76 @@ export function useChat(options: UseChatOptions = {}) {
 
     // Новое сообщение
     socket.on("message:new", (message: Message) => {
-      console.log("[useChat] 📨 New message via socket");
-      
-      // Добавляем только если сообщение ещё не существует
-      setMessages(prev => {
-        if (prev.some(m => m.id === message.id)) return prev;
-        return [...prev, message];
+      console.log("[useChat] 📨 New message via socket:", {
+        messageId: message.id,
+        chatId: message.chatId,
+        senderId: message.senderId,
+        contentLength: message.content?.length || 0,
+        currentChatId: selectedChatRef.current?.id,
       });
-
-      // Обновляем превью текущего чата
+      
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавляем сообщение в список только если это текущий открытый чат
       const currentChatId = selectedChatRef.current?.id;
-      if (currentChatId) {
-        setChats(prev => prev.map(chat =>
-          chat.id === currentChatId
-            ? { ...chat, lastMessage: message.content || "[Файл]", lastMessageAt: new Date() }
-            : chat
-        ));
+      if (currentChatId === message.chatId) {
+        setMessages(prev => {
+          if (prev.some(m => m.id === message.id)) {
+            console.log("[useChat] ⚠️ Message already exists, skipping:", message.id);
+            return prev;
+          }
+          console.log("[useChat] ✅ Adding message to current chat:", message.id);
+          return [...prev, message];
+        });
+      } else {
+        console.log("[useChat] 📬 Message for different chat, updating preview only");
       }
+
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем превью для ВСЕХ чатов, где пришло сообщение
+      setChats(prev => {
+        const updated = prev.map(chat => {
+          if (chat.id === message.chatId) {
+            // Очищаем markdown из превью (как в chat-service.ts)
+            let previewContent = message.content || "[Файл]";
+            if (typeof previewContent === 'string' && previewContent.length > 0) {
+              previewContent = previewContent
+                .replace(/\*\*(.*?)\*\*/g, '$1') // Удаляем **жирный текст**
+                .replace(/\*(.*?)\*/g, '$1') // Удаляем *курсив*
+                .replace(/#{1,6}\s+/g, '') // Удаляем заголовки
+                .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Удаляем ссылки
+                .replace(/`([^`]+)`/g, '$1') // Удаляем код
+                .replace(/```[\s\S]*?```/g, '') // Удаляем блоки кода
+                .replace(/\n{2,}/g, ' ') // Заменяем множественные переносы
+                .trim();
+              
+              // Обрезаем длинные сообщения
+              if (previewContent.length > 100) {
+                previewContent = previewContent.substring(0, 100) + '...';
+              }
+            }
+            
+            console.log("[useChat] ✅ Updating chat preview:", {
+              chatId: chat.id,
+              oldLastMessage: chat.lastMessage?.substring(0, 50),
+              newLastMessage: previewContent.substring(0, 50),
+            });
+            
+            return {
+              ...chat,
+              lastMessage: previewContent,
+              lastMessageAt: message.createdAt ? new Date(message.createdAt) : new Date(),
+              unreadCount: chat.id === currentChatId ? 0 : (chat.unreadCount || 0) + 1,
+            };
+          }
+          return chat;
+        });
+        
+        // Если чат не найден в списке, возможно нужно перезагрузить список
+        const chatExists = updated.some(c => c.id === message.chatId);
+        if (!chatExists) {
+          console.log("[useChat] ⚠️ Chat not found in list, may need to reload:", message.chatId);
+        }
+        
+        return updated;
+      });
     });
 
     // Сообщение обновлено
@@ -169,10 +239,11 @@ export function useChat(options: UseChatOptions = {}) {
     });
 
     return () => {
+      console.log("[useChat] Cleaning up socket connection");
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [session]);
+  }, [session, loadChats]); // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавлен loadChats в зависимости для перезагрузки при смене режима
 
   // Загрузка списка чатов
   const loadChats = useCallback(async () => {
@@ -636,7 +707,37 @@ export function useChat(options: UseChatOptions = {}) {
                   if (prev.some(m => m.id === data.message.id)) return prev;
                   return [...prev, data.message];
                 });
-                // Обновляем список чатов
+                
+                // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем превью чата сразу после отправки
+                const message = data.message;
+                let previewContent = message.content || "[Файл]";
+                if (typeof previewContent === 'string' && previewContent.length > 0) {
+                  previewContent = previewContent
+                    .replace(/\*\*(.*?)\*\*/g, '$1')
+                    .replace(/\*(.*?)\*/g, '$1')
+                    .replace(/#{1,6}\s+/g, '')
+                    .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+                    .replace(/`([^`]+)`/g, '$1')
+                    .replace(/```[\s\S]*?```/g, '')
+                    .replace(/\n{2,}/g, ' ')
+                    .trim();
+                  
+                  if (previewContent.length > 100) {
+                    previewContent = previewContent.substring(0, 100) + '...';
+                  }
+                }
+                
+                setChats(prev => prev.map(chat =>
+                  chat.id === message.chatId
+                    ? {
+                        ...chat,
+                        lastMessage: previewContent,
+                        lastMessageAt: message.createdAt ? new Date(message.createdAt) : new Date(),
+                      }
+                    : chat
+                ));
+                
+                // Обновляем список чатов (для синхронизации с сервером)
                 loadChats();
                 return true;
               } else {

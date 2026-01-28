@@ -91,18 +91,30 @@ io.on("connection", (socket) => {
 
   // Присоединение к чату
   socket.on("chat:join", async (chatId) => {
+    console.log(`[Socket] chat:join request:`, {
+      chatId,
+      userId,
+      userName,
+      socketId: socket.id,
+    });
+    
     // Проверяем доступ к чату
     const participant = await prisma.chatParticipant.findUnique({
       where: { chatId_userId: { chatId, userId } },
     });
 
     if (!participant) {
+      console.warn(`[Socket] ❌ Access denied: user ${userId} not a participant of chat ${chatId}`);
       socket.emit("error", { message: "Нет доступа к чату" });
       return;
     }
 
     socket.join(chatId);
-    console.log(`[Socket] ${userName} присоединился к чату ${chatId}`);
+    console.log(`[Socket] ✅ ${userName} (${userId}) присоединился к чату ${chatId}`);
+    
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Логируем все комнаты, к которым подключен пользователь
+    const rooms = Array.from(socket.rooms);
+    console.log(`[Socket] User ${userId} is now in rooms:`, rooms);
   });
 
   // Покидание чата
@@ -186,8 +198,23 @@ io.on("connection", (socket) => {
 
       console.log(`[Socket] ✅ Message saved to DB: ${message.id} in chat ${chatId}`);
 
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем количество подключенных клиентов в комнате
+      const room = io.sockets.adapter.rooms.get(chatId);
+      const clientsCount = room ? room.size : 0;
+      
+      console.log(`[Socket] 📤 Emitting message:new to room ${chatId}:`, {
+        messageId: message.id,
+        chatId: message.chatId,
+        senderId: message.senderId,
+        contentLength: message.content?.length || 0,
+        clientsInRoom: clientsCount,
+        senderName: userName,
+      });
+      
       // Отправляем всем в чате (включая отправителя)
       io.to(chatId).emit("message:new", message);
+      
+      console.log(`[Socket] ✅ Message emitted to ${clientsCount} clients in room ${chatId}`);
 
       // Останавливаем typing
       clearTyping(chatId, userId, socket);
