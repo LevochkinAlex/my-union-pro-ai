@@ -103,25 +103,24 @@ export function useChat(options: UseChatOptions = {}) {
           return sum + Math.max(0, count);
         }, 0);
         
-        console.log(`[useChat] loadChats: Total unread count:`, {
-          totalUnread,
-          chatsWithUnreadCount: chatsWithUnread.length,
-          chatsWithUnread: chatsWithUnread.map((c: Chat) => ({
-            id: c.id,
-            name: (c as any).name || (c as any).displayName,
-            unreadCount: (c as any).unreadCount,
-            type: c.type,
-            otherUserId: c.otherUser?.id,
-          })),
-          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Показываем все чаты для диагностики
-          allChats: data.chats.map((c: Chat) => ({
-            id: c.id,
-            name: (c as any).name || (c as any).displayName,
-            unreadCount: (c as any).unreadCount || 0,
-            type: c.type,
-            otherUserId: c.otherUser?.id,
-          })),
-        });
+        console.log(`[useChat] ========== LOAD CHATS UNREAD COUNT ==========`);
+        console.log(`[useChat] Total unread:`, totalUnread);
+        console.log(`[useChat] Chats with unread:`, chatsWithUnread.length);
+        console.log(`[useChat] Chats with unread details:`, chatsWithUnread.map((c: Chat) => ({
+          id: c.id,
+          name: (c as any).name || (c as any).displayName,
+          unreadCount: (c as any).unreadCount,
+          type: c.type,
+          otherUserId: c.otherUser?.id,
+        })));
+        console.log(`[useChat] ALL CHATS:`, data.chats.map((c: Chat) => ({
+          id: c.id,
+          name: (c as any).name || (c as any).displayName,
+          unreadCount: (c as any).unreadCount || 0,
+          type: c.type,
+          otherUserId: c.otherUser?.id,
+        })));
+        console.log(`[useChat] ==============================================`);
         
         window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
           detail: { totalUnread },

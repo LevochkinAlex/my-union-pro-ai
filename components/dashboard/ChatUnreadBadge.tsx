@@ -39,27 +39,26 @@ export default function ChatUnreadBadge() {
       }, 0);
       
       // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Детальное логирование для диагностики
-      console.log('[ChatUnreadBadge] Fetched unread count:', {
-        total,
-        roomsCount: rooms.length,
-        roomsWithUnreadCount: roomsWithUnread.length,
-        roomsWithUnread: roomsWithUnread.map(r => ({
-          id: r.id,
-          name: r.name || r.displayName,
-          unreadCount: r.unreadCount,
-          type: r.type,
-          isDirect: r.isDirect,
-          isGroup: r.isGroup,
-          isTicket: r.isTicket,
-        })),
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Показываем все чаты для диагностики
-        allRooms: rooms.map(r => ({
-          id: r.id,
-          name: r.name || r.displayName,
-          unreadCount: r.unreadCount,
-          type: r.type,
-        })),
-      });
+      console.log('[ChatUnreadBadge] ========== FETCHED UNREAD COUNT ==========');
+      console.log('[ChatUnreadBadge] Total unread:', total);
+      console.log('[ChatUnreadBadge] Rooms count:', rooms.length);
+      console.log('[ChatUnreadBadge] Rooms with unread:', roomsWithUnread.length);
+      console.log('[ChatUnreadBadge] Rooms with unread details:', roomsWithUnread.map(r => ({
+        id: r.id,
+        name: r.name || r.displayName,
+        unreadCount: r.unreadCount,
+        type: r.type,
+        isDirect: r.isDirect,
+        isGroup: r.isGroup,
+        isTicket: r.isTicket,
+      })));
+      console.log('[ChatUnreadBadge] ALL ROOMS:', rooms.map(r => ({
+        id: r.id,
+        name: r.name || r.displayName,
+        unreadCount: r.unreadCount || 0,
+        type: r.type,
+      })));
+      console.log('[ChatUnreadBadge] ==========================================');
       
       // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Всегда обновляем счетчик, даже если он 0
       setUnreadCount(total);
