@@ -448,12 +448,19 @@ export default function SlackStyleChat({
       const data = await safeJsonParse(response);
       
       if (!response.ok) {
-        throw new Error(data?.error || 'Ошибка закрытия обращения');
+        const errMsg = data?.error || 'Ошибка закрытия обращения';
+        // Обращение уже закрыто — обновляем UI, чтобы скрыть кнопку и инпут
+        if (response.status === 400 && typeof errMsg === 'string' && errMsg.toLowerCase().includes('уже закрыто')) {
+          setTicketInfo((prev) => (prev ? { ...prev, status: 'RESOLVED' } : null));
+          setShowCloseAppealModal(false);
+          showToast('Обращение уже закрыто', 'info');
+          return;
+        }
+        throw new Error(errMsg);
       }
       
       showToast('Обращение успешно закрыто', 'success');
       setShowCloseAppealModal(false);
-      // Сразу обновляем статус обращения — поле ввода скрывается, отправка недоступна
       if (data?.ticket) {
         setTicketInfo({
           id: data.ticket.id,
@@ -466,7 +473,6 @@ export default function SlackStyleChat({
       console.error('[SlackStyleChat] Error closing appeal:', error);
       const errorMessage = error instanceof Error ? error.message : 'Ошибка закрытия обращения';
       showToast(errorMessage, 'error');
-      // Пробрасываем ошибку, чтобы модальное окно не закрывалось
       throw error;
     }
   }, [ticketInfo, showToast]);
@@ -523,16 +529,15 @@ export default function SlackStyleChat({
       return;
     }
 
-    // Если информации нет в чате, загружаем отдельно
+    // Если информации нет в чате, загружаем отдельно (id или publicId — API принимает оба)
     const fetchTicketInfo = async () => {
-      const ticketIdToUse = ticketIdFromUrl || selectedChat?.ticketId;
+      const ticketIdToUse = ticketIdFromUrl || selectedChat?.ticketId || selectedChat?.ticketPublicId;
       if (!ticketIdToUse) {
         setTicketInfo(null);
         return;
       }
       
       try {
-        // Пытаемся получить по ID или publicId
         const response = await fetch(`/api/tickets/${ticketIdToUse}`);
         if (response.ok) {
           const data = await safeJsonParse(response);
@@ -553,12 +558,12 @@ export default function SlackStyleChat({
       }
     };
     
-    if (mounted && (ticketIdFromUrl || selectedChat?.ticketId)) {
+    if (mounted && (ticketIdFromUrl || selectedChat?.ticketId || selectedChat?.ticketPublicId)) {
       fetchTicketInfo();
     } else {
       setTicketInfo(null);
     }
-  }, [mounted, ticketIdFromUrl, selectedChat?.ticketId, selectedChat?.ticket]);
+  }, [mounted, ticketIdFromUrl, selectedChat?.ticketId, selectedChat?.ticketPublicId, selectedChat?.ticket]);
 
   // Handle URL params
   useEffect(() => {
@@ -936,7 +941,7 @@ export default function SlackStyleChat({
                       </button>
                     </div>
                   ) : (() => {
-                    const isTicketClosed = !!(ticketIdFromUrl || selectedChat?.ticketId) &&
+                    const isTicketClosed = !!(ticketIdFromUrl || selectedChat?.ticketId || selectedChat?.ticketPublicId) &&
                       (ticketInfo?.status === 'CLOSED' || ticketInfo?.status === 'RESOLVED');
                     if (isTicketClosed) {
                       return (

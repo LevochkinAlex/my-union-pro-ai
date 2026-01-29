@@ -24,8 +24,12 @@ export async function GET(
 
     const { id } = await params;
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { id },
+    // Поддержка и внутреннего id (cuid), и publicId (8 цифр) — из URL/чата может прийти любой
+    const publicIdNormalized = id.replace(/-/g, "");
+    const ticket = await prisma.ticket.findFirst({
+      where: {
+        OR: [{ id }, { publicId: publicIdNormalized }],
+      },
       include: {
         attachments: {
           select: {
