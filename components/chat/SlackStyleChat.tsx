@@ -481,6 +481,7 @@ export default function SlackStyleChat({
     loadingMessages,
     sending,
     typingUsers,
+    aiTyping,
     loadChats,
     selectChat,
     createOrOpenChat,
@@ -879,7 +880,10 @@ export default function SlackStyleChat({
                     loadingMessages={loadingMessages}
                     messages={formattedMessages}
                     currentUserId={currentUserId || ""}
-                    typingUsers={new Set(typingUsers?.map((u) => typeof u === "string" ? u : (u as any).userId) || [])}
+                    typingUsers={new Set([
+                      ...(typingUsers?.map((u) => typeof u === "string" ? u : (u as any).userId) || []),
+                      ...(aiTyping && selectedChat?.name === "ИИ-Ассистент" ? ["ai-assistant-bot"] : []),
+                    ])}
                     isTicketChat={!!selectedChat.ticketId || !!ticketIdFromUrl}
                     ticketId={ticketIdFromUrl || selectedChat?.ticketId || undefined}
                     chatId={selectedChat?.id}

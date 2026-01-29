@@ -44,6 +44,7 @@ export function useChat(options: UseChatOptions = {}) {
   const [hasMore, setHasMore] = useState(false);
   const [oldestMessageId, setOldestMessageId] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  const [aiTyping, setAiTyping] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   
   const socketRef = useRef<Socket | null>(null);
@@ -809,6 +810,26 @@ export function useChat(options: UseChatOptions = {}) {
       // Для ИИ-чата используем специальный endpoint
       if (isAIChat && !file) {
         console.log(`[useChat] Sending message to AI chat via /api/chat/ai`);
+        const tempMessageId = `temp-ai-user-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        const optimisticUserMessage: Message = {
+          id: tempMessageId,
+          chatId: selectedChat.id,
+          senderId: session?.user?.id || '',
+          content: content.trim(),
+          messageType: 'text',
+          createdAt: new Date().toISOString(),
+          editedAt: null,
+          sender: {
+            id: session?.user?.id || '',
+            firstName: session?.user?.firstName || null,
+            lastName: session?.user?.lastName || null,
+            middleName: null,
+            avatarUrl: session?.user?.avatarUrl || null,
+          },
+          reactions: {},
+        };
+        setMessages(prev => [...prev, optimisticUserMessage]);
+        setAiTyping(true);
         try {
           const response = await fetch("/api/chat/ai", {
             method: "POST",
@@ -821,16 +842,27 @@ export function useChat(options: UseChatOptions = {}) {
 
           if (response.ok) {
             const data = await response.json();
-            // Добавляем оба сообщения (пользователя и бота)
+            setAiTyping(false);
             setMessages(prev => {
-              const newMessages = [...prev];
-              if (data.userMessage && !newMessages.some(m => m.id === data.userMessage.id)) {
-                newMessages.push(data.userMessage);
-              }
-              if (data.botMessage && !newMessages.some(m => m.id === data.botMessage.id)) {
-                newMessages.push(data.botMessage);
-              }
-              return newMessages;
+              const withoutTemp = prev.filter(m => m.id !== tempMessageId);
+              const userMsg: Message = {
+                ...data.userMessage,
+                chatId: selectedChat.id,
+                sender: data.userMessage.sender,
+                reactions: {},
+              };
+              const botMsg: Message = {
+                ...data.botMessage,
+                chatId: selectedChat.id,
+                sender: data.botMessage.sender,
+                reactions: {},
+              };
+              const hasUser = withoutTemp.some(m => m.id === userMsg.id);
+              const hasBot = withoutTemp.some(m => m.id === botMsg.id);
+              let next = [...withoutTemp];
+              if (!hasUser) next.push(userMsg);
+              if (!hasBot) next.push(botMsg);
+              return next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
             });
             loadChats();
             setSending(false);
@@ -839,12 +871,16 @@ export function useChat(options: UseChatOptions = {}) {
             const errorText = await response.text();
             console.error(`[useChat] ❌ AI chat POST failed: ${response.status}`, errorText);
             options.onError?.("Ошибка отправки сообщения ИИ");
+            setMessages(prev => prev.filter(m => m.id !== tempMessageId));
+            setAiTyping(false);
             setSending(false);
             return false;
           }
         } catch (error) {
           console.error(`[useChat] ❌ AI chat POST error:`, error);
           options.onError?.("Ошибка отправки сообщения ИИ");
+          setMessages(prev => prev.filter(m => m.id !== tempMessageId));
+          setAiTyping(false);
           setSending(false);
           return false;
         }
@@ -1418,8 +1454,9 @@ export function useChat(options: UseChatOptions = {}) {
     sending,
     hasMore,
     typingUsers,
+    aiTyping,
     isConnected,
-    isBotTyping: typingUsers.length > 0,
+    isBotTyping: typingUsers.length > 0 || aiTyping,
 
     // Действия
     loadChats,

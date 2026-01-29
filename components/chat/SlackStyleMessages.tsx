@@ -2009,13 +2009,33 @@ export default function SlackStyleMessages({
 
         {/* Typing indicator */}
         {typingUsers.size > 0 && (
-          <div className="flex items-center gap-2 py-2 px-4">
-            <div className="flex gap-1">
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.4s" }} />
-            </div>
-            <span className="text-sm text-gray-500 dark:text-gray-400">печатает...</span>
+          <div className={clsx(
+            "flex items-center gap-2 py-2",
+            isAIChat && typingUsers.has("ai-assistant-bot")
+              ? "px-0 justify-start" // бабл слева для ИИ
+              : "px-4"
+          )}>
+            {isAIChat && typingUsers.has("ai-assistant-bot") ? (
+              <div className="max-w-[85%] rounded-2xl rounded-tl-sm px-4 py-3 bg-gray-100 dark:bg-gray-700/80 border border-gray-200 dark:border-gray-600 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" />
+                    <div className="w-2 h-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.15s" }} />
+                    <div className="w-2 h-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.3s" }} />
+                  </div>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">думает...</span>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.4s" }} />
+                </div>
+                <span className="text-sm text-gray-500 dark:text-gray-400">печатает...</span>
+              </>
+            )}
           </div>
         )}
 
