@@ -15,7 +15,6 @@ import {
   MessageSquare,
   ChevronDown,
   Copy,
-  Check,
   AlertCircle,
   UserPlus,
   Settings,
@@ -27,6 +26,7 @@ import {
   Heart,
   MessageCircle,
   Eye,
+  EyeOff,
 } from "lucide-react";
 import ChannelComments from "./ChannelComments";
 import EmojiPicker from "./EmojiPicker";
@@ -1624,13 +1624,11 @@ const MessageBubble = memo(function MessageBubble({
               <span>{formatMessageTime(new Date(message.createdAt))}</span>
               {message.editedAt && <span>(ред.)</span>}
               {isOwn && (
-                <span className="inline-flex items-center gap-0.5" title={message.isRead ? 'Прочитано' : 'Отправлено'}>
-                  {/* Одна галочка — отправлено, две галочки — прочитано (как в WhatsApp/Telegram) */}
-                  <Check className="w-3.5 h-3.5 opacity-80" />
+                <span className="inline-flex items-center" title={message.isRead ? 'Просмотрено' : 'Не просмотрено'}>
                   {message.isRead ? (
-                    <Check className="w-3.5 h-3.5 text-blue-300 dark:text-blue-400" />
+                    <Eye className="w-3.5 h-3.5 text-blue-300 dark:text-blue-400" />
                   ) : (
-                    <Check className="w-3.5 h-3.5 opacity-50" />
+                    <EyeOff className="w-3.5 h-3.5 opacity-70" />
                   )}
                 </span>
               )}
