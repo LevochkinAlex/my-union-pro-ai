@@ -16,7 +16,6 @@ import {
   ChevronDown,
   Copy,
   Check,
-  CheckCheck,
   AlertCircle,
   UserPlus,
   Settings,
@@ -1625,12 +1624,15 @@ const MessageBubble = memo(function MessageBubble({
               <span>{formatMessageTime(new Date(message.createdAt))}</span>
               {message.editedAt && <span>(ред.)</span>}
               {isOwn && (
-                // Одна галочка - отправлено, две галочки - прочитано
-                message.isRead ? (
-                  <CheckCheck className="w-3.5 h-3.5" />
-                ) : (
-                  <Check className="w-3.5 h-3.5 opacity-70" />
-                )
+                <span className="inline-flex items-center gap-0.5" title={message.isRead ? 'Прочитано' : 'Отправлено'}>
+                  {/* Одна галочка — отправлено, две галочки — прочитано (как в WhatsApp/Telegram) */}
+                  <Check className="w-3.5 h-3.5 opacity-80" />
+                  {message.isRead ? (
+                    <Check className="w-3.5 h-3.5 text-blue-300 dark:text-blue-400" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5 opacity-50" />
+                  )}
+                </span>
               )}
             </div>
           </div>
@@ -1658,6 +1660,7 @@ const MessageBubble = memo(function MessageBubble({
     prevProps.message.content === nextProps.message.content &&
     prevProps.message.reactions === nextProps.message.reactions &&
     prevProps.message.threadRepliesCount === nextProps.message.threadRepliesCount &&
+    prevProps.message.isRead === nextProps.message.isRead &&
     prevProps.isOwn === nextProps.isOwn &&
     prevProps.showAvatar === nextProps.showAvatar &&
     prevProps.showName === nextProps.showName
