@@ -478,6 +478,7 @@ export default function SlackStyleChat({
     selectedChat,
     messages,
     loading,
+    loadingMessages,
     sending,
     typingUsers,
     loadChats,
@@ -903,6 +904,7 @@ export default function SlackStyleChat({
                   <SlackStyleMessages
                     isGroupChat={selectedChat?.type === 'GROUP' || selectedChat?.type === 'CHANNEL'}
                     isAIChat={selectedChat?.name === "ИИ-Ассистент"}
+                    loadingMessages={loadingMessages}
                     messages={formattedMessages}
                     currentUserId={currentUserId || ""}
                     typingUsers={new Set(typingUsers?.map((u) => typeof u === "string" ? u : (u as any).userId) || [])}

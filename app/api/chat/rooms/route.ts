@@ -36,10 +36,11 @@ export async function GET() {
 
     const isMemberMode = user?.viewMode === "MEMBER";
 
-    // Убеждаемся что у пользователя есть чат с AI ботом
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем тот же метод создания AI чата, что и /api/chat
+    // чтобы избежать создания дублирующих чатов
     try {
-      const botUser = await getOrCreateAIBotUser();
-      await getOrCreatePrivateChat(session.user.id, botUser.id);
+      const { getOrCreateAIChat } = await import('@/app/api/chat/route');
+      await getOrCreateAIChat(session.user.id);
     } catch (err) {
       console.error('[chat/rooms] Error ensuring AI bot chat:', err);
     }
@@ -82,7 +83,12 @@ export async function GET() {
 
     // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Детальное логирование для диагностики
     const roomsWithUnread = rooms.filter(r => (r.unreadCount || 0) > 0);
-    const totalUnread = roomsWithUnread.reduce((sum, r) => sum + Math.max(0, r.unreadCount || 0), 0);
+    // Не считаем в бейдж непрочитанные из чатов бота/ИИ-Ассистент
+    const roomsCountedForBadge = rooms.filter(r => !r.excludeFromUnreadBadge);
+    const totalUnread = roomsCountedForBadge.reduce(
+      (sum, r) => sum + Math.max(0, r.unreadCount || 0),
+      0
+    );
     console.log(`[chat/rooms] Returning rooms:`, {
       totalRooms: rooms.length,
       totalUnread,
@@ -136,11 +142,17 @@ function formatRoomForUI(chat: ChatInfo, currentUserId: string) {
   // Определяем имя для отображения
   let displayName = chat.displayName;
   
-  // Проверяем, является ли собеседник ботом
+  // Проверяем, является ли собеседник ботом (МойСоюз Помощник)
   const isBot = chat.otherUser?.firstName === 'AI' && chat.otherUser?.lastName === 'Помощник';
   if (isBot) {
     displayName = 'МойСоюз Помощник';
   }
+  // Исключаем из бейджа непрочитанных: чаты с ботом и ИИ-Ассистент
+  const isBotOrAssistant =
+    isBot ||
+    (displayName || '').includes('ИИ-Ассистент') ||
+    (chat.displayName || '').includes('ИИ-Ассистент') ||
+    (chat.name || '').includes('ИИ-Ассистент');
 
   // Определяем аватар
   let avatarUrl: string | null = null;
@@ -175,6 +187,7 @@ function formatRoomForUI(chat: ChatInfo, currentUserId: string) {
     } : null,
     lastMessageTime: chat.lastMessageAt ? new Date(chat.lastMessageAt).getTime() : null,
     unreadCount: chat.unreadCount,
+    excludeFromUnreadBadge: isBotOrAssistant,
     participants: chat.participants.map(p => ({
       id: p.user?.id,
       firstName: p.user?.firstName,

@@ -25,23 +25,23 @@ export default function ChatUnreadBadge() {
       }
       
       const rooms = data.rooms || [];
+      // Не учитываем в бейдже чаты бота и ИИ-Ассистент (МойСоюз Помощник, ИИ-Ассистент)
+      const roomsForBadge = rooms.filter((r: any) => !r.excludeFromUnreadBadge);
       
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Суммируем только валидные unreadCount
-      const roomsWithUnread = rooms.filter(r => {
+      const roomsWithUnread = roomsForBadge.filter((r: any) => {
         const count = typeof r.unreadCount === 'number' ? r.unreadCount : 0;
         return count > 0;
       });
       
       const total = roomsWithUnread.reduce((sum: number, room: any) => {
         const count = typeof room.unreadCount === 'number' ? room.unreadCount : 0;
-        // Игнорируем отрицательные значения
         return sum + Math.max(0, count);
       }, 0);
       
       // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Детальное логирование для диагностики
       console.log('[ChatUnreadBadge] ========== FETCHED UNREAD COUNT ==========');
-      console.log('[ChatUnreadBadge] Total unread:', total);
-      console.log('[ChatUnreadBadge] Rooms count:', rooms.length);
+      console.log('[ChatUnreadBadge] Total unread (excl. bot/assistant):', total);
+      console.log('[ChatUnreadBadge] Rooms count:', rooms.length, '| for badge:', roomsForBadge.length);
       console.log('[ChatUnreadBadge] Rooms with unread:', roomsWithUnread.length);
       console.log('[ChatUnreadBadge] Rooms with unread details:', JSON.stringify(roomsWithUnread.map(r => ({
         id: r.id,

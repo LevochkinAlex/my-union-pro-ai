@@ -15,6 +15,23 @@ interface UseChatOptions {
   onError?: (error: string) => void;
 }
 
+/** Чат бота/ИИ-ассистента не учитывается в бейдже непрочитанных */
+function isExcludedFromUnreadBadge(c: {
+  name?: string | null;
+  displayName?: string | null;
+  otherUser?: { id?: string; firstName?: string | null; lastName?: string | null } | null;
+}) {
+  const n = (c.name ?? '') || (c.displayName ?? '');
+  const ou = c.otherUser;
+  return (
+    n.includes('МойСоюз Помощник') ||
+    n.includes('ИИ-Ассистент') ||
+    n.includes('AI Помощник') ||
+    ou?.id === 'ai-assistant-bot' ||
+    (ou?.firstName === 'AI' && ou?.lastName === 'Помощник')
+  );
+}
+
 export function useChat(options: UseChatOptions = {}) {
   const { data: session } = useSession();
   const [chats, setChats] = useState<Chat[]>([]);
@@ -93,8 +110,10 @@ export function useChat(options: UseChatOptions = {}) {
         })));
         setChats(data.chats);
         
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных для обновления бейджа
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных для обновления бейджа.
+        // Не учитываем чаты бота и ИИ-Ассистент (МойСоюз Помощник, ИИ-Ассистент).
         const chatsWithUnread = data.chats.filter((c: Chat) => {
+          if (isExcludedFromUnreadBadge(c as any)) return false;
           const count = (c as any).unreadCount || 0;
           return count > 0;
         });
@@ -353,11 +372,11 @@ export function useChat(options: UseChatOptions = {}) {
           return chat;
         });
         
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных для обновления бейджа
-        const totalUnread = updated.reduce((sum, c) => sum + Math.max(0, c.unreadCount || 0), 0);
-        console.log("[useChat] 📊 Total unread count after message:new:", {
+        const chatsForBadge = updated.filter(c => !isExcludedFromUnreadBadge(c as any));
+        const totalUnread = chatsForBadge.reduce((sum, c) => sum + Math.max(0, c.unreadCount || 0), 0);
+        console.log("[useChat] 📊 Total unread count after message:new (excl. bot/assistant):", {
           totalUnread,
-          chatsWithUnread: updated.filter(c => (c.unreadCount || 0) > 0).length,
+          chatsWithUnread: chatsForBadge.filter(c => (c.unreadCount || 0) > 0).length,
         });
         window.dispatchEvent(new CustomEvent('chat-unread-count-changed', {
           detail: { totalUnread },
@@ -509,10 +528,8 @@ export function useChat(options: UseChatOptions = {}) {
             const updated = prev.map(chat =>
               chat.id === chatId ? { ...chat, unreadCount: 0 } : chat
             );
-            
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных сразу
-            // Фильтруем чаты с unreadCount > 0 ПЕРЕД суммированием
             const chatsWithUnread = updated.filter(c => {
+              if (isExcludedFromUnreadBadge(c as any)) return false;
               const count = c.unreadCount || 0;
               return count > 0;
             });
@@ -549,14 +566,11 @@ export function useChat(options: UseChatOptions = {}) {
             
             // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем с реальным значением с сервера
             setChats(prev => {
-              // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Сначала обновляем чат с новым unreadCount
               const updated = prev.map(chat =>
                 chat.id === chatId ? { ...chat, unreadCount: newUnreadCount } : chat
               );
-              
-              // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных
-              // Фильтруем чаты с unreadCount > 0 ПЕРЕД суммированием
               const chatsWithUnread = updated.filter(c => {
+                if (isExcludedFromUnreadBadge(c as any)) return false;
                 const count = c.unreadCount || 0;
                 return count > 0;
               });

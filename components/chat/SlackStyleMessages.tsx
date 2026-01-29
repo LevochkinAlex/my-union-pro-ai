@@ -135,6 +135,7 @@ export interface SlackStyleMessagesProps {
   isTicketChat?: boolean;
   isGroupChat?: boolean; // Для определения типа чата (групповой или приватный)
   isAIChat?: boolean; // Для определения ИИ чата
+  loadingMessages?: boolean; // Идёт загрузка сообщений — не показывать приветствие
   ticketId?: string; // ID обращения для отображения кнопки закрытия
   onReply?: (message: Message) => void;
   onStartThread?: (message: Message) => void;
@@ -1702,6 +1703,7 @@ export default function SlackStyleMessages({
   isTicketChat = false,
   isGroupChat = false,
   isAIChat = false,
+  loadingMessages = false,
   ticketId,
   onReply,
   onStartThread,
@@ -1978,9 +1980,16 @@ export default function SlackStyleMessages({
     >
       <div className="py-4 px-4 space-y-1 min-h-full">
         {isAIChat && messages.length === 0 && onQuestionClick ? (
-          <div className="flex items-center justify-center h-full">
-            <AIChatWelcome onQuestionClick={onQuestionClick} />
-          </div>
+          loadingMessages ? (
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-500 dark:text-gray-400">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-solid border-blue-500 border-r-transparent" />
+              <p className="text-sm">Загрузка чата...</p>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <AIChatWelcome onQuestionClick={onQuestionClick} />
+            </div>
+          )
         ) : (
           renderedMessages
         )}
