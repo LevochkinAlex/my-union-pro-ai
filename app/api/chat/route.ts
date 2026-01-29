@@ -18,9 +18,9 @@ const AI_CHAT_NAME = "ИИ-Ассистент";
 const AI_BOT_ID = "ai-assistant-bot";
 
 /**
- * Получает или создает чат с ИИ-ассистентом
+ * Получает или создает чат с ИИ-ассистентом (экспорт для /api/chat/rooms)
  */
-async function getOrCreateAIChat(userId: string) {
+export async function getOrCreateAIChat(userId: string) {
   // Ищем существующий чат с ИИ
   let aiChat = await prisma.chat.findFirst({
     where: {
