@@ -750,62 +750,34 @@ export default function SlackStyleChat({
         setEditingMessage(null);
       }
     } else {
-      // Если есть файлы, отправляем через FormData
+      const currentThreadRootId = activeThread?.id || threadRootId;
+      const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
+      const mentionIds: string[] = [];
+      let match;
+      while ((match = mentionRegex.exec(content)) !== null) {
+        const userId = match[2];
+        if (userId && !mentionIds.includes(userId)) mentionIds.push(userId);
+      }
+      const resolvedMentions = (mentionedUserIds && mentionedUserIds.length > 0) ? mentionedUserIds : (mentionIds.length > 0 ? mentionIds : undefined);
+
       if (files && files.length > 0) {
         if (!selectedChat) return;
-        
-        // Отправляем все файлы последовательно
         let hasError = false;
-        for (const file of files) {
-          const formData = new FormData();
-          // Для каждого файла используем тот же текст, но только для первого файла
-          formData.append("content", files.indexOf(file) === 0 ? content : "");
-          formData.append("file", file);
-          if (replyToId) formData.append("replyToId", replyToId);
-          if (threadRootId) formData.append("threadRootId", threadRootId);
-          if (mentionedUserIds && mentionedUserIds.length > 0) {
-            formData.append("mentionedUserIds", JSON.stringify(mentionedUserIds));
-          }
-
-          try {
-            const response = await fetch(`/api/chat/${selectedChat.id}/attachments`, {
-              method: "POST",
-              body: formData,
-            });
-            
-            if (!response.ok) {
-              const errorData = await safeJsonParse(response) || {};
-              console.error("File upload error:", errorData);
-              hasError = true;
-            }
-          } catch (error) {
-            console.error("File upload error:", error);
-            hasError = true;
-          }
+        for (let i = 0; i < files.length; i++) {
+          const ok = await sendMessage(
+            i === 0 ? content : "",
+            files[i],
+            replyToId || replyingTo?.id || undefined,
+            currentThreadRootId,
+            resolvedMentions
+          );
+          if (!ok) hasError = true;
         }
-        
-        if (hasError) {
-          showToast("Ошибка загрузки некоторых файлов", "error");
-        }
-        
+        if (hasError) showToast("Ошибка загрузки некоторых файлов", "error");
         setReplyingTo(null);
-        loadChats();
       } else {
-        const currentThreadRootId = activeThread?.id || undefined;
-        // Парсим упоминания из контента
-        const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
-        const mentionedUserIds: string[] = [];
-        let match;
-        while ((match = mentionRegex.exec(content)) !== null) {
-          const userId = match[2];
-          if (userId && !mentionedUserIds.includes(userId)) {
-            mentionedUserIds.push(userId);
-          }
-        }
-        const success = await sendMessage(content, undefined, replyToId || replyingTo?.id, currentThreadRootId, mentionedUserIds.length > 0 ? mentionedUserIds : undefined);
-        if (success) {
-          setReplyingTo(null);
-        }
+        const success = await sendMessage(content, undefined, replyToId || replyingTo?.id || undefined, currentThreadRootId, resolvedMentions);
+        if (success) setReplyingTo(null);
       }
     }
   }, [editingMessage, replyingTo, selectedChat, editMessage, sendMessage, loadChats, showToast, activeThread]);

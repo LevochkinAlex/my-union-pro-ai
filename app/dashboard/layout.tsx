@@ -30,7 +30,8 @@ export default async function DashboardLayout({
   const isImpersonating = session.user.isImpersonating || false;
   
     // Получаем дополнительные данные пользователя из БД (viewMode, isPPOHead, isMPOHead, isRPOHead)
-    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убираем Promise.race - он вызывает 503 ошибки
+    // Таймаут 5s: при медленной БД не блокируем RSC — используем defaults, избегаем 503 от nginx
+    const LAYOUT_DB_TIMEOUT_MS = 5000;
     let userData: {
       viewMode: string;
       isPPOHead: boolean;
@@ -41,7 +42,7 @@ export default async function DashboardLayout({
       rpoHeadOrganizationId: string | null;
     } | null = null;
     try {
-      userData = await prisma.user.findUnique({
+      const dbPromise = prisma.user.findUnique({
         where: { id: session.user.id },
         select: {
           viewMode: true,
@@ -53,9 +54,12 @@ export default async function DashboardLayout({
           rpoHeadOrganizationId: true,
         },
       });
+      const timeoutPromise = new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), LAYOUT_DB_TIMEOUT_MS)
+      );
+      userData = await Promise.race([dbPromise, timeoutPromise]);
     } catch (error) {
       console.error("[dashboard/layout] Database query error:", error);
-      // Возвращаем значения по умолчанию при ошибке
       userData = null;
     }
   
@@ -505,8 +509,8 @@ export default async function DashboardLayout({
     if (error?.message === 'NEXT_REDIRECT' || error?.digest?.startsWith('NEXT_REDIRECT')) {
       throw error; // Пробрасываем редирект дальше
     }
-    
-    console.error("[dashboard/layout] Fatal error:", error);
+    // Полный стек в логах для разбора 503 на _rsc (documents, users, appeals)
+    console.error("[dashboard/layout] Fatal error:", error?.message, error?.stack ?? error);
     
     // Только для реальных ошибок проверяем сессию еще раз
     try {

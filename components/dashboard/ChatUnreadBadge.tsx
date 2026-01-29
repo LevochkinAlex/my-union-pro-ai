@@ -87,10 +87,12 @@ export default function ChatUnreadBadge() {
   useEffect(() => {
     const handleUnreadUpdate = (e: Event) => {
       const customEvent = e as CustomEvent;
-      if (customEvent.detail?.count !== undefined) {
-        setUnreadCount(customEvent.detail.count);
+      if (customEvent.detail?.count === undefined) return;
+      const count = customEvent.detail.count;
+      queueMicrotask(() => {
+        setUnreadCount(count);
         setIsInitialized(true);
-      }
+      });
     };
     
     const handleMessagesRead = (e?: Event) => {
@@ -106,21 +108,25 @@ export default function ChatUnreadBadge() {
       }, 1500); // Увеличена задержка для синхронизации с перезагрузкой чатов
     };
     
-    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Слушаем события изменения unreadCount из useChat
+    // Слушаем события изменения unreadCount из useChat.
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Откладываем setState в очередь, чтобы не обновлять
+    // ChatUnreadBadge во время рендера другого компонента (SlackStyleChat) — иначе
+    // "Cannot update a component while rendering a different component".
     const handleUnreadCountChange = (e: Event) => {
       const customEvent = e as CustomEvent;
-      if (customEvent.detail?.totalUnread !== undefined) {
-        const newCount = Math.max(0, customEvent.detail.totalUnread);
-        const oldCount = unreadCount;
-        console.log('[ChatUnreadBadge] Unread count changed via event:', {
-          oldCount,
-          newCount,
-          difference: newCount - oldCount,
-          eventDetail: customEvent.detail,
-        });
+      if (customEvent.detail?.totalUnread === undefined) return;
+      const newCount = Math.max(0, customEvent.detail.totalUnread);
+      const oldCount = unreadCount;
+      console.log('[ChatUnreadBadge] Unread count changed via event:', {
+        oldCount,
+        newCount,
+        difference: newCount - oldCount,
+        eventDetail: customEvent.detail,
+      });
+      queueMicrotask(() => {
         setUnreadCount(newCount);
         setIsInitialized(true);
-      }
+      });
     };
     
     window.addEventListener('chat-unread-updated', handleUnreadUpdate);

@@ -17,6 +17,38 @@ import {
 import EmojiPicker from './EmojiPicker';
 import MentionAutocomplete, { Participant } from './MentionAutocomplete';
 
+/** Проверяет, нужно ли конвертировать файл из HEIC/HEIF в JPEG (браузер не показывает HEIC в <img>) */
+function isHeicFile(file: File): boolean {
+  const t = (file.type || '').toLowerCase();
+  const name = (file.name || '').toLowerCase();
+  return t === 'image/heic' || t === 'image/heif' || name.endsWith('.heic') || name.endsWith('.heif');
+}
+
+/** Конвертирует HEIC/HEIF в JPEG в браузере (для превью и отправки). Остальные файлы возвращает как есть. */
+async function convertHeicFilesIfNeeded(files: File[]): Promise<File[]> {
+  const heic2any = (await import('heic2any')).default;
+  const out: File[] = [];
+  for (const file of files) {
+    if (!isHeicFile(file)) {
+      out.push(file);
+      continue;
+    }
+    try {
+      const result = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+      const blobs = Array.isArray(result) ? result : [result];
+      const baseName = (file.name || 'image').replace(/\.(heic|heif)$/i, '').replace(/\.$/, '') || 'image';
+      blobs.forEach((blob, i) => {
+        const name = blobs.length > 1 ? `${baseName}-${i + 1}.jpg` : `${baseName}.jpg`;
+        out.push(new File([blob as Blob], name, { type: 'image/jpeg' }));
+      });
+    } catch (err) {
+      console.warn('[ChatInput] HEIC conversion failed, attaching original:', err);
+      out.push(file);
+    }
+  }
+  return out;
+}
+
 interface ChatInputProps {
   onSend: (content: string, files?: File[], replyToId?: string, threadRootId?: string, mentionedUserIds?: string[]) => void;
   disabled?: boolean;
@@ -78,6 +110,7 @@ export default function ChatInput({
 }: ChatInputProps) {
   const [content, setContent] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [convertingHeic, setConvertingHeic] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   
@@ -243,13 +276,22 @@ export default function ChatInput({
     }
   }, [handleSend, handleCancel, mentionPosition]);
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length > 0) {
+    e.target.value = '';
+    if (files.length === 0) return;
+    const hasHeic = files.some(isHeicFile);
+    if (hasHeic) {
+      setConvertingHeic(true);
+      try {
+        const converted = await convertHeicFilesIfNeeded(files);
+        setAttachedFiles(prev => [...prev, ...converted]);
+      } finally {
+        setConvertingHeic(false);
+      }
+    } else {
       setAttachedFiles(prev => [...prev, ...files]);
     }
-    // Reset input
-    e.target.value = '';
   }, []);
 
   const removeFile = useCallback((index: number) => {
@@ -318,13 +360,22 @@ export default function ChatInput({
     e.stopPropagation();
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    
     const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
+    if (files.length === 0) return;
+    const hasHeic = files.some(isHeicFile);
+    if (hasHeic) {
+      setConvertingHeic(true);
+      try {
+        const converted = await convertHeicFilesIfNeeded(files);
+        setAttachedFiles(prev => [...prev, ...converted]);
+      } finally {
+        setConvertingHeic(false);
+      }
+    } else {
       setAttachedFiles(prev => [...prev, ...files]);
     }
   }, []);
@@ -394,18 +445,26 @@ export default function ChatInput({
         </div>
       )}
 
+      {/* Converting HEIC indicator */}
+      {convertingHeic && (
+        <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-sm">
+          Конвертирую HEIC в JPEG…
+        </div>
+      )}
+
       {/* Attached files preview */}
       {attachedFiles.length > 0 && (
         <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
           <div className="flex flex-wrap gap-2">
             {attachedFiles.map((file, index) => {
               const isImage = file.type.startsWith('image/');
+              const canPreview = isImage && !file.type.includes('heic') && !file.type.includes('heif');
               return (
                 <div 
                   key={index}
                   className="relative group"
                 >
-                  {isImage ? (
+                  {canPreview ? (
                     <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
                       <img 
                         src={URL.createObjectURL(file)} 

@@ -871,6 +871,7 @@ export function useChat(options: UseChatOptions = {}) {
           attachments: [{
             id: `temp-attachment-${tempMessageId}`,
             type: isImage ? 'image' : 'file',
+            url: fileUrl,
             fileName: file.name,
             originalName: file.name,
             filePath: fileUrl,
