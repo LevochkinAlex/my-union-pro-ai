@@ -32,6 +32,35 @@ function isExcludedFromUnreadBadge(c: {
   );
 }
 
+/** Превью для списка чатов: без сырого JSON/HTML, с читаемым текстом для постов и ИИ */
+function getChatPreviewContent(
+  content: string | null | undefined,
+  messageType?: string,
+  attachments?: { type?: string }[]
+): string {
+  if (messageType === 'channel_post') return '📢 Пост в канале';
+  if (messageType === 'assistant') return '💬 Ответ ИИ-ассистента';
+  if (attachments?.length) {
+    const first = attachments[0];
+    return first.type === 'image' ? '📷 Фото' : '📎 Файл';
+  }
+  if (!content || typeof content !== 'string') return '[Файл]';
+  const t = content.trim();
+  if (t.startsWith('{') && (t.includes('"type"') || t.includes('"postId"'))) return '📢 Пост в канале';
+  if (t.startsWith('<') && t.includes('>')) return 'Сообщение';
+  let out = content
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/#{1,6}\s+/g, '')
+    .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/\n{2,}/g, ' ')
+    .trim();
+  if (out.length > 100) out = out.substring(0, 100) + '...';
+  return out;
+}
+
 export function useChat(options: UseChatOptions = {}) {
   const { data: session } = useSession();
   const [chats, setChats] = useState<Chat[]>([]);
@@ -329,28 +358,11 @@ export function useChat(options: UseChatOptions = {}) {
       setChats(prev => {
         const updated = prev.map(chat => {
           if (chat.id === normalizedMsg.chatId) {
-            // Очищаем markdown из превью (как в chat-service.ts)
-            let previewContent = normalizedMsg.content || "[Файл]";
-            if (typeof previewContent === 'string' && previewContent.length > 0) {
-              previewContent = previewContent
-                .replace(/\*\*(.*?)\*\*/g, '$1') // Удаляем **жирный текст**
-                .replace(/\*(.*?)\*/g, '$1') // Удаляем *курсив*
-                .replace(/#{1,6}\s+/g, '') // Удаляем заголовки
-                .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Удаляем ссылки
-                .replace(/`([^`]+)`/g, '$1') // Удаляем код
-                .replace(/```[\s\S]*?```/g, '') // Удаляем блоки кода
-                .replace(/\n{2,}/g, ' ') // Заменяем множественные переносы
-                .trim();
-              
-              // Обрезаем длинные сообщения
-              if (previewContent.length > 100) {
-                previewContent = previewContent.substring(0, 100) + '...';
-              }
-            } else if (normalizedMsg.attachments && normalizedMsg.attachments.length > 0) {
-              // Если есть файлы, показываем тип файла
-              const firstAtt = normalizedMsg.attachments[0];
-              previewContent = firstAtt.type === 'image' ? '📷 Фото' : '📎 Файл';
-            }
+            const previewContent = getChatPreviewContent(
+              normalizedMsg.content,
+              (normalizedMsg as any).messageType,
+              normalizedMsg.attachments
+            );
             
             // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем unreadCount только для получателей (не для отправителя)
             const isMessageFromCurrentUser = isCurrentUser;
@@ -919,9 +931,10 @@ export function useChat(options: UseChatOptions = {}) {
             mimeType: file.type,
           }],
           reactions: {},
+          uploadProgress: 0,
         };
         
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавляем оптимистичное сообщение сразу
+        // Добавляем оптимистичное сообщение с прогрессом загрузки
         console.log("[useChat] 📤 Adding optimistic message with file:", {
           tempMessageId,
           fileName: file.name,
@@ -940,13 +953,42 @@ export function useChat(options: UseChatOptions = {}) {
         }
 
         try {
-          const response = await fetch(`/api/chat/${selectedChat.id}/attachments`, {
-            method: "POST",
-            body: formData,
+          const data = await new Promise<any>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            const url = `/api/chat/${selectedChat.id}/attachments`;
+            xhr.open("POST", url);
+            xhr.upload.onprogress = (e) => {
+              if (e.lengthComputable) {
+                const percent = Math.min(99, Math.round((e.loaded / e.total) * 100));
+                setMessages(prev =>
+                  prev.map((m) =>
+                    m.id === tempMessageId ? { ...m, uploadProgress: percent } : m
+                  )
+                );
+              }
+            };
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                  resolve(JSON.parse(xhr.responseText || "{}"));
+                } catch {
+                  reject(new Error("Invalid JSON response"));
+                }
+              } else {
+                try {
+                  const err = JSON.parse(xhr.responseText || "{}");
+                  reject(new Error(err.error || `HTTP ${xhr.status}`));
+                } catch {
+                  reject(new Error(xhr.responseText || `HTTP ${xhr.status}`));
+                }
+              }
+            };
+            xhr.onerror = () => reject(new Error("Network error"));
+            xhr.onabort = () => reject(new Error("Upload aborted"));
+            xhr.send(formData);
           });
 
-          if (response.ok) {
-            const data = await response.json();
+          if (data && data.message) {
             console.log("[useChat] ✅ File uploaded, message created:", {
               messageId: data.message.id,
               hasAttachments: !!(data.message.attachments && data.message.attachments.length > 0),
@@ -990,29 +1032,13 @@ export function useChat(options: UseChatOptions = {}) {
             // Освобождаем URL объекта
             URL.revokeObjectURL(fileUrl);
           
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем превью чата после загрузки файла
+            // Обновляем превью чата после загрузки файла
             if (data.message) {
-              let previewContent = data.message.content || "[Файл]";
-              if (typeof previewContent === 'string' && previewContent.length > 0) {
-                previewContent = previewContent
-                  .replace(/\*\*(.*?)\*\*/g, '$1')
-                  .replace(/\*(.*?)\*/g, '$1')
-                  .replace(/#{1,6}\s+/g, '')
-                  .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
-                  .replace(/`([^`]+)`/g, '$1')
-                  .replace(/```[\s\S]*?```/g, '')
-                  .replace(/\n{2,}/g, ' ')
-                  .trim();
-                
-                if (previewContent.length > 100) {
-                  previewContent = previewContent.substring(0, 100) + '...';
-                }
-              } else if (data.message.attachments && data.message.attachments.length > 0) {
-                // Если есть файлы, показываем тип файла
-                const firstAtt = data.message.attachments[0];
-                previewContent = firstAtt.type === 'image' ? '📷 Фото' : '📎 Файл';
-              }
-              
+              const previewContent = getChatPreviewContent(
+                data.message.content,
+                data.message.messageType,
+                data.message.attachments
+              );
               setChats(prev => prev.map(chat =>
                 chat.id === data.message.chatId
                   ? {
@@ -1026,26 +1052,17 @@ export function useChat(options: UseChatOptions = {}) {
             
             return true;
           } else {
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке удаляем оптимистичное сообщение
-            console.error("[useChat] ❌ File upload failed:", response.status);
+            console.error("[useChat] ❌ File upload failed: no message in response");
             setMessages(prev => prev.filter(m => m.id !== tempMessageId));
             URL.revokeObjectURL(fileUrl);
-            const errorText = await response.text();
-            let errorData;
-            try {
-              errorData = JSON.parse(errorText);
-            } catch {
-              errorData = { error: errorText || 'Ошибка загрузки файла' };
-            }
-            options.onError?.(errorData.error || 'Ошибка загрузки файла');
+            options.onError?.("Ошибка загрузки файла");
             return false;
           }
-        } catch (error) {
-          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При ошибке удаляем оптимистичное сообщение
+        } catch (error: any) {
           console.error("[useChat] ❌ File upload error:", error);
           setMessages(prev => prev.filter(m => m.id !== tempMessageId));
           URL.revokeObjectURL(fileUrl);
-          options.onError?.("Ошибка загрузки файла");
+          options.onError?.(error?.message || "Ошибка загрузки файла");
           return false;
         }
       } else {
@@ -1154,25 +1171,13 @@ export function useChat(options: UseChatOptions = {}) {
                   return [...prev, data.message];
                 });
                 
-                // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем превью чата сразу после отправки
+                // Обновляем превью чата сразу после отправки
                 const message = data.message;
-                let previewContent = message.content || "[Файл]";
-                if (typeof previewContent === 'string' && previewContent.length > 0) {
-                  previewContent = previewContent
-                    .replace(/\*\*(.*?)\*\*/g, '$1')
-                    .replace(/\*(.*?)\*/g, '$1')
-                    .replace(/#{1,6}\s+/g, '')
-                    .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
-                    .replace(/`([^`]+)`/g, '$1')
-                    .replace(/```[\s\S]*?```/g, '')
-                    .replace(/\n{2,}/g, ' ')
-                    .trim();
-                  
-                  if (previewContent.length > 100) {
-                    previewContent = previewContent.substring(0, 100) + '...';
-                  }
-                }
-                
+                const previewContent = getChatPreviewContent(
+                  message.content,
+                  (message as any).messageType,
+                  message.attachments
+                );
                 setChats(prev => prev.map(chat =>
                   chat.id === message.chatId
                     ? {

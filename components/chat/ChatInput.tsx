@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import EmojiPicker from './EmojiPicker';
 import MentionAutocomplete, { Participant } from './MentionAutocomplete';
+import { compressImages } from '@/lib/compress-image';
 
 /** Проверяет, нужно ли конвертировать файл из HEIC/HEIF в JPEG (браузер не показывает HEIC в <img>) */
 function isHeicFile(file: File): boolean {
@@ -111,6 +112,7 @@ export default function ChatInput({
   const [content, setContent] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [convertingHeic, setConvertingHeic] = useState(false);
+  const [compressingImages, setCompressingImages] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   
@@ -283,16 +285,15 @@ export default function ChatInput({
     e.target.value = '';
     if (files.length === 0) return;
     const hasHeic = files.some(isHeicFile);
-    if (hasHeic) {
-      setConvertingHeic(true);
-      try {
-        const converted = await convertHeicFilesIfNeeded(files);
-        setAttachedFiles(prev => [...prev, ...converted]);
-      } finally {
-        setConvertingHeic(false);
-      }
-    } else {
-      setAttachedFiles(prev => [...prev, ...files]);
+    if (hasHeic) setConvertingHeic(true);
+    setCompressingImages(true);
+    try {
+      const converted = hasHeic ? await convertHeicFilesIfNeeded(files) : files;
+      const compressed = await compressImages(converted);
+      setAttachedFiles(prev => [...prev, ...compressed]);
+    } finally {
+      setCompressingImages(false);
+      if (hasHeic) setConvertingHeic(false);
     }
   }, []);
 
@@ -369,16 +370,15 @@ export default function ChatInput({
     const files = Array.from(e.dataTransfer.files);
     if (files.length === 0) return;
     const hasHeic = files.some(isHeicFile);
-    if (hasHeic) {
-      setConvertingHeic(true);
-      try {
-        const converted = await convertHeicFilesIfNeeded(files);
-        setAttachedFiles(prev => [...prev, ...converted]);
-      } finally {
-        setConvertingHeic(false);
-      }
-    } else {
-      setAttachedFiles(prev => [...prev, ...files]);
+    if (hasHeic) setConvertingHeic(true);
+    setCompressingImages(true);
+    try {
+      const converted = hasHeic ? await convertHeicFilesIfNeeded(files) : files;
+      const compressed = await compressImages(converted);
+      setAttachedFiles(prev => [...prev, ...compressed]);
+    } finally {
+      setCompressingImages(false);
+      if (hasHeic) setConvertingHeic(false);
     }
   }, []);
 
@@ -451,6 +451,13 @@ export default function ChatInput({
       {convertingHeic && (
         <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-sm">
           Конвертирую HEIC в JPEG…
+        </div>
+      )}
+
+      {/* Compressing images indicator */}
+      {compressingImages && !convertingHeic && (
+        <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm">
+          Сжимаем фото перед отправкой…
         </div>
       )}
 

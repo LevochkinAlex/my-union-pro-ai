@@ -294,16 +294,22 @@ export async function POST(request: NextRequest) {
         console.log(`[chat/ai] AI API response keys:`, Object.keys(aiData));
         console.log(`[chat/ai] AI API response data:`, JSON.stringify(aiData, null, 2).substring(0, 500));
         
-        // Извлекаем ответ из разных возможных полей
-        aiResponse = aiData.message || aiData.response || aiData.content || "";
-        
+        // Извлекаем ответ из разных возможных полей (всегда строка для markdown)
+        let raw = aiData.message ?? aiData.response ?? aiData.content ?? "";
+        if (typeof raw !== "string") {
+          raw = (raw && (raw.text ?? raw.content) != null)
+            ? String(raw.text ?? raw.content)
+            : (raw != null ? JSON.stringify(raw) : "");
+        }
+        aiResponse = typeof raw === "string" ? raw : "";
+
         if (!aiResponse || aiResponse.trim().length === 0) {
           console.error(`[chat/ai] ❌ CRITICAL: AI returned empty response!`);
           console.error(`[chat/ai] Full response data:`, JSON.stringify(aiData, null, 2));
           throw new Error("ИИ вернул пустой ответ");
         }
         
-        console.log(`[chat/ai] ✅ AI response received, length: ${aiResponse.length}`);
+        console.log(`[chat/ai] ✅ AI response received, length: ${aiResponse.length}, isString: ${typeof aiResponse === "string"}`);
       } else {
         const errorText = await aiApiResponse.text();
         console.error(`[chat/ai] ❌ AI API HTTP error: ${aiApiResponse.status} ${aiApiResponse.statusText}`);

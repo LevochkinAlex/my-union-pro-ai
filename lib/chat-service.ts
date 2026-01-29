@@ -1198,32 +1198,25 @@ export function formatChatInfo(
   // Получаем последнее сообщение из relation
   let lastMessage: string | null = null;
   if (chat.lastMessage) {
-    // lastMessage - это объект ChatMessage из relation
-    if (typeof chat.lastMessage === 'object' && 'content' in chat.lastMessage) {
-      lastMessage = chat.lastMessage.content || null;
-      
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Очищаем markdown разметку из preview
-      if (lastMessage) {
-        // Удаляем markdown разметку (**текст**, # заголовок, и т.д.)
-        lastMessage = lastMessage
-          .replace(/\*\*(.*?)\*\*/g, '$1') // Удаляем **жирный текст**
-          .replace(/\*(.*?)\*/g, '$1') // Удаляем *курсив*
-          .replace(/#{1,6}\s+/g, '') // Удаляем заголовки (# ## ###)
-          .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Удаляем ссылки [текст](url)
-          .replace(/`([^`]+)`/g, '$1') // Удаляем код `код`
-          .replace(/```[\s\S]*?```/g, '') // Удаляем блоки кода
-          .replace(/\n{2,}/g, ' ') // Заменяем множественные переносы на пробел
-          .trim();
-        
-        // Обрезаем длинные сообщения для preview
-        if (lastMessage.length > 100) {
-          lastMessage = lastMessage.substring(0, 100) + '...';
-        }
-      }
-    } else if (typeof chat.lastMessage === 'string') {
-      lastMessage = chat.lastMessage;
-      // Очищаем markdown и из строки
-      if (lastMessage) {
+    const msg = chat.lastMessage as { content?: string; messageType?: string };
+    const messageType = msg.messageType;
+
+    // Специальные типы: не показываем сырой JSON/HTML в превью
+    if (messageType === 'channel_post') {
+      lastMessage = '📢 Пост в канале';
+    } else if (messageType === 'assistant') {
+      lastMessage = '💬 Ответ ИИ-ассистента';
+    } else if (typeof msg === 'object' && 'content' in msg && msg.content) {
+      let raw = msg.content;
+      // Не показываем сырой JSON или HTML в превью
+      const trimmed = raw.trim();
+      if (trimmed.startsWith('{') && (trimmed.includes('"type"') || trimmed.includes('"postId"'))) {
+        lastMessage = '📢 Пост в канале';
+      } else if (trimmed.startsWith('<') && trimmed.includes('>')) {
+        lastMessage = 'Сообщение';
+      } else {
+        lastMessage = raw;
+        // Очищаем markdown разметку из preview
         lastMessage = lastMessage
           .replace(/\*\*(.*?)\*\*/g, '$1')
           .replace(/\*(.*?)\*/g, '$1')
@@ -1233,7 +1226,27 @@ export function formatChatInfo(
           .replace(/```[\s\S]*?```/g, '')
           .replace(/\n{2,}/g, ' ')
           .trim();
-        
+        if (lastMessage.length > 100) {
+          lastMessage = lastMessage.substring(0, 100) + '...';
+        }
+      }
+    } else if (typeof chat.lastMessage === 'string') {
+      const raw = chat.lastMessage;
+      const trimmed = raw.trim();
+      if (trimmed.startsWith('{') && (trimmed.includes('"type"') || trimmed.includes('"postId"'))) {
+        lastMessage = '📢 Пост в канале';
+      } else if (trimmed.startsWith('<') && trimmed.includes('>')) {
+        lastMessage = 'Сообщение';
+      } else {
+        lastMessage = raw
+          .replace(/\*\*(.*?)\*\*/g, '$1')
+          .replace(/\*(.*?)\*/g, '$1')
+          .replace(/#{1,6}\s+/g, '')
+          .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+          .replace(/`([^`]+)`/g, '$1')
+          .replace(/```[\s\S]*?```/g, '')
+          .replace(/\n{2,}/g, ' ')
+          .trim();
         if (lastMessage.length > 100) {
           lastMessage = lastMessage.substring(0, 100) + '...';
         }

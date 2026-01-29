@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 
 // ИСПРАВЛЕНО: Убран импорт типа из @prisma/client, используем строковый литерал
-type OrganizationType = "PRIMARY" | "REGIONAL" | "FEDERAL";
+type OrganizationType = "PRIMARY" | "LOCAL" | "REGIONAL" | "FEDERAL";
 
 interface Organization {
   id: string;
@@ -455,7 +455,7 @@ export default function OrganizationsPage() {
             <div className="flex items-center gap-2">
               <span className="font-semibold">{node.name}</span>
               <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                {node.type === "FEDERAL" ? "Федерация" : node.type === "REGIONAL" ? "Региональное" : "ППО"}
+                {node.type === "FEDERAL" ? "Федерация" : node.type === "REGIONAL" ? "Региональное" : node.type === "LOCAL" ? "Местные" : "ППО"}
               </span>
               {!node.isActive && (
                 <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700 dark:bg-red-900 dark:text-red-300">
@@ -693,6 +693,7 @@ export default function OrganizationsPage() {
               >
                 <option value="FEDERAL">Федерация</option>
                 <option value="REGIONAL">Региональное отделение</option>
+                <option value="LOCAL">Местные организации</option>
                 <option value="PRIMARY">ППО (Первичная профсоюзная организация)</option>
               </select>
             </div>

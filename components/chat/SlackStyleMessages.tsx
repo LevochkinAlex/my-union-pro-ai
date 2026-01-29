@@ -101,6 +101,8 @@ export interface Message {
   activityType?: string;
   activityData?: any;
   isRead?: boolean; // Прочитано ли сообщение другими участниками (для своих сообщений)
+  /** 0–100, только во время загрузки вложения (оптимистичное сообщение) */
+  uploadProgress?: number;
   post?: {
     id: string;
     title: string;
@@ -168,6 +170,17 @@ function getSenderInitials(sender: MessageSender): string {
     .join("")
     .toUpperCase()
     .slice(0, 2);
+}
+
+/** Нормализует content сообщения в строку (ИИ/API иногда возвращают объект → "[object Object]"). */
+function normalizeMessageContent(content: unknown): string {
+  if (content == null) return "";
+  if (typeof content === "string") return content;
+  if (typeof content === "object" && "text" in content && typeof (content as { text?: string }).text === "string")
+    return (content as { text: string }).text;
+  if (typeof content === "object" && "content" in content && typeof (content as { content?: string }).content === "string")
+    return (content as { content: string }).content;
+  return String(content);
 }
 
 function formatMessageTime(date: Date): string {
@@ -1483,40 +1496,63 @@ const MessageBubble = memo(function MessageBubble({
             />
           ) : (
             <>
-              {/* Attachments */}
+              {/* Attachments (с прогресс-баром во время загрузки) */}
               {message.attachments && message.attachments.length > 0 && (
-                <div className="mb-2">
+                <div className="mb-2 relative">
+                  {message.uploadProgress != null && message.uploadProgress < 100 && (
+                    <div
+                      className={clsx(
+                        "absolute inset-0 z-10 rounded-xl flex flex-col items-center justify-center gap-2",
+                        isOwn ? "bg-blue-500/90" : "bg-gray-200/90 dark:bg-gray-700/90"
+                      )}
+                    >
+                      <div className="w-full max-w-[200px] h-2 rounded-full bg-white/30 overflow-hidden">
+                        <div
+                          className={clsx(
+                            "h-full rounded-full transition-all duration-300",
+                            isOwn ? "bg-white" : "bg-blue-500"
+                          )}
+                          style={{ width: `${message.uploadProgress}%` }}
+                        />
+                      </div>
+                      <span className={clsx("text-xs font-medium", isOwn ? "text-white" : "text-gray-700 dark:text-gray-200")}>
+                        Загрузка {message.uploadProgress}%
+                      </span>
+                    </div>
+                  )}
                   <AttachmentsDisplay
                     attachments={message.attachments}
                     isOwn={isOwn}
-                    onImageClick={onImageClick}
+                    onImageClick={message.uploadProgress != null && message.uploadProgress < 100 ? undefined : onImageClick}
                   />
                 </div>
               )}
 
               {/* Text content with markdown */}
-              {message.content && (() => {
+              {(() => {
+                const contentString = normalizeMessageContent(message.content);
+                if (!contentString) return null;
                 // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверяем, является ли это начальным сообщением обращения
-                const isAppealInitialMessage = message.content.includes('**Обращение #') && 
-                                                message.content.includes('**Тема:**') &&
-                                                message.content.includes('**Текст обращения:**');
-                
+                const isAppealInitialMessage = contentString.includes('**Обращение #') &&
+                                                contentString.includes('**Тема:**') &&
+                                                contentString.includes('**Текст обращения:**');
+
                 // Если это начальное сообщение обращения - используем специальный компонент
                 if (isAppealInitialMessage) {
                   return (
                     <>
-                      <AppealMessageCard content={message.content} isOwn={isOwn} />
+                      <AppealMessageCard content={contentString} isOwn={isOwn} />
                       {/* Link previews */}
-                      <LinkPreviews content={message.content} isOwn={isOwn} />
+                      <LinkPreviews content={contentString} isOwn={isOwn} />
                     </>
                   );
                 }
-                
+
                 // Обрабатываем упоминания ДО передачи в ReactMarkdown
                 // Заменяем @[Name](userId) на специальные плейсхолдеры, чтобы ReactMarkdown не интерпретировал их как ссылки
                 const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
                 const mentionPlaceholders: Map<string, { name: string; userId: string }> = new Map();
-                let processedContent = message.content;
+                let processedContent = contentString;
                 let placeholderIndex = 0;
                 
                 processedContent = processedContent.replace(mentionRegex, (match, name, userId) => {
@@ -1595,7 +1631,7 @@ const MessageBubble = memo(function MessageBubble({
                     </div>
                     
                     {/* Link previews */}
-                    <LinkPreviews content={message.content} isOwn={isOwn} />
+                    <LinkPreviews content={contentString} isOwn={isOwn} />
                   </>
                 );
               })()}
@@ -1659,6 +1695,7 @@ const MessageBubble = memo(function MessageBubble({
     prevProps.message.reactions === nextProps.message.reactions &&
     prevProps.message.threadRepliesCount === nextProps.message.threadRepliesCount &&
     prevProps.message.isRead === nextProps.message.isRead &&
+    prevProps.message.uploadProgress === nextProps.message.uploadProgress &&
     prevProps.isOwn === nextProps.isOwn &&
     prevProps.showAvatar === nextProps.showAvatar &&
     prevProps.showName === nextProps.showName

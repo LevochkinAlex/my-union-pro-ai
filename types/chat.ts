@@ -95,6 +95,8 @@ export interface Message {
   reactions?: Record<string, { userIds: string[]; users?: ReactionUser[] }> | null;
   sender: ChatUser;
   attachments?: MessageAttachment[];
+  /** 0–100, только для оптимистичного сообщения с файлом во время загрузки */
+  uploadProgress?: number;
 }
 
 export interface ReactionUser {

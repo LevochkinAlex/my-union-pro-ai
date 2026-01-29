@@ -354,7 +354,8 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
     );
   };
 
-  const CommentForm = () => {
+  // Форма комментария — рендерим инлайном, чтобы не пересоздавать компонент при каждом вводе (иначе теряется фокус)
+  const renderCommentForm = () => {
     if (!session?.user?.id) {
       return (
         <div className="rounded-lg border border-gray-200 bg-gray-100 p-4 text-center text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
@@ -418,7 +419,7 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
       <div className="p-4 sm:p-6">
         {/* Форма ввода - ВСЕГДА СВЕРХУ */}
         <div className="mb-6">
-          <CommentForm />
+          {renderCommentForm()}
         </div>
 
         {/* Список комментариев */}
@@ -467,7 +468,7 @@ export default function NewsComments({ newsId }: NewsCommentsProps) {
 
             {/* Форма ввода в модалке */}
             <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-              <CommentForm />
+              {renderCommentForm()}
             </div>
 
             {/* Скроллируемый список комментариев */}
