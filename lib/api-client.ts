@@ -17,6 +17,7 @@ const DEFAULT_RETRY_OPTIONS: Required<RetryOptions> = {
   maxRetries: 3,
   retryDelay: 1000, // 1 секунда
   retryableStatuses: [503, 508, 500, 502, 504], // Повторяем при этих статусах
+  timeoutMs: 30000,
 };
 
 /**
