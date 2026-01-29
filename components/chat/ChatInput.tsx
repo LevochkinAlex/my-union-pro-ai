@@ -255,6 +255,8 @@ export default function ChatInput({
   }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Shift+Enter — новая строка, не перехватываем
+    if (e.key === 'Enter' && e.shiftKey) return;
     // Если открыто автодополнение, не обрабатываем Enter здесь
     if (mentionPosition && (e.key === 'Enter' || e.key === 'Tab' || e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       // Эти клавиши обрабатываются в MentionAutocomplete

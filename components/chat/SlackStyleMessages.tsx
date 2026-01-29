@@ -1729,9 +1729,17 @@ export default function SlackStyleMessages({
   } | null>(null);
 
   const scrollToBottom = useCallback((smooth = true) => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: smooth ? "smooth" : "auto",
-    });
+    if (containerRef.current) {
+      const { scrollHeight, clientHeight } = containerRef.current;
+      containerRef.current.scrollTo({
+        top: Math.max(0, scrollHeight - clientHeight),
+        behavior: smooth ? "smooth" : "auto",
+      });
+    } else {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: smooth ? "smooth" : "auto",
+      });
+    }
   }, []);
 
   // Сохранение позиции скролла (относительно низа контейнера для стабильности)
@@ -1836,26 +1844,30 @@ export default function SlackStyleMessages({
     }
   }, [chatId, messages]);
 
-  // Восстанавливаем позицию при загрузке сообщений
+  // Восстанавливаем позицию при загрузке сообщений (возврат в чат)
   useEffect(() => {
-    if (messages.length > 0 && chatId) {
-      // Проверяем, был ли пользователь внизу
+    if (messages.length > 0 && chatId && containerRef.current) {
       const wasAtBottom = localStorage.getItem(`chat_at_bottom_${chatId}`) === 'true';
       
       if (wasAtBottom) {
-        // Если был внизу, скроллим вниз
-        setTimeout(() => {
-          scrollToBottom(false);
-        }, 100);
+        // Был внизу: скролл вниз после рендера, затем повтор через задержку (учитываем подгрузку картинок/лейаут)
+        const scrollToEnd = () => {
+          if (!containerRef.current) return;
+          const { scrollHeight, clientHeight } = containerRef.current;
+          containerRef.current.scrollTop = Math.max(0, scrollHeight - clientHeight);
+        };
+        const t1 = setTimeout(scrollToEnd, 150);
+        const t2 = setTimeout(scrollToEnd, 450);
+        return () => {
+          clearTimeout(t1);
+          clearTimeout(t2);
+        };
       } else {
-        // Если не был внизу, восстанавливаем позицию
-        const timer = setTimeout(() => {
-          restoreScrollPosition();
-        }, 200);
+        const timer = setTimeout(() => restoreScrollPosition(), 250);
         return () => clearTimeout(timer);
       }
     }
-  }, [messages.length, chatId, restoreScrollPosition, scrollToBottom]);
+  }, [messages.length, chatId, restoreScrollPosition]);
 
   // Автоматический скролл вниз только если пользователь был внизу и не восстанавливаем позицию
   useEffect(() => {
