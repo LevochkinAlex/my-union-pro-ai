@@ -53,31 +53,6 @@ export async function GET(request: NextRequest) {
     const isPPOHead = (user?.role === "PPO_HEAD" || user?.isPPOHead === true) && user?.viewMode === "PPO_HEAD";
     const chairmanOrgId = user?.ppoHeadOrganizationId || user?.organizationId;
 
-    // Получаем чаты, в которых пользователь является участником
-    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем прямой запрос с обработкой ошибок
-    let userChats = [];
-    try {
-      userChats = await prisma.chat.findMany({
-        where: {
-          participants: {
-            some: {
-              userId: session.user.id,
-              leftAt: null,
-            },
-          },
-        },
-        select: {
-          id: true,
-        },
-      });
-    } catch (chatError: any) {
-      console.error("[tickets] Error fetching user chats:", chatError);
-      // Продолжаем с пустым массивом чатов
-      userChats = [];
-    }
-
-    const userChatIds = userChats.map(chat => chat.id);
-
     // Формируем условия фильтрации
     // Если пользователь председатель - показываем все обращения из его организации
     // Иначе показываем обращения, созданные пользователем, связанные с чатами или из той же организации
@@ -87,27 +62,10 @@ export async function GET(request: NextRequest) {
       // Председатель видит все обращения из своей организации
       where.organizationId = chairmanOrgId;
     } else {
-      // Обычный пользователь (в режиме MEMBER) видит ВСЕ свои обращения
-      // (и личные, и адресованные председателю) и обращения из чатов, где он участник
-      // КРИТИЧНО: Пользователь должен видеть ВСЕ обращения, которые он создал
-      // Другие пользователи НЕ видят обращения, адресованные председателю (кроме своих)
-      const orConditions: any[] = [];
-
-      // ВСЕ свои обращения (независимо от organizationId)
-      // Пользователь должен видеть ВСЕ обращения, которые он создал
-      orConditions.push({
-        userId: session.user.id,
-      });
-
-      // Обращения из чатов пользователя (где он является участником)
-      // Показываем все обращения из чатов, где пользователь участник
-      if (userChatIds.length > 0) {
-        orConditions.push({ 
-          chatId: { in: userChatIds },
-        });
-      }
-
-      where.OR = orConditions.length > 0 ? orConditions : { userId: 'never-match' }; // Если нет условий, возвращаем пустой результат
+      // Обычный пользователь (в режиме MEMBER) видит ТОЛЬКО свои обращения.
+      // Обращения, адресованные председателю (organizationId != null), видны только создателю и председателю в режиме PPO_HEAD.
+      // Не показываем обращения по chatId — иначе председатель в режиме MEMBER видел бы чужие обращения из чатов, где он участник.
+      where.userId = session.user.id;
     }
 
     if (status && status !== "all") {

@@ -445,16 +445,15 @@ export default function SlackStyleChat({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rating, comment }),
       });
+      const data = await safeJsonParse(response);
       
       if (!response.ok) {
-        const error = await safeJsonParse(response);
-        throw new Error(error?.error || 'Ошибка закрытия обращения');
+        throw new Error(data?.error || 'Ошибка закрытия обращения');
       }
       
       showToast('Обращение успешно закрыто', 'success');
       setShowCloseAppealModal(false);
-      // Обновляем информацию об обращении
-      const data = await safeJsonParse(response);
+      // Сразу обновляем статус обращения — поле ввода скрывается, отправка недоступна
       if (data?.ticket) {
         setTicketInfo({
           id: data.ticket.id,
@@ -936,7 +935,19 @@ export default function SlackStyleChat({
                         Создать пост в канале
                       </button>
                     </div>
-                  ) : (
+                  ) : (() => {
+                    const isTicketClosed = !!(ticketIdFromUrl || selectedChat?.ticketId) &&
+                      (ticketInfo?.status === 'CLOSED' || ticketInfo?.status === 'RESOLVED');
+                    if (isTicketClosed) {
+                      return (
+                        <div className="px-4 py-3 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                          <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
+                            Обращение закрыто. Отправка сообщений недоступна.
+                          </p>
+                        </div>
+                      );
+                    }
+                    return (
                     <ChatInput
                       onSend={handleSendMessage}
                       replyTo={replyingTo ? {
@@ -965,6 +976,8 @@ export default function SlackStyleChat({
                       })) || []}
                       currentUserId={currentUserId || ''}
                     />
+                    );
+                  })()}
                   )}
                 </div>
 

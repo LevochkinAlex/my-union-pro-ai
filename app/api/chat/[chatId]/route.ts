@@ -1266,6 +1266,9 @@ export async function POST(
             role: true,
           },
         },
+        ticket: {
+          select: { status: true },
+        },
       },
     });
 
@@ -1274,6 +1277,17 @@ export async function POST(
         { error: 'Chat not found' },
         { status: 404 }
       );
+    }
+
+    // Чат обращения: запрещаем отправку сообщений после закрытия
+    if (chat.ticket) {
+      const status = (chat.ticket as { status: string }).status;
+      if (status === 'CLOSED' || status === 'RESOLVED') {
+        return NextResponse.json(
+          { error: 'Обращение закрыто. Отправка сообщений недоступна.' },
+          { status: 403 }
+        );
+      }
     }
     
     // Проверяем, что отправитель является участником чата
