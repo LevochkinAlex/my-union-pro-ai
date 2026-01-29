@@ -9,6 +9,8 @@ export interface RetryOptions {
   maxRetries?: number;
   retryDelay?: number;
   retryableStatuses?: number[];
+  /** Таймаут запроса в мс (по умолчанию 30000) */
+  timeoutMs?: number;
 }
 
 const DEFAULT_RETRY_OPTIONS: Required<RetryOptions> = {
@@ -28,11 +30,12 @@ export async function fetchWithRetry(
   const config = { ...DEFAULT_RETRY_OPTIONS, ...retryOptions };
   let lastError: Error | null = null;
 
+  const timeoutMs = retryOptions.timeoutMs ?? 30000;
   for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
     try {
       const response = await fetch(url, {
         ...options,
-        signal: AbortSignal.timeout(30000), // 30 секунд таймаут
+        signal: options.signal ?? AbortSignal.timeout(timeoutMs),
       });
 
       // Если успешный ответ - возвращаем сразу
@@ -137,11 +140,16 @@ export async function fetchJsonWithRetry<T = any>(
         errorData = { error: 'Unknown error' };
       }
       
-      console.error(`[fetchJsonWithRetry] Request failed: ${response.status} ${response.statusText}`, {
-        url,
-        status: response.status,
-        error: errorData,
-      });
+      const isServerUnavailable = [502, 503, 504].includes(response.status);
+      if (isServerUnavailable) {
+        console.warn(`[fetchJsonWithRetry] Server unavailable: ${response.status}`, url);
+      } else {
+        console.error(`[fetchJsonWithRetry] Request failed: ${response.status} ${response.statusText}`, {
+          url,
+          status: response.status,
+          error: errorData,
+        });
+      }
       return null;
     }
 
@@ -153,8 +161,13 @@ export async function fetchJsonWithRetry<T = any>(
     }
     
     return result;
-  } catch (error) {
-    console.error('[fetchJsonWithRetry] Request error:', error, { url });
+  } catch (error: unknown) {
+    const isTimeout = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+    if (isTimeout) {
+      console.warn(`[fetchJsonWithRetry] Request timeout: ${url}`);
+    } else {
+      console.error('[fetchJsonWithRetry] Request error:', error, { url });
+    }
     return null;
   }
 }

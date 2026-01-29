@@ -27,13 +27,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Получаем HTML страницы
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; MyUnionBot/1.0; +https://myunion.pro)",
-      },
-      signal: AbortSignal.timeout(5000), // Таймаут 5 секунд
-    });
+    // Получаем HTML страницы (таймаут — без превью, без ошибки в консоль)
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; MyUnionBot/1.0; +https://myunion.pro)",
+        },
+        signal: AbortSignal.timeout(8000), // 8 секунд
+      });
+    } catch (fetchError: unknown) {
+      const isTimeout = fetchError instanceof Error && (fetchError.name === "TimeoutError" || fetchError.name === "AbortError");
+      if (isTimeout) {
+        return NextResponse.json({ preview: null, error: "timeout" }, { status: 200 });
+      }
+      throw fetchError;
+    }
 
     if (!response.ok) {
       return NextResponse.json(

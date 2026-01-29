@@ -250,10 +250,24 @@ export function useChat(options: UseChatOptions = {}) {
       // Не прерываем работу - используем HTTP fallback
     });
 
+    // Нормализуем вложения сообщения для отображения (url/filePath для getAttachmentUrl)
+    const normalizeMessageAttachments = (msg: Message): Message => ({
+      ...msg,
+      attachments: (msg.attachments || []).map((a: any) => ({
+        ...a,
+        url: a.url || a.filePath || '',
+        filePath: a.filePath || a.url || '',
+        name: a.name ?? a.fileName ?? a.originalName,
+        fileName: a.fileName ?? a.name ?? a.originalName,
+        originalName: a.originalName ?? a.name ?? a.fileName,
+      })),
+    });
+
     // Новое сообщение
     socket.on("message:new", (message: Message) => {
       const currentChatId = selectedChatRef.current?.id;
       const isCurrentUser = session?.user?.id === message.senderId;
+      const normalizedMsg = normalizeMessageAttachments(message);
       
       console.log("[useChat] 📨 New message via socket:", {
         messageId: message.id,
@@ -273,8 +287,8 @@ export function useChat(options: UseChatOptions = {}) {
           const withoutOptimistic = prev.filter(m => !m.id.startsWith('temp-'));
           
           // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверяем по ID, а не по контенту
-          if (withoutOptimistic.some(m => m.id === message.id)) {
-            console.log("[useChat] ⚠️ Message already exists, skipping:", message.id);
+          if (withoutOptimistic.some(m => m.id === normalizedMsg.id)) {
+            console.log("[useChat] ⚠️ Message already exists, skipping:", normalizedMsg.id);
             return prev;
           }
           
@@ -293,27 +307,18 @@ export function useChat(options: UseChatOptions = {}) {
                 realId: message.id,
               });
               const newMessages = [...prev];
-              newMessages[optimisticIndex] = message;
+              newMessages[optimisticIndex] = normalizedMsg;
               return newMessages.filter(m => !m.id.startsWith('temp-') || m.id === prev[optimisticIndex].id);
             }
           }
           
           console.log("[useChat] ✅ Adding message to current chat:", {
-            messageId: message.id,
-            hasAttachments: !!(message.attachments && message.attachments.length > 0),
-            attachmentsCount: message.attachments?.length || 0,
-            attachments: message.attachments?.map(a => ({
-              id: a.id,
-              type: a.type,
-              fileName: a.fileName,
-              originalName: a.originalName,
-              filePath: a.filePath,
-              fileSize: a.fileSize,
-              mimeType: a.mimeType,
-            })),
+            messageId: normalizedMsg.id,
+            hasAttachments: !!(normalizedMsg.attachments && normalizedMsg.attachments.length > 0),
+            attachmentsCount: normalizedMsg.attachments?.length || 0,
           });
           
-          return [...withoutOptimistic, message];
+          return [...withoutOptimistic, normalizedMsg];
         });
       } else {
         console.log("[useChat] 📬 Message for different chat, updating preview only");
@@ -322,9 +327,9 @@ export function useChat(options: UseChatOptions = {}) {
       // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем превью для ВСЕХ чатов, где пришло сообщение
       setChats(prev => {
         const updated = prev.map(chat => {
-          if (chat.id === message.chatId) {
+          if (chat.id === normalizedMsg.chatId) {
             // Очищаем markdown из превью (как в chat-service.ts)
-            let previewContent = message.content || "[Файл]";
+            let previewContent = normalizedMsg.content || "[Файл]";
             if (typeof previewContent === 'string' && previewContent.length > 0) {
               previewContent = previewContent
                 .replace(/\*\*(.*?)\*\*/g, '$1') // Удаляем **жирный текст**
@@ -340,9 +345,9 @@ export function useChat(options: UseChatOptions = {}) {
               if (previewContent.length > 100) {
                 previewContent = previewContent.substring(0, 100) + '...';
               }
-            } else if (message.attachments && message.attachments.length > 0) {
+            } else if (normalizedMsg.attachments && normalizedMsg.attachments.length > 0) {
               // Если есть файлы, показываем тип файла
-              const firstAtt = message.attachments[0];
+              const firstAtt = normalizedMsg.attachments[0];
               previewContent = firstAtt.type === 'image' ? '📷 Фото' : '📎 Файл';
             }
             
@@ -365,7 +370,7 @@ export function useChat(options: UseChatOptions = {}) {
             return {
               ...chat,
               lastMessage: previewContent,
-              lastMessageAt: message.createdAt ? new Date(message.createdAt) : new Date(),
+              lastMessageAt: normalizedMsg.createdAt ? new Date(normalizedMsg.createdAt) : new Date(),
               unreadCount: newUnreadCount,
             };
           }
@@ -383,7 +388,7 @@ export function useChat(options: UseChatOptions = {}) {
         }));
         
         // Если чат не найден в списке, возможно нужно перезагрузить список
-        const chatExists = updated.some(c => c.id === message.chatId);
+        const chatExists = updated.some(c => c.id === normalizedMsg.chatId);
         if (!chatExists) {
           console.log("[useChat] ⚠️ Chat not found in list, may need to reload:", message.chatId);
         }
@@ -466,7 +471,8 @@ export function useChat(options: UseChatOptions = {}) {
         {
           method: "GET",
           headers: { "Content-Type": "application/json" },
-        }
+        },
+        { timeoutMs: 60000 }
       );
       
       console.log(`[useChat] API response:`, {
@@ -635,10 +641,9 @@ export function useChat(options: UseChatOptions = {}) {
           }));
         }
       } else {
-        console.error(`[useChat] ❌ API returned null/empty data for chat ${chatId}`);
-        console.error(`[useChat] This usually means the request failed or returned non-JSON response`);
-        // Устанавливаем пустой массив, чтобы UI знал что загрузка завершена
+        console.warn(`[useChat] API returned no data for chat ${chatId} (timeout or server error)`);
         setMessages([]);
+        options.onError?.("Не удалось загрузить сообщения. Проверьте соединение или обновите страницу.");
       }
     } catch (error) {
       console.error("[useChat] ❌ Error loading messages:", error);
@@ -871,6 +876,7 @@ export function useChat(options: UseChatOptions = {}) {
           attachments: [{
             id: `temp-attachment-${tempMessageId}`,
             type: isImage ? 'image' : 'file',
+            url: fileUrl,
             fileName: file.name,
             originalName: file.name,
             filePath: fileUrl,
@@ -913,28 +919,35 @@ export function useChat(options: UseChatOptions = {}) {
             });
             
             // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Заменяем оптимистичное сообщение на реальное
-            // Но если WebSocket уже доставил сообщение, не дублируем
+            // Нормализуем вложения: url и filePath для отображения (getAttachmentUrl использует оба)
+            const normalizedMessage = {
+              ...data.message,
+              attachments: (data.message.attachments || []).map((a: any) => ({
+                ...a,
+                url: a.url || a.filePath || '',
+                filePath: a.filePath || a.url || '',
+                name: a.name ?? a.fileName ?? a.originalName,
+                fileName: a.fileName ?? a.name ?? a.originalName,
+                originalName: a.originalName ?? a.name ?? a.fileName,
+              })),
+            };
             setMessages(prev => {
-              // Проверяем, не пришло ли уже сообщение через WebSocket
               const alreadyExists = prev.some(m => m.id === data.message.id && !m.id.startsWith('temp-'));
               if (alreadyExists) {
                 console.log("[useChat] ⚠️ Message already exists from WebSocket, just removing optimistic:", {
                   tempId: tempMessageId,
                   realId: data.message.id,
                 });
-                // Просто удаляем оптимистичное сообщение
                 return prev.filter(m => m.id !== tempMessageId);
               }
-              
-              // Удаляем оптимистичное сообщение
               const withoutOptimistic = prev.filter(m => m.id !== tempMessageId);
-              // Добавляем реальное сообщение
               if (!withoutOptimistic.some(m => m.id === data.message.id)) {
                 console.log("[useChat] ✅ Replacing optimistic message with real one from API:", {
                   tempId: tempMessageId,
                   realId: data.message.id,
+                  attachmentsCount: normalizedMessage.attachments?.length,
                 });
-                return [...withoutOptimistic, data.message];
+                return [...withoutOptimistic, normalizedMessage];
               }
               return withoutOptimistic;
             });
