@@ -978,7 +978,6 @@ export default function SlackStyleChat({
                     />
                     );
                   })()}
-                  )}
                 </div>
 
               </div>
