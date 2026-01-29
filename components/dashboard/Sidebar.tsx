@@ -63,6 +63,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
         <div className="flex-shrink-0 flex items-center px-4 py-4 border-b border-gray-200 dark:border-gray-700">
           <Link
             href={isAdmin ? "/admin/dashboard" : "/dashboard"}
+            prefetch={false}
             className={`flex items-center gap-2 ${isCollapsed ? "justify-center" : ""}`}
           >
             <LogoIcon className="h-8 w-8" size="sm" />
@@ -165,6 +166,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                 ) : (
                   <Link
                     href={item.href}
+                    prefetch={false}
                     onClick={(e) => {
                       if (isNavigating) {
                         e.preventDefault();
@@ -209,6 +211,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                         <Link
                           key={subItem.href}
                           href={subItem.href}
+                          prefetch={false}
                           onClick={(e) => {
                             if (isNavigating) {
                               e.preventDefault();
@@ -281,6 +284,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                           {/* Profile */}
                           <Link
                             href={isAdmin ? "/admin/users" : "/dashboard/profile"}
+                            prefetch={false}
                             onClick={() => setShowMoreMenu(false)}
                             className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                           >
@@ -325,6 +329,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                   {/* Account icon */}
                   <Link
                     href={isAdmin ? "/admin/users" : "/dashboard/profile"}
+                    prefetch={false}
                     className="flex h-9 w-9 items-center justify-center rounded-full overflow-hidden bg-gray-200 text-gray-700 shadow-sm hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
                     title="Профиль"
                   >

@@ -288,6 +288,7 @@ export default function MobileMenu({
           <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-700">
             <Link
               href={isAdmin ? "/admin/dashboard" : "/dashboard"}
+              prefetch={false}
               className="flex items-center gap-2"
               onClick={onClose}
             >
@@ -366,6 +367,7 @@ export default function MobileMenu({
                               <Link
                                 key={subItem.href}
                                 href={subItem.href}
+                                prefetch={false}
                                 onClick={onClose}
                                 className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                                   isSubActive
@@ -383,6 +385,7 @@ export default function MobileMenu({
                   ) : (
                     <Link
                       href={item.href}
+                      prefetch={false}
                       onClick={onClose}
                       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                         isActive
@@ -464,6 +467,7 @@ export default function MobileMenu({
               {/* Avatar with link */}
               <Link
                 href={isAdmin ? "/admin/users" : "/dashboard/profile"}
+                prefetch={false}
                 onClick={onClose}
                 className="h-10 w-10 rounded-full overflow-hidden bg-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0 hover:opacity-80 transition-opacity"
                 title="Профиль"
@@ -495,6 +499,7 @@ export default function MobileMenu({
               {!isAdmin && (
                 <Link
                   href="/dashboard/settings"
+                  prefetch={false}
                   onClick={onClose}
                   className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                   title="Настройки"
