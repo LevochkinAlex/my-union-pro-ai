@@ -54,7 +54,6 @@ export function setTourShownAfterApproval(isDemo?: boolean): void {
   }
 }
 
-export const TOUR_STEPS: TourStep[] = [
 export const TOUR_TARGET = {
   SIDEBAR: "[data-tour=\"sidebar\"]",
   MEMBERSHIP_BANNER: "[data-tour=\"membership-banner\"]",
