@@ -12,6 +12,16 @@ import PPOHeadDashboard from "@/components/dashboard/PPOHeadDashboard";
 import OrgHeadDashboard from "@/components/dashboard/OrgHeadDashboard";
 import { calculateProfileProgress } from "@/lib/profile-progress";
 import MembershipProtectedSection from "@/components/dashboard/MembershipProtectedSection";
+import {
+  DEMO_USER_ID,
+  DEMO_MEMBER_USER_ID,
+  DEMO_NEWS_ORG_NAME,
+  getDemoStats,
+  getDemoAppeals,
+  getDemoMembers,
+  getDemoNewsFromOrg,
+  getDemoNewUsers,
+} from "@/lib/demo";
 
 // Указываем, что страница динамическая (использует getServerSession)
 export const dynamic = 'force-dynamic';
@@ -34,41 +44,86 @@ export default async function DashboardPage() {
     
     console.log("[dashboard/page] ✅ Rendering dashboard for user:", userId);
 
-    // Получаем роль и режим просмотра пользователя
-    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убираем Promise.race - он вызывает 503 ошибки
-    let userRole;
-    try {
-      userRole = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          role: true,
-          firstName: true,
-          lastName: true,
-          viewMode: true,
-          isPPOHead: true,
-          isMPOHead: true,
-          isRPOHead: true,
-          ppoHeadOrganizationId: true,
-          mpoHeadOrganizationId: true,
-          rpoHeadOrganizationId: true,
-          organization: {
-            select: {
-              id: true,
-              name: true,
+    // Демо-режим: не обращаемся к БД, подставляем данные председателя
+    const isDemo = userId === DEMO_USER_ID;
+    let userRole: {
+      role: string;
+      firstName: string | null;
+      lastName: string | null;
+      viewMode: string | null;
+      isPPOHead: boolean;
+      isMPOHead: boolean;
+      isRPOHead: boolean;
+      ppoHeadOrganizationId: string | null;
+      mpoHeadOrganizationId: string | null;
+      rpoHeadOrganizationId: string | null;
+      organization: { id: string; name: string } | null;
+      ppoHeadOrganization: { id: string; name: string } | null;
+    } | null;
+
+    if (isDemo) {
+      userRole = {
+        role: "PPO_HEAD",
+        firstName: "Председатель",
+        lastName: "(демо)",
+        viewMode: "PPO_HEAD",
+        isPPOHead: true,
+        isMPOHead: false,
+        isRPOHead: false,
+        ppoHeadOrganizationId: null,
+        mpoHeadOrganizationId: null,
+        rpoHeadOrganizationId: null,
+        organization: { id: "demo-org", name: DEMO_NEWS_ORG_NAME },
+        ppoHeadOrganization: { id: "demo-org", name: DEMO_NEWS_ORG_NAME },
+      };
+    } else if (userId === DEMO_MEMBER_USER_ID) {
+      userRole = {
+        role: "MEMBER",
+        firstName: "Член",
+        lastName: "(демо)",
+        viewMode: "MEMBER",
+        isPPOHead: false,
+        isMPOHead: false,
+        isRPOHead: false,
+        ppoHeadOrganizationId: null,
+        mpoHeadOrganizationId: null,
+        rpoHeadOrganizationId: null,
+        organization: { id: "demo-org", name: DEMO_NEWS_ORG_NAME },
+        ppoHeadOrganization: null,
+      };
+    } else {
+      try {
+        userRole = await prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            role: true,
+            firstName: true,
+            lastName: true,
+            viewMode: true,
+            isPPOHead: true,
+            isMPOHead: true,
+            isRPOHead: true,
+            ppoHeadOrganizationId: true,
+            mpoHeadOrganizationId: true,
+            rpoHeadOrganizationId: true,
+            organization: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            ppoHeadOrganization: {
+              select: {
+                id: true,
+                name: true,
+              },
             },
           },
-          ppoHeadOrganization: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      });
-    } catch (error) {
-      console.error("[dashboard/page] Database query error:", error);
-      // Возвращаем null при ошибке, чтобы использовать значения по умолчанию
-      userRole = null;
+        });
+      } catch (error) {
+        console.error("[dashboard/page] Database query error:", error);
+        userRole = null;
+      }
     }
     
     const userRoleTyped = (userRole || null) as {
@@ -109,6 +164,23 @@ export default async function DashboardPage() {
 
   // Если пользователь в режиме Председателя ППО, показываем специальный дашборд
   if (showPPOHeadDashboard && ppoOrganization) {
+    // Демо-режим: мок-данные без запросов к БД
+    if (isDemo) {
+      const stats = getDemoStats();
+      const recentAppeals = getDemoAppeals();
+      const recentMembers = getDemoMembers();
+      const userName = userRole?.firstName || session.user?.name || "Председатель";
+      return (
+        <PPOHeadDashboard
+          userName={userName}
+          organizationName={ppoOrganization.name}
+          stats={stats}
+          recentAppeals={recentAppeals}
+          recentMembers={recentMembers}
+        />
+      );
+    }
+
     // Дата начала года для расчёта роста
     const startOfYear = new Date(new Date().getFullYear(), 0, 1);
     
@@ -255,6 +327,161 @@ export default async function DashboardPage() {
           createdAt: m.createdAt.toISOString(),
         }))}
       />
+    );
+  }
+
+  // Демо-режим члена: мок-данные без запросов к БД
+  if (userId === DEMO_MEMBER_USER_ID) {
+    const recentNews = await getDemoNewsFromOrg(5);
+    const newUsers = getDemoNewUsers();
+    const subscriptions: { targetUserId: string }[] = [];
+    const postsFromSubscriptions: any[] = [];
+    const currentUser = {
+      id: DEMO_MEMBER_USER_ID,
+      firstName: "Член",
+      lastName: "(демо)",
+      membershipStatus: "APPROVED" as const,
+      organization: { id: "demo-org", name: DEMO_NEWS_ORG_NAME },
+      documents: [],
+      additionalInfo: null,
+      aboutMe: null,
+      hobbies: null,
+      awards: null,
+    };
+    const profileProgress = 85;
+    const hasDocuments = true;
+    const hasAdditionalInfo = true;
+    const hasAwards = false;
+    const membershipStatus = "APPROVED" as const;
+    const userName = currentUser.firstName || session.user?.name || "Пользователь";
+    const greeting = "С возвращением";
+
+    return (
+      <div className="space-y-8 min-w-0 w-full">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            {greeting}, {userName}!
+          </h1>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
+            Ваш личный кабинет члена Профсоюза
+          </p>
+        </div>
+
+        {currentUser && (
+          <MembershipBanner
+            profileProgress={profileProgress}
+            hasDocuments={hasDocuments}
+            membershipStatus={membershipStatus}
+            hasAdditionalInfo={hasAdditionalInfo}
+            hasAwards={hasAwards}
+          />
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 min-w-0">
+          <div className="lg:col-span-2 space-y-6 min-w-0">
+            <MembershipProtectedSection title="Новости для членов профсоюза">
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
+                <div className="flex items-center justify-between mb-4 md:justify-start gap-4 w-full md:w-auto">
+                  <h2 className="text-lg md:text-xl font-semibold text-gray-900 dark:text-white">
+                    Свежие новости
+                  </h2>
+                  <Link
+                    href="/dashboard/news"
+                    className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
+                  >
+                    Все новости
+                  </Link>
+                </div>
+                {recentNews.length > 0 ? (
+                  <NewsList news={recentNews} />
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4">
+                    Пока нет новостей
+                  </p>
+                )}
+              </div>
+            </MembershipProtectedSection>
+
+            <MembershipProtectedSection title="Скидки для членов профсоюза">
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
+                <div className="flex items-center justify-between mb-4 md:justify-start gap-4 w-full md:w-auto">
+                  <h2 className="text-lg md:text-xl font-semibold text-gray-900 dark:text-white">
+                    Скидки и привилегии
+                  </h2>
+                  <Link
+                    href="/dashboard/discounts"
+                    className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
+                  >
+                    Все скидки
+                  </Link>
+                </div>
+                <DiscountsPreview />
+              </div>
+            </MembershipProtectedSection>
+          </div>
+
+          <div className="space-y-6 min-w-0">
+            <MembershipProtectedSection title="Коллеги для членов профсоюза">
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
+                <div className="flex items-center justify-between gap-4 w-full">
+                  <h2 className="text-lg md:text-xl font-semibold text-gray-900 dark:text-white">
+                    Новые коллеги
+                  </h2>
+                  <Link
+                    href="/dashboard/users"
+                    className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
+                  >
+                    Все коллеги
+                  </Link>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {newUsers.map((user) => (
+                    <UserCard
+                      key={user.id}
+                      user={{ ...user, createdAt: new Date(user.createdAt) }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </MembershipProtectedSection>
+
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 lg:p-6 min-w-0">
+              <h2 className="text-lg md:text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                Быстрые действия
+              </h2>
+              <div className="space-y-2">
+                <Link
+                  href="/dashboard/documents"
+                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <svg className="h-5 w-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Мои документы</span>
+                </Link>
+                <Link
+                  href="/dashboard/chat"
+                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <svg className="h-5 w-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Мои чаты</span>
+                </Link>
+                <Link
+                  href="/dashboard/discounts"
+                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <svg className="h-5 w-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Скидки и привилегии</span>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 

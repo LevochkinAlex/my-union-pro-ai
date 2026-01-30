@@ -7,6 +7,7 @@ declare module "next-auth" {
     firstName?: string | null;
     lastName?: string | null;
     avatarUrl?: string | null;
+    isDemo?: boolean; // Демо-режим: без записи в БД
   }
 
   interface Session {
@@ -24,6 +25,7 @@ declare module "next-auth" {
       viewMode?: string; // Текущий режим работы: MEMBER или PPO_HEAD
       isPPOHead?: boolean; // Является ли пользователь председателем ППО
       ppoHeadOrganizationId?: string | null; // ID организации председателя
+      isDemo?: boolean; // Демо-режим: данные не сохраняются в БД
     };
   }
 }
@@ -40,5 +42,6 @@ declare module "next-auth/jwt" {
     name?: string | null;
     originalAdminId?: string; // ID админа при impersonation
     isImpersonating?: boolean; // Флаг режима impersonation
+    isDemo?: boolean; // Демо-режим
   }
 }

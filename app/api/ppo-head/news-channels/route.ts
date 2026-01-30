@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getPPOHead } from "@/lib/ppo-head-utils";
 import { syncChannelWithChat } from "@/lib/channel-sync";
+import { isDemoUserId } from "@/lib/demo";
 
 /**
  * GET /api/ppo-head/news-channels
@@ -15,6 +16,21 @@ export async function GET(request: NextRequest) {
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    // Демо: один виртуальный канал для отображения новостей (только чтение)
+    if (isDemoUserId(session.user.id)) {
+      return NextResponse.json([
+        {
+          id: "demo-channel",
+          name: "Новости",
+          description: "Новости ППО Аппарат МООП РЗ РФ",
+          iconUrl: null,
+          isMain: true,
+          _count: { newsPosts: 0 },
+          chat: null,
+        },
+      ]);
     }
 
     // Проверяем, что пользователь является Председателем

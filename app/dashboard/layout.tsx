@@ -7,6 +7,8 @@ import Sidebar from "@/components/dashboard/Sidebar";
 import MiniChatWrapperConditional from "@/components/dashboard/MiniChatWrapperConditional";
 import MobileLayout from "@/components/dashboard/MobileLayout";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
+import DemoBanner from "@/components/dashboard/DemoBanner";
+import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo";
 
 // Указываем, что layout динамический (использует getServerSession)
 export const dynamic = 'force-dynamic';
@@ -29,9 +31,8 @@ export default async function DashboardLayout({
   const membershipStatus = session.user.membershipStatus;
   const isImpersonating = session.user.isImpersonating || false;
   
-    // Получаем дополнительные данные пользователя из БД (viewMode, isPPOHead, isMPOHead, isRPOHead)
-    // Таймаут 5s: при медленной БД не блокируем RSC — используем defaults, избегаем 503 от nginx
-    const LAYOUT_DB_TIMEOUT_MS = 5000;
+    // Демо-режим: не обращаемся к БД
+    const isDemo = session.user.id === DEMO_USER_ID || (session.user as { isDemo?: boolean }).isDemo;
     let userData: {
       viewMode: string;
       isPPOHead: boolean;
@@ -41,26 +42,50 @@ export default async function DashboardLayout({
       isRPOHead: boolean;
       rpoHeadOrganizationId: string | null;
     } | null = null;
-    try {
-      const dbPromise = prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: {
-          viewMode: true,
-          isPPOHead: true,
-          ppoHeadOrganizationId: true,
-          isMPOHead: true,
-          mpoHeadOrganizationId: true,
-          isRPOHead: true,
-          rpoHeadOrganizationId: true,
-        },
-      });
-      const timeoutPromise = new Promise<null>((resolve) =>
-        setTimeout(() => resolve(null), LAYOUT_DB_TIMEOUT_MS)
-      );
-      userData = await Promise.race([dbPromise, timeoutPromise]);
-    } catch (error) {
-      console.error("[dashboard/layout] Database query error:", error);
-      userData = null;
+
+    if (session.user.id === DEMO_MEMBER_USER_ID) {
+      userData = {
+        viewMode: "MEMBER",
+        isPPOHead: false,
+        ppoHeadOrganizationId: null,
+        isMPOHead: false,
+        mpoHeadOrganizationId: null,
+        isRPOHead: false,
+        rpoHeadOrganizationId: null,
+      };
+    } else if (isDemo) {
+      userData = {
+        viewMode: "PPO_HEAD",
+        isPPOHead: true,
+        ppoHeadOrganizationId: null,
+        isMPOHead: false,
+        mpoHeadOrganizationId: null,
+        isRPOHead: false,
+        rpoHeadOrganizationId: null,
+      };
+    } else {
+      const LAYOUT_DB_TIMEOUT_MS = 5000;
+      try {
+        const dbPromise = prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: {
+            viewMode: true,
+            isPPOHead: true,
+            ppoHeadOrganizationId: true,
+            isMPOHead: true,
+            mpoHeadOrganizationId: true,
+            isRPOHead: true,
+            rpoHeadOrganizationId: true,
+          },
+        });
+        const timeoutPromise = new Promise<null>((resolve) =>
+          setTimeout(() => resolve(null), LAYOUT_DB_TIMEOUT_MS)
+        );
+        userData = await Promise.race([dbPromise, timeoutPromise]);
+      } catch (error) {
+        console.error("[dashboard/layout] Database query error:", error);
+        userData = null;
+      }
     }
   
   const viewMode = userData?.viewMode || "MEMBER";
@@ -446,9 +471,9 @@ export default async function DashboardLayout({
     });
   }
 
-  // Get user avatar
+  // Get user avatar (не для демо — демо-пользователя нет в БД)
   let user: { avatarUrl: string | null } | null = null;
-  if (session.user?.id) {
+  if (session.user?.id && session.user.id !== DEMO_USER_ID && session.user.id !== DEMO_MEMBER_USER_ID) {
     try {
       user = await prisma.user.findUnique({
         where: { id: session.user.id },
@@ -456,7 +481,6 @@ export default async function DashboardLayout({
       });
     } catch (error) {
       console.error("[dashboard/layout] Error fetching user avatar:", error);
-      // Продолжаем работу без аватара
     }
   }
 
@@ -494,6 +518,9 @@ export default async function DashboardLayout({
         <main className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden min-w-0 min-h-full">
           <div className="flex-1 overflow-y-auto overflow-x-hidden pt-16 md:pt-0 min-w-0 bg-gray-50 dark:bg-gray-900 min-h-full">
             <div className="px-4 py-8 sm:px-8 lg:px-12 min-h-full w-full max-w-full min-w-0 bg-gray-50 dark:bg-gray-900">
+              {(session.user.id === DEMO_USER_ID || session.user.id === DEMO_MEMBER_USER_ID || (session.user as { isDemo?: boolean }).isDemo) && (
+                <DemoBanner />
+              )}
               {children}
             </div>
           </div>

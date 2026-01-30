@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getPPOHead } from "@/lib/ppo-head-utils";
+import { isDemoUserId } from "@/lib/demo";
+import { getDemoNewsFromOrg } from "@/lib/demo";
 
 /**
  * GET /api/ppo-head/news
@@ -14,6 +16,17 @@ export async function GET(request: NextRequest) {
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    // Демо: новости от ППО Аппарат МООП РЗ РФ (только чтение)
+    if (isDemoUserId(session.user.id)) {
+      const demoNews = await getDemoNewsFromOrg(50);
+      const mapped = demoNews.map((post: any) => ({
+        ...post,
+        channel: post.channel ?? { id: "demo", name: "Новости", iconUrl: null },
+        author: post.author ?? { id: "demo", firstName: "Председатель", lastName: "ППО", email: "", avatarUrl: null },
+      }));
+      return NextResponse.json(mapped);
     }
 
     // Проверяем, что пользователь является Председателем

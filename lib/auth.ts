@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import YandexProvider from "next-auth/providers/yandex";
 import { prisma } from "./prisma";
 import bcrypt from "bcryptjs";
+import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "./demo";
 
 /**
  * Нормализация номера телефона к формату +7XXXXXXXXXX
@@ -493,6 +494,42 @@ export const authOptions: NextAuthOptions = {
         }
       },
     }),
+    // Демо-режим: вход без БД — председатель (demo=chairman) или член профсоюза (demo=member)
+    CredentialsProvider({
+      id: "demo",
+      name: "Demo",
+      credentials: {
+        demo: { label: "Demo", type: "text" },
+      },
+      async authorize(credentials): Promise<User | null> {
+        const demo = credentials?.demo;
+        if (demo === "chairman" || demo === "true") {
+          return {
+            id: DEMO_USER_ID,
+            email: "demo-chairman@demo.local",
+            name: "Председатель (демо)",
+            role: "PPO_HEAD",
+            membershipStatus: "APPROVED",
+            firstName: "Председатель",
+            lastName: "(демо)",
+            isDemo: true,
+          } as User & { isDemo: boolean };
+        }
+        if (demo === "member") {
+          return {
+            id: DEMO_MEMBER_USER_ID,
+            email: "demo-member@demo.local",
+            name: "Член профсоюза (демо)",
+            role: "MEMBER",
+            membershipStatus: "APPROVED",
+            firstName: "Член",
+            lastName: "(демо)",
+            isDemo: true,
+          } as User & { isDemo: boolean };
+        }
+        return null;
+      },
+    }),
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
@@ -780,6 +817,17 @@ export const authOptions: NextAuthOptions = {
         } else {
           token.isImpersonating = undefined;
         }
+        // Демо-режим: не обращаемся к БД
+        if ('isDemo' in user && user.isDemo) {
+          token.isDemo = true;
+        } else {
+          token.isDemo = undefined;
+        }
+      }
+      
+      // Демо-пользователь: не обновляем из БД
+      if (token.id === DEMO_USER_ID || token.id === DEMO_MEMBER_USER_ID || token.isDemo) {
+        return token;
       }
       
       // Если это вход через Яндекс, получаем актуальные данные пользователя
@@ -826,36 +874,43 @@ export const authOptions: NextAuthOptions = {
         // avatarUrl не хранится в токене (слишком длинный URL), будет получаться из БД при необходимости
         session.user.avatarUrl = undefined;
         
-        // Получаем актуальные данные из БД при каждом запросе сессии
-        // Это важно для корректного отображения статуса членства и роли
-        // Особенно важно при изменении статуса администратором или при одобрении документов
-        try {
-          const userData = await prisma.user.findUnique({
-            where: { id: token.id as string },
-            select: {
-              role: true,
-              membershipStatus: true,
-              viewMode: true,
-              isPPOHead: true,
-              ppoHeadOrganizationId: true,
-            },
-          });
-          
-          if (userData) {
-            // Обновляем role и membershipStatus из БД (актуальные данные)
-            session.user.role = userData.role;
-            session.user.membershipStatus = userData.membershipStatus;
-            
-            // Обновляем viewMode и isPPOHead
-            (session.user as any).viewMode = userData.viewMode || "MEMBER";
-            (session.user as any).isPPOHead = userData.isPPOHead || false;
-            (session.user as any).ppoHeadOrganizationId = userData.ppoHeadOrganizationId || null;
-          }
-        } catch (error) {
-          console.error("[Auth] Error fetching user data from DB:", error);
-          // В случае ошибки используем значения из токена
+        // Демо-режим: не обращаемся к БД
+        if (token.id === DEMO_USER_ID || token.isDemo) {
+          (session.user as any).viewMode = "PPO_HEAD";
+          (session.user as any).isPPOHead = true;
+          (session.user as any).ppoHeadOrganizationId = null;
+          (session.user as any).isDemo = true;
+        } else if (token.id === DEMO_MEMBER_USER_ID) {
           (session.user as any).viewMode = "MEMBER";
           (session.user as any).isPPOHead = false;
+          (session.user as any).ppoHeadOrganizationId = null;
+          (session.user as any).isDemo = true;
+        } else {
+          // Получаем актуальные данные из БД при каждом запросе сессии
+          try {
+            const userData = await prisma.user.findUnique({
+              where: { id: token.id as string },
+              select: {
+                role: true,
+                membershipStatus: true,
+                viewMode: true,
+                isPPOHead: true,
+                ppoHeadOrganizationId: true,
+              },
+            });
+            
+            if (userData) {
+              session.user.role = userData.role;
+              session.user.membershipStatus = userData.membershipStatus;
+              (session.user as any).viewMode = userData.viewMode || "MEMBER";
+              (session.user as any).isPPOHead = userData.isPPOHead || false;
+              (session.user as any).ppoHeadOrganizationId = userData.ppoHeadOrganizationId || null;
+            }
+          } catch (error) {
+            console.error("[Auth] Error fetching user data from DB:", error);
+            (session.user as any).viewMode = "MEMBER";
+            (session.user as any).isPPOHead = false;
+          }
         }
         
         // Копируем поля impersonation из токена в сессию

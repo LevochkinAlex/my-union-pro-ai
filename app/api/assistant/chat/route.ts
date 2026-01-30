@@ -7,6 +7,7 @@ import { saveChatConversationToKnowledgeBase } from "@/lib/chat-knowledge-learni
 import { saveUserInteractionToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { enhancedSearch, formatSearchResultsForPrompt } from "@/lib/chat-enhanced-search";
 import { getOrCreatePrivateChat } from "@/lib/chat-service";
+import { isDemoUserId, DEMO_NEWS_ORG_NAME } from "@/lib/demo";
 import type { ChatBot, ApiProvider } from "@prisma/client";
 
 /**
@@ -28,7 +29,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { message } = await request.json();
+    const body = await request.json();
+    const message = body?.message;
+    const history: Array<{ role: string; content: string }> = Array.isArray(body?.history) ? body.history : [];
     console.log("[assistant/chat] Message received:", message?.substring(0, 50));
 
     if (!message || typeof message !== "string" || message.trim().length === 0) {
@@ -36,6 +39,48 @@ export async function POST(request: NextRequest) {
         { error: "Сообщение не может быть пустым" },
         { status: 400 }
       );
+    }
+
+    // Демо-режим: ИИ отвечает, но без записи в БД; история передаётся с клиента (localStorage)
+    if (isDemoUserId(session.user.id)) {
+      const bot = await prisma.chatBot.findFirst({
+        where: { isActive: true },
+        include: { apiProvider: true },
+      });
+      if (!bot) {
+        return NextResponse.json(
+          { error: "Бот не настроен. Обратитесь к администратору." },
+          { status: 500 }
+        );
+      }
+      const apiKey = bot.apiProvider?.apiKey || process.env.OPENROUTER_API_KEY || "";
+      if (!apiKey) {
+        return NextResponse.json(
+          { error: "API ключ не настроен. Обратитесь к администратору." },
+          { status: 500 }
+        );
+      }
+      const fakeUser = {
+        firstName: "Председатель",
+        lastName: "(демо)",
+        organization: { name: DEMO_NEWS_ORG_NAME },
+      };
+      const formattedSearchInfo = "";
+      const systemPrompt = buildSystemPromptWithEnhancedSearch(fakeUser, formattedSearchInfo);
+      const conversationSlice = history.slice(-10);
+      const messages = [
+        { role: "system" as const, content: systemPrompt },
+        ...conversationSlice.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+        { role: "user" as const, content: message.trim() },
+      ];
+      let aiResponse: string;
+      try {
+        aiResponse = await callAI(bot, messages);
+        if (!aiResponse?.trim()) aiResponse = "Извините, не удалось получить ответ. Попробуйте позже.";
+      } catch (e: any) {
+        aiResponse = e?.message?.includes("401") ? "Ошибка авторизации API." : "Ошибка при обращении к ИИ. Попробуйте позже.";
+      }
+      return NextResponse.json({ message: aiResponse });
     }
 
     // Получаем пользователя с профилем

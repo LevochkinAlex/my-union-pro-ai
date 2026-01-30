@@ -523,8 +523,7 @@ export default function DiscountsClient({
     setClaimed(nextClaimed);
 
     try {
-      // Save to local preferences AND activate on BestBenefits
-      await fetch("/api/discounts/activate", {
+      const response = await fetch("/api/discounts/activate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -533,13 +532,23 @@ export default function DiscountsClient({
           favorites,
         }),
       });
-      
+      const data = await response.json().catch(() => ({}));
+      if (data.demoBlocked) {
+        setClaimed(claimed);
+        setError(data.message ?? "В демо-режиме активация скидок недоступна.");
+        setTimeout(() => setError(null), 5000);
+        return;
+      }
+      if (!response.ok) {
+        setClaimed(claimed);
+        return;
+      }
       if (filters.view === "claimed") {
         fetchDiscounts(filters, { favorites, claimed: nextClaimed });
       }
     } catch (error) {
       console.error("Failed to activate discount", error);
-      // Don't revert UI - user can still access discount via link
+      setClaimed(claimed);
     }
   };
 

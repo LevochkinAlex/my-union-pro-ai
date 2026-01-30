@@ -4,6 +4,9 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo";
+
+const DEMO_ASSISTANT_STORAGE_KEY = "demo_assistant_messages";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -26,6 +29,8 @@ export default function FloatingChatBot() {
   const isSendingMessageRef = useRef(false);
   const [isUserTyping, setIsUserTyping] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const isDemo = typeof window !== "undefined" && (session?.user?.id === DEMO_USER_ID || session?.user?.id === DEMO_MEMBER_USER_ID || (session?.user as { isDemo?: boolean })?.isDemo);
   
   // Вычисляем, можно ли отправить сообщение
   const canSend = input.trim().length > 0 && !isLoading;
@@ -43,9 +48,9 @@ export default function FloatingChatBot() {
     adjustTextareaHeight();
   }, [input, adjustTextareaHeight]);
 
-  // Загружаем аватарку пользователя
+  // Загружаем аватарку пользователя (не в демо — профиля нет в БД)
   useEffect(() => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id || isDemo) return;
 
     const loadUserAvatar = async () => {
       try {
@@ -62,20 +67,43 @@ export default function FloatingChatBot() {
     };
 
     loadUserAvatar();
-  }, [session?.user?.id]);
+  }, [session?.user?.id, isDemo]);
 
-  // Загружаем историю чата с ботом при открытии
+  // Загружаем историю чата при открытии: демо — из localStorage, иначе из API
   useEffect(() => {
-    if (isOpen && session?.user?.id && !isSendingMessageRef.current && messages.length === 0) {
-      loadChatHistory();
+    if (!isOpen || !session?.user?.id || isSendingMessageRef.current || messages.length > 0) return;
+    if (isDemo) {
+      try {
+        const raw = localStorage.getItem(DEMO_ASSISTANT_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as ChatMessage[];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed);
+            conversationHistoryRef.current = parsed;
+          }
+        }
+      } catch {
+        // ignore
+      }
+      return;
     }
+    loadChatHistory();
   }, [isOpen, session?.user?.id]);
 
-  // Периодически синхронизируем сообщения с основным чатом
+  // Сохраняем историю демо в localStorage при изменении сообщений
   useEffect(() => {
-    if (!isOpen || !chatId || !session?.user?.id) return;
+    if (!isDemo || messages.length === 0) return;
+    try {
+      localStorage.setItem(DEMO_ASSISTANT_STORAGE_KEY, JSON.stringify(messages));
+    } catch {
+      // ignore
+    }
+  }, [isDemo, messages]);
 
-    // Синхронизируем каждые 3 секунды, если чат открыт
+  // Периодически синхронизируем сообщения с основным чатом (не в демо)
+  useEffect(() => {
+    if (isDemo || !isOpen || !chatId || !session?.user?.id) return;
+
     const syncInterval = setInterval(() => {
       if (!isSendingMessageRef.current) {
         loadChatHistory();
@@ -83,7 +111,7 @@ export default function FloatingChatBot() {
     }, 3000);
 
     return () => clearInterval(syncInterval);
-  }, [isOpen, chatId, session?.user?.id]);
+  }, [isDemo, isOpen, chatId, session?.user?.id]);
 
   // Автоскролл к последнему сообщению
   useEffect(() => {
@@ -281,6 +309,31 @@ export default function FloatingChatBot() {
         setTimeout(() => {
           loadChatHistory();
         }, 1000);
+      } else if (isDemo) {
+        // Демо: только API помощника, история передаётся и сохраняется в localStorage
+        const history = conversationHistoryRef.current.map((m) => ({ role: m.role, content: m.content }));
+        const response = await fetch("/api/assistant/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: userMessage,
+            history,
+          }),
+        });
+        if (!response.ok) {
+          throw new Error("Ошибка отправки сообщения");
+        }
+        const data = await response.json();
+        const aiMsgId = `ai-${Date.now()}-${Math.random()}`;
+        const aiMsg: ChatMessage = {
+          role: "assistant",
+          content: data.message ?? "Извините, не удалось получить ответ.",
+          timestamp: Date.now(),
+          id: aiMsgId,
+        };
+        setMessages((prev) => [...prev, aiMsg]);
+        conversationHistoryRef.current = [...conversationHistoryRef.current, aiMsg];
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
       } else {
         // Если chatId нет, используем старый API
         const response = await fetch("/api/assistant/chat", {
@@ -393,7 +446,25 @@ export default function FloatingChatBot() {
                 <h3 className="text-sm font-semibold text-white">Помощник</h3>
                 <p className="text-xs text-blue-100">AI Ассистент</p>
               </div>
-              {chatId && (
+              {isDemo && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      localStorage.removeItem(DEMO_ASSISTANT_STORAGE_KEY);
+                    } catch {
+                      // ignore
+                    }
+                    setMessages([]);
+                    conversationHistoryRef.current = [];
+                  }}
+                  className="ml-2 text-xs text-blue-100 hover:text-white underline"
+                  title="Очистить историю до начального состояния"
+                >
+                  Очистить историю
+                </button>
+              )}
+              {!isDemo && chatId && (
                 <a
                   href={`/dashboard/chat?botChatId=${chatId}`}
                   className="ml-2 text-xs text-blue-100 hover:text-white underline"

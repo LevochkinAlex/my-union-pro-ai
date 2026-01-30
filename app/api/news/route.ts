@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { withCache, getCacheKey } from "@/lib/cache";
+import { isDemoUserId } from "@/lib/demo";
+import { getDemoNewsFromOrg } from "@/lib/demo";
 
 // GET /api/news - получить список опубликованных новостей
 export async function GET(request: NextRequest) {
@@ -12,6 +14,33 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
     const skip = (page - 1) * limit;
+
+    // Демо-режим: новости от ППО Аппарат МООП РЗ РФ
+    if (session?.user?.id && isDemoUserId(session.user.id)) {
+      const allDemo = await getDemoNewsFromOrg(limit * 3);
+      const total = allDemo.length;
+      const news = allDemo.slice(skip, skip + limit).map((post: any) => ({
+        id: post.id,
+        title: post.title,
+        content: post.content,
+        coverImage: post.coverImage,
+        publishedAt: post.publishedAt,
+        viewCount: post.viewCount,
+        author: post.author,
+        _count: post._count ?? { likes: 0, comments: 0 },
+        isLiked: post.isLiked ?? false,
+        polls: post.polls ?? [],
+      }));
+      return NextResponse.json({
+        news,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit) || 1,
+        },
+      });
+    }
 
     // Получаем организацию пользователя для фильтрации
     let userOrganizationId: string | null = null;

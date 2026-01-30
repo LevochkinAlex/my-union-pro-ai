@@ -429,6 +429,12 @@ export default function DiscountDetailPage() {
       
       const result = await response.json();
       console.log("🎯 ACTIVATION API RESPONSE:", result);
+
+      if (result.demoBlocked) {
+        setIsClaimed(false);
+        alert(result.message ?? "В демо-режиме активация скидок недоступна. Войдите в аккаунт для активации.");
+        return;
+      }
       
       // Перезагружаем preferences чтобы получить сохраненный промокод
       await loadPreferences();
@@ -451,6 +457,7 @@ export default function DiscountDetailPage() {
       setShowPromoModal(true);
     } catch (error) {
       console.error("❌ Failed to activate:", error);
+      setIsClaimed(false);
       // Показываем модальное окно даже при ошибке
       setShowPromoModal(true);
     }

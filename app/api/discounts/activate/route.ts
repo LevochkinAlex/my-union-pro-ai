@@ -6,12 +6,22 @@ import { safeActivateDiscount } from "@/lib/best-benefits-activation";
 import { decryptPassword } from "@/lib/best-benefits-password";
 import { saveDiscountActivation, getDiscountPromoCode } from "@/lib/discount-activation";
 import { fetchBestBenefitsDiscounts } from "@/lib/best-benefits";
+import { isDemoUserId } from "@/lib/demo";
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    // В демо-режиме скидки не активируются (без записи в БД)
+    if (isDemoUserId(session.user.id)) {
+      return NextResponse.json({
+        success: false,
+        demoBlocked: true,
+        message: "В демо-режиме активация скидок недоступна. Войдите в аккаунт для активации.",
+      });
     }
 
     const { discountId, parentDiscountId, promoCode: requestPromoCode, claimed, favorites } = await request.json();
