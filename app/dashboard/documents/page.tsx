@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { alertError, alertSuccess, alertWarning, confirm } from "@/lib/alert";
+import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import PPOHeadDocumentsPage from "./ppo-head/page";
 
 interface Document {
@@ -49,9 +50,12 @@ export default function DocumentsPage() {
   const [regeneratingDocId, setRegeneratingDocId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   
-  // Проверяем режим просмотра вместо роли для корректного переключения
-  const isPPOHead = session?.user?.viewMode === "PPO_HEAD" || 
-    (session?.user?.role === "PPO_HEAD" && !session?.user?.isPPOHead);
+  // У члена профсоюза — только «Мои документы», без функций председателя (создание, журнал, заседания)
+  const isDemoMember = session?.user?.id === DEMO_MEMBER_USER_ID;
+  const isPPOHead =
+    !isDemoMember &&
+    (session?.user?.viewMode === "PPO_HEAD" ||
+      (session?.user?.role === "PPO_HEAD" && !(session?.user as { isPPOHead?: boolean })?.isPPOHead));
 
   // Функции загрузки данных вынесены из useEffect для повторного использования
   const loadProfileStatus = async () => {

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
+import { getDemoMemberOutgoingDocuments } from "@/lib/demo";
 import fs from "fs";
 import path from "path";
 
@@ -11,12 +13,59 @@ const CHARTER_TITLE = "Устав Профсоюза работников здр
 const CHARTER_DESCRIPTION = "Устав Профсоюза работников здравоохранения РФ (принят на VII съезде, апрель 2021)";
 const CHARTER_FILENAME = "Устав Профсоюза (принят на VII съезде апрель 2021) зарегистрировано для публикации на сайте и печати.docx";
 
+function buildCharterDocument() {
+  let charterFileSize: number | null = null;
+  let charterFilePath: string | null = CHARTER_PATH;
+  try {
+    const fullPath = path.join(process.cwd(), "public", CHARTER_PATH);
+    if (fs.existsSync(fullPath)) {
+      const stats = fs.statSync(fullPath);
+      charterFileSize = stats.size;
+    } else {
+      charterFilePath = null;
+    }
+  } catch {
+    charterFilePath = null;
+  }
+  return {
+    id: "charter-system",
+    type: "OTHER" as const,
+    status: "GENERATED" as const,
+    title: CHARTER_TITLE,
+    description: CHARTER_DESCRIPTION,
+    fileName: CHARTER_FILENAME,
+    fileSize: charterFileSize,
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    filePath: charterFilePath,
+    signedFilePath: null,
+    driveFileId: null,
+    driveUrl: null,
+    verificationStatus: null,
+    verificationMessage: null,
+    verifiedAt: null,
+    createdAt: new Date("2021-04-01"),
+    updatedAt: new Date("2021-04-01"),
+    assignedAt: null,
+    user: null,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    // Демо-член профсоюза: только входящие (устав) и сгенерированные заявления, без БД
+    if (session.user.id === DEMO_MEMBER_USER_ID) {
+      const incomingDocuments = [buildCharterDocument()];
+      const outgoingDocuments = getDemoMemberOutgoingDocuments();
+      return NextResponse.json({
+        incomingDocuments,
+        outgoingDocuments,
+      });
     }
 
     // Получаем документы пользователя (исходящие - созданные пользователем)

@@ -507,11 +507,11 @@ export const authOptions: NextAuthOptions = {
           return {
             id: DEMO_USER_ID,
             email: "demo-chairman@demo.local",
-            name: "Председатель (демо)",
+            name: "Иван Еременко",
             role: "PPO_HEAD",
             membershipStatus: "APPROVED",
-            firstName: "Председатель",
-            lastName: "(демо)",
+            firstName: "Иван",
+            lastName: "Еременко",
             isDemo: true,
           } as User & { isDemo: boolean };
         }
@@ -519,11 +519,11 @@ export const authOptions: NextAuthOptions = {
           return {
             id: DEMO_MEMBER_USER_ID,
             email: "demo-member@demo.local",
-            name: "Член профсоюза (демо)",
+            name: "Анна Сидорова",
             role: "MEMBER",
             membershipStatus: "APPROVED",
-            firstName: "Член",
-            lastName: "(демо)",
+            firstName: "Анна",
+            lastName: "Сидорова",
             isDemo: true,
           } as User & { isDemo: boolean };
         }
@@ -871,6 +871,9 @@ export const authOptions: NextAuthOptions = {
         session.user.membershipStatus = token.membershipStatus;
         session.user.firstName = token.firstName;
         session.user.lastName = token.lastName;
+        // Имя для отображения: из токена (firstName + lastName) или оставляем текущее
+        const fullName = [token.firstName, token.lastName].filter(Boolean).join(" ").trim();
+        if (fullName) session.user.name = fullName;
         // avatarUrl не хранится в токене (слишком длинный URL), будет получаться из БД при необходимости
         session.user.avatarUrl = undefined;
         

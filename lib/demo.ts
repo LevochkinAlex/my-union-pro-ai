@@ -141,6 +141,69 @@ export function getDemoNewUsers() {
   ];
 }
 
+/** Мок исходящих документов (заявлений) для демо-члена профсоюза — сгенерированные заявления. */
+export function getDemoMemberOutgoingDocuments(): Array<{
+  id: string;
+  type: string;
+  status: string;
+  title: string;
+  description: string | null;
+  fileName: string | null;
+  fileSize: number | null;
+  mimeType: string;
+  filePath: string | null;
+  signedFilePath: string | null;
+  driveFileId: string | null;
+  driveUrl: string | null;
+  verificationStatus: string | null;
+  verificationMessage: string | null;
+  verifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}> {
+  const now = new Date().toISOString();
+  return [
+    {
+      id: "demo-doc-membership",
+      type: "MEMBERSHIP_APPLICATION",
+      status: "GENERATED",
+      title: "Заявление о вступлении в Профсоюз",
+      description: "Заявление о вступлении в члены Профсоюза работников здравоохранения РФ",
+      fileName: "Заявление_о_вступлении_Сидорова_А.П..docx",
+      fileSize: 45678,
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      filePath: null,
+      signedFilePath: null,
+      driveFileId: null,
+      driveUrl: null,
+      verificationStatus: null,
+      verificationMessage: null,
+      verifiedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: "demo-doc-contribution",
+      type: "CONTRIBUTION_APPLICATION",
+      status: "GENERATED",
+      title: "Заявление о перечислении членских взносов",
+      description: "Заявление о перечислении членских взносов по безналичному расчёту",
+      fileName: "Заявление_о_взносах_Сидорова_А.П..docx",
+      fileSize: 38912,
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      filePath: null,
+      signedFilePath: null,
+      driveFileId: null,
+      driveUrl: null,
+      verificationStatus: null,
+      verificationMessage: null,
+      verifiedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+}
+
 /** Проверка: является ли текущий пользователь демо (председатель или член). */
 export function isDemoUserId(userId: string | undefined): boolean {
   return userId === DEMO_USER_ID || userId === DEMO_MEMBER_USER_ID;

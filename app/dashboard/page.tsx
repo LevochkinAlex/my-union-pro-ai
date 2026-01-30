@@ -62,8 +62,8 @@ export default async function DashboardPage() {
     if (isDemo) {
       userRole = {
         role: "PPO_HEAD",
-        firstName: "Председатель",
-        lastName: "(демо)",
+        firstName: session.user.firstName ?? "Иван",
+        lastName: session.user.lastName ?? "Еременко",
         viewMode: "PPO_HEAD",
         isPPOHead: true,
         isMPOHead: false,
@@ -77,8 +77,8 @@ export default async function DashboardPage() {
     } else if (userId === DEMO_MEMBER_USER_ID) {
       userRole = {
         role: "MEMBER",
-        firstName: "Член",
-        lastName: "(демо)",
+        firstName: session.user.firstName ?? "Анна",
+        lastName: session.user.lastName ?? "Сидорова",
         viewMode: "MEMBER",
         isPPOHead: false,
         isMPOHead: false,
@@ -167,7 +167,7 @@ export default async function DashboardPage() {
       const stats = getDemoStats();
       const recentAppeals = getDemoAppeals();
       const recentMembers = getDemoMembers();
-      const userName = userRole?.firstName || session.user?.name || "Председатель";
+      const userName = [userRole?.firstName, userRole?.lastName].filter(Boolean).join(" ") || session.user?.name || "Председатель";
       return (
         <PPOHeadDashboard
           userName={userName}
@@ -336,8 +336,8 @@ export default async function DashboardPage() {
     const postsFromSubscriptions: any[] = [];
     const currentUser = {
       id: DEMO_MEMBER_USER_ID,
-      firstName: "Член",
-      lastName: "(демо)",
+      firstName: session.user.firstName ?? "Анна",
+      lastName: session.user.lastName ?? "Сидорова",
       membershipStatus: "APPROVED" as const,
       organization: { id: "demo-org", name: DEMO_NEWS_ORG_NAME },
       documents: [],
@@ -351,7 +351,7 @@ export default async function DashboardPage() {
     const hasAdditionalInfo = true;
     const hasAwards = false;
     const membershipStatus = "APPROVED" as const;
-    const userName = currentUser.firstName || session.user?.name || "Пользователь";
+    const userName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(" ") || session.user?.name || "Пользователь";
     const greeting = "С возвращением";
 
     return (

@@ -55,9 +55,22 @@ export function useMembershipAccess(): MembershipAccessResult {
             unionMembershipStatus: data.user?.unionMembershipStatus || null,
             role: data.user?.role || null,
           });
+        } else {
+          // Fallback: при 404/503 используем данные сессии, чтобы валидированные члены и председатели видели контент
+          setMembershipData({
+            membershipStatus: session?.user?.membershipStatus ?? null,
+            unionMembershipStatus: null,
+            role: session?.user?.role ?? null,
+          });
         }
       } catch (error) {
         console.error("[useMembershipAccess] Error fetching membership status:", error);
+        // Fallback на сессию при сетевой ошибке или недоступности API
+        setMembershipData({
+          membershipStatus: session?.user?.membershipStatus ?? null,
+          unionMembershipStatus: null,
+          role: session?.user?.role ?? null,
+        });
       } finally {
         setIsLoading(false);
       }
