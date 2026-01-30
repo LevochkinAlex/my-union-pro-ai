@@ -376,3 +376,39 @@ button:disabled {
 .card-hover:hover {
   background-color: var(--card-hover);
 }
+
+/* ====================================
+   LANDING ANIMATIONS
+   ==================================== */
+@keyframes landing-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.landing-animate-in {
+  animation: landing-fade-in-up 0.6s ease-out both;
+}
+
+.landing-animate-in-delay-1 { animation-delay: 0.1s; }
+.landing-animate-in-delay-2 { animation-delay: 0.2s; }
+.landing-animate-in-delay-3 { animation-delay: 0.3s; }
+.landing-animate-in-delay-4 { animation-delay: 0.4s; }
+.landing-animate-in-delay-5 { animation-delay: 0.5s; }
+.landing-animate-in-delay-6 { animation-delay: 0.6s; }
+.landing-animate-in-delay-7 { animation-delay: 0.7s; }
+.landing-animate-in-delay-8 { animation-delay: 0.8s; }
