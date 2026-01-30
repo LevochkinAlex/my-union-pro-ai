@@ -416,6 +416,7 @@ export default function FloatingChatBot() {
     <>
       {/* Плавающая кнопка - показываем всегда, даже если сессия еще загружается */}
       <button
+        data-tour="ai-widget-button"
         onClick={() => setIsOpen(!isOpen)}
         className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-blue-600 shadow-lg transition-all hover:from-purple-600 hover:to-blue-700 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:from-purple-600 dark:to-blue-700 dark:hover:from-purple-700 dark:hover:to-blue-800"
         aria-label="Открыть чат с ИИ помощником"

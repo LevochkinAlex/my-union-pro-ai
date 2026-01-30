@@ -2,7 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import TourGuideModal from "./TourGuideModal";
+import TourGuideSpotlight from "./TourGuideSpotlight";
 import {
   getTourDismissed,
   getTourShownAfterApproval,
@@ -96,7 +96,7 @@ export default function TourGuideProvider({
   return (
     <TourContext.Provider value={value}>
       {children}
-      <TourGuideModal isOpen={isOpen} onClose={closeTour} isDemo={isDemo} />
+      <TourGuideSpotlight isOpen={isOpen} onClose={closeTour} isDemo={isDemo} />
     </TourContext.Provider>
   );
 }

@@ -56,6 +56,7 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
 
   return (
     <aside
+      data-tour="sidebar"
       className={`hidden md:flex md:flex-col md:fixed md:inset-y-0 transition-all duration-300 ${
         isCollapsed ? "md:w-16" : "md:w-64"
       }`}
