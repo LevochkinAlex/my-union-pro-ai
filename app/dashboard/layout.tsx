@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/dashboard/Sidebar";
 import MiniChatWrapperConditional from "@/components/dashboard/MiniChatWrapperConditional";
 import MobileLayout from "@/components/dashboard/MobileLayout";
+import TourGuideProvider from "@/components/dashboard/TourGuideProvider";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 import DemoBanner from "@/components/dashboard/DemoBanner";
 import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
@@ -496,40 +497,42 @@ export default async function DashboardLayout({
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
-      {/* Mobile Header and Menu */}
-      <MobileLayout
-        items={menuItems}
-        userInitial={getUserInitial()}
-        avatarUrl={user?.avatarUrl || null}
-      />
+    <TourGuideProvider>
+      <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
+        {/* Mobile Header and Menu */}
+        <MobileLayout
+          items={menuItems}
+          userInitial={getUserInitial()}
+          avatarUrl={user?.avatarUrl || null}
+        />
 
-      {/* Desktop Sidebar */}
-      <Sidebar
-        items={menuItems}
-        userInitial={getUserInitial()}
-        avatarUrl={user?.avatarUrl || null}
-      />
+        {/* Desktop Sidebar */}
+        <Sidebar
+          items={menuItems}
+          userInitial={getUserInitial()}
+          avatarUrl={user?.avatarUrl || null}
+        />
 
-      {/* Main content */}
-      <div id="main-content" className="flex flex-col flex-1 md:pl-64 transition-all duration-300 min-w-0 bg-gray-50 dark:bg-gray-900">
-        {/* Impersonation Banner */}
-        {isImpersonating && <ImpersonationBanner />}
-        <main className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden min-w-0 min-h-full">
-          <div className="flex-1 overflow-y-auto overflow-x-hidden pt-16 md:pt-0 min-w-0 bg-gray-50 dark:bg-gray-900 min-h-full">
-            <div className="px-4 py-8 sm:px-8 lg:px-12 min-h-full w-full max-w-full min-w-0 bg-gray-50 dark:bg-gray-900">
-              {(session.user.id === DEMO_USER_ID || session.user.id === DEMO_MEMBER_USER_ID || (session.user as { isDemo?: boolean }).isDemo) && (
-                <DemoBanner />
-              )}
-              {children}
+        {/* Main content */}
+        <div id="main-content" className="flex flex-col flex-1 md:pl-64 transition-all duration-300 min-w-0 bg-gray-50 dark:bg-gray-900">
+          {/* Impersonation Banner */}
+          {isImpersonating && <ImpersonationBanner />}
+          <main className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden min-w-0 min-h-full">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden pt-16 md:pt-0 min-w-0 bg-gray-50 dark:bg-gray-900 min-h-full">
+              <div className="px-4 py-8 sm:px-8 lg:px-12 min-h-full w-full max-w-full min-w-0 bg-gray-50 dark:bg-gray-900">
+                {(session.user.id === DEMO_USER_ID || session.user.id === DEMO_MEMBER_USER_ID || (session.user as { isDemo?: boolean }).isDemo) && (
+                  <DemoBanner />
+                )}
+                {children}
+              </div>
             </div>
-          </div>
-        </main>
+          </main>
+        </div>
+        
+        {/* Мини-чат виджет (показывается на всех страницах кроме чатов) */}
+        <MiniChatWrapperConditional />
       </div>
-      
-      {/* Мини-чат виджет (показывается на всех страницах кроме чатов) */}
-      <MiniChatWrapperConditional />
-    </div>
+    </TourGuideProvider>
   );
   } catch (error: any) {
     // NEXT_REDIRECT - это нормальное исключение Next.js, не ошибка
