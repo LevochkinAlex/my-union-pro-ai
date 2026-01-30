@@ -12,10 +12,8 @@ import PPOHeadDashboard from "@/components/dashboard/PPOHeadDashboard";
 import OrgHeadDashboard from "@/components/dashboard/OrgHeadDashboard";
 import { calculateProfileProgress } from "@/lib/profile-progress";
 import MembershipProtectedSection from "@/components/dashboard/MembershipProtectedSection";
+import { DEMO_USER_ID, DEMO_MEMBER_USER_ID, DEMO_NEWS_ORG_NAME } from "@/lib/demo-constants";
 import {
-  DEMO_USER_ID,
-  DEMO_MEMBER_USER_ID,
-  DEMO_NEWS_ORG_NAME,
   getDemoStats,
   getDemoAppeals,
   getDemoMembers,

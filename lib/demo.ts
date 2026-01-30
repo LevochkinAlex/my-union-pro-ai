@@ -1,45 +1,21 @@
 /**
  * Демо-режим платформы: полный функционал без записи в БД.
  * Данные хранятся локально или подставляются как заглушки.
+ * Клиентским компонентам нужны только константы — импортируйте из lib/demo-constants.ts.
  */
 
 import { prisma } from "./prisma";
+import {
+  DEMO_USER_ID,
+  DEMO_MEMBER_USER_ID,
+  DEMO_NEWS_ORG_NAME,
+  type DemoStats,
+  type DemoAppeal,
+  type DemoMember,
+} from "./demo-constants";
 
-/** ID пользователя в сессии при входе в демо председателя (не существует в БД). */
-export const DEMO_USER_ID = "demo-chairman";
-
-/** ID пользователя в сессии при входе в демо члена профсоюза (не существует в БД). */
-export const DEMO_MEMBER_USER_ID = "demo-member";
-
-/** Название организации для подтягивания новостей в демо (Председатель Еременко, МООП РЗ Аппарат). */
-export const DEMO_NEWS_ORG_NAME = "ППО Аппарат МООП РЗ РФ";
-
-export interface DemoStats {
-  pendingAppeals: number;
-  pendingMembers: number;
-  activeMembers: number;
-  totalNews: number;
-  totalDocuments: number;
-  totalEmployees: number;
-  membershipPercent: number;
-  growthYTD: number;
-}
-
-export interface DemoAppeal {
-  id: string;
-  publicId: string;
-  title: string;
-  status: string;
-  createdAt: string;
-  user: { firstName: string | null; lastName: string | null };
-}
-
-export interface DemoMember {
-  id: string;
-  firstName: string | null;
-  lastName: string | null;
-  createdAt: string;
-}
+export { DEMO_USER_ID, DEMO_MEMBER_USER_ID, DEMO_NEWS_ORG_NAME };
+export type { DemoStats, DemoAppeal, DemoMember };
 
 /** Мок-статистика для дашборда председателя в демо. */
 export function getDemoStats(): DemoStats {

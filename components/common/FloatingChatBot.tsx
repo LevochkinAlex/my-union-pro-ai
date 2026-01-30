@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo";
+import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 
 const DEMO_ASSISTANT_STORAGE_KEY = "demo_assistant_messages";
 

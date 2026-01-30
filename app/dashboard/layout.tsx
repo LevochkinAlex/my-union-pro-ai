@@ -8,7 +8,7 @@ import MiniChatWrapperConditional from "@/components/dashboard/MiniChatWrapperCo
 import MobileLayout from "@/components/dashboard/MobileLayout";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 import DemoBanner from "@/components/dashboard/DemoBanner";
-import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo";
+import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 
 // Указываем, что layout динамический (использует getServerSession)
 export const dynamic = 'force-dynamic';

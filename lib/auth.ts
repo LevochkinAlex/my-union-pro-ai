@@ -3,7 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import YandexProvider from "next-auth/providers/yandex";
 import { prisma } from "./prisma";
 import bcrypt from "bcryptjs";
-import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "./demo";
+import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "./demo-constants";
 
 /**
  * Нормализация номера телефона к формату +7XXXXXXXXXX
