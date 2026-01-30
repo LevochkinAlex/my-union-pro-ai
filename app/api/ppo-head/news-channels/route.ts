@@ -20,17 +20,19 @@ export async function GET(request: NextRequest) {
 
     // Демо: один виртуальный канал для отображения новостей (только чтение)
     if (isDemoUserId(session.user.id)) {
-      return NextResponse.json([
-        {
-          id: "demo-channel",
-          name: "Новости",
-          description: "Новости ППО Аппарат МООП РЗ РФ",
-          iconUrl: null,
-          isMain: true,
-          _count: { newsPosts: 0 },
-          chat: null,
-        },
-      ]);
+      return NextResponse.json({
+        channels: [
+          {
+            id: "demo-channel",
+            name: "Новости",
+            description: "Новости ППО Аппарат МООП РЗ РФ",
+            iconUrl: null,
+            isMain: true,
+            _count: { newsPosts: 3 },
+            chat: null,
+          },
+        ],
+      });
     }
 
     // Проверяем, что пользователь является Председателем

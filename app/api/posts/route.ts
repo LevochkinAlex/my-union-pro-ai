@@ -9,6 +9,8 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { initVDSStorageFromEnv, uploadFileToVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 import { convertHeicToJpegServer } from "@/lib/heic-convert-server";
+import { isDemoUserId } from "@/lib/demo";
+import { getDemoProfsetyPosts } from "@/lib/demo";
 
 // Инициализируем VDS хранилище при загрузке модуля
 if (typeof window === "undefined") {
@@ -29,6 +31,12 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get("userId");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
+
+    // Демо: мок-посты Профсети без БД
+    if (isDemoUserId(session.user.id)) {
+      const posts = getDemoProfsetyPosts({ limit, page });
+      return NextResponse.json({ posts });
+    }
 
     // Получаем организацию текущего пользователя для фильтрации
     const currentUser = await prisma.user.findUnique({

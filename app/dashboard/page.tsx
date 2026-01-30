@@ -351,7 +351,7 @@ export default async function DashboardPage() {
     const hasAdditionalInfo = true;
     const hasAwards = false;
     const membershipStatus = "APPROVED" as const;
-    const userName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(" ") || session.user?.name || "Пользователь";
+    const userName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(" ") || "Анна Сидорова";
     const greeting = "С возвращением";
 
     return (

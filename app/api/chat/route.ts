@@ -13,6 +13,8 @@ import { sendUserNotification } from "@/lib/notifications";
 import { invalidateChatCache, invalidateUserChatsCache } from "@/lib/chat-redis";
 import { withCache, getCacheKey } from "@/lib/cache";
 import * as Sentry from "@sentry/nextjs";
+import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
+import { getDemoMemberChats, getDemoChairmanChats } from "@/lib/demo";
 
 const AI_CHAT_NAME = "ИИ-Ассистент";
 const AI_BOT_ID = "ai-assistant-bot";
@@ -165,6 +167,14 @@ export async function GET(request: NextRequest) {
 
     const userId = session.user.id;
     const { searchParams } = new URL(request.url);
+
+    // Демо-режим: мок-чаты без БД
+    if (userId === DEMO_MEMBER_USER_ID) {
+      return NextResponse.json({ chats: getDemoMemberChats() });
+    }
+    if (userId === DEMO_USER_ID) {
+      return NextResponse.json({ chats: getDemoChairmanChats() });
+    }
 
     // Получаем viewMode пользователя для фильтрации чатов
     const user = await prisma.user.findUnique({

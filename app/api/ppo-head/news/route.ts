@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getPPOHead } from "@/lib/ppo-head-utils";
 import { isDemoUserId } from "@/lib/demo";
-import { getDemoNewsFromOrg } from "@/lib/demo";
+import { getDemoNews } from "@/lib/demo";
 
 /**
  * GET /api/ppo-head/news
@@ -18,15 +18,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Демо: новости от ППО Аппарат МООП РЗ РФ (только чтение)
+    // Демо: мок-новости без БД (формат как у обычного ответа — { news: [...] })
     if (isDemoUserId(session.user.id)) {
-      const demoNews = await getDemoNewsFromOrg(50);
-      const mapped = demoNews.map((post: any) => ({
-        ...post,
-        channel: post.channel ?? { id: "demo", name: "Новости", iconUrl: null },
+      const demoNews = getDemoNews(50);
+      const news = demoNews.map((post: any) => ({
+        id: post.id,
+        title: post.title,
+        content: post.content,
+        coverImage: post.coverImage,
+        publishedAt: post.publishedAt,
+        viewCount: post.viewCount,
         author: post.author ?? { id: "demo", firstName: "Председатель", lastName: "ППО", email: "", avatarUrl: null },
+        channel: post.channel ?? { id: "demo", name: "Новости", iconUrl: null },
+        _count: post._count ?? { likes: 0, comments: 0 },
+        isLiked: post.isLiked ?? false,
+        polls: post.polls ?? [],
       }));
-      return NextResponse.json(mapped);
+      return NextResponse.json({ news });
     }
 
     // Проверяем, что пользователь является Председателем

@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getPPOHead } from "@/lib/ppo-head-utils";
+import { DEMO_USER_ID } from "@/lib/demo-constants";
+import { getDemoPPOHeadTickets } from "@/lib/demo";
 
 /**
  * GET /api/ppo-head/appeals
@@ -16,6 +18,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get("status");
+    const userId = searchParams.get("userId");
+
+    // Демо-председатель: мок-обращения без БД
+    if (session.user.id === DEMO_USER_ID) {
+      const tickets = getDemoPPOHeadTickets(status || undefined);
+      return NextResponse.json({ success: true, tickets });
+    }
+
     // Проверяем, что пользователь является Председателем
     const chairman = await getPPOHead(session.user.id);
 
@@ -25,10 +37,6 @@ export async function GET(request: NextRequest) {
         { status: 403 }
       );
     }
-
-    const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status");
-    const userId = searchParams.get("userId"); // Фильтр по конкретному пользователю
     
     console.log("[ppo-head/appeals] Request params:", { status, userId, chairmanId: chairman.organizationId });
 

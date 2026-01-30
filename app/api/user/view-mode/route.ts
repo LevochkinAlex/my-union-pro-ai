@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 
 // GET /api/user/view-mode
 // Получить текущий режим просмотра и доступные режимы
@@ -16,6 +17,37 @@ export async function GET() {
         { error: "Не авторизован" },
         { status: 401 }
       );
+    }
+
+    // Демо-режим: не обращаемся к БД
+    if (session.user.id === DEMO_MEMBER_USER_ID) {
+      return NextResponse.json({
+        currentMode: "MEMBER",
+        availableModes: [{ mode: "MEMBER", label: "Член профсоюза" }],
+        canSwitch: false,
+      });
+    }
+    if (session.user.id === DEMO_USER_ID) {
+      return NextResponse.json({
+        currentMode: "PPO_HEAD",
+        availableModes: [{ mode: "PPO_HEAD", label: "Председатель ППО", organizationName: "ППО Аппарат МООП РЗ РФ" }],
+        canSwitch: false,
+      });
+    }
+    if ((session.user as { isDemo?: boolean }).isDemo) {
+      const viewMode = (session.user as { viewMode?: string }).viewMode;
+      if (viewMode === "PPO_HEAD") {
+        return NextResponse.json({
+          currentMode: "PPO_HEAD",
+          availableModes: [{ mode: "PPO_HEAD", label: "Председатель ППО", organizationName: "ППО Аппарат МООП РЗ РФ" }],
+          canSwitch: false,
+        });
+      }
+      return NextResponse.json({
+        currentMode: "MEMBER",
+        availableModes: [{ mode: "MEMBER", label: "Член профсоюза" }],
+        canSwitch: false,
+      });
     }
 
     // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убираем withPrismaRetry - он может вызывать 503

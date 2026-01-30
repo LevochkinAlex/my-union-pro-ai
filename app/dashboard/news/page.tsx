@@ -8,6 +8,7 @@ import NewsChannels from "@/components/dashboard/news/NewsChannels";
 import UnionMembers from "@/components/dashboard/news/UnionMembers";
 import PPOHeadNewsPage from "./ppo-head/page";
 import { MembershipGate } from "@/components/MembershipGate";
+import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 
 interface NewsPost {
   id: string;
@@ -41,11 +42,13 @@ interface NewsPost {
 export default function NewsPage() {
   const { data: session } = useSession();
   
-  // Показываем страницу председателя только если viewMode === "PPO_HEAD"
-  // Это позволяет председателям переключаться в режим обычного члена
-  const showPPOHeadView = session?.user?.viewMode === "PPO_HEAD" || 
-    (session?.user?.role === "PPO_HEAD" && !session?.user?.isPPOHead);
-  
+  // У члена профсоюза — только лента новостей, без функций председателя (создание, каналы)
+  const isDemoMember = session?.user?.id === DEMO_MEMBER_USER_ID;
+  const showPPOHeadView =
+    !isDemoMember &&
+    (session?.user?.viewMode === "PPO_HEAD" ||
+      ((session?.user as { role?: string; isPPOHead?: boolean })?.role === "PPO_HEAD" && !(session?.user as { isPPOHead?: boolean })?.isPPOHead));
+
   if (showPPOHeadView) {
     return <PPOHeadNewsPage />;
   }

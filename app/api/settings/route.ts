@@ -1,7 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { prisma } from "@/lib/prisma";
+
+const DEMO_SETTINGS = {
+  pushNotificationsEnabled: true,
+  pushSoundEnabled: true,
+  emailBotNotifications: false,
+  emailAppealNotifications: true,
+  bestBenefits: {
+    userId: null,
+    status: null,
+    createdAt: null,
+    synced: false,
+  },
+};
 
 // GET - получить настройки пользователя
 export async function GET() {
@@ -13,6 +27,11 @@ export async function GET() {
         { error: "Не авторизован" },
         { status: 401 }
       );
+    }
+
+    const isDemo = session.user.id === DEMO_USER_ID || session.user.id === DEMO_MEMBER_USER_ID;
+    if (isDemo) {
+      return NextResponse.json(DEMO_SETTINGS);
     }
 
     console.log("[settings] Fetching settings for user:", session.user.id);
@@ -105,6 +124,14 @@ export async function PUT(request: NextRequest) {
         { error: "Не авторизован" },
         { status: 401 }
       );
+    }
+
+    const isDemo = session.user.id === DEMO_USER_ID || session.user.id === DEMO_MEMBER_USER_ID;
+    if (isDemo) {
+      return NextResponse.json({
+        success: true,
+        message: "Настройки успешно сохранены",
+      });
     }
 
     const body = await request.json();

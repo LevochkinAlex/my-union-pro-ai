@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
+import { getDemoProfile } from "@/lib/demo";
 import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { invalidateUsersCache } from "@/lib/cache-invalidation";
 import { cacheDeletePattern } from "@/lib/cache";
@@ -40,6 +42,12 @@ export async function GET() {
     if (!session?.user?.id) {
       console.error("[profile] GET: No session or user ID");
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    const isDemo = session.user.id === DEMO_USER_ID || session.user.id === DEMO_MEMBER_USER_ID;
+    if (isDemo) {
+      const { user, viewMode, isPPOHead } = getDemoProfile(session.user.id);
+      return NextResponse.json({ user, viewMode, isPPOHead });
     }
 
     console.log("[profile] GET: Fetching user data for ID:", session.user.id);
@@ -194,6 +202,12 @@ export async function PUT(request: NextRequest) {
     if (!session?.user?.id) {
       console.error("[profile] PUT: No session or user ID");
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    const isDemo = session.user.id === DEMO_USER_ID || session.user.id === DEMO_MEMBER_USER_ID;
+    if (isDemo) {
+      const { user } = getDemoProfile(session.user.id);
+      return NextResponse.json({ success: true, user });
     }
 
     const body = await request.json();

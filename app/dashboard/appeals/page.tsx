@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PPOHeadAppealsPage from "./ppo-head/page";
 import { MembershipGate } from "@/components/MembershipGate";
+import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 
 interface Ticket {
   id: string;
@@ -71,9 +72,12 @@ export default function AppealsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | keyof typeof TICKET_STATUSES>("all");
   
-  // Проверяем режим просмотра вместо роли для корректного переключения
-  const isPPOHead = session?.user?.viewMode === "PPO_HEAD" || 
-    (session?.user?.role === "PPO_HEAD" && !session?.user?.isPPOHead);
+  // У члена профсоюза — только «Мои обращения», без раздела председателя
+  const isDemoMember = session?.user?.id === DEMO_MEMBER_USER_ID;
+  const isPPOHead =
+    !isDemoMember &&
+    (session?.user?.viewMode === "PPO_HEAD" ||
+      (session?.user?.role === "PPO_HEAD" && !(session?.user as { isPPOHead?: boolean })?.isPPOHead));
 
   const loadTickets = async () => {
     try {

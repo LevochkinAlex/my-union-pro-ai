@@ -888,6 +888,9 @@ export const authOptions: NextAuthOptions = {
           (session.user as any).isPPOHead = false;
           (session.user as any).ppoHeadOrganizationId = null;
           (session.user as any).isDemo = true;
+          session.user.firstName = token.firstName || "Анна";
+          session.user.lastName = token.lastName || "Сидорова";
+          session.user.name = [session.user.firstName, session.user.lastName].filter(Boolean).join(" ").trim() || "Анна Сидорова";
         } else {
           // Получаем актуальные данные из БД при каждом запросе сессии
           try {

@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatAppealId } from "@/lib/appeal-id";
 import { sendChatMessage } from "@/lib/chat-server-utils";
+import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
+import { getDemoMemberTicketById } from "@/lib/demo";
 
 /**
  * GET /api/tickets/[id] - Получить тикет по ID
@@ -23,6 +25,15 @@ export async function GET(
     }
 
     const { id } = await params;
+
+    // Демо-член профсоюза: мок-обращение по id
+    if (session.user.id === DEMO_MEMBER_USER_ID) {
+      const demoTicket = getDemoMemberTicketById(id);
+      if (demoTicket) {
+        return NextResponse.json({ success: true, ticket: demoTicket });
+      }
+      return NextResponse.json({ error: "Тикет не найден" }, { status: 404 });
+    }
 
     // Поддержка и внутреннего id (cuid), и publicId (8 цифр) — из URL/чата может прийти любой
     const publicIdNormalized = id.replace(/-/g, "");

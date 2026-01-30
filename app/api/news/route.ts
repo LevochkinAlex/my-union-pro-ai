@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { withCache, getCacheKey } from "@/lib/cache";
 import { isDemoUserId } from "@/lib/demo";
-import { getDemoNewsFromOrg } from "@/lib/demo";
+import { getDemoNews } from "@/lib/demo";
 
 // GET /api/news - получить список опубликованных новостей
 export async function GET(request: NextRequest) {
@@ -15,9 +15,9 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "10");
     const skip = (page - 1) * limit;
 
-    // Демо-режим: новости от ППО Аппарат МООП РЗ РФ
+    // Демо-режим: мок-новости без БД
     if (session?.user?.id && isDemoUserId(session.user.id)) {
-      const allDemo = await getDemoNewsFromOrg(limit * 3);
+      const allDemo = getDemoNews(limit * 5);
       const total = allDemo.length;
       const news = allDemo.slice(skip, skip + limit).map((post: any) => ({
         id: post.id,

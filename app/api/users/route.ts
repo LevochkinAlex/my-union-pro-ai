@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { withCache, getCacheKey } from "@/lib/cache";
 import * as Sentry from "@sentry/nextjs";
+import { isDemoUserId } from "@/lib/demo";
+import { getDemoProfsetyUsers } from "@/lib/demo";
 
 // GET - получение списка пользователей с поиском (только внутри организации пользователя)
 export async function GET(request: NextRequest) {
@@ -11,6 +13,28 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    const searchParams = request.nextUrl.searchParams;
+    const search = searchParams.get("search") || "";
+    const page = parseInt(searchParams.get("page") || "1");
+    let limit = parseInt(searchParams.get("limit") || "20");
+
+    // Демо: мок-пользователи Профсети без БД
+    if (isDemoUserId(session.user.id)) {
+      const { users, total } = getDemoProfsetyUsers({
+        search,
+        page,
+        limit,
+        excludeUserId: session.user.id,
+      });
+      return NextResponse.json({
+        users,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+      });
     }
 
     // Получаем организацию текущего пользователя
@@ -21,10 +45,6 @@ export async function GET(request: NextRequest) {
 
     const userOrganizationId = currentUser?.organizationId;
 
-    const searchParams = request.nextUrl.searchParams;
-    const search = searchParams.get("search") || "";
-    const page = parseInt(searchParams.get("page") || "1");
-    let limit = parseInt(searchParams.get("limit") || "20");
     const skip = (page - 1) * limit;
 
     // Строим условия поиска

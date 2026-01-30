@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getDemoPublicProfileById } from "@/lib/demo";
 import { prisma } from "@/lib/prisma";
 
 // GET - получение публичного профиля пользователя
@@ -19,6 +20,16 @@ export async function GET(
 
     if (!userId) {
       return NextResponse.json({ error: "ID пользователя не указан" }, { status: 400 });
+    }
+
+    const demoIds = ["demo-chairman", "demo-member", "demo-u2", "demo-u3", "demo-u4", "demo-u5"];
+    if (demoIds.includes(userId)) {
+      const publicProfile = getDemoPublicProfileById(userId);
+      if (!publicProfile) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+      return NextResponse.json({
+        ...publicProfile,
+        isOwnProfile: publicProfile.id === session.user.id,
+      });
     }
 
     const user = await prisma.user.findUnique({

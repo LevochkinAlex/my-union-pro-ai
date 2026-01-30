@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
+import { getDemoProfileMembership } from "@/lib/demo";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -22,6 +24,11 @@ export async function GET() {
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    const isDemo = session.user.id === DEMO_USER_ID || session.user.id === DEMO_MEMBER_USER_ID;
+    if (isDemo) {
+      return NextResponse.json(getDemoProfileMembership(session.user.id));
     }
 
     const user = await prisma.user.findUnique({

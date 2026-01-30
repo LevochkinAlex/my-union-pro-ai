@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { prisma } from "@/lib/prisma";
+
+const DEMO_IDS = [DEMO_USER_ID, DEMO_MEMBER_USER_ID, "demo-u1", "demo-u2", "demo-u3", "demo-u4", "demo-u5"];
 
 // GET - проверка статуса подписки
 export async function GET(
@@ -24,6 +27,11 @@ export async function GET(
     // Проверяем, не пытается ли пользователь подписаться на себя
     if (session.user.id === targetUserId) {
       return NextResponse.json({ error: "Нельзя подписаться на себя" }, { status: 400 });
+    }
+
+    // Демо: текущий пользователь или целевой — демо, не обращаемся к БД
+    if (DEMO_IDS.includes(session.user.id) || DEMO_IDS.includes(targetUserId)) {
+      return NextResponse.json({ isSubscribed: false, subscription: null });
     }
 
     // Проверяем существование целевого пользователя
@@ -88,6 +96,11 @@ export async function POST(
     // Проверяем, не пытается ли пользователь подписаться на себя
     if (session.user.id === targetUserId) {
       return NextResponse.json({ error: "Нельзя подписаться на себя" }, { status: 400 });
+    }
+
+    // Демо: не пишем в БД
+    if (DEMO_IDS.includes(session.user.id) || DEMO_IDS.includes(targetUserId)) {
+      return NextResponse.json({ success: true, subscription: null });
     }
 
     // Проверяем существование целевого пользователя
@@ -157,6 +170,11 @@ export async function DELETE(
 
     if (!targetUserId) {
       return NextResponse.json({ error: "ID пользователя не указан" }, { status: 400 });
+    }
+
+    // Демо: не пишем в БД
+    if (DEMO_IDS.includes(session.user.id) || DEMO_IDS.includes(targetUserId)) {
+      return NextResponse.json({ success: true });
     }
 
     // Удаляем подписку

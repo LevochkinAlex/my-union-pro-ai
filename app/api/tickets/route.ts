@@ -5,6 +5,8 @@ import { prisma, withPrismaRetry } from "@/lib/prisma";
 import { generateAppealPublicId, formatAppealId } from "@/lib/appeal-id";
 import { saveTicketToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { sendUserNotification } from "@/lib/notifications";
+import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
+import { getDemoMemberTickets } from "@/lib/demo";
 
 /**
  * GET /api/tickets - Получить тикеты пользователя
@@ -22,6 +24,12 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
+
+    // Демо-член профсоюза: мок-обращения без БД
+    if (session.user.id === DEMO_MEMBER_USER_ID) {
+      const tickets = getDemoMemberTickets(status || undefined);
+      return NextResponse.json({ success: true, tickets });
+    }
 
     // Получаем информацию о пользователе и его организации
     // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем прямой запрос с обработкой ошибок

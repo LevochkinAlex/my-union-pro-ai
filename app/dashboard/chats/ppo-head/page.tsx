@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 
 // Lazy load SlackStyleChat компонент
 const SlackStyleChat = dynamic(() => import("@/components/chat/SlackStyleChat"), {
@@ -29,19 +30,22 @@ function ChatSkeleton() {
 function PPOHeadChatsContent() {
   const { data: session } = useSession();
   const router = useRouter();
-  
-  // Проверяем режим просмотра - эта страница только для председателей
-  const isPPOHead = session?.user?.viewMode === "PPO_HEAD" || 
-    session?.user?.viewMode === "MPO_HEAD" ||
-    session?.user?.viewMode === "RPO_HEAD" ||
-    (session?.user?.role === "PPO_HEAD" && !session?.user?.isPPOHead);
 
-  // Редирект для обычных членов на страницу личных чатов
+  // Демо-член не должен видеть раздел председателя — редирект на «Чат»
+  const isDemoMember = session?.user?.id === DEMO_MEMBER_USER_ID;
+  const isDemoChairman = session?.user?.id === DEMO_USER_ID;
+  const isPPOHead =
+    isDemoChairman ||
+    (session?.user?.viewMode === "PPO_HEAD" ||
+      session?.user?.viewMode === "MPO_HEAD" ||
+      session?.user?.viewMode === "RPO_HEAD" ||
+      ((session?.user as { role?: string; isPPOHead?: boolean })?.role === "PPO_HEAD" && !(session?.user as { isPPOHead?: boolean })?.isPPOHead));
+
   useEffect(() => {
-    if (session && !isPPOHead) {
+    if (session && (isDemoMember || !isPPOHead)) {
       router.replace("/dashboard/chat");
     }
-  }, [session, isPPOHead, router]);
+  }, [session, isDemoMember, isPPOHead, router]);
 
   if (!session) {
     return <ChatSkeleton />;
