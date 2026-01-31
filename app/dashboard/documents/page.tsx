@@ -338,33 +338,47 @@ export default function DocumentsPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    const styles = {
+    const styles: Record<string, string> = {
       DRAFT: "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
       GENERATED: "bg-blue-200 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+      PENDING_REVIEW: "bg-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+      PENDING_APPROVAL: "bg-amber-200 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+      PENDING_SIGNATURE: "bg-orange-200 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
       SIGNED: "bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-300",
+      REGISTERED: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300",
+      SENT: "bg-indigo-200 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300",
+      RECEIVED: "bg-cyan-200 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
+      COMPLETED: "bg-emerald-200 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300",
       PENDING: "bg-yellow-200 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
       APPROVED: "bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-300",
       REJECTED: "bg-red-200 text-red-800 dark:bg-red-900 dark:text-red-300",
       ARCHIVED: "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
     };
 
-    const labels = {
+    const labels: Record<string, string> = {
       DRAFT: "Черновик",
       GENERATED: "Сформировано",
+      PENDING_REVIEW: "На рассмотрении",
+      PENDING_APPROVAL: "На согласовании",
+      PENDING_SIGNATURE: "На подписи",
       SIGNED: "Подписан",
+      REGISTERED: "Зарегистрирован",
+      SENT: "Отправлен",
+      RECEIVED: "Получен",
+      COMPLETED: "Исполнен",
       PENDING: "На проверке",
       APPROVED: "Одобрен",
-      REJECTED: "Отклонен",
+      REJECTED: "Отклонён",
       ARCHIVED: "В архиве",
     };
 
     return (
       <span
         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-          styles[status as keyof typeof styles] || styles.DRAFT
+          styles[status] ?? styles.DRAFT
         }`}
       >
-        {labels[status as keyof typeof labels] || status}
+        {labels[status] ?? status}
       </span>
     );
   };
