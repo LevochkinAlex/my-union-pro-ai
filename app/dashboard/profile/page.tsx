@@ -197,6 +197,10 @@ export default function ProfilePage() {
     }>;
   } | null>(null);
   const [loadingMembership, setLoadingMembership] = useState(false);
+  const [ppoAutoFilled, setPpoAutoFilled] = useState(false);
+  const [showManualPpo, setShowManualPpo] = useState(false);
+  const [manualPpoText, setManualPpoText] = useState("");
+  const [sendingPpoRequest, setSendingPpoRequest] = useState(false);
   
   // Вычисление возраста
   const calculateAge = (birthDate: Date): number => {
@@ -818,8 +822,32 @@ export default function ProfilePage() {
   };
 
   const handleFieldBlur = (fieldName: string, value: any) => {
-    // Автосохранение при потере фокуса
     autoSaveField(fieldName, value);
+  };
+
+  const handleSendPpoNotInList = async () => {
+    const text = manualPpoText.trim();
+    if (!text) {
+      setMessage({ type: "error", text: "Введите название вашей организации профсоюза (ППО)" });
+      return;
+    }
+    setSendingPpoRequest(true);
+    try {
+      const res = await fetch("/api/ppo-not-in-list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customPpoName: text }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка отправки");
+      setMessage({ type: "success", text: data.message || "Заявка отправлена. Мы свяжемся с вами после добавления ППО." });
+      setManualPpoText("");
+      setShowManualPpo(false);
+    } catch (e) {
+      setMessage({ type: "error", text: e instanceof Error ? e.message : "Ошибка отправки заявки" });
+    } finally {
+      setSendingPpoRequest(false);
+    }
   };
 
   const handleProfileSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -1117,142 +1145,156 @@ export default function ProfilePage() {
         </div>
         
         <form onSubmit={handleProfileSubmit} className="mt-4 space-y-6">
-          {/* Место работы - ПЕРВОЕ ПОЛЕ, на всю ширину */}
-          <div>
-            <WorkplaceSearch
-              value={profileData.workplace ? {
-                name: profileData.workplace,
-                inn: profileData.workplaceInn,
-                directorName: profileData.directorName,
-                directorPosition: profileData.directorPosition,
-              } : null}
-              onChange={async (workplace) => {
-                if (workplace) {
-                  // Обновляем данные места работы
-                  setProfileData(prev => ({
-                    ...prev,
-                    workplace: workplace.name,
-                    workplaceInn: workplace.inn,
-                    directorName: workplace.directorName,
-                    directorPosition: workplace.directorPosition,
-                  }));
-                  
-                  // Автосохранение места работы
-                  handleFieldBlur("workplace", workplace.name);
-                  
-                  // Автоматически определяем ППО по месту работы
-                  try {
-                    const response = await fetch(
-                      `/api/workplace/ppo?workplaceName=${encodeURIComponent(workplace.name)}&workplaceInn=${encodeURIComponent(workplace.inn)}`
-                    );
-                    
-                    if (response.ok) {
-                      const data = await response.json();
-                      if (data.success && data.found && data.ppoOrganization) {
-                        // Автоматически устанавливаем ППО
-                        setProfileData(prev => ({
-                          ...prev,
-                          organizationId: data.ppoOrganization.id,
-                        }));
-                        handleFieldBlur("organizationId", data.ppoOrganization.id);
-                        setMessage({
-                          type: "success",
-                          text: `Автоматически определена ППО: ${data.ppoOrganization.name}`,
-                        });
-                        setTimeout(() => setMessage(null), 5000);
-                      } else {
-                        // ППО не найдено - сбрасываем organizationId
-                        setProfileData(prev => ({
-                          ...prev,
-                          organizationId: null,
-                        }));
-                        setMessage({
-                          type: "error",
-                          text: "ППО для данного места работы не найдено. Пожалуйста, выберите ППО вручную ниже.",
-                        });
-                        setTimeout(() => setMessage(null), 8000);
-                      }
-                    }
-                  } catch (error) {
-                    console.error("Error finding PPO by workplace:", error);
-                    // При ошибке не блокируем, просто не устанавливаем ППО автоматически
-                  }
-                } else {
-                  // Очищаем данные места работы и ППО
-                  setProfileData(prev => ({
-                    ...prev,
-                    workplace: "",
-                    workplaceInn: "",
-                    directorName: "",
-                    directorPosition: "",
-                    organizationId: null,
-                  }));
-                }
-              }}
-              required
-            />
-          </div>
-
-          {/* ППО (автоматически определяется или выбирается вручную) */}
-          {profileData.workplace && (
+          {/* Место работы и Должность — первая строка (как в анкете) */}
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                Первичная профсоюзная организация (ППО) <span className="text-red-500">*</span>
+                Место работы <span className="text-red-500">*</span>
               </label>
               <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-                {profileData.organizationId 
-                  ? "ППО автоматически определена по месту работы. При необходимости вы можете изменить выбор."
-                  : "ППО не найдена автоматически. Пожалуйста, выберите ППО вручную. Согласно Уставу, сотрудник может вступить только в ППО по месту работы."}
+                Поиск по названию или укажите ИНН организации
               </p>
-              <OrganizationAutocomplete
-                value={profileData.organizationId || ""}
-                onChange={async (organizationId) => {
-                  setProfileData(prev => ({ ...prev, organizationId: organizationId || null }));
-                  if (organizationId) {
-                    handleFieldBlur("organizationId", organizationId);
-                    
-                    // Валидация: проверяем соответствие места работы и ППО
-                    if (profileData.workplace && profileData.workplaceInn) {
-                      try {
-                        const response = await fetch(
-                          `/api/workplace/ppo?workplaceName=${encodeURIComponent(profileData.workplace)}&workplaceInn=${encodeURIComponent(profileData.workplaceInn)}`
-                        );
-                        
-                        if (response.ok) {
-                          const data = await response.json();
-                          if (data.success && data.found && data.ppoOrganization) {
-                            // Проверяем, совпадает ли выбранная ППО с найденной
-                            if (data.ppoOrganization.id !== organizationId) {
-                              setMessage({
-                                type: "error",
-                                text: `⚠️ Внимание: Для места работы "${profileData.workplace}" рекомендуется ППО "${data.ppoOrganization.name}". Согласно Уставу, сотрудник может вступить только в ППО по месту работы.`,
-                              });
-                              setTimeout(() => setMessage(null), 10000);
-                            } else {
-                              setMessage({
-                                type: "success",
-                                text: `✅ ППО соответствует месту работы`,
-                              });
-                              setTimeout(() => setMessage(null), 5000);
-                            }
-                          }
+              <WorkplaceSearch
+                value={profileData.workplace ? {
+                  name: profileData.workplace,
+                  inn: profileData.workplaceInn,
+                  directorName: profileData.directorName,
+                  directorPosition: profileData.directorPosition,
+                } : null}
+                onChange={async (workplace) => {
+                  if (workplace) {
+                    setProfileData(prev => ({
+                      ...prev,
+                      workplace: workplace.name,
+                      workplaceInn: workplace.inn,
+                      directorName: workplace.directorName,
+                      directorPosition: workplace.directorPosition,
+                    }));
+                    handleFieldBlur("workplace", workplace.name);
+                    try {
+                      const response = await fetch(
+                        `/api/workplace/ppo?workplaceName=${encodeURIComponent(workplace.name)}&workplaceInn=${encodeURIComponent(workplace.inn)}`
+                      );
+                      if (response.ok) {
+                        const data = await response.json();
+                        if (data.success && data.found && data.ppoOrganization) {
+                          setProfileData(prev => ({ ...prev, organizationId: data.ppoOrganization.id }));
+                          handleFieldBlur("organizationId", data.ppoOrganization.id);
+                          setPpoAutoFilled(true);
+                          setShowManualPpo(false);
+                          setMessage({ type: "success", text: `Автоматически определена ППО: ${data.ppoOrganization.name}` });
+                          setTimeout(() => setMessage(null), 5000);
+                        } else {
+                          setProfileData(prev => ({ ...prev, organizationId: null }));
+                          setPpoAutoFilled(false);
+                          setMessage({ type: "error", text: "ППО для данного места работы не найдено. Выберите ППО вручную или отправьте заявку «Моего ППО нет в списке»." });
+                          setTimeout(() => setMessage(null), 8000);
                         }
-                      } catch (error) {
-                        console.error("Error validating workplace-PPO match:", error);
                       }
+                    } catch (error) {
+                      console.error("Error finding PPO by workplace:", error);
+                      setPpoAutoFilled(false);
                     }
+                  } else {
+                    setProfileData(prev => ({
+                      ...prev,
+                      workplace: "",
+                      workplaceInn: "",
+                      directorName: "",
+                      directorPosition: "",
+                      organizationId: null,
+                    }));
+                    setPpoAutoFilled(false);
                   }
                 }}
-                options={organizations.filter(org => org.type === "PRIMARY")} // Только ППО
-                placeholder="Начните вводить название ППО..."
+                required
               />
-              {profileData.organizationId && profileData.workplace && (
-                <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                  ⚠️ Согласно Уставу, сотрудник может вступить только в ППО по месту работы. Убедитесь, что выбранная ППО соответствует вашему месту работы.
-                </p>
-              )}
             </div>
-          )}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Должность <span className="text-red-500">*</span>
+              </label>
+              <Autocomplete
+                name="jobTitle"
+                value={profileData.jobTitle}
+                onChange={(value) => {
+                  setProfileData(prev => ({ ...prev, jobTitle: value }));
+                  if (jobTitles.includes(value)) handleFieldBlur("jobTitle", value);
+                }}
+                options={jobTitles}
+                placeholder="Начните вводить должность..."
+                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              />
+            </div>
+          </div>
+
+          {/* Организация профсоюза (ППО) — активна после выбора места работы */}
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+              Организация профсоюза (ППО) <span className="text-red-500">*</span>
+            </label>
+            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+              Членом можно быть только первичной организации (ППО). После выбора места работы ППО может подставиться автоматически.
+            </p>
+            {!profileData.workplace?.trim() || !profileData.workplaceInn?.trim() ? (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+                Сначала укажите место работы (с ИНН) — тогда станет доступен выбор ППО
+              </div>
+            ) : ppoAutoFilled && profileData.organizationId ? (
+              <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-200">
+                {organizations.find(o => o.id === profileData.organizationId)?.name || profileData.organization?.name || "ППО подставлено по месту работы"}
+              </div>
+            ) : (
+              <>
+                <OrganizationAutocomplete
+                  value={profileData.organizationId || ""}
+                  onChange={(organizationId) => {
+                    setProfileData(prev => ({ ...prev, organizationId: organizationId || null }));
+                    setPpoAutoFilled(false);
+                    if (organizationId) handleFieldBlur("organizationId", organizationId);
+                  }}
+                  options={organizations}
+                  placeholder="Выберите ППО из списка или начните вводить название..."
+                />
+                <p className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowManualPpo((v) => !v)}
+                    className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                  >
+                    Моего ППО нет в списке
+                  </button>
+                </p>
+                {showManualPpo && (
+                  <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
+                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                      Укажите название вашей ППО
+                    </label>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                      <input
+                        type="text"
+                        value={manualPpoText}
+                        onChange={(e) => setManualPpoText(e.target.value)}
+                        placeholder="Например: ППО ГБУЗ Солнечногорской Городской Больницы"
+                        className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSendPpoNotInList}
+                        disabled={sendingPpoRequest || !manualPpoText.trim()}
+                        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {sendingPpoRequest ? "Отправка..." : "Отправить"}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                      Заявка придёт нам на почту — мы добавим ППО в справочник или свяжемся с вами.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
@@ -1330,26 +1372,6 @@ export default function ProfilePage() {
                 value={profileData.address}
                 onChange={handleAddressChange}
                 onBlur={() => handleFieldBlur("address", profileData.address)}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                Должность <span className="text-red-500">*</span>
-              </label>
-              <Autocomplete
-                name="jobTitle"
-                value={profileData.jobTitle}
-                onChange={(value) => {
-                  // Используем функциональное обновление для сохранения всех полей
-                  setProfileData(prev => ({ ...prev, jobTitle: value }));
-                  // Автосохранение при выборе из списка
-                  if (jobTitles.includes(value)) {
-                    handleFieldBlur("jobTitle", value);
-                  }
-                }}
-                options={jobTitles}
-                placeholder="Начните вводить должность..."
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>

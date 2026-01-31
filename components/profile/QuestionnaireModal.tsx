@@ -89,6 +89,12 @@ export default function QuestionnaireModal({
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [isChangePhoneModalOpen, setIsChangePhoneModalOpen] = useState(false);
   const [isExistingMember, setIsExistingMember] = useState(false);
+  // ППО: автоподстановка по месту работы; ручной ввод если нет в списке
+  const [ppoAutoFilled, setPpoAutoFilled] = useState(false);
+  const [showManualPpo, setShowManualPpo] = useState(false);
+  const [manualPpoText, setManualPpoText] = useState("");
+  const [sendingPpoRequest, setSendingPpoRequest] = useState(false);
+  const [generateProgress, setGenerateProgress] = useState<number | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -115,6 +121,35 @@ export default function QuestionnaireModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
+
+  // Автоподстановка ППО по месту работы (название + ИНН)
+  useEffect(() => {
+    if (!formData.workplace?.trim() || !formData.workplaceInn?.trim()) {
+      setPpoAutoFilled(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/workplace/ppo?workplaceName=${encodeURIComponent(formData.workplace)}&workplaceInn=${encodeURIComponent(formData.workplaceInn)}`
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.found && data.ppoOrganization?.id) {
+          setFormData((prev) => ({ ...prev, organizationId: data.ppoOrganization.id }));
+          setPpoAutoFilled(true);
+          setShowManualPpo(false);
+        } else {
+          setPpoAutoFilled(false);
+        }
+      } catch {
+        if (!cancelled) setPpoAutoFilled(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [formData.workplace, formData.workplaceInn]);
 
   const loadData = async () => {
     try {
@@ -189,8 +224,9 @@ export default function QuestionnaireModal({
 
       if (orgsRes.ok) {
         const orgsData = await orgsRes.json();
-        // API возвращает flatList, а не organizations
-        setOrganizations(orgsData.flatList || orgsData.organizations || []);
+        // Только ППО (первичные организации) — членом можно быть только первичной организации
+        const allOrgs = orgsData.flatList || orgsData.organizations || [];
+        setOrganizations(allOrgs.filter((o: { type?: string }) => o.type === "PRIMARY"));
       }
 
       if (dictionariesRes.ok) {
@@ -398,30 +434,32 @@ export default function QuestionnaireModal({
 
   const handleGenerateDocuments = async () => {
     setIsGenerating(true);
+    setGenerateProgress(0);
     try {
       console.log("[QuestionnaireModal] Запрос на генерацию документов...");
+      setGenerateProgress(20);
       const response = await fetch("/api/documents/generate", {
         method: "POST",
       });
+      setGenerateProgress(80);
 
       const data = await response.json();
       console.log("[QuestionnaireModal] Ответ сервера:", { status: response.status, ok: response.ok, data });
 
       if (!response.ok) {
-        // Формируем понятное сообщение с указанием недостающих полей
         let errorMessage = data.error || "Ошибка при генерации документов";
         if (data.missingFields && data.missingFields.length > 0) {
           errorMessage = `Не заполнены обязательные поля: ${data.missingFields.join(", ")}. Вернитесь на шаг 1 и заполните их.`;
-          // Переключаем на первый шаг для заполнения
           setCurrentStep(1);
         }
         console.error("[QuestionnaireModal] Ошибка генерации:", errorMessage);
         throw new Error(errorMessage);
       }
 
+      setGenerateProgress(100);
       console.log("[QuestionnaireModal] ✅ Документы успешно сгенерированы");
       showAlert({ message: "Документы успешно сгенерированы", type: "success" });
-      await loadData(); // Перезагружаем документы
+      await loadData();
     } catch (error) {
       console.error("[QuestionnaireModal] Ошибка при генерации документов:", error);
       const errorMessage = error instanceof Error ? error.message : "Ошибка при генерации документов";
@@ -431,6 +469,7 @@ export default function QuestionnaireModal({
       });
     } finally {
       setIsGenerating(false);
+      setGenerateProgress(null);
     }
   };
 
@@ -666,11 +705,37 @@ export default function QuestionnaireModal({
       formData.dateOfBirth &&
       formData.phone &&
       formData.email &&
+      emailVerified &&
       formData.address &&
       formData.organizationId &&
       formData.workplace &&
       formData.jobTitle
     );
+  };
+
+  const handleSendPpoNotInList = async () => {
+    const text = manualPpoText.trim();
+    if (!text) {
+      showAlert({ message: "Введите название вашей организации профсоюза (ППО)", type: "error" });
+      return;
+    }
+    setSendingPpoRequest(true);
+    try {
+      const res = await fetch("/api/ppo-not-in-list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customPpoName: text }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка отправки");
+      showAlert({ message: data.message || "Заявка отправлена. Мы свяжемся с вами после добавления ППО.", type: "success" });
+      setManualPpoText("");
+      setShowManualPpo(false);
+    } catch (e) {
+      showAlert({ message: e instanceof Error ? e.message : "Ошибка отправки заявки", type: "error" });
+    } finally {
+      setSendingPpoRequest(false);
+    }
   };
 
   const selectedOrganization = organizations.find((org) => org.id === formData.organizationId);
@@ -732,6 +797,128 @@ export default function QuestionnaireModal({
                 Основная информация
               </h3>
 
+              {/* Место работы и Должность — первая строка */}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Место работы <span className="text-red-500">*</span>
+                  </label>
+                  <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                    Поиск по названию или укажите ИНН организации
+                  </p>
+                  <WorkplaceSearch
+                    value={formData.workplace ? {
+                      name: formData.workplace,
+                      inn: formData.workplaceInn,
+                      directorName: formData.directorName,
+                      directorPosition: formData.directorPosition,
+                    } : null}
+                    onChange={(workplace) => {
+                      if (workplace) {
+                        setFormData({
+                          ...formData,
+                          workplace: workplace.name,
+                          workplaceInn: workplace.inn,
+                          directorName: workplace.directorName,
+                          directorPosition: workplace.directorPosition,
+                        });
+                        handleFieldBlur("workplace", workplace.name);
+                      } else {
+                        setFormData({
+                          ...formData,
+                          workplace: "",
+                          workplaceInn: "",
+                          directorName: "",
+                          directorPosition: "",
+                        });
+                        setPpoAutoFilled(false);
+                      }
+                    }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Должность <span className="text-red-500">*</span>
+                  </label>
+                  <Autocomplete
+                    value={formData.jobTitle}
+                    onChange={(value) => setFormData({ ...formData, jobTitle: value })}
+                    onBlur={() => handleFieldBlur("jobTitle", formData.jobTitle)}
+                    options={jobTitles}
+                    placeholder="Начните вводить должность..."
+                    className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
+                  />
+                </div>
+              </div>
+
+              {/* Организация профсоюза (ППО) — активна только после выбора места работы */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Организация профсоюза (ППО) <span className="text-red-500">*</span>
+                </label>
+                <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                  Членом можно быть только первичной организации (ППО). После выбора места работы ППО может подставиться автоматически.
+                </p>
+                {!formData.workplace?.trim() || !formData.workplaceInn?.trim() ? (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+                    Сначала укажите место работы (с ИНН) — тогда станет доступен выбор ППО
+                  </div>
+                ) : ppoAutoFilled && formData.organizationId ? (
+                  <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-200">
+                    {selectedOrganization?.name || "ППО подставлено по месту работы"}
+                  </div>
+                ) : (
+                  <>
+                    <OrganizationAutocomplete
+                      value={formData.organizationId}
+                      onChange={(organizationId) => {
+                        setFormData({ ...formData, organizationId });
+                        handleFieldBlur("organizationId", organizationId || null);
+                      }}
+                      options={organizations}
+                      placeholder="Выберите ППО из списка или начните вводить название..."
+                    />
+                    <p className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowManualPpo((v) => !v)}
+                        className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                      >
+                        Моего ППО нет в списке
+                      </button>
+                    </p>
+                    {showManualPpo && (
+                      <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
+                        <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Укажите название вашей ППО
+                        </label>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                          <input
+                            type="text"
+                            value={manualPpoText}
+                            onChange={(e) => setManualPpoText(e.target.value)}
+                            placeholder="Например: ППО ГБУЗ Солнечногорской Городской Больницы"
+                            className="flex-1 h-11 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSendPpoNotInList}
+                            disabled={sendingPpoRequest || !manualPpoText.trim()}
+                            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {sendingPpoRequest ? "Отправка..." : "Отправить"}
+                          </button>
+                        </div>
+                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                          Заявка придёт нам на почту — мы добавим ППО в справочник или свяжемся с вами.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
               {/* Загрузка аватара */}
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -741,25 +928,6 @@ export default function QuestionnaireModal({
                   currentAvatarUrl={formData.avatarUrl}
                   onSave={handleAvatarSave}
                   userName={[formData.lastName, formData.firstName, formData.middleName].filter(Boolean).join(" ") || undefined}
-                />
-              </div>
-
-              {/* Организация профсоюза - ПЕРВОЕ ПОЛЕ, на всю ширину */}
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Организация профсоюза <span className="text-red-500">*</span>
-                </label>
-                <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-                  В какую организацию профсоюза вы хотите вступить?
-                </p>
-                <OrganizationAutocomplete
-                  value={formData.organizationId}
-                  onChange={(organizationId) => {
-                    setFormData({ ...formData, organizationId });
-                    handleFieldBlur("organizationId", organizationId || null);
-                  }}
-                  options={organizations}
-                  placeholder="Начните вводить название организации..."
                 />
               </div>
 
@@ -841,10 +1009,7 @@ export default function QuestionnaireModal({
                     }}
                     onVerified={() => {
                       setEmailVerified(new Date());
-                      // Сохраняем email после верификации
-                      if (formData.email) {
-                        handleFieldBlur("email", formData.email);
-                      }
+                      if (formData.email) handleFieldBlur("email", formData.email);
                     }}
                   />
                 </div>
@@ -856,55 +1021,6 @@ export default function QuestionnaireModal({
                     value={formData.address}
                     onChange={(value) => setFormData({ ...formData, address: value })}
                     onBlur={() => handleFieldBlur("address", formData.address)}
-                  />
-                </div>
-                <div>
-                  <WorkplaceSearch
-                    value={formData.workplace ? {
-                      name: formData.workplace,
-                      inn: formData.workplaceInn,
-                      directorName: formData.directorName,
-                      directorPosition: formData.directorPosition,
-                    } : null}
-                    onChange={(workplace) => {
-                      if (workplace) {
-                        setFormData({
-                          ...formData,
-                          workplace: workplace.name,
-                          workplaceInn: workplace.inn,
-                          directorName: workplace.directorName,
-                          directorPosition: workplace.directorPosition,
-                        });
-                        handleFieldBlur("workplace", workplace.name);
-                      } else {
-                        setFormData({
-                          ...formData,
-                          workplace: "",
-                          workplaceInn: "",
-                          directorName: "",
-                          directorPosition: "",
-                        });
-                      }
-                    }}
-                    required
-                  />
-                  {formData.organizationId && formData.workplace && (
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      💡 Место работы должно соответствовать организации профсоюза, в которую вы хотите вступить
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Должность <span className="text-red-500">*</span>
-                  </label>
-                  <Autocomplete
-                    value={formData.jobTitle}
-                    onChange={(value) => setFormData({ ...formData, jobTitle: value })}
-                    onBlur={() => handleFieldBlur("jobTitle", formData.jobTitle)}
-                    options={jobTitles}
-                    placeholder="Начните вводить должность..."
-                    className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
                   />
                 </div>
               </div>
@@ -1035,14 +1151,27 @@ export default function QuestionnaireModal({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <p className="font-medium text-green-800 dark:text-green-200">
                         Загрузка документов пропущена
                       </p>
                       <p className="mt-1 text-sm text-green-700 dark:text-green-300">
                         Ваша заявка будет направлена председателю для подтверждения членства. 
-                        Председатель проверит наличие ваших документов и примет решение.
+                        При нажатии «Подтвердить» документы будут сформированы и сохранены в разделе «Исходящие».
                       </p>
+                      {isGenerating && generateProgress !== null && (
+                        <div className="mt-4">
+                          <div className="h-2 overflow-hidden rounded-full bg-green-200 dark:bg-green-800">
+                            <div
+                              className="h-full rounded-full bg-green-600 transition-all duration-300"
+                              style={{ width: `${generateProgress}%` }}
+                            />
+                          </div>
+                          <p className="mt-2 text-sm text-green-700 dark:text-green-300">
+                            Генерация документов... {generateProgress}%
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1112,6 +1241,19 @@ export default function QuestionnaireModal({
                         </>
                       )}
                     </button>
+                    {generateProgress !== null && (
+                      <div className="mt-4">
+                        <div className="h-2 overflow-hidden rounded-full bg-blue-200 dark:bg-blue-800">
+                          <div
+                            className="h-full rounded-full bg-blue-600 transition-all duration-300"
+                            style={{ width: `${generateProgress}%` }}
+                          />
+                        </div>
+                        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                          Генерация документов... {generateProgress}%
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -1354,9 +1496,17 @@ export default function QuestionnaireModal({
             )}
             {currentStep === 3 && (
               <button
-                onClick={() => setCurrentStep(4)}
+                onClick={async () => {
+                  if (isExistingMember) {
+                    await handleGenerateDocuments();
+                    await handleComplete();
+                  } else {
+                    setCurrentStep(4);
+                  }
+                }}
                 disabled={
-                  !isExistingMember && (
+                  isGenerating ||
+                  (!isExistingMember && (
                     documents.filter(
                       (doc) =>
                         doc.type === "MEMBERSHIP_APPLICATION" ||
@@ -1369,12 +1519,21 @@ export default function QuestionnaireModal({
                           doc.type === "CONTRIBUTION_APPLICATION"
                       )
                       .some((doc) => doc.status === "GENERATED")
-                  )
+                  ))
                 }
                 className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isExistingMember ? "Подтвердить" : "Далее"}
-                <Check className="h-4 w-4" />
+                {isGenerating ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                    {isExistingMember ? "Генерация документов..." : "Далее"}
+                  </>
+                ) : (
+                  <>
+                    {isExistingMember ? "Подтвердить" : "Далее"}
+                    <Check className="h-4 w-4" />
+                  </>
+                )}
               </button>
             )}
             {currentStep === 4 && (

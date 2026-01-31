@@ -21,6 +21,7 @@
     "prisma:push": "dotenv -e .env.local -- pnpm prisma db push",
     "prisma:reset": "dotenv -e .env.local -- pnpm prisma migrate reset --force",
     "prisma:validate": "dotenv -e .env.local -- pnpm prisma validate",
+    "create-super-admin": "dotenv -e .env.local -- node scripts/create-super-admin.mjs",
     "prisma:fix": "bash scripts/fix-prisma.sh",
     "seed:default-bot": "dotenv -e .env.local -- node scripts/create-default-bot.mjs",
     "seed:document-templates": "dotenv -e .env.local -- node scripts/seed-document-templates.mjs",

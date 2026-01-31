@@ -102,17 +102,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Отправляем magic link на email
-    // Используем NEXTAUTH_URL или NEXT_PUBLIC_APP_URL, fallback на продакшн URL
+    // Приоритет: origin из запроса (для localhost) -> NEXTAUTH_URL -> NEXT_PUBLIC_APP_URL -> продакшн
     let baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
                   process.env.NEXTAUTH_URL || 
                   "https://myunion.pro";
     
-    // Убеждаемся, что используется HTTPS и правильный домен в продакшене
-    // Если это localhost, заменяем на продакшн URL
-    if (baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1")) {
-      baseUrl = "https://myunion.pro";
-    } else {
-      // Убеждаемся, что используется HTTPS
+    // На localhost используем origin запроса, чтобы ссылка вела на текущий хост
+    try {
+      const requestOrigin = new URL(request.url).origin;
+      if (requestOrigin.includes("localhost") || requestOrigin.includes("127.0.0.1")) {
+        baseUrl = requestOrigin;
+      }
+    } catch {
+      // игнорируем
+    }
+    
+    // В продакшене используем HTTPS
+    if (!baseUrl.includes("localhost") && !baseUrl.includes("127.0.0.1")) {
       baseUrl = baseUrl.replace(/^http:/, "https:");
     }
     
@@ -125,7 +131,8 @@ export async function POST(request: NextRequest) {
       user?.firstName || undefined
     );
 
-    if (!emailSent.success) {
+    // Если письмо не отправлено, но есть magicLink (dev/SMTP off) — всё ок
+    if (!emailSent.success && !(emailSent as { devMode?: boolean }).devMode) {
       console.error("[Email Auth] Ошибка отправки email:", emailSent.error);
       return NextResponse.json(
         {
@@ -137,7 +144,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("[Email Auth] Email успешно отправлен");
+    const emailActuallySent = emailSent.success;
+    const emailLibDevMode = !!(emailSent as { devMode?: boolean }).devMode;
+
+    console.log("[Email Auth]", emailActuallySent ? "Email отправлен" : "Режим без отправки (показываем ссылку)");
 
     // Формируем ответ
     const response: {
@@ -149,14 +159,14 @@ export async function POST(request: NextRequest) {
       dbAvailable?: boolean;
     } = {
       success: true,
-      message: isDevMode() 
-        ? "Режим разработки: используйте ссылку ниже для входа"
-        : "Письмо с ссылкой для входа отправлено на ваш email",
+      message: emailActuallySent
+        ? "Письмо с ссылкой для входа отправлено на ваш email"
+        : "Используйте ссылку ниже для входа (SMTP не настроен)",
       isNewUser,
     };
 
-    // В режиме разработки добавляем magic link для удобства тестирования
-    if (isDevMode()) {
+    // Добавляем magic link, когда письмо не отправлено (dev, SMTP не настроен)
+    if (emailLibDevMode || isDevMode()) {
       response.devMode = true;
       response.magicLink = magicLink;
       response.dbAvailable = dbAvailable;
