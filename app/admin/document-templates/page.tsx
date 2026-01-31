@@ -14,7 +14,7 @@ const DocumentTemplateEditor = dynamic(
   }
 );
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
-import { TEMPLATE_VARIABLES_FOR_EDITOR } from "@/lib/document-templates/renderer";
+import { TEMPLATE_VARIABLES_FOR_EDITOR } from "@/lib/document-templates/variables";
 
 // ИСПРАВЛЕНО: Убран импорт типа из @prisma/client, используем строковый литерал
 type DocumentType = 

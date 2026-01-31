@@ -193,12 +193,11 @@ export default function DocumentsPage() {
     }
   };
 
-  const handleDownload = async (docId: string, fileName: string | null) => {
+  const handleDownload = async (docId: string, fileName: string | null, useSigned?: boolean) => {
     try {
-      // Кодируем ID для безопасной передачи в URL
       const encodedId = encodeURIComponent(docId);
-      console.log("[documents] Downloading document:", { docId, encodedId, fileName });
-      const response = await fetch(`/api/documents/${encodedId}/download`);
+      const downloadUrl = `/api/documents/${encodedId}/download${useSigned ? "?signed=true" : ""}`;
+      const response = await fetch(downloadUrl);
       
       if (!response.ok) {
         // Пытаемся получить сообщение об ошибке из JSON
@@ -239,16 +238,16 @@ export default function DocumentsPage() {
         throw new Error("Получен пустой файл");
       }
       
-      const url = window.URL.createObjectURL(blob);
+      const blobUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
+      a.href = blobUrl;
       a.download = fileName || "document.pdf";
       document.body.appendChild(a);
       a.click();
       
       // Небольшая задержка перед очисткой, чтобы браузер успел начать скачивание
       setTimeout(() => {
-        window.URL.revokeObjectURL(url);
+        window.URL.revokeObjectURL(blobUrl);
         document.body.removeChild(a);
       }, 100);
     } catch (err) {
@@ -587,17 +586,32 @@ export default function DocumentsPage() {
         </div>
       ) : (
         <div className="grid gap-4 w-full max-w-full">
-          {currentDocuments.map((doc) => (
+          {currentDocuments.map((doc) => {
+            const isOutgoing = activeTab === "outgoing";
+            const hasUploadedSigned = Boolean(doc.signedFilePath);
+            const hasFileToDownload = Boolean(doc.filePath || doc.signedFilePath);
+            return (
             <div
               key={doc.id}
-              className="w-full max-w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800 sm:p-4 md:p-6 overflow-hidden"
+              className={`w-full max-w-full rounded-lg border p-3 shadow-sm transition-shadow hover:shadow-md overflow-hidden sm:p-4 md:p-6 ${
+                isOutgoing && hasUploadedSigned
+                  ? "border-green-300 bg-green-50/50 dark:border-green-700 dark:bg-green-900/20 ring-1 ring-green-200 dark:ring-green-800"
+                  : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+              }`}
             >
               <div className="flex flex-col gap-3 sm:gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white sm:text-base md:text-lg break-words">
+                    <h3 className={`text-sm font-semibold text-gray-900 dark:text-white sm:text-base md:text-lg break-words ${
+                      isOutgoing && hasUploadedSigned ? "underline decoration-green-500 decoration-2 underline-offset-2" : ""
+                    }`}>
                       {doc.title}
                     </h3>
+                    {isOutgoing && hasUploadedSigned && (
+                      <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300 ring-1 ring-green-300 dark:ring-green-700">
+                        Заявление загружено
+                      </span>
+                    )}
                     {getStatusBadge(doc.status)}
                     {getVerificationBadge(doc)}
                   </div>
@@ -634,27 +648,52 @@ export default function DocumentsPage() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                  {/* Кнопка скачивания - показываем для всех документов со статусом GENERATED или для устава */}
-                  {(doc.status === "GENERATED" || doc.id === "charter-system" || doc.filePath) && (
-                    <button
-                      onClick={() => handleDownload(doc.id, doc.fileName)}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:px-4"
-                    >
-                      <svg
-                        className="h-4 w-4 flex-shrink-0"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+                  {/* Кнопка скачивания - для входящих и исходящих, когда есть файл */}
+                  {hasFileToDownload && (
+                    <>
+                      <button
+                        onClick={() => handleDownload(doc.id, doc.fileName, !doc.filePath && !!doc.signedFilePath)}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:px-4"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                        />
-                      </svg>
-                      <span>Скачать</span>
-                    </button>
+                        <svg
+                          className="h-4 w-4 flex-shrink-0"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                          />
+                        </svg>
+                        <span>Скачать</span>
+                      </button>
+                      {/* Кнопка печати - открывает PDF в новой вкладке для печати */}
+                      <a
+                        href={`/api/documents/${encodeURIComponent(doc.id)}/download${doc.signedFilePath ? "?signed=true" : ""}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:w-auto sm:px-4"
+                        title="Открыть для печати"
+                      >
+                        <svg
+                          className="h-4 w-4 flex-shrink-0"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+                          />
+                        </svg>
+                        <span>Печать</span>
+                      </a>
+                    </>
                   )}
                   {/* Кнопка перегенерации для заявлений */}
                   {(doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION") && (
@@ -755,7 +794,8 @@ export default function DocumentsPage() {
                 </div>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
     </div>
