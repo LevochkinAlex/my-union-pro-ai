@@ -48,40 +48,45 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Нормализуем запрос для поиска
+    // Поле «Место работы» — только компании из DaData (работодатели), без ППО из базы
+    const workplaceOnly = searchParams.get("workplaceOnly") === "1" || searchParams.get("workplaceOnly") === "true";
+    if (workplaceOnly) {
+      const companies = await searchCompanies(query);
+      return NextResponse.json({
+        success: true,
+        suggestions: companies,
+      });
+    }
+
+    // Нормализуем запрос для поиска (объединённый поиск: ППО + компании)
     const normalizedQuery = query.trim().toLowerCase();
     const queryWords = normalizedQuery.split(/\s+/).filter(w => w.length > 2);
 
     // Ищем и в компаниях через DaData, и в профсоюзных организациях из базы
     const [companies, allOrganizations] = await Promise.all([
       searchCompanies(query),
-      // Ищем в профсоюзных организациях - улучшенный поиск
       prisma.organization.findMany({
         where: {
           isActive: true,
           OR: [
-            // Точное совпадение в начале названия
             {
               name: {
                 startsWith: query,
                 mode: "insensitive" as const,
               },
             },
-            // Содержит запрос в названии
             {
               name: {
                 contains: query,
                 mode: "insensitive" as const,
               },
             },
-            // Содержит запрос в полном пути
             {
               fullPath: {
                 contains: query,
                 mode: "insensitive" as const,
               },
             },
-            // Поиск по отдельным словам (если запрос состоит из нескольких слов)
             ...(queryWords.length > 1 ? [{
               AND: queryWords.map(word => ({
                 OR: [
@@ -110,25 +115,18 @@ export async function GET(request: NextRequest) {
           fullPath: true,
           chairmanName: true,
         },
-        take: 10, // Увеличиваем количество результатов
+        take: 10,
       }),
     ]);
 
-    // Сортируем организации по релевантности
     const organizations = allOrganizations.sort((a, b) => {
       const aName = (a.fullPath || a.name).toLowerCase();
       const bName = (b.fullPath || b.name).toLowerCase();
       const queryLower = normalizedQuery;
-
-      // Точное совпадение - самый высокий приоритет
       if (aName === queryLower && bName !== queryLower) return -1;
       if (bName === queryLower && aName !== queryLower) return 1;
-      
-      // Начинается с запроса
       if (aName.startsWith(queryLower) && !bName.startsWith(queryLower)) return -1;
       if (bName.startsWith(queryLower) && !aName.startsWith(queryLower)) return 1;
-      
-      // Содержит запрос в начале
       const aIndex = aName.indexOf(queryLower);
       const bIndex = bName.indexOf(queryLower);
       if (aIndex !== -1 && bIndex !== -1) {
@@ -137,12 +135,9 @@ export async function GET(request: NextRequest) {
       }
       if (aIndex !== -1 && bIndex === -1) return -1;
       if (bIndex !== -1 && aIndex === -1) return 1;
-      
-      // По алфавиту
       return aName.localeCompare(bName, 'ru');
     });
 
-    // Преобразуем организации в формат CompanySuggestion для единообразия
     const orgSuggestions = organizations.map(org => ({
       value: org.fullPath || org.name,
       unrestricted_value: org.fullPath || org.name,
@@ -152,19 +147,16 @@ export async function GET(request: NextRequest) {
           full: org.fullPath || org.name,
           short: org.name,
         },
-        // Добавляем информацию о руководителе если есть
         management: org.chairmanName ? {
           name: org.chairmanName,
           post: "ПРЕДСЕДАТЕЛЬ",
         } : undefined,
-        // Помечаем как профсоюзную организацию
         opf: {
           full: `Профсоюзная организация (${org.type})`,
         },
       },
     }));
 
-    // Объединяем результаты: сначала профсоюзные организации, потом компании
     const allSuggestions = [...orgSuggestions, ...companies];
 
     return NextResponse.json({

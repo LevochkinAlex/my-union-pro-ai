@@ -18,6 +18,8 @@ interface WorkplaceSearchProps {
   } | null) => void;
   required?: boolean;
   error?: string;
+  /** Не показывать внутренний лейбл «Место работы» — лейбл рисует родитель (анкета/профиль) */
+  hideLabel?: boolean;
 }
 
 export default function WorkplaceSearch({
@@ -25,6 +27,7 @@ export default function WorkplaceSearch({
   onChange,
   required = false,
   error,
+  hideLabel = false,
 }: WorkplaceSearchProps) {
   const [query, setQuery] = useState(value?.name || "");
   const [suggestions, setSuggestions] = useState<CompanySuggestion[]>([]);
@@ -98,7 +101,7 @@ export default function WorkplaceSearch({
     const timeoutId = setTimeout(async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(`/api/dadata/companies?query=${encodeURIComponent(query)}`);
+        const response = await fetch(`/api/dadata/companies?query=${encodeURIComponent(query)}&workplaceOnly=1`);
         if (response.ok) {
           const data = await response.json();
           setSuggestions(data.suggestions || []);
@@ -177,10 +180,11 @@ export default function WorkplaceSearch({
 
   return (
     <div ref={wrapperRef} className="relative">
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-        Место работы {required && <span className="text-red-500">*</span>}
-      </label>
-      
+      {!hideLabel && (
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          Место работы {required && <span className="text-red-500">*</span>}
+        </label>
+      )}
       <div className="relative">
         <input
           ref={inputRef}

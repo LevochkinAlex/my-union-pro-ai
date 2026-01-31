@@ -152,6 +152,7 @@ export default async function DiscountsPage() {
       <DiscountsPageWrapper
         initialData={initialData}
         initialPreference={preferencePayload}
+        preferredCityName={user?.preferredDiscountCity ?? undefined}
       />
     </div>
   );

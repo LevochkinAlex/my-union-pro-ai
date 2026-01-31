@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import QuestionnaireModal from "@/components/profile/QuestionnaireModal";
 import { calculateProfileProgress } from "@/lib/profile-progress";
+import { hasBothApplicationsSubmitted } from "@/lib/documents-status";
 
 interface MembershipBannerProps {
   profileProgress: number; // 0-100
@@ -28,11 +29,22 @@ export default function MembershipBanner({
   const [isVisible, setIsVisible] = useState(true);
   const [isQuestionnaireOpen, setIsQuestionnaireOpen] = useState(false);
 
+  const QUESTIONNAIRE_MODAL_KEY = "questionnaireModalOpen";
+
+  // Восстановить открытую модалку после Fast Refresh / перемонтирования (например после загрузки заявления)
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.sessionStorage?.getItem(QUESTIONNAIRE_MODAL_KEY) === "1") {
+      setIsQuestionnaireOpen(true);
+    }
+  }, []);
+
   // Автоматически открыть модалку анкеты если есть параметр в URL
   useEffect(() => {
     if (searchParams.get("openQuestionnaire") === "true") {
       setIsQuestionnaireOpen(true);
-      // Убираем параметр из URL без перезагрузки
+      if (typeof window !== "undefined" && window.sessionStorage) {
+        window.sessionStorage.setItem(QUESTIONNAIRE_MODAL_KEY, "1");
+      }
       router.replace("/dashboard", { scroll: false });
     }
   }, [searchParams, router]);
@@ -84,25 +96,8 @@ export default function MembershipBanner({
         }
         
         const docsData = await docsResponse.json();
-        const documents = docsData.documents || [];
-        
-        // Проверяем наличие отправленных документов
-        const sentDocuments = documents.filter((doc: any) => {
-          const isCorrectType = doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION";
-          if (!isCorrectType) return false;
-          
-          if (doc.status === "PENDING_REVIEW" || doc.status === "PENDING_APPROVAL" || doc.status === "PENDING_SIGNATURE" || doc.status === "COMPLETED") {
-            return true;
-          }
-          
-          if (doc.status === "SIGNED" && doc.signedFilePath) {
-            return true;
-          }
-          
-          return false;
-        });
-        
-        const newHasDocuments = sentDocuments.length > 0;
+        const documents = docsData.outgoingDocuments || docsData.documents || [];
+        const newHasDocuments = hasBothApplicationsSubmitted(documents);
         const newMembershipStatus = user?.membershipStatus || membershipStatus;
         const newProfileProgress = user ? calculateProfileProgress(user).total : profileProgress;
         
@@ -278,7 +273,12 @@ export default function MembershipBanner({
         title: "Заполните анкету, чтобы стать членом профсоюза",
         description: "Заполните все обязательные поля профиля для подачи заявления",
         buttonText: "Заполнить анкету",
-        buttonAction: () => setIsQuestionnaireOpen(true),
+        buttonAction: () => {
+          if (typeof window !== "undefined" && window.sessionStorage) {
+            window.sessionStorage.setItem(QUESTIONNAIRE_MODAL_KEY, "1");
+          }
+          setIsQuestionnaireOpen(true);
+        },
       };
     } else if (!hasDocuments) {
       return {
@@ -451,7 +451,13 @@ export default function MembershipBanner({
       {/* Модальное окно анкеты */}
       <QuestionnaireModal
         isOpen={isQuestionnaireOpen}
-        onClose={() => setIsQuestionnaireOpen(false)}
+        onClose={() => {
+          if (typeof window !== "undefined" && window.sessionStorage) {
+            window.sessionStorage.removeItem(QUESTIONNAIRE_MODAL_KEY);
+          }
+          setIsQuestionnaireOpen(false);
+          router.refresh();
+        }}
         onComplete={() => {
           // Обновляем страницу после завершения анкеты
           window.location.reload();

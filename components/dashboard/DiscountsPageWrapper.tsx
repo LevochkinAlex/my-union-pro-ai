@@ -7,11 +7,14 @@ import type { DiscountPreferenceResponse, DiscountSearchResult } from "@/types/d
 interface DiscountsPageWrapperProps {
   initialData: DiscountSearchResult;
   initialPreference: DiscountPreferenceResponse;
+  /** Название города из профиля — показываем в фильтре, если выбран город */
+  preferredCityName?: string | null;
 }
 
 export default function DiscountsPageWrapper({
   initialData,
   initialPreference,
+  preferredCityName,
 }: DiscountsPageWrapperProps) {
   return (
     <MembershipGate 
@@ -22,6 +25,7 @@ export default function DiscountsPageWrapper({
       <DiscountsClient
         initialData={initialData}
         initialPreference={initialPreference}
+        preferredCityName={preferredCityName ?? undefined}
       />
     </MembershipGate>
   );

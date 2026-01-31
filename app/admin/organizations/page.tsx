@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 
@@ -68,6 +68,19 @@ export default function OrganizationsPage() {
   const [existingUser, setExistingUser] = useState<ExistingUser | null>(null);
   const [searchingUser, setSearchingUser] = useState(false);
   const [userConfirmed, setUserConfirmed] = useState(false);
+
+  // Привязанные места работы (юр. лица) — для ППО, региональных и местных организаций
+  const [workplaceMappings, setWorkplaceMappings] = useState<Array<{ id: string; workplaceName: string; workplaceInn: string }>>([]);
+  const [newWorkplaceInn, setNewWorkplaceInn] = useState("");
+  const [newWorkplaceName, setNewWorkplaceName] = useState("");
+  const [addingMapping, setAddingMapping] = useState(false);
+  const [deletingMappingId, setDeletingMappingId] = useState<string | null>(null);
+  // Поиск через DaData для заполнения привязок «место работы»
+  const [dadataSearch, setDadataSearch] = useState("");
+  const [dadataSuggestions, setDadataSuggestions] = useState<Array<{ inn: string; name: string }>>([]);
+  const [dadataLoading, setDadataLoading] = useState(false);
+  const [dadataOpen, setDadataOpen] = useState(false);
+  const dadataWrapperRef = useRef<HTMLDivElement>(null);
   
   const [formData, setFormData] = useState<{
     name: string;
@@ -226,6 +239,151 @@ export default function OrganizationsPage() {
       console.error("Ошибка загрузки должностей:", error);
     }
   };
+
+  const loadWorkplaceMappings = async (ppoOrganizationId: string) => {
+    try {
+      const res = await fetch(`/api/admin/workplace-ppo-mapping?ppoOrganizationId=${encodeURIComponent(ppoOrganizationId)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setWorkplaceMappings((data.mappings || []).map((m: { id: string; workplaceName: string; workplaceInn: string }) => ({ id: m.id, workplaceName: m.workplaceName, workplaceInn: m.workplaceInn })));
+      } else {
+        setWorkplaceMappings([]);
+      }
+    } catch (e) {
+      console.error("Ошибка загрузки привязок мест работы:", e);
+      setWorkplaceMappings([]);
+    }
+  };
+
+  const addWorkplaceMapping = async (workplaceInn?: string, workplaceName?: string) => {
+    const inn = (workplaceInn ?? newWorkplaceInn).trim();
+    const name = (workplaceName ?? newWorkplaceName).trim();
+    if (!selectedOrg?.id || !inn || !name) {
+      alertError("Укажите ИНН и название организации (юр. лица)");
+      return;
+    }
+    setAddingMapping(true);
+    try {
+      const res = await fetch("/api/admin/workplace-ppo-mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workplaceInn: inn,
+          workplaceName: name,
+          ppoOrganizationId: selectedOrg.id,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWorkplaceMappings((prev) => [...prev, { id: data.mapping.id, workplaceName: name, workplaceInn: inn }]);
+        setNewWorkplaceInn("");
+        setNewWorkplaceName("");
+        if (workplaceInn !== undefined) {
+          setDadataSearch("");
+          setDadataSuggestions([]);
+          setDadataOpen(false);
+        }
+        alertSuccess("Место работы привязано.");
+      } else {
+        const err = await res.json();
+        alertError(err.error || "Ошибка при добавлении привязки");
+      }
+    } catch (e) {
+      console.error(e);
+      alertError("Ошибка при добавлении привязки");
+    } finally {
+      setAddingMapping(false);
+    }
+  };
+
+  const deleteWorkplaceMapping = async (id: string) => {
+    setDeletingMappingId(id);
+    try {
+      const res = await fetch(`/api/admin/workplace-ppo-mapping/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setWorkplaceMappings((prev) => prev.filter((m) => m.id !== id));
+        alertSuccess("Привязка удалена.");
+      } else {
+        const err = await res.json();
+        alertError(err.error || "Ошибка при удалении");
+      }
+    } catch (e) {
+      console.error(e);
+      alertError("Ошибка при удалении");
+    } finally {
+      setDeletingMappingId(null);
+    }
+  };
+
+  useEffect(() => {
+    const canHaveWorkplace = formData.type === "PRIMARY" || formData.type === "REGIONAL" || formData.type === "LOCAL";
+    if (isEditing && selectedOrg?.id && canHaveWorkplace) {
+      loadWorkplaceMappings(selectedOrg.id);
+    } else {
+      setWorkplaceMappings([]);
+      setNewWorkplaceInn("");
+      setNewWorkplaceName("");
+      setDadataSearch("");
+      setDadataSuggestions([]);
+    }
+  }, [isEditing, selectedOrg?.id, formData.type]);
+
+  // Поиск через DaData по названию или ИНН (debounce)
+  useEffect(() => {
+    const q = dadataSearch.trim();
+    if (!q) {
+      setDadataSuggestions([]);
+      setDadataLoading(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setDadataLoading(true);
+      try {
+        const isInn = /^\d{10}$|^\d{12}$/.test(q);
+        const url = isInn
+          ? `/api/dadata/companies?inn=${encodeURIComponent(q)}`
+          : `/api/dadata/companies?query=${encodeURIComponent(q)}&workplaceOnly=1`;
+        const res = await fetch(url);
+        if (!res.ok) {
+          setDadataSuggestions([]);
+          return;
+        }
+        const data = await res.json();
+        if (data.company) {
+          const c = data.company;
+          setDadataSuggestions([{ inn: c.inn, name: c.name?.full || c.name?.short || "" }]);
+          setDadataOpen(true);
+        } else if (data.suggestions?.length) {
+          setDadataSuggestions(
+            data.suggestions.map((s: { data: { inn: string; name: { full?: string; short?: string } } }) => ({
+              inn: s.data.inn,
+              name: s.data.name?.full || s.data.name?.short || s.value || "",
+            }))
+          );
+          setDadataOpen(true);
+        } else {
+          setDadataSuggestions([]);
+        }
+      } catch (e) {
+        console.error("DaData search error:", e);
+        setDadataSuggestions([]);
+      } finally {
+        setDadataLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [dadataSearch]);
+
+  // Закрытие выпадающего списка DaData при клике снаружи
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dadataWrapperRef.current && !dadataWrapperRef.current.contains(e.target as Node)) {
+        setDadataOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleCreate = () => {
     setIsCreating(true);
@@ -718,53 +876,60 @@ export default function OrganizationsPage() {
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-800/50">
+              <h3 className="mb-2 text-base font-semibold text-gray-900 dark:text-white">
+                Реквизиты юр. лица (фирмы)
+              </h3>
+              <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">
+                Для любой организации (в т.ч. региональной, местной, федеральной — например МООП РЗ) можно указать ИНН, адрес и контакты юр. лица (аппарата).
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    ИНН
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.inn}
+                    onChange={(e) => setFormData({ ...formData, inn: e.target.value })}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                    placeholder="10 цифр"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Телефон
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                  />
+                </div>
+              </div>
+              <div className="mt-4">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  ИНН
+                  Email
                 </label>
                 <input
-                  type="text"
-                  value={formData.inn}
-                  onChange={(e) => setFormData({ ...formData, inn: e.target.value })}
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
                 />
               </div>
-              <div>
+              <div className="mt-4">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Телефон
+                  Адрес
                 </label>
-                <input
-                  type="text"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                <textarea
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                  rows={2}
                 />
               </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Email
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Адрес
-              </label>
-              <textarea
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
-                rows={2}
-              />
             </div>
 
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
@@ -961,6 +1126,103 @@ export default function OrganizationsPage() {
                 </datalist>
               </div>
             </div>
+
+            {/* Привязанные места работы (юр. лица) — для ППО, региональных и местных организаций */}
+            {isEditing && selectedOrg && (formData.type === "PRIMARY" || formData.type === "REGIONAL" || formData.type === "LOCAL") && (
+              <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+                <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
+                  Привязанные места работы (юр. лица)
+                </h3>
+                <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
+                  {formData.type === "PRIMARY"
+                    ? "По ИНН и названию места работы пользователям будет подставляться это ППО."
+                    : "Для региональных и местных организаций место работы — как правило, сама организация (аппарат). Укажите ИНН и название юр. лица — пользователям будет подставляться ППО этой организации (например, ППО аппарата)."}
+                </p>
+                <div ref={dadataWrapperRef} className="relative mb-4">
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Помочь заполнить через DaData (по названию или ИНН)
+                  </label>
+                  <input
+                    type="text"
+                    value={dadataSearch}
+                    onChange={(e) => setDadataSearch(e.target.value)}
+                    onFocus={() => dadataSuggestions.length > 0 && setDadataOpen(true)}
+                    placeholder="Введите название юр. лица или ИНН (10 цифр)"
+                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                  />
+                  {dadataLoading && (
+                    <span className="absolute right-3 top-8 text-xs text-gray-500">поиск…</span>
+                  )}
+                  {dadataOpen && dadataSuggestions.length > 0 && (
+                    <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded border border-gray-300 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800">
+                      {dadataSuggestions.map((s, i) => (
+                        <li key={`${s.inn}-${i}`}>
+                          <button
+                            type="button"
+                            onClick={() => addWorkplaceMapping(s.inn, s.name)}
+                            disabled={addingMapping}
+                            className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            <span className="truncate font-medium">{s.name}</span>
+                            <span className="shrink-0 text-gray-500">ИНН {s.inn}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                {workplaceMappings.length > 0 && (
+                  <ul className="mb-4 space-y-2">
+                    {workplaceMappings.map((m) => (
+                      <li key={m.id} className="flex items-center justify-between rounded border border-gray-200 bg-white px-3 py-2 dark:border-gray-600 dark:bg-gray-700">
+                        <span className="text-sm">
+                          <span className="font-medium">{m.workplaceName}</span>
+                          <span className="ml-2 text-gray-500">ИНН {m.workplaceInn}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => deleteWorkplaceMapping(m.id)}
+                          disabled={deletingMappingId === m.id}
+                          className="rounded px-2 py-1 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50"
+                        >
+                          {deletingMappingId === m.id ? "…" : "Удалить"}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="min-w-[120px] flex-1">
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">ИНН</label>
+                    <input
+                      type="text"
+                      value={newWorkplaceInn}
+                      onChange={(e) => setNewWorkplaceInn(e.target.value)}
+                      placeholder="10 цифр"
+                      className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700"
+                    />
+                  </div>
+                  <div className="min-w-[200px] flex-1">
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Название юр. лица</label>
+                    <input
+                      type="text"
+                      value={newWorkplaceName}
+                      onChange={(e) => setNewWorkplaceName(e.target.value)}
+                      placeholder="ГБУЗ МО «Солнечногорская больница»"
+                      className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addWorkplaceMapping}
+                    disabled={addingMapping || !newWorkplaceInn.trim() || !newWorkplaceName.trim()}
+                    className="rounded bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {addingMapping ? "…" : "Добавить"}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="flex items-center">

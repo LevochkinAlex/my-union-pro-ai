@@ -46,6 +46,7 @@ export async function GET(
     console.log("[documents/download] Resolved ID:", id);
     const { searchParams } = new URL(request.url);
     const downloadSigned = searchParams.get("signed") === "true";
+    const inline = searchParams.get("inline") === "1" || searchParams.get("inline") === "true";
 
     console.log("[documents/download] ===== START DOWNLOAD =====");
     console.log("[documents/download] Document ID:", id);
@@ -466,15 +467,23 @@ export async function GET(
       fileName: fileNameToUse,
       size: fileBuffer.length,
       signed: downloadSigned,
+      inline,
     });
 
-    // Возвращаем файл напрямую как Buffer
+    const disposition = inline ? "inline" : "attachment";
+    // RFC 5987: filename* для UTF-8 имён (кириллица) — улучшает открытие PDF в браузере на проде
+    const safeFileName = fileNameToUse.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const contentDisposition =
+      disposition +
+      `; filename="${safeFileName}"; filename*=UTF-8''${encodeURIComponent(fileNameToUse)}`;
+
     return new NextResponse(fileBuffer as any, {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(fileNameToUse)}"`,
+        "Content-Disposition": contentDisposition,
         "Content-Length": fileBuffer.length.toString(),
+        "Cache-Control": "private, max-age=0",
       },
     });
   } catch (error) {

@@ -290,12 +290,13 @@ export async function POST(request: NextRequest) {
       });
 
       if (existingDoc) {
-        // Обновляем существующий документ, добавляя подписанный файл
+        // Обновляем существующий документ, добавляя подписанный файл (имя файла пользователя для отображения)
         document = await prisma.document.update({
           where: { id: documentId },
           data: {
             status: "SIGNED",
             signedFilePath: relativePath,
+            fileName: file.name,
             updatedAt: new Date(),
           },
         });
@@ -340,12 +341,13 @@ export async function POST(request: NextRequest) {
         });
         
         if (generatedDoc) {
-          // Обновляем GENERATED документ
+          // Обновляем GENERATED документ (имя файла пользователя для отображения)
           document = await prisma.document.update({
             where: { id: generatedDoc.id },
             data: {
               status: "SIGNED",
               signedFilePath: relativePath,
+              fileName: file.name,
               updatedAt: new Date(),
             },
           });
@@ -368,12 +370,13 @@ export async function POST(request: NextRequest) {
           console.log(`[upload] Created new ${documentType} (existing is PENDING/APPROVED):`, document.id);
         }
       } else if (existingDoc) {
-        // Обновляем существующий документ, добавляя подписанный файл
+        // Обновляем существующий документ, добавляя подписанный файл (имя файла пользователя)
         document = await prisma.document.update({
           where: { id: existingDoc.id },
           data: {
             status: "SIGNED",
             signedFilePath: relativePath,
+            fileName: file.name,
             updatedAt: new Date(),
           },
         });
@@ -426,68 +429,7 @@ export async function POST(request: NextRequest) {
     });
   } // end for loop
 
-  // Проверяем загружены ли оба обязательных документа (membership и contribution)
-  // Документ считается загруженным, если:
-  // 1. Статус в workflow или завершён (уже отправлен)
-  // 2. Статус SIGNED и есть signedFilePath (подписан и загружен)
-  const membershipDoc = await prisma.document.findFirst({
-      where: {
-        userId: session.user.id,
-        type: "MEMBERSHIP_APPLICATION",
-        OR: [
-          { status: { in: ["PENDING_REVIEW", "PENDING_APPROVAL", "PENDING_SIGNATURE", "COMPLETED"] } },
-          { status: "SIGNED", signedFilePath: { not: null } },
-        ],
-      },
-    });
-
-  const contributionDoc = await prisma.document.findFirst({
-    where: {
-      userId: session.user.id,
-      type: "CONTRIBUTION_APPLICATION",
-      OR: [
-        { status: { in: ["PENDING_REVIEW", "PENDING_APPROVAL", "PENDING_SIGNATURE", "COMPLETED"] } },
-        { status: "SIGNED", signedFilePath: { not: null } },
-      ],
-    },
-  });
-
-  // Если оба документа загружены - обновляем статус на PENDING_REVIEW
-  if (membershipDoc && contributionDoc) {
-    try {
-      // Обновляем статус документов на PENDING_REVIEW (отправлены на проверку)
-      await prisma.document.updateMany({
-        where: {
-          userId: session.user.id,
-          type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
-          status: "SIGNED",
-        },
-        data: { status: "PENDING_REVIEW" },
-      });
-      console.log("[upload] ✅ Documents status updated to PENDING_REVIEW");
-
-      // Обновляем статус пользователя на DOCUMENTS_PENDING (если еще не APPROVED или REJECTED)
-      const currentUser = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { membershipStatus: true },
-      });
-
-      if (currentUser && 
-          currentUser.membershipStatus !== "APPROVED" && 
-          currentUser.membershipStatus !== "REJECTED") {
-        await prisma.user.update({
-          where: { id: session.user.id },
-          data: { membershipStatus: "DOCUMENTS_PENDING" },
-        });
-        console.log("[upload] ✅ User membershipStatus updated to DOCUMENTS_PENDING");
-      }
-    } catch (error) {
-      console.error("[upload] Error updating document/user status:", error);
-      // Не блокируем загрузку документов из-за ошибки обновления статуса
-    }
-  }
-
-  // Проверяем финальный статус документов для ответа
+  // Проверяем финальный статус документов для ответа (allDocumentsUploaded — оба загружены, но ещё не отправлены)
   const finalMembershipDoc = await prisma.document.findFirst({
     where: {
       userId: session.user.id,

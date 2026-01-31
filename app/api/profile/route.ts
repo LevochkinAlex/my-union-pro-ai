@@ -92,6 +92,7 @@ export async function GET() {
             membershipStatus: true,
             unionMembershipStatus: true, // Добавляем для проверки ACCEPTED
             organizationId: true,
+            organizationName: true, // на случай, если организация не из справочника
             profileChangedAfterDocuments: true,
             profileLastModified: true,
             viewMode: true,
@@ -238,10 +239,11 @@ export async function PUT(request: NextRequest) {
           ? body.organizationId.trim() 
           : null);  // Пустая строка -> null (явная очистка)
 
-    // Валидация организации, если указана
+    // Валидация организации, если указана (только ППО — членом можно быть только первичной организации)
     if (organizationId) {
       const org = await prisma.organization.findUnique({
         where: { id: organizationId },
+        select: { id: true, name: true, type: true, isActive: true },
       });
       if (!org) {
         console.warn("[profile] Organization not found:", organizationId);
@@ -250,11 +252,19 @@ export async function PUT(request: NextRequest) {
           { status: 400 }
         );
       }
-      console.log("[profile] Validating organization:", {
-        id: org.id,
-        name: org.name,
-        type: org.type,
-      });
+      if (org.type !== "PRIMARY") {
+        return NextResponse.json(
+          { error: "Членом профсоюза можно быть только в первичной организации (ППО). Выберите ППО из списка." },
+          { status: 400 }
+        );
+      }
+      if (!org.isActive) {
+        return NextResponse.json(
+          { error: "Выбранная организация неактивна. Выберите другую организацию." },
+          { status: 400 }
+        );
+      }
+      console.log("[profile] Validating organization:", { id: org.id, name: org.name, type: org.type });
     }
 
     let dateOfBirth: Date | null = null;

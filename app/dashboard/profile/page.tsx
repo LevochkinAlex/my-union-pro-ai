@@ -197,6 +197,7 @@ export default function ProfilePage() {
     }>;
   } | null>(null);
   const [loadingMembership, setLoadingMembership] = useState(false);
+  const [ppoOptionsForWorkplace, setPpoOptionsForWorkplace] = useState<Array<{ id: string; name: string }>>([]);
   const [ppoAutoFilled, setPpoAutoFilled] = useState(false);
   const [showManualPpo, setShowManualPpo] = useState(false);
   const [manualPpoText, setManualPpoText] = useState("");
@@ -575,6 +576,31 @@ export default function ProfilePage() {
 
     loadDictionaries();
   }, []);
+
+  // Загрузка ППО по месту работы из справочника (при уже указанном месте работы, напр. после loadProfile)
+  useEffect(() => {
+    if (!profileData.workplace?.trim() || !profileData.workplaceInn?.trim()) {
+      setPpoOptionsForWorkplace([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/workplace/ppo?workplaceName=${encodeURIComponent(profileData.workplace)}&workplaceInn=${encodeURIComponent(profileData.workplaceInn)}`
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const list = data.ppoOrganizations || (data.ppoOrganization ? [data.ppoOrganization] : []);
+        setPpoOptionsForWorkplace(Array.isArray(list) ? list : []);
+        setPpoAutoFilled(list.length === 1);
+      } catch {
+        if (!cancelled) setPpoOptionsForWorkplace([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [profileData.workplace, profileData.workplaceInn]);
 
   useEffect(() => {
     const loadAdditionalInfo = async () => {
@@ -1151,10 +1177,8 @@ export default function ProfilePage() {
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
                 Место работы <span className="text-red-500">*</span>
               </label>
-              <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-                Поиск по названию или укажите ИНН организации
-              </p>
               <WorkplaceSearch
+                hideLabel
                 value={profileData.workplace ? {
                   name: profileData.workplace,
                   inn: profileData.workplaceInn,
@@ -1177,12 +1201,20 @@ export default function ProfilePage() {
                       );
                       if (response.ok) {
                         const data = await response.json();
-                        if (data.success && data.found && data.ppoOrganization) {
-                          setProfileData(prev => ({ ...prev, organizationId: data.ppoOrganization.id }));
-                          handleFieldBlur("organizationId", data.ppoOrganization.id);
+                        const list = data.ppoOrganizations || (data.ppoOrganization ? [data.ppoOrganization] : []);
+                        setPpoOptionsForWorkplace(Array.isArray(list) ? list : []);
+                        if (list.length === 1 && list[0]?.id) {
+                          setProfileData(prev => ({ ...prev, organizationId: list[0].id }));
+                          handleFieldBlur("organizationId", list[0].id);
                           setPpoAutoFilled(true);
                           setShowManualPpo(false);
-                          setMessage({ type: "success", text: `Автоматически определена ППО: ${data.ppoOrganization.name}` });
+                          setMessage({ type: "success", text: `По справочнику определена ППО: ${list[0].name}` });
+                          setTimeout(() => setMessage(null), 5000);
+                        } else if (list.length > 1) {
+                          setPpoAutoFilled(false);
+                          setProfileData(prev => ({ ...prev, organizationId: list[0]?.id || null }));
+                          if (list[0]?.id) handleFieldBlur("organizationId", list[0].id);
+                          setMessage({ type: "success", text: "Выберите ваше ППО из привязанных к месту работы." });
                           setTimeout(() => setMessage(null), 5000);
                         } else {
                           setProfileData(prev => ({ ...prev, organizationId: null }));
@@ -1193,6 +1225,7 @@ export default function ProfilePage() {
                       }
                     } catch (error) {
                       console.error("Error finding PPO by workplace:", error);
+                      setPpoOptionsForWorkplace([]);
                       setPpoAutoFilled(false);
                     }
                   } else {
@@ -1204,11 +1237,15 @@ export default function ProfilePage() {
                       directorPosition: "",
                       organizationId: null,
                     }));
+                    setPpoOptionsForWorkplace([]);
                     setPpoAutoFilled(false);
                   }
                 }}
                 required
               />
+              <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                Поиск по названию или укажите ИНН организации
+              </p>
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
@@ -1228,21 +1265,21 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Организация профсоюза (ППО) — активна после выбора места работы */}
+          {/* Организация профсоюза (ППО) — по справочнику: автоподстановка или выбор из ППО, привязанных к месту работы */}
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
               Организация профсоюза (ППО) <span className="text-red-500">*</span>
             </label>
             <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-              Членом можно быть только первичной организации (ППО). После выбора места работы ППО может подставиться автоматически.
+              Членом можно быть только первичной организации (ППО). После выбора места работы ППО подставится по справочнику или можно выбрать из привязанных к вашему месту работы.
             </p>
             {!profileData.workplace?.trim() || !profileData.workplaceInn?.trim() ? (
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-                Сначала укажите место работы (с ИНН) — тогда станет доступен выбор ППО
+                Сначала укажите место работы (с ИНН) — тогда подставится ППО по справочнику или откроется выбор
               </div>
-            ) : ppoAutoFilled && profileData.organizationId ? (
+            ) : ppoAutoFilled && profileData.organizationId && ppoOptionsForWorkplace.length === 1 ? (
               <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-200">
-                {organizations.find(o => o.id === profileData.organizationId)?.name || profileData.organization?.name || "ППО подставлено по месту работы"}
+                {ppoOptionsForWorkplace[0]?.name || organizations.find(o => o.id === profileData.organizationId)?.name || profileData.organization?.name || "ППО подставлено по месту работы"}
               </div>
             ) : (
               <>
@@ -1253,8 +1290,16 @@ export default function ProfilePage() {
                     setPpoAutoFilled(false);
                     if (organizationId) handleFieldBlur("organizationId", organizationId);
                   }}
-                  options={organizations}
-                  placeholder="Выберите ППО из списка или начните вводить название..."
+                  options={
+                    ppoOptionsForWorkplace.length > 0
+                      ? ppoOptionsForWorkplace.map((p) => ({ id: p.id, name: p.name, fullPath: p.name, indentedName: p.name }))
+                      : organizations
+                  }
+                  placeholder={
+                    ppoOptionsForWorkplace.length > 1
+                      ? "Выберите ваше ППО из привязанных к месту работы..."
+                      : "Выберите ППО из списка или начните вводить название..."
+                  }
                 />
                 <p className="mt-2">
                   <button
@@ -1380,6 +1425,23 @@ export default function ProfilePage() {
                 Предпочтительный город для скидок
                 <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">(управляет фильтром скидок)</span>
               </label>
+              <div className="mb-3 flex items-center gap-2 rounded-xl border-2 border-blue-200 bg-blue-50/80 px-4 py-3 dark:border-blue-800 dark:bg-blue-900/40">
+                <svg className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <div className="min-w-0 flex-1">
+                  <span className="text-xs font-medium uppercase tracking-wide text-blue-600 dark:text-blue-400">Сейчас в предпочтении:</span>
+                  <p className="mt-0.5 text-base font-semibold text-blue-900 dark:text-blue-100">
+                    {profileData.preferredDiscountCity?.trim() || "Город не указан"}
+                  </p>
+                  {!profileData.preferredDiscountCity?.trim() && (
+                    <p className="mt-1 text-xs text-blue-700/80 dark:text-blue-300/80">
+                      В разделе «Скидки» можно выбрать любой город в фильтре.
+                    </p>
+                  )}
+                </div>
+              </div>
               <input
                 type="text"
                 name="preferredDiscountCity"

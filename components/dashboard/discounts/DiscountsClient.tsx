@@ -14,6 +14,8 @@ import clsx from "clsx";
 interface DiscountsClientProps {
   initialData: DiscountSearchResult;
   initialPreference: DiscountPreferenceResponse;
+  /** Название города из профиля — для отображения, когда выбран город */
+  preferredCityName?: string;
 }
 
 type FilterState = {
@@ -47,6 +49,7 @@ const DEFAULT_FILTERS: FilterState = {
 export default function DiscountsClient({
   initialData,
   initialPreference,
+  preferredCityName,
 }: DiscountsClientProps) {
   // Защита от некорректных данных
   const safeInitialData: DiscountSearchResult = initialData || {
@@ -806,6 +809,20 @@ export default function DiscountsClient({
           </div>
 
           <div className="md:w-72 lg:w-80">
+            {filters.cityId != null && (() => {
+              const selectedCity = (data.cities || []).find((c) => c.id === filters.cityId);
+              const displayName = selectedCity?.name ?? preferredCityName ?? `ID ${filters.cityId}`;
+              return (
+                <div className="mb-2 flex items-center gap-2 rounded-lg border-2 border-blue-200 bg-blue-50/80 px-3 py-2 dark:border-blue-800 dark:bg-blue-900/40">
+                  <svg className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  </svg>
+                  <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                    Показаны скидки по городу: <span className="font-semibold">{displayName}</span>
+                  </span>
+                </div>
+              );
+            })()}
             <CityFilter
               cities={data.cities || []}
               value={filters.cityId}
@@ -817,6 +834,9 @@ export default function DiscountsClient({
                 })
               }
             />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Город из профиля подставляется автоматически. Изменить: здесь или в разделе «Профиль».
+            </p>
           </div>
         </div>
 

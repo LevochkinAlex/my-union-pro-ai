@@ -13,7 +13,8 @@ import AvatarUpload from "@/components/profile/AvatarUpload";
 import ChangePhoneModal from "@/components/profile/ChangePhoneModal";
 import WorkplaceSearch from "@/components/profile/WorkplaceSearch";
 import { useAlert } from "@/components/ui/Alert";
-import { Download, Upload, Check, X, Edit2 } from "lucide-react";
+import { DOCUMENT_ON_REVIEW_STATUSES } from "@/lib/documents-status";
+import { Download, Upload, Check, X, Edit2, Printer } from "lucide-react";
 
 interface QuestionnaireModalProps {
   isOpen: boolean;
@@ -45,6 +46,7 @@ interface Document {
   description?: string;
   fileName: string;
   filePath?: string | null;
+  content?: string | null;
   status: string;
   signedFilePath?: string | null;
   verificationStatus?: string | null;
@@ -61,7 +63,9 @@ export default function QuestionnaireModal({
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSubmittingForReview, setIsSubmittingForReview] = useState(false);
   const [downloadingDocIds, setDownloadingDocIds] = useState<Set<string>>(new Set());
+  const QUESTIONNAIRE_STEP_KEY = "questionnaireStep";
   const [currentStep, setCurrentStep] = useState(1);
   const [autoSaving, setAutoSaving] = useState(false);
   const [lastSavedField, setLastSavedField] = useState<string | null>(null);
@@ -89,12 +93,21 @@ export default function QuestionnaireModal({
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [isChangePhoneModalOpen, setIsChangePhoneModalOpen] = useState(false);
   const [isExistingMember, setIsExistingMember] = useState(false);
-  // ППО: автоподстановка по месту работы; ручной ввод если нет в списке
+  // ППО по месту работы из справочника (один или несколько — выбор из дропдауна)
+  const [ppoOptionsForWorkplace, setPpoOptionsForWorkplace] = useState<Array<{ id: string; name: string }>>([]);
   const [ppoAutoFilled, setPpoAutoFilled] = useState(false);
   const [showManualPpo, setShowManualPpo] = useState(false);
   const [manualPpoText, setManualPpoText] = useState("");
   const [sendingPpoRequest, setSendingPpoRequest] = useState(false);
   const [generateProgress, setGenerateProgress] = useState<number | null>(null);
+  const [justGeneratedDocuments, setJustGeneratedDocuments] = useState(false);
+
+  // Запоминаем шаг анкеты при переключении (чтобы при повторном открытии не откатываться назад)
+  useEffect(() => {
+    if (isOpen && typeof window !== "undefined" && window.sessionStorage) {
+      window.sessionStorage.setItem(QUESTIONNAIRE_STEP_KEY, String(currentStep));
+    }
+  }, [isOpen, currentStep]);
 
   useEffect(() => {
     if (isOpen) {
@@ -122,9 +135,10 @@ export default function QuestionnaireModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  // Автоподстановка ППО по месту работы (название + ИНН)
+  // Загрузка ППО по месту работы из справочника (один — автоподстановка, несколько — выбор из дропдауна)
   useEffect(() => {
     if (!formData.workplace?.trim() || !formData.workplaceInn?.trim()) {
+      setPpoOptionsForWorkplace([]);
       setPpoAutoFilled(false);
       return;
     }
@@ -137,15 +151,21 @@ export default function QuestionnaireModal({
         if (!res.ok || cancelled) return;
         const data = await res.json();
         if (cancelled) return;
-        if (data.found && data.ppoOrganization?.id) {
-          setFormData((prev) => ({ ...prev, organizationId: data.ppoOrganization.id }));
+        const list = data.ppoOrganizations || (data.ppoOrganization ? [data.ppoOrganization] : []);
+        setPpoOptionsForWorkplace(Array.isArray(list) ? list : []);
+        if (list.length === 1 && list[0]?.id) {
+          setFormData((prev) => ({ ...prev, organizationId: list[0].id }));
           setPpoAutoFilled(true);
           setShowManualPpo(false);
         } else {
           setPpoAutoFilled(false);
+          if (list.length > 1 && !formData.organizationId) {
+            setFormData((prev) => ({ ...prev, organizationId: list[0]?.id || "" }));
+          }
         }
       } catch {
-        if (!cancelled) setPpoAutoFilled(false);
+        if (!cancelled) setPpoOptionsForWorkplace([]);
+        setPpoAutoFilled(false);
       }
     })();
     return () => { cancelled = true; };
@@ -241,8 +261,10 @@ export default function QuestionnaireModal({
       let loadedDocs: Document[] = [];
       if (documentsRes.ok) {
         const documentsData = await documentsRes.json();
-        console.log("[QuestionnaireModal] Loaded documents:", documentsData.documents?.length || 0);
-        loadedDocs = documentsData.documents || [];
+        const incoming = documentsData.incomingDocuments || [];
+        const outgoing = documentsData.outgoingDocuments || [];
+        loadedDocs = [...incoming, ...outgoing];
+        console.log("[QuestionnaireModal] Loaded documents:", loadedDocs.length, "(incoming:", incoming.length, ", outgoing:", outgoing.length, ")");
         setDocuments(loadedDocs);
       } else {
         console.error("[QuestionnaireModal] Failed to load documents:", documentsRes.status, documentsRes.statusText);
@@ -273,41 +295,58 @@ export default function QuestionnaireModal({
             doc.type === "CONTRIBUTION_APPLICATION"
         );
         
-        // Документы сгенерированы если есть хотя бы одно заявление с filePath
+        // Документы сгенерированы если есть хотя бы одно заявление с filePath или content (PDF в БД)
         const hasGeneratedApplications = applicationDocs.some(
-          (doc: Document) => doc.filePath
+          (doc: Document) => doc.filePath || doc.content
         );
         
-        // Проверяем подписаны ли ОБА заявления
+        // Оба заявления загружены (есть подписанный файл)
         const membershipApp = applicationDocs.find((doc: Document) => doc.type === "MEMBERSHIP_APPLICATION");
         const contributionApp = applicationDocs.find((doc: Document) => doc.type === "CONTRIBUTION_APPLICATION");
-        const allApplicationsSigned = !!(
-          membershipApp?.signedFilePath && 
+        const bothUploaded = !!(
+          membershipApp?.signedFilePath &&
           contributionApp?.signedFilePath
         );
+        const allApplicationsSubmitted =
+          bothUploaded &&
+          membershipApp &&
+          contributionApp &&
+          DOCUMENT_ON_REVIEW_STATUSES.includes(membershipApp.status as any) &&
+          DOCUMENT_ON_REVIEW_STATUSES.includes(contributionApp.status as any);
 
-        // Определяем шаг
+        // Определяем шаг по данным; шаг 4 только после явной отправки на проверку
         let initialStep = 1;
-        if (allApplicationsSigned) {
-          initialStep = 4; // Всё готово - оба заявления подписаны
+        if (allApplicationsSubmitted) {
+          initialStep = 4; // Уже отправлено на проверку
         } else if (hasGeneratedApplications) {
           initialStep = 3; // Заявления сгенерированы, нужно подписать
         } else if (isProfileComplete) {
           initialStep = 2; // Профиль заполнен, сверка данных
         }
-        
-        setCurrentStep(initialStep);
-        
+        const savedStepRaw = typeof window !== "undefined" && window.sessionStorage
+          ? window.sessionStorage.getItem(QUESTIONNAIRE_STEP_KEY)
+          : null;
+        const savedStep = savedStepRaw ? parseInt(savedStepRaw, 10) : NaN;
+        const stepToUse =
+          !isNaN(savedStep) && savedStep >= 1 && savedStep <= 4 && savedStep >= initialStep
+            ? savedStep
+            : initialStep;
+        setCurrentStep(stepToUse);
+
         console.log("[QuestionnaireModal] Determined initial step:", {
           isProfileComplete,
           hasGeneratedApplications,
-          allApplicationsSigned,
+          bothUploaded,
+          allApplicationsSubmitted,
           applicationDocs: applicationDocs.map((d: Document) => ({ 
             type: d.type, 
+            status: d.status,
             filePath: !!d.filePath, 
             signedFilePath: !!d.signedFilePath 
           })),
-          initialStep
+          initialStep,
+          savedStep: savedStepRaw ?? undefined,
+          stepToUse
         });
       }
     } catch (error) {
@@ -440,6 +479,8 @@ export default function QuestionnaireModal({
       setGenerateProgress(20);
       const response = await fetch("/api/documents/generate", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isExistingMember: !!isExistingMember }),
       });
       setGenerateProgress(80);
 
@@ -452,14 +493,32 @@ export default function QuestionnaireModal({
           errorMessage = `Не заполнены обязательные поля: ${data.missingFields.join(", ")}. Вернитесь на шаг 1 и заполните их.`;
           setCurrentStep(1);
         }
+        if (data.details && typeof data.details === "string") {
+          console.error("[QuestionnaireModal] Детали ошибки с сервера:", data.details);
+        }
         console.error("[QuestionnaireModal] Ошибка генерации:", errorMessage);
         throw new Error(errorMessage);
       }
 
       setGenerateProgress(100);
-      console.log("[QuestionnaireModal] ✅ Документы успешно сгенерированы");
-      showAlert({ message: "Документы успешно сгенерированы", type: "success" });
-      await loadData();
+      if (isExistingMember) {
+        showAlert({
+          message: "Документы сформированы и сохранены в разделе «Документы». Председатель получит заявку для подтверждения вашего членства — вам придёт уведомление после проверки. Спасибо!",
+          type: "success",
+        });
+      } else {
+        const docRes = await fetch("/api/documents");
+        if (docRes.ok) {
+          const docData = await docRes.json();
+          setDocuments([...(docData.incomingDocuments || []), ...(docData.outgoingDocuments || [])]);
+        }
+        setCurrentStep(3);
+        setJustGeneratedDocuments(true);
+        showAlert({
+          message: "Документы сформированы. Ниже откройте для печати, скачайте или загрузите подписанный вариант. На вашу почту отправлено письмо с инструкцией.",
+          type: "success",
+        });
+      }
     } catch (error) {
       console.error("[QuestionnaireModal] Ошибка при генерации документов:", error);
       const errorMessage = error instanceof Error ? error.message : "Ошибка при генерации документов";
@@ -471,6 +530,11 @@ export default function QuestionnaireModal({
       setIsGenerating(false);
       setGenerateProgress(null);
     }
+  };
+
+  const handleOpenForPrint = (documentId: string) => {
+    const encodedId = encodeURIComponent(documentId);
+    window.open(`/api/documents/${encodedId}/download?inline=1`, "_blank", "noopener,noreferrer");
   };
 
   const handleDownloadDocument = async (documentId: string, fileName: string) => {
@@ -488,7 +552,7 @@ export default function QuestionnaireModal({
       console.log("[QuestionnaireModal] Download URL:", downloadUrl);
       console.log("[QuestionnaireModal] Отправка запроса...");
       
-      const response = await fetch(downloadUrl);
+      const response = await fetch(downloadUrl, { credentials: "include" });
       console.log("[QuestionnaireModal] Получен ответ:", {
         status: response.status,
         statusText: response.statusText,
@@ -569,6 +633,9 @@ export default function QuestionnaireModal({
 
   const handleUploadSigned = async (documentId: string, file: File) => {
     try {
+      if (typeof window !== "undefined" && window.sessionStorage) {
+        window.sessionStorage.setItem("questionnaireModalOpen", "1");
+      }
       console.log("[QuestionnaireModal] Начало загрузки подписанного документа:", { documentId, fileName: file.name, fileSize: file.size, fileType: file.type });
       
       // Проверяем размер файла (50MB max)
@@ -590,16 +657,19 @@ export default function QuestionnaireModal({
 
       xhr.upload.addEventListener("progress", (e) => {
         if (e.lengthComputable) {
-          const percentComplete = Math.round((e.loaded / e.total) * 100);
+          const rawPercent = (e.loaded / e.total) * 100;
+          const percentComplete = Math.min(95, Math.round(rawPercent));
           console.log(`[QuestionnaireModal] Прогресс загрузки: ${percentComplete}%`);
           setUploadProgress((prev) => ({ ...prev, [documentId]: percentComplete }));
         }
       });
 
       return new Promise<void>((resolve, reject) => {
-        xhr.addEventListener("load", () => {
+        xhr.addEventListener("load", async () => {
           console.log("[QuestionnaireModal] Загрузка завершена, статус:", xhr.status);
           if (xhr.status === 200) {
+            setUploadProgress((prev) => ({ ...prev, [documentId]: 100 }));
+            await new Promise((r) => setTimeout(r, 400));
             setUploadProgress((prev) => {
               const newProgress = { ...prev };
               delete newProgress[documentId];
@@ -619,19 +689,7 @@ export default function QuestionnaireModal({
               : "Документ успешно загружен";
             
             showAlert({ message, type: "success" });
-            loadData();
-            
-            // Обновляем страницу после загрузки документа, чтобы обновить баннер
-            // Используем более короткую задержку и принудительное обновление
-            setTimeout(() => {
-              router.refresh();
-              // Дополнительно обновляем через window.location если router.refresh не сработал
-              setTimeout(() => {
-                if (typeof window !== "undefined") {
-                  window.location.reload();
-                }
-              }, 500);
-            }, 1000);
+            await loadData();
             resolve();
           } else {
             // Пытаемся получить сообщение об ошибке из ответа
@@ -803,10 +861,8 @@ export default function QuestionnaireModal({
                   <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Место работы <span className="text-red-500">*</span>
                   </label>
-                  <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-                    Поиск по названию или укажите ИНН организации
-                  </p>
                   <WorkplaceSearch
+                    hideLabel
                     value={formData.workplace ? {
                       name: formData.workplace,
                       inn: formData.workplaceInn,
@@ -836,6 +892,9 @@ export default function QuestionnaireModal({
                     }}
                     required
                   />
+                  <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    Поиск по названию или укажите ИНН организации
+                  </p>
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -852,21 +911,21 @@ export default function QuestionnaireModal({
                 </div>
               </div>
 
-              {/* Организация профсоюза (ППО) — активна только после выбора места работы */}
+              {/* Организация профсоюза (ППО) — по справочнику: автоподстановка или выбор из ППО, привязанных к месту работы */}
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Организация профсоюза (ППО) <span className="text-red-500">*</span>
                 </label>
                 <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-                  Членом можно быть только первичной организации (ППО). После выбора места работы ППО может подставиться автоматически.
+                  Членом можно быть только первичной организации (ППО). После выбора места работы ППО подставится по справочнику или можно выбрать из привязанных к вашему месту работы.
                 </p>
                 {!formData.workplace?.trim() || !formData.workplaceInn?.trim() ? (
                   <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-                    Сначала укажите место работы (с ИНН) — тогда станет доступен выбор ППО
+                    Сначала укажите место работы (с ИНН) — тогда подставится ППО по справочнику или откроется выбор
                   </div>
-                ) : ppoAutoFilled && formData.organizationId ? (
+                ) : ppoAutoFilled && formData.organizationId && ppoOptionsForWorkplace.length === 1 ? (
                   <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-200">
-                    {selectedOrganization?.name || "ППО подставлено по месту работы"}
+                    {ppoOptionsForWorkplace[0]?.name || selectedOrganization?.name || "ППО подставлено по месту работы"}
                   </div>
                 ) : (
                   <>
@@ -876,8 +935,16 @@ export default function QuestionnaireModal({
                         setFormData({ ...formData, organizationId });
                         handleFieldBlur("organizationId", organizationId || null);
                       }}
-                      options={organizations}
-                      placeholder="Выберите ППО из списка или начните вводить название..."
+                      options={
+                        ppoOptionsForWorkplace.length > 0
+                          ? ppoOptionsForWorkplace.map((p) => ({ id: p.id, name: p.name, fullPath: p.name, indentedName: p.name }))
+                          : organizations
+                      }
+                      placeholder={
+                        ppoOptionsForWorkplace.length > 1
+                          ? "Выберите ваше ППО из привязанных к месту работы..."
+                          : "Выберите ППО из списка или начните вводить название..."
+                      }
                     />
                     <p className="mt-2">
                       <button
@@ -1027,69 +1094,76 @@ export default function QuestionnaireModal({
             </div>
           )}
 
-          {/* Шаг 2: Сверка информации */}
+          {/* Шаг 2: Сверка информации (адаптивно под мобилку) */}
           {currentStep === 2 && (
-            <div className="space-y-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            <div className="space-y-4 sm:space-y-6 min-w-0">
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white sm:text-lg">
                 Проверьте введенные данные
               </h3>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800/50">
-                <div className="space-y-4">
-                  {/* Организация профсоюза - ПЕРВОЕ ПОЛЕ */}
-                  <div className="md:col-span-2">
-                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50 sm:p-6 min-w-0 overflow-hidden">
+                <div className="space-y-4 min-w-0">
+                  <div className="min-w-0">
+                    <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
                       Организация профсоюза:
                     </span>
-                    <p className="mt-1 text-gray-900 dark:text-white">
+                    <p className="mt-1 break-words text-sm text-gray-900 dark:text-white sm:text-base">
                       {selectedOrganization?.name || ""}
                     </p>
                   </div>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div>
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 min-w-0">
+                    <div className="min-w-0">
+                      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
                         ФИО:
                       </span>
-                      <p className="mt-1 text-gray-900 dark:text-white">
+                      <p className="mt-1 break-words text-sm text-gray-900 dark:text-white sm:text-base">
                         {[formData.lastName, formData.firstName, formData.middleName]
                           .filter(Boolean)
                           .join(" ")}
                       </p>
                     </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <div className="min-w-0">
+                      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
                         Дата рождения:
                       </span>
-                      <p className="mt-1 text-gray-900 dark:text-white">
+                      <p className="mt-1 text-sm text-gray-900 dark:text-white sm:text-base">
                         {formData.dateOfBirth
                           ? new Date(formData.dateOfBirth).toLocaleDateString("ru-RU")
                           : ""}
                       </p>
                     </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <div className="min-w-0">
+                      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
                         Телефон:
                       </span>
-                      <p className="mt-1 text-gray-900 dark:text-white">{formData.phone}</p>
+                      <p className="mt-1 break-words text-sm text-gray-900 dark:text-white sm:text-base">
+                        {formData.phone}
+                      </p>
                     </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <div className="min-w-0">
+                      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
                         Email:
                       </span>
-                      <p className="mt-1 text-gray-900 dark:text-white">{formData.email}</p>
+                      <p className="mt-1 break-words text-sm text-gray-900 dark:text-white sm:text-base">
+                        {formData.email}
+                      </p>
                     </div>
-                    <div className="md:col-span-2">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <div className="min-w-0 sm:col-span-2">
+                      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
                         Адрес:
                       </span>
-                      <p className="mt-1 text-gray-900 dark:text-white">{formData.address}</p>
+                      <p className="mt-1 break-words text-sm text-gray-900 dark:text-white sm:text-base">
+                        {formData.address}
+                      </p>
                     </div>
-                    <div className="md:col-span-2">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <div className="min-w-0 sm:col-span-2">
+                      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
                         Место работы:
                       </span>
-                      <p className="mt-1 text-gray-900 dark:text-white">{formData.workplace || "Не указано"}</p>
+                      <p className="mt-1 break-words text-sm text-gray-900 dark:text-white sm:text-base">
+                        {formData.workplace || "Не указано"}
+                      </p>
                       {formData.directorName && (
-                        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        <p className="mt-1 break-words text-xs text-gray-600 dark:text-gray-400 sm:text-sm">
                           {formData.directorPosition}: {formData.directorName}
                         </p>
                       )}
@@ -1099,11 +1173,13 @@ export default function QuestionnaireModal({
                         </p>
                       )}
                     </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <div className="min-w-0">
+                      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
                         Должность:
                       </span>
-                      <p className="mt-1 text-gray-900 dark:text-white">{formData.jobTitle}</p>
+                      <p className="mt-1 break-words text-sm text-gray-900 dark:text-white sm:text-base">
+                        {formData.jobTitle}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1177,6 +1253,26 @@ export default function QuestionnaireModal({
                 </div>
               )}
 
+              {/* Баннер успешной генерации */}
+              {justGeneratedDocuments && (
+                <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-green-300 bg-green-50 p-4 dark:border-green-700 dark:bg-green-900/20">
+                  <div>
+                    <p className="font-medium text-green-800 dark:text-green-200">Документы сформированы</p>
+                    <p className="mt-1 text-sm text-green-700 dark:text-green-300">
+                      Откройте документ для печати (в новой вкладке), распечатайте, подпишите и загрузите подписанный вариант ниже. На вашу почту отправлено письмо с инструкцией.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setJustGeneratedDocuments(false)}
+                    className="shrink-0 rounded p-1 text-green-600 hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-800/50"
+                    aria-label="Закрыть"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              )}
+
               {/* Показываем устав (системный документ) - всегда видно */}
               {!isExistingMember && documents
                 .filter(
@@ -1191,7 +1287,7 @@ export default function QuestionnaireModal({
                     key={doc.id}
                     className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 sm:p-4"
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-col sm:items-start sm:justify-between">
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-medium text-gray-900 dark:text-white sm:text-base break-words">
                           {doc.title}
@@ -1200,7 +1296,17 @@ export default function QuestionnaireModal({
                           {doc.description || doc.fileName}
                         </p>
                       </div>
-                      <div className="flex-shrink-0 sm:ml-4">
+                      <div className="flex flex-wrap gap-2 flex-shrink-0 sm:ml-4">
+                        {(doc.mimeType === "application/pdf" || (doc.fileName && doc.fileName.toLowerCase().endsWith(".pdf"))) && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenForPrint(doc.id)}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:w-auto sm:px-4"
+                          >
+                            <Printer className="h-4 w-4 flex-shrink-0" />
+                            <span className="whitespace-nowrap">Открыть для печати</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDownloadDocument(doc.id, doc.fileName)}
                           className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:px-4"
@@ -1269,16 +1375,54 @@ export default function QuestionnaireModal({
                         key={doc.id}
                         className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 sm:p-4"
                       >
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-col sm:items-start sm:justify-between">
                           <div className="flex-1 min-w-0">
                             <h4 className="text-sm font-medium text-gray-900 dark:text-white sm:text-base break-words">
                               {doc.title}
                             </h4>
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 sm:text-sm break-words">
-                              {doc.fileName}
-                            </p>
+                            {uploadProgress[doc.id] !== undefined ? (
+                              <div className="mt-2">
+                                <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                                  <div
+                                    className="h-full rounded-full bg-purple-600 transition-all duration-300"
+                                    style={{ width: `${uploadProgress[doc.id]}%` }}
+                                  />
+                                </div>
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                  Загрузка… {uploadProgress[doc.id]}%
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="mt-1 min-w-0">
+                                {doc.signedFilePath ? (
+                                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                                    <span className="inline-flex shrink-0 items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                                      <Check className="h-3.5 w-3.5 shrink-0" />
+                                      Загружено:
+                                    </span>
+                                    <span className="break-all text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
+                                      {/^(membership_application_|dues_application_).*\.pdf$/i.test(doc.fileName || "")
+                                        ? "Подписанный файл загружен"
+                                        : doc.fileName}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <p className="break-all text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
+                                    {doc.fileName}
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          <div className="flex flex-col gap-2 sm:ml-4 sm:flex-row sm:flex-shrink-0">
+                          <div className="flex flex-col gap-2 sm:ml-4 sm:flex-row sm:flex-shrink-0 sm:flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenForPrint(doc.id)}
+                              className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:px-4"
+                            >
+                              <Printer className="h-4 w-4 flex-shrink-0" />
+                              <span className="whitespace-nowrap">Открыть для печати</span>
+                            </button>
                             <button
                               onClick={() => handleDownloadDocument(doc.id, doc.fileName)}
                               disabled={downloadingDocIds.has(doc.id)}
@@ -1365,19 +1509,6 @@ export default function QuestionnaireModal({
                             )}
                           </div>
                         </div>
-                        {uploadProgress[doc.id] !== undefined && (
-                          <div className="mt-3">
-                            <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                              <div
-                                className="h-full rounded-full bg-purple-600 transition-all"
-                                style={{ width: `${uploadProgress[doc.id]}%` }}
-                              />
-                            </div>
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                              {uploadProgress[doc.id]}%
-                            </p>
-                          </div>
-                        )}
                       </div>
                     ))}
                   {/* Если нет заявлений, показываем сообщение */}

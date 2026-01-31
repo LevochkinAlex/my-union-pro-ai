@@ -11,6 +11,7 @@ import PostsListClient from "@/components/posts/PostsListClient";
 import PPOHeadDashboard from "@/components/dashboard/PPOHeadDashboard";
 import OrgHeadDashboard from "@/components/dashboard/OrgHeadDashboard";
 import { calculateProfileProgress } from "@/lib/profile-progress";
+import { hasBothApplicationsSubmitted } from "@/lib/documents-status";
 import MembershipProtectedSection from "@/components/dashboard/MembershipProtectedSection";
 import { DEMO_USER_ID, DEMO_MEMBER_USER_ID, DEMO_NEWS_ORG_NAME } from "@/lib/demo-constants";
 import {
@@ -692,22 +693,7 @@ export default async function DashboardPage() {
     membershipStatus = currentUser.membershipStatus;
     const progressResult = calculateProfileProgress(currentUser);
     profileProgress = progressResult.total;
-    // Проверяем, что есть подписанные документы (отправленные на проверку)
-    hasDocuments = currentUser.documents.some(
-      (doc) => {
-        // Если статус ожидания или завершён - документ точно отправлен
-        if (doc.status === "PENDING_REVIEW" || doc.status === "PENDING_APPROVAL" || doc.status === "PENDING_SIGNATURE" || doc.status === "COMPLETED") {
-          return true;
-        }
-        
-        // Если статус SIGNED и есть signedFilePath - документ подписан и загружен
-        if (doc.status === "SIGNED" && doc.signedFilePath) {
-          return true;
-        }
-        
-        return false;
-      }
-    );
+    hasDocuments = hasBothApplicationsSubmitted(currentUser.documents);
     
     // Проверяем заполнение дополнительной информации
     hasAdditionalInfo = !!(

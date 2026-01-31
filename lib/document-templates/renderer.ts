@@ -57,6 +57,43 @@ export interface TemplateVariables {
   [key: string]: string | undefined;
 }
 
+/** Список переменных для конструктора документов (админка) — единый источник правды с extractUserVariables */
+export const TEMPLATE_VARIABLES_FOR_EDITOR: { key: keyof TemplateVariables | string; label: string }[] = [
+  { key: "firstName", label: "Имя" },
+  { key: "lastName", label: "Фамилия" },
+  { key: "middleName", label: "Отчество" },
+  { key: "fullName", label: "Полное ФИО" },
+  { key: "fullNameGenitive", label: "ФИО в родительном падеже" },
+  { key: "phone", label: "Телефон" },
+  { key: "email", label: "Email" },
+  { key: "address", label: "Адрес" },
+  { key: "jobTitle", label: "Должность" },
+  { key: "profession", label: "Профессия" },
+  { key: "education", label: "Образование" },
+  { key: "organizationName", label: "Название организации" },
+  { key: "organizationInn", label: "ИНН организации" },
+  { key: "organizationChairmanName", label: "ФИО председателя организации" },
+  { key: "organizationChairmanJobTitle", label: "Должность председателя организации" },
+  { key: "organizationChairmanFullName", label: "Полное ФИО председателя с должностью (для шапки «Кому»)" },
+  { key: "workplace", label: "Место работы (компания)" },
+  { key: "workplaceInn", label: "ИНН места работы" },
+  { key: "directorName", label: "ФИО руководителя с места работы" },
+  { key: "directorPosition", label: "Должность руководителя с места работы" },
+  { key: "dateOfBirth", label: "Дата рождения (ДД.ММ.ГГГГ)" },
+  { key: "currentDate", label: "Текущая дата (ДД.ММ.ГГГГ)" },
+  { key: "meetingDate", label: "Дата заседания (ДД.ММ.ГГГГ)" },
+  { key: "meetingTime", label: "Время заседания (ЧЧ:ММ)" },
+  { key: "meetingPlace", label: "Место проведения заседания" },
+  { key: "agendaItems", label: "Пункты повестки дня (список)" },
+  { key: "votingParticipants", label: "Участники голосования (список ФИО и должностей)" },
+  { key: "presentMembers", label: "Присутствующие члены профкома (список)" },
+  { key: "absentMembers", label: "Отсутствующие члены профкома (список)" },
+  { key: "secretaryName", label: "ФИО секретаря" },
+  { key: "secretaryJobTitle", label: "Должность секретаря" },
+  { key: "resolutionNumber", label: "Номер постановления" },
+  { key: "protocolNumber", label: "Номер протокола" },
+];
+
 /**
  * Извлекает переменные из пользователя для подстановки в шаблон
  */
@@ -136,40 +173,60 @@ export function renderTemplate(htmlTemplate: string, variables: TemplateVariable
   return rendered;
 }
 
+/** Пути к Chrome на macOS для fallback, если бандл Puppeteer не скачан */
+const MACOS_CHROME_PATHS = [
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+  "/Applications/Chromium.app/Contents/MacOS/Chromium",
+];
+
+async function resolveChromeExecutablePath(): Promise<string | undefined> {
+  const fs = await import("fs/promises");
+  let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+
+  const pathExists = async (p: string): Promise<boolean> => {
+    try {
+      await fs.access(p);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  if (executablePath && (await pathExists(executablePath))) {
+    return executablePath;
+  }
+
+  try {
+    executablePath = puppeteer.executablePath();
+    if (executablePath && (await pathExists(executablePath))) {
+      return executablePath;
+    }
+  } catch {
+    // игнорируем
+  }
+
+  if (process.platform === "darwin") {
+    for (const p of MACOS_CHROME_PATHS) {
+      if (await pathExists(p)) {
+        console.log(`[document-templates] Using system Chrome: ${p}`);
+        return p;
+      }
+    }
+  }
+
+  return undefined;
+}
+
 /**
  * Генерирует PDF из HTML используя Puppeteer
  */
 export async function generatePDFFromHTML(html: string): Promise<Buffer> {
-  // Используем системный Chromium, если доступен и указан в переменной окружения
-  // Иначе Puppeteer использует встроенный браузер
-  let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-  
-  // Если не указан явно, используем встроенный браузер Puppeteer
-  if (!executablePath) {
-    try {
-      // Получаем путь к встроенному браузеру Puppeteer
-      executablePath = puppeteer.executablePath();
-      console.log(`[document-templates] Using Puppeteer's bundled browser: ${executablePath}`);
-    } catch (error) {
-      console.warn(`[document-templates] Could not get Puppeteer executable path, will try to launch without it:`, error);
-      executablePath = undefined;
-    }
+  const executablePath = await resolveChromeExecutablePath();
+  if (executablePath) {
+    console.log(`[document-templates] Using Chrome: ${executablePath}`);
   } else {
-    // Проверяем, что файл действительно существует
-    const fs = await import("fs/promises");
-    try {
-      await fs.access(executablePath);
-      console.log(`[document-templates] Using custom Puppeteer executable: ${executablePath}`);
-    } catch (error) {
-      console.warn(`[document-templates] Custom executablePath ${executablePath} not found, falling back to bundled browser`);
-      try {
-        executablePath = puppeteer.executablePath();
-        console.log(`[document-templates] Using Puppeteer's bundled browser: ${executablePath}`);
-      } catch (fallbackError) {
-        console.error(`[document-templates] Could not get Puppeteer executable path:`, fallbackError);
-        executablePath = undefined;
-      }
-    }
+    console.warn(`[document-templates] No Chrome executable found. Set PUPPETEER_EXECUTABLE_PATH or install: npx puppeteer browsers install chrome`);
   }
   
   const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
@@ -192,7 +249,19 @@ export async function generatePDFFromHTML(html: string): Promise<Buffer> {
     launchOptions.executablePath = executablePath;
   }
   
-  const browser = await puppeteer.launch(launchOptions);
+  let browser;
+  try {
+    browser = await puppeteer.launch(launchOptions);
+  } catch (launchError) {
+    const msg = launchError instanceof Error ? launchError.message : String(launchError);
+    if (msg.includes("executablePath") || msg.includes("Browser was not found")) {
+      throw new Error(
+        "Chrome не найден. Установите Google Chrome или выполните: npx puppeteer browsers install chrome. " +
+        "Либо задайте PUPPETEER_EXECUTABLE_PATH в .env (путь к Chrome)."
+      );
+    }
+    throw launchError;
+  }
   
   try {
     const page = await browser.newPage();

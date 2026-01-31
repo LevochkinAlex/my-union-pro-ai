@@ -90,6 +90,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       tree,
       flatList,
+      organizations: flatList, // для совместимости с клиентами, ожидающими data.organizations
     });
   } catch (error) {
     console.error("[organizations] GET error:", error);

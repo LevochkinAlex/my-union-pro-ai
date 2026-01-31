@@ -37,12 +37,12 @@ export default function OrganizationAutocomplete({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Находим отображаемое значение для выбранной организации
-  // Важно: сохраняем предыдущее значение, если организация не найдена в options (например, при загрузке)
+  // В анкете и профиле показываем только название ППО (name), без полного пути
   useEffect(() => {
     if (value) {
       const selectedOrg = options.find((org) => org.id === value);
       if (selectedOrg) {
-        const newDisplayValue = selectedOrg.fullPath || selectedOrg.indentedName || selectedOrg.name;
+        const newDisplayValue = selectedOrg.name;
         setDisplayValue(newDisplayValue);
         setSavedDisplayValue(newDisplayValue); // Сохраняем значение
       } else if (options.length === 0) {
@@ -85,7 +85,7 @@ export default function OrganizationAutocomplete({
       const queryWords = query.split(/\s+/).filter(w => w.length > 1); // Уменьшили минимальную длину слова до 1
 
       options.forEach((org) => {
-        const displayName = (org.fullPath || org.indentedName || org.name).toLowerCase();
+        const displayName = org.name.toLowerCase();
         const nameWords = displayName.split(/\s+/);
 
         if (displayName === query) {
@@ -157,7 +157,7 @@ export default function OrganizationAutocomplete({
 
   const handleOptionClick = (org: Organization) => {
     onChange(org.id);
-    setDisplayValue(org.fullPath || org.indentedName || org.name);
+    setDisplayValue(org.name);
     setJustSelected(true);
     setUserTyping(false);
     setIsOpen(false);
@@ -219,7 +219,7 @@ export default function OrganizationAutocomplete({
           className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-gray-300 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800"
         >
           {filteredOptions.map((org, index) => {
-            const displayName = org.fullPath || org.indentedName || org.name;
+            const displayName = org.name;
             return (
               <button
                 key={org.id}

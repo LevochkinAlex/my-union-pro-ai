@@ -10,7 +10,7 @@
     "start": "dotenv -e .env.local -- next start -p 3004",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "test": "node --import tsx --test __tests__/chat-flows.test.ts",
+    "test": "node --import tsx --test __tests__/documents-helpers.test.ts __tests__/chat-flows.test.ts",
     "test:chat": "node --import tsx --test __tests__/chat-flows.test.ts",
     "test:api": "dotenv -e .env.local -- node scripts/test-tickets-api.mjs",
     "test:ticket-flow": "dotenv -e .env.local -- node scripts/test-ticket-creation-flow.mjs",

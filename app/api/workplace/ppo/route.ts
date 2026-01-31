@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { findPPOByWorkplace } from "@/lib/workplace-ppo-mapping";
-import { prisma } from "@/lib/prisma";
+import { findPPOsByWorkplace } from "@/lib/workplace-ppo-mapping";
 
 /**
  * GET /api/workplace/ppo?workplaceName=...&workplaceInn=...
- * Найти ППО по месту работы
+ * Найти все ППО, привязанные к месту работы (по справочнику). Один ИНН может иметь несколько ППО — пользователь выбирает из списка.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -27,35 +26,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Ищем ППО по месту работы
-    const ppoMapping = await findPPOByWorkplace(workplaceName, workplaceInn);
-
-    if (!ppoMapping) {
-      return NextResponse.json({
-        success: true,
-        found: false,
-        message: "ППО для данного места работы не найдено в справочнике",
-      });
-    }
-
-    // Проверяем, что найденная организация действительно является ППО
-    if (ppoMapping.ppoOrganization.type !== "PRIMARY") {
-      return NextResponse.json({
-        success: true,
-        found: false,
-        message: "Найденная организация не является ППО",
-      });
-    }
+    const ppoOptions = await findPPOsByWorkplace(workplaceName, workplaceInn);
 
     return NextResponse.json({
       success: true,
-      found: true,
-      ppoOrganization: {
-        id: ppoMapping.ppoOrganization.id,
-        name: ppoMapping.ppoOrganization.name,
-        chairmanName: ppoMapping.ppoOrganization.chairmanName,
-        chairmanJobTitle: ppoMapping.ppoOrganization.chairmanJobTitle,
-      },
+      found: ppoOptions.length > 0,
+      ppoOrganizations: ppoOptions,
+      // Один результат — для обратной совместиости
+      ppoOrganization: ppoOptions[0] ?? null,
     });
   } catch (error: any) {
     console.error("[workplace/ppo] GET error:", error);

@@ -4,7 +4,12 @@ import type { Session } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Logger } from "@/lib/logger";
-import { generateMembershipApplication, generateContributionsApplication } from "@/lib/documents";
+import {
+  validateUserForMembershipDocuments,
+  getDefaultMembershipTemplates,
+  generateMembershipAndContributionPDFs,
+  saveGeneratedMembershipDocumentsToDb,
+} from "@/lib/document-generation";
 
 /**
  * Force generate documents for a specific user
@@ -52,19 +57,9 @@ export async function POST(request: NextRequest) {
 
     console.log(`[generate-documents] Found user: ${user.firstName} ${user.lastName}`);
 
-    // Check if profile is complete
-    const isProfileComplete =
-      user.firstName &&
-      user.lastName &&
-      user.dateOfBirth &&
-      user.phone &&
-      user.address &&
-      user.jobTitle &&
-      user.profession &&
-      user.education;
-
+    const validation = validateUserForMembershipDocuments(user);
     const profileStatus = {
-      complete: isProfileComplete,
+      complete: validation.ok,
       fields: {
         firstName: !!user.firstName,
         lastName: !!user.lastName,
@@ -77,7 +72,7 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    if (!isProfileComplete) {
+    if (!validation.ok) {
       console.warn(`[generate-documents] Profile incomplete for user ${userId}`, profileStatus);
       return NextResponse.json({
         success: false,
@@ -91,80 +86,29 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    console.log(`[generate-documents] Profile is complete for user ${userId}`);
+    const templates = await getDefaultMembershipTemplates(prisma);
+    if (!templates) {
+      return NextResponse.json(
+        { success: false, error: "Шаблоны заявлений не настроены. Настройте в Конструкторе документов." },
+        { status: 500 }
+      );
+    }
 
-    // Generate documents
     try {
-      const ppoChairman = user.organization?.chairmanName || "Председатель ПОО";
-
       console.log(`[generate-documents] Generating documents for ${user.firstName} ${user.lastName}...`);
-
-      let membershipPath: string;
-      let contributionsPath: string;
-      
-      try {
-        console.log("[generate-documents] Generating membership application...");
-        membershipPath = await generateMembershipApplication(user, ppoChairman);
-        console.log(`[generate-documents] Membership generated: ${membershipPath}`);
-      } catch (membershipError) {
-        console.error("[generate-documents] Error generating membership:", membershipError);
-        throw new Error(`Ошибка при генерации заявления о вступлении: ${membershipError instanceof Error ? membershipError.message : String(membershipError)}`);
-      }
-
-      try {
-        console.log("[generate-documents] Generating contributions application...");
-        contributionsPath = await generateContributionsApplication(user, user.organization?.name, undefined);
-        console.log(`[generate-documents] Contributions generated: ${contributionsPath}`);
-      } catch (contribError) {
-        console.error("[generate-documents] Error generating contributions:", contribError);
-        throw new Error(`Ошибка при генерации заявления о взносах: ${contribError instanceof Error ? contribError.message : String(contribError)}`);
-      }
-
-      console.log(`[generate-documents] Documents generated: ${membershipPath}, ${contributionsPath}`);
-
-      // Check for existing documents
-      const existingDocs = await prisma.document.findMany({
-        where: {
-          userId: userId,
-          type: { in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"] },
-        },
-      });
-
-      if (existingDocs.length > 0) {
-        console.log(`[generate-documents] Removing ${existingDocs.length} existing documents`);
-        await prisma.document.deleteMany({
-          where: {
-            id: { in: existingDocs.map(doc => doc.id) },
-          },
-        });
-      }
-
-      // Save new documents to database
-      const [membershipDoc, contributionDoc] = await Promise.all([
-        prisma.document.create({
-          data: {
-            type: "MEMBERSHIP_APPLICATION",
-            status: "DRAFT",
-            title: "Заявление о вступлении в профсоюз",
-            filePath: membershipPath,
-            fileName: `membership_${userId}.pdf`,
-            userId: userId,
-            organizationId: user.organizationId || null,
-          },
-        }),
-        prisma.document.create({
-          data: {
-            type: "CONTRIBUTION_APPLICATION",
-            status: "DRAFT",
-            title: "Заявление о взносах",
-            filePath: contributionsPath,
-            fileName: `contributions_${userId}.pdf`,
-            userId: userId,
-            organizationId: user.organizationId || null,
-          },
-        }),
-      ]);
-
+      const { membershipPdf, duesPdf } = await generateMembershipAndContributionPDFs(
+        user,
+        templates.membershipTemplate,
+        templates.duesTemplate
+      );
+      const { membershipDoc, duesDoc: contributionDoc } = await saveGeneratedMembershipDocumentsToDb(
+        prisma,
+        user,
+        membershipPdf,
+        duesPdf,
+        templates.membershipTemplate,
+        templates.duesTemplate
+      );
       console.log(`[generate-documents] ✅ Documents saved to DB for user ${userId}`);
 
       return NextResponse.json({
@@ -277,10 +221,16 @@ export async function PUT(request: NextRequest) {
       details: [] as any[],
     };
 
-    // Generate documents for each user
+    const templates = await getDefaultMembershipTemplates(prisma);
+    if (!templates) {
+      return NextResponse.json(
+        { error: "Шаблоны заявлений не настроены. Настройте в Конструкторе документов." },
+        { status: 500 }
+      );
+    }
+
     for (const user of users) {
       try {
-        // Skip if user already has documents
         if (user.documents && user.documents.length >= 2) {
           console.log(`[generate-documents-all] Skipping ${user.email} - already has documents`);
           results.skipped++;
@@ -292,47 +242,32 @@ export async function PUT(request: NextRequest) {
           continue;
         }
 
-        const ppoChairman = user.organization?.chairmanName || "Председатель ППО";
-
-        console.log(`[generate-documents-all] Generating for ${user.email}...`);
-
-        const [membershipPath, contributionsPath] = await Promise.all([
-          generateMembershipApplication(user, ppoChairman),
-          generateContributionsApplication(user, user.organization?.name, undefined),
-        ]);
-
-        // Delete old documents if any
-        if (user.documents && user.documents.length > 0) {
-          await prisma.document.deleteMany({
-            where: { id: { in: user.documents.map(d => d.id) } },
+        const validation = validateUserForMembershipDocuments(user);
+        if (!validation.ok) {
+          results.skipped++;
+          results.details.push({
+            email: user.email,
+            status: "skipped",
+            reason: "profile incomplete",
+            missingFields: validation.missingFields,
           });
+          continue;
         }
 
-        // Create new documents
-        await Promise.all([
-          prisma.document.create({
-            data: {
-              type: "MEMBERSHIP_APPLICATION",
-              status: "DRAFT",
-              title: "Заявление о вступлении в профсоюз",
-              filePath: membershipPath,
-              fileName: `membership_${user.id}.pdf`,
-              userId: user.id,
-              organizationId: user.organizationId || null,
-            },
-          }),
-          prisma.document.create({
-            data: {
-              type: "CONTRIBUTION_APPLICATION",
-              status: "DRAFT",
-              title: "Заявление о взносах",
-              filePath: contributionsPath,
-              fileName: `contributions_${user.id}.pdf`,
-              userId: user.id,
-              organizationId: user.organizationId || null,
-            },
-          }),
-        ]);
+        console.log(`[generate-documents-all] Generating for ${user.email}...`);
+        const { membershipPdf, duesPdf } = await generateMembershipAndContributionPDFs(
+          user,
+          templates.membershipTemplate,
+          templates.duesTemplate
+        );
+        await saveGeneratedMembershipDocumentsToDb(
+          prisma,
+          user,
+          membershipPdf,
+          duesPdf,
+          templates.membershipTemplate,
+          templates.duesTemplate
+        );
 
         console.log(`[generate-documents-all] ✅ Generated for ${user.email}`);
         results.generated++;

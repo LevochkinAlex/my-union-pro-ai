@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
       orderBy: {
         createdAt: "desc",
       },
-      take: 100,
+      take: 500,
     });
 
     return NextResponse.json({
@@ -115,15 +115,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Проверяем, что организация является ППО
+    // Разрешаем привязку для ППО, региональных и местных организаций (у региональных/местных место работы — обычно сама организация/аппарат)
     const organization = await prisma.organization.findUnique({
       where: { id: ppoOrganizationId },
       select: { type: true },
     });
 
-    if (!organization || organization.type !== "PRIMARY") {
+    if (!organization || !["PRIMARY", "REGIONAL", "LOCAL"].includes(organization.type)) {
       return NextResponse.json(
-        { error: "Указанная организация не является ППО" },
+        { error: "Привязка места работы возможна только для ППО, региональной или местной организации" },
         { status: 400 }
       );
     }

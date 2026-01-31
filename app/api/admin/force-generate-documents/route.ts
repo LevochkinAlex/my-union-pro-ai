@@ -70,48 +70,50 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Импортируем функции генерации
-        const { generateMembershipApplication, generateContributionsApplication } = await import(
-          "@/lib/documents"
-        );
+        const {
+          validateUserForMembershipDocuments,
+          getDefaultMembershipTemplates,
+          generateMembershipAndContributionPDFs,
+          saveGeneratedMembershipDocumentsToDb,
+        } = await import("@/lib/document-generation");
 
-        const ppoChairman = user.organization?.chairmanName || "Председатель ППО";
+        const validation = validateUserForMembershipDocuments(user);
+        if (!validation.ok) {
+          results.push({
+            userId: user.id,
+            email: user.email,
+            status: "skipped",
+            reason: "profile incomplete",
+            missingFields: validation.missingFields,
+          });
+          continue;
+        }
+
+        const templates = await getDefaultMembershipTemplates(prisma);
+        if (!templates) {
+          results.push({
+            userId: user.id,
+            email: user.email,
+            status: "error",
+            reason: "Шаблоны не настроены",
+          });
+          continue;
+        }
 
         console.log(`[force-generate] Генерируем документы для ${user.id}`);
-
-        // Генерируем оба заявления
-        const [membershipPath, contributionsPath] = await Promise.all([
-          generateMembershipApplication(user, ppoChairman),
-          generateContributionsApplication(user, user.organization?.name, undefined),
-        ]);
-
-        // Сохраняем в БД только если их нет
-        if (!user.documents || user.documents.length === 0) {
-          await Promise.all([
-            prisma.document.create({
-              data: {
-                type: "MEMBERSHIP_APPLICATION",
-                status: "DRAFT",
-                title: "Заявление о вступлении в профсоюз",
-                filePath: membershipPath,
-                fileName: `membership_${user.id}.pdf`,
-                userId: user.id,
-                organizationId: user.organizationId,
-              },
-            }),
-            prisma.document.create({
-              data: {
-                type: "CONTRIBUTION_APPLICATION",
-                status: "DRAFT",
-                title: "Заявление о перечислении членских взносов",
-                filePath: contributionsPath,
-                fileName: `contributions_${user.id}.pdf`,
-                userId: user.id,
-                organizationId: user.organizationId,
-              },
-            }),
-          ]);
-        }
+        const { membershipPdf, duesPdf } = await generateMembershipAndContributionPDFs(
+          user,
+          templates.membershipTemplate,
+          templates.duesTemplate
+        );
+        await saveGeneratedMembershipDocumentsToDb(
+          prisma,
+          user,
+          membershipPdf,
+          duesPdf,
+          templates.membershipTemplate,
+          templates.duesTemplate
+        );
 
         results.push({
           userId: user.id,

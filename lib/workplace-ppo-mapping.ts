@@ -104,6 +104,88 @@ export async function findPPOByWorkplace(
   return null;
 }
 
+/** Элемент списка ППО по месту работы */
+export interface PPOOption {
+  id: string;
+  name: string;
+  chairmanName: string | null;
+  chairmanJobTitle: string | null;
+}
+
+/**
+ * Найти все ППО, привязанные к месту работы (по ИНН).
+ * У одной организации (ИНН) может быть несколько записей в справочнике → несколько ППО на выбор.
+ */
+export async function findPPOsByWorkplace(
+  workplaceName: string,
+  workplaceInn: string
+): Promise<PPOOption[]> {
+  if (!workplaceName?.trim() || !workplaceInn?.trim()) {
+    return [];
+  }
+
+  const inn = workplaceInn.trim();
+
+  const mappings = await prisma.workplacePPOMapping.findMany({
+    where: {
+      workplaceInn: inn,
+    },
+    include: {
+      ppoOrganization: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          chairmanName: true,
+          chairmanJobTitle: true,
+        },
+      },
+    },
+    orderBy: [{ verified: "desc" }, { workplaceName: "asc" }],
+  });
+
+  const seen = new Set<string>();
+  const result: PPOOption[] = [];
+
+  for (const m of mappings) {
+    const org = m.ppoOrganization;
+    if (org.type === "PRIMARY") {
+      if (seen.has(org.id)) continue;
+      seen.add(org.id);
+      result.push({
+        id: org.id,
+        name: org.name,
+        chairmanName: org.chairmanName,
+        chairmanJobTitle: org.chairmanJobTitle,
+      });
+      continue;
+    }
+    // Региональная или местная организация: подставляем её первички (ППО), например «ППО аппарата МООП РЗ»
+    if (org.type === "REGIONAL" || org.type === "LOCAL") {
+      const primaryChildren = await prisma.organization.findMany({
+        where: { parentId: org.id, type: "PRIMARY" },
+        select: {
+          id: true,
+          name: true,
+          chairmanName: true,
+          chairmanJobTitle: true,
+        },
+      });
+      for (const child of primaryChildren) {
+        if (seen.has(child.id)) continue;
+        seen.add(child.id);
+        result.push({
+          id: child.id,
+          name: child.name,
+          chairmanName: child.chairmanName,
+          chairmanJobTitle: child.chairmanJobTitle,
+        });
+      }
+    }
+  }
+  return result;
+}
+
 /**
  * Создать или обновить связь места работы с ППО
  */

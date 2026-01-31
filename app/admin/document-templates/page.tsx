@@ -14,6 +14,7 @@ const DocumentTemplateEditor = dynamic(
   }
 );
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
+import { TEMPLATE_VARIABLES_FOR_EDITOR } from "@/lib/document-templates/renderer";
 
 // ИСПРАВЛЕНО: Убран импорт типа из @prisma/client, используем строковый литерал
 type DocumentType = 
@@ -41,42 +42,7 @@ interface DocumentTemplate {
   updatedAt: string;
 }
 
-const AVAILABLE_VARIABLES = [
-  { key: "firstName", label: "Имя" },
-  { key: "lastName", label: "Фамилия" },
-  { key: "middleName", label: "Отчество" },
-  { key: "fullName", label: "Полное ФИО" },
-  { key: "fullNameGenitive", label: "ФИО в родительном падеже" },
-  { key: "phone", label: "Телефон" },
-  { key: "email", label: "Email" },
-  { key: "address", label: "Адрес" },
-  { key: "jobTitle", label: "Должность" },
-  { key: "profession", label: "Профессия" },
-  { key: "education", label: "Образование" },
-  { key: "organizationName", label: "Название организации" },
-  { key: "organizationInn", label: "ИНН организации" },
-  { key: "organizationChairmanName", label: "ФИО председателя организации" },
-  { key: "organizationChairmanJobTitle", label: "Должность председателя организации" },
-  { key: "organizationChairmanFullName", label: "Полное ФИО председателя с должностью (для шапки 'Кому')" },
-  { key: "workplace", label: "Место работы (компания)" },
-  { key: "workplaceInn", label: "ИНН места работы" },
-  { key: "directorName", label: "ФИО руководителя с места работы" },
-  { key: "directorPosition", label: "Должность руководителя с места работы" },
-  { key: "dateOfBirth", label: "Дата рождения (ДД.ММ.ГГГГ)" },
-  { key: "currentDate", label: "Текущая дата (ДД.ММ.ГГГГ)" },
-  // Переменные для документов профкома
-  { key: "meetingDate", label: "Дата заседания (ДД.ММ.ГГГГ)" },
-  { key: "meetingTime", label: "Время заседания (ЧЧ:ММ)" },
-  { key: "meetingPlace", label: "Место проведения заседания" },
-  { key: "agendaItems", label: "Пункты повестки дня (список)" },
-  { key: "votingParticipants", label: "Участники голосования (список ФИО и должностей)" },
-  { key: "presentMembers", label: "Присутствующие члены профкома (список)" },
-  { key: "absentMembers", label: "Отсутствующие члены профкома (список)" },
-  { key: "secretaryName", label: "ФИО секретаря" },
-  { key: "secretaryJobTitle", label: "Должность секретаря" },
-  { key: "resolutionNumber", label: "Номер постановления" },
-  { key: "protocolNumber", label: "Номер протокола" },
-];
+const AVAILABLE_VARIABLES = TEMPLATE_VARIABLES_FOR_EDITOR;
 
 export default function DocumentTemplatesPage() {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
