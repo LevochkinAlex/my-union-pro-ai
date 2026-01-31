@@ -51,6 +51,7 @@ interface Document {
   signedFilePath?: string | null;
   verificationStatus?: string | null;
   verificationMessage?: string | null;
+  mimeType?: string;
 }
 
 export default function QuestionnaireModal({

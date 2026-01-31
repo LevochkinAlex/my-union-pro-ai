@@ -355,7 +355,7 @@ export default function OrganizationsPage() {
           setDadataOpen(true);
         } else if (data.suggestions?.length) {
           setDadataSuggestions(
-            data.suggestions.map((s: { data: { inn: string; name: { full?: string; short?: string } } }) => ({
+            data.suggestions.map((s: { data: { inn: string; name: { full?: string; short?: string } }; value?: string }) => ({
               inn: s.data.inn,
               name: s.data.name?.full || s.data.name?.short || s.value || "",
             }))
@@ -1214,7 +1214,7 @@ export default function OrganizationsPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={addWorkplaceMapping}
+                    onClick={() => addWorkplaceMapping()}
                     disabled={addingMapping || !newWorkplaceInn.trim() || !newWorkplaceName.trim()}
                     className="rounded bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
                   >

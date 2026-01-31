@@ -382,7 +382,7 @@ export default function DocumentTemplatesPage() {
                 <DocumentTemplateEditor
                   value={formData.htmlContent}
                   onChange={(html) => setFormData({ ...formData, htmlContent: html })}
-                  availableVariables={AVAILABLE_VARIABLES}
+                  availableVariables={AVAILABLE_VARIABLES.map((v) => ({ key: String(v.key), label: v.label }))}
                   placeholder="Введите содержимое документа..."
                 />
               ) : (
