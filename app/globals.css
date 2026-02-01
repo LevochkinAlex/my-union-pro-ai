@@ -346,7 +346,6 @@ div.relative > select[class*="appearance-none"] {
 /* Chat scroll - prevent bounce on iOS */
 .chat-messages-container {
   overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
 }
 
@@ -413,8 +412,10 @@ button:disabled {
 .landing-animate-in-delay-7 { animation-delay: 0.7s; }
 .landing-animate-in-delay-8 { animation-delay: 0.8s; }
 
-/* Meeting detail: horizontal tabs scroll (thin scrollbar, touch scrolling) */
+/* Meeting detail: horizontal tabs scroll */
 .meeting-tabs-scroll {
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
+  /* scrollbar-width: thin — применяется только в поддерживающих браузерах */
+  @supports (scrollbar-width: thin) {
+    scrollbar-width: thin;
+  }
 }

@@ -131,7 +131,7 @@ export default function MeetingsPage() {
     middleName: string | null;
     jobTitle: string | null;
   }>>([]);
-  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [_loadingMembers, setLoadingMembers] = useState(false);
 
   useEffect(() => {
     loadMeetings();
@@ -142,7 +142,7 @@ export default function MeetingsPage() {
       loadElectedBodyMembers();
       if (members.length === 0) loadMembers();
     }
-  }, [showCreateForm]);
+  }, [showCreateForm, members.length]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -184,7 +184,7 @@ export default function MeetingsPage() {
     }
   };
 
-  const getMemberFullName = (member: any) => {
+  const getMemberFullName = (member: { lastName?: string | null; firstName?: string | null; middleName?: string | null }) => {
     return [member.lastName, member.firstName, member.middleName].filter(Boolean).join(" ");
   };
 
@@ -713,10 +713,12 @@ export default function MeetingsPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="meeting-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Тип заседания
               </label>
               <select
+                id="meeting-type"
+                aria-label="Тип заседания"
                 value={formData.type}
                 onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value }))}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
@@ -728,10 +730,12 @@ export default function MeetingsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="meeting-format" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Формат
               </label>
               <select
+                id="meeting-format"
+                aria-label="Формат заседания"
                 value={formData.format}
                 onChange={(e) => setFormData(prev => ({ ...prev, format: e.target.value }))}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
@@ -756,11 +760,13 @@ export default function MeetingsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="meeting-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Дата заседания *
               </label>
               <input
+                id="meeting-date"
                 type="date"
+                aria-label="Дата заседания"
                 value={formData.scheduledDate}
                 onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
@@ -768,11 +774,13 @@ export default function MeetingsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="meeting-time" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Время начала
               </label>
               <input
+                id="meeting-time"
                 type="time"
+                aria-label="Время начала заседания"
                 value={formData.scheduledTime}
                 onChange={(e) => setFormData(prev => ({ ...prev, scheduledTime: e.target.value }))}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
@@ -950,8 +958,9 @@ export default function MeetingsPage() {
                         type="button"
                         onClick={() => removeExternalParticipant(index)}
                         className="text-red-500 hover:text-red-700 p-2"
+                        aria-label="Удалить внешнего участника"
                       >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
@@ -1003,6 +1012,7 @@ export default function MeetingsPage() {
                         </label>
                         <div className="grid gap-2 sm:grid-cols-2">
                           <select
+                            aria-label={`Докладывает по вопросу ${index + 1}`}
                             value={item.speakerId ? `user:${item.speakerId}` : (() => {
                               const idx = formData.externalParticipants.findIndex(ext => ext.name.trim() === (item.speakerName || "").trim());
                               return idx >= 0 ? `ext:${idx}` : "";
@@ -1052,6 +1062,7 @@ export default function MeetingsPage() {
                         </label>
                         <div className="grid gap-2 sm:grid-cols-2">
                           <select
+                            aria-label={`Со-докладчик по вопросу ${index + 1}`}
                             value={item.coSpeakerId ? `user:${item.coSpeakerId}` : (() => {
                               const idx = formData.externalParticipants.findIndex(ext => ext.name.trim() === (item.coSpeakerName || "").trim());
                               return idx >= 0 ? `ext:${idx}` : "";
@@ -1107,6 +1118,7 @@ export default function MeetingsPage() {
                             type="file"
                             id={`agenda-file-${index}`}
                             className="hidden"
+                            aria-label={`Прикрепить файл к вопросу ${index + 1}`}
                             accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.md,.csv,.ppt,.pptx,.odt,.ods,.odp,.rtf,.jpg,.jpeg,.png,.zip"
                             onChange={async (e) => {
                               const file = e.target.files?.[0];
@@ -1312,7 +1324,7 @@ export default function MeetingsPage() {
                       {STEPS.map((step, i) => {
                         const status = getStepStatus(meeting, step.key);
                         return (
-                          <div key={step.key} className="flex items-center">
+                          <div key={step.key} className="flex items-center" role="listitem">
                             {i > 0 && (
                               <span className={`mx-0.5 h-px w-2 sm:w-4 ${status === "pending" ? "bg-gray-200 dark:bg-gray-600" : "bg-blue-400 dark:bg-blue-500"}`} aria-hidden />
                             )}
