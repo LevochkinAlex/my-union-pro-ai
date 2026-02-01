@@ -412,3 +412,9 @@ button:disabled {
 .landing-animate-in-delay-6 { animation-delay: 0.6s; }
 .landing-animate-in-delay-7 { animation-delay: 0.7s; }
 .landing-animate-in-delay-8 { animation-delay: 0.8s; }
+
+/* Meeting detail: horizontal tabs scroll (thin scrollbar, touch scrolling) */
+.meeting-tabs-scroll {
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}

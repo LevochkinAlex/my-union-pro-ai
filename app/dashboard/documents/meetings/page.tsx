@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 import Link from "next/link";
 import { Modal } from "@/components/ui/modal";
@@ -84,6 +84,10 @@ export default function MeetingsPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [deletingMeetingId, setDeletingMeetingId] = useState<string | null>(null);
+  const [showProtocolFromAgendaModal, setShowProtocolFromAgendaModal] = useState(false);
+  const [createdMeetingId, setCreatedMeetingId] = useState<string | null>(null);
+  const [postCreateStep, setPostCreateStep] = useState<"choose" | "generating" | null>(null);
+  const router = useRouter();
 
   // Синхронизация таба с URL при переходе по пунктам меню
   useEffect(() => {
@@ -280,25 +284,62 @@ export default function MeetingsPage() {
         throw new Error(errorMessage + errorDetails);
       }
 
-      alertSuccess("Документ создан!");
-      setShowCreateForm(false);
-      setFormData({
-        type: "COMMITTEE",
-        format: "OFFLINE",
-        title: "",
-        scheduledDate: "",
-        scheduledTime: "",
-        location: "",
-        onlineLink: "",
-        participantIds: [],
-        externalParticipants: [],
-        agendaItems: [{ title: "", description: "", speakerId: "", speakerName: "", speakerPosition: "", coSpeakerId: "", coSpeakerName: "", attachments: [] }],
-      });
-      loadMeetings();
+      const data = await response.json();
+      const meetingId = data?.meeting?.id;
+      if (meetingId) {
+        setCreatedMeetingId(meetingId);
+        setPostCreateStep("choose");
+      } else {
+        alertSuccess("Документ создан!");
+        setShowCreateForm(false);
+        resetFormAndClose();
+        loadMeetings();
+      }
     } catch (error) {
       alertError(error instanceof Error ? error.message : "Не удалось создать заседание");
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const resetFormAndClose = () => {
+    setShowCreateForm(false);
+    setCreatedMeetingId(null);
+    setPostCreateStep(null);
+    setFormData({
+      type: "COMMITTEE",
+      format: "OFFLINE",
+      title: "",
+      scheduledDate: "",
+      scheduledTime: "",
+      location: "",
+      onlineLink: "",
+      participantIds: [],
+      externalParticipants: [],
+      agendaItems: [{ title: "", description: "", speakerId: "", speakerName: "", speakerPosition: "", coSpeakerId: "", coSpeakerName: "", attachments: [] }],
+    });
+  };
+
+  const handleGenerateAgenda = async () => {
+    if (!createdMeetingId) return;
+    setPostCreateStep("generating");
+    try {
+      const res = await fetch(`/api/ppo-head/meetings/${createdMeetingId}/generate-document`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentType: "AGENDA" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message = (data && typeof data.error === "string" ? data.error : null) || (data?.details ? `${data.error || "Ошибка"}: ${data.details}` : null) || "Ошибка генерации документа";
+        throw new Error(message);
+      }
+      alertSuccess("Повестка дня сформирована");
+      loadMeetings();
+      resetFormAndClose();
+    } catch (e) {
+      alertError(e instanceof Error ? e.message : "Не удалось сформировать повестку");
+      setPostCreateStep("choose");
     }
   };
 
@@ -445,15 +486,27 @@ export default function MeetingsPage() {
             Управление заседаниями, повестками и протоколами
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateForm(true)}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-        >
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Новый документ
-        </button>
+        {activeTab === "protocol" ? (
+          <button
+            onClick={() => setShowProtocolFromAgendaModal(true)}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Новый протокол
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowCreateForm(true)}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Новый документ
+          </button>
+        )}
       </div>
 
       {/* Табы */}
@@ -483,9 +536,9 @@ export default function MeetingsPage() {
             }`}
           >
             Повестки заседания
-            {meetings.filter(m => m.agendaDocument).length > 0 && (
+            {meetings.filter(m => m.agendaDocument || (m._count?.agendaItems ?? 0) > 0).length > 0 && (
               <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                {meetings.filter(m => m.agendaDocument).length}
+                {meetings.filter(m => m.agendaDocument || (m._count?.agendaItems ?? 0) > 0).length}
               </span>
             )}
           </button>
@@ -562,27 +615,101 @@ export default function MeetingsPage() {
         </div>
       </details>
 
+      {/* Модальное окно: выбрать повестку для создания протокола */}
+      <Modal
+        isOpen={showProtocolFromAgendaModal}
+        onClose={() => setShowProtocolFromAgendaModal(false)}
+        className="max-w-2xl w-full"
+      >
+        <div className="p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Новый протокол</h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Выберите заседание с уже сформированной повесткой, для которого нужно создать протокол.
+          </p>
+          {(() => {
+            const withAgendaNoProtocol = meetings.filter(m => m.agendaDocument && !m.protocolDocument);
+            if (withAgendaNoProtocol.length === 0) {
+              return (
+                <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                  Нет заседаний с повесткой без протокола. Сначала создайте заседание и сформируйте повестку дня.
+                </p>
+              );
+            }
+            return (
+              <ul className="mt-4 space-y-2 max-h-[60vh] overflow-y-auto">
+                {withAgendaNoProtocol.map((m) => (
+                  <li key={m.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProtocolFromAgendaModal(false);
+                        router.push(`/dashboard/documents/meetings/${m.id}?tab=protocol`);
+                      }}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-left transition-colors hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-700 dark:hover:bg-blue-950/30"
+                    >
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {MEETING_TYPE_LABELS[m.type] || m.type} №{m.number}
+                      </span>
+                      {m.title && m.title !== `Заседание профкома №${m.number}` && (
+                        <span className="ml-2 text-gray-500 dark:text-gray-400">· {m.title}</span>
+                      )}
+                      <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+                        Повестка: {m.agendaDocument?.regNumber ?? "—"} · {new Date(m.scheduledDate).toLocaleDateString("ru-RU")}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
+        </div>
+      </Modal>
+
       {/* Модальное окно создания заседания */}
       <Modal
         isOpen={showCreateForm}
-        onClose={() => {
-          setShowCreateForm(false);
-          setFormData({
-            type: "COMMITTEE",
-            format: "OFFLINE",
-            title: "",
-            scheduledDate: "",
-            scheduledTime: "",
-            location: "",
-            onlineLink: "",
-            participantIds: [],
-            externalParticipants: [],
-            agendaItems: [{ title: "", description: "", speakerId: "", speakerName: "", speakerPosition: "", coSpeakerId: "", coSpeakerName: "", attachments: [] }],
-          });
-        }}
-        className="max-w-4xl w-full"
+        onClose={resetFormAndClose}
+        className="max-w-2xl w-full sm:max-w-3xl"
       >
-        <div className="p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex flex-col max-h-[85vh] min-h-0">
+          {postCreateStep === "choose" ? (
+            <>
+              <div className="p-6">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Заседание создано</h2>
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  Сформировать документ «Повестка дня» сейчас или сохранить как черновик и сделать это позже?
+                </p>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleGenerateAgenda}
+                    disabled={postCreateStep === "generating"}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {postCreateStep === "generating" ? "Формирование…" : "Сформировать повестку дня"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      alertSuccess("Сохранено как черновик");
+                      loadMeetings();
+                      resetFormAndClose();
+                    }}
+                    className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                  >
+                    Сохранить как черновик
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : postCreateStep === "generating" ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" aria-hidden />
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Формирование повестки дня…</p>
+            </div>
+          ) : (
+            <>
+          <div className="flex-1 min-h-0 overflow-y-auto p-6">
           <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Новое заседание</h2>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -1076,29 +1203,35 @@ export default function MeetingsPage() {
             </button>
           </div>
 
-          <div className="mt-6 flex gap-2">
-            <button
-              onClick={handleCreateMeeting}
-              disabled={isCreating}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {isCreating ? "Создание..." : "Создать документ"}
-            </button>
-            <button
-              onClick={() => setShowCreateForm(false)}
-              className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
-            >
-              Отмена
-            </button>
           </div>
+          <div className="shrink-0 border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-800/80">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleCreateMeeting}
+                disabled={isCreating}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isCreating ? "Создание..." : "Создать документ"}
+              </button>
+              <button
+                onClick={resetFormAndClose}
+                className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+            </>
+          )}
         </div>
       </Modal>
 
       {/* Список заседаний */}
       {(() => {
         // Фильтрация по активному табу
+        // «Повестки заседания»: заседания с уже сформированной повесткой или с пунктами повестки (черновики)
         const filteredMeetings = activeTab === "all" ? meetings :
-          activeTab === "agenda" ? meetings.filter(m => m.agendaDocument) :
+          activeTab === "agenda" ? meetings.filter(m => m.agendaDocument || (m._count?.agendaItems ?? 0) > 0) :
           activeTab === "protocol" ? meetings.filter(m => m.protocolDocument) :
           activeTab === "resolutions" ? meetings.filter(m => (m._count?.resolutions || 0) > 0) :
           activeTab === "extracts" ? meetings.filter(m => (m._count?.extracts || 0) > 0) :
@@ -1130,108 +1263,149 @@ export default function MeetingsPage() {
           );
         }
 
+        const STEPS = [
+          { key: "draft", label: "Черновик" },
+          { key: "agenda", label: "Повестка" },
+          { key: "protocol", label: "Протокол" },
+          { key: "resolutions", label: "Постановления" },
+          { key: "extracts", label: "Выписка" },
+        ] as const;
+        const getStepStatus = (meeting: Meeting, step: (typeof STEPS)[number]["key"]) => {
+          switch (step) {
+            case "draft": return "done";
+            case "agenda": return meeting.agendaDocument ? "done" : "current";
+            case "protocol": return meeting.protocolDocument ? "done" : (meeting.agendaDocument ? "current" : "pending");
+            case "resolutions": return (meeting._count?.resolutions ?? 0) > 0 ? "done" : (meeting.protocolDocument ? "current" : "pending");
+            case "extracts": return (meeting._count?.extracts ?? 0) > 0 ? "done" : ((meeting._count?.resolutions ?? 0) > 0 ? "current" : "pending");
+            default: return "pending";
+          }
+        };
+
         return (
           <div className="space-y-3">
             {filteredMeetings.map((meeting) => (
               <article
                 key={meeting.id}
-                className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow dark:border-gray-700 dark:bg-gray-800 dark:hover:shadow-none"
+                className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow dark:border-gray-700 dark:bg-gray-800 dark:hover:shadow-none"
               >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0 flex-1">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <Link
+                    href={`/dashboard/documents/meetings/${meeting.id}`}
+                    className="group min-w-0 flex-1 rounded-lg -m-1 p-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                  >
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                      <h3 className="text-base font-semibold text-gray-900 transition-colors group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">
                         {MEETING_TYPE_LABELS[meeting.type] || meeting.type} №{meeting.number}
                       </h3>
                       <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${MEETING_STATUS_COLORS[meeting.status]}`}>
                         {MEETING_STATUS_LABELS[meeting.status]}
                       </span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {new Date(meeting.scheduledDate).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" })}
+                        {meeting.scheduledTime && ` · ${meeting.scheduledTime}`}
+                      </span>
                     </div>
                     {meeting.title && meeting.title !== `Заседание профкома №${meeting.number}` && (
-                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{meeting.title}</p>
+                      <p className="mt-0.5 text-sm text-gray-600 dark:text-gray-400">{meeting.title}</p>
                     )}
-                    <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
-                      <span>{new Date(meeting.scheduledDate).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}</span>
-                      {meeting.scheduledTime && <span>{meeting.scheduledTime}</span>}
-                      {meeting.location && <span className="truncate max-w-[200px] sm:max-w-none" title={meeting.location}>{meeting.location}</span>}
-                      <span>{meeting._count.participants} участников</span>
-                      <span>{meeting._count.agendaItems} вопросов</span>
-                    </dl>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {meeting.agendaDocument ? (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">
-                          Повестка: {meeting.agendaDocument.regNumber}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-400">
-                          Повестка не сформирована
-                        </span>
-                      )}
-                      {meeting.protocolDocument ? (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">
-                          Протокол: {meeting.protocolDocument.regNumber}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-400">
-                          Протокол не сформирован
-                        </span>
-                      )}
-                      {meeting._count.resolutions > 0 && (
-                        <span className="inline-flex rounded-md bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
-                          {meeting._count.resolutions} постановлений
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2 sm:flex-col sm:items-end">
-                    <Link
-                      href={`/dashboard/documents/meetings/${meeting.id}`}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                    >
-                      Открыть
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const ok = await confirm(
-                          "Удалить это заседание? Действие нельзя отменить.",
-                          "Удаление заседания"
+                    {/* Степпер */}
+                    <div className="mt-3 flex flex-wrap items-center gap-1 sm:gap-0" role="list" aria-label="Этапы документа">
+                      {STEPS.map((step, i) => {
+                        const status = getStepStatus(meeting, step.key);
+                        return (
+                          <div key={step.key} className="flex items-center">
+                            {i > 0 && (
+                              <span className={`mx-0.5 h-px w-2 sm:w-4 ${status === "pending" ? "bg-gray-200 dark:bg-gray-600" : "bg-blue-400 dark:bg-blue-500"}`} aria-hidden />
+                            )}
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                status === "done"
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+                                  : status === "current"
+                                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
+                                    : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                              }`}
+                            >
+                              {step.label}
+                            </span>
+                          </div>
                         );
-                        if (!ok) return;
-                        setDeletingMeetingId(meeting.id);
-                        try {
-                          const res = await fetch(`/api/ppo-head/meetings/${meeting.id}`, { method: "DELETE" });
-                          if (!res.ok) {
-                            const err = await res.json().catch(() => ({}));
-                            throw new Error(err.error || "Ошибка удаления");
-                          }
-                          alertSuccess("Заседание удалено");
-                          setMeetings((prev) => prev.filter((m) => m.id !== meeting.id));
-                        } catch (e) {
-                          alertError(e instanceof Error ? e.message : "Не удалось удалить заседание");
-                        } finally {
-                          setDeletingMeetingId(null);
-                        }
-                      }}
-                      disabled={deletingMeetingId === meeting.id}
-                      className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-                      title="Удалить заседание"
-                    >
-                      {deletingMeetingId === meeting.id ? (
-                        "Удаление…"
-                      ) : (
-                        <>
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          Удалить
-                        </>
-                      )}
-                    </button>
-                  </div>
+                      })}
+                    </div>
+                  </Link>
+                  {(() => {
+                    const pdfUrl = meeting.protocolDocument?.filePath || meeting.agendaDocument?.filePath || null;
+                    const primaryLabel = pdfUrl
+                      ? "Открыть PDF"
+                      : meeting.agendaDocument
+                        ? "Сформировать протокол"
+                        : "Сформировать повестку";
+                    const primaryTitle = primaryLabel;
+                    return (
+                      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                        {pdfUrl ? (
+                          <a
+                            href={pdfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 p-2 text-white hover:bg-blue-700 sm:px-3 sm:py-1.5 sm:pr-2"
+                            title={primaryTitle}
+                          >
+                            <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                            <span className="hidden sm:inline">{primaryLabel}</span>
+                          </a>
+                        ) : (
+                          <Link
+                            href={`/dashboard/documents/meetings/${meeting.id}`}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 p-2 text-white hover:bg-blue-700 sm:px-3 sm:py-1.5 sm:pr-2"
+                            title={primaryTitle}
+                          >
+                            <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span className="hidden sm:inline">{primaryLabel}</span>
+                          </Link>
+                        )}
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const ok = await confirm(
+                              "Удалить это заседание? Действие нельзя отменить.",
+                              "Удаление заседания"
+                            );
+                            if (!ok) return;
+                            setDeletingMeetingId(meeting.id);
+                            try {
+                              const res = await fetch(`/api/ppo-head/meetings/${meeting.id}`, { method: "DELETE" });
+                              if (!res.ok) {
+                                const err = await res.json().catch(() => ({}));
+                                throw new Error(err.error || "Ошибка удаления");
+                              }
+                              alertSuccess("Заседание удалено");
+                              setMeetings((prev) => prev.filter((m) => m.id !== meeting.id));
+                            } catch (e) {
+                              alertError(e instanceof Error ? e.message : "Не удалось удалить заседание");
+                            } finally {
+                              setDeletingMeetingId(null);
+                            }
+                          }}
+                          disabled={deletingMeetingId === meeting.id}
+                          className="inline-flex items-center justify-center rounded-lg border border-gray-300 p-2 text-gray-500 hover:bg-gray-100 hover:text-red-600 disabled:opacity-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-red-400 sm:p-1.5"
+                          title="Удалить заседание"
+                        >
+                          {deletingMeetingId === meeting.id ? (
+                            <span className="text-xs">…</span>
+                          ) : (
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
               </article>
             ))}

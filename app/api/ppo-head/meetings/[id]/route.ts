@@ -150,6 +150,9 @@ export async function PATCH(
       onlineLink,
       format,
       notes,
+      presidingOfficerUserId,
+      secretaryUserId,
+      voteCounterUserIds,
     } = body;
 
     const updateData: any = {};
@@ -162,6 +165,9 @@ export async function PATCH(
     if (onlineLink !== undefined) updateData.onlineLink = onlineLink;
     if (format) updateData.format = format;
     if (notes !== undefined) updateData.notes = notes;
+    if (presidingOfficerUserId !== undefined) updateData.presidingOfficerUserId = presidingOfficerUserId || null;
+    if (secretaryUserId !== undefined) updateData.secretaryUserId = secretaryUserId || null;
+    if (voteCounterUserIds !== undefined) updateData.voteCounterUserIds = Array.isArray(voteCounterUserIds) ? (voteCounterUserIds.length ? JSON.stringify(voteCounterUserIds) : null) : (voteCounterUserIds ?? null);
 
     // Обновление времени начала/окончания
     if (status === "IN_PROGRESS" && !meeting.actualStartAt) {

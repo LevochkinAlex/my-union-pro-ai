@@ -35,7 +35,7 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
-    const { documentType, approve } = body; // documentType: "AGENDA" | "PROTOCOL"; approve: true — сразу утвердить (только для PROTOCOL)
+    const { documentType, approve, regNumber: regNumberOverride } = body; // documentType: "AGENDA" | "PROTOCOL"; approve: true — сразу утвердить; regNumber — необязательный свой номер документа
 
     if (!documentType || !["AGENDA", "PROTOCOL"].includes(documentType)) {
       return NextResponse.json(
@@ -105,6 +105,8 @@ export async function POST(
 
     if (existingProtocolDoc?.regNumber) {
       regNumber = existingProtocolDoc.regNumber;
+    } else if (regNumberOverride && typeof regNumberOverride === "string" && regNumberOverride.trim()) {
+      regNumber = regNumberOverride.trim();
     } else {
       const lastDoc = await prisma.document.findFirst({
         where: {
@@ -141,6 +143,35 @@ export async function POST(
     const presentMembers = meeting.participants.filter(p => presentStatuses.includes(p.attendance));
     const absentMembers = meeting.participants.filter(p => p.attendance === "ABSENT" || p.attendance === "EXCUSED");
 
+    // Для протокола: подписывают Председательствующий и Секретарь (избранные на заседании — presidingOfficerUserId, secretaryUserId)
+    let presidingOfficerName = "";
+    let protocolSecretaryName = "";
+    if (documentType === "PROTOCOL" && (meeting.presidingOfficerUserId || meeting.secretaryUserId)) {
+      const userIds = [meeting.presidingOfficerUserId, meeting.secretaryUserId].filter(Boolean) as string[];
+      const fromParticipants = userIds.map(uid => meeting.participants.find(p => p.userId === uid)?.user).filter(Boolean);
+      const foundIds = new Set(fromParticipants.map((u: any) => u.id));
+      const missingIds = userIds.filter(uid => !foundIds.has(uid));
+      let extraUsers: Array<{ id: string; firstName: string | null; lastName: string | null; middleName: string | null }> = [];
+      if (missingIds.length > 0) {
+        extraUsers = await prisma.user.findMany({
+          where: { id: { in: missingIds } },
+          select: { id: true, firstName: true, lastName: true, middleName: true },
+        });
+      }
+      const allUsers = [
+        ...fromParticipants,
+        ...extraUsers,
+      ] as Array<{ id: string; firstName: string | null; lastName: string | null; middleName: string | null }>;
+      if (meeting.presidingOfficerUserId) {
+        const u = allUsers.find((u: any) => u.id === meeting.presidingOfficerUserId);
+        presidingOfficerName = u ? formatUserName(u) : "";
+      }
+      if (meeting.secretaryUserId) {
+        const u = allUsers.find((u: any) => u.id === meeting.secretaryUserId);
+        protocolSecretaryName = u ? formatUserName(u) : "";
+      }
+    }
+
     const templateData = {
       organizationName: meeting.organization.name,
       organizationChairmanName: meeting.organization.chairmanName || formatUserName(chairman?.user),
@@ -152,9 +183,10 @@ export async function POST(
       regNumber,
       currentDate: formatDate(new Date()),
       
-      chairmanName: formatUserName(chairman?.user) || meeting.organization.chairmanName || "",
-      secretaryName: formatUserName(secretary?.user) || "",
+      chairmanName: documentType === "PROTOCOL" && presidingOfficerName ? presidingOfficerName : (formatUserName(chairman?.user) || meeting.organization.chairmanName || ""),
+      secretaryName: documentType === "PROTOCOL" && protocolSecretaryName ? protocolSecretaryName : (formatUserName(secretary?.user) || ""),
       secretaryJobTitle: secretary?.user?.jobTitle || "Секретарь",
+      signatureLabelChairman: documentType === "PROTOCOL" ? "Председательствующий" : "Председатель",
       
       presentMembers: presentMembers.map(p => 
         p.user ? formatUserName(p.user) : p.externalName || ""
@@ -182,12 +214,14 @@ export async function POST(
     }
 
     // Генерация PDF
-    let filePath = null;
+    let filePath: string | null = null;
     let pdfBuffer: Buffer | null = null;
 
     try {
       pdfBuffer = await generatePDFFromHTML(htmlContent);
-      // Сохранение PDF в public
+      if (!pdfBuffer || pdfBuffer.length === 0) {
+        throw new Error("Генератор PDF вернул пустой результат");
+      }
       const fileName = `${documentType.toLowerCase()}_${regNumber}_${Date.now()}.pdf`;
       const fs = await import("fs/promises");
       const path = await import("path");
@@ -196,9 +230,15 @@ export async function POST(
       const fullPath = path.join(publicDir, fileName);
       await fs.writeFile(fullPath, pdfBuffer);
       filePath = `/generated-documents/${fileName}`;
-    } catch (pdfError) {
+    } catch (pdfError: any) {
       console.error("Ошибка генерации PDF:", pdfError);
-      // Продолжаем без PDF
+      return NextResponse.json(
+        {
+          error: "Не удалось сформировать PDF документа",
+          details: process.env.NODE_ENV === "development" ? (pdfError?.message || String(pdfError)) : undefined,
+        },
+        { status: 500 }
+      );
     }
 
     const protocolStatus = documentType === "PROTOCOL" && approve === true
@@ -363,22 +403,6 @@ function generateAgendaHTML(meeting: any, data: any): string {
     .agenda-table td {
       border: 1px solid #333;
     }
-    .signatures {
-      margin-top: 40px;
-    }
-    .signature-row {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 30px;
-    }
-    .signature-block {
-      text-align: center;
-    }
-    .signature-line {
-      border-bottom: 1px solid #000;
-      width: 200px;
-      margin: 5px auto;
-    }
   </style>
 </head>
 <body>
@@ -401,25 +425,6 @@ function generateAgendaHTML(meeting: any, data: any): string {
       ${agendaItemsHtml}
     </tbody>
   </table>
-
-  <div class="signatures">
-    <div class="signature-row">
-      <div class="signature-block">
-        <p>Председатель профкома</p>
-        <div class="signature-line"></div>
-        <p>${data.organizationChairmanName}</p>
-      </div>
-      <div class="signature-block">
-        <p>Секретарь</p>
-        <div class="signature-line"></div>
-        <p>${data.secretaryName || "_________________________"}</p>
-      </div>
-    </div>
-  </div>
-
-  <p style="margin-top: 30px; font-size: 12px; color: #666;">
-    Дата формирования: ${data.currentDate}
-  </p>
 </body>
 </html>
   `.trim();
@@ -610,9 +615,9 @@ function generateProtocolHTML(meeting: any, data: any): string {
   <div class="signatures">
     <div class="signature-row">
       <div class="signature-block">
-        <p>Председатель</p>
+        <p>${data.signatureLabelChairman ?? "Председательствующий"}</p>
         <div class="signature-line"></div>
-        <p>${data.chairmanName}</p>
+        <p>${data.chairmanName || "_________________________"}</p>
       </div>
       <div class="signature-block">
         <p>Секретарь</p>

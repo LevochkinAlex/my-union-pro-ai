@@ -24,16 +24,16 @@ elif command -v chromium-browser &>/dev/null; then
 fi
 
 if [ -z "$CHROME_PATH" ]; then
-  echo "Браузер не найден. Устанавливаем Google Chrome (stable)..."
+  echo "Браузер не найден. Устанавливаем Google Chrome (stable) через .deb..."
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update -qq
-  apt-get install -y -qq wget gnupg
+  # Установка без полного apt update (на случай сломанных репозиториев)
+  apt-get install -y -qq wget 2>/dev/null || true
   wget -q -O /tmp/google-chrome.deb "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"
-  apt-get install -y -qq /tmp/google-chrome.deb || true
+  dpkg -i /tmp/google-chrome.deb 2>/dev/null || apt-get install -y -f -qq && dpkg -i /tmp/google-chrome.deb
   rm -f /tmp/google-chrome.deb
   CHROME_PATH=$(command -v google-chrome-stable 2>/dev/null || command -v google-chrome 2>/dev/null)
   if [ -z "$CHROME_PATH" ]; then
-    echo "Пробуем Chromium..."
+    echo "Пробуем Chromium (apt без обновления списка)..."
     apt-get install -y -qq chromium-browser 2>/dev/null || apt-get install -y -qq chromium 2>/dev/null || true
     CHROME_PATH=$(command -v chromium-browser 2>/dev/null || command -v chromium 2>/dev/null)
   fi
