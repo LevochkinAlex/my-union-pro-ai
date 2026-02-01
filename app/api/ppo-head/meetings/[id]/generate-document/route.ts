@@ -311,6 +311,14 @@ export async function POST(
       }
     }
 
+    // При утверждении протокола — статус заседания «Завершено»
+    if (documentType === "PROTOCOL" && approve === true) {
+      await prisma.meeting.update({
+        where: { id: meeting.id },
+        data: { status: "COMPLETED" },
+      });
+    }
+
     const message = existingProtocolDoc
       ? (approve === true ? "Протокол обновлён и утверждён. Можно отправлять в печать." : "Протокол сохранён в черновики.")
       : (documentType === "PROTOCOL" && approve === true

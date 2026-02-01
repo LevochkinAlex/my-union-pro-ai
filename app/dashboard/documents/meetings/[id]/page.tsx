@@ -417,8 +417,8 @@ export default function MeetingDetailPage({
         throw new Error(message);
       }
 
+      if (data.meeting) setMeeting(data.meeting);
       alertSuccess((data && data.message) || "Документ сформирован!");
-      await loadMeeting();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Не удалось сформировать документ";
       alertError(message);
