@@ -288,6 +288,35 @@ export default function SubscriptionPage() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Выбор тарифа
         </h2>
+
+        <div className="flex flex-wrap items-center gap-4 mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+          <label className="flex items-center gap-2">
+            <span className="text-gray-700 dark:text-gray-300 font-medium">Период:</span>
+            <select
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value as TariffPeriod)}
+              className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2"
+            >
+              {(Object.keys(PERIOD_LABELS) as TariffPeriod[]).map((p) => (
+                <option key={p} value={p}>
+                  {PERIOD_LABELS[p]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={handleCheckout}
+            disabled={checkoutLoading || !selectedPlan}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          >
+            {checkoutLoading ? "Оформление…" : "Оформить (мок-оплата)"}
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          Сначала выберите период оплаты, затем тариф по количеству участников.
+        </p>
+
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6">
           {plans
             .filter((p) => !p.isUnlimited)
@@ -312,36 +341,8 @@ export default function SubscriptionPage() {
               </button>
             ))}
         </div>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           Тариф «Более 3600» — по запросу (договорная цена).
-        </p>
-
-        <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <label className="flex items-center gap-2">
-            <span className="text-gray-700 dark:text-gray-300">Период:</span>
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value as TariffPeriod)}
-              className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2"
-            >
-              {(Object.keys(PERIOD_LABELS) as TariffPeriod[]).map((p) => (
-                <option key={p} value={p}>
-                  {PERIOD_LABELS[p]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={handleCheckout}
-            disabled={checkoutLoading || !selectedPlan}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-          >
-            {checkoutLoading ? "Оформление…" : "Оформить (мок-оплата)"}
-          </button>
-        </div>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-          Сейчас используется моковый платёжный ресурс: подписка активируется сразу после нажатия.
         </p>
       </div>
       )}
