@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getOrgHead } from "@/lib/ppo-head-utils";
 import { DocumentType, DocumentStatus, DocumentCategory } from "@prisma/client";
 import { generatePDFFromHTML } from "@/lib/document-templates/renderer";
+import { assignAgendaToParticipantsAndNotify } from "@/lib/meeting-agenda-notify";
 
 // Форматирование даты в русском формате
 function formatDate(date: Date): string {
@@ -34,7 +35,7 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
-    const { documentType } = body; // "AGENDA" или "PROTOCOL"
+    const { documentType, approve } = body; // documentType: "AGENDA" | "PROTOCOL"; approve: true — сразу утвердить (только для PROTOCOL)
 
     if (!documentType || !["AGENDA", "PROTOCOL"].includes(documentType)) {
       return NextResponse.json(
@@ -90,35 +91,42 @@ export async function POST(
       return NextResponse.json({ error: "Нет доступа к этому заседанию" }, { status: 403 });
     }
 
-    // Генерация номера документа
+    // Для протокола: если уже есть документ — обновляем его (тот же номер)
+    const existingProtocolDoc = documentType === "PROTOCOL" && meeting.protocolDocumentId
+      ? await prisma.document.findUnique({ where: { id: meeting.protocolDocumentId } })
+      : null;
+
     const docPrefix = documentType === "AGENDA" ? "AG" : "PR";
     const year = meeting.scheduledDate.getFullYear();
-    
-    // Получаем последний номер для данного типа в году
-    const lastDoc = await prisma.document.findFirst({
-      where: {
-        organizationId: meeting.organizationId,
-        type: documentType as DocumentType,
-        createdAt: {
-          gte: new Date(year, 0, 1),
-          lt: new Date(year + 1, 0, 1),
-        },
-      },
-      orderBy: { regNumber: "desc" },
-    });
+    let regNumber: string;
 
-    let nextNumber = 1;
-    if (lastDoc?.regNumber) {
-      const match = lastDoc.regNumber.match(/(\d+)/);
-      if (match) {
-        nextNumber = parseInt(match[1]) + 1;
+    if (existingProtocolDoc?.regNumber) {
+      regNumber = existingProtocolDoc.regNumber;
+    } else {
+      const lastDoc = await prisma.document.findFirst({
+        where: {
+          organizationId: meeting.organizationId,
+          type: documentType as DocumentType,
+          createdAt: {
+            gte: new Date(year, 0, 1),
+            lt: new Date(year + 1, 0, 1),
+          },
+        },
+        orderBy: { regNumber: "desc" },
+      });
+      let nextNumber = 1;
+      if (lastDoc?.regNumber) {
+        const match = lastDoc.regNumber.match(/(\d+)/);
+        if (match) nextNumber = parseInt(match[1]) + 1;
       }
+      regNumber = `${docPrefix}${String(nextNumber).padStart(5, "0")}`;
     }
 
-    const regNumber = `${docPrefix}${String(nextNumber).padStart(5, "0")}`;
     const docDate = formatDate(meeting.scheduledDate);
 
-    // Формирование данных для шаблона
+    // ФИО в документы (повестка, протокол): участники заседания = выборный орган из «Управление сотрудниками»
+    // (meeting.participants созданы при создании заседания из списка elected-body-members);
+    // докладчики по пунктам — из item.speaker (User) или item.speakerName.
     const formatUserName = (user: any) => {
       if (!user) return "";
       return [user.lastName, user.firstName, user.middleName].filter(Boolean).join(" ");
@@ -189,84 +197,83 @@ export async function POST(
       // Продолжаем без PDF
     }
 
-    // Создание документа в БД
-    // Статус DRAFT - документ создан, но еще не отправлен на согласование
-    const document = await prisma.document.create({
-      data: {
-        type: documentType as DocumentType,
-        status: DocumentStatus.DRAFT, // Черновик - согласно алгоритму
-        category: DocumentCategory.INTERNAL,
-        title: documentTitle,
-        content: htmlContent,
-        regNumber,
-        regDate: new Date(),
-        filePath,
-        fileName: filePath ? filePath.split("/").pop() : null,
-        userId: session.user.id,
-        organizationId: meeting.organizationId,
-        metadata: {
-          meetingId: meeting.id,
-          meetingNumber: meeting.number,
-          meetingDate: meeting.scheduledDate.toISOString(),
-        },
-      },
-    });
+    const protocolStatus = documentType === "PROTOCOL" && approve === true
+      ? DocumentStatus.COMPLETED
+      : DocumentStatus.DRAFT;
 
-    // Привязка документа к заседанию
-    if (documentType === "AGENDA") {
+    let document: { id: string; regNumber: string; status: string; filePath: string | null; [key: string]: any };
+
+    if (existingProtocolDoc) {
+      // Обновляем существующий протокол (перезаписываем PDF и контент, опционально утверждаем)
+      document = await prisma.document.update({
+        where: { id: existingProtocolDoc.id },
+        data: {
+          title: documentTitle,
+          content: htmlContent,
+          filePath,
+          fileName: filePath ? filePath.split("/").pop() : null,
+          status: protocolStatus,
+          updatedAt: new Date(),
+        },
+      });
+    } else {
+      // Создание документа в БД
+      document = await prisma.document.create({
+        data: {
+          type: documentType as DocumentType,
+          status: documentType === "PROTOCOL" ? protocolStatus : DocumentStatus.DRAFT,
+          category: DocumentCategory.INTERNAL,
+          title: documentTitle,
+          content: htmlContent,
+          regNumber,
+          regDate: new Date(),
+          filePath,
+          fileName: filePath ? filePath.split("/").pop() : null,
+          userId: session.user.id,
+          organizationId: meeting.organizationId,
+          metadata: {
+            meetingId: meeting.id,
+            meetingNumber: meeting.number,
+            meetingDate: meeting.scheduledDate.toISOString(),
+          },
+        },
+      });
+    }
+
+    // Привязка документа к заседанию и рассылка участникам (только при создании повестки)
+    if (documentType === "AGENDA" && !meeting.agendaDocumentId) {
       await prisma.meeting.update({
         where: { id: meeting.id },
         data: { agendaDocumentId: document.id },
       });
-
-      // Назначаем повестку дня всем участникам заседания для ознакомления
-      // Согласно алгоритму: Шаг 3. Ознакомление/согласование повестки
-      // Примечание: документ создается в статусе DRAFT, отправка на согласование происходит отдельно
-      const participantsWithUserId = meeting.participants.filter(p => p.user?.id && p.role !== "CHAIRMAN");
-      
-      if (participantsWithUserId.length > 0) {
-        // Назначаем документ первому участнику для отображения в его списке документов
-        // Остальные участники получат доступ через систему согласований
-        await prisma.document.update({
-          where: { id: document.id },
-          data: {
-            assignedToId: participantsWithUserId[0].user!.id,
-            assignedAt: new Date(),
-          },
-        });
-
-        console.log(`[generate-document] Повестка дня создана. Для отправки на согласование используйте функцию "Отправить на согласование"`);
+      try {
+        const result = await assignAgendaToParticipantsAndNotify(meeting.id, session.user.id);
+        console.log(`[generate-document] Повестка: назначено ${result.assignedCount} участникам, уведомлено ${result.notifiedCount}`);
+      } catch (notifyErr) {
+        console.error("[generate-document] Ошибка рассылки повестки участникам:", notifyErr);
+        // Не падаем — документ создан, рассылку можно повторить вручную
       }
-    } else {
+    } else if (documentType === "PROTOCOL" && !existingProtocolDoc) {
       await prisma.meeting.update({
         where: { id: meeting.id },
         data: { protocolDocumentId: document.id },
       });
-
-      // Назначаем протокол всем участникам заседания для ознакомления
-      // Согласно алгоритму: Шаг 5. Оформление протокола
-      // Примечание: документ создается в статусе DRAFT, отправка на согласование происходит отдельно
       const participantsWithUserId = meeting.participants.filter(p => p.user?.id && p.role !== "CHAIRMAN");
-      
       if (participantsWithUserId.length > 0) {
-        // Назначаем документ первому участнику для отображения в его списке документов
-        // Остальные участники получат доступ через систему согласований
         await prisma.document.update({
           where: { id: document.id },
-          data: {
-            assignedToId: participantsWithUserId[0].user!.id,
-            assignedAt: new Date(),
-          },
+          data: { assignedToId: participantsWithUserId[0].user!.id, assignedAt: new Date() },
         });
-
-        console.log(`[generate-document] Протокол создан. Для отправки на согласование используйте функцию "Отправить на согласование"`);
       }
     }
 
-    return NextResponse.json({ 
-      document,
-      message: `${documentType === "AGENDA" ? "Повестка" : "Протокол"} успешно сформирован(а)${documentType === "AGENDA" ? ` и назначена ${meeting.participants.filter(p => p.user?.id).length} участникам` : ""}`,
-    });
+    const message = existingProtocolDoc
+      ? (approve === true ? "Протокол обновлён и утверждён. Можно отправлять в печать." : "Протокол сохранён в черновики.")
+      : (documentType === "PROTOCOL" && approve === true
+        ? "Протокол создан и утверждён. Можно отправлять в печать."
+        : `${documentType === "AGENDA" ? "Повестка" : "Протокол"} успешно сформирован(а).`);
+
+    return NextResponse.json({ document, message });
   } catch (error: any) {
     console.error("[ppo-head/meetings/[id]/generate-document] POST error:", error);
     return NextResponse.json(

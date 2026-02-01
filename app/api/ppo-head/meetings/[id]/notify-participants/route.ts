@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrgHead } from "@/lib/ppo-head-utils";
 import { sendMassNotification } from "@/lib/notifications";
+import { assignAgendaToParticipantsAndNotify } from "@/lib/meeting-agenda-notify";
 
 /**
  * POST /api/ppo-head/meetings/[id]/notify-participants
@@ -105,87 +106,12 @@ export async function POST(
     if (type === "agenda_review") {
       notificationTitle = `Повестка дня: Заседание №${meeting.number}`;
       notificationBody = `Вы приглашены на заседание ${meetingDate}. Ознакомьтесь с повесткой дня.`;
-      
-      // Назначаем повестку всем участникам для ознакомления (если еще не назначена)
-      if (meeting.agendaDocument) {
-        // Используем тех же участников, которым отправляем уведомления
-        const participantsWithUserId = finalParticipantUserIds;
-        
-        if (participantsWithUserId.length > 0) {
-          // Проверяем, какие участники еще не имеют назначенной повестки
-          // Ищем документы, которые являются копиями этой повестки и назначены участникам
-          const existingAssigned = await prisma.document.findMany({
-            where: {
-              OR: [
-                { id: meeting.agendaDocument.id }, // Оригинальный документ
-                {
-                  metadata: {
-                    path: ["originalDocumentId"],
-                    equals: meeting.agendaDocument.id,
-                  },
-                },
-              ],
-              assignedToId: { in: participantsWithUserId },
-            },
-            select: { assignedToId: true },
-          });
-          
-          const assignedUserIds = new Set(existingAssigned.map(d => d.assignedToId).filter(Boolean));
-          const usersToAssign = participantsWithUserId.filter(userId => !assignedUserIds.has(userId));
-          
-          if (usersToAssign.length > 0) {
-            // Получаем полную информацию о документе повестки
-            const agendaDoc = await prisma.document.findUnique({
-              where: { id: meeting.agendaDocument.id },
-              select: {
-                title: true,
-                content: true,
-                regNumber: true,
-                filePath: true,
-                fileName: true,
-              },
-            });
-            
-            if (agendaDoc) {
-              // Создаем копии повестки для участников, которым она еще не назначена
-              await Promise.all(
-                usersToAssign.map(userId =>
-                  prisma.document.create({
-                    data: {
-                      type: "AGENDA",
-                      status: "GENERATED",
-                      category: "INTERNAL",
-                      title: agendaDoc.title,
-                      content: agendaDoc.content,
-                      regNumber: agendaDoc.regNumber 
-                        ? `${agendaDoc.regNumber}-${userId.slice(0, 4)}`
-                        : null,
-                      regDate: new Date(),
-                      filePath: agendaDoc.filePath,
-                      fileName: agendaDoc.fileName,
-                      userId: session.user.id,
-                      organizationId: meeting.organizationId,
-                      assignedToId: userId,
-                      assignedAt: new Date(),
-                      metadata: {
-                        meetingId: meeting.id,
-                        meetingNumber: meeting.number,
-                        meetingDate: meeting.scheduledDate.toISOString(),
-                        isCopy: true,
-                        originalDocumentId: meeting.agendaDocument.id,
-                      },
-                    },
-                  })
-                )
-              );
-              
-              console.log(`[notify-participants] Повестка назначена ${usersToAssign.length} участникам`);
-            }
-          }
-        }
+
+      const agendaResult = await assignAgendaToParticipantsAndNotify(meetingId, session.user.id);
+      if (agendaResult.assignedCount > 0 || agendaResult.notifiedCount > 0) {
+        console.log(`[notify-participants] Повестка: назначено ${agendaResult.assignedCount}, уведомлено ${agendaResult.notifiedCount}`);
       }
-      
-      // Обновляем статус заседания на "Запланировано"
+
       await prisma.meeting.update({
         where: { id: meetingId },
         data: { status: "SCHEDULED" },
@@ -269,18 +195,22 @@ export async function POST(
         : `Место проведения: ${meeting.location || "Не указано"}`;
     }
 
-    // Отправляем уведомления
-    await sendMassNotification({
-      userIds: finalParticipantUserIds,
-      title: notificationTitle,
-      body: notificationBody,
-      url: notificationUrl,
-      type: `meeting_${type}`,
-    });
+    // Отправляем уведомления (для agenda_review уже отправлено в assignAgendaToParticipantsAndNotify)
+    if (type !== "agenda_review") {
+      await sendMassNotification({
+        userIds: finalParticipantUserIds,
+        title: notificationTitle,
+        body: notificationBody,
+        url: notificationUrl,
+        type: `meeting_${type}`,
+      });
+    }
 
     return NextResponse.json({
       success: true,
-      message: `Уведомления отправлены ${finalParticipantUserIds.length} участникам`,
+      message: type === "agenda_review"
+        ? `Повестка назначена участникам, уведомления отправлены ${finalParticipantUserIds.length} участникам`
+        : `Уведомления отправлены ${finalParticipantUserIds.length} участникам`,
       sentCount: finalParticipantUserIds.length,
     });
   } catch (error: any) {
