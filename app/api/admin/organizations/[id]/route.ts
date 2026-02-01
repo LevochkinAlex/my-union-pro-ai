@@ -144,6 +144,7 @@ export async function PUT(
       chairmanName,
       chairmanJobTitle,
       isActive,
+      totalEmployees,
     } = body;
 
     // Проверяем существование организации
@@ -220,6 +221,7 @@ export async function PUT(
     if (chairmanName !== undefined) updateData.chairmanName = chairmanName || null;
     if (chairmanJobTitle !== undefined) updateData.chairmanJobTitle = chairmanJobTitle || null;
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (totalEmployees !== undefined) updateData.totalEmployees = totalEmployees == null || totalEmployees === "" ? null : Math.max(0, parseInt(String(totalEmployees), 10) || 0);
 
     // Если меняется имя, обновляем fullPath для всех дочерних организаций
     if (name !== undefined && name !== existingOrg.name) {

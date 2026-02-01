@@ -14,7 +14,7 @@ interface PPOHeadDashboardProps {
     totalDocuments: number;
     // Новые поля для карточек как в референсе
     totalEmployees: number;
-    membershipPercent: number;
+    appealSatisfactionPercent: number;
     growthYTD: number;
   };
   recentAppeals: Array<{
@@ -63,72 +63,58 @@ export default function PPOHeadDashboard({
         </p>
       </div>
 
-      {/* Основные показатели организации (как в референсе) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Основные показатели */}
+      <div className="grid grid-cols-1 min-w-0 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Работников */}
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-blue-100 font-medium">Работников</p>
-              <p className="text-3xl font-bold mt-1">{stats.totalEmployees}</p>
-            </div>
-            <div className="p-3 bg-white/20 rounded-lg">
-              <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            </div>
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-blue-200/60 bg-blue-50 dark:border-blue-800/50 dark:bg-blue-950/40 p-4 sm:p-5 flex flex-col gap-4">
+          <div className="flex shrink-0 w-10 h-10 items-center justify-center rounded-xl bg-blue-200/50 dark:bg-blue-800/40" aria-hidden>
+            <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
           </div>
+          <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Работников</p>
+          <p className="text-2xl font-semibold tabular-nums text-blue-900 dark:text-blue-100 sm:text-3xl">{stats.totalEmployees}</p>
         </div>
 
         {/* Членов ППО */}
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-green-100 font-medium">Членов ППО</p>
-              <p className="text-3xl font-bold mt-1">{stats.activeMembers}</p>
-            </div>
-            <div className="p-3 bg-white/20 rounded-lg">
-              <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-emerald-200/60 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-950/40 p-4 sm:p-5 flex flex-col gap-4">
+          <div className="flex shrink-0 w-10 h-10 items-center justify-center rounded-xl bg-emerald-200/50 dark:bg-emerald-800/40" aria-hidden>
+            <svg className="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
           </div>
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Членов ППО</p>
+          <p className="text-2xl font-semibold tabular-nums text-emerald-900 dark:text-emerald-100 sm:text-3xl">{stats.activeMembers}</p>
         </div>
 
-        {/* Процент членов ППО */}
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-purple-100 font-medium">Процент членов ППО</p>
-              <p className="text-3xl font-bold mt-1">{stats.membershipPercent}%</p>
-            </div>
-            <div className="p-3 bg-white/20 rounded-lg">
-              <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </div>
+        {/* Удовлетворённость обращениями */}
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-violet-200/60 bg-violet-50 dark:border-violet-800/50 dark:bg-violet-950/40 p-4 sm:p-5 flex flex-col gap-4">
+          <div className="flex shrink-0 w-10 h-10 items-center justify-center rounded-xl bg-violet-200/50 dark:bg-violet-800/40" aria-hidden>
+            <svg className="h-5 w-5 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
           </div>
+          <p className="text-sm font-medium text-violet-700 dark:text-violet-300">Удовлетворённость обращениями</p>
+          <p className="text-2xl font-semibold tabular-nums text-violet-900 dark:text-violet-100 sm:text-3xl">{stats.appealSatisfactionPercent}%</p>
         </div>
 
         {/* Рост к началу года */}
-        <div className={`bg-gradient-to-br ${stats.growthYTD >= 0 ? 'from-emerald-500 to-emerald-600' : 'from-red-500 to-red-600'} rounded-xl shadow-lg p-6 text-white`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-white/80 font-medium">Рост к началу года</p>
-              <p className="text-3xl font-bold mt-1">
-                {stats.growthYTD > 0 ? '+' : ''}{stats.growthYTD}%
-              </p>
-            </div>
-            <div className="p-3 bg-white/20 rounded-lg">
-              <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {stats.growthYTD >= 0 ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-                )}
+        <div className={`min-w-0 overflow-hidden rounded-2xl border p-4 sm:p-5 flex flex-col gap-4 ${stats.growthYTD >= 0 ? 'border-teal-200/60 bg-teal-50 dark:border-teal-800/50 dark:bg-teal-950/40' : 'border-rose-200/60 bg-rose-50 dark:border-rose-800/50 dark:bg-rose-950/40'}`}>
+          <div className={`flex shrink-0 w-10 h-10 items-center justify-center rounded-xl ${stats.growthYTD >= 0 ? 'bg-teal-200/50 dark:bg-teal-800/40' : 'bg-rose-200/50 dark:bg-rose-800/40'}`} aria-hidden>
+            {stats.growthYTD >= 0 ? (
+              <svg className="h-5 w-5 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
-            </div>
+            ) : (
+              <svg className="h-5 w-5 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+              </svg>
+            )}
           </div>
+          <p className={`text-sm font-medium ${stats.growthYTD >= 0 ? 'text-teal-700 dark:text-teal-300' : 'text-rose-700 dark:text-rose-300'}`}>Рост к началу года</p>
+          <p className={`text-2xl font-semibold tabular-nums sm:text-3xl ${stats.growthYTD >= 0 ? 'text-teal-900 dark:text-teal-100' : 'text-rose-900 dark:text-rose-100'}`}>
+            {stats.growthYTD > 0 ? "+" : ""}{stats.growthYTD}%
+          </p>
         </div>
       </div>
 

@@ -26,7 +26,7 @@ export function getDemoStats(): DemoStats {
     totalNews: 12,
     totalDocuments: 8,
     totalEmployees: 58,
-    membershipPercent: 81,
+    appealSatisfactionPercent: 85,
     growthYTD: 5,
   };
 }

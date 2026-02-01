@@ -192,8 +192,10 @@ export default async function DashboardPage() {
       totalDocuments, 
       recentAppeals, 
       recentMembers,
-      organization,
-      membersAtYearStart
+      membersAtYearStart,
+      staffCount,
+      resolvedOrClosedCount,
+      totalWithOutcome,
     ] = await Promise.all([
       // Количество новых обращений
       prisma.ticket.count({
@@ -277,11 +279,6 @@ export default async function DashboardPage() {
           createdAt: true,
         },
       }),
-      // Данные организации (для totalEmployees)
-      prisma.organization.findUnique({
-        where: { id: ppoOrganization.id },
-        select: { totalEmployees: true },
-      }),
       // Количество членов на начало года (для расчёта роста)
       prisma.user.count({
         where: {
@@ -290,16 +287,35 @@ export default async function DashboardPage() {
           createdAt: { lt: startOfYear },
         },
       }),
+      // Сотрудники в разделе «Управление сотрудниками» (staff) — число работников на дашборде
+      prisma.organizationStaff.count({
+        where: { organizationId: ppoOrganization.id },
+      }),
+      // Обращения с положительным исходом (решено / закрыто) — для удовлетворённости
+      prisma.ticket.count({
+        where: {
+          organizationId: ppoOrganization.id,
+          status: { in: ["RESOLVED", "CLOSED"] },
+        },
+      }),
+      // Все обращения с итоговым решением (решено, закрыто, отклонено)
+      prisma.ticket.count({
+        where: {
+          organizationId: ppoOrganization.id,
+          status: { in: ["RESOLVED", "CLOSED", "REJECTED"] },
+        },
+      }),
     ]);
 
-    // Расчёт показателей
-    const totalEmployees = organization?.totalEmployees || 0;
-    const membershipPercent = totalEmployees > 0 
-      ? Math.round((activeMembers / totalEmployees) * 100) 
-      : 0;
+    // Число работников на дашборде — только по списку «Управление сотрудниками»
+    const totalEmployees = staffCount;
     const growthYTD = membersAtYearStart > 0 
       ? Math.round(((activeMembers - membersAtYearStart) / membersAtYearStart) * 100) 
       : (activeMembers > 0 ? 100 : 0);
+    // Удовлетворённость решениями обращений: % решённых/закрытых среди всех с итогом
+    const appealSatisfactionPercent = totalWithOutcome > 0
+      ? Math.round((resolvedOrClosedCount / totalWithOutcome) * 100)
+      : 0;
 
     const userName = userRole.firstName || session.user?.name || "Председатель";
 
@@ -314,7 +330,7 @@ export default async function DashboardPage() {
           totalNews,
           totalDocuments,
           totalEmployees,
-          membershipPercent,
+          appealSatisfactionPercent,
           growthYTD,
         }}
         recentAppeals={recentAppeals.map((a) => ({

@@ -20,7 +20,7 @@ export interface DemoStats {
   totalNews: number;
   totalDocuments: number;
   totalEmployees: number;
-  membershipPercent: number;
+  appealSatisfactionPercent: number;
   growthYTD: number;
 }
 
