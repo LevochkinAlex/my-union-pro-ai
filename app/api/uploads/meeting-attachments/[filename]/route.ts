@@ -51,7 +51,7 @@ export async function GET(
     const fileKey = `meeting-attachments/${filename}`;
     const fileBuffer = await getFileFromVDS(fileKey);
 
-    return new NextResponse(fileBuffer as Buffer, {
+    return new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,
       headers: {
         "Content-Type": contentType,

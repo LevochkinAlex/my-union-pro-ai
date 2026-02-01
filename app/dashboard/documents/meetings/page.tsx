@@ -316,12 +316,13 @@ export default function MeetingsPage() {
     }));
   };
 
+  type AgendaItemForm = { title: string; description: string; speakerId: string; speakerName: string; speakerPosition: string; coSpeakerId: string; coSpeakerName: string; attachments: Array<{ name: string; url: string; size?: number }> };
   const updateAgendaItem = (index: number, field: "title" | "description" | "speakerId" | "speakerName" | "speakerPosition" | "coSpeakerId" | "coSpeakerName" | "attachments", value: string | Array<{ name: string; url: string; size?: number }>) => {
     setFormData(prev => ({
       ...prev,
-      agendaItems: prev.agendaItems.map((item, i) => {
-        if (i !== index) return item;
-        if (field === "speakerId" && value) {
+      agendaItems: prev.agendaItems.map((item, i): AgendaItemForm => {
+        if (i !== index) return item as AgendaItemForm;
+        if (field === "speakerId" && typeof value === "string") {
           const member = electedBodyMembers.find(m => m.id === value);
           return {
             ...item,
@@ -330,15 +331,16 @@ export default function MeetingsPage() {
             speakerPosition: member ? (member.jobTitle || member.roleName || "") : "",
           };
         }
-        if (field === "speakerName" && value) return { ...item, speakerName: value, speakerId: "", speakerPosition: "" };
+        if (field === "speakerName" && typeof value === "string") return { ...item, speakerName: value, speakerId: "", speakerPosition: "" };
         if (field === "speakerPosition" && typeof value === "string") return { ...item, speakerPosition: value };
-        if (field === "coSpeakerId" && value) {
+        if (field === "coSpeakerId" && typeof value === "string") {
           const member = electedBodyMembers.find(m => m.id === value);
           return { ...item, coSpeakerId: value, coSpeakerName: member ? getMemberFullName(member) : "" };
         }
-        if (field === "coSpeakerName" && value) return { ...item, coSpeakerName: value, coSpeakerId: "" };
+        if (field === "coSpeakerName" && typeof value === "string") return { ...item, coSpeakerName: value, coSpeakerId: "" };
         if (field === "attachments") return { ...item, attachments: value as Array<{ name: string; url: string; size?: number }> };
-        return { ...item, [field]: value };
+        if (field === "title" || field === "description") return { ...item, [field]: value as string };
+        return item as AgendaItemForm;
       }),
     }));
   };
