@@ -317,7 +317,31 @@ export async function POST(
         ? "Протокол создан и утверждён. Можно отправлять в печать."
         : `${documentType === "AGENDA" ? "Повестка" : "Протокол"} успешно сформирован(а).`);
 
-    return NextResponse.json({ document, message });
+    // Возвращаем обновлённое заседание с актуальными статусами документов для синхронизации UI
+    const updatedMeeting = await prisma.meeting.findUnique({
+      where: { id },
+      include: {
+        organization: { select: { id: true, name: true, chairmanName: true, chairmanJobTitle: true } },
+        createdBy: { select: { id: true, firstName: true, lastName: true, middleName: true } },
+        agendaDocument: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true } },
+        protocolDocument: { select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true } },
+        resolutions: { select: { id: true, regNumber: true, status: true, filePath: true, title: true } },
+        extracts: { select: { id: true, regNumber: true, status: true, filePath: true, title: true } },
+        participants: {
+          include: { user: { select: { id: true, firstName: true, lastName: true, middleName: true, jobTitle: true, email: true } } },
+          orderBy: [{ role: "asc" }, { createdAt: "asc" }],
+        },
+        agendaItems: {
+          include: {
+            speaker: { select: { id: true, firstName: true, lastName: true, middleName: true } },
+            votes: { include: { user: { select: { id: true, firstName: true, lastName: true } } } },
+          },
+          orderBy: { orderNumber: "asc" },
+        },
+      },
+    });
+
+    return NextResponse.json({ document, message, meeting: updatedMeeting });
   } catch (error: any) {
     console.error("[ppo-head/meetings/[id]/generate-document] POST error:", error);
     return NextResponse.json(

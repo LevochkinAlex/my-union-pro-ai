@@ -2160,7 +2160,7 @@ export default function MeetingDetailPage({
                           });
                           if (!res.ok) throw new Error((await res.json()).error);
                           const data = await res.json();
-                          loadMeeting();
+                          if (data.meeting) setMeeting(data.meeting);
                           if (data.document?.filePath) setPdfPreviewUrl(data.document.filePath);
                         } catch (e) {
                           alertError(e instanceof Error ? e.message : "Ошибка предпросмотра");
@@ -2191,8 +2191,8 @@ export default function MeetingDetailPage({
                           });
                           if (!res.ok) throw new Error((await res.json()).error);
                           const data = await res.json();
+                          if (data.meeting) setMeeting(data.meeting);
                           alertSuccess(data.message || "Протокол сохранён в черновики");
-                          loadMeeting();
                         } catch (e) {
                           alertError(e instanceof Error ? e.message : "Не удалось сохранить");
                         } finally {
@@ -2218,8 +2218,8 @@ export default function MeetingDetailPage({
                           });
                           if (!res.ok) throw new Error((await res.json()).error);
                           const data = await res.json();
+                          if (data.meeting) setMeeting(data.meeting);
                           alertSuccess(data.message || "Протокол утверждён. Можно отправлять в печать.");
-                          loadMeeting();
                         } catch (e) {
                           alertError(e instanceof Error ? e.message : "Не удалось утвердить");
                         } finally {
