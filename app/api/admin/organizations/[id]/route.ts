@@ -64,7 +64,34 @@ export async function GET(
       return NextResponse.json({ error: "Организация не найдена" }, { status: 404 });
     }
 
-    return NextResponse.json({ organization });
+    // Председатель — пользователь с ppoHeadOrganizationId = эта организация (для подстановки email/телефона в форме)
+    const chairmanUser = await prisma.user.findFirst({
+      where: { ppoHeadOrganizationId: id },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        jobTitle: true,
+      },
+    });
+
+    return NextResponse.json({
+      organization,
+      chairmanUser: chairmanUser
+        ? {
+            id: chairmanUser.id,
+            email: chairmanUser.email ?? "",
+            phone: chairmanUser.phone ?? "",
+            firstName: chairmanUser.firstName ?? "",
+            lastName: chairmanUser.lastName ?? "",
+            middleName: chairmanUser.middleName ?? "",
+            jobTitle: chairmanUser.jobTitle ?? "",
+          }
+        : null,
+    });
   } catch (error) {
     console.error("[admin/organizations] GET [id] error:", error);
     return NextResponse.json(

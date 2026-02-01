@@ -279,6 +279,7 @@ model User {
   createdMeetings       Meeting[]            @relation("MeetingCreatedBy")
   meetingParticipations MeetingParticipant[] @relation("UserMeetingParticipations")
   agendaItemsSpeaker    MeetingAgendaItem[]  @relation("AgendaItemSpeaker")
+  agendaItemsCoSpeaker MeetingAgendaItem[]  @relation("AgendaItemCoSpeaker")
   agendaVotes           MeetingAgendaVote[]  @relation("UserAgendaVotes")
 
   @@index([email])
@@ -925,6 +926,11 @@ model Meeting {
   resolutions Document[] @relation("MeetingResolutions")
   extracts    Document[] @relation("MeetingExtracts")
 
+  // Протокол: избранные на заседании (заполняются на шаге протокола)
+  presidingOfficerUserId String? // Председательствующий (из выборного органа)
+  secretaryUserId        String? // Секретарь заседания (из выборного органа)
+  voteCounterUserIds     String? @db.Text // JSON: массив userId ответственных за подсчёт голосов
+
   // Созыватель/Организатор
   createdById String
   createdBy   User   @relation("MeetingCreatedBy", fields: [createdById], references: [id])
@@ -954,8 +960,10 @@ enum MeetingParticipantRole {
 enum MeetingAttendanceStatus {
   INVITED // Приглашён
   CONFIRMED // Подтвердил участие
-  PRESENT // Присутствует
-  ABSENT // Отсутствует
+  PRESENT // Присутствует (очно, для обратной совместимости)
+  PRESENT_OFFLINE // Присутствовал очно
+  PRESENT_ONLINE // Присутствовал онлайн
+  ABSENT // Отсутствовал
   EXCUSED // Отсутствует по уважительной причине
 }
 
@@ -1013,6 +1021,10 @@ model MeetingAgendaItem {
   speaker         User?   @relation("AgendaItemSpeaker", fields: [speakerId], references: [id])
   speakerName     String? // ФИО докладчика (если не из системы)
   speakerPosition String? // Должность докладчика
+  // Со-докладчик (в документ в клеточку «докладывал»)
+  coSpeakerId   String?
+  coSpeaker     User?   @relation("AgendaItemCoSpeaker", fields: [coSpeakerId], references: [id])
+  coSpeakerName String?
 
   // ПОСТАНОВИЛИ
   resolutionText String? @db.Text // Текст постановления
@@ -2403,6 +2415,12 @@ model StaffRole {
 
   // Активна ли роль
   isActive Boolean @default(true)
+
+  // Роль в выборном органе (Председатель ППО, Зам. председателя, Член профкома) — для состава заседаний
+  isElectedBody Boolean @default(false)
+
+  // Управленец профкома (председатель, зам.) — для полей «Докладывает»/«Со-докладчик»; не «Член Профкома»
+  isManagement Boolean @default(false)
 
   // Сотрудники с этой ролью
   staff OrganizationStaff[]

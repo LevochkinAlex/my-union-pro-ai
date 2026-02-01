@@ -147,7 +147,11 @@ export default async function DashboardLayout({
         </svg>
       ),
       subItems: [
-        { href: "/dashboard/documents/meetings", label: "Заседания профкома" },
+        { href: "/dashboard/documents/meetings", label: "Все документы" },
+        { href: "/dashboard/documents/meetings?tab=agenda", label: "Повестки заседания" },
+        { href: "/dashboard/documents/meetings?tab=protocol", label: "Протоколы" },
+        { href: "/dashboard/documents/meetings?tab=resolutions", label: "Постановления" },
+        { href: "/dashboard/documents/meetings?tab=extracts", label: "Выписки" },
       ],
     });
     

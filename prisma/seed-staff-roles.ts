@@ -56,9 +56,13 @@ const DEFAULT_ROLES: Array<{
   name: string;
   description: string;
   permissions: StaffPermissions;
+  isElectedBody?: boolean; // Роль в выборном органе (для состава заседаний)
+  isManagement?: boolean; // Управленец профкома (для полей Докладывает/Со-докладчик)
 }> = [
   {
     name: "Заместитель председателя",
+    isElectedBody: true,
+    isManagement: true,
     description:
       "Полный доступ ко всем функциям кроме управления сотрудниками и ролями",
     permissions: {
@@ -204,6 +208,36 @@ const DEFAULT_ROLES: Array<{
       staff_manage: false,
     },
   },
+  {
+    name: "Член Профкома",
+    description: "Член выборного органа (профсоюзного комитета), участвует в заседаниях",
+    isElectedBody: true,
+    permissions: {
+      documents_view: true,
+      documents_create: false,
+      documents_edit: false,
+      discounts_view: true,
+      discounts_manage: false,
+      members_view: true,
+      members_edit: false,
+      members_manage: false,
+      appeals_view: true,
+      appeals_respond: false,
+      appeals_manage: false,
+      chats_view: true,
+      chats_participate: true,
+      chats_create: false,
+      news_view: true,
+      news_create: false,
+      news_manage: false,
+      reports_view: false,
+      reports_create: false,
+      settings_view: false,
+      settings_manage: false,
+      staff_view: false,
+      staff_manage: false,
+    },
+  },
 ];
 
 /**
@@ -230,9 +264,13 @@ export async function createDefaultRolesForOrganization(
           permissions: roleData.permissions as any,
           isSystem: true,
           isActive: true,
+          isElectedBody: roleData.isElectedBody ?? false,
+          isManagement: roleData.isManagement ?? false,
         },
         update: {
           description: roleData.description,
+          isElectedBody: roleData.isElectedBody ?? undefined,
+          isManagement: roleData.isManagement ?? undefined,
           // Не обновляем permissions для существующих ролей - председатель мог их настроить
         },
       });

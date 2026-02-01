@@ -76,6 +76,9 @@ export async function POST(
             speaker: {
               select: { id: true, firstName: true, lastName: true, middleName: true, jobTitle: true },
             },
+            coSpeaker: {
+              select: { id: true, firstName: true, lastName: true, middleName: true },
+            },
             votes: true,
           },
           orderBy: { orderNumber: "asc" },
@@ -134,7 +137,8 @@ export async function POST(
 
     const chairman = meeting.participants.find(p => p.role === "CHAIRMAN");
     const secretary = meeting.participants.find(p => p.role === "SECRETARY");
-    const presentMembers = meeting.participants.filter(p => p.attendance === "PRESENT");
+    const presentStatuses = ["PRESENT", "PRESENT_OFFLINE", "PRESENT_ONLINE"];
+    const presentMembers = meeting.participants.filter(p => presentStatuses.includes(p.attendance));
     const absentMembers = meeting.participants.filter(p => p.attendance === "ABSENT" || p.attendance === "EXCUSED");
 
     const templateData = {
@@ -286,21 +290,36 @@ export async function POST(
   }
 }
 
+// Экранирование HTML для безопасной подстановки в PDF
+function escapeHtml(s: string | null | undefined): string {
+  if (s == null || s === "") return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 // Генерация HTML для Повестки дня
 function generateAgendaHTML(meeting: any, data: any): string {
   const agendaItemsHtml = meeting.agendaItems
-    .map((item: any, index: number) => `
+    .map((item: any) => {
+      const speakerText = item.speakerName || (item.speaker ? [item.speaker.lastName, item.speaker.firstName, item.speaker.middleName].filter(Boolean).join(" ") : "");
+      const speakerPosition = (item.speakerPosition || (item.speaker?.jobTitle ?? "")).trim();
+      const coSpeakerText = item.coSpeakerName || (item.coSpeaker ? [item.coSpeaker.lastName, item.coSpeaker.firstName, item.coSpeaker.middleName].filter(Boolean).join(" ") : "");
+      const docladchikLine = speakerText ? (speakerPosition ? `Докладчик: ${escapeHtml(speakerText)}, ${escapeHtml(speakerPosition)}` : `Докладчик: ${escapeHtml(speakerText)}`) : "";
+      return `
       <tr>
         <td style="width: 40px; text-align: center; vertical-align: top; padding: 8px;">${item.orderNumber}.</td>
         <td style="padding: 8px;">
-          <strong>${item.title}</strong>
-          ${item.description ? `<br><span style="color: #666;">${item.description}</span>` : ""}
-          ${item.speakerName || item.speaker ? `
-            <br><em>Докладчик: ${item.speakerName || [item.speaker?.lastName, item.speaker?.firstName, item.speaker?.middleName].filter(Boolean).join(" ")}</em>
-          ` : ""}
+          <strong>${escapeHtml(item.title)}</strong>
+          ${item.description ? `<br><span style="color: #666;">${escapeHtml(item.description)}</span>` : ""}
+          ${docladchikLine ? `<br><em>${docladchikLine}</em>` : ""}
+          ${coSpeakerText ? `<br><em>Со-докладчик: ${escapeHtml(coSpeakerText)}</em>` : ""}
         </td>
       </tr>
-    `)
+    `;
+    })
     .join("");
 
   return `
@@ -406,30 +425,41 @@ function generateAgendaHTML(meeting: any, data: any): string {
   `.trim();
 }
 
-// Генерация HTML для Протокола
+// Генерация HTML для Протокола.
+// Данные берутся из meeting.agendaItems (поля заполняются в форме «Заполнение протокола» и сохраняются через PATCH /api/ppo-head/meetings/[id]/agenda):
+// — СЛУШАЛИ: item.heardText || item.title
+// — ДОКЛАДЫВАЛ: item.speakerName / item.speaker, item.speakerPosition / item.speaker.jobTitle, item.coSpeakerName / item.coSpeaker
+// — ПОСТАНОВИЛИ: item.resolutionText
+// — ГОЛОСОВАНИЕ: item.votesFor, item.votesAgainst, item.votesAbstained; Решение: item.isApproved (true/false)
+// — РЕШИЛИ: item.decidedText (если указано)
 function generateProtocolHTML(meeting: any, data: any): string {
   const agendaItemsHtml = meeting.agendaItems
     .map((item: any) => {
-      const speakerName = item.speakerName || 
+      const speakerName = item.speakerName ||
         (item.speaker ? [item.speaker.lastName, item.speaker.firstName, item.speaker.middleName].filter(Boolean).join(" ") : "");
-      
+      const coSpeakerName = item.coSpeakerName ||
+        (item.coSpeaker ? [item.coSpeaker.lastName, item.coSpeaker.firstName, item.coSpeaker.middleName].filter(Boolean).join(" ") : "");
+      const speakerLine = speakerName || "____________________________";
+      const coSpeakerLine = coSpeakerName ? ` Со-докладчик: ${coSpeakerName}` : "";
+      const positionText = (item.speakerPosition || (item.speaker?.jobTitle ?? "")).trim();
+      const positionLine = positionText ? ` ${escapeHtml(positionText)}` : "";
       return `
         <div class="agenda-item">
-          <p class="item-number"><strong>${item.orderNumber}. ${item.title}</strong></p>
+          <p class="item-number"><strong>${item.orderNumber}. ${escapeHtml(item.title)}</strong></p>
           
           <div class="section">
             <p class="section-title">СЛУШАЛИ:</p>
-            <p>${item.heardText || item.title}</p>
+            <p>${escapeHtml(item.heardText || item.title)}</p>
           </div>
           
           <div class="section">
             <p class="section-title">ДОКЛАДЫВАЛ:</p>
-            <p>${speakerName || "____________________________"} ${item.speakerPosition || ""}</p>
+            <p>${escapeHtml(speakerLine)}${positionLine}${coSpeakerLine ? `<br>Со-докладчик: ${escapeHtml(coSpeakerName)}` : ""}</p>
           </div>
           
           <div class="section">
             <p class="section-title">ПОСТАНОВИЛИ:</p>
-            <p>${item.resolutionText || "____________________________"}</p>
+            <p>${escapeHtml(item.resolutionText || "____________________________")}</p>
           </div>
           
           <div class="voting">
@@ -449,7 +479,7 @@ function generateProtocolHTML(meeting: any, data: any): string {
           ${item.decidedText ? `
           <div class="section">
             <p class="section-title">РЕШИЛИ:</p>
-            <p>${item.decidedText}</p>
+            <p>${escapeHtml(item.decidedText)}</p>
           </div>
           ` : ""}
         </div>

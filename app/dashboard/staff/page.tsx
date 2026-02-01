@@ -75,6 +75,9 @@ export default function StaffManagementPage() {
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
   const [showEditRoleModal, setShowEditRoleModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState<StaffRole | null>(null);
+  const [showEditStaffModal, setShowEditStaffModal] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   // Форма добавления сотрудника
   const [addStaffForm, setAddStaffForm] = useState({
@@ -163,6 +166,51 @@ export default function StaffManagementPage() {
       fetchData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка");
+    }
+  };
+
+  // Повторная отправка приглашения (только для PENDING)
+  const handleResendInvite = async (staffId: string) => {
+    try {
+      setResendingId(staffId);
+      const res = await fetch(`/api/ppo-head/staff/${staffId}/resend-invite`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка отправки");
+      setError(null);
+      fetchData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось отправить приглашение");
+    } finally {
+      setResendingId(null);
+    }
+  };
+
+  // Редактирование сотрудника (открыть модалку)
+  const handleEditStaff = (member: StaffMember) => {
+    setEditingStaff(member);
+    setShowEditStaffModal(true);
+  };
+
+  // Сохранение изменений сотрудника (роль)
+  const handleSaveStaff = async (staffId: string, roleId: string) => {
+    try {
+      const res = await fetch(`/api/ppo-head/staff/${staffId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roleId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Ошибка сохранения");
+      }
+      setShowEditStaffModal(false);
+      setEditingStaff(null);
+      setError(null);
+      fetchData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ошибка сохранения");
     }
   };
 
@@ -424,7 +472,32 @@ export default function StaffManagementPage() {
                           {new Date(member.invitedAt).toLocaleDateString("ru-RU")}
                         </td>
                         <td className="py-4">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-2 flex-wrap">
+                            <button
+                              onClick={() => handleEditStaff(member)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                              title="Редактировать"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            {member.status === "PENDING" && (
+                              <button
+                                onClick={() => handleResendInvite(member.id)}
+                                disabled={resendingId === member.id}
+                                className="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors disabled:opacity-50"
+                                title="Отправить приглашение повторно"
+                              >
+                                {resendingId === member.id ? (
+                                  <span className="text-xs">Отправка...</span>
+                                ) : (
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                  </svg>
+                                )}
+                              </button>
+                            )}
                             {member.status === "ACTIVE" && (
                               <button
                                 onClick={() => handleChangeStaffStatus(member.id, "INACTIVE")}
@@ -648,6 +721,93 @@ export default function StaffManagementPage() {
           onSave={handleSaveRole}
         />
       )}
+
+      {/* Модалка редактирования сотрудника */}
+      {showEditStaffModal && editingStaff && (
+        <EditStaffModal
+          member={editingStaff}
+          roles={roles}
+          onClose={() => {
+            setShowEditStaffModal(false);
+            setEditingStaff(null);
+          }}
+          onSave={handleSaveStaff}
+        />
+      )}
+    </div>
+  );
+}
+
+// Модалка редактирования сотрудника (роль)
+function EditStaffModal({
+  member,
+  roles,
+  onClose,
+  onSave,
+}: {
+  member: StaffMember;
+  roles: StaffRole[];
+  onClose: () => void;
+  onSave: (staffId: string, roleId: string) => void;
+}) {
+  const [roleId, setRoleId] = useState(member.role.id);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (roleId === member.role.id) {
+      onClose();
+      return;
+    }
+    setSaving(true);
+    await onSave(member.id, roleId);
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-4">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+          Редактировать сотрудника
+        </h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          {[member.user.lastName, member.user.firstName, member.user.middleName].filter(Boolean).join(" ") || member.user.email || "Без имени"}
+          {member.user.email && (
+            <span className="block text-gray-600 dark:text-gray-300 mt-1">{member.user.email}</span>
+          )}
+        </p>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Роль (должность)
+          </label>
+          <select
+            value={roleId}
+            onChange={(e) => setRoleId(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          >
+            {roles.map((role) => (
+              <option key={role.id} value={role.id}>
+                {role.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg"
+          >
+            Отмена
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg disabled:opacity-50"
+          >
+            {saving ? "Сохранение..." : "Сохранить"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

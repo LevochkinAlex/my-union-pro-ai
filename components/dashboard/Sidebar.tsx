@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import ThemeToggle from "@/components/ThemeToggle";
 import { LogoIcon } from "@/components/Logo";
 import { signOut } from "next-auth/react";
@@ -32,8 +32,10 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
   const [isNavigating, setIsNavigating] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { openTour } = useTour();
+  const fullPath = pathname + (searchParams.toString() ? `?${searchParams.toString()}` : "");
 
   // Обновляем отступ контента при изменении состояния sidebar
   useEffect(() => {
@@ -90,9 +92,15 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
 
             const hasSubItems = item.subItems && item.subItems.length > 0;
             
-            // Check if any sub-item is active
+            // Check if any sub-item is active (pathname + query for same-path sub-items)
             const isSubItemActive = hasSubItems && item.subItems!.some(
-              (subItem) => pathname === subItem.href || pathname.startsWith(subItem.href + "/")
+              (subItem) => {
+                const hrefPath = subItem.href.split("?")[0];
+                const hrefQuery = subItem.href.includes("?") ? subItem.href.split("?")[1] : "";
+                if (pathname !== hrefPath) return pathname.startsWith(subItem.href + "/");
+                if (!hrefQuery) return pathname === subItem.href;
+                return fullPath === subItem.href;
+              }
             );
             
             // Main item is active ONLY if we're exactly on it AND it's not duplicated in sub-items
@@ -202,11 +210,15 @@ export default function Sidebar({ items, userInitial, avatarUrl, isAdmin = false
                 {hasSubItems && isExpanded && !isCollapsed && (
                   <div className="mt-0.5 ml-2.5 space-y-0.5 border-l-2 border-gray-200 pl-3 dark:border-gray-700">
                     {item.subItems!.map((subItem) => {
-                      const isExactMatch = pathname === subItem.href;
-                      const isChildPage = pathname.startsWith(subItem.href + "/") && 
-                                         !item.subItems!.some(other => 
-                                           other.href !== subItem.href && 
-                                           (pathname === other.href || pathname.startsWith(other.href + "/"))
+                      const hrefPath = subItem.href.split("?")[0];
+                      const hasQuery = subItem.href.includes("?");
+                      const isExactMatch = hasQuery
+                        ? fullPath === subItem.href
+                        : pathname === subItem.href;
+                      const isChildPage = pathname.startsWith(hrefPath + "/") &&
+                                         !item.subItems!.some(other =>
+                                           other.href !== subItem.href &&
+                                           (pathname === other.href.split("?")[0] || pathname.startsWith(other.href.split("?")[0] + "/"))
                                          );
                       const subIsActive = isExactMatch || isChildPage;
                       

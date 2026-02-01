@@ -266,6 +266,9 @@ function getShouldSendEmail(
     case "user_post":
       // Уведомления о новых постах также используют emailAppealNotifications
       return user.emailAppealNotifications;
+    case "staff_added":
+      // Приглашение/назначение в состав управляющего органа — всегда отправляем email
+      return true;
     default:
       // Для неизвестных типов не отправляем email
       return false;
@@ -301,6 +304,8 @@ function getEmailSubject(type: NotificationType, senderName?: string): string {
       return "Опубликована новая новость";
     case "mass_notification":
       return "Важное уведомление";
+    case "staff_added":
+      return "Приглашение в состав управляющего органа профкома";
     default:
       return "Новое уведомление";
   }
@@ -348,6 +353,9 @@ function getEmailBody(
       message = `${body}\n\n`;
       break;
     case "mass_notification":
+      message = `${body}\n\n`;
+      break;
+    case "staff_added":
       message = `${body}\n\n`;
       break;
     default:
@@ -408,6 +416,10 @@ function getEmailHtml(
     case "mass_notification":
       message = body;
       actionText = "Открыть уведомление";
+      break;
+    case "staff_added":
+      message = body;
+      actionText = "Перейти в личный кабинет";
       break;
     default:
       message = body;

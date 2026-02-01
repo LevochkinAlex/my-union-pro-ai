@@ -171,18 +171,20 @@ export default function MeetingDetailPage({
         const data = await response.json();
         setMeeting(data.meeting);
         
-        // Инициализация данных протокола из agendaItems
+        // Инициализация данных протокола из agendaItems (все поля, которые выводятся в PDF протокола)
         const initialData: Record<string, any> = {};
         data.meeting.agendaItems.forEach((item: AgendaItem) => {
           initialData[item.id] = {
             heardText: item.heardText || item.title,
             speakerId: item.speakerId || "",
             speakerName: item.speakerName || "",
+            speakerPosition: item.speakerPosition || "",
             resolutionText: item.resolutionText || "",
             decidedText: item.decidedText || "",
-            votesFor: item.votesFor || 0,
-            votesAgainst: item.votesAgainst || 0,
-            votesAbstained: item.votesAbstained || 0,
+            votesFor: item.votesFor ?? 0,
+            votesAgainst: item.votesAgainst ?? 0,
+            votesAbstained: item.votesAbstained ?? 0,
+            isApproved: item.isApproved ?? null,
           };
         });
         setProtocolData(initialData);
@@ -392,35 +394,33 @@ export default function MeetingDetailPage({
           }`}>
             {MEETING_STATUS_LABELS[meeting.status]}
           </span>
-          {meeting.status === "DRAFT" && (
-            <button
-              onClick={async () => {
-                const confirmed = await confirm(
-                  "Вы уверены, что хотите удалить это заседание? Это действие нельзя отменить.",
-                  "Подтвердите удаление"
-                );
-                if (!confirmed) {
-                  return;
+          <button
+            onClick={async () => {
+              const confirmed = await confirm(
+                "Вы уверены, что хотите удалить это заседание? Это действие нельзя отменить.",
+                "Подтвердите удаление"
+              );
+              if (!confirmed) {
+                return;
+              }
+              try {
+                const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}`, {
+                  method: "DELETE",
+                });
+                if (!response.ok) {
+                  const error = await response.json();
+                  throw new Error(error.error || "Ошибка удаления");
                 }
-                try {
-                  const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}`, {
-                    method: "DELETE",
-                  });
-                  if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || "Ошибка удаления");
-                  }
-                  alertSuccess("Заседание удалено");
-                  router.push("/dashboard/documents/meetings");
-                } catch (error) {
-                  alertError(error instanceof Error ? error.message : "Не удалось удалить заседание");
-                }
-              }}
-              className="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"
-            >
-              Удалить
-            </button>
-          )}
+                alertSuccess("Заседание удалено");
+                router.push("/dashboard/documents/meetings");
+              } catch (error) {
+                alertError(error instanceof Error ? error.message : "Не удалось удалить заседание");
+              }
+            }}
+            className="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"
+          >
+            Удалить
+          </button>
         </div>
       </div>
 
@@ -602,7 +602,7 @@ export default function MeetingDetailPage({
       {/* Контент табов */}
       {activeTab === "info" && (
         <div className="flex flex-col gap-6">
-          {/* Информация о заседании */}
+          {/* Общая информация */}
           <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
             <h3 className="mb-4 font-semibold text-gray-900 dark:text-white">Общая информация</h3>
             <dl className="space-y-3 text-sm">
@@ -629,90 +629,121 @@ export default function MeetingDetailPage({
             </dl>
           </div>
 
-          {/* Участники */}
+          {/* Итог проведения: присутствовали / отсутствовали — только финал, без переключателей */}
           <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900 dark:text-white">
-                Участники ({meeting.participants.length})
-              </h3>
-              <button
-                onClick={async () => {
-                  try {
-                    const participantsWithUserId = meeting.participants.filter(p => p.user?.id);
-                    await Promise.all(
-                      participantsWithUserId.map(p =>
-                        fetch(`/api/ppo-head/meetings/${resolvedParams.id}/participants/${p.id}`, {
-                          method: "PATCH",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ attendance: "PRESENT" }),
-                        })
-                      )
-                    );
-                    alertSuccess("Все участники отмечены как присутствующие");
-                    loadMeeting();
-                  } catch (error) {
-                    alertError("Ошибка обновления статусов");
-                  }
-                }}
-                className="text-xs rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
-              >
-                Отметить всех присутствующими
-              </button>
+            <h3 className="mb-4 font-semibold text-gray-900 dark:text-white">Итог проведения</h3>
+            <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+              Участники и статус присутствия по итогам заседания (только просмотр).
+            </p>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div>
+                <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Присутствовали ({meeting.participants.filter(p => p.attendance === "PRESENT" || p.attendance === "PRESENT_OFFLINE" || p.attendance === "PRESENT_ONLINE").length})
+                </h4>
+                <ul className="space-y-1.5 text-sm">
+                  {meeting.participants
+                    .filter(p => p.attendance === "PRESENT" || p.attendance === "PRESENT_OFFLINE" || p.attendance === "PRESENT_ONLINE")
+                    .map((p) => (
+                      <li key={p.id} className="flex items-center gap-2">
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-green-500" />
+                        <span>{getParticipantName(p)}</span>
+                        {p.role === "CHAIRMAN" && <span className="text-xs text-blue-600">(Председатель)</span>}
+                        {p.role === "SECRETARY" && <span className="text-xs text-purple-600">(Секретарь)</span>}
+                        {(p.attendance === "PRESENT_ONLINE" || p.attendance === "PRESENT_OFFLINE") && (
+                          <span className="text-xs text-gray-500">
+                            {p.attendance === "PRESENT_ONLINE" ? "онлайн" : "очно"}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  {meeting.participants.filter(p => p.attendance === "PRESENT" || p.attendance === "PRESENT_OFFLINE" || p.attendance === "PRESENT_ONLINE").length === 0 && (
+                    <li className="text-gray-500 dark:text-gray-400">—</li>
+                  )}
+                </ul>
+              </div>
+              <div>
+                <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Отсутствовали ({meeting.participants.filter(p => p.attendance === "ABSENT" || p.attendance === "EXCUSED" || p.attendance === "INVITED" || p.attendance === "CONFIRMED").length})
+                </h4>
+                <ul className="space-y-1.5 text-sm">
+                  {meeting.participants
+                    .filter(p => p.attendance === "ABSENT" || p.attendance === "EXCUSED" || p.attendance === "INVITED" || p.attendance === "CONFIRMED")
+                    .map((p) => (
+                      <li key={p.id} className="flex items-center gap-2">
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                        <span>{getParticipantName(p)}</span>
+                        {p.role === "CHAIRMAN" && <span className="text-xs text-blue-600">(Председатель)</span>}
+                        {p.role === "SECRETARY" && <span className="text-xs text-purple-600">(Секретарь)</span>}
+                        {p.attendance === "EXCUSED" && <span className="text-xs text-gray-500">(уваж. причина)</span>}
+                      </li>
+                    ))}
+                  {meeting.participants.filter(p => p.attendance === "ABSENT" || p.attendance === "EXCUSED" || p.attendance === "INVITED" || p.attendance === "CONFIRMED").length === 0 && (
+                    <li className="text-gray-500 dark:text-gray-400">—</li>
+                  )}
+                </ul>
+              </div>
             </div>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {meeting.participants.map((p) => (
-                <div key={p.id} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2 w-2 rounded-full ${
-                      p.attendance === "PRESENT" ? "bg-green-500" :
-                      p.attendance === "ABSENT" ? "bg-red-500" : "bg-gray-300"
-                    }`} />
-                    <span>{getParticipantName(p)}</span>
-                    {p.role === "CHAIRMAN" && (
-                      <span className="text-xs text-blue-600">(Председатель)</span>
-                    )}
-                    {p.role === "SECRETARY" && (
-                      <span className="text-xs text-purple-600">(Секретарь)</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {p.canVote && (
-                      <span className="text-xs text-gray-500">Голосует</span>
-                    )}
-                    <select
-                      value={p.attendance}
-                      onChange={async (e) => {
-                        try {
-                          const response = await fetch(
-                            `/api/ppo-head/meetings/${resolvedParams.id}/participants/${p.id}`,
-                            {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ attendance: e.target.value }),
-                            }
-                          );
-                          if (response.ok) {
-                            loadMeeting();
-                          } else {
-                            const error = await response.json();
-                            alertError(error.error || "Ошибка обновления статуса");
-                          }
-                        } catch (error) {
-                          alertError("Ошибка обновления статуса");
-                        }
-                      }}
-                      className="text-xs rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-700"
-                    >
-                      <option value="INVITED">Приглашён</option>
-                      <option value="CONFIRMED">Подтвердил</option>
-                      <option value="PRESENT">Присутствует</option>
-                      <option value="ABSENT">Отсутствует</option>
-                      <option value="EXCUSED">Отсутствует (уваж. причина)</option>
-                    </select>
-                  </div>
-                </div>
-              ))}
-            </div>
+          </div>
+
+          {/* Что утверждено */}
+          <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+            <h3 className="mb-4 font-semibold text-gray-900 dark:text-white">Утверждено</h3>
+            <ul className="space-y-2 text-sm">
+              <li className="flex items-center gap-2">
+                {meeting.agendaDocument?.status === "COMPLETED" ? (
+                  <span className="h-5 w-5 rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 flex items-center justify-center flex-shrink-0">
+                    <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                  </span>
+                ) : (
+                  <span className="h-5 w-5 rounded-full bg-gray-200 dark:bg-gray-600 flex-shrink-0" />
+                )}
+                <span>Повестка дня</span>
+                {meeting.agendaDocument?.regNumber && (
+                  <span className="text-gray-500 dark:text-gray-400">— {meeting.agendaDocument.regNumber}</span>
+                )}
+                {meeting.agendaDocument?.status === "COMPLETED" && (
+                  <span className="text-green-600 dark:text-green-400 text-xs font-medium">утверждена</span>
+                )}
+              </li>
+              <li className="flex items-center gap-2">
+                {meeting.protocolDocument?.status === "COMPLETED" ? (
+                  <span className="h-5 w-5 rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 flex items-center justify-center flex-shrink-0">
+                    <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                  </span>
+                ) : (
+                  <span className="h-5 w-5 rounded-full bg-gray-200 dark:bg-gray-600 flex-shrink-0" />
+                )}
+                <span>Протокол</span>
+                {meeting.protocolDocument?.regNumber && (
+                  <span className="text-gray-500 dark:text-gray-400">— {meeting.protocolDocument.regNumber}</span>
+                )}
+                {meeting.protocolDocument?.status === "COMPLETED" && (
+                  <span className="text-green-600 dark:text-green-400 text-xs font-medium">утверждён</span>
+                )}
+              </li>
+              {meeting.agendaItems.length > 0 && meeting.protocolDocument?.status === "COMPLETED" && (
+                <>
+                  <li className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Вопросы повестки
+                  </li>
+                  {meeting.agendaItems.map((item) => (
+                    <li key={item.id} className="flex items-center gap-2 pl-7">
+                      {item.isApproved === true ? (
+                        <span className="h-4 w-4 rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                          <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                        </span>
+                      ) : (
+                        <span className="h-4 w-4 rounded-full bg-gray-200 dark:bg-gray-600 flex-shrink-0" />
+                      )}
+                      <span className={item.isApproved === true ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"}>
+                        {item.orderNumber}. {item.title}
+                      </span>
+                      {item.isApproved === true && <span className="text-green-600 dark:text-green-400 text-xs">принят</span>}
+                    </li>
+                  ))}
+                </>
+              )}
+            </ul>
           </div>
         </div>
       )}
@@ -927,6 +958,19 @@ export default function MeetingDetailPage({
                       </svg>
                       Просмотреть PDF
                     </button>
+                    {meeting.protocolDocument.status === "COMPLETED" && (
+                      <a
+                        href={meeting.protocolDocument.filePath}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-600 bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 dark:border-green-500 dark:bg-green-600 dark:hover:bg-green-700"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h2z" />
+                        </svg>
+                        Печать
+                      </a>
+                    )}
                     <a
                       href={meeting.protocolDocument.filePath}
                       download
@@ -1054,31 +1098,11 @@ export default function MeetingDetailPage({
           {/* Форма заполнения протокола */}
           {meeting.agendaDocument && (
             <>
-              <div className="flex items-center justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
-                <div>
-                  <h3 className="font-semibold text-gray-900 dark:text-white">Заполнение протокола</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Заполните данные по каждому вопросу повестки дня
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={saveProtocolData}
-                    disabled={isSaving}
-                    className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:hover:bg-gray-700"
-                  >
-                    {isSaving ? "Сохранение..." : "Сохранить черновик"}
-                  </button>
-                  {!meeting.protocolDocument && (
-                    <button
-                      onClick={() => handleGenerateDocument("PROTOCOL")}
-                      disabled={isGenerating}
-                      className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {isGenerating ? "Формирование..." : "Сформировать протокол"}
-                    </button>
-                  )}
-                </div>
+              <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Заполнение протокола</h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Заполните данные по каждому вопросу повестки дня. Внизу страницы — кнопки «Предпросмотр», «Сохранить в черновики» и «Утвердить».
+                </p>
               </div>
 
           {/* Вопросы с формами */}
@@ -1118,15 +1142,14 @@ export default function MeetingDetailPage({
                       value={protocolData[item.id]?.speakerId || item.speakerId || ""}
                       onChange={(e) => {
                         const memberId = e.target.value;
-                        // Сначала ищем среди участников заседания
                         const participant = meeting.participants.find(p => p.user?.id === memberId);
-                        // Если не нашли, ищем среди всех членов
                         const member = participant?.user || members.find(m => m.id === memberId);
-                        
                         updateProtocolItem(item.id, "speakerId", memberId);
                         if (member) {
                           const name = [member.lastName, member.firstName, member.middleName].filter(Boolean).join(" ");
                           updateProtocolItem(item.id, "speakerName", name);
+                          const jobTitle = (member as { jobTitle?: string | null }).jobTitle;
+                          if (jobTitle) updateProtocolItem(item.id, "speakerPosition", jobTitle);
                         }
                       }}
                       className="block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
@@ -1159,6 +1182,7 @@ export default function MeetingDetailPage({
                       onChange={(e) => {
                         updateProtocolItem(item.id, "speakerName", e.target.value);
                         updateProtocolItem(item.id, "speakerId", "");
+                        updateProtocolItem(item.id, "speakerPosition", "");
                       }}
                       className="block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
                       placeholder="или ввести ФИО вручную"
@@ -1170,6 +1194,16 @@ export default function MeetingDetailPage({
                       Докладчик: {protocolData[item.id]?.speakerName || item.speakerName}
                     </p>
                   )}
+                  <div className="mt-2">
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Должность докладчика (в PDF)</label>
+                    <input
+                      type="text"
+                      value={protocolData[item.id]?.speakerPosition ?? item.speakerPosition ?? ""}
+                      onChange={(e) => updateProtocolItem(item.id, "speakerPosition", e.target.value)}
+                      className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                      placeholder="Например: председатель профкома"
+                    />
+                  </div>
                 </div>
 
                 {/* ПОСТАНОВИЛИ */}
@@ -1266,6 +1300,21 @@ export default function MeetingDetailPage({
                       </div>
                     );
                   })()}
+                  <div className="mt-3">
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Решение по голосованию</label>
+                    <select
+                      value={protocolData[item.id]?.isApproved === true ? "true" : protocolData[item.id]?.isApproved === false ? "false" : ""}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        updateProtocolItem(item.id, "isApproved", v === "" ? null : v === "true");
+                      }}
+                      className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                    >
+                      <option value="">— Не указано —</option>
+                      <option value="true">Принято</option>
+                      <option value="false">Не принято</option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* РЕШИЛИ */}
@@ -1285,32 +1334,106 @@ export default function MeetingDetailPage({
             </div>
           ))}
 
-              {/* Кнопки внизу */}
-              <div className="flex justify-between mt-6">
-                <button
-                  onClick={() => setActiveTab("agenda")}
-                  className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
-                >
-                  ← Назад к повестке
-                </button>
-                <div className="flex gap-2">
+              {/* Внизу: предпросмотр, сохранить в черновики, утвердить */}
+              <div className="mt-8 rounded-xl border-2 border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800/50">
+                <h4 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                  Действия с протоколом
+                </h4>
+                <div className="flex flex-wrap items-center justify-between gap-4">
                   <button
-                    onClick={saveProtocolData}
-                    disabled={isSaving}
-                    className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                    onClick={() => setActiveTab("agenda")}
+                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
                   >
-                    {isSaving ? "Сохранение..." : "Сохранить черновик"}
+                    ← Назад к повестке
                   </button>
-                  {!meeting.protocolDocument && (
+                  <div className="flex flex-wrap items-center gap-3">
                     <button
-                      onClick={() => handleGenerateDocument("PROTOCOL")}
-                      disabled={isGenerating}
-                      className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+                      onClick={async () => {
+                        await saveProtocolData();
+                        try {
+                          setIsGenerating(true);
+                          const res = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/generate-document`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ documentType: "PROTOCOL" }),
+                          });
+                          if (!res.ok) throw new Error((await res.json()).error);
+                          const data = await res.json();
+                          loadMeeting();
+                          if (data.document?.filePath) setPdfPreviewUrl(data.document.filePath);
+                        } catch (e) {
+                          alertError(e instanceof Error ? e.message : "Ошибка предпросмотра");
+                        } finally {
+                          setIsGenerating(false);
+                        }
+                      }}
+                      disabled={isSaving || isGenerating}
+                      className="inline-flex items-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
                     >
-                      {isGenerating ? "Формирование..." : "Сформировать протокол"}
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      {isGenerating ? "Формирование..." : "Предпросмотр"}
                     </button>
-                  )}
+                    <button
+                      onClick={async () => {
+                        await saveProtocolData();
+                        try {
+                          setIsGenerating(true);
+                          const res = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/generate-document`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ documentType: "PROTOCOL" }),
+                          });
+                          if (!res.ok) throw new Error((await res.json()).error);
+                          const data = await res.json();
+                          alertSuccess(data.message || "Протокол сохранён в черновики");
+                          loadMeeting();
+                        } catch (e) {
+                          alertError(e instanceof Error ? e.message : "Не удалось сохранить");
+                        } finally {
+                          setIsGenerating(false);
+                        }
+                      }}
+                      disabled={isSaving || isGenerating}
+                      className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                    >
+                      {isSaving || isGenerating ? "Сохранение..." : "Сохранить в черновики"}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await saveProtocolData();
+                        try {
+                          setIsGenerating(true);
+                          const res = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/generate-document`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ documentType: "PROTOCOL", approve: true }),
+                          });
+                          if (!res.ok) throw new Error((await res.json()).error);
+                          const data = await res.json();
+                          alertSuccess(data.message || "Протокол утверждён. Можно отправлять в печать.");
+                          loadMeeting();
+                        } catch (e) {
+                          alertError(e instanceof Error ? e.message : "Не удалось утвердить");
+                        } finally {
+                          setIsGenerating(false);
+                        }
+                      }}
+                      disabled={isSaving || isGenerating}
+                      className="inline-flex items-center gap-2 rounded-lg border border-green-600 bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      {isGenerating ? "Утверждение..." : "Утвердить"}
+                    </button>
+                  </div>
                 </div>
+                <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                  Предпросмотр — сформирует документ и откроет его в окне. Сохранить в черновики — создаёт/обновляет черновик. Утвердить — документ создаётся и утверждается, после этого можно отправлять в печать.
+                </p>
               </div>
             </>
           )}

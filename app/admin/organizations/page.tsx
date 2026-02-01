@@ -169,6 +169,40 @@ export default function OrganizationsPage() {
     return () => clearTimeout(timer);
   }, [formData.chairmanEmail, formData.chairmanPhone]);
 
+  // При открытии редактирования организации подгружаем председателя (email, телефон) из пользователя с ppoHeadOrganizationId
+  useEffect(() => {
+    if (!isEditing || !selectedOrg?.id) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/admin/organizations/${selectedOrg.id}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const cu = data.chairmanUser;
+        if (cu) {
+          setFormData((prev) => ({
+            ...prev,
+            chairmanEmail: cu.email ?? prev.chairmanEmail,
+            chairmanPhone: cu.phone ?? prev.chairmanPhone,
+            chairmanFirstName: cu.firstName ?? prev.chairmanFirstName,
+            chairmanLastName: cu.lastName ?? prev.chairmanLastName,
+            chairmanMiddleName: cu.middleName ?? prev.chairmanMiddleName,
+            chairmanJobTitle: cu.jobTitle ?? prev.chairmanJobTitle,
+            existingUserId: cu.id ?? prev.existingUserId,
+          }));
+          // Не ставим userConfirmed при загрузке — поля остаются редактируемыми; userConfirmed только при явном «Подтвердить» в блоке существующего пользователя
+        }
+      } catch (e) {
+        if (!cancelled) console.error("[admin/organizations] Load chairman:", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditing, selectedOrg?.id]);
+
   // Функция подтверждения использования существующего пользователя
   const confirmExistingUser = () => {
     if (!existingUser) return;
@@ -442,14 +476,7 @@ export default function OrganizationsPage() {
 
   const handleSave = async () => {
     try {
-      // Валидация данных председателя
-      if (formData.chairmanEmail || formData.chairmanPhone || formData.chairmanFirstName || formData.chairmanLastName) {
-        if (!formData.chairmanEmail || !formData.chairmanPhone || !formData.chairmanFirstName || !formData.chairmanLastName) {
-          alertError("Для назначения председателя необходимо заполнить все обязательные поля: Фамилия, Имя, Email, Телефон");
-          return;
-        }
-      }
-
+      // Поля председателя необязательны. Инвайт отправляется только если заполнены все четыре: ФИО, email, телефон.
       const url = isCreating
         ? "/api/admin/organizations"
         : `/api/admin/organizations/${selectedOrg?.id}`;
@@ -935,13 +962,13 @@ export default function OrganizationsPage() {
 
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
               <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
-                Председатель организации
+                Председатель организации <span className="font-normal text-gray-500">(необязательно)</span>
               </h3>
               
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Фамилия *
+                    Фамилия
                   </label>
                   <input
                     type="text"
@@ -953,7 +980,7 @@ export default function OrganizationsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Имя *
+                    Имя
                   </label>
                   <input
                     type="text"
@@ -980,7 +1007,7 @@ export default function OrganizationsPage() {
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Email председателя *
+                    Email председателя
                   </label>
                   <div className="relative">
                     <input
@@ -1003,7 +1030,7 @@ export default function OrganizationsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Телефон председателя *
+                    Телефон председателя
                   </label>
                   <input
                     type="tel"

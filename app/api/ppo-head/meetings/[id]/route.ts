@@ -201,7 +201,7 @@ export async function PATCH(
 
 /**
  * DELETE /api/ppo-head/meetings/[id]
- * Удаление заседания (только черновики)
+ * Удаление заседания (в любом статусе)
  */
 export async function DELETE(
   request: NextRequest,
@@ -232,13 +232,6 @@ export async function DELETE(
 
     if (meeting.organizationId !== orgHead.organizationId) {
       return NextResponse.json({ error: "Нет доступа к этому заседанию" }, { status: 403 });
-    }
-
-    if (meeting.status !== "DRAFT") {
-      return NextResponse.json(
-        { error: "Можно удалить только заседания в статусе 'Черновик'" },
-        { status: 400 }
-      );
     }
 
     await prisma.meeting.delete({

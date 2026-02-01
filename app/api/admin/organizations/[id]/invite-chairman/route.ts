@@ -225,6 +225,62 @@ export async function POST(
       });
     }
 
+    // Пользователь не найден по email — проверяем по телефону (избегаем ошибки дубликата при повторном вводе)
+    const existingByPhone = phone
+      ? await prisma.user.findFirst({ where: { phone } })
+      : null;
+    if (existingByPhone) {
+      if (existingByPhone.ppoHeadOrganizationId === id) {
+        return NextResponse.json(
+          { error: "Пользователь уже является председателем этой организации" },
+          { status: 400 }
+        );
+      }
+      const updateData: any = {
+        isPPOHead: true,
+        ppoHeadOrganizationId: id,
+        organizationId: id,
+        viewMode: "PPO_HEAD",
+        firstName: firstName,
+        lastName: lastName,
+        middleName: middleName || null,
+        phone: phone,
+        jobTitle: jobTitle || null,
+        membershipStatus: "APPROVED",
+      };
+      if (existingByPhone.role !== "MEMBER" && existingByPhone.role !== "PENDING_MEMBER") {
+        updateData.role = "PPO_HEAD";
+      }
+      const updatedUser = await prisma.user.update({
+        where: { id: existingByPhone.id },
+        data: updateData,
+      });
+      await prisma.organization.update({
+        where: { id },
+        data: {
+          chairmanName: [lastName, firstName, middleName].filter(Boolean).join(" "),
+          chairmanJobTitle: jobTitle || null,
+        },
+      });
+      await createDefaultChannelForOrganization(id, updatedUser.id);
+      const inviteToken = crypto.randomBytes(32).toString("hex");
+      const inviteTokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await prisma.user.update({
+        where: { id: updatedUser.id },
+        data: { resetToken: inviteToken, resetTokenExpires: inviteTokenExpires },
+      });
+      const baseUrl = process.env.NEXTAUTH_URL || "https://myunion.pro";
+      const inviteUrl = `${baseUrl}/auth/invite?token=${inviteToken}`;
+      const userEmail = existingByPhone.email || email;
+      await sendChairmanInviteEmail(userEmail, firstName, lastName, organization.name, inviteUrl);
+      return NextResponse.json({
+        success: true,
+        message: "Существующему пользователю (по телефону) предоставлены права председателя ППО",
+        userId: updatedUser.id,
+        existingUserPromoted: true,
+      });
+    }
+
     // Создаем нового пользователя
     const generatedPassword = crypto.randomBytes(12).toString("base64").slice(0, 12);
     const hashedPassword = await bcrypt.hash(generatedPassword, 10);

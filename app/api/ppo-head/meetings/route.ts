@@ -115,7 +115,6 @@ export async function POST(request: NextRequest) {
       scheduledTime,
       location,
       onlineLink,
-      secretaryId,
       participantIds = [],
       externalParticipants = [],
       agendaItems = [],
@@ -155,18 +154,7 @@ export async function POST(request: NextRequest) {
     ];
     addedUserIds.add(session.user.id);
     
-    // Секретарь (если указан и еще не добавлен как председатель)
-    if (secretaryId && !addedUserIds.has(secretaryId)) {
-      participantsToCreate.push({
-        userId: secretaryId,
-        role: "SECRETARY" as const,
-        attendance: "INVITED" as const,
-        canVote: true,
-      });
-      addedUserIds.add(secretaryId);
-    }
-    
-    // Члены профкома (исключаем только тех, кто уже добавлен)
+    // Члены профкома (выборный орган; секретарь избирается на шаге протокола) (исключаем только тех, кто уже добавлен)
     const uniqueParticipantIds = participantIds.filter(
       (userId: string) => !addedUserIds.has(userId)
     );
@@ -216,11 +204,15 @@ export async function POST(request: NextRequest) {
             orderNumber: index + 1,
             title: item.title || `Вопрос ${index + 1}`,
             description: item.description,
-            // Докладчик - может быть из базы или внешний
             speakerId: item.speakerId || null,
             speakerName: item.speakerName || null,
-            // Если выбран пользователь из базы, получим его позицию при необходимости
-            heardText: item.title || `Вопрос ${index + 1}`, // По умолчанию = title
+            speakerPosition: item.speakerPosition?.trim() || null,
+            coSpeakerId: item.coSpeakerId || null,
+            coSpeakerName: item.coSpeakerName || null,
+            heardText: item.title || `Вопрос ${index + 1}`,
+            attachments: Array.isArray(item.attachments) && item.attachments.length > 0
+              ? JSON.stringify(item.attachments)
+              : null,
           })),
         },
       },

@@ -10,6 +10,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { randomBytes } from "crypto";
 import { sendUserNotification } from "@/lib/notifications";
+import { sendEmail } from "@/lib/email";
 
 // Генерация токена приглашения
 function generateInviteToken(): string {
@@ -361,18 +362,35 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // TODO: Отправить email с приглашением
-      // Вход по одноразовому коду, поэтому просто ссылка на вход
       const inviteLink = `${process.env.NEXTAUTH_URL || "https://myunion.pro"}/login?email=${encodeURIComponent(email)}&invite=1`;
-      
-      console.log(`[Staff] Приглашение для ${email}: ${inviteLink}`);
+      const orgName = organization?.name || "профком";
+      const roleName = role.name;
+
+      try {
+        await sendEmail({
+          to: email,
+          subject: "Приглашение в состав управляющего органа профкома",
+          text: `Здравствуйте!\n\nВас приглашают в состав управляющего органа (${orgName}) с ролью «${roleName}».\n\nДля входа в личный кабинет перейдите по ссылке (действует 7 дней):\n${inviteLink}\n\nВход выполняется по одноразовому коду на email.\n\n--\nС уважением,\nМойСоюз`,
+          html: `
+            <p>Здравствуйте!</p>
+            <p>Вас приглашают в состав управляющего органа <strong>${orgName}</strong> с ролью «${roleName}».</p>
+            <p>Для входа в личный кабинет перейдите по ссылке (действует 7 дней):</p>
+            <p><a href="${inviteLink}" style="color: #2563eb;">Войти в личный кабинет</a></p>
+            <p>Вход выполняется по одноразовому коду на email.</p>
+            <p>--<br>С уважением,<br>МойСоюз</p>
+          `,
+        });
+        console.log(`[Staff] Приглашение отправлено на ${email}`);
+      } catch (emailError) {
+        console.error("[Staff] Ошибка отправки email приглашения:", emailError);
+        // Не падаем — приглашение создано, ссылку можно отправить повторно
+      }
 
       return NextResponse.json(
         {
           staff,
           message: `Приглашение отправлено на ${email}`,
           isExistingUser: false,
-          inviteLink, // Для отладки (убрать в продакшене)
         },
         { status: 201 }
       );
