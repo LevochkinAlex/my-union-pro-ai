@@ -813,8 +813,8 @@ export default function QuestionnaireModal({
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} className="w-full max-w-2xl lg:max-w-3xl">
-        <div className="max-h-[calc(100vh-2rem)] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6 w-full">
+      <Modal isOpen={isOpen} onClose={onClose} className="w-full max-w-2xl lg:max-w-3xl flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[85vh]">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 w-full">
           <div className="mb-4 sm:mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white pr-8 sm:pr-0">
               Заполнение анкеты для вступления в профсоюз
@@ -1095,95 +1095,67 @@ export default function QuestionnaireModal({
             </div>
           )}
 
-          {/* Шаг 2: Сверка информации (адаптивно под мобилку) */}
+          {/* Шаг 2: Сверка информации — единая сетка полей, подблок «Место работы» с отступом */}
           {currentStep === 2 && (
-            <div className="space-y-4 sm:space-y-6 min-w-0">
+            <div className="space-y-4 sm:space-y-5 min-w-0">
               <h3 className="text-base font-semibold text-gray-900 dark:text-white sm:text-lg">
                 Проверьте введенные данные
               </h3>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50 sm:p-6 min-w-0 overflow-hidden">
-                <div className="space-y-4 min-w-0">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50 p-4 sm:p-6 min-w-0">
+                <dl className="space-y-5 sm:space-y-5 min-w-0">
                   <div className="min-w-0">
-                    <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
-                      Организация профсоюза:
-                    </span>
-                    <p className="mt-1 break-words text-sm text-gray-900 dark:text-white sm:text-base">
-                      {selectedOrganization?.name || ""}
-                    </p>
+                    <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Организация профсоюза</dt>
+                    <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{selectedOrganization?.name || "—"}</dd>
                   </div>
-                  <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 min-w-0">
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 min-w-0">
                     <div className="min-w-0">
-                      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
-                        ФИО:
-                      </span>
-                      <p className="mt-1 break-words text-sm text-gray-900 dark:text-white sm:text-base">
-                        {[formData.lastName, formData.firstName, formData.middleName]
-                          .filter(Boolean)
-                          .join(" ")}
-                      </p>
+                      <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">ФИО</dt>
+                      <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">
+                        {[formData.lastName, formData.firstName, formData.middleName].filter(Boolean).join(" ") || "—"}
+                      </dd>
                     </div>
                     <div className="min-w-0">
-                      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
-                        Дата рождения:
-                      </span>
-                      <p className="mt-1 text-sm text-gray-900 dark:text-white sm:text-base">
-                        {formData.dateOfBirth
-                          ? new Date(formData.dateOfBirth).toLocaleDateString("ru-RU")
-                          : ""}
-                      </p>
+                      <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Дата рождения</dt>
+                      <dd className="mt-1.5 text-sm text-gray-900 dark:text-white sm:text-base">
+                        {formData.dateOfBirth ? new Date(formData.dateOfBirth).toLocaleDateString("ru-RU") : "—"}
+                      </dd>
                     </div>
                     <div className="min-w-0">
-                      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
-                        Телефон:
-                      </span>
-                      <p className="mt-1 break-words text-sm text-gray-900 dark:text-white sm:text-base">
-                        {formData.phone}
-                      </p>
+                      <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Телефон</dt>
+                      <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.phone || "—"}</dd>
                     </div>
                     <div className="min-w-0">
-                      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
-                        Email:
-                      </span>
-                      <p className="mt-1 break-words text-sm text-gray-900 dark:text-white sm:text-base">
-                        {formData.email}
-                      </p>
-                    </div>
-                    <div className="min-w-0 sm:col-span-2">
-                      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
-                        Адрес:
-                      </span>
-                      <p className="mt-1 break-words text-sm text-gray-900 dark:text-white sm:text-base">
-                        {formData.address}
-                      </p>
-                    </div>
-                    <div className="min-w-0 sm:col-span-2">
-                      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
-                        Место работы:
-                      </span>
-                      <p className="mt-1 break-words text-sm text-gray-900 dark:text-white sm:text-base">
-                        {formData.workplace || "Не указано"}
-                      </p>
-                      {formData.directorName && (
-                        <p className="mt-1 break-words text-xs text-gray-600 dark:text-gray-400 sm:text-sm">
-                          {formData.directorPosition}: {formData.directorName}
-                        </p>
-                      )}
-                      {formData.workplaceInn && (
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                          ИНН: {formData.workplaceInn}
-                        </p>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
-                        Должность:
-                      </span>
-                      <p className="mt-1 break-words text-sm text-gray-900 dark:text-white sm:text-base">
-                        {formData.jobTitle}
-                      </p>
+                      <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Email</dt>
+                      <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.email || "—"}</dd>
                     </div>
                   </div>
-                </div>
+                  <div className="min-w-0">
+                    <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Адрес</dt>
+                    <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.address || "—"}</dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Место работы</dt>
+                    <dd className="mt-1.5 min-w-0">
+                      <p className="break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.workplace || "Не указано"}</p>
+                      {(formData.directorName || formData.workplaceInn) && (
+                        <div className="mt-2 pl-3 sm:pl-4 border-l-2 border-gray-200 dark:border-gray-600 space-y-1.5">
+                          {formData.directorName && (
+                            <p className="break-words text-xs text-gray-600 dark:text-gray-400 sm:text-sm">
+                              {formData.directorPosition || "Руководитель"}: {formData.directorName}
+                            </p>
+                          )}
+                          {formData.workplaceInn && (
+                            <p className="text-xs text-gray-500 dark:text-gray-500">ИНН: {formData.workplaceInn}</p>
+                          )}
+                        </div>
+                      )}
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Должность</dt>
+                    <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.jobTitle || "—"}</dd>
+                  </div>
+                </dl>
               </div>
             </div>
           )}
@@ -1568,8 +1540,11 @@ export default function QuestionnaireModal({
             </div>
           )}
 
-          {/* Кнопки навигации */}
-          <div className="mt-8 flex justify-between">
+        </div>
+
+        {/* Кнопки навигации — всегда внизу модалки, не скроллятся */}
+        <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 sm:p-6 pt-4 rounded-b-3xl">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <button
               onClick={() => {
                 if (currentStep > 1) {
@@ -1671,7 +1646,7 @@ export default function QuestionnaireModal({
             {currentStep === 4 && (
               <button
                 onClick={handleComplete}
-                className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-green-700"
+                className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-green-700 shrink-0"
               >
                 Завершить
                 <Check className="h-4 w-4" />

@@ -155,6 +155,9 @@ model User {
   organizationName String? // Название организации (если она не в базе МойСоюз, но найдена в Минюсте)
   organization     Organization? @relation(fields: [organizationId], references: [id])
 
+  // Блокировка по лимиту подписки: если задано — доступ закрыт (последние зарегистрированные сверх лимита тарифа)
+  subscriptionBlockedAt DateTime?
+
   // Документы пользователя
   documents Document[]
 
@@ -489,11 +492,93 @@ model Organization {
   // Связь с местами работы (для автоматического определения ППО)
   workplaceMappings WorkplacePPOMapping[] @relation("WorkplacePPOMapping")
 
+  // Подписка (тариф, лимит участников, срок) — для ППО и организаций с платным доступом
+  subscription OrganizationSubscription?
+  payments     OrganizationPayment[]
+
   @@index([type])
   @@index([parentId])
   @@index([inn])
   @@index([level])
   @@index([sortOrder])
+}
+
+// Статус подписки организации
+enum SubscriptionStatus {
+  NONE       // Нет подписки
+  TRIAL      // Пробный период (14 дней без карты)
+  ACTIVE     // Оплаченная подписка активна
+  EXPIRED    // Подписка истекла
+  CANCELLED  // Отменена
+}
+
+// Подписка организации (тариф, лимит участников, срок)
+model OrganizationSubscription {
+  id String @id @default(cuid())
+
+  organizationId String   @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  status SubscriptionStatus @default(NONE)
+
+  // Лимит участников (null = безлимит, задаётся тарифом или суперадмином)
+  memberLimit Int?
+
+  // Тариф из прайса: ключ плана (50, 100, 500, 1000, 3600, UNLIMITED)
+  tariffKey String?
+
+  // Период подписки
+  trialEndsAt    DateTime? // Окончание пробного периода (14 дней)
+  periodEndsAt   DateTime? // Окончание оплаченного периода
+  periodStartedAt DateTime? // Начало текущего оплаченного периода
+
+  // Ручное управление суперадмином: доп. дни, свой лимит, безлимит, тест
+  manualOverride   Boolean @default(false)
+  addedDaysByAdmin Int?   // Доп. дни, добавленные админом
+  adminNote        String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments OrganizationPayment[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([periodEndsAt])
+}
+
+// Платёж организации (история)
+model OrganizationPayment {
+  id String @id @default(cuid())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Связь с подпиской (оплата продлевает/активирует подписку)
+  subscriptionId String?
+  subscription   OrganizationSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  amountCents Int      // Сумма в копейках
+  currency    String   @default("RUB")
+
+  // Период, за который оплачено
+  periodStart DateTime
+  periodEnd   DateTime
+
+  // Статус: PENDING, COMPLETED, FAILED, REFUNDED
+  status String @default("PENDING")
+
+  // Мок: внешний ID платежа (позже — id из платёжной системы)
+  externalId String?
+
+  // Метаданные: тариф, кол-во участников на момент оплаты
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([subscriptionId])
+  @@index([createdAt])
 }
 
 // Справочник связи мест работы с ППО

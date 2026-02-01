@@ -28,6 +28,9 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status"); // "pending" или "approved"
+    const q = searchParams.get("q")?.trim() || ""; // поиск по ФИО, должности
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
+    const skip = Math.max(0, parseInt(searchParams.get("skip") || "0", 10));
 
     const where: any = {
       organizationId: chairman.organizationId,
@@ -41,38 +44,51 @@ export async function GET(request: NextRequest) {
       where.membershipStatus = "APPROVED";
     }
 
-    const members = await prisma.user.findMany({
-      where,
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        middleName: true,
-        email: true,
-        phone: true,
-        avatarUrl: true,
-        membershipStatus: true,
-        createdAt: true,
-        documents: {
-          where: {
-            type: {
-              in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
+    if (q.length >= 1) {
+      where.OR = [
+        { lastName: { contains: q, mode: "insensitive" } },
+        { firstName: { contains: q, mode: "insensitive" } },
+        { middleName: { contains: q, mode: "insensitive" } },
+        { jobTitle: { contains: q, mode: "insensitive" } },
+      ];
+    }
+
+    const [members, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          middleName: true,
+          jobTitle: true,
+          email: true,
+          phone: true,
+          avatarUrl: true,
+          membershipStatus: true,
+          createdAt: true,
+          documents: {
+            where: {
+              type: {
+                in: ["MEMBERSHIP_APPLICATION", "CONTRIBUTION_APPLICATION"],
+              },
+            },
+            select: {
+              id: true,
+              type: true,
+              status: true,
+              filePath: true,
             },
           },
-          select: {
-            id: true,
-            type: true,
-            status: true,
-            filePath: true,
-          },
         },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+        orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+        take: limit,
+        skip,
+      }),
+      prisma.user.count({ where }),
+    ]);
 
-    return NextResponse.json({ members });
+    return NextResponse.json({ members, total });
   } catch (error: any) {
     console.error("[ppo-head/members] GET error:", error);
     return NextResponse.json(

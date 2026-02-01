@@ -5,6 +5,8 @@ import { useSession } from "next-auth/react";
 import { alertSuccess, alertError } from "@/lib/alert";
 import Link from "next/link";
 import { Modal } from "@/components/ui/modal";
+import PPOMemberSelect from "@/components/form/PPOMemberSelect";
+import PPOMemberMultiSelect from "@/components/form/PPOMemberMultiSelect";
 
 interface Meeting {
   id: string;
@@ -131,16 +133,6 @@ export default function MeetingsPage() {
 
   const getMemberFullName = (member: any) => {
     return [member.lastName, member.firstName, member.middleName].filter(Boolean).join(" ");
-  };
-
-  // Управление участниками
-  const toggleParticipant = (memberId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      participantIds: prev.participantIds.includes(memberId)
-        ? prev.participantIds.filter(id => id !== memberId)
-        : [...prev.participantIds, memberId],
-    }));
   };
 
   const addExternalParticipant = () => {
@@ -458,7 +450,6 @@ export default function MeetingsPage() {
         isOpen={showCreateForm}
         onClose={() => {
           setShowCreateForm(false);
-          // Сброс формы при закрытии
           setFormData({
             type: "COMMITTEE",
             format: "OFFLINE",
@@ -600,20 +591,14 @@ export default function MeetingsPage() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Секретарь заседания
                 </label>
-                <select
+                <PPOMemberSelect
                   value={formData.secretaryId}
-                  onChange={(e) => setFormData(prev => ({ ...prev, secretaryId: e.target.value }))}
-                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
-                  disabled={loadingMembers}
-                >
-                  <option value="">— Выберите секретаря —</option>
-                  {members.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {getMemberFullName(member)}
-                      {member.jobTitle && ` (${member.jobTitle})`}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(id) => setFormData(prev => ({ ...prev, secretaryId: id }))}
+                  members={members}
+                  placeholder="Поиск по ФИО или должности..."
+                  loading={loadingMembers}
+                  showJobTitle
+                />
               </div>
 
               {/* Члены профкома */}
@@ -621,44 +606,12 @@ export default function MeetingsPage() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Члены профкома / участники
                 </label>
-                {loadingMembers ? (
-                  <p className="text-sm text-gray-500">Загрузка списка...</p>
-                ) : (
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 max-h-48 overflow-y-auto p-2 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                    {members.map((member) => (
-                      <label
-                        key={member.id}
-                        className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
-                          formData.participantIds.includes(member.id)
-                            ? "bg-blue-100 dark:bg-blue-900/30"
-                            : "hover:bg-gray-50 dark:hover:bg-gray-600"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={formData.participantIds.includes(member.id)}
-                          onChange={() => toggleParticipant(member.id)}
-                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                            {getMemberFullName(member)}
-                          </div>
-                          {member.jobTitle && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                              {member.jobTitle}
-                            </div>
-                          )}
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                )}
-                {formData.participantIds.length > 0 && (
-                  <p className="mt-1 text-xs text-green-600 dark:text-green-400">
-                    Выбрано: {formData.participantIds.length} участников
-                  </p>
-                )}
+                <PPOMemberMultiSelect
+                  value={formData.participantIds}
+                  onChange={(ids) => setFormData((prev) => ({ ...prev, participantIds: ids }))}
+                  placeholder="Поиск по ФИО или должности (в пределах вашего ППО)..."
+                  fetchLimit={50}
+                />
               </div>
 
               {/* Внешние участники */}
@@ -739,20 +692,19 @@ export default function MeetingsPage() {
                           Докладывает *
                         </label>
                         <div className="grid gap-2 sm:grid-cols-2">
-                          <select
+                          <PPOMemberSelect
                             value={item.speakerId}
-                            onChange={(e) => updateAgendaItem(index, "speakerId", e.target.value)}
-                            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
-                            disabled={loadingMembers}
-                          >
-                            <option value="">— Выбрать из списка —</option>
-                            {members.map((member) => (
-                              <option key={member.id} value={member.id}>
-                                {getMemberFullName(member)}
-                                {member.jobTitle && ` (${member.jobTitle})`}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={(id, member) => {
+                              updateAgendaItem(index, "speakerId", id);
+                              if (member) {
+                                updateAgendaItem(index, "speakerName", getMemberFullName(member));
+                              }
+                            }}
+                            members={members}
+                            placeholder="Поиск по ФИО или должности..."
+                            loading={loadingMembers}
+                            showJobTitle
+                          />
                           <input
                             type="text"
                             value={item.speakerId ? "" : item.speakerName}
@@ -762,11 +714,6 @@ export default function MeetingsPage() {
                             disabled={!!item.speakerId}
                           />
                         </div>
-                        {item.speakerId && item.speakerName && (
-                          <p className="mt-1 text-xs text-green-600 dark:text-green-400">
-                            Выбран: {item.speakerName}
-                          </p>
-                        )}
                       </div>
                       
                       {/* Описание */}

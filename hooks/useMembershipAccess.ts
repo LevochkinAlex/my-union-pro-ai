@@ -9,6 +9,7 @@ export type MembershipAccessStatus =
   | "pending"       // Ожидает проверки/одобрения
   | "incomplete"    // Профиль не заполнен
   | "rejected"      // Отклонён
+  | "subscription_blocked" // Доступ закрыт по лимиту подписки организации
   | "unauthenticated";
 
 interface MembershipAccessResult {
@@ -34,7 +35,8 @@ export function useMembershipAccess(): MembershipAccessResult {
     membershipStatus: string | null;
     unionMembershipStatus: string | null;
     role: string | null;
-  }>({ membershipStatus: null, unionMembershipStatus: null, role: null });
+    subscriptionBlockedAt: string | null;
+  }>({ membershipStatus: null, unionMembershipStatus: null, role: null, subscriptionBlockedAt: null });
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -54,6 +56,7 @@ export function useMembershipAccess(): MembershipAccessResult {
             membershipStatus: data.user?.membershipStatus || null,
             unionMembershipStatus: data.user?.unionMembershipStatus || null,
             role: data.user?.role || null,
+            subscriptionBlockedAt: data.user?.subscriptionBlockedAt ?? null,
           });
         } else {
           // Fallback: при 404/503 используем данные сессии, чтобы валидированные члены и председатели видели контент
@@ -61,6 +64,7 @@ export function useMembershipAccess(): MembershipAccessResult {
             membershipStatus: session?.user?.membershipStatus ?? null,
             unionMembershipStatus: null,
             role: session?.user?.role ?? null,
+            subscriptionBlockedAt: (session?.user as { subscriptionBlockedAt?: string })?.subscriptionBlockedAt ?? null,
           });
         }
       } catch (error) {
@@ -70,6 +74,7 @@ export function useMembershipAccess(): MembershipAccessResult {
           membershipStatus: session?.user?.membershipStatus ?? null,
           unionMembershipStatus: null,
           role: session?.user?.role ?? null,
+          subscriptionBlockedAt: (session?.user as { subscriptionBlockedAt?: string })?.subscriptionBlockedAt ?? null,
         });
       } finally {
         setIsLoading(false);
@@ -84,12 +89,17 @@ export function useMembershipAccess(): MembershipAccessResult {
     if (sessionStatus === "loading" || isLoading) return "loading";
     if (sessionStatus === "unauthenticated") return "unauthenticated";
 
-    const { membershipStatus, unionMembershipStatus, role } = membershipData;
+    const { membershipStatus, unionMembershipStatus, role, subscriptionBlockedAt } = membershipData;
 
-    // Роли с полным доступом (председатели и админы)
+    // Роли с полным доступом (председатели и админы) — не блокируются по подписке
     const privilegedRoles = ["PPO_HEAD", "REGIONAL_CHAIRMAN", "FEDERAL_CHAIRMAN", "SUPER_ADMIN"];
     if (role && privilegedRoles.includes(role)) {
       return "approved";
+    }
+
+    // Блокировка по лимиту подписки организации (последние зарегистрированные сверх лимита)
+    if (subscriptionBlockedAt) {
+      return "subscription_blocked";
     }
 
     // Полный доступ имеют только одобренные члены и привилегированные роли.
@@ -126,6 +136,8 @@ export function useMembershipAccess(): MembershipAccessResult {
         return "Заполните анкету и подайте заявку на вступление в профсоюз.";
       case "rejected":
         return "Ваша заявка была отклонена. Свяжитесь с председателем для уточнения причин.";
+      case "subscription_blocked":
+        return "Доступ приостановлен по лимиту подписки организации. Свяжитесь с председателем для уточнения.";
       case "unauthenticated":
         return "Войдите в систему для доступа к этой странице.";
       default:

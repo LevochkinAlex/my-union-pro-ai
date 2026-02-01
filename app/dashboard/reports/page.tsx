@@ -123,8 +123,11 @@ export default function ReportsPage() {
       
       if (ticketStatsRes.ok) {
         const data = await ticketStatsRes.json();
-        setTicketStats(data.statistics || null);
-        setRecentRated(data.recentRated || []);
+        setTicketStats(data.statistics ?? null);
+        setRecentRated(data.recentRated ?? []);
+      } else {
+        setTicketStats(null);
+        setRecentRated([]);
       }
     } catch (error) {
       console.error("Ошибка загрузки данных:", error);
@@ -469,7 +472,8 @@ export default function ReportsPage() {
       )}
       
       {/* Статистика по обращениям */}
-      {activeTab === 'tickets' && ticketStats && (
+      {activeTab === 'tickets' && (
+        ticketStats ? (
         <div className="space-y-6">
           {/* Выбор периода */}
           <div className="flex items-center gap-4">
@@ -672,6 +676,14 @@ export default function ReportsPage() {
             </div>
           )}
         </div>
+      ) : (
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-8 text-center">
+          <p className="text-gray-500 dark:text-gray-400">Не удалось загрузить статистику по обращениям.</p>
+          <button type="button" onClick={() => fetchData()} className="mt-3 text-blue-600 dark:text-blue-400 hover:underline">
+            Повторить
+          </button>
+        </div>
+      )
       )}
 
       {/* Модалка создания отчёта */}
@@ -691,14 +703,22 @@ export default function ReportsPage() {
                   value={selectedTemplate}
                   onChange={(e) => setSelectedTemplate(e.target.value)}
                   className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  aria-describedby={templates.length === 0 ? "no-templates-hint" : undefined}
                 >
-                  <option value="">Выберите шаблон...</option>
+                  <option value="">
+                    {templates.length === 0 ? "Нет доступных шаблонов" : "Выберите шаблон..."}
+                  </option>
                   {templates.map((template) => (
                     <option key={template.id} value={template.id}>
                       {template.name} ({PERIODICITY_LABELS[template.periodicity]})
                     </option>
                   ))}
                 </select>
+                {templates.length === 0 && (
+                  <p id="no-templates-hint" className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+                    Шаблоны отчётов не загружены. Выполните в проекте: <code className="rounded bg-gray-100 dark:bg-gray-700 px-1">pnpm seed:reports</code>
+                  </p>
+                )}
               </div>
 
               <div className={needsMonth() ? "grid grid-cols-2 gap-4" : ""}>

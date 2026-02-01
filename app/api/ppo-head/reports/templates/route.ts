@@ -107,12 +107,15 @@ export async function GET(request: NextRequest) {
       orderBy: { code: "asc" },
     });
 
-    // Фильтруем по типу организации
-    const filteredTemplates = templates.filter((template) => {
+    // Фильтруем по типу организации; если ни один не подошёл — возвращаем все активные (чтобы не было пустого списка из-за несовпадения типа)
+    let filteredTemplates = templates.filter((template) => {
       if (!template.forOrganizationTypes) return true;
       const types = template.forOrganizationTypes as string[];
       return types.includes(organization.type);
     });
+    if (filteredTemplates.length === 0 && templates.length > 0) {
+      filteredTemplates = templates;
+    }
 
     return NextResponse.json({
       templates: filteredTemplates.map((t) => ({

@@ -893,27 +893,33 @@ export const authOptions: NextAuthOptions = {
           session.user.name = [session.user.firstName, session.user.lastName].filter(Boolean).join(" ").trim() || "Анна Сидорова";
         } else {
           // Получаем актуальные данные из БД при каждом запросе сессии
-          try {
-            const userData = await prisma.user.findUnique({
-              where: { id: token.id as string },
-              select: {
-                role: true,
-                membershipStatus: true,
-                viewMode: true,
-                isPPOHead: true,
-                ppoHeadOrganizationId: true,
-              },
-            });
-            
-            if (userData) {
-              session.user.role = userData.role;
-              session.user.membershipStatus = userData.membershipStatus;
-              (session.user as any).viewMode = userData.viewMode || "MEMBER";
-              (session.user as any).isPPOHead = userData.isPPOHead || false;
-              (session.user as any).ppoHeadOrganizationId = userData.ppoHeadOrganizationId || null;
+          const userId = typeof token.id === "string" && token.id.trim() ? token.id.trim() : null;
+          if (userId) {
+            try {
+              const userData = await prisma.user.findUnique({
+                where: { id: userId },
+                select: {
+                  role: true,
+                  membershipStatus: true,
+                  viewMode: true,
+                  isPPOHead: true,
+                  ppoHeadOrganizationId: true,
+                },
+              });
+
+              if (userData) {
+                session.user.role = userData.role;
+                session.user.membershipStatus = userData.membershipStatus;
+                (session.user as any).viewMode = userData.viewMode || "MEMBER";
+                (session.user as any).isPPOHead = userData.isPPOHead || false;
+                (session.user as any).ppoHeadOrganizationId = userData.ppoHeadOrganizationId ?? null;
+              }
+            } catch (error) {
+              console.error("[Auth] Error fetching user data from DB:", error);
+              (session.user as any).viewMode = "MEMBER";
+              (session.user as any).isPPOHead = false;
             }
-          } catch (error) {
-            console.error("[Auth] Error fetching user data from DB:", error);
+          } else {
             (session.user as any).viewMode = "MEMBER";
             (session.user as any).isPPOHead = false;
           }

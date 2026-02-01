@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
+import OrgSubscriptionManage from "@/components/admin/OrgSubscriptionManage";
 
 // ИСПРАВЛЕНО: Убран импорт типа из @prisma/client, используем строковый литерал
 type OrganizationType = "PRIMARY" | "LOCAL" | "REGIONAL" | "FEDERAL";
@@ -1222,6 +1223,14 @@ export default function OrganizationsPage() {
                   </button>
                 </div>
               </div>
+            )}
+
+            {/* Управление подпиской (для ППО) — суперадмин */}
+            {isEditing && selectedOrg && formData.type === "PRIMARY" && (
+              <OrgSubscriptionManage
+                organizationId={selectedOrg.id}
+                organizationName={selectedOrg.name}
+              />
             )}
 
             <div>

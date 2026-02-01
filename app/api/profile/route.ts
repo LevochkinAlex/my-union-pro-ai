@@ -91,10 +91,12 @@ export async function GET() {
             additionalInfo: true,
             membershipStatus: true,
             unionMembershipStatus: true, // Добавляем для проверки ACCEPTED
+            subscriptionBlockedAt: true, // Блокировка по лимиту подписки организации
             organizationId: true,
             organizationName: true, // на случай, если организация не из справочника
             profileChangedAfterDocuments: true,
             profileLastModified: true,
+            role: true,
             viewMode: true,
             isPPOHead: true,
             createdAt: true,
@@ -157,10 +159,12 @@ export async function GET() {
         additionalInfo: user.additionalInfo,
         membershipStatus: user.membershipStatus, // Статус верификации (PENDING_VERIFICATION, APPROVED и т.д.)
         unionMembershipStatus: user.unionMembershipStatus, // Статус членства в профсоюзе (ACCEPTED, NOT_ACCEPTED и т.д.)
+        subscriptionBlockedAt: user.subscriptionBlockedAt ? (user.subscriptionBlockedAt as Date).toISOString() : null,
         organizationId: user.organizationId, // Добавляем organizationId для удобства
         organization: user.organization,
         profileChangedAfterDocuments: user.profileChangedAfterDocuments,
         profileLastModified: user.profileLastModified,
+        role: user.role,
         viewMode: user.viewMode, // Режим просмотра для председателей/сотрудников
         isPPOHead: user.isPPOHead, // Флаг председателя ППО
         createdAt: user.createdAt,

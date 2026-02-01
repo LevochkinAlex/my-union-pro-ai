@@ -2,11 +2,38 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+
+/**
+ * Получить организацию пользователя (как Председатель или сотрудник) — та же логика, что в отчётах
+ */
+async function getUserOrganization(userId: string): Promise<string | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      isPPOHead: true,
+      ppoHeadOrganizationId: true,
+      viewMode: true,
+    },
+  });
+
+  if (user?.isPPOHead && user.ppoHeadOrganizationId && user.viewMode === "PPO_HEAD") {
+    return user.ppoHeadOrganizationId;
+  }
+
+  const staffPosition = await prisma.organizationStaff.findFirst({
+    where: {
+      userId,
+      status: "ACTIVE",
+    },
+    select: { organizationId: true },
+  });
+
+  return staffPosition?.organizationId || null;
+}
 
 /**
  * GET /api/ppo-head/tickets/statistics
- * Статистика по обращениям для отчётности председателя
+ * Статистика по обращениям для отчётности председателя/сотрудника организации
  */
 export async function GET(request: Request) {
   try {
@@ -16,14 +43,30 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
+    const organizationId = await getUserOrganization(session.user.id);
 
-    if (!chairman) {
-      return NextResponse.json(
-        { error: "Доступ запрещен" },
-        { status: 403 }
-      );
+    if (!organizationId) {
+      return NextResponse.json({
+        period: { year: new Date().getFullYear(), month: undefined },
+        statistics: {
+          total: 0,
+          resolved: 0,
+          pending: 0,
+          inProgress: 0,
+          rejected: 0,
+          resolutionRate: 0,
+          avgRating: null,
+          ratedCount: 0,
+          avgResolutionTime: null,
+          byType: {},
+          byPriority: {},
+          ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+          byMonth: Object.fromEntries(
+            Array.from({ length: 12 }, (_, i) => [i + 1, { total: 0, resolved: 0 }])
+          ),
+        },
+        recentRated: [],
+      });
     }
 
     const { searchParams } = new URL(request.url);
@@ -41,7 +84,7 @@ export async function GET(request: Request) {
     // Получаем все обращения организации за период
     const tickets = await prisma.ticket.findMany({
       where: {
-        organizationId: chairman.organizationId!,
+        organizationId,
         createdAt: {
           gte: startDate,
           lte: endDate,

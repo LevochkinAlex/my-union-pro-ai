@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import SubscriptionWidget from "@/components/dashboard/SubscriptionWidget";
 
 interface PPOHeadDashboardProps {
   userName: string;
@@ -129,6 +130,11 @@ export default function PPOHeadDashboard({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Подписка и доступы */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <SubscriptionWidget />
       </div>
 
       {/* Операционная статистика */}

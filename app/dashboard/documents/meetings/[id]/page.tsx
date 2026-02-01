@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
@@ -129,11 +129,39 @@ export default function MeetingDetailPage({
   const [isSendingForApproval, setIsSendingForApproval] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
+  const [tabsScrollLeftHint, setTabsScrollLeftHint] = useState(false);
+  const [tabsScrollRightHint, setTabsScrollRightHint] = useState(false);
+
+  const updateTabsScrollHint = useCallback(() => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    const canScrollLeft = el.scrollLeft > 2;
+    const canScrollRight = el.scrollLeft < el.scrollWidth - el.clientWidth - 2;
+    setTabsScrollLeftHint(canScrollLeft);
+    setTabsScrollRightHint(canScrollRight);
+  }, []);
+
+  const scrollTabs = useCallback((direction: "left" | "right") => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    const step = Math.max(200, el.clientWidth * 0.6);
+    el.scrollBy({ left: direction === "left" ? -step : step, behavior: "smooth" });
+  }, []);
 
   useEffect(() => {
     loadMeeting();
     loadMembers();
   }, [resolvedParams.id]);
+
+  useEffect(() => {
+    updateTabsScrollHint();
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(updateTabsScrollHint);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [meeting, updateTabsScrollHint]);
 
   const loadMeeting = async () => {
     try {
@@ -396,105 +424,180 @@ export default function MeetingDetailPage({
         </div>
       </div>
 
-      {/* Табы - НАВИГАЦИЯ ПО ДОКУМЕНТАМ */}
-      <div className="mt-6 mb-4 rounded-lg border-2 border-blue-300 dark:border-blue-600 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 shadow-lg p-4">
-        <h2 className="mb-3 text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Навигация по документам</h2>
-        <nav className="flex flex-wrap gap-2">
-          {[
-            { id: "info", label: "Информация", icon: "📋" },
-            { id: "agenda", label: `Повестка${meeting.agendaDocument ? ` (${meeting.agendaDocument.regNumber})` : ""}`, icon: "📄" },
-            { id: "protocol", label: `Протокол${meeting.protocolDocument ? ` (${meeting.protocolDocument.regNumber})` : ""}`, icon: "📝" },
-            { id: "resolutions", label: `Постановления (${meeting.resolutions.length})`, icon: "📋" },
-            { id: "extracts", label: `Выписки (${meeting.extracts.length})`, icon: "📄" },
-          ].map((tab) => (
+      {/* Навигация по документам — одна строка, скролл стрелками или тачем */}
+      <nav
+        className="mt-6 border-b border-gray-200 dark:border-gray-700"
+        aria-label="Разделы заседания"
+      >
+        <div className="flex items-stretch">
+          {/* Стрелка влево — показать, когда есть куда скроллить влево */}
+          {tabsScrollLeftHint && (
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold transition-all transform hover:scale-105 ${
-                activeTab === tab.id
-                  ? "bg-blue-600 text-white shadow-lg ring-2 ring-blue-400"
-                  : "bg-white text-gray-700 hover:bg-blue-100 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 shadow"
-              }`}
+              type="button"
+              onClick={() => scrollTabs("left")}
+              className="shrink-0 self-center flex items-center justify-center w-10 h-10 rounded-full border border-transparent bg-white/70 dark:bg-gray-800/70 backdrop-blur-md text-gray-600 dark:text-gray-400 hover:bg-white/90 hover:text-gray-900 dark:hover:bg-gray-700/90 dark:hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+              aria-label="Прокрутить табы влево"
             >
-              <span className="text-lg">{tab.icon}</span>
-              <span>{tab.label}</span>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
             </button>
+          )}
+          <div
+            ref={tabsScrollRef}
+            onScroll={updateTabsScrollHint}
+            className="flex-1 min-w-0 overflow-x-auto overflow-y-hidden -mb-px"
+            style={{ scrollbarWidth: "thin", WebkitOverflowScrolling: "touch" }}
+          >
+            <ul className="flex flex-nowrap gap-0 -mb-px min-w-max">
+          {[
+            {
+              id: "info",
+              label: "Информация",
+              icon: (
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              ),
+              badge: null,
+            },
+            {
+              id: "agenda",
+              label: "Повестка",
+              icon: (
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              ),
+              badge: meeting.agendaDocument?.regNumber ?? (meeting.agendaDocument ? DOC_STATUS_LABELS[meeting.agendaDocument.status] : null),
+            },
+            {
+              id: "protocol",
+              label: "Протокол",
+              icon: (
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              ),
+              badge: meeting.protocolDocument?.regNumber ?? (meeting.protocolDocument ? DOC_STATUS_LABELS[meeting.protocolDocument.status] : null),
+            },
+            {
+              id: "resolutions",
+              label: "Постановления",
+              icon: (
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              ),
+              badge: meeting.resolutions.length ? `${meeting.resolutions.length}` : null,
+            },
+            {
+              id: "extracts",
+              label: "Выписки",
+              icon: (
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              ),
+              badge: meeting.extracts.length ? `${meeting.extracts.length}` : null,
+            },
+          ].map((tab) => (
+            <li key={tab.id}>
+              <button
+                type="button"
+                onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                aria-current={activeTab === tab.id ? "page" : undefined}
+                className={`
+                  flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded-t-md
+                  ${activeTab === tab.id
+                    ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:border-gray-600"
+                  }
+                `}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+                {tab.badge && (
+                  <span
+                    className={`
+                      shrink-0 rounded-full px-2 py-0.5 text-xs font-medium
+                      ${activeTab === tab.id
+                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                        : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+                      }
+                    `}
+                  >
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            </li>
           ))}
-        </nav>
-      </div>
-
-      {/* Краткая информация о документах - быстрый доступ */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div 
-          onClick={() => setActiveTab("agenda")}
-          className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
-        >
-          <div className="flex items-center justify-between">
-            <h3 className="font-medium text-gray-900 dark:text-white">Повестка дня</h3>
-            {meeting.agendaDocument && (
-              <span className="text-xs text-green-600 dark:text-green-400">✓</span>
-            )}
+            </ul>
           </div>
-          {meeting.agendaDocument ? (
-            <div className="mt-2">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">
-                {meeting.agendaDocument.regNumber}
-              </p>
-              <span className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${DOC_STATUS_COLORS[meeting.agendaDocument.status] || DOC_STATUS_COLORS.DRAFT}`}>
-                {DOC_STATUS_LABELS[meeting.agendaDocument.status] || "Черновик"}
-              </span>
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-gray-500">Не создана</p>
+          {/* Стрелка вправо — показать, когда есть куда скроллить вправо */}
+          {tabsScrollRightHint && (
+            <button
+              type="button"
+              onClick={() => scrollTabs("right")}
+              className="shrink-0 self-center flex items-center justify-center w-10 h-10 rounded-full border border-transparent bg-white/70 dark:bg-gray-800/70 backdrop-blur-md text-gray-600 dark:text-gray-400 hover:bg-white/90 hover:text-gray-900 dark:hover:bg-gray-700/90 dark:hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+              aria-label="Прокрутить табы вправо"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           )}
         </div>
-
-        <div 
-          onClick={() => setActiveTab("protocol")}
-          className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
-        >
-          <div className="flex items-center justify-between">
-            <h3 className="font-medium text-gray-900 dark:text-white">Протокол</h3>
-            {meeting.protocolDocument && (
-              <span className="text-xs text-green-600 dark:text-green-400">✓</span>
-            )}
-          </div>
-          {meeting.protocolDocument ? (
-            <div className="mt-2">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">
-                {meeting.protocolDocument.regNumber}
-              </p>
-              <span className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${DOC_STATUS_COLORS[meeting.protocolDocument.status] || DOC_STATUS_COLORS.DRAFT}`}>
-                {DOC_STATUS_LABELS[meeting.protocolDocument.status] || "Черновик"}
-              </span>
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-gray-500">Не создан</p>
+        {/* Контекст текущего раздела — одна строка вместо четырёх карточек */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
+          {activeTab === "agenda" && (
+            meeting.agendaDocument ? (
+              <>
+                <span className="font-medium text-gray-700 dark:text-gray-300">
+                  {meeting.agendaDocument.regNumber ?? "Повестка дня"}
+                </span>
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${DOC_STATUS_COLORS[meeting.agendaDocument.status] || DOC_STATUS_COLORS.DRAFT}`}>
+                  {DOC_STATUS_LABELS[meeting.agendaDocument.status] || "Черновик"}
+                </span>
+              </>
+            ) : (
+              <span>Повестка не создана</span>
+            )
+          )}
+          {activeTab === "protocol" && (
+            meeting.protocolDocument ? (
+              <>
+                <span className="font-medium text-gray-700 dark:text-gray-300">
+                  {meeting.protocolDocument.regNumber ?? "Протокол"}
+                </span>
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${DOC_STATUS_COLORS[meeting.protocolDocument.status] || DOC_STATUS_COLORS.DRAFT}`}>
+                  {DOC_STATUS_LABELS[meeting.protocolDocument.status] || "Черновик"}
+                </span>
+              </>
+            ) : (
+              <span>Протокол не создан</span>
+            )
+          )}
+          {activeTab === "resolutions" && (
+            <span>
+              {meeting.resolutions.length === 0
+                ? "Постановлений пока нет"
+                : `${meeting.resolutions.length} ${meeting.resolutions.length === 1 ? "постановление" : meeting.resolutions.length < 5 ? "постановления" : "постановлений"}`
+              }
+            </span>
+          )}
+          {activeTab === "extracts" && (
+            <span>
+              {meeting.extracts.length === 0
+                ? "Выписок пока нет"
+                : `${meeting.extracts.length} ${meeting.extracts.length === 1 ? "выписка" : meeting.extracts.length < 5 ? "выписки" : "выписок"}`
+              }
+            </span>
           )}
         </div>
-
-        <div 
-          onClick={() => setActiveTab("resolutions")}
-          className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
-        >
-          <h3 className="font-medium text-gray-900 dark:text-white">Постановления</h3>
-          <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
-            {meeting.resolutions.length}
-          </p>
-          <p className="text-xs text-gray-500">документов</p>
-        </div>
-
-        <div 
-          onClick={() => setActiveTab("extracts")}
-          className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
-        >
-          <h3 className="font-medium text-gray-900 dark:text-white">Выписки</h3>
-          <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
-            {meeting.extracts.length}
-          </p>
-          <p className="text-xs text-gray-500">документов</p>
-        </div>
-      </div>
+      </nav>
 
       {/* Контент табов */}
       {activeTab === "info" && (

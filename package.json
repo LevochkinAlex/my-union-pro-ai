@@ -1,6 +1,6 @@
 {
   "name": "my-union-pro",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "private": true,
   "scripts": {
     "fix-appeal-messages": "tsx scripts/fix-appeal-messages.ts",
@@ -25,6 +25,7 @@
     "prisma:fix": "bash scripts/fix-prisma.sh",
     "seed:default-bot": "dotenv -e .env.local -- node scripts/create-default-bot.mjs",
     "seed:document-templates": "dotenv -e .env.local -- node scripts/seed-document-templates.mjs",
+    "seed:reports": "dotenv -e .env.local -- npx tsx prisma/seed-reports.ts",
     "export:templates": "dotenv -e .env.local -- node scripts/export-document-templates.mjs",
     "import:templates": "dotenv -e .env.local -- node scripts/import-document-templates.mjs",
     "migrate:files-to-vds": "dotenv -e .env.local -- node scripts/migrate-files-to-vds.mjs",
