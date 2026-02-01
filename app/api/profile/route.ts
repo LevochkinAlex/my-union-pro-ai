@@ -52,68 +52,89 @@ export async function GET() {
 
     console.log("[profile] GET: Fetching user data for ID:", session.user.id);
 
-    // Кешируем профиль на 10 секунд для уменьшения нагрузки на БД
-    // Уменьшено с 30 до 10 секунд для более быстрого обновления статуса членства
+    const profileSelectBase = {
+      id: true,
+      email: true,
+      emailVerified: true,
+      firstName: true,
+      lastName: true,
+      middleName: true,
+      phone: true,
+      dateOfBirth: true,
+      address: true,
+      preferredDiscountCity: true,
+      avatarUrl: true,
+      jobTitle: true,
+      workplace: true,
+      workplaceInn: true,
+      directorName: true,
+      directorPosition: true,
+      profession: true,
+      education: true,
+      employmentStatus: true,
+      hobbies: true,
+      aboutMe: true,
+      hasChildren: true,
+      childrenInfo: true,
+      maritalStatus: true,
+      spouseInfo: true,
+      additionalInfo: true,
+      membershipStatus: true,
+      unionMembershipStatus: true,
+      organizationId: true,
+      organizationName: true,
+      profileChangedAfterDocuments: true,
+      profileLastModified: true,
+      viewMode: true,
+      isPPOHead: true,
+      createdAt: true,
+      updatedAt: true,
+      organization: {
+        select: { id: true, name: true, inn: true },
+      },
+    } as const;
+
     const cacheKey = getCacheKey("profile", { userId: session.user.id });
-    
-    const user = await withCache(
-      cacheKey,
-      async () => {
-        return await withPrismaRetry(async () => {
+
+    type UserWithProfile = { [key: string]: unknown; organization?: { id: string; name: string; inn: string } | null; subscriptionBlockedAt?: Date | null; role?: string | null };
+    let user: UserWithProfile | null = null;
+
+    try {
+      user = (await withCache(
+        cacheKey,
+        async () => {
+          return await withPrismaRetry(async () => {
+            return await prisma.user.findUnique({
+              where: { id: session.user.id },
+              select: { ...profileSelectBase, subscriptionBlockedAt: true, role: true },
+            });
+          });
+        },
+        10
+      )) as UserWithProfile | null;
+    } catch (profileError: unknown) {
+      const err = profileError as { message?: string; code?: string };
+      const isMissingColumn =
+        err?.message?.includes("subscriptionBlockedAt") ||
+        err?.message?.includes("Unknown column") ||
+        err?.message?.includes("does not exist") ||
+        err?.code === "P2010";
+      if (isMissingColumn) {
+        console.warn("[profile] GET: subscription columns missing, using fallback (run migration)");
+        user = (await withPrismaRetry(async () => {
           return await prisma.user.findUnique({
             where: { id: session.user.id },
-            select: {
-            id: true,
-            email: true,
-            emailVerified: true,
-            firstName: true,
-            lastName: true,
-            middleName: true,
-            phone: true,
-            dateOfBirth: true,
-            address: true,
-            preferredDiscountCity: true,
-            avatarUrl: true,
-            jobTitle: true,
-            workplace: true,
-            workplaceInn: true,
-            directorName: true,
-            directorPosition: true,
-            profession: true,
-            education: true,
-            employmentStatus: true,
-            hobbies: true,
-            aboutMe: true,
-            hasChildren: true,
-            childrenInfo: true,
-            maritalStatus: true,
-            spouseInfo: true,
-            additionalInfo: true,
-            membershipStatus: true,
-            unionMembershipStatus: true, // Добавляем для проверки ACCEPTED
-            subscriptionBlockedAt: true, // Блокировка по лимиту подписки организации
-            organizationId: true,
-            organizationName: true, // на случай, если организация не из справочника
-            profileChangedAfterDocuments: true,
-            profileLastModified: true,
-            role: true,
-            viewMode: true,
-            isPPOHead: true,
-            createdAt: true,
-            updatedAt: true,
-            organization: {
-              select: {
-                id: true,
-                name: true,
-                inn: true,
-              },
-            },
-          },
-        });
-        });
-      },
-      10 // Кеш на 10 секунд (уменьшено для более быстрого обновления)
-    );
+            select: profileSelectBase,
+          });
+        })) as UserWithProfile | null;
+        if (user) {
+          (user as { subscriptionBlockedAt?: null; role?: string }).subscriptionBlockedAt = null;
+          (user as { role?: string }).role = (session.user as { role?: string })?.role ?? null;
+        }
+      } else {
+        throw profileError;
+      }
+    }
 
     if (!user) {
       console.error("[profile] GET: User not found for ID:", session.user.id);

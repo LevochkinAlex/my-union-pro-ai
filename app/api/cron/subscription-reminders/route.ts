@@ -88,10 +88,12 @@ export async function GET(request: NextRequest) {
 
       if (chairman.email) {
         try {
+          const text = body + "\n\nПродлить подписку: " + subscriptionUrl;
           await sendEmail({
             to: chairman.email,
             subject: title,
-            text: body + "\n\nПродлить подписку: " + subscriptionUrl,
+            html: `<p>${body.replace(/\n/g, "<br/>")}</p><p><a href="${subscriptionUrl}">Продлить подписку</a></p>`,
+            text,
           });
         } catch (e) {
           console.warn("[subscription-reminders] Email send failed for", chairmanId, e);

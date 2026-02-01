@@ -12,11 +12,11 @@ import {
 } from "@/lib/subscription";
 import { getTariffByKey } from "@/lib/constants/tariffs";
 
-function ensureSuperAdmin(session: { user?: { id?: string }; user?: { role?: string } } | null) {
+function ensureSuperAdmin(session: { user?: { id?: string; role?: string } } | null) {
   if (!session?.user?.id) {
     return { error: NextResponse.json({ error: "Не авторизован" }, { status: 401 }) };
   }
-  if ((session.user as { role?: string })?.role !== "SUPER_ADMIN") {
+  if (session.user?.role !== "SUPER_ADMIN") {
     return { error: NextResponse.json({ error: "Доступ запрещен" }, { status: 403 }) };
   }
   return { error: null };
