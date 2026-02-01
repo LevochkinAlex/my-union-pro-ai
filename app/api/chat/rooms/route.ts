@@ -117,17 +117,20 @@ export async function GET() {
       tags: { endpoint: 'GET /api/chat/rooms' },
       extra: { userId: session?.user?.id },
     });
-    
-    // Более информативное сообщение об ошибке
-    const errorMessage = error?.message || 'Failed to fetch rooms';
-    const statusCode = (error as any)?.statusCode || (error as any)?.status || 500;
-    
+    // Всегда возвращаем 500 (не 503), чтобы не путать с недоступностью сервиса; при ошибке БД отдаём пустой список, чтобы UI не ломался
+    const isDbOrConnectionError =
+      error?.code?.startsWith?.('P') ||
+      error?.message?.includes?.('timeout') ||
+      error?.message?.includes?.('ECONNREFUSED');
+    if (isDbOrConnectionError && session?.user?.id) {
+      return NextResponse.json({ rooms: [] });
+    }
     return NextResponse.json(
-      { 
+      {
         error: 'Ошибка при загрузке чатов',
-        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
+        details: process.env.NODE_ENV === 'development' ? (error?.message || '') : undefined,
       },
-      { status: statusCode }
+      { status: 500 }
     );
   }
 }

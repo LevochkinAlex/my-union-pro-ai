@@ -121,9 +121,26 @@ export async function GET() {
     });
   } catch (e) {
     console.error("[api/subscription] GET error:", e);
-    return NextResponse.json(
-      { error: "Ошибка при получении подписки" },
-      { status: 500 }
-    );
+    // При ошибке (БД, таблица подписок не создана) отдаём нейтральные данные 200, чтобы дашборд и виджет не ломались
+    return NextResponse.json({
+      subscription: {
+        id: null,
+        status: "NONE",
+        memberLimit: null,
+        tariffKey: null,
+        tariffLabel: "—",
+        trialEndsAt: null,
+        periodEndsAt: null,
+        periodStartedAt: null,
+        manualOverride: false,
+        adminNote: null,
+      },
+      usage: {
+        activeMembers: 0,
+        availableLicenses: null,
+        isOverLimit: false,
+      },
+      hasActiveAccess: false,
+    });
   }
 }

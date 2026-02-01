@@ -71,9 +71,25 @@ export async function GET() {
         },
       });
     } catch (dbError) {
-      // Если ошибка БД, используем fallback из сессии
+      // При любой ошибке БД возвращаем fallback из сессии, не пробрасываем 503/500
       console.error("[user/view-mode] Database error:", dbError);
-      throw dbError;
+      const u = (session as any)?.user;
+      if (u) {
+        return NextResponse.json({
+          currentMode: u.viewMode || "MEMBER",
+          availableModes: [
+            { mode: "MEMBER", label: "Член профсоюза" },
+            ...(u.isPPOHead || u.isMPOHead || u.isRPOHead
+              ? [{ mode: "PPO_HEAD", label: "Председатель ППО", organizationName: (u.ppoHeadOrganization as { name?: string })?.name }]
+              : []),
+          ],
+          canSwitch: (u.isPPOHead || u.isMPOHead || u.isRPOHead) && u.viewMode !== "MEMBER",
+        });
+      }
+      return NextResponse.json(
+        { error: "Ошибка получения данных. Попробуйте позже." },
+        { status: 500 }
+      );
     }
 
     if (!user) {
