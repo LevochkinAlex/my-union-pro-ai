@@ -124,90 +124,70 @@ export default function PPOHeadDashboard({
       </div>
 
       {/* Операционная статистика */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 min-w-0 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         <Link
           href="/dashboard/appeals"
-          className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 hover:shadow-md transition-shadow"
+          className="min-w-0 overflow-hidden rounded-2xl border border-amber-200/60 bg-amber-50 dark:border-amber-800/50 dark:bg-amber-950/40 p-4 sm:p-5 flex flex-col gap-4 hover:shadow-md transition-shadow"
         >
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
-              <svg className="h-6 w-6 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.pendingAppeals}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Новых обращений</p>
-            </div>
+          <div className="flex shrink-0 w-10 h-10 items-center justify-center rounded-xl bg-amber-200/50 dark:bg-amber-800/40" aria-hidden>
+            <svg className="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
           </div>
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">Новых обращений</p>
+          <p className="text-2xl font-semibold tabular-nums text-amber-900 dark:text-amber-100 sm:text-3xl">{stats.pendingAppeals}</p>
         </Link>
 
         <Link
           href="/dashboard/members"
-          className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 hover:shadow-md transition-shadow"
+          className="min-w-0 overflow-hidden rounded-2xl border border-orange-200/60 bg-orange-50 dark:border-orange-800/50 dark:bg-orange-950/40 p-4 sm:p-5 flex flex-col gap-4 hover:shadow-md transition-shadow"
         >
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
-              <svg className="h-6 w-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.pendingMembers}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">На валидации</p>
-            </div>
+          <div className="flex shrink-0 w-10 h-10 items-center justify-center rounded-xl bg-orange-200/50 dark:bg-orange-800/40" aria-hidden>
+            <svg className="h-5 w-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
           </div>
+          <p className="text-sm font-medium text-orange-800 dark:text-orange-200">На валидации</p>
+          <p className="text-2xl font-semibold tabular-nums text-orange-900 dark:text-orange-100 sm:text-3xl">{stats.pendingMembers}</p>
         </Link>
 
         <Link
           href="/dashboard/members"
-          className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 hover:shadow-md transition-shadow"
+          className="min-w-0 overflow-hidden rounded-2xl border border-green-200/60 bg-green-50 dark:border-green-800/50 dark:bg-green-950/40 p-4 sm:p-5 flex flex-col gap-4 hover:shadow-md transition-shadow"
         >
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-              <svg className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.activeMembers}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Активных членов</p>
-            </div>
+          <div className="flex shrink-0 w-10 h-10 items-center justify-center rounded-xl bg-green-200/50 dark:bg-green-800/40" aria-hidden>
+            <svg className="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
           </div>
+          <p className="text-sm font-medium text-green-800 dark:text-green-200">Активных членов</p>
+          <p className="text-2xl font-semibold tabular-nums text-green-900 dark:text-green-100 sm:text-3xl">{stats.activeMembers}</p>
         </Link>
 
         <Link
           href="/dashboard/news"
-          className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 hover:shadow-md transition-shadow"
+          className="min-w-0 overflow-hidden rounded-2xl border border-sky-200/60 bg-sky-50 dark:border-sky-800/50 dark:bg-sky-950/40 p-4 sm:p-5 flex flex-col gap-4 hover:shadow-md transition-shadow"
         >
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-              <svg className="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalNews}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Новостей</p>
-            </div>
+          <div className="flex shrink-0 w-10 h-10 items-center justify-center rounded-xl bg-sky-200/50 dark:bg-sky-800/40" aria-hidden>
+            <svg className="h-5 w-5 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+            </svg>
           </div>
+          <p className="text-sm font-medium text-sky-800 dark:text-sky-200">Новостей</p>
+          <p className="text-2xl font-semibold tabular-nums text-sky-900 dark:text-sky-100 sm:text-3xl">{stats.totalNews}</p>
         </Link>
 
         <Link
           href="/dashboard/documents"
-          className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 hover:shadow-md transition-shadow"
+          className="min-w-0 overflow-hidden rounded-2xl border border-indigo-200/60 bg-indigo-50 dark:border-indigo-800/50 dark:bg-indigo-950/40 p-4 sm:p-5 flex flex-col gap-4 hover:shadow-md transition-shadow"
         >
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-              <svg className="h-6 w-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalDocuments}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Документов</p>
-            </div>
+          <div className="flex shrink-0 w-10 h-10 items-center justify-center rounded-xl bg-indigo-200/50 dark:bg-indigo-800/40" aria-hidden>
+            <svg className="h-5 w-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
           </div>
+          <p className="text-sm font-medium text-indigo-800 dark:text-indigo-200">Документов</p>
+          <p className="text-2xl font-semibold tabular-nums text-indigo-900 dark:text-indigo-100 sm:text-3xl">{stats.totalDocuments}</p>
         </Link>
       </div>
 
