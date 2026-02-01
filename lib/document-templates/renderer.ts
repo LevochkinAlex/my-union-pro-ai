@@ -84,11 +84,20 @@ export function renderTemplate(htmlTemplate: string, variables: TemplateVariable
   return rendered;
 }
 
-/** Пути к Chrome на macOS для fallback, если бандл Puppeteer не скачан */
+/** Пути к Chrome на macOS для fallback */
 const MACOS_CHROME_PATHS = [
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   "/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
   "/Applications/Chromium.app/Contents/MacOS/Chromium",
+];
+
+/** Стандартные пути Chrome/Chromium на Linux (VDS, Docker) */
+const LINUX_CHROME_PATHS = [
+  "/usr/bin/google-chrome-stable",
+  "/usr/bin/google-chrome",
+  "/usr/bin/chromium",
+  "/usr/bin/chromium-browser",
+  "/snap/bin/chromium",
 ];
 
 async function resolveChromeExecutablePath(): Promise<string | undefined> {
@@ -119,6 +128,15 @@ async function resolveChromeExecutablePath(): Promise<string | undefined> {
 
   if (process.platform === "darwin") {
     for (const p of MACOS_CHROME_PATHS) {
+      if (await pathExists(p)) {
+        console.log(`[document-templates] Using system Chrome: ${p}`);
+        return p;
+      }
+    }
+  }
+
+  if (process.platform === "linux") {
+    for (const p of LINUX_CHROME_PATHS) {
       if (await pathExists(p)) {
         console.log(`[document-templates] Using system Chrome: ${p}`);
         return p;
