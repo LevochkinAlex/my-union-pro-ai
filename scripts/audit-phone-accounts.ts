@@ -55,7 +55,7 @@ async function main() {
   if (users.length === 0) {
     const byHistory = await prisma.phoneHistory.findMany({
       where: {
-        OR: variants.map((p) => ({ phone: { contains: p.replace(/\D/g, "").slice(-10) } })),
+        OR: variants.map((p) => ({ phone: p })),
       },
       include: { user: { select: { id: true, phone: true, authPhone: true, email: true, firstName: true, lastName: true, createdAt: true } } },
       take: 20,

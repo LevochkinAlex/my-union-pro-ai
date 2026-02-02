@@ -732,59 +732,81 @@ export const authOptions: NextAuthOptions = {
               (user as any).avatarUrl = existingUser.avatarUrl;
             }
           } else {
-            // Создаем нового пользователя (если авторизовался через Яндекс первым)
-            console.log("[Yandex Auth] Пользователь не найден, создаем нового");
-            
-            const normalizedPhone = yandexUserInfo.default_phone?.number
-              ? normalizePhone(yandexUserInfo.default_phone.number)
-              : null;
+            // Email/телефон не нашли — проверяем: может, аккаунт с этим email уже есть (например, заходил по СМС и верифицировал почту)
+            const existingByEmail =
+              yandexUserInfo.default_email
+                ? await prisma.user.findFirst({
+                    where: {
+                      email: { equals: yandexUserInfo.default_email.trim().toLowerCase(), mode: "insensitive" },
+                    },
+                  })
+                : null;
 
-            const newUserData: any = {
-              email: yandexUserInfo.default_email || null,
-              phone: normalizedPhone,
-              authPhone: normalizedPhone, // Устанавливаем authPhone при первой Яндекс авторизации
-              role: "PENDING_MEMBER",
-              membershipStatus: "PROFILE_INCOMPLETE",
-            };
+            if (existingByEmail) {
+              console.log("[Yandex Auth] Найден аккаунт по email — привязываем Яндекс к существующему пользователю:", existingByEmail.id);
+              const updateData: any = { yandexId: yandexUserInfo.id ? yandexUserInfo.id.toString() : undefined };
+              if (!existingByEmail.firstName || !existingByEmail.lastName) {
+                const parsedName = parseYandexName(yandexUserInfo);
+                if (parsedName.firstName && !existingByEmail.firstName) updateData.firstName = parsedName.firstName;
+                if (parsedName.lastName && !existingByEmail.lastName) updateData.lastName = parsedName.lastName;
+                if (parsedName.middleName && !existingByEmail.middleName) updateData.middleName = parsedName.middleName;
+              }
+              if (yandexUserInfo.default_avatar_id && !existingByEmail.avatarUrl) {
+                updateData.avatarUrl = `https://avatars.yandex.net/get-yapic/${yandexUserInfo.default_avatar_id}/islands-200`;
+              }
+              if (Object.keys(updateData).length > 0) {
+                await prisma.user.update({ where: { id: existingByEmail.id }, data: updateData });
+              }
+              const updated = await prisma.user.findUnique({ where: { id: existingByEmail.id } });
+              if (updated) {
+                user.id = updated.id;
+                user.email = updated.email || undefined;
+                user.name = updated.firstName && updated.lastName
+                  ? `${updated.firstName} ${updated.lastName}`
+                  : yandexUserInfo.real_name || yandexUserInfo.display_name || undefined;
+                (user as any).role = updated.role;
+                (user as any).membershipStatus = updated.membershipStatus;
+                (user as any).firstName = updated.firstName;
+                (user as any).lastName = updated.lastName;
+                (user as any).avatarUrl = updated.avatarUrl;
+              }
+            } else {
+              // Создаем нового пользователя (если авторизовался через Яндекс первым)
+              console.log("[Yandex Auth] Пользователь не найден, создаем нового");
 
-            // Парсим имя из данных Яндекс
-            const parsedName = parseYandexName(yandexUserInfo);
-            if (parsedName.firstName) {
-              newUserData.firstName = parsedName.firstName;
+              const normalizedPhone = yandexUserInfo.default_phone?.number
+                ? normalizePhone(yandexUserInfo.default_phone.number)
+                : null;
+
+              const newUserData: any = {
+                email: yandexUserInfo.default_email || null,
+                phone: normalizedPhone,
+                authPhone: normalizedPhone,
+                role: "PENDING_MEMBER",
+                membershipStatus: "PROFILE_INCOMPLETE",
+              };
+
+              const parsedName = parseYandexName(yandexUserInfo);
+              if (parsedName.firstName) newUserData.firstName = parsedName.firstName;
+              if (parsedName.lastName) newUserData.lastName = parsedName.lastName;
+              if (parsedName.middleName) newUserData.middleName = parsedName.middleName;
+              if (yandexUserInfo.default_avatar_id) {
+                newUserData.avatarUrl = `https://avatars.yandex.net/get-yapic/${yandexUserInfo.default_avatar_id}/islands-200`;
+              }
+              if (yandexUserInfo.id) newUserData.yandexId = yandexUserInfo.id.toString();
+
+              const newUser = await prisma.user.create({
+                data: newUserData,
+              });
+
+              console.log("[Yandex Auth] Создан новый пользователь:", newUser.id);
+
+              user.id = newUser.id;
+              user.email = newUser.email || undefined;
+              user.name = newUser.firstName && newUser.lastName
+                ? `${newUser.firstName} ${newUser.lastName}`
+                : yandexUserInfo.real_name || yandexUserInfo.display_name || undefined;
             }
-            if (parsedName.lastName) {
-              newUserData.lastName = parsedName.lastName;
-            }
-            if (parsedName.middleName) {
-              newUserData.middleName = parsedName.middleName;
-            }
-
-            // Аватар
-            if (yandexUserInfo.default_avatar_id) {
-              newUserData.avatarUrl = `https://avatars.yandex.net/get-yapic/${yandexUserInfo.default_avatar_id}/islands-200`;
-            }
-
-            // Yandex ID
-            if (yandexUserInfo.id) {
-              newUserData.yandexId = yandexUserInfo.id.toString();
-            }
-
-            const newUser = await prisma.user.create({
-              data: newUserData,
-            });
-
-            console.log("[Yandex Auth] Создан новый пользователь:", {
-              id: newUser.id,
-              email: newUser.email,
-              phone: newUser.phone,
-              authPhone: newUser.authPhone,
-            });
-            
-            user.id = newUser.id;
-            user.email = newUser.email || undefined;
-            user.name = newUser.firstName && newUser.lastName
-              ? `${newUser.firstName} ${newUser.lastName}`
-              : yandexUserInfo.real_name || yandexUserInfo.display_name || undefined;
           }
         } catch (error) {
           console.error("[Yandex Auth] Ошибка при обработке входа:", error);

@@ -31,8 +31,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Если пользователь авторизован, обновляем его email и помечаем как подтвержденный
+    // Если пользователь авторизован, проверяем: не привязан ли этот email уже к другому аккаунту
     if (session?.user?.id) {
+      const emailNorm = String(email).trim().toLowerCase();
+      const otherUser = await prisma.user.findFirst({
+        where: {
+          email: { equals: emailNorm, mode: "insensitive" },
+          id: { not: session.user.id },
+        },
+        select: { id: true, firstName: true, lastName: true, email: true },
+      });
+      if (otherUser) {
+        return NextResponse.json(
+          {
+            error: "Этот email уже привязан к другому аккаунту. Объедините аккаунты в настройках или обратитесь в поддержку.",
+            code: "EMAIL_ALREADY_USED",
+            existingUserId: otherUser.id,
+          },
+          { status: 409 }
+        );
+      }
+
       const updatedUser = await prisma.user.update({
         where: { id: session.user.id },
         data: {

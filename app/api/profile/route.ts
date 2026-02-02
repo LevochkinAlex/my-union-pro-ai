@@ -347,7 +347,9 @@ export async function PUT(request: NextRequest) {
         console.warn("[profile] Phone already used by another user:", normalizedPhone, existingUserWithPhone.id);
         return NextResponse.json(
           { 
-            error: "Этот номер телефона уже используется другим пользователем",
+            error: "Этот номер телефона уже используется другим аккаунтом. Объедините аккаунты в настройках или обратитесь в поддержку.",
+            code: "PHONE_ALREADY_USED",
+            existingUserId: existingUserWithPhone.id,
             existingUser: {
               id: existingUserWithPhone.id,
               name: [existingUserWithPhone.firstName, existingUserWithPhone.lastName].filter(Boolean).join(" ") || "Пользователь"
