@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import PhoneInput from "@/components/form/PhoneInput";
 import AddressInput from "@/components/form/AddressInput";
@@ -13,7 +12,8 @@ import AvatarUpload from "@/components/profile/AvatarUpload";
 import ChangePhoneModal from "@/components/profile/ChangePhoneModal";
 import WorkplaceSearch from "@/components/profile/WorkplaceSearch";
 import { useAlert } from "@/components/ui/Alert";
-import { DOCUMENT_ON_REVIEW_STATUSES } from "@/lib/documents-status";
+import { ProgressBarFill } from "@/components/ui/ProgressBarFill";
+import { DOCUMENT_ON_REVIEW_STATUSES, type DocumentOnReviewStatus } from "@/lib/documents-status";
 import { Download, Upload, Check, X, Edit2, Printer } from "lucide-react";
 
 interface QuestionnaireModalProps {
@@ -59,12 +59,10 @@ export default function QuestionnaireModal({
   onClose,
   onComplete,
 }: QuestionnaireModalProps) {
-  const router = useRouter();
   const { showAlert, AlertComponent } = useAlert();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isSubmittingForReview, setIsSubmittingForReview] = useState(false);
   const [downloadingDocIds, setDownloadingDocIds] = useState<Set<string>>(new Set());
   const QUESTIONNAIRE_STEP_KEY = "questionnaireStep";
   const [currentStep, setCurrentStep] = useState(1);
@@ -170,7 +168,7 @@ export default function QuestionnaireModal({
       }
     })();
     return () => { cancelled = true; };
-  }, [formData.workplace, formData.workplaceInn]);
+  }, [formData.workplace, formData.workplaceInn, formData.organizationId]);
 
   const loadData = async () => {
     try {
@@ -312,8 +310,8 @@ export default function QuestionnaireModal({
           bothUploaded &&
           membershipApp &&
           contributionApp &&
-          DOCUMENT_ON_REVIEW_STATUSES.includes(membershipApp.status as any) &&
-          DOCUMENT_ON_REVIEW_STATUSES.includes(contributionApp.status as any);
+          DOCUMENT_ON_REVIEW_STATUSES.includes(membershipApp.status as DocumentOnReviewStatus) &&
+          DOCUMENT_ON_REVIEW_STATUSES.includes(contributionApp.status as DocumentOnReviewStatus);
 
         // Определяем шаг по данным; шаг 4 только после явной отправки на проверку
         let initialStep = 1;
@@ -362,14 +360,14 @@ export default function QuestionnaireModal({
   };
 
   // Функция автосохранения полей
-  const autoSaveField = async (fieldName: string, value: any) => {
+  const autoSaveField = async (fieldName: string, value: string | null) => {
     if (autoSaving) return;
 
     setAutoSaving(true);
     setLastSavedField(fieldName);
 
     try {
-      const payload: any = {};
+      const payload: Record<string, string | null> = {};
       if (fieldName === 'organizationId') {
         payload.organizationId = value || null;
       } else {
@@ -400,7 +398,7 @@ export default function QuestionnaireModal({
     }
   };
 
-  const handleFieldBlur = (fieldName: string, value: any) => {
+  const handleFieldBlur = (fieldName: string, value: string | null) => {
     autoSaveField(fieldName, value);
   };
 
@@ -678,11 +676,11 @@ export default function QuestionnaireModal({
             });
             
             // Парсим ответ для проверки статуса
-            let responseData: any = {};
+            let responseData: { allDocumentsUploaded?: boolean } = {};
             try {
-              responseData = JSON.parse(xhr.responseText);
-            } catch (e) {
-              console.warn("[QuestionnaireModal] Не удалось распарсить ответ:", e);
+              responseData = JSON.parse(xhr.responseText) as { allDocumentsUploaded?: boolean };
+            } catch {
+              console.warn("[QuestionnaireModal] Не удалось распарсить ответ");
             }
             
             const message = responseData.allDocumentsUploaded 
@@ -698,7 +696,7 @@ export default function QuestionnaireModal({
             try {
               const response = JSON.parse(xhr.responseText);
               errorMessage = response.error || errorMessage;
-            } catch (e) {
+            } catch {
               console.error("[QuestionnaireModal] Не удалось распарсить ответ сервера:", xhr.responseText);
             }
             console.error("[QuestionnaireModal] Ошибка загрузки:", errorMessage);
@@ -842,9 +840,9 @@ export default function QuestionnaireModal({
               </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-              <div
-                className="h-full rounded-full bg-blue-600 transition-all duration-300"
-                style={{ width: `${(currentStep / 4) * 100}%` }}
+              <ProgressBarFill
+                value={(currentStep / 4) * 100}
+                className="h-full rounded-full bg-blue-600 progress-bar-fill"
               />
             </div>
           </div>
@@ -1001,10 +999,11 @@ export default function QuestionnaireModal({
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label htmlFor="questionnaire-lastName" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Фамилия <span className="text-red-500">*</span>
                   </label>
                   <input
+                    id="questionnaire-lastName"
                     type="text"
                     value={formData.lastName}
                     onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
@@ -1014,10 +1013,11 @@ export default function QuestionnaireModal({
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label htmlFor="questionnaire-firstName" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Имя <span className="text-red-500">*</span>
                   </label>
                   <input
+                    id="questionnaire-firstName"
                     type="text"
                     value={formData.firstName}
                     onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
@@ -1102,59 +1102,41 @@ export default function QuestionnaireModal({
                 Проверьте введенные данные
               </h3>
               <div className="rounded-xl border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50 p-4 sm:p-6 min-w-0">
-                <dl className="space-y-5 sm:space-y-5 min-w-0">
-                  <div className="min-w-0">
-                    <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Организация профсоюза</dt>
-                    <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{selectedOrganization?.name || "—"}</dd>
-                  </div>
-                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 min-w-0">
-                    <div className="min-w-0">
-                      <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">ФИО</dt>
-                      <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">
-                        {[formData.lastName, formData.firstName, formData.middleName].filter(Boolean).join(" ") || "—"}
-                      </dd>
-                    </div>
-                    <div className="min-w-0">
-                      <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Дата рождения</dt>
-                      <dd className="mt-1.5 text-sm text-gray-900 dark:text-white sm:text-base">
-                        {formData.dateOfBirth ? new Date(formData.dateOfBirth).toLocaleDateString("ru-RU") : "—"}
-                      </dd>
-                    </div>
-                    <div className="min-w-0">
-                      <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Телефон</dt>
-                      <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.phone || "—"}</dd>
-                    </div>
-                    <div className="min-w-0">
-                      <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Email</dt>
-                      <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.email || "—"}</dd>
-                    </div>
-                  </div>
-                  <div className="min-w-0">
-                    <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Адрес</dt>
-                    <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.address || "—"}</dd>
-                  </div>
-                  <div className="min-w-0">
-                    <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Место работы</dt>
-                    <dd className="mt-1.5 min-w-0">
-                      <p className="break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.workplace || "Не указано"}</p>
-                      {(formData.directorName || formData.workplaceInn) && (
-                        <div className="mt-2 pl-3 sm:pl-4 border-l-2 border-gray-200 dark:border-gray-600 space-y-1.5">
-                          {formData.directorName && (
-                            <p className="break-words text-xs text-gray-600 dark:text-gray-400 sm:text-sm">
-                              {formData.directorPosition || "Руководитель"}: {formData.directorName}
-                            </p>
-                          )}
-                          {formData.workplaceInn && (
-                            <p className="text-xs text-gray-500 dark:text-gray-500">ИНН: {formData.workplaceInn}</p>
-                          )}
-                        </div>
-                      )}
-                    </dd>
-                  </div>
-                  <div className="min-w-0">
-                    <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Должность</dt>
-                    <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.jobTitle || "—"}</dd>
-                  </div>
+                <dl className="space-y-5 min-w-0">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Организация профсоюза</dt>
+                  <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{selectedOrganization?.name || "—"}</dd>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">ФИО</dt>
+                  <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">
+                    {[formData.lastName, formData.firstName, formData.middleName].filter(Boolean).join(" ") || "—"}
+                  </dd>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Дата рождения</dt>
+                  <dd className="mt-1.5 text-sm text-gray-900 dark:text-white sm:text-base">
+                    {formData.dateOfBirth ? new Date(formData.dateOfBirth).toLocaleDateString("ru-RU") : "—"}
+                  </dd>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Телефон</dt>
+                  <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.phone || "—"}</dd>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Email</dt>
+                  <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.email || "—"}</dd>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Адрес</dt>
+                  <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.address || "—"}</dd>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Место работы</dt>
+                  <dd className="mt-1.5 min-w-0">
+                    <p className="break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.workplace || "Не указано"}</p>
+                    {(formData.directorName || formData.workplaceInn) && (
+                      <div className="mt-2 pl-3 sm:pl-4 border-l-2 border-gray-200 dark:border-gray-600 space-y-1.5">
+                        {formData.directorName && (
+                          <p className="break-words text-xs text-gray-600 dark:text-gray-400 sm:text-sm">
+                            {formData.directorPosition || "Руководитель"}: {formData.directorName}
+                          </p>
+                        )}
+                        {formData.workplaceInn && (
+                          <p className="text-xs text-gray-500 dark:text-gray-500">ИНН: {formData.workplaceInn}</p>
+                        )}
+                      </div>
+                    )}
+                  </dd>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-sm">Должность</dt>
+                  <dd className="mt-1.5 break-words text-sm text-gray-900 dark:text-white sm:text-base">{formData.jobTitle || "—"}</dd>
                 </dl>
               </div>
             </div>
@@ -1211,9 +1193,9 @@ export default function QuestionnaireModal({
                       {isGenerating && generateProgress !== null && (
                         <div className="mt-4">
                           <div className="h-2 overflow-hidden rounded-full bg-green-200 dark:bg-green-800">
-                            <div
-                              className="h-full rounded-full bg-green-600 transition-all duration-300"
-                              style={{ width: `${generateProgress}%` }}
+                            <ProgressBarFill
+                              value={generateProgress}
+                              className="h-full rounded-full bg-green-600 progress-bar-fill"
                             />
                           </div>
                           <p className="mt-2 text-sm text-green-700 dark:text-green-300">
@@ -1323,9 +1305,9 @@ export default function QuestionnaireModal({
                     {generateProgress !== null && (
                       <div className="mt-4">
                         <div className="h-2 overflow-hidden rounded-full bg-blue-200 dark:bg-blue-800">
-                          <div
-                            className="h-full rounded-full bg-blue-600 transition-all duration-300"
-                            style={{ width: `${generateProgress}%` }}
+                          <ProgressBarFill
+                            value={generateProgress}
+                            className="h-full rounded-full bg-blue-600 progress-bar-fill"
                           />
                         </div>
                         <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
@@ -1356,9 +1338,9 @@ export default function QuestionnaireModal({
                             {uploadProgress[doc.id] !== undefined ? (
                               <div className="mt-2">
                                 <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                                  <div
-                                    className="h-full rounded-full bg-purple-600 transition-all duration-300"
-                                    style={{ width: `${uploadProgress[doc.id]}%` }}
+                                  <ProgressBarFill
+                                    value={uploadProgress[doc.id]}
+                                    className="h-full rounded-full bg-purple-600 progress-bar-fill"
                                   />
                                 </div>
                                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">

@@ -1344,7 +1344,8 @@ export default function MeetingsPage() {
                     </div>
                   </Link>
                   {(() => {
-                    const pdfUrl = meeting.protocolDocument?.filePath || meeting.agendaDocument?.filePath || null;
+                    const docForPdf = meeting.protocolDocument ?? meeting.agendaDocument;
+                    const pdfUrl = docForPdf ? `/api/documents/${docForPdf.id}/download?inline=1` : null;
                     const primaryLabel = pdfUrl
                       ? "Открыть PDF"
                       : meeting.agendaDocument

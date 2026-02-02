@@ -419,3 +419,9 @@ button:disabled {
     scrollbar-width: thin;
   }
 }
+
+/* Progress bar fill width — значение задаётся через CSS-переменную --progress (0%..100%) */
+.progress-bar-fill {
+  width: var(--progress, 0%);
+  transition: width 0.3s ease;
+}

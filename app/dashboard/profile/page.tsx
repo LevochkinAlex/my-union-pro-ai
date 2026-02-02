@@ -1343,12 +1343,14 @@ export default function ProfilePage() {
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+              <label htmlFor="profile-lastName" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
                 Фамилия <span className="text-red-500">*</span>
               </label>
               <input
+                id="profile-lastName"
                 type="text"
                 name="lastName"
+                aria-label="Фамилия"
                 value={profileData.lastName}
                 onChange={handleNameChange("lastName")}
                 onBlur={() => handleFieldBlur("lastName", profileData.lastName)}
@@ -1357,12 +1359,14 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+              <label htmlFor="profile-firstName" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
                 Имя <span className="text-red-500">*</span>
               </label>
               <input
+                id="profile-firstName"
                 type="text"
                 name="firstName"
+                aria-label="Имя"
                 value={profileData.firstName}
                 onChange={handleNameChange("firstName")}
                 onBlur={() => handleFieldBlur("firstName", profileData.firstName)}
@@ -1371,10 +1375,11 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+              <label htmlFor="profile-middleName" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
                 Отчество <span className="font-normal text-gray-500">(необязательно)</span>
               </label>
               <input
+                id="profile-middleName"
                 type="text"
                 name="middleName"
                 value={profileData.middleName}
@@ -1510,10 +1515,12 @@ export default function ProfilePage() {
         <form onSubmit={handleAdditionalInfoSubmit} className="mt-6 space-y-6">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Занятость</label>
+              <label htmlFor="profile-employmentStatus" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Занятость</label>
               <div className="relative">
                 <select
+                  id="profile-employmentStatus"
                   name="employmentStatus"
+                  aria-label="Занятость"
                   value={additionalInfo.employmentStatus}
                 onChange={handleAdditionalInfoChange}
                   className="block w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2.5 pr-12 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
@@ -1532,10 +1539,12 @@ export default function ProfilePage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Семейное положение</label>
+              <label htmlFor="profile-maritalStatus" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Семейное положение</label>
               <div className="relative">
               <select
+                id="profile-maritalStatus"
                 name="maritalStatus"
+                aria-label="Семейное положение"
                 value={additionalInfo.maritalStatus}
                 onChange={handleAdditionalInfoChange}
                   className="block w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2.5 pr-12 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
@@ -1636,11 +1645,13 @@ export default function ProfilePage() {
                           </div>
                           
                           <div className="w-full sm:w-24">
-                            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                            <label htmlFor={`child-gender-${index}`} className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
                               Пол
                             </label>
                             <div className="relative">
                               <select
+                                id={`child-gender-${index}`}
+                                aria-label="Пол ребёнка"
                                 value={child.gender}
                                 onChange={(e) => updateChild(index, "gender", e.target.value)}
                                 className="block w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2 pr-12 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
@@ -1658,11 +1669,13 @@ export default function ProfilePage() {
                           </div>
                           
                           <div className="flex-1">
-                            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                            <label htmlFor={`child-birthDate-${index}`} className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
                               Дата рождения
                             </label>
                             <input
+                              id={`child-birthDate-${index}`}
                               type="date"
+                              aria-label="Дата рождения ребёнка"
                               value={child.birthDate}
                               onChange={(e) => updateChild(index, "birthDate", e.target.value)}
                               max={new Date().toISOString().split('T')[0]}
@@ -1936,10 +1949,12 @@ export default function ProfilePage() {
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                        <label htmlFor="new-education-level" className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
                           Уровень образования <span className="text-red-500">*</span>
                         </label>
                         <select
+                          id="new-education-level"
+                          aria-label="Уровень образования"
                           value={newEducation.level}
                           onChange={(e) => setNewEducation({ ...newEducation, level: e.target.value })}
                           className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
@@ -2343,10 +2358,12 @@ export default function ProfilePage() {
               <div className="space-y-4">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                    <label htmlFor="new-award-type" className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
                       Тип награды <span className="text-red-500">*</span>
                     </label>
                     <select
+                      id="new-award-type"
+                      aria-label="Тип награды"
                       value={newAward.type}
                       onChange={(e) => setNewAward({ ...newAward, type: e.target.value as Award["type"] })}
                       className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"

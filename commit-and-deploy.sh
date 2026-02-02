@@ -38,6 +38,8 @@ pnpm build
 echo ""
 echo "=== Restarting PM2 ==="
 pm2 restart my-union-pro
+pm2 restart my-union-socket
+pm2 save
 echo ""
 echo "=== PM2 Status ==="
 pm2 status
