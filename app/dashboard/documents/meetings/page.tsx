@@ -103,11 +103,11 @@ export default function MeetingsPage() {
     scheduledTime: "",
     location: "",
     onlineLink: "",
-    // Участники: члены выборного органа (секретарь избирается на шаге протокола)
+    // Участники: члены выборного органа (председатель = текущий пользователь; зам + члены профкома)
     participantIds: [] as string[],
-    externalParticipants: [] as Array<{ name: string; position: string }>,
+    externalParticipants: [] as Array<{ name: string; position: string; userId?: string }>,
     // Пункты повестки
-    agendaItems: [{ title: "", description: "", speakerId: "", speakerName: "", speakerPosition: "", coSpeakerId: "", coSpeakerName: "", attachments: [] as Array<{ name: string; url: string; size?: number }> }],
+    agendaItems: [{ title: "", description: "", speakerId: "", speakerName: "", speakerPosition: "", coSpeakerId: "", coSpeakerName: "", coSpeakers: [] as Array<{ userId?: string; extIndex?: number; name: string; position?: string }>, attachments: [] as Array<{ name: string; url: string; size?: number }> }],
   });
 
   // Члены выборного органа (для состава заседания)
@@ -122,7 +122,11 @@ export default function MeetingsPage() {
   const [loadingElectedBody, setLoadingElectedBody] = useState(false);
   const [uploadingAgendaIndex, setUploadingAgendaIndex] = useState<number | null>(null);
   const [participantsDropdownOpen, setParticipantsDropdownOpen] = useState(false);
+  const [externalInviteDropdownOpen, setExternalInviteDropdownOpen] = useState(false);
+  const [coSpeakerDropdownIndex, setCoSpeakerDropdownIndex] = useState<number | null>(null);
   const participantsDropdownRef = useRef<HTMLDivElement>(null);
+  const externalInviteDropdownRef = useRef<HTMLDivElement>(null);
+  const coSpeakerDropdownRef = useRef<HTMLDivElement>(null);
   // Все члены профсоюза (для докладчика и приглашённых)
   const [members, setMembers] = useState<Array<{
     id: string;
@@ -144,14 +148,40 @@ export default function MeetingsPage() {
     }
   }, [showCreateForm, members.length]);
 
+  // Автоподстановка состава: все замы и все члены профкома по умолчанию (по уставу)
+  const chairmanId = session?.user?.id ?? "";
+  const isDeputyRole = (roleName: string) => /зам|заместитель/i.test(roleName);
+  const isMemberRole = (roleName: string) => /член|профком/i.test(roleName) || roleName.trim() !== "";
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (participantsDropdownRef.current && !participantsDropdownRef.current.contains(e.target as Node)) {
-        setParticipantsDropdownOpen(false);
-      }
+    if (!showCreateForm || !chairmanId || electedBodyMembers.length === 0) return;
+    setFormData((prev) => {
+      if (prev.participantIds.length > 0) return prev;
+      const deputyIds = electedBodyMembers.filter((m) => m.id !== chairmanId && isDeputyRole(m.roleName)).map((m) => m.id);
+      const memberIds = electedBodyMembers.filter((m) => m.id !== chairmanId && !deputyIds.includes(m.id) && isMemberRole(m.roleName)).map((m) => m.id);
+      const defaultIds = [...new Set([...deputyIds, ...memberIds])];
+      return { ...prev, participantIds: defaultIds };
+    });
+  }, [showCreateForm, chairmanId, electedBodyMembers]);
+
+  useEffect(() => {
+    const closeAllDropdowns = () => {
+      setParticipantsDropdownOpen(false);
+      setExternalInviteDropdownOpen(false);
+      setCoSpeakerDropdownIndex(null);
     };
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (participantsDropdownRef.current && !participantsDropdownRef.current.contains(target)) setParticipantsDropdownOpen(false);
+      if (externalInviteDropdownRef.current && !externalInviteDropdownRef.current.contains(target)) setExternalInviteDropdownOpen(false);
+      if (coSpeakerDropdownRef.current && !coSpeakerDropdownRef.current.contains(target)) setCoSpeakerDropdownIndex(null);
+    };
+    const handleScroll = () => closeAllDropdowns();
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("scroll", handleScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("scroll", handleScroll, true);
+    };
   }, []);
 
   const loadElectedBodyMembers = async () => {
@@ -232,6 +262,28 @@ export default function MeetingsPage() {
       return;
     }
 
+    // Состав заседания: минимум 3 человека (председатель + зам. председателя + член профкома)
+    if (formData.participantIds.length < 2) {
+      alertError("Состав заседания: минимум 3 человека (председатель + зам. председателя + член профкома). Добавьте участников в блоке «Состав заседания».");
+      return;
+    }
+    const hasDeputy = formData.participantIds.some((id) => {
+      const m = electedBodyMembers.find((e) => e.id === id);
+      return m && isDeputyRole(m.roleName);
+    });
+    const hasMember = formData.participantIds.some((id) => {
+      const m = electedBodyMembers.find((e) => e.id === id);
+      return m && !isDeputyRole(m.roleName) && isMemberRole(m.roleName);
+    });
+    if (!hasDeputy) {
+      alertError("В составе заседания должен быть хотя бы один зам. председателя. Добавьте участника в блоке «Зам. председателя» или назначьте роль в разделе Управление сотрудниками.");
+      return;
+    }
+    if (!hasMember) {
+      alertError("В составе заседания должен быть хотя бы один член профкома. Добавьте участника в блоке «Члены профкома» или назначьте роль в разделе Управление сотрудниками.");
+      return;
+    }
+
     const validAgendaItems = formData.agendaItems.filter(item => item.title.trim());
     
     if (validAgendaItems.length === 0) {
@@ -263,17 +315,22 @@ export default function MeetingsPage() {
           location: formData.location || null,
           onlineLink: formData.onlineLink || null,
           participantIds: formData.participantIds,
-          externalParticipants: formData.externalParticipants.filter(p => p.name.trim()),
-          agendaItems: validAgendaItems.map(item => ({
-            title: item.title.trim(),
-            description: item.description?.trim() || null,
-            speakerId: item.speakerId || null,
-            speakerName: item.speakerName?.trim() || null,
-            speakerPosition: item.speakerPosition?.trim() || null,
-            coSpeakerId: item.coSpeakerId || null,
-            coSpeakerName: item.coSpeakerName?.trim() || null,
-            attachments: item.attachments?.length ? item.attachments : undefined,
-          })),
+          externalParticipants: formData.externalParticipants.filter(p => p.name.trim()).map(({ name, position }) => ({ name, position })),
+          agendaItems: validAgendaItems.map(item => {
+            const coSpeakers = (item as AgendaItemForm).coSpeakers ?? [];
+            const firstUser = coSpeakers.find(c => c.userId);
+            const names = coSpeakers.map(c => c.name).filter(Boolean).join(", ");
+            return {
+              title: item.title.trim(),
+              description: item.description?.trim() || null,
+              speakerId: item.speakerId || null,
+              speakerName: item.speakerName?.trim() || null,
+              speakerPosition: item.speakerPosition?.trim() || null,
+              coSpeakerId: firstUser?.userId || null,
+              coSpeakerName: names || null,
+              attachments: item.attachments?.length ? item.attachments : undefined,
+            };
+          }),
         }),
       });
 
@@ -316,7 +373,7 @@ export default function MeetingsPage() {
       onlineLink: "",
       participantIds: [],
       externalParticipants: [],
-      agendaItems: [{ title: "", description: "", speakerId: "", speakerName: "", speakerPosition: "", coSpeakerId: "", coSpeakerName: "", attachments: [] }],
+      agendaItems: [{ title: "", description: "", speakerId: "", speakerName: "", speakerPosition: "", coSpeakerId: "", coSpeakerName: "", coSpeakers: [], attachments: [] }],
     });
   };
 
@@ -346,7 +403,7 @@ export default function MeetingsPage() {
   const addAgendaItem = () => {
     setFormData(prev => ({
       ...prev,
-      agendaItems: [...prev.agendaItems, { title: "", description: "", speakerId: "", speakerName: "", speakerPosition: "", coSpeakerId: "", coSpeakerName: "", attachments: [] }],
+      agendaItems: [...prev.agendaItems, { title: "", description: "", speakerId: "", speakerName: "", speakerPosition: "", coSpeakerId: "", coSpeakerName: "", coSpeakers: [], attachments: [] }],
     }));
   };
 
@@ -357,8 +414,9 @@ export default function MeetingsPage() {
     }));
   };
 
-  type AgendaItemForm = { title: string; description: string; speakerId: string; speakerName: string; speakerPosition: string; coSpeakerId: string; coSpeakerName: string; attachments: Array<{ name: string; url: string; size?: number }> };
-  const updateAgendaItem = (index: number, field: "title" | "description" | "speakerId" | "speakerName" | "speakerPosition" | "coSpeakerId" | "coSpeakerName" | "attachments", value: string | Array<{ name: string; url: string; size?: number }>) => {
+  type CoSpeakerEntry = { userId?: string; extIndex?: number; name: string; position?: string };
+  type AgendaItemForm = { title: string; description: string; speakerId: string; speakerName: string; speakerPosition: string; coSpeakerId: string; coSpeakerName: string; coSpeakers: CoSpeakerEntry[]; attachments: Array<{ name: string; url: string; size?: number }> };
+  const updateAgendaItem = (index: number, field: "title" | "description" | "speakerId" | "speakerName" | "speakerPosition" | "coSpeakers" | "attachments", value: string | Array<{ name: string; url: string; size?: number }> | CoSpeakerEntry[]) => {
     setFormData(prev => ({
       ...prev,
       agendaItems: prev.agendaItems.map((item, i): AgendaItemForm => {
@@ -374,11 +432,7 @@ export default function MeetingsPage() {
         }
         if (field === "speakerName" && typeof value === "string") return { ...item, speakerName: value, speakerId: "", speakerPosition: "" };
         if (field === "speakerPosition" && typeof value === "string") return { ...item, speakerPosition: value };
-        if (field === "coSpeakerId" && typeof value === "string") {
-          const member = electedBodyMembers.find(m => m.id === value);
-          return { ...item, coSpeakerId: value, coSpeakerName: member ? getMemberFullName(member) : "" };
-        }
-        if (field === "coSpeakerName" && typeof value === "string") return { ...item, coSpeakerName: value, coSpeakerId: "" };
+        if (field === "coSpeakers") return { ...item, coSpeakers: value as CoSpeakerEntry[] };
         if (field === "attachments") return { ...item, attachments: value as Array<{ name: string; url: string; size?: number }> };
         if (field === "title" || field === "description") return { ...item, [field]: value as string };
         return item as AgendaItemForm;
@@ -386,7 +440,32 @@ export default function MeetingsPage() {
     }));
   };
 
-  /** Выбор докладчика/со-докладчика: член профкома (user:id) или приглашённый (ext:index) */
+  const addCoSpeaker = (itemIndex: number, entry: CoSpeakerEntry) => {
+    setFormData(prev => ({
+      ...prev,
+      agendaItems: prev.agendaItems.map((item, i) => {
+        if (i !== itemIndex) return item;
+        const list = (item as AgendaItemForm).coSpeakers ?? [];
+        const already = list.some(c => (c.userId && c.userId === entry.userId) || (entry.extIndex !== undefined && c.extIndex === entry.extIndex));
+        if (already) return item;
+        return { ...item, coSpeakers: [...list, entry] };
+      }),
+    }));
+    setCoSpeakerDropdownIndex(null);
+  };
+
+  const removeCoSpeaker = (itemIndex: number, coSpeakerIndex: number) => {
+    setFormData(prev => ({
+      ...prev,
+      agendaItems: prev.agendaItems.map((item, i) => {
+        if (i !== itemIndex) return item;
+        const list = (item as AgendaItemForm).coSpeakers ?? [];
+        return { ...item, coSpeakers: list.filter((_, idx) => idx !== coSpeakerIndex) };
+      }),
+    }));
+  };
+
+  /** Докладчик — только члены выборного органа (председатель, замы, члены профкома) */
   const setSpeakerFromSelect = (index: number, value: string) => {
     if (!value) {
       updateAgendaItem(index, "speakerId", "");
@@ -394,73 +473,20 @@ export default function MeetingsPage() {
       updateAgendaItem(index, "speakerPosition", "");
       return;
     }
-    if (value.startsWith("user:")) {
-      const id = value.slice(5);
-      const member = electedBodyMembers.find(m => m.id === id);
-      if (member) {
-        setFormData(prev => ({
-          ...prev,
-          agendaItems: prev.agendaItems.map((item, i) =>
-            i !== index ? item : {
-              ...item,
-              speakerId: id,
-              speakerName: getMemberFullName(member),
-              speakerPosition: member.jobTitle || member.roleName || "",
-            }
-          ),
-        }));
-      }
-      return;
-    }
-    if (value.startsWith("ext:")) {
-      const idx = parseInt(value.slice(4), 10);
-      const ext = formData.externalParticipants[idx];
-      if (ext) {
-        setFormData(prev => ({
-          ...prev,
-          agendaItems: prev.agendaItems.map((item, i) =>
-            i !== index ? item : {
-              ...item,
-              speakerId: "",
-              speakerName: ext.name.trim(),
-              speakerPosition: ext.position?.trim() || "",
-            }
-          ),
-        }));
-      }
-    }
-  };
-
-  const setCoSpeakerFromSelect = (index: number, value: string) => {
-    if (!value) {
-      updateAgendaItem(index, "coSpeakerId", "");
-      updateAgendaItem(index, "coSpeakerName", "");
-      return;
-    }
-    if (value.startsWith("user:")) {
-      const id = value.slice(5);
-      const member = electedBodyMembers.find(m => m.id === id);
-      if (member) {
-        setFormData(prev => ({
-          ...prev,
-          agendaItems: prev.agendaItems.map((item, i) =>
-            i !== index ? item : { ...item, coSpeakerId: id, coSpeakerName: getMemberFullName(member) }
-          ),
-        }));
-      }
-      return;
-    }
-    if (value.startsWith("ext:")) {
-      const idx = parseInt(value.slice(4), 10);
-      const ext = formData.externalParticipants[idx];
-      if (ext) {
-        setFormData(prev => ({
-          ...prev,
-          agendaItems: prev.agendaItems.map((item, i) =>
-            i !== index ? item : { ...item, coSpeakerId: "", coSpeakerName: ext.name.trim() }
-          ),
-        }));
-      }
+    const id = value.startsWith("user:") ? value.slice(5) : value;
+    const member = electedBodyMembers.find(m => m.id === id);
+    if (member) {
+      setFormData(prev => ({
+        ...prev,
+        agendaItems: prev.agendaItems.map((item, i) =>
+          i !== index ? item : {
+            ...item,
+            speakerId: id,
+            speakerName: getMemberFullName(member),
+            speakerPosition: member.jobTitle || member.roleName || "",
+          }
+        ),
+      }));
     }
   };
 
@@ -816,17 +842,17 @@ export default function MeetingsPage() {
             )}
           </div>
 
-          {/* Участники заседания */}
+          {/* Состав заседания: минимум 3 человека — председатель, зам. председателя, член профкома */}
           <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
             <h3 className="mb-4 font-semibold text-gray-900 dark:text-white flex items-center gap-2">
               <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              Состав заседания
+              Состав заседания (минимум 3 человека)
             </h3>
-            
+
             <div className="space-y-4">
-              {/* Информация о председателе */}
+              {/* Председатель — автоматически */}
               <div className="flex items-center gap-2 p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                 <span className="text-xs font-medium text-blue-800 dark:text-blue-300 px-2 py-0.5 bg-blue-200 dark:bg-blue-800 rounded">
                   Председатель
@@ -836,144 +862,115 @@ export default function MeetingsPage() {
                 </span>
               </div>
 
-              {/* Сотрудники = члены выборного органа (раздел Управление сотрудниками). ФИО отсюда попадают в повестку и протокол. */}
-              <div ref={participantsDropdownRef} className="relative">
+              {/* Зам. председателя — автоматически все по роли из Управления сотрудниками */}
+              <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Члены профкома / участники (сотрудники из раздела «Управление сотрудниками»)
+                  Зам. председателя
+                </label>
+                {loadingElectedBody ? (
+                  <p className="text-sm text-gray-500">Загрузка...</p>
+                ) : electedBodyMembers.filter((m) => isDeputyRole(m.roleName)).length === 0 && electedBodyMembers.length > 0 ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      Роль «Зам. председателя» не назначена. Добавьте роль и сотрудника в разделе Управление сотрудниками.
+                    </p>
+                    <Link href="/dashboard/staff" className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                      Добавить роль
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {formData.participantIds
+                      .filter((id) => electedBodyMembers.find((m) => m.id === id && isDeputyRole(m.roleName)))
+                      .map((id) => {
+                        const m = electedBodyMembers.find((e) => e.id === id);
+                        return m ? (
+                          <span key={id} className="inline-flex items-center rounded-md bg-gray-200 dark:bg-gray-700 px-2 py-1 text-sm">
+                            {getMemberFullName(m)}
+                          </span>
+                        ) : null;
+                      })}
+                  </div>
+                )}
+              </div>
+
+              {/* Члены профкома — автоматически все по роли из Управления сотрудниками */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Члены профкома / участники (из раздела «Управление сотрудниками»)
                 </label>
                 {loadingElectedBody ? (
                   <p className="text-sm text-gray-500">Загрузка...</p>
                 ) : electedBodyMembers.length === 0 ? (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
                     <p className="text-sm text-amber-800 dark:text-amber-200">
-                      Нет сотрудников в разделе «Управление сотрудниками». Добавьте сотрудников или роли в разделе Управление сотрудниками — оттуда подтягиваются ФИО в повестку и протокол.
+                      Нет сотрудников в разделе «Управление сотрудниками». Добавьте роли и сотрудников — оттуда подтягиваются ФИО в повестку и протокол.
                     </p>
-                    <Link
-                      href="/dashboard/staff"
-                      className="mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                    >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
+                    <Link href="/dashboard/staff" className="mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                       Добавить роль / сотрудника
                     </Link>
                   </div>
                 ) : (
                   <>
-                    <button
-                      type="button"
-                      onClick={() => setParticipantsDropdownOpen((v) => !v)}
-                      className="flex w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-left text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                    >
-                      <span className={formData.participantIds.length === 0 ? "text-gray-500 dark:text-gray-400" : ""}>
-                        {formData.participantIds.length === 0
-                          ? "Выберите участников"
-                          : `Выбрано: ${formData.participantIds.length} участников`}
-                      </span>
-                      <svg
-                        className={`h-5 w-5 flex-shrink-0 text-gray-400 transition-transform ${participantsDropdownOpen ? "rotate-180" : ""}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    {participantsDropdownOpen && (
-                      <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-800">
-                        {electedBodyMembers.map((member) => (
-                          <label
-                            key={member.id}
-                            className="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={formData.participantIds.includes(member.id)}
-                              onChange={() => {
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  participantIds: prev.participantIds.includes(member.id)
-                                    ? prev.participantIds.filter((id) => id !== member.id)
-                                    : [...prev.participantIds, member.id],
-                                }));
-                              }}
-                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                {getMemberFullName(member)}
-                              </div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                {member.roleName}
-                                {member.jobTitle ? ` · ${member.jobTitle}` : ""}
-                              </div>
-                            </div>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                    <div className="mt-2 flex items-center gap-3">
-                      <Link
-                        href="/dashboard/staff"
-                        className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400"
-                      >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Добавить роль
-                      </Link>
-                      {formData.participantIds.length > 0 && (
-                        <span className="text-xs text-green-600 dark:text-green-400">
-                          Выбрано: {formData.participantIds.length} участников
-                        </span>
-                      )}
+                    <div className="flex flex-wrap gap-2">
+                      {formData.participantIds
+                        .filter((id) => !electedBodyMembers.find((m) => m.id === id && isDeputyRole(m.roleName)))
+                        .map((id) => {
+                          const m = electedBodyMembers.find((e) => e.id === id);
+                          return m ? (
+                            <span key={id} className="inline-flex items-center rounded-md bg-gray-200 dark:bg-gray-700 px-2 py-1 text-sm">
+                              {getMemberFullName(m)}
+                            </span>
+                          ) : null;
+                        })}
                     </div>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Выбрано: {formData.participantIds.length} участников (вместе с председателем — {formData.participantIds.length + 1})
+                    </p>
                   </>
                 )}
               </div>
 
-              {/* Внешние участники */}
-              <div>
+              {/* Приглашённые / внешние — любой член профсоюза организации, кроме состава выборного органа */}
+              <div ref={externalInviteDropdownRef} className="relative">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Приглашённые / внешние участники
+                  Приглашённые / внешние участники (члены профсоюза, не из состава выборного органа)
                 </label>
                 <div className="space-y-2">
                   {formData.externalParticipants.map((p, index) => (
                     <div key={index} className="flex gap-2">
-                      <input
-                        type="text"
-                        value={p.name}
-                        onChange={(e) => updateExternalParticipant(index, "name", e.target.value)}
-                        className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
-                        placeholder="ФИО"
-                      />
-                      <input
-                        type="text"
-                        value={p.position}
-                        onChange={(e) => updateExternalParticipant(index, "position", e.target.value)}
-                        className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
-                        placeholder="Должность"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeExternalParticipant(index)}
-                        className="text-red-500 hover:text-red-700 p-2"
-                        aria-label="Удалить внешнего участника"
-                      >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                      <input type="text" value={p.name} onChange={(e) => updateExternalParticipant(index, "name", e.target.value)} className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700" placeholder="ФИО" />
+                      <input type="text" value={p.position} onChange={(e) => updateExternalParticipant(index, "position", e.target.value)} className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700" placeholder="Должность" />
+                      <button type="button" onClick={() => removeExternalParticipant(index)} className="text-red-500 hover:text-red-700 p-2" aria-label="Удалить внешнего участника">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
                     </div>
                   ))}
                 </div>
-                <button
-                  type="button"
-                  onClick={addExternalParticipant}
-                  className="mt-2 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400"
-                >
-                  + Добавить внешнего участника
-                </button>
+                <div className="relative mt-2">
+                  <button type="button" onClick={() => setExternalInviteDropdownOpen((v) => !v)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                    + Добавить внешнего участника
+                  </button>
+                  {externalInviteDropdownOpen && (
+                    <div className="absolute z-10 left-0 mt-1 max-h-56 w-72 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-800">
+                      {members
+                        .filter((m) => !electedBodyMembers.some((e) => e.id === m.id) && !formData.externalParticipants.some((p) => p.userId === m.id))
+                        .map((member) => (
+                          <button key={member.id} type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700" onClick={() => { setFormData((p) => ({ ...p, externalParticipants: [...p.externalParticipants, { name: getMemberFullName(member), position: member.jobTitle || "", userId: member.id }] })); setExternalInviteDropdownOpen(false); }}>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-gray-900 dark:text-white truncate">{getMemberFullName(member)}</div>
+                              {member.jobTitle && <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{member.jobTitle}</div>}
+                            </div>
+                          </button>
+                        ))}
+                      {members.filter((m) => !electedBodyMembers.some((e) => e.id === m.id) && !formData.externalParticipants.some((p) => p.userId === m.id)).length === 0 && (
+                        <p className="px-3 py-2 text-xs text-gray-500">Нет членов профсоюза для приглашения (кроме состава выборного органа) или все уже добавлены</p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1005,100 +1002,102 @@ export default function MeetingsPage() {
                         />
                       </div>
                       
-                      {/* Докладывает — члены профкома или приглашённые (выводятся в PDF в блоке ДОКЛАДЧИК) */}
+                      {/* Докладывает — только члены выборного органа (председатель, замы, члены профкома), без приглашённых */}
                       <div>
                         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                           Докладывает *
                         </label>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <select
-                            aria-label={`Докладывает по вопросу ${index + 1}`}
-                            value={item.speakerId ? `user:${item.speakerId}` : (() => {
-                              const idx = formData.externalParticipants.findIndex(ext => ext.name.trim() === (item.speakerName || "").trim());
-                              return idx >= 0 ? `ext:${idx}` : "";
-                            })()}
-                            onChange={(e) => setSpeakerFromSelect(index, e.target.value)}
-                            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
-                          >
-                            <option value="">Выберите докладчика...</option>
-                            {electedBodyMembers.length > 0 && (
-                              <optgroup label="Члены профкома / участники">
-                                {electedBodyMembers.map(m => (
-                                  <option key={m.id} value={`user:${m.id}`}>
-                                    {getMemberFullName(m)}{m.jobTitle || m.roleName ? ` (${m.jobTitle || m.roleName})` : ""}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            )}
-                            {formData.externalParticipants.some(p => p.name.trim()) && (
-                              <optgroup label="Приглашённые / внешние участники">
-                                {formData.externalParticipants.map((ext, idx) => ext.name.trim() ? (
-                                  <option key={idx} value={`ext:${idx}`}>
-                                    {ext.name.trim()}{ext.position?.trim() ? ` (${ext.position.trim()})` : ""}
-                                  </option>
-                                ) : null)}
-                              </optgroup>
-                            )}
-                          </select>
-                          <input
-                            type="text"
-                            value={item.speakerId ? "" : (formData.externalParticipants.some(ext => ext.name.trim() === (item.speakerName || "").trim()) ? "" : (item.speakerName || ""))}
-                            onChange={(e) => updateAgendaItem(index, "speakerName", e.target.value)}
-                            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
-                            placeholder="или ввести ФИО вручную"
-                            disabled={!!(item.speakerId || formData.externalParticipants.some(ext => ext.name.trim() === (item.speakerName || "").trim()))}
-                          />
-                        </div>
+                        <select
+                          aria-label={`Докладывает по вопросу ${index + 1}`}
+                          value={item.speakerId ? `user:${item.speakerId}` : ""}
+                          onChange={(e) => setSpeakerFromSelect(index, e.target.value)}
+                          className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                        >
+                          <option value="">Выберите докладчика...</option>
+                          {electedBodyMembers.length > 0 && (
+                            <optgroup label="Члены выборного органа (председатель, замы, члены профкома)">
+                              {electedBodyMembers.map(m => (
+                                <option key={m.id} value={`user:${m.id}`}>
+                                  {getMemberFullName(m)}{m.jobTitle || m.roleName ? ` (${m.jobTitle || m.roleName})` : ""}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </select>
                         {(item.speakerPosition || (item.speakerId && electedBodyMembers.find(m => m.id === item.speakerId)?.jobTitle)) && (
                           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                             Должность в PDF: {item.speakerPosition || electedBodyMembers.find(m => m.id === item.speakerId)?.jobTitle || electedBodyMembers.find(m => m.id === item.speakerId)?.roleName || ""}
                           </p>
                         )}
                       </div>
-                      {/* Со-докладчик — члены профкома или приглашённые (опционально) */}
-                      <div>
+                      {/* Со-докладчики — члены выборного органа или приглашённые, можно несколько (Добавить ещё) */}
+                      <div ref={coSpeakerDropdownIndex === index ? coSpeakerDropdownRef : undefined} className="relative">
                         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                          Со-докладчик (опционально)
+                          Со-докладчики (опционально)
                         </label>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <select
-                            aria-label={`Со-докладчик по вопросу ${index + 1}`}
-                            value={item.coSpeakerId ? `user:${item.coSpeakerId}` : (() => {
-                              const idx = formData.externalParticipants.findIndex(ext => ext.name.trim() === (item.coSpeakerName || "").trim());
-                              return idx >= 0 ? `ext:${idx}` : "";
-                            })()}
-                            onChange={(e) => setCoSpeakerFromSelect(index, e.target.value)}
-                            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                        <div className="flex flex-wrap gap-2">
+                          {((item as AgendaItemForm).coSpeakers ?? []).map((c, cIdx) => (
+                            <span key={cIdx} className="inline-flex items-center gap-1 rounded-md bg-gray-200 dark:bg-gray-700 px-2 py-1 text-sm">
+                              {c.name}{c.position ? ` (${c.position})` : ""}
+                              <button type="button" onClick={() => removeCoSpeaker(index, cIdx)} className="text-gray-500 hover:text-red-600" aria-label="Убрать со-докладчика">×</button>
+                            </span>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setCoSpeakerDropdownIndex(coSpeakerDropdownIndex === index ? null : index)}
+                            className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                           >
-                            <option value="">Не указан</option>
+                            + Добавить ещё
+                          </button>
+                        </div>
+                        {coSpeakerDropdownIndex === index && (
+                          <div className="absolute z-10 left-0 mt-1 max-h-56 w-72 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-800">
                             {electedBodyMembers.length > 0 && (
-                              <optgroup label="Члены профкома / участники">
-                                {electedBodyMembers.map(m => (
-                                  <option key={m.id} value={`user:${m.id}`}>
-                                    {getMemberFullName(m)}{m.jobTitle || m.roleName ? ` (${m.jobTitle || m.roleName})` : ""}
-                                  </option>
-                                ))}
-                              </optgroup>
+                              <>
+                                <div className="px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">Члены выборного органа</div>
+                                {electedBodyMembers.map(m => {
+                                  const coSpeakers = (item as AgendaItemForm).coSpeakers ?? [];
+                                  const added = coSpeakers.some(c => c.userId === m.id);
+                                  return (
+                                    <button
+                                      key={m.id}
+                                      type="button"
+                                      disabled={added}
+                                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                                      onClick={() => addCoSpeaker(index, { userId: m.id, name: getMemberFullName(m), position: m.jobTitle || m.roleName })}
+                                    >
+                                      {getMemberFullName(m)}{m.jobTitle || m.roleName ? ` (${m.jobTitle || m.roleName})` : ""}
+                                    </button>
+                                  );
+                                })}
+                              </>
                             )}
                             {formData.externalParticipants.some(p => p.name.trim()) && (
-                              <optgroup label="Приглашённые / внешние участники">
-                                {formData.externalParticipants.map((ext, idx) => ext.name.trim() ? (
-                                  <option key={idx} value={`ext:${idx}`}>
-                                    {ext.name.trim()}{ext.position?.trim() ? ` (${ext.position.trim()})` : ""}
-                                  </option>
-                                ) : null)}
-                              </optgroup>
+                              <>
+                                <div className="border-t border-gray-200 dark:border-gray-600 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">Приглашённые / внешние</div>
+                                {formData.externalParticipants.map((ext, idx) => {
+                                  if (!ext.name.trim()) return null;
+                                  const coSpeakers = (item as AgendaItemForm).coSpeakers ?? [];
+                                  const added = coSpeakers.some(c => c.extIndex === idx);
+                                  return (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      disabled={added}
+                                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                                      onClick={() => addCoSpeaker(index, { extIndex: idx, name: ext.name.trim(), position: ext.position?.trim() })}
+                                    >
+                                      {ext.name.trim()}{ext.position?.trim() ? ` (${ext.position.trim()})` : ""}
+                                    </button>
+                                  );
+                                })}
+                              </>
                             )}
-                          </select>
-                          <input
-                            type="text"
-                            value={item.coSpeakerId ? "" : (formData.externalParticipants.some(ext => ext.name.trim() === (item.coSpeakerName || "").trim()) ? "" : (item.coSpeakerName || ""))}
-                            onChange={(e) => updateAgendaItem(index, "coSpeakerName", e.target.value)}
-                            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
-                            placeholder="или ввести ФИО вручную"
-                            disabled={!!(item.coSpeakerId || formData.externalParticipants.some(ext => ext.name.trim() === (item.coSpeakerName || "").trim()))}
-                          />
-                        </div>
+                            {electedBodyMembers.length === 0 && !formData.externalParticipants.some(p => p.name.trim()) && (
+                              <p className="px-3 py-2 text-xs text-gray-500">Добавьте участников в состав заседания или приглашённых</p>
+                            )}
+                          </div>
+                        )}
                       </div>
                       
                       {/* Описание / материалы */}

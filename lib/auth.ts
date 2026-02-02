@@ -971,6 +971,8 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === "development",
+  // В продакшене за реверс-прокси: доверять Host из запроса для редиректов и callback URL
+  trustHost: true,
 };
 
 // Логирование конфигурации при загрузке модуля

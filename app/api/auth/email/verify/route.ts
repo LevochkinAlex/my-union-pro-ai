@@ -19,12 +19,15 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const token = searchParams.get("token");
 
-    // Определяем правильный baseUrl
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                    process.env.NEXTAUTH_URL || 
-                    (request.headers.get("host")?.includes("localhost") 
-                      ? `http://${request.headers.get("host")}` 
-                      : `https://${request.headers.get("host") || "myunion.pro"}`);
+    // Определяем правильный baseUrl: в продакшене приоритет у хоста из запроса,
+    // чтобы редирект по ссылке из письма всегда вёл на тот же домен
+    const host = request.headers.get("host") || "";
+    const isLocalHost = host.includes("localhost") || host.includes("127.0.0.1");
+    const baseUrl = !isLocalHost && host
+      ? `https://${host}`
+      : (process.env.NEXT_PUBLIC_APP_URL ||
+         process.env.NEXTAUTH_URL ||
+         (isLocalHost ? `http://${host}` : "https://myunion.pro"));
 
     console.log("[Email Verify] Попытка верификации токена:", token ? token.substring(0, 10) + "..." : "отсутствует");
     console.log("[Email Verify] Base URL:", baseUrl);

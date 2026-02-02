@@ -1028,7 +1028,7 @@ export default function QuestionnaireModal({
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Отчество <span className="text-red-500">*</span>
+                    Отчество <span className="font-normal text-gray-500">(необязательно)</span>
                   </label>
                   <input
                     type="text"
@@ -1036,7 +1036,7 @@ export default function QuestionnaireModal({
                     onChange={(e) => setFormData({ ...formData, middleName: e.target.value })}
                     onBlur={() => handleFieldBlur("middleName", formData.middleName)}
                     className="w-full h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
-                    required
+                    placeholder="Например: Петрович"
                   />
                 </div>
                 <div>

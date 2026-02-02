@@ -539,6 +539,10 @@ export default function MeetingDetailPage({
     });
   };
 
+  /** URL для просмотра/скачивания документа через API (работает на проде при отсутствии файла на диске) */
+  const getDocumentViewUrl = (docId: string) => `/api/documents/${docId}/download?inline=1`;
+  const getDocumentDownloadUrl = (docId: string) => `/api/documents/${docId}/download`;
+
   const getParticipantName = (p: Participant) => {
     if (p.user) {
       return [p.user.lastName, p.user.firstName, p.user.middleName].filter(Boolean).join(" ");
@@ -1036,10 +1040,10 @@ export default function MeetingDetailPage({
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {meeting.agendaDocument.filePath && (
+                {meeting.agendaDocument && (
                   <>
                     <button
-                      onClick={() => setPdfPreviewUrl(meeting.agendaDocument!.filePath!)}
+                      onClick={() => setPdfPreviewUrl(getDocumentViewUrl(meeting.agendaDocument!.id))}
                       className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
                     >
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1049,7 +1053,7 @@ export default function MeetingDetailPage({
                       Просмотреть PDF
                     </button>
                     <a
-                      href={meeting.agendaDocument.filePath}
+                      href={getDocumentDownloadUrl(meeting.agendaDocument.id)}
                       download
                       className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                     >
@@ -1428,10 +1432,10 @@ export default function MeetingDetailPage({
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {meeting.protocolDocument.filePath && (
+                {meeting.protocolDocument && (
                   <>
                     <button
-                      onClick={() => setPdfPreviewUrl(meeting.protocolDocument!.filePath!)}
+                      onClick={() => setPdfPreviewUrl(getDocumentViewUrl(meeting.protocolDocument!.id))}
                       className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
                     >
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1442,7 +1446,7 @@ export default function MeetingDetailPage({
                     </button>
                     {meeting.protocolDocument.status === "COMPLETED" && (
                       <a
-                        href={meeting.protocolDocument.filePath}
+                        href={getDocumentViewUrl(meeting.protocolDocument.id)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-600 bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 dark:border-green-500 dark:bg-green-600 dark:hover:bg-green-700"
@@ -1454,7 +1458,7 @@ export default function MeetingDetailPage({
                       </a>
                     )}
                     <a
-                      href={meeting.protocolDocument.filePath}
+                      href={getDocumentDownloadUrl(meeting.protocolDocument.id)}
                       download
                       className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                     >
@@ -2161,7 +2165,7 @@ export default function MeetingDetailPage({
                           if (!res.ok) throw new Error((await res.json()).error);
                           const data = await res.json();
                           if (data.meeting) setMeeting(data.meeting);
-                          if (data.document?.filePath) setPdfPreviewUrl(data.document.filePath);
+                          if (data.document?.id) setPdfPreviewUrl(getDocumentViewUrl(data.document.id));
                         } catch (e) {
                           alertError(e instanceof Error ? e.message : "Ошибка предпросмотра");
                         } finally {
@@ -2303,10 +2307,10 @@ export default function MeetingDetailPage({
                       )}
                     </div>
                     <div className="flex gap-2">
-                      {resolution.filePath && (
+                      {resolution.id && (
                         <>
                           <button
-                            onClick={() => setPdfPreviewUrl(resolution.filePath!)}
+                            onClick={() => setPdfPreviewUrl(getDocumentViewUrl(resolution.id))}
                             className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
                           >
                             <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2316,7 +2320,7 @@ export default function MeetingDetailPage({
                             Просмотр
                           </button>
                           <a
-                            href={resolution.filePath}
+                            href={getDocumentDownloadUrl(resolution.id)}
                             download
                             className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                           >
@@ -2394,10 +2398,10 @@ export default function MeetingDetailPage({
                       )}
                     </div>
                     <div className="flex gap-2">
-                      {extract.filePath && (
+                      {extract.id && (
                         <>
                           <button
-                            onClick={() => setPdfPreviewUrl(extract.filePath!)}
+                            onClick={() => setPdfPreviewUrl(getDocumentViewUrl(extract.id))}
                             className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
                           >
                             <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2407,7 +2411,7 @@ export default function MeetingDetailPage({
                             Просмотр
                           </button>
                           <a
-                            href={extract.filePath}
+                            href={getDocumentDownloadUrl(extract.id)}
                             download
                             className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                           >
@@ -2442,7 +2446,7 @@ export default function MeetingDetailPage({
             <div className="flex gap-2">
               {pdfPreviewUrl && (
                 <a
-                  href={pdfPreviewUrl}
+                  href={pdfPreviewUrl.replace("?inline=1", "")}
                   download
                   target="_blank"
                   rel="noopener noreferrer"

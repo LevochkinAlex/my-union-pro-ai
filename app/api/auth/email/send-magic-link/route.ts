@@ -101,23 +101,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Отправляем magic link на email
-    // Приоритет: origin из запроса (для localhost) -> NEXTAUTH_URL -> NEXT_PUBLIC_APP_URL -> продакшн
-    let baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                  process.env.NEXTAUTH_URL || 
-                  "https://myunion.pro";
-    
-    // На localhost используем origin запроса, чтобы ссылка вела на текущий хост
+    // Отправляем magic link на email: ссылка должна вести на тот же хост, с которого запросили
+    let baseUrl: string;
     try {
       const requestOrigin = new URL(request.url).origin;
       if (requestOrigin.includes("localhost") || requestOrigin.includes("127.0.0.1")) {
         baseUrl = requestOrigin;
+      } else {
+        // Продакшен: используем хост из запроса, чтобы ссылка из письма открывалась на том же домене
+        baseUrl = requestOrigin.replace(/^http:/, "https:");
       }
     } catch {
-      // игнорируем
+      baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
+                process.env.NEXTAUTH_URL ||
+                "https://myunion.pro";
     }
-    
-    // В продакшене используем HTTPS
     if (!baseUrl.includes("localhost") && !baseUrl.includes("127.0.0.1")) {
       baseUrl = baseUrl.replace(/^http:/, "https:");
     }

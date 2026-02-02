@@ -70,6 +70,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Синхронизируем предустановленные роли (добавляет недостающие, например «Член профкома»)
+    await createDefaultRolesForOrganization(organizationId);
+
     // Получаем роли организации
     const roles = await prisma.staffRole.findMany({
       where: {
@@ -87,36 +90,6 @@ export async function GET(request: NextRequest) {
       },
       orderBy: [{ isSystem: "desc" }, { name: "asc" }],
     });
-
-    // Если ролей нет, создаем предустановленные
-    if (roles.length === 0) {
-      await createDefaultRolesForOrganization(organizationId);
-      
-      // Получаем созданные роли
-      const newRoles = await prisma.staffRole.findMany({
-        where: {
-          organizationId,
-          isActive: true,
-        },
-        include: {
-          _count: {
-            select: {
-              staff: {
-                where: { status: "ACTIVE" },
-              },
-            },
-          },
-        },
-        orderBy: [{ isSystem: "desc" }, { name: "asc" }],
-      });
-      
-      return NextResponse.json({
-        roles: newRoles.map((r) => ({
-          ...r,
-          staffCount: r._count.staff,
-        })),
-      });
-    }
 
     return NextResponse.json({
       roles: roles.map((r) => ({

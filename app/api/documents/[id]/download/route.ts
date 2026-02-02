@@ -5,6 +5,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { initVDSStorageFromEnv, getFileFromVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
+import { generatePDFFromHTML } from "@/lib/document-templates/renderer";
+import { DocumentType } from "@prisma/client";
 
 // Инициализируем VDS хранилище при загрузке модуля
 if (typeof window === "undefined") {
@@ -260,7 +262,9 @@ export async function GET(
 
     let fileBuffer: Buffer | null = null;
 
-    if (document.content && !downloadSigned) {
+    // Для повестки/протокола content — это HTML, не base64; для остальных — base64
+    const isMeetingDoc = document.type === DocumentType.AGENDA || document.type === DocumentType.PROTOCOL;
+    if (document.content && !downloadSigned && !isMeetingDoc) {
       // Документ хранится в базе данных как base64 (только для обычного файла)
       fileBuffer = Buffer.from(document.content, "base64");
       console.log("[documents/download] Загружен из базы данных (base64), размер:", fileBuffer.length);
@@ -373,8 +377,10 @@ export async function GET(
               }
             }
             
-            // Если запрашивается подписанный файл, но он не найден - возвращаем ошибку
-            if (downloadSigned) {
+            // Для повестки/протокола с HTML в БД не возвращаем 404 — ниже сгенерируем PDF из content
+            if (isMeetingDoc && document.content) {
+              // не возвращаем 404, выходим из блока — сработает fallback генерации из HTML
+            } else if (downloadSigned) {
               console.error("[documents/download] Подписанный документ не найден:");
               console.error("[documents/download]   - Локальный путь:", absolutePath);
               console.error("[documents/download]   - VDS попытка:", isVDSStorageConfigured() ? "выполнена" : "не выполнена (VDS не настроен)");
@@ -411,12 +417,12 @@ export async function GET(
                   { status: 404 }
                 );
               }
+            } else if (!(isMeetingDoc && document.content)) {
+              return NextResponse.json(
+                { error: `Файл не найден: ${filePathToDownload}` },
+                { status: 404 }
+              );
             }
-            
-            return NextResponse.json(
-              { error: `Файл не найден: ${filePathToDownload}` },
-              { status: 404 }
-            );
           }
           
           // Если файл существует локально, читаем его
@@ -431,6 +437,20 @@ export async function GET(
         console.error("[documents/download] Абсолютный путь:", resolveFilePath(filePathToDownload));
         return NextResponse.json(
           { error: `Не удалось прочитать файл: ${error instanceof Error ? error.message : String(error)}` },
+          { status: 500 }
+        );
+      }
+    }
+
+    // На проде файл может отсутствовать (эфемерная ФС): для повестки/протокола генерируем PDF из HTML
+    if (!fileBuffer && document.content && isMeetingDoc) {
+      try {
+        fileBuffer = await generatePDFFromHTML(document.content);
+        console.log("[documents/download] PDF сгенерирован из HTML (fallback для прода), размер:", fileBuffer.length);
+      } catch (pdfErr) {
+        console.error("[documents/download] Ошибка генерации PDF из HTML:", pdfErr);
+        return NextResponse.json(
+          { error: "Не удалось сформировать документ для просмотра" },
           { status: 500 }
         );
       }

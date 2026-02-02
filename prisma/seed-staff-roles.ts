@@ -209,7 +209,7 @@ const DEFAULT_ROLES: Array<{
     },
   },
   {
-    name: "Член Профкома",
+    name: "Член профкома",
     description: "Член выборного органа (профсоюзного комитета), участвует в заседаниях",
     isElectedBody: true,
     permissions: {
