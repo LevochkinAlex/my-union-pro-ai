@@ -971,7 +971,8 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === "development",
-  // В продакшене за реверс-прокси: доверять Host из запроса для редиректов и callback URL
+  // В продакшене за реверс-прокси: доверять Host из запроса (в типах NextAuth 4.24 нет, на runtime работает)
+  // @ts-expect-error - trustHost supported at runtime
   trustHost: true,
 };
 
