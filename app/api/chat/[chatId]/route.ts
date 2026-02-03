@@ -900,7 +900,7 @@ export async function GET(
         }
       }
       
-      return {
+      const formatted = {
       id: msg.id,
       chatId: msg.chatId,
       senderId: isAIMessage ? AI_BOT_ID : msg.senderId, // Для ИИ используем виртуальный ID
@@ -977,13 +977,13 @@ export async function GET(
       threadRepliesCount: msg._count?.threadReplies || 0,
       // Данные поста для channel_post
       post: postData,
-      };
-      } catch (err) {
-        console.error(`[chat/${chatId}] Error formatting message ${msg?.id}:`, err);
-        return null;
-      }
-    }
-    }).filter((msg: any) => msg !== null);
+    };
+    return formatted;
+  } catch (err) {
+    console.error(`[chat/${chatId}] Error formatting message ${msg?.id}:`, err);
+    return null;
+  }
+}).filter((msg: any) => msg !== null);
 
     // Для каналов: добавляем виртуальные сообщения для постов из NewsChannel,
     // которые еще не созданы как сообщения в чате
@@ -1279,7 +1279,7 @@ export async function POST(
     }
 
     // Получаем информацию о чате для проверки типа и прав
-    const chat = await prisma.chat.findUnique({
+    let chat = await prisma.chat.findUnique({
       where: { id: chatId },
       include: {
         participants: {
