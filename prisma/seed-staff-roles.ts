@@ -9,10 +9,12 @@ const prisma = new PrismaClient();
 
 // Типы прав доступа
 export interface StaffPermissions {
-  // Документы
-  documents_view: boolean; // Просмотр документов
-  documents_create: boolean; // Создание документов
-  documents_edit: boolean; // Редактирование документов
+  // Документы (Входящие / Исходящие: заседания, повестки, протоколы)
+  documents_view: boolean;   // Просмотр документов (входящие, исходящие)
+  documents_create: boolean; // Создание заседаний, повесток, протоколов
+  documents_edit: boolean;   // Редактирование черновиков документов
+  documents_approve: boolean; // Согласование повесток и протоколов (одобрить/отклонить)
+  documents_sign: boolean;   // Подписание протоколов (председатель/секретарь)
 
   // Скидки
   discounts_view: boolean; // Просмотр скидок
@@ -69,6 +71,8 @@ const DEFAULT_ROLES: Array<{
       documents_view: true,
       documents_create: true,
       documents_edit: true,
+      documents_approve: true,
+      documents_sign: false,
       discounts_view: true,
       discounts_manage: true,
       members_view: true,
@@ -98,6 +102,8 @@ const DEFAULT_ROLES: Array<{
       documents_view: true,
       documents_create: true,
       documents_edit: true,
+      documents_approve: false,
+      documents_sign: false,
       discounts_view: false,
       discounts_manage: false,
       members_view: true,
@@ -127,6 +133,8 @@ const DEFAULT_ROLES: Array<{
       documents_view: true,
       documents_create: true,
       documents_edit: true,
+      documents_approve: true,
+      documents_sign: true,
       discounts_view: true,
       discounts_manage: false,
       members_view: true,
@@ -157,6 +165,8 @@ const DEFAULT_ROLES: Array<{
       documents_view: true,
       documents_create: false,
       documents_edit: false,
+      documents_approve: false,
+      documents_sign: false,
       discounts_view: true,
       discounts_manage: true,
       members_view: true,
@@ -186,6 +196,8 @@ const DEFAULT_ROLES: Array<{
       documents_view: true,
       documents_create: false,
       documents_edit: false,
+      documents_approve: false,
+      documents_sign: false,
       discounts_view: true,
       discounts_manage: false,
       members_view: true,
@@ -216,6 +228,8 @@ const DEFAULT_ROLES: Array<{
       documents_view: true,
       documents_create: false,
       documents_edit: false,
+      documents_approve: true,
+      documents_sign: false,
       discounts_view: true,
       discounts_manage: false,
       members_view: true,

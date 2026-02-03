@@ -3,7 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrgHead } from "@/lib/ppo-head-utils";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 import { DocumentStatus } from "@prisma/client";
+import { postMeetingChatSystemMessage } from "@/lib/meeting-chat";
 
 /**
  * POST /api/ppo-head/meetings/[id]/documents/[documentId]/approve
@@ -21,8 +23,8 @@ export async function POST(
     }
 
     const { id: meetingId, documentId } = await params;
-    const body = await request.json();
-    const { comment } = body;
+    const body = await request.json().catch(() => ({}));
+    const { action = "approve", comment } = body as { action?: "approve" | "reject"; comment?: string };
 
     // Проверяем документ и согласование
     const document = await prisma.document.findUnique({
@@ -78,7 +80,6 @@ export async function POST(
       return NextResponse.json({ error: "Заседание не найдено" }, { status: 404 });
     }
 
-    // Проверяем, что пользователь является участником заседания
     const isParticipant = meeting.participants.some(
       p => p.user?.id === session.user.id && p.role !== "CHAIRMAN"
     );
@@ -90,44 +91,82 @@ export async function POST(
       );
     }
 
-    // Находим запись согласования для этого пользователя
+    // Участник должен иметь право на согласование (председатель имеет все права)
+    const orgHead = await getOrgHead(session.user.id);
+    if (!orgHead) {
+      const perm = await checkUserPermissions(session.user.id, "documents_approve");
+      if (!perm.hasAccess) {
+        return NextResponse.json(
+          { error: "Недостаточно прав для согласования документов" },
+          { status: 403 }
+        );
+      }
+    }
+
+    const newStatus = action === "reject" ? "REJECTED" : "APPROVED";
     const approval = document.approvals.find(a => a.userId === session.user.id);
 
-    if (!approval) {
-      return NextResponse.json(
-        { error: "Согласование не найдено" },
-        { status: 404 }
-      );
+    if (approval) {
+      if (approval.status !== "PENDING") {
+        return NextResponse.json(
+          {
+            error:
+              approval.status === "APPROVED"
+                ? "Документ уже согласован вами"
+                : "Документ уже отклонён вами",
+          },
+          { status: 400 }
+        );
+      }
+      await prisma.documentApproval.update({
+        where: { id: approval.id },
+        data: {
+          status: newStatus,
+          comment: comment || null,
+          approvedAt: new Date(),
+        },
+      });
+    } else {
+      // Участник добавлен после отправки на согласование — создаём запись и сразу проставляем решение
+      await prisma.documentApproval.create({
+        data: {
+          documentId: document.id,
+          userId: session.user.id,
+          order: document.approvals.length + 1,
+          status: newStatus,
+          comment: comment || null,
+          approvedAt: new Date(),
+        },
+      });
     }
 
-    if (approval.status === "APPROVED") {
-      return NextResponse.json(
-        { error: "Документ уже согласован вами" },
-        { status: 400 }
-      );
-    }
-
-    // Обновляем статус согласования
-    await prisma.documentApproval.update({
-      where: { id: approval.id },
-      data: {
-        status: "APPROVED",
-        comment: comment || null,
-        approvedAt: new Date(),
-      },
-    });
-
-    // Проверяем, все ли согласования получены
     const allApprovals = await prisma.documentApproval.findMany({
       where: { documentId: document.id },
     });
 
     const allApproved = allApprovals.every(a => a.status === "APPROVED");
+    const hasRejected = allApprovals.some(a => a.status === "REJECTED");
     const pendingCount = allApprovals.filter(a => a.status === "PENDING").length;
 
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { firstName: true, lastName: true, middleName: true },
+    });
+    const displayName = [user?.lastName, user?.firstName, user?.middleName].filter(Boolean).join(" ") || "Участник";
+    const docLabel = document.meetingAsAgenda ? "Повестку" : "Протокол";
+    const message =
+      action === "reject"
+        ? `${displayName} отклонил ${docLabel}${comment ? `: ${comment}` : "."}`
+        : `${displayName} согласовал ${docLabel}${comment ? ` (примечание: ${comment})` : "."}`;
+    postMeetingChatSystemMessage(meetingId, message, session.user.id).catch((err) =>
+      console.warn("[approve] postMeetingChatSystemMessage:", err)
+    );
+
     return NextResponse.json({
-      message: "Документ согласован",
+      message: action === "reject" ? "Документ отклонён" : "Документ согласован",
+      action: newStatus,
       allApproved,
+      hasRejected,
       pendingCount,
       totalApprovals: allApprovals.length,
       approvedCount: allApprovals.filter(a => a.status === "APPROVED").length,

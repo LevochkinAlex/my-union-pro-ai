@@ -24,6 +24,11 @@ interface Participant {
   externalPosition: string | null;
 }
 
+type AgendaAttachment = { name: string; url: string; size?: number };
+
+/** Со-докладчик: член выборного органа (userId) или приглашённый (extId = id участника заседания) */
+type AgendaCoSpeakerEntry = { name: string; userId?: string; extId?: string; position?: string };
+
 interface AgendaItem {
   id: string;
   orderNumber: number;
@@ -39,6 +44,8 @@ interface AgendaItem {
     lastName: string | null;
     middleName: string | null;
   } | null;
+  coSpeakerId: string | null;
+  coSpeakerName: string | null;
   resolutionText: string | null;
   decidedText: string | null;
   votesFor: number;
@@ -46,6 +53,7 @@ interface AgendaItem {
   votesAbstained: number;
   votingCompleted: boolean;
   isApproved: boolean | null;
+  attachments?: string | AgendaAttachment[] | null;
 }
 
 interface Meeting {
@@ -69,6 +77,13 @@ interface Meeting {
     status: string;
     filePath: string | null;
     title: string;
+    approvals?: Array<{
+      id: string;
+      status: string;
+      comment: string | null;
+      approvedAt: string | null;
+      user: { firstName: string | null; lastName: string | null; middleName: string | null };
+    }>;
   } | null;
   protocolDocument: {
     id: string;
@@ -76,6 +91,13 @@ interface Meeting {
     status: string;
     filePath: string | null;
     title: string;
+    approvals?: Array<{
+      id: string;
+      status: string;
+      comment: string | null;
+      approvedAt: string | null;
+      user: { firstName: string | null; lastName: string | null; middleName: string | null };
+    }>;
   } | null;
   participants: Participant[];
   agendaItems: AgendaItem[];
@@ -84,6 +106,7 @@ interface Meeting {
   presidingOfficerUserId?: string | null;
   secretaryUserId?: string | null;
   voteCounterUserIds?: string | null; // JSON array of userId
+  groupChat?: { id: string } | null;
 }
 
 const MEETING_STATUS_LABELS: Record<string, string> = {
@@ -101,6 +124,7 @@ const DOC_STATUS_LABELS: Record<string, string> = {
   PENDING_REVIEW: "На рассмотрении",
   PENDING_APPROVAL: "На согласовании",
   COMPLETED: "Утверждён",
+  SIGNED: "Подписан",
 };
 
 const DOC_STATUS_COLORS: Record<string, string> = {
@@ -109,6 +133,7 @@ const DOC_STATUS_COLORS: Record<string, string> = {
   PENDING_REVIEW: "bg-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
   PENDING_APPROVAL: "bg-orange-200 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
   COMPLETED: "bg-green-200 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+  SIGNED: "bg-emerald-200 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
 };
 
 export default function MeetingDetailPage({
@@ -159,20 +184,27 @@ export default function MeetingDetailPage({
   const [isSendingNotifications, setIsSendingNotifications] = useState(false);
   const [isSendingForApproval, setIsSendingForApproval] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const [uploadingSignedProtocol, setUploadingSignedProtocol] = useState(false);
+  const protocolSignedFileInputRef = useRef<HTMLInputElement>(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [editingAgendaId, setEditingAgendaId] = useState<string | null>(null);
-  const [agendaEditForm, setAgendaEditForm] = useState<Record<string, { title: string; description: string; speakerName: string; speakerPosition: string }>>({});
+  const [agendaEditForm, setAgendaEditForm] = useState<Record<string, { title: string; description: string; speakerId: string; speakerName: string; speakerPosition: string; coSpeakers: AgendaCoSpeakerEntry[]; attachments: AgendaAttachment[] }>>({});
   const [showAddAgendaForm, setShowAddAgendaForm] = useState(false);
-  const [newAgendaForm, setNewAgendaForm] = useState({ title: "", description: "", speakerName: "", speakerPosition: "" });
+  const [newAgendaForm, setNewAgendaForm] = useState({ title: "", description: "", speakerId: "", speakerName: "", speakerPosition: "", coSpeakers: [] as AgendaCoSpeakerEntry[], attachments: [] as AgendaAttachment[] });
+  const [coSpeakerDropdownAgendaId, setCoSpeakerDropdownAgendaId] = useState<string | null>(null);
+  const [coSpeakerDropdownNew, setCoSpeakerDropdownNew] = useState(false);
+  const coSpeakerDropdownRef = useRef<HTMLDivElement>(null);
+  const [uploadingAttachmentAgendaId, setUploadingAttachmentAgendaId] = useState<string | null>(null);
+  const [uploadingNewAgendaAttachment, setUploadingNewAgendaAttachment] = useState(false);
   const [isSavingAgenda, setIsSavingAgenda] = useState(false);
   const [isAddingAgenda, setIsAddingAgenda] = useState(false);
   const [deletingAgendaId, setDeletingAgendaId] = useState<string | null>(null);
+  const [agendaDataChangedSinceLoad, setAgendaDataChangedSinceLoad] = useState(false);
   const [agendaRegNumberOverride, setAgendaRegNumberOverride] = useState("");
   const [protocolRegNumberOverride, setProtocolRegNumberOverride] = useState("");
   const [protocolDocDate, setProtocolDocDate] = useState("");
   const [protocolMeetingTime, setProtocolMeetingTime] = useState("");
   const [protocolPlace, setProtocolPlace] = useState("");
-  const [protocolElectedMembers, setProtocolElectedMembers] = useState("");
   const [isSavingMeetingGeneral, setIsSavingMeetingGeneral] = useState(false);
   const tabsScrollRef = useRef<HTMLDivElement>(null);
   const [tabsScrollLeftHint, setTabsScrollLeftHint] = useState(false);
@@ -221,6 +253,18 @@ export default function MeetingDetailPage({
     ro.observe(el);
     return () => ro.disconnect();
   }, [meeting, updateTabsScrollHint]);
+
+  useEffect(() => {
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (coSpeakerDropdownRef.current && !coSpeakerDropdownRef.current.contains(target)) {
+        setCoSpeakerDropdownAgendaId(null);
+        setCoSpeakerDropdownNew(false);
+      }
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
 
   const loadMeeting = async () => {
     try {
@@ -296,6 +340,25 @@ export default function MeetingDetailPage({
 
   const canEditAgenda = meeting && (meeting.status === "DRAFT" || meeting.status === "SCHEDULED");
 
+  const parseAgendaAttachments = (item: AgendaItem): AgendaAttachment[] => {
+    const raw = item.attachments;
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    try {
+      const parsed = JSON.parse(raw as string);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  /** Парсит coSpeakerName (через запятую) в массив записей со-докладчиков (без userId/extId при загрузке) */
+  const parseCoSpeakersFromItem = (item: AgendaItem): AgendaCoSpeakerEntry[] => {
+    const s = item.coSpeakerName?.trim();
+    if (!s) return [];
+    return s.split(/\s*,\s*/).map((name) => ({ name: name.trim() })).filter((c) => c.name);
+  };
+
   const startEditAgendaItem = (item: AgendaItem) => {
     setEditingAgendaId(item.id);
     setAgendaEditForm((prev) => ({
@@ -303,8 +366,11 @@ export default function MeetingDetailPage({
       [item.id]: {
         title: item.title,
         description: item.description || "",
+        speakerId: item.speakerId || "",
         speakerName: item.speakerName || "",
         speakerPosition: item.speakerPosition || "",
+        coSpeakers: parseCoSpeakersFromItem(item),
+        attachments: parseAgendaAttachments(item),
       },
     }));
   };
@@ -312,18 +378,33 @@ export default function MeetingDetailPage({
   const cancelEditAgendaItem = () => {
     setEditingAgendaId(null);
     setAgendaEditForm({});
+    setCoSpeakerDropdownAgendaId(null);
   };
 
   const saveAgendaItem = async (itemId: string) => {
     const form = agendaEditForm[itemId];
     if (!form || !form.title.trim()) return;
+    if (!form.speakerId) {
+      alertError("Выберите докладчика из состава выборного органа");
+      return;
+    }
     try {
       setIsSavingAgenda(true);
       const res = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/agenda`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: [{ id: itemId, title: form.title.trim(), description: form.description.trim() || null, speakerName: form.speakerName.trim() || null, speakerPosition: form.speakerPosition.trim() || null }],
+          items: [{
+            id: itemId,
+            title: form.title.trim(),
+            description: form.description.trim() || null,
+            speakerId: form.speakerId || null,
+            speakerName: form.speakerName.trim() || null,
+            speakerPosition: form.speakerPosition.trim() || null,
+            coSpeakerId: form.coSpeakers?.find((c) => c.userId)?.userId || null,
+            coSpeakerName: form.coSpeakers?.length ? form.coSpeakers.map((c) => c.name).join(", ") : null,
+            attachments: form.attachments?.length ? form.attachments : [],
+          }],
         }),
       });
       if (!res.ok) {
@@ -332,7 +413,8 @@ export default function MeetingDetailPage({
       }
       setEditingAgendaId(null);
       setAgendaEditForm({});
-      loadMeeting();
+      await loadMeeting();
+      setAgendaDataChangedSinceLoad(true);
       alertSuccess("Пункт повестки сохранён");
     } catch (e) {
       alertError(e instanceof Error ? e.message : "Не удалось сохранить");
@@ -346,6 +428,10 @@ export default function MeetingDetailPage({
       alertError("Укажите название вопроса");
       return;
     }
+    if (!newAgendaForm.speakerId) {
+      alertError("Выберите докладчика из состава выборного органа");
+      return;
+    }
     try {
       setIsAddingAgenda(true);
       const res = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/agenda`, {
@@ -354,8 +440,12 @@ export default function MeetingDetailPage({
         body: JSON.stringify({
           title: newAgendaForm.title.trim(),
           description: newAgendaForm.description.trim() || null,
+          speakerId: newAgendaForm.speakerId || null,
           speakerName: newAgendaForm.speakerName.trim() || null,
           speakerPosition: newAgendaForm.speakerPosition.trim() || null,
+          coSpeakerId: newAgendaForm.coSpeakers?.find((c) => c.userId)?.userId || null,
+          coSpeakerName: newAgendaForm.coSpeakers?.length ? newAgendaForm.coSpeakers.map((c) => c.name).join(", ") : null,
+          attachments: newAgendaForm.attachments?.length ? newAgendaForm.attachments : undefined,
         }),
       });
       if (!res.ok) {
@@ -363,8 +453,10 @@ export default function MeetingDetailPage({
         throw new Error(err.error || "Ошибка добавления");
       }
       setShowAddAgendaForm(false);
-      setNewAgendaForm({ title: "", description: "", speakerName: "", speakerPosition: "" });
-      loadMeeting();
+      setNewAgendaForm({ title: "", description: "", speakerId: "", speakerName: "", speakerPosition: "", coSpeakers: [], attachments: [] });
+      setCoSpeakerDropdownNew(false);
+      await loadMeeting();
+      setAgendaDataChangedSinceLoad(true);
       alertSuccess("Пункт повестки добавлен");
     } catch (e) {
       alertError(e instanceof Error ? e.message : "Не удалось добавить");
@@ -383,7 +475,8 @@ export default function MeetingDetailPage({
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || "Ошибка удаления");
       }
-      loadMeeting();
+      await loadMeeting();
+      setAgendaDataChangedSinceLoad(true);
       alertSuccess("Пункт повестки удалён");
     } catch (e) {
       alertError(e instanceof Error ? e.message : "Не удалось удалить");
@@ -418,6 +511,7 @@ export default function MeetingDetailPage({
       }
 
       if (data.meeting) setMeeting(data.meeting);
+      if (documentType === "AGENDA") setAgendaDataChangedSinceLoad(false);
       alertSuccess((data && data.message) || "Документ сформирован!");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Не удалось сформировать документ";
@@ -684,13 +778,6 @@ export default function MeetingDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className={`rounded-full px-3 py-1 text-sm font-medium ${
-            meeting.status === "COMPLETED" ? "bg-green-200 text-green-800 dark:bg-green-900/30 dark:text-green-400" :
-            meeting.status === "IN_PROGRESS" ? "bg-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400" :
-            "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
-          }`}>
-            {MEETING_STATUS_LABELS[meeting.status]}
-          </span>
           <button
             onClick={async () => {
               const confirmed = await confirm(
@@ -1028,7 +1115,7 @@ export default function MeetingDetailPage({
           {/* Документ повестки */}
           {meeting.agendaDocument ? (
             <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     Повестка дня {meeting.agendaDocument.regNumber}
@@ -1037,21 +1124,47 @@ export default function MeetingDetailPage({
                     {DOC_STATUS_LABELS[meeting.agendaDocument.status] || "Черновик"}
                   </span>
                 </div>
+                {meeting.groupChat && (
+                  <a
+                    href={`/dashboard/chat?chatId=${meeting.groupChat.id}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    Чат заседания
+                  </a>
+                )}
               </div>
 
               <div className="flex flex-wrap gap-2">
                 {meeting.agendaDocument && (
                   <>
-                    <button
-                      onClick={() => setPdfPreviewUrl(getDocumentViewUrl(meeting.agendaDocument!.id))}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
-                    >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                      Просмотреть PDF
-                    </button>
+                    {agendaDataChangedSinceLoad && canEditAgenda ? (
+                      <button
+                        type="button"
+                        onClick={() => handleGenerateDocument("AGENDA", meeting.agendaDocument!.regNumber ?? undefined)}
+                        disabled={isGenerating}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-50 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
+                        title="Пересоздать PDF по текущим пунктам повестки"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        {isGenerating ? "Пересоздание…" : "Пересоздать документ"}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setPdfPreviewUrl(getDocumentViewUrl(meeting.agendaDocument!.id))}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        Просмотреть PDF
+                      </button>
+                    )}
                     <a
                       href={getDocumentDownloadUrl(meeting.agendaDocument.id)}
                       download
@@ -1064,82 +1177,145 @@ export default function MeetingDetailPage({
                     </a>
                   </>
                 )}
-                {meeting.agendaDocument.status === "DRAFT" && (
+                <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                  Шаги: 1) Разослать — участники получат документ во входящие, push и email, создаётся групповой чат заседания. 2) Участники согласуют или отклоняют с примечаниями во входящих. 3) После согласования всеми — утвердите повестку. Либо утвердите без согласования (быстрый путь).
+                </p>
+                {(meeting.agendaDocument.status === "DRAFT" || meeting.agendaDocument.status === "PENDING_APPROVAL") && (
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Согласование:</span>
+                    {meeting.agendaDocument.status === "DRAFT" && (
+                      <>
+                        <button
+                          onClick={async () => {
+                            try {
+                              setIsSendingForApproval(true);
+                              const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/documents/${meeting.agendaDocument!.id}/send-for-approval`, {
+                                method: "POST",
+                              });
+                              if (!response.ok) {
+                                const error = await response.json();
+                                throw new Error(error.error || "Ошибка отправки");
+                              }
+                              const data = await response.json();
+                              alertSuccess(data.message || "Повестка отправлена на согласование");
+                              loadMeeting();
+                            } catch (error) {
+                              alertError(error instanceof Error ? error.message : "Не удалось отправить на согласование");
+                            } finally {
+                              setIsSendingForApproval(false);
+                            }
+                          }}
+                          disabled={isSendingForApproval}
+                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-100 disabled:opacity-50 dark:border-orange-700 dark:bg-orange-900/30 dark:text-orange-300 dark:hover:bg-orange-900/50"
+                          title="Участники получат повестку во входящие, push и email; создаётся групповой чат заседания"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                          </svg>
+                          {isSendingForApproval ? "Отправка…" : "Разослать на согласование"}
+                        </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              setIsApproving(true);
+                              const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/documents/${meeting.agendaDocument!.id}/direct-approve`, {
+                                method: "POST",
+                              });
+                              if (!response.ok) {
+                                const error = await response.json();
+                                throw new Error(error.error || "Ошибка утверждения");
+                              }
+                              const data = await response.json();
+                              alertSuccess(data.message || "Повестка утверждена");
+                              loadMeeting();
+                            } catch (error) {
+                              alertError(error instanceof Error ? error.message : "Не удалось утвердить повестку");
+                            } finally {
+                              setIsApproving(false);
+                            }
+                          }}
+                          disabled={isApproving}
+                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50 dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
+                          title="Утвердить повестку без согласования участниками"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          {isApproving ? "Утверждение…" : "Утвердить без согласования"}
+                        </button>
+                      </>
+                    )}
+                    {meeting.agendaDocument.status === "PENDING_APPROVAL" && (
+                      <>
+                        {meeting.agendaDocument.approvals && meeting.agendaDocument.approvals.length > 0 && (
+                          <div className="w-full rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-800/50">
+                            <span className="text-xs font-medium text-gray-600 dark:text-gray-300">Обратная связь участников:</span>
+                            <ul className="mt-1 space-y-1 text-sm">
+                              {meeting.agendaDocument.approvals.map((a: { id: string; status: string; comment: string | null; approvedAt: string | null; user: { firstName: string | null; lastName: string | null; middleName: string | null } }) => (
+                                <li key={a.id} className="flex flex-wrap items-baseline gap-2">
+                                  <span className="font-medium text-gray-800 dark:text-gray-200">
+                                    {[a.user?.lastName, a.user?.firstName, a.user?.middleName].filter(Boolean).join(" ")}
+                                  </span>
+                                  <span className={a.status === "APPROVED" ? "text-green-600 dark:text-green-400" : a.status === "REJECTED" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}>
+                                    {a.status === "APPROVED" ? "согласовал" : a.status === "REJECTED" ? "отклонил" : "ожидает"}
+                                  </span>
+                                  {a.comment && <span className="text-gray-600 dark:text-gray-400">— {a.comment}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {meeting.agendaDocument.approvals?.every((a: { status: string }) => a.status === "APPROVED") && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                setIsApproving(true);
+                                const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/documents/${meeting.agendaDocument!.id}/final-approve`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({}),
+                                });
+                                if (!response.ok) {
+                                  const error = await response.json();
+                                  throw new Error(error.error || "Ошибка утверждения");
+                                }
+                                const data = await response.json();
+                                alertSuccess(data.message || "Повестка утверждена");
+                                loadMeeting();
+                              } catch (error) {
+                                alertError(error instanceof Error ? error.message : "Не удалось утвердить повестку");
+                              } finally {
+                                setIsApproving(false);
+                              }
+                            }}
+                            disabled={isApproving}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50 dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
+                            title="Утвердить повестку после согласования всеми участниками"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            {isApproving ? "Утверждение…" : "Утвердить повестку"}
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Рассылка участникам:</span>
                   <button
-                    onClick={async () => {
-                      try {
-                        setIsSendingForApproval(true);
-                        const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/documents/${meeting.agendaDocument!.id}/send-for-approval`, {
-                          method: "POST",
-                        });
-
-                        if (!response.ok) {
-                          const error = await response.json();
-                          throw new Error(error.error || "Ошибка отправки");
-                        }
-
-                        const data = await response.json();
-                        alertSuccess(data.message || "Документ отправлен на согласование");
-                        loadMeeting();
-                      } catch (error) {
-                        alertError(error instanceof Error ? error.message : "Не удалось отправить на согласование");
-                      } finally {
-                        setIsSendingForApproval(false);
-                      }
-                    }}
-                    disabled={isSendingForApproval}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-orange-700 dark:bg-orange-900/30 dark:text-orange-300 dark:hover:bg-orange-900/50"
+                    onClick={handleSendForReview}
+                    disabled={isSendingNotifications || meeting.agendaDocument.status !== "COMPLETED"}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
+                    title={meeting.agendaDocument.status !== "COMPLETED" ? "Сначала утвердите повестку" : "Отправить утверждённую повестку участникам (уведомления и ссылка на документ)"}
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                     </svg>
-                    {isSendingForApproval ? "Отправка..." : "Отправить на согласование"}
+                    {isSendingNotifications ? "Отправка…" : "Разослать повестку участникам"}
                   </button>
-                )}
-                {meeting.agendaDocument.status === "PENDING_APPROVAL" && (
-                  <button
-                    onClick={async () => {
-                      try {
-                        setIsApproving(true);
-                        const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/documents/${meeting.agendaDocument!.id}/final-approve`, {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                        });
-
-                        if (!response.ok) {
-                          const error = await response.json();
-                          throw new Error(error.error || "Ошибка утверждения");
-                        }
-
-                        const data = await response.json();
-                        alertSuccess(data.message || "Документ утвержден");
-                        loadMeeting();
-                      } catch (error) {
-                        alertError(error instanceof Error ? error.message : "Не удалось утвердить документ");
-                      } finally {
-                        setIsApproving(false);
-                      }
-                    }}
-                    disabled={isApproving}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    {isApproving ? "Утверждение..." : "Утвердить документ"}
-                  </button>
-                )}
-                <button
-                  onClick={handleSendForReview}
-                  disabled={isSendingNotifications || meeting.agendaDocument.status !== "COMPLETED"}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
-                  title={meeting.agendaDocument.status !== "COMPLETED" ? "Сначала утвердите документ" : "Отправить участникам для ознакомления"}
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                  {isSendingNotifications ? "Отправка..." : "Разослать участникам"}
-                </button>
+                </div>
               </div>
             </div>
           ) : (
@@ -1212,7 +1388,7 @@ export default function MeetingDetailPage({
                     {editingAgendaId === item.id ? (
                       <div className="space-y-3">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Тема вопроса *
+                          Слушали (тема вопроса) *
                         </label>
                         <input
                           type="text"
@@ -1220,62 +1396,240 @@ export default function MeetingDetailPage({
                           onChange={(e) =>
                             setAgendaEditForm((prev) => ({
                               ...prev,
-                              [item.id]: { ...(prev[item.id] ?? { title: item.title, description: item.description || "", speakerName: item.speakerName || "", speakerPosition: item.speakerPosition || "" }), title: e.target.value },
+                              [item.id]: { ...(prev[item.id] ?? { title: item.title, description: item.description || "", speakerId: item.speakerId || "", speakerName: item.speakerName || "", speakerPosition: item.speakerPosition || "", coSpeakers: parseCoSpeakersFromItem(item), attachments: parseAgendaAttachments(item) }), title: e.target.value },
                             }))
                           }
                           className="block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                          placeholder="О чём вопрос"
+                          placeholder="О чём будет обсуждение..."
                         />
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Описание (опционально)
+                          Описание / материалы (опционально)
                         </label>
                         <textarea
                           value={agendaEditForm[item.id]?.description ?? item.description ?? ""}
                           onChange={(e) =>
                             setAgendaEditForm((prev) => ({
                               ...prev,
-                              [item.id]: { ...(prev[item.id] ?? { title: item.title, description: item.description || "", speakerName: item.speakerName || "", speakerPosition: item.speakerPosition || "" }), description: e.target.value },
+                              [item.id]: { ...(prev[item.id] ?? { title: item.title, description: item.description || "", speakerId: item.speakerId || "", speakerName: item.speakerName || "", speakerPosition: item.speakerPosition || "", coSpeakers: parseCoSpeakersFromItem(item), attachments: parseAgendaAttachments(item) }), description: e.target.value },
                             }))
                           }
                           rows={2}
                           className="block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                          placeholder="Дополнительная информация"
+                          placeholder="Дополнительная информация по вопросу..."
                         />
+                        <div>
+                          <input
+                            type="file"
+                            id={`agenda-edit-file-${item.id}`}
+                            className="hidden"
+                            aria-label={`Прикрепить файл к вопросу ${item.orderNumber}`}
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.md,.csv,.ppt,.pptx,.odt,.ods,.odp,.rtf,.jpg,.jpeg,.png,.zip"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              const input = e.target as HTMLInputElement;
+                              if (!file) return;
+                              setUploadingAttachmentAgendaId(item.id);
+                              try {
+                                const fd = new FormData();
+                                fd.append("file", file);
+                                const res = await fetch("/api/ppo-head/meetings/agenda-attachment", { method: "POST", body: fd });
+                                if (!res.ok) {
+                                  const err = await res.json().catch(() => ({}));
+                                  throw new Error(err.error || "Ошибка загрузки");
+                                }
+                                const data = await res.json();
+                                const list = (agendaEditForm[item.id]?.attachments ?? parseAgendaAttachments(item)).concat([{ name: data.name, url: data.url, size: data.size }]);
+                                setAgendaEditForm((prev) => ({ ...prev, [item.id]: { ...(prev[item.id] ?? { title: item.title, description: item.description || "", speakerId: item.speakerId || "", speakerName: item.speakerName || "", speakerPosition: item.speakerPosition || "", coSpeakers: parseCoSpeakersFromItem(item), attachments: parseAgendaAttachments(item) }), attachments: list } }));
+                              } catch (err) {
+                                alertError(err instanceof Error ? err.message : "Не удалось загрузить файл");
+                              } finally {
+                                setUploadingAttachmentAgendaId(null);
+                                if (input) input.value = "";
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById(`agenda-edit-file-${item.id}`)?.click()}
+                            disabled={uploadingAttachmentAgendaId === item.id}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                          >
+                            {uploadingAttachmentAgendaId === item.id ? "Загрузка…" : (
+                              <>
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                </svg>
+                                Прикрепить файл
+                              </>
+                            )}
+                          </button>
+                          {((agendaEditForm[item.id]?.attachments ?? parseAgendaAttachments(item)).length > 0) && (
+                            <ul className="mt-1.5 space-y-1">
+                              {(agendaEditForm[item.id]?.attachments ?? parseAgendaAttachments(item)).map((att, i) => (
+                                <li key={i} className="flex items-center gap-2 text-sm">
+                                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline dark:text-blue-400 truncate max-w-[200px]" title={att.name}>{att.name}</a>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const list = (agendaEditForm[item.id]?.attachments ?? parseAgendaAttachments(item)).filter((_, j) => j !== i);
+                                      setAgendaEditForm((prev) => ({ ...prev, [item.id]: { ...(prev[item.id] ?? { title: item.title, description: item.description || "", speakerId: item.speakerId || "", speakerName: item.speakerName || "", speakerPosition: item.speakerPosition || "", coSpeakers: parseCoSpeakersFromItem(item), attachments: parseAgendaAttachments(item) }), attachments: list } }));
+                                    }}
+                                    className="text-red-500 hover:text-red-700 p-0.5"
+                                    title="Удалить"
+                                  >
+                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Докладчик (ФИО)
+                          Докладывает * (только члены выборного органа)
                         </label>
-                        <input
-                          type="text"
-                          value={agendaEditForm[item.id]?.speakerName ?? item.speakerName ?? (item.speaker ? [item.speaker.lastName, item.speaker.firstName].filter(Boolean).join(" ") : "")}
-                          onChange={(e) =>
+                        <select
+                          aria-label={`Докладчик по вопросу ${item.orderNumber}`}
+                          value={agendaEditForm[item.id]?.speakerId ?? item.speakerId ?? ""}
+                          onChange={(e) => {
+                            const id = e.target.value;
+                            const m = electedBody.find((x) => x.id === id);
+                            const base = agendaEditForm[item.id] ?? { title: item.title, description: item.description || "", speakerId: item.speakerId || "", speakerName: item.speakerName || "", speakerPosition: item.speakerPosition || "", coSpeakers: parseCoSpeakersFromItem(item), attachments: parseAgendaAttachments(item) };
+                            const coSpeakers = id ? (base.coSpeakers || []).filter((c) => c.userId !== id) : (base.coSpeakers || []);
                             setAgendaEditForm((prev) => ({
                               ...prev,
-                              [item.id]: { ...(prev[item.id] ?? { title: item.title, description: item.description || "", speakerName: item.speakerName || "", speakerPosition: item.speakerPosition || "" }), speakerName: e.target.value },
-                            }))
-                          }
+                              [item.id]: {
+                                ...(prev[item.id] ?? base),
+                                speakerId: id,
+                                speakerName: m ? getElectedMemberName(m) : "",
+                                speakerPosition: m ? (m.jobTitle || m.roleName || "") : "",
+                                coSpeakers,
+                              },
+                            }));
+                          }}
                           className="block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                          placeholder="ФИО докладчика"
-                        />
+                        >
+                          <option value="">— Выберите докладчика —</option>
+                          {electedBody.map((m) => {
+                            const coSpeakers = agendaEditForm[item.id]?.coSpeakers ?? parseCoSpeakersFromItem(item);
+                            const isCoSpeaker = coSpeakers.some((c) => c.userId === m.id);
+                            return (
+                              <option key={m.id} value={m.id} disabled={isCoSpeaker}>
+                                {getElectedMemberName(m)}
+                                {m.jobTitle || m.roleName ? ` (${m.jobTitle || m.roleName})` : ""}
+                                {isCoSpeaker ? " — уже со-докладчик" : ""}
+                              </option>
+                            );
+                          })}
+                        </select>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Должность докладчика
+                          Со-докладчики (опционально)
                         </label>
-                        <input
-                          type="text"
-                          value={agendaEditForm[item.id]?.speakerPosition ?? item.speakerPosition ?? ""}
-                          onChange={(e) =>
-                            setAgendaEditForm((prev) => ({
-                              ...prev,
-                              [item.id]: { ...(prev[item.id] ?? { title: item.title, description: item.description || "", speakerName: item.speakerName || "", speakerPosition: item.speakerPosition || "" }), speakerPosition: e.target.value },
-                            }))
-                          }
-                          className="block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                          placeholder="Должность"
-                        />
+                        <p className="mb-1.5 text-xs text-gray-500 dark:text-gray-400">
+                          Можно несколько. Нажмите «+ Добавить ещё», чтобы выбрать.
+                        </p>
+                        <div ref={coSpeakerDropdownAgendaId === item.id ? coSpeakerDropdownRef : undefined} className="relative">
+                          <div className="flex flex-wrap gap-2">
+                            {(agendaEditForm[item.id]?.coSpeakers ?? parseCoSpeakersFromItem(item)).map((c, cIdx) => (
+                              <span key={cIdx} className="inline-flex items-center gap-1 rounded-md bg-gray-200 dark:bg-gray-700 px-2 py-1 text-sm">
+                                {c.name}{c.position ? ` (${c.position})` : ""}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const list = (agendaEditForm[item.id]?.coSpeakers ?? parseCoSpeakersFromItem(item)).filter((_, j) => j !== cIdx);
+                                    setAgendaEditForm((prev) => ({ ...prev, [item.id]: { ...(prev[item.id] ?? { title: item.title, description: item.description || "", speakerId: item.speakerId || "", speakerName: item.speakerName || "", speakerPosition: item.speakerPosition || "", coSpeakers: parseCoSpeakersFromItem(item), attachments: parseAgendaAttachments(item) }), coSpeakers: list } }));
+                                  }}
+                                  className="text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+                                  aria-label="Убрать со-докладчика"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => setCoSpeakerDropdownAgendaId(coSpeakerDropdownAgendaId === item.id ? null : item.id)}
+                              className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            >
+                              + Добавить ещё
+                            </button>
+                          </div>
+                          {coSpeakerDropdownAgendaId === item.id && (
+                            <div className="absolute z-10 left-0 mt-1 max-h-56 w-72 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-800">
+                              {electedBody.length > 0 && (
+                                <>
+                                  <div className="px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">Члены выборного органа</div>
+                                  {electedBody.map((m) => {
+                                    const list = agendaEditForm[item.id]?.coSpeakers ?? parseCoSpeakersFromItem(item);
+                                    const currentSpeakerId = agendaEditForm[item.id]?.speakerId ?? item.speakerId ?? "";
+                                    const added = list.some((c) => c.userId === m.id);
+                                    const isMainSpeaker = m.id === currentSpeakerId;
+                                    const disabled = added || isMainSpeaker;
+                                    return (
+                                      <button
+                                        key={m.id}
+                                        type="button"
+                                        disabled={disabled}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                                        onClick={() => {
+                                          const list = agendaEditForm[item.id]?.coSpeakers ?? parseCoSpeakersFromItem(item);
+                                          const sid = agendaEditForm[item.id]?.speakerId ?? item.speakerId ?? "";
+                                          if (list.some((c) => c.userId === m.id) || m.id === sid) return;
+                                          setAgendaEditForm((prev) => ({ ...prev, [item.id]: { ...(prev[item.id] ?? { title: item.title, description: item.description || "", speakerId: item.speakerId || "", speakerName: item.speakerName || "", speakerPosition: item.speakerPosition || "", coSpeakers: parseCoSpeakersFromItem(item), attachments: parseAgendaAttachments(item) }), coSpeakers: [...list, { userId: m.id, name: getElectedMemberName(m), position: m.jobTitle || m.roleName || "" }] } }));
+                                          setCoSpeakerDropdownAgendaId(null);
+                                        }}
+                                      >
+                                        {getElectedMemberName(m)}
+                                        {m.jobTitle || m.roleName ? ` (${m.jobTitle || m.roleName})` : ""}
+                                        {isMainSpeaker ? " — докладчик" : ""}
+                                      </button>
+                                    );
+                                  })}
+                                </>
+                              )}
+                              {meeting?.participants?.filter((p) => p.externalName).length ? (
+                                <>
+                                  <div className="px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">Приглашённые</div>
+                                  {meeting.participants.filter((p) => p.externalName).map((p) => {
+                                    const list = agendaEditForm[item.id]?.coSpeakers ?? parseCoSpeakersFromItem(item);
+                                    const added = list.some((c) => c.extId === p.id);
+                                    const currentSpeakerName = agendaEditForm[item.id]?.speakerName ?? item.speakerName ?? "";
+                                    const isMainSpeaker = p.externalName === currentSpeakerName;
+                                    const disabled = added || isMainSpeaker;
+                                    return (
+                                      <button
+                                        key={p.id}
+                                        type="button"
+                                        disabled={disabled}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                                        onClick={() => {
+                                          const list = agendaEditForm[item.id]?.coSpeakers ?? parseCoSpeakersFromItem(item);
+                                          const sName = agendaEditForm[item.id]?.speakerName ?? item.speakerName ?? "";
+                                          if (list.some((c) => c.extId === p.id) || p.externalName === sName) return;
+                                          setAgendaEditForm((prev) => ({ ...prev, [item.id]: { ...(prev[item.id] ?? { title: item.title, description: item.description || "", speakerId: item.speakerId || "", speakerName: item.speakerName || "", speakerPosition: item.speakerPosition || "", coSpeakers: parseCoSpeakersFromItem(item), attachments: parseAgendaAttachments(item) }), coSpeakers: [...list, { extId: p.id, name: p.externalName || "", position: p.externalPosition || undefined }] } }));
+                                          setCoSpeakerDropdownAgendaId(null);
+                                        }}
+                                      >
+                                        {p.externalName}
+                                        {p.externalPosition ? ` (${p.externalPosition})` : ""}
+                                        {isMainSpeaker ? " — докладчик" : ""}
+                                      </button>
+                                    );
+                                  })}
+                                </>
+                              ) : null}
+                              {electedBody.length === 0 && !meeting?.participants?.filter((p) => p.externalName).length ? (
+                                <p className="px-3 py-2 text-xs text-gray-500">Нет участников для выбора</p>
+                              ) : null}
+                            </div>
+                          )}
+                        </div>
                         <div className="flex flex-wrap gap-2 pt-2">
                           <button
                             type="button"
                             onClick={() => saveAgendaItem(item.id)}
-                            disabled={isSavingAgenda || !(agendaEditForm[item.id]?.title?.trim())}
+                            disabled={isSavingAgenda || !(agendaEditForm[item.id]?.title?.trim()) || !(agendaEditForm[item.id]?.speakerId)}
                             className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                           >
                             {isSavingAgenda ? "Сохранение…" : "Сохранить"}
@@ -1300,11 +1654,27 @@ export default function MeetingDetailPage({
                             {item.description && (
                               <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{item.description}</p>
                             )}
+                            {parseAgendaAttachments(item).length > 0 && (
+                              <ul className="mt-2 space-y-1">
+                                {parseAgendaAttachments(item).map((att, i) => (
+                                  <li key={i} className="text-sm">
+                                    <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline dark:text-blue-400 truncate max-w-[200px] inline-block" title={att.name}>
+                                      {att.name}
+                                    </a>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
                             {(item.speakerName || item.speaker) && (
                               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                                 <strong>Докладчик:</strong>{" "}
                                 {item.speakerName || [item.speaker?.lastName, item.speaker?.firstName].filter(Boolean).join(" ")}
                                 {item.speakerPosition && `, ${item.speakerPosition}`}
+                              </p>
+                            )}
+                            {item.coSpeakerName && (
+                              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                <strong>Со-докладчик:</strong> {item.coSpeakerName}
                               </p>
                             )}
                           </div>
@@ -1347,50 +1717,220 @@ export default function MeetingDetailPage({
                     <h4 className="mb-3 text-sm font-medium text-gray-900 dark:text-white">Новый пункт повестки</h4>
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Тема вопроса *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Слушали (тема вопроса) *</label>
                         <input
                           type="text"
                           value={newAgendaForm.title}
                           onChange={(e) => setNewAgendaForm((prev) => ({ ...prev, title: e.target.value }))}
                           className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                          placeholder="О чём вопрос"
+                          placeholder="О чём будет обсуждение..."
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Описание (опционально)</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Описание / материалы (опционально)</label>
                         <textarea
                           value={newAgendaForm.description}
                           onChange={(e) => setNewAgendaForm((prev) => ({ ...prev, description: e.target.value }))}
                           rows={2}
                           className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                          placeholder="Дополнительная информация"
+                          placeholder="Дополнительная информация по вопросу..."
                         />
+                        <div className="mt-2">
+                          <input
+                            type="file"
+                            id="agenda-new-file"
+                            className="hidden"
+                            aria-label="Прикрепить файл к новому вопросу"
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.md,.csv,.ppt,.pptx,.odt,.ods,.odp,.rtf,.jpg,.jpeg,.png,.zip"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              const input = e.target as HTMLInputElement;
+                              if (!file) return;
+                              setUploadingNewAgendaAttachment(true);
+                              try {
+                                const fd = new FormData();
+                                fd.append("file", file);
+                                const res = await fetch("/api/ppo-head/meetings/agenda-attachment", { method: "POST", body: fd });
+                                if (!res.ok) {
+                                  const err = await res.json().catch(() => ({}));
+                                  throw new Error(err.error || "Ошибка загрузки");
+                                }
+                                const data = await res.json();
+                                setNewAgendaForm((prev) => ({ ...prev, attachments: (prev.attachments || []).concat([{ name: data.name, url: data.url, size: data.size }]) }));
+                              } catch (err) {
+                                alertError(err instanceof Error ? err.message : "Не удалось загрузить файл");
+                              } finally {
+                                setUploadingNewAgendaAttachment(false);
+                                if (input) input.value = "";
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById("agenda-new-file")?.click()}
+                            disabled={uploadingNewAgendaAttachment}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                          >
+                            {uploadingNewAgendaAttachment ? "Загрузка…" : (
+                              <>
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                </svg>
+                                Прикрепить файл
+                              </>
+                            )}
+                          </button>
+                          {(newAgendaForm.attachments?.length ?? 0) > 0 && (
+                            <ul className="mt-1.5 space-y-1">
+                              {(newAgendaForm.attachments || []).map((att, i) => (
+                                <li key={i} className="flex items-center gap-2 text-sm">
+                                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline dark:text-blue-400 truncate max-w-[200px]" title={att.name}>{att.name}</a>
+                                  <button
+                                    type="button"
+                                    onClick={() => setNewAgendaForm((prev) => ({ ...prev, attachments: (prev.attachments || []).filter((_, j) => j !== i) }))}
+                                    className="text-red-500 hover:text-red-700 p-0.5"
+                                    title="Удалить"
+                                  >
+                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Докладчик (ФИО)</label>
-                        <input
-                          type="text"
-                          value={newAgendaForm.speakerName}
-                          onChange={(e) => setNewAgendaForm((prev) => ({ ...prev, speakerName: e.target.value }))}
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Докладывает * (только члены выборного органа)</label>
+                        <select
+                          aria-label="Докладчик нового вопроса"
+                          value={newAgendaForm.speakerId}
+                          onChange={(e) => {
+                            const id = e.target.value;
+                            const m = electedBody.find((x) => x.id === id);
+                            setNewAgendaForm((prev) => {
+                              const coSpeakers = id ? (prev.coSpeakers || []).filter((c) => c.userId !== id) : (prev.coSpeakers || []);
+                              return {
+                                ...prev,
+                                speakerId: id,
+                                speakerName: m ? getElectedMemberName(m) : "",
+                                speakerPosition: m ? (m.jobTitle || m.roleName || "") : "",
+                                coSpeakers,
+                              };
+                            });
+                          }}
                           className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                          placeholder="ФИО докладчика"
-                        />
+                        >
+                          <option value="">— Выберите докладчика —</option>
+                          {electedBody.map((m) => {
+                            const isCoSpeaker = (newAgendaForm.coSpeakers || []).some((c) => c.userId === m.id);
+                            return (
+                              <option key={m.id} value={m.id} disabled={isCoSpeaker}>
+                                {getElectedMemberName(m)}
+                                {m.jobTitle || m.roleName ? ` (${m.jobTitle || m.roleName})` : ""}
+                                {isCoSpeaker ? " — уже со-докладчик" : ""}
+                              </option>
+                            );
+                          })}
+                        </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Должность докладчика</label>
-                        <input
-                          type="text"
-                          value={newAgendaForm.speakerPosition}
-                          onChange={(e) => setNewAgendaForm((prev) => ({ ...prev, speakerPosition: e.target.value }))}
-                          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                          placeholder="Должность"
-                        />
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Со-докладчики (опционально)</label>
+                        <p className="mb-1.5 text-xs text-gray-500 dark:text-gray-400">
+                          Можно несколько. Нажмите «+ Добавить ещё», чтобы выбрать.
+                        </p>
+                        <div ref={coSpeakerDropdownNew ? coSpeakerDropdownRef : undefined} className="relative mt-1">
+                          <div className="flex flex-wrap gap-2">
+                            {(newAgendaForm.coSpeakers || []).map((c, cIdx) => (
+                              <span key={cIdx} className="inline-flex items-center gap-1 rounded-md bg-gray-200 dark:bg-gray-700 px-2 py-1 text-sm">
+                                {c.name}{c.position ? ` (${c.position})` : ""}
+                                <button
+                                  type="button"
+                                  onClick={() => setNewAgendaForm((prev) => ({ ...prev, coSpeakers: (prev.coSpeakers || []).filter((_, j) => j !== cIdx) }))}
+                                  className="text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+                                  aria-label="Убрать со-докладчика"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => setCoSpeakerDropdownNew(!coSpeakerDropdownNew)}
+                              className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            >
+                              + Добавить ещё
+                            </button>
+                          </div>
+                          {coSpeakerDropdownNew && (
+                            <div className="absolute z-10 left-0 mt-1 max-h-56 w-72 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-800">
+                              {electedBody.length > 0 && (
+                                <>
+                                  <div className="px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">Члены выборного органа</div>
+                                  {electedBody.map((m) => {
+                                    const added = (newAgendaForm.coSpeakers || []).some((c) => c.userId === m.id);
+                                    const isMainSpeaker = m.id === newAgendaForm.speakerId;
+                                    const disabled = added || isMainSpeaker;
+                                    return (
+                                      <button
+                                        key={m.id}
+                                        type="button"
+                                        disabled={disabled}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                                        onClick={() => {
+                                          if ((newAgendaForm.coSpeakers || []).some((c) => c.userId === m.id) || m.id === newAgendaForm.speakerId) return;
+                                          setNewAgendaForm((prev) => ({ ...prev, coSpeakers: [...(prev.coSpeakers || []), { userId: m.id, name: getElectedMemberName(m), position: m.jobTitle || m.roleName || "" }] }));
+                                          setCoSpeakerDropdownNew(false);
+                                        }}
+                                      >
+                                        {getElectedMemberName(m)}
+                                        {m.jobTitle || m.roleName ? ` (${m.jobTitle || m.roleName})` : ""}
+                                        {isMainSpeaker ? " — докладчик" : ""}
+                                      </button>
+                                    );
+                                  })}
+                                </>
+                              )}
+                              {meeting?.participants?.filter((p) => p.externalName).length ? (
+                                <>
+                                  <div className="px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">Приглашённые</div>
+                                  {meeting.participants.filter((p) => p.externalName).map((p) => {
+                                    const added = (newAgendaForm.coSpeakers || []).some((c) => c.extId === p.id);
+                                    const isMainSpeaker = p.externalName === newAgendaForm.speakerName;
+                                    const disabled = added || isMainSpeaker;
+                                    return (
+                                      <button
+                                        key={p.id}
+                                        type="button"
+                                        disabled={disabled}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                                        onClick={() => {
+                                          if ((newAgendaForm.coSpeakers || []).some((c) => c.extId === p.id) || p.externalName === newAgendaForm.speakerName) return;
+                                          setNewAgendaForm((prev) => ({ ...prev, coSpeakers: [...(prev.coSpeakers || []), { extId: p.id, name: p.externalName || "", position: p.externalPosition || undefined }] }));
+                                          setCoSpeakerDropdownNew(false);
+                                        }}
+                                      >
+                                        {p.externalName}
+                                        {p.externalPosition ? ` (${p.externalPosition})` : ""}
+                                        {isMainSpeaker ? " — докладчик" : ""}
+                                      </button>
+                                    );
+                                  })}
+                                </>
+                              ) : null}
+                              {electedBody.length === 0 && !meeting?.participants?.filter((p) => p.externalName).length ? (
+                                <p className="px-3 py-2 text-xs text-gray-500">Нет участников для выбора</p>
+                              ) : null}
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={addAgendaItem}
-                          disabled={isAddingAgenda || !newAgendaForm.title.trim()}
+                          disabled={isAddingAgenda || !newAgendaForm.title.trim() || !newAgendaForm.speakerId}
                           className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                           {isAddingAgenda ? "Добавление…" : "Добавить"}
@@ -1399,7 +1939,8 @@ export default function MeetingDetailPage({
                           type="button"
                           onClick={() => {
                             setShowAddAgendaForm(false);
-                            setNewAgendaForm({ title: "", description: "", speakerName: "", speakerPosition: "" });
+                            setNewAgendaForm({ title: "", description: "", speakerId: "", speakerName: "", speakerPosition: "", coSpeakers: [], attachments: [] });
+                            setCoSpeakerDropdownNew(false);
                           }}
                           className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
                         >
@@ -1420,7 +1961,7 @@ export default function MeetingDetailPage({
           {/* Документ протокола */}
           {meeting.protocolDocument && (
             <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     Протокол {meeting.protocolDocument.regNumber}
@@ -1429,6 +1970,17 @@ export default function MeetingDetailPage({
                     {DOC_STATUS_LABELS[meeting.protocolDocument.status] || "Черновик"}
                   </span>
                 </div>
+                {meeting.groupChat && (
+                  <a
+                    href={`/dashboard/chat?chatId=${meeting.groupChat.id}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    Чат заседания
+                  </a>
+                )}
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -1467,106 +2019,170 @@ export default function MeetingDetailPage({
                       </svg>
                       Скачать
                     </a>
+                    {(meeting.protocolDocument.status === "COMPLETED" || meeting.protocolDocument.status === "SIGNED") && (
+                      <>
+                        <input
+                          ref={protocolSignedFileInputRef}
+                          type="file"
+                          accept=".pdf,image/jpeg,image/jpg,image/png"
+                          className="hidden"
+                          aria-label="Загрузить подписанный протокол (скан)"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file || !meeting.protocolDocument) return;
+                            setUploadingSignedProtocol(true);
+                            try {
+                              const fd = new FormData();
+                              fd.append("file", file);
+                              fd.append("documentId", meeting.protocolDocument.id);
+                              const res = await fetch("/api/documents/upload-signed", { method: "POST", body: fd });
+                              const data = await res.json().catch(() => ({}));
+                              if (!res.ok) throw new Error(data.error || "Ошибка загрузки");
+                              alertSuccess(data.message || "Подписанный протокол загружен");
+                              loadMeeting();
+                            } catch (err) {
+                              alertError(err instanceof Error ? err.message : "Не удалось загрузить скан");
+                            } finally {
+                              setUploadingSignedProtocol(false);
+                              e.target.value = "";
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => protocolSignedFileInputRef.current?.click()}
+                          disabled={uploadingSignedProtocol}
+                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-50 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
+                          title="Шаг 8: распечатайте протокол, подпишите у председательствующего и секретаря, загрузите скан"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          {uploadingSignedProtocol ? "Загрузка…" : "Загрузить подписанный протокол (скан)"}
+                        </button>
+                        {(meeting.protocolDocument as { signedFilePath?: string | null }).signedFilePath && (
+                          <a
+                            href={`${getDocumentDownloadUrl(meeting.protocolDocument.id)}?signed=true`}
+                            download
+                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 transition-colors hover:bg-emerald-100 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200 dark:hover:bg-emerald-900/50"
+                            title="Скачать подписанный протокол (скан)"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Скачать скан
+                          </a>
+                        )}
+                      </>
+                    )}
                   </>
                 )}
-                {meeting.protocolDocument.status === "DRAFT" && (
+                <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                  Согласование: участники подтверждают протокол в системе, затем вы утверждаете документ. Шаг 8: распечатайте, подпишите у председательствующего и секретаря, загрузите скан. Рассылка: после утверждения — уведомления и ссылка на протокол участникам.
+                </p>
+                {(meeting.protocolDocument.status === "DRAFT" || meeting.protocolDocument.status === "PENDING_APPROVAL") && (
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Согласование протокола:</span>
+                    {meeting.protocolDocument.status === "DRAFT" && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            setIsSendingForApproval(true);
+                            const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/documents/${meeting.protocolDocument!.id}/send-for-approval`, {
+                              method: "POST",
+                            });
+                            if (!response.ok) {
+                              const error = await response.json();
+                              throw new Error(error.error || "Ошибка отправки");
+                            }
+                            const data = await response.json();
+                            alertSuccess(data.message || "Протокол отправлен на согласование");
+                            loadMeeting();
+                          } catch (error) {
+                            alertError(error instanceof Error ? error.message : "Не удалось отправить на согласование");
+                          } finally {
+                            setIsSendingForApproval(false);
+                          }
+                        }}
+                        disabled={isSendingForApproval}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-orange-700 dark:bg-orange-900/30 dark:text-orange-300 dark:hover:bg-orange-900/50"
+                        title="Участники получат задачу согласовать протокол, затем вы сможете утвердить документ"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                        {isSendingForApproval ? "Отправка…" : "Отправить протокол на согласование"}
+                      </button>
+                    )}
+                    {meeting.protocolDocument.status === "PENDING_APPROVAL" && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            setIsApproving(true);
+                            const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/documents/${meeting.protocolDocument!.id}/final-approve`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({}),
+                            });
+                            if (!response.ok) {
+                              const error = await response.json();
+                              throw new Error(error.error || "Ошибка утверждения");
+                            }
+                            const data = await response.json();
+                            alertSuccess(data.message || "Протокол утверждён");
+                            loadMeeting();
+                          } catch (error) {
+                            alertError(error instanceof Error ? error.message : "Не удалось утвердить документ");
+                          } finally {
+                            setIsApproving(false);
+                          }
+                        }}
+                        disabled={isApproving}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
+                        title="Утвердить протокол после согласования участниками"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        {isApproving ? "Утверждение…" : "Утвердить протокол"}
+                      </button>
+                    )}
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Рассылка участникам:</span>
                   <button
                     onClick={async () => {
                       try {
-                        setIsSendingForApproval(true);
-                        const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/documents/${meeting.protocolDocument!.id}/send-for-approval`, {
+                        setIsSendingNotifications(true);
+                        const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/notify-participants`, {
                           method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ type: "protocol_review" }),
                         });
-
                         if (!response.ok) {
                           const error = await response.json();
                           throw new Error(error.error || "Ошибка отправки");
                         }
-
                         const data = await response.json();
-                        alertSuccess(data.message || "Документ отправлен на согласование");
+                        alertSuccess(data.message || `Уведомления отправлены ${data.sentCount} участникам`);
                         loadMeeting();
                       } catch (error) {
-                        alertError(error instanceof Error ? error.message : "Не удалось отправить на согласование");
+                        alertError(error instanceof Error ? error.message : "Не удалось отправить уведомления");
                       } finally {
-                        setIsSendingForApproval(false);
+                        setIsSendingNotifications(false);
                       }
                     }}
-                    disabled={isSendingForApproval}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-orange-700 dark:bg-orange-900/30 dark:text-orange-300 dark:hover:bg-orange-900/50"
+                    disabled={isSendingNotifications || meeting.protocolDocument.status !== "COMPLETED"}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
+                    title={meeting.protocolDocument.status !== "COMPLETED" ? "Сначала утвердите протокол" : "Отправить утверждённый протокол участникам (уведомления и ссылка на документ)"}
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                     </svg>
-                    {isSendingForApproval ? "Отправка..." : "Отправить на согласование"}
+                    {isSendingNotifications ? "Отправка…" : "Разослать протокол участникам"}
                   </button>
-                )}
-                {meeting.protocolDocument.status === "PENDING_APPROVAL" && (
-                  <button
-                    onClick={async () => {
-                      try {
-                        setIsApproving(true);
-                        const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/documents/${meeting.protocolDocument!.id}/final-approve`, {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                        });
-
-                        if (!response.ok) {
-                          const error = await response.json();
-                          throw new Error(error.error || "Ошибка утверждения");
-                        }
-
-                        const data = await response.json();
-                        alertSuccess(data.message || "Документ утвержден");
-                        loadMeeting();
-                      } catch (error) {
-                        alertError(error instanceof Error ? error.message : "Не удалось утвердить документ");
-                      } finally {
-                        setIsApproving(false);
-                      }
-                    }}
-                    disabled={isApproving}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    {isApproving ? "Утверждение..." : "Утвердить документ"}
-                  </button>
-                )}
-                <button
-                  onClick={async () => {
-                    try {
-                      setIsSendingNotifications(true);
-                      const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/notify-participants`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ type: "protocol_review" }),
-                      });
-
-                      if (!response.ok) {
-                        const error = await response.json();
-                        throw new Error(error.error || "Ошибка отправки");
-                      }
-
-                      const data = await response.json();
-                      alertSuccess(data.message || `Уведомления отправлены ${data.sentCount} участникам`);
-                      loadMeeting();
-                    } catch (error) {
-                      alertError(error instanceof Error ? error.message : "Не удалось отправить уведомления");
-                    } finally {
-                      setIsSendingNotifications(false);
-                    }
-                  }}
-                  disabled={isSendingNotifications || meeting.protocolDocument.status !== "COMPLETED"}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
-                  title={meeting.protocolDocument.status !== "COMPLETED" ? "Сначала утвердите документ" : "Отправить участникам для ознакомления"}
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                  {isSendingNotifications ? "Отправка..." : "Разослать протокол"}
-                </button>
+                </div>
               </div>
             </div>
           )}
@@ -1628,10 +2244,6 @@ export default function MeetingDetailPage({
                         <label htmlFor="protocol-place" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Место проведения</label>
                         <input id="protocol-place" type="text" value={protocolPlace} onChange={(e) => setProtocolPlace(e.target.value)} placeholder="Например: Москва" className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} />
                       </div>
-                      <div className="sm:col-span-2 lg:col-span-3">
-                        <label htmlFor="protocol-elected-members" className="block text-sm font-medium text-gray-700 dark:text-gray-300">В состав профкома избраны</label>
-                        <textarea id="protocol-elected-members" value={protocolElectedMembers} onChange={(e) => setProtocolElectedMembers(e.target.value)} rows={2} placeholder="Перечень (необязательно)" className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white" onFocus={(e) => e.target.select()} />
-                      </div>
                     </div>
                     <div className="mt-4">
                       <button type="button" onClick={saveProtocolProceduralAndElected} disabled={isSavingMeetingGeneral} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600">
@@ -1648,7 +2260,7 @@ export default function MeetingDetailPage({
                   1. Участники заседания (присутствие)
                 </h4>
                 <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-                  Список из сотрудников (выборный орган) с учётом тех, кто участвовал в повестке дня. Укажите для каждого: Присутствовал очно, Присутствовал онлайн или Отсутствовал.
+                  Сотрудники (выборный орган) и приглашённые участники. Укажите для каждого: Присутствовал очно, Присутствовал онлайн или Отсутствовал.
                 </p>
                 <button
                   type="button"
@@ -1662,51 +2274,59 @@ export default function MeetingDetailPage({
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
                     <thead className="bg-gray-50 dark:bg-gray-700">
                       <tr>
-                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 dark:text-gray-300">ФИО (сотрудник)</th>
+                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 dark:text-gray-300">ФИО (сотрудник / приглашённый)</th>
                         <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Присутствие</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-600 dark:bg-gray-800">
-                      {electedBody.length === 0 ? (
-                        <tr><td colSpan={2} className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">Загрузите выборный орган (сотрудники).</td></tr>
-                      ) : (
-                        electedBody.map((m) => {
+                      {(() => {
+                        const electedRows = electedBody.map((m) => {
                           const participant = meeting.participants.find(p => p.user?.id === m.id);
+                          return { key: `elected-${m.id}`, label: getElectedMemberName(m), participant };
+                        });
+                        const externalRows = meeting.participants
+                          .filter(p => p.externalName)
+                          .map(p => ({ key: `ext-${p.id}`, label: getParticipantName(p) + (p.externalPosition ? ` (${p.externalPosition})` : ""), participant: p }));
+                        const allRows = [...electedRows, ...externalRows];
+                        if (allRows.length === 0) {
                           return (
-                            <tr key={m.id} className="dark:bg-gray-800">
-                              <td className="px-4 py-2 text-sm text-gray-900 dark:text-white">{getElectedMemberName(m)}</td>
-                              <td className="px-4 py-2">
-                                {participant ? (
-                                  <select
-                                    aria-label={`Присутствие: ${getElectedMemberName(m)}`}
-                                    value={participant.attendance === "PRESENT" ? "PRESENT_OFFLINE" : participant.attendance}
-                                    onChange={async (e) => {
-                                      const v = e.target.value as "PRESENT_OFFLINE" | "PRESENT_ONLINE" | "ABSENT";
-                                      try {
-                                        const res = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/participants/${participant.id}`, {
-                                          method: "PATCH",
-                                          headers: { "Content-Type": "application/json" },
-                                          body: JSON.stringify({ attendance: v }),
-                                        });
-                                        if (res.ok) loadMeeting();
-                                      } catch (err) {
-                                        alertError("Не удалось обновить присутствие");
-                                      }
-                                    }}
-                                    className="rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                  >
-                                    <option value="PRESENT_OFFLINE">Присутствовал очно</option>
-                                    <option value="PRESENT_ONLINE">Присутствовал онлайн</option>
-                                    <option value="ABSENT">Отсутствовал</option>
-                                  </select>
-                                ) : (
-                                  <span className="text-sm text-gray-400">— добавьте через кнопку выше</span>
-                                )}
-                              </td>
-                            </tr>
+                            <tr><td colSpan={2} className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">Загрузите выборный орган и нажмите «Синхронизировать» или добавьте приглашённых при создании заседания.</td></tr>
                           );
-                        })
-                      )}
+                        }
+                        return allRows.map(({ key, label, participant }) => (
+                          <tr key={key} className="dark:bg-gray-800">
+                            <td className="px-4 py-2 text-sm text-gray-900 dark:text-white">{label}</td>
+                            <td className="px-4 py-2">
+                              {participant ? (
+                                <select
+                                  aria-label={`Присутствие: ${label}`}
+                                  value={participant.attendance === "PRESENT" ? "PRESENT_OFFLINE" : participant.attendance}
+                                  onChange={async (e) => {
+                                    const v = e.target.value as "PRESENT_OFFLINE" | "PRESENT_ONLINE" | "ABSENT";
+                                    try {
+                                      const res = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}/participants/${participant.id}`, {
+                                        method: "PATCH",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ attendance: v }),
+                                      });
+                                      if (res.ok) loadMeeting();
+                                    } catch (err) {
+                                      alertError("Не удалось обновить присутствие");
+                                    }
+                                  }}
+                                  className="rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                >
+                                  <option value="PRESENT_OFFLINE">Присутствовал очно</option>
+                                  <option value="PRESENT_ONLINE">Присутствовал онлайн</option>
+                                  <option value="ABSENT">Отсутствовал</option>
+                                </select>
+                              ) : (
+                                <span className="text-sm text-gray-400">— добавьте через кнопку выше</span>
+                              )}
+                            </td>
+                          </tr>
+                        ));
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -1902,79 +2522,39 @@ export default function MeetingDetailPage({
                   />
                 </div>
 
-                {/* ДОКЛАДЫВАЛ */}
+                {/* ДОКЛАДЫВАЛ — только члены выборного органа (как при создании повестки) */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Докладывал: *
+                    Докладывал: * (только члены выборного органа)
                   </label>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <select
-                      aria-label={`Докладывал по вопросу ${item.orderNumber}`}
-                      value={protocolData[item.id]?.speakerId || item.speakerId || ""}
-                      onChange={(e) => {
-                        const memberId = e.target.value;
-                        const participant = meeting.participants.find(p => p.user?.id === memberId);
-                        const member = participant?.user || members.find(m => m.id === memberId);
-                        updateProtocolItem(item.id, "speakerId", memberId);
-                        if (member) {
-                          const name = [member.lastName, member.firstName, member.middleName].filter(Boolean).join(" ");
-                          updateProtocolItem(item.id, "speakerName", name);
-                          const jobTitle = (member as { jobTitle?: string | null }).jobTitle;
-                          if (jobTitle) updateProtocolItem(item.id, "speakerPosition", jobTitle);
-                        }
-                      }}
-                      className="block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
-                    >
-                      <option value="">— Выбрать из участников —</option>
-                      <optgroup label="Участники заседания">
-                        {meeting.participants
-                          .filter(p => p.user)
-                          .map((p) => (
-                            <option key={p.user!.id} value={p.user!.id}>
-                              {getParticipantName(p)}
-                              {p.role === "CHAIRMAN" && " (Председатель)"}
-                              {p.role === "SECRETARY" && " (Секретарь)"}
-                            </option>
-                          ))}
-                      </optgroup>
-                      <optgroup label="Все члены организации">
-                        {members
-                          .filter(m => !meeting.participants.some(p => p.user?.id === m.id))
-                          .map((member) => (
-                            <option key={member.id} value={member.id}>
-                              {getMemberName(member)}
-                            </option>
-                          ))}
-                      </optgroup>
-                    </select>
-                    <input
-                      type="text"
-                      value={protocolData[item.id]?.speakerId ? "" : (protocolData[item.id]?.speakerName || item.speakerName || "")}
-                      onChange={(e) => {
-                        updateProtocolItem(item.id, "speakerName", e.target.value);
-                        updateProtocolItem(item.id, "speakerId", "");
-                        updateProtocolItem(item.id, "speakerPosition", "");
-                      }}
-                      className="block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
-                      placeholder="или ввести ФИО вручную"
-                      disabled={!!(protocolData[item.id]?.speakerId || item.speakerId)}
-                    />
-                  </div>
+                  <select
+                    aria-label={`Докладывал по вопросу ${item.orderNumber}`}
+                    value={protocolData[item.id]?.speakerId || item.speakerId || ""}
+                    onChange={(e) => {
+                      const memberId = e.target.value;
+                      const m = electedBody.find((x) => x.id === memberId);
+                      updateProtocolItem(item.id, "speakerId", memberId);
+                      if (m) {
+                        updateProtocolItem(item.id, "speakerName", getElectedMemberName(m));
+                        updateProtocolItem(item.id, "speakerPosition", m.jobTitle || m.roleName || "");
+                      }
+                    }}
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                  >
+                    <option value="">— Выберите докладчика —</option>
+                    {electedBody.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {getElectedMemberName(m)}
+                        {m.jobTitle || m.roleName ? ` (${m.jobTitle || m.roleName})` : ""}
+                      </option>
+                    ))}
+                  </select>
                   {(protocolData[item.id]?.speakerName || item.speakerName) && (
                     <p className="mt-1 text-xs text-green-600 dark:text-green-400">
                       Докладчик: {protocolData[item.id]?.speakerName || item.speakerName}
+                      {(protocolData[item.id]?.speakerPosition ?? item.speakerPosition) && `, ${protocolData[item.id]?.speakerPosition ?? item.speakerPosition}`}
                     </p>
                   )}
-                  <div className="mt-2">
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Должность докладчика (в PDF)</label>
-                    <input
-                      type="text"
-                      value={protocolData[item.id]?.speakerPosition ?? item.speakerPosition ?? ""}
-                      onChange={(e) => updateProtocolItem(item.id, "speakerPosition", e.target.value)}
-                      className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
-                      placeholder="Например: председатель профкома"
-                    />
-                  </div>
                 </div>
 
                 {/* ПОСТАНОВИЛИ */}

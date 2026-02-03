@@ -58,10 +58,20 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
 
-    // Строим условия фильтрации
-    const where: Prisma.DocumentWhereInput = {
-      organizationId,
-    };
+    // ID документов повесток и протоколов заседаний организации (на случай если у документа нет organizationId)
+    const meetingDocs = await prisma.meeting.findMany({
+      where: { organizationId },
+      select: { agendaDocumentId: true, protocolDocumentId: true },
+    });
+    const meetingDocumentIds = meetingDocs.flatMap((m) =>
+      [m.agendaDocumentId, m.protocolDocumentId].filter((id): id is string => id != null)
+    );
+
+    // Строим условия фильтрации: по organizationId ИЛИ по привязке к заседанию организации
+    const where: Prisma.DocumentWhereInput =
+      meetingDocumentIds.length > 0
+        ? { OR: [{ organizationId }, { id: { in: meetingDocumentIds } }] }
+        : { organizationId };
 
     if (category) {
       where.category = category;

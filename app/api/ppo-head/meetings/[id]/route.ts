@@ -37,10 +37,24 @@ export async function GET(
           select: { id: true, firstName: true, lastName: true, middleName: true },
         },
         agendaDocument: {
-          select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true },
+          include: {
+            approvals: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    middleName: true,
+                  },
+                },
+              },
+              orderBy: { order: "asc" },
+            },
+          },
         },
         protocolDocument: {
-          select: { id: true, regNumber: true, status: true, filePath: true, title: true, createdAt: true },
+          select: { id: true, regNumber: true, status: true, filePath: true, signedFilePath: true, title: true, createdAt: true },
         },
         resolutions: {
           select: { id: true, regNumber: true, status: true, filePath: true, title: true },
@@ -81,6 +95,7 @@ export async function GET(
           },
           orderBy: { orderNumber: "asc" },
         },
+        groupChat: { select: { id: true } },
       },
     });
 

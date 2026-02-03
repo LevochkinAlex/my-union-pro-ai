@@ -51,13 +51,19 @@ function LoginForm() {
   const [hasTelegram, setHasTelegram] = useState(false);
   const [devMagicLink, setDevMagicLink] = useState<string | null>(null);
 
-  // Получаем callbackUrl из query параметров при монтировании
+  // Получаем callbackUrl и error из query параметров при монтировании
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const callback = params.get("callbackUrl");
       if (callback) {
         setCallbackUrl(decodeURIComponent(callback));
+      }
+      const err = params.get("error");
+      if (err === "link_used_or_expired") {
+        setError("Ссылка для входа уже использована или истекла. Запросите новую ссылку по email.");
+      } else if (err === "invalid_token" || err === "token_expired" || err === "token_used") {
+        setError("Ссылка недействительна или уже использована. Запросите новую ссылку для входа.");
       }
     }
   }, []);

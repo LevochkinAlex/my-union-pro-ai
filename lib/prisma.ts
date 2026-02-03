@@ -1,17 +1,35 @@
 import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
+  __prisma: PrismaClient | undefined;
+  __prismaInitError: Error | undefined;
 };
 
-function createPrismaClient() {
+function createPrismaClient(): PrismaClient {
   if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL environment variable is not set');
+    const msg =
+      'DATABASE_URL не задан. Добавьте в .env.local и выполните: pnpm prisma generate';
+    console.error('[prisma]', msg);
+    throw new Error(msg);
   }
-  
+  // В dev: предупреждение, если БД не на localhost (часто недоступна с машины разработчика)
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      const url = new URL(process.env.DATABASE_URL.replace(/^postgres:/, 'postgresql:'));
+      const host = url.hostname || '';
+      if (host && host !== 'localhost' && host !== '127.0.0.1') {
+        console.warn(
+          '[prisma] В dev DATABASE_URL указывает на удалённый хост:',
+          host,
+          '\n  Если видите "Can\'t reach database server" — в .env.local укажите локальную БД (localhost) или поднимите SSH-туннель:\n  ssh -L 5432:localhost:5432 root@' + host
+        );
+      }
+    } catch {
+      // ignore URL parse errors
+    }
+  }
   return new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
-    // Увеличиваем таймауты для предотвращения 503 ошибок
     datasources: {
       db: {
         url: process.env.DATABASE_URL,
@@ -20,24 +38,43 @@ function createPrismaClient() {
   });
 }
 
-// Создаем инстанс только на сервере
-let prismaInstance: PrismaClient;
-
-if (process.env.NODE_ENV === 'production') {
-  prismaInstance = createPrismaClient();
-} else {
-  if (!globalForPrisma.prisma) {
-    globalForPrisma.prisma = createPrismaClient();
+/** Единый экземпляр Prisma: ленивая инициализация при первом обращении. */
+function getPrismaClient(): PrismaClient {
+  if (globalForPrisma.__prisma) {
+    return globalForPrisma.__prisma;
   }
-  prismaInstance = globalForPrisma.prisma;
+  if (globalForPrisma.__prismaInitError) {
+    throw globalForPrisma.__prismaInitError;
+  }
+  try {
+    const client = createPrismaClient();
+    globalForPrisma.__prisma = client;
+    if (typeof process !== 'undefined') {
+      process.on('beforeExit', async () => {
+        await client.$disconnect();
+      });
+    }
+    return client;
+  } catch (err) {
+    const wrapped =
+      err instanceof Error
+        ? err
+        : new Error(err instanceof Error ? err.message : String(err));
+    globalForPrisma.__prismaInitError = wrapped;
+    console.error('[prisma] Ошибка инициализации:', wrapped.message);
+    throw wrapped;
+  }
 }
 
-// Graceful shutdown
-if (typeof process !== 'undefined') {
-  process.on('beforeExit', async () => {
-    await prismaInstance.$disconnect();
-  });
-}
+/**
+ * Экспорт Prisma: один экземпляр через globalThis (совместимо с Next.js + Turbopack).
+ * При ошибке инициализации (нет DATABASE_URL или БД недоступна) ошибка кэшируется и пробрасывается при первом обращении.
+ */
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop: string | symbol) {
+    return (getPrismaClient() as unknown as Record<string | symbol, unknown>)[prop];
+  },
+});
 
 /**
  * Обертка для Prisma запросов с обработкой ошибок подключения
@@ -52,40 +89,30 @@ export async function withPrismaRetry<T>(
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убрали Promise.race с таймаутом
-      // Prisma сам управляет таймаутами через connection pool
       return await operation();
     } catch (error: any) {
       lastError = error;
-      
-      // Проверяем, является ли это ошибкой подключения
-      const isConnectionError = 
-        error?.code === 'P1001' || // Can't reach database server
-        error?.code === 'P1002' || // Database server doesn't accept connections
-        error?.code === 'P1008' || // Operations timed out
-        error?.code === 'P1017' || // Server has closed the connection
+      const isConnectionError =
+        error?.code === 'P1001' ||
+        error?.code === 'P1002' ||
+        error?.code === 'P1008' ||
+        error?.code === 'P1017' ||
         error?.message?.includes('ECONNREFUSED') ||
         error?.message?.includes('ENOTFOUND') ||
         error?.message?.includes('Connection') ||
         error?.message?.includes('connect');
-      
       if (isConnectionError && attempt < maxRetries) {
-        const retryDelay = delay * Math.pow(2, attempt); // Exponential backoff
+        const retryDelay = delay * Math.pow(2, attempt);
         console.warn(`[prisma] Connection error (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${retryDelay}ms...`, {
           code: error?.code,
           message: error?.message?.substring(0, 100),
         });
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
         continue;
       }
-      
-      // Если это не ошибка подключения или закончились попытки, пробрасываем ошибку
       throw error;
     }
   }
-  
   throw lastError;
 }
-
-export const prisma = prismaInstance;
 

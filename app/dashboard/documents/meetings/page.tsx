@@ -34,6 +34,7 @@ interface Meeting {
     status: string;
     filePath: string | null;
   } | null;
+  groupChat: { id: string } | null;
   _count: {
     participants: number;
     agendaItems: number;
@@ -79,6 +80,7 @@ export default function MeetingsPage() {
   const initialTab: TabKey = TAB_FROM_URL.includes(tabParam as TabKey) ? (tabParam as TabKey) : "all";
 
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [isOrgHead, setIsOrgHead] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -123,6 +125,7 @@ export default function MeetingsPage() {
   const [uploadingAgendaIndex, setUploadingAgendaIndex] = useState<number | null>(null);
   const [participantsDropdownOpen, setParticipantsDropdownOpen] = useState(false);
   const [externalInviteDropdownOpen, setExternalInviteDropdownOpen] = useState(false);
+  const [externalInviteSearch, setExternalInviteSearch] = useState("");
   const [coSpeakerDropdownIndex, setCoSpeakerDropdownIndex] = useState<number | null>(null);
   const participantsDropdownRef = useRef<HTMLDivElement>(null);
   const externalInviteDropdownRef = useRef<HTMLDivElement>(null);
@@ -164,24 +167,14 @@ export default function MeetingsPage() {
   }, [showCreateForm, chairmanId, electedBodyMembers]);
 
   useEffect(() => {
-    const closeAllDropdowns = () => {
-      setParticipantsDropdownOpen(false);
-      setExternalInviteDropdownOpen(false);
-      setCoSpeakerDropdownIndex(null);
-    };
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
       if (participantsDropdownRef.current && !participantsDropdownRef.current.contains(target)) setParticipantsDropdownOpen(false);
       if (externalInviteDropdownRef.current && !externalInviteDropdownRef.current.contains(target)) setExternalInviteDropdownOpen(false);
       if (coSpeakerDropdownRef.current && !coSpeakerDropdownRef.current.contains(target)) setCoSpeakerDropdownIndex(null);
     };
-    const handleScroll = () => closeAllDropdowns();
     document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("scroll", handleScroll, true);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("scroll", handleScroll, true);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const loadElectedBodyMembers = async () => {
@@ -245,12 +238,21 @@ export default function MeetingsPage() {
     try {
       setIsLoading(true);
       const response = await fetch("/api/ppo-head/meetings");
+      const data = await response.json().catch(() => ({}));
       if (response.ok) {
-        const data = await response.json();
         setMeetings(data.meetings || []);
+        setIsOrgHead(data.isOrgHead !== false);
+      } else {
+        const msg = data.error || "Ошибка загрузки заседаний";
+        const details = data.details ? ` ${data.details}` : "";
+        console.error("[meetings] GET error:", msg, details, data.stack);
+        alertError(msg + (details ? `\n\nДетали: ${details}` : ""));
+        setMeetings([]);
       }
     } catch (error) {
       console.error("Ошибка загрузки заседаний:", error);
+      alertError("Не удалось загрузить список заседаний");
+      setMeetings([]);
     } finally {
       setIsLoading(false);
     }
@@ -441,16 +443,21 @@ export default function MeetingsPage() {
   };
 
   const addCoSpeaker = (itemIndex: number, entry: CoSpeakerEntry) => {
-    setFormData(prev => ({
-      ...prev,
-      agendaItems: prev.agendaItems.map((item, i) => {
-        if (i !== itemIndex) return item;
-        const list = (item as AgendaItemForm).coSpeakers ?? [];
-        const already = list.some(c => (c.userId && c.userId === entry.userId) || (entry.extIndex !== undefined && c.extIndex === entry.extIndex));
-        if (already) return item;
-        return { ...item, coSpeakers: [...list, entry] };
-      }),
-    }));
+    setFormData(prev => {
+      const item = prev.agendaItems[itemIndex] as AgendaItemForm;
+      const list = item?.coSpeakers ?? [];
+      const already = list.some(c => (c.userId && c.userId === entry.userId) || (entry.extIndex !== undefined && c.extIndex === entry.extIndex));
+      const isMainSpeaker = entry.userId && item?.speakerId === entry.userId;
+      if (already || isMainSpeaker) return prev;
+      return {
+        ...prev,
+        agendaItems: prev.agendaItems.map((it, i) => {
+          if (i !== itemIndex) return it;
+          const list = (it as AgendaItemForm).coSpeakers ?? [];
+          return { ...it, coSpeakers: [...list, entry] };
+        }),
+      };
+    });
     setCoSpeakerDropdownIndex(null);
   };
 
@@ -465,7 +472,7 @@ export default function MeetingsPage() {
     }));
   };
 
-  /** Докладчик — только члены выборного органа (председатель, замы, члены профкома) */
+  /** Докладчик — только члены выборного органа (председатель, замы, члены профкома). Нельзя выбрать того, кто уже со-докладчик; при выборе докладчика убираем его из со-докладчиков. */
   const setSpeakerFromSelect = (index: number, value: string) => {
     if (!value) {
       updateAgendaItem(index, "speakerId", "");
@@ -478,14 +485,18 @@ export default function MeetingsPage() {
     if (member) {
       setFormData(prev => ({
         ...prev,
-        agendaItems: prev.agendaItems.map((item, i) =>
-          i !== index ? item : {
-            ...item,
+        agendaItems: prev.agendaItems.map((item, i) => {
+          if (i !== index) return item;
+          const prevItem = item as AgendaItemForm;
+          const coSpeakers = (prevItem.coSpeakers ?? []).filter(c => c.userId !== id);
+          return {
+            ...prevItem,
             speakerId: id,
             speakerName: getMemberFullName(member),
             speakerPosition: member.jobTitle || member.roleName || "",
-          }
-        ),
+            coSpeakers,
+          };
+        }),
       }));
     }
   };
@@ -509,10 +520,10 @@ export default function MeetingsPage() {
             Заседания профкома
           </h1>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Управление заседаниями, повестками и протоколами
+            {isOrgHead ? "Управление заседаниями, повестками и протоколами" : "Заседания, в которых вы участвуете"}
           </p>
         </div>
-        {activeTab === "protocol" ? (
+        {isOrgHead && (activeTab === "protocol" ? (
           <button
             onClick={() => setShowProtocolFromAgendaModal(true)}
             className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
@@ -530,9 +541,9 @@ export default function MeetingsPage() {
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Новый документ
+            Создать заседание
           </button>
-        )}
+        ))}
       </div>
 
       {/* Табы */}
@@ -628,16 +639,15 @@ export default function MeetingsPage() {
           <ol className="list-decimal list-inside space-y-1.5 text-sm text-gray-600 dark:text-gray-400">
             <li><strong>Шаг 1:</strong> Создайте заседание с повесткой дня</li>
             <li><strong>Шаг 2:</strong> Сформируйте документ «Повестка дня» (статус: Черновик)</li>
-            <li><strong>Шаг 3:</strong> Отправьте повестку на согласование участникам</li>
-            <li><strong>Шаг 4:</strong> Утвердите повестку председателем (статус: Утверждено)</li>
-            <li><strong>Шаг 5:</strong> Проведите заседание (очно или онлайн)</li>
-            <li><strong>Шаг 6:</strong> Создайте «Протокол» с результатами голосования</li>
-            <li><strong>Шаг 7:</strong> Отправьте протокол на согласование</li>
-            <li><strong>Шаг 8:</strong> Утвердите протокол председателем</li>
-            <li><strong>Шаг 9:</strong> Сформируйте «Постановление» на основании протокола</li>
-            <li><strong>Шаг 10:</strong> При необходимости создайте «Выписку из протокола»</li>
+            <li><strong>Шаг 3:</strong> Разошлите повестку на согласование (участники получат документ во входящие, push и email; создаётся чат заседания)</li>
+            <li><strong>Шаг 4:</strong> Участники согласуют или отклоняют с примечаниями во вкладке «Входящие»</li>
+            <li><strong>Шаг 5:</strong> После согласования всеми утвердите повестку; при необходимости разошлите участникам</li>
+            <li><strong>Шаг 6:</strong> Проведите заседание (очно или онлайн)</li>
+            <li><strong>Шаг 7:</strong> Создайте «Протокол» с результатами голосования</li>
+            <li><strong>Шаг 8:</strong> Распечатайте протокол, подпишите у председательствующего и секретаря заседания Профкома, копию (скан) загрузите в систему</li>
+            <li><strong>Шаг 9:</strong> Сформируйте «Постановление» и при необходимости «Выписку из протокола»</li>
           </ol>
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">Документооборот: Черновик → На согласовании → Утверждено</p>
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">Повестка и протокол: Черновик → На согласовании (входящие, чат) → Утверждено</p>
         </div>
       </details>
 
@@ -933,11 +943,14 @@ export default function MeetingsPage() {
                 )}
               </div>
 
-              {/* Приглашённые / внешние — любой член профсоюза организации, кроме состава выборного органа */}
+              {/* Приглашённые / внешние — из списка членов профсоюза (с поиском) или ввод ФИО вручную */}
               <div ref={externalInviteDropdownRef} className="relative">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Приглашённые / внешние участники (члены профсоюза, не из состава выборного органа)
+                  Приглашённые / внешние участники
                 </label>
+                <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                  Выберите из списка членов профсоюза (кроме состава выборного органа) или введите ФИО вручную для участников вне системы.
+                </p>
                 <div className="space-y-2">
                   {formData.externalParticipants.map((p, index) => (
                     <div key={index} className="flex gap-2">
@@ -950,24 +963,87 @@ export default function MeetingsPage() {
                   ))}
                 </div>
                 <div className="relative mt-2">
-                  <button type="button" onClick={() => setExternalInviteDropdownOpen((v) => !v)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                  <button
+                    type="button"
+                    onClick={() => { setExternalInviteSearch(""); setExternalInviteDropdownOpen((v) => !v); }}
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  >
                     + Добавить внешнего участника
                   </button>
                   {externalInviteDropdownOpen && (
-                    <div className="absolute z-10 left-0 mt-1 max-h-56 w-72 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-800">
-                      {members
-                        .filter((m) => !electedBodyMembers.some((e) => e.id === m.id) && !formData.externalParticipants.some((p) => p.userId === m.id))
-                        .map((member) => (
-                          <button key={member.id} type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700" onClick={() => { setFormData((p) => ({ ...p, externalParticipants: [...p.externalParticipants, { name: getMemberFullName(member), position: member.jobTitle || "", userId: member.id }] })); setExternalInviteDropdownOpen(false); }}>
-                            <div className="min-w-0 flex-1">
-                              <div className="font-medium text-gray-900 dark:text-white truncate">{getMemberFullName(member)}</div>
-                              {member.jobTitle && <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{member.jobTitle}</div>}
-                            </div>
-                          </button>
-                        ))}
-                      {members.filter((m) => !electedBodyMembers.some((e) => e.id === m.id) && !formData.externalParticipants.some((p) => p.userId === m.id)).length === 0 && (
-                        <p className="px-3 py-2 text-xs text-gray-500">Нет членов профсоюза для приглашения (кроме состава выборного органа) или все уже добавлены</p>
-                      )}
+                    <div className="absolute z-10 left-0 mt-1 w-80 max-h-72 flex flex-col rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800">
+                      <div className="p-2 border-b border-gray-200 dark:border-gray-600 sticky top-0 bg-white dark:bg-gray-800">
+                        <input
+                          type="text"
+                          value={externalInviteSearch}
+                          onChange={(e) => setExternalInviteSearch(e.target.value)}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          placeholder="Поиск по ФИО или должности..."
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="overflow-y-auto flex-1 min-h-0 py-1 max-h-44">
+                        {(() => {
+                          const available = members.filter(
+                            (m) =>
+                              !electedBodyMembers.some((e) => e.id === m.id) &&
+                              !formData.externalParticipants.some((p) => p.userId === m.id)
+                          );
+                          const q = externalInviteSearch.trim().toLowerCase();
+                          const filtered = q
+                            ? available.filter(
+                                (m) =>
+                                  getMemberFullName(m).toLowerCase().includes(q) ||
+                                  (m.jobTitle || "").toLowerCase().includes(q)
+                              )
+                            : available;
+                          return (
+                            <>
+                              {filtered.map((member) => (
+                                <button
+                                  key={member.id}
+                                  type="button"
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
+                                  onClick={() => {
+                                    setFormData((p) => ({
+                                      ...p,
+                                      externalParticipants: [...p.externalParticipants, { name: getMemberFullName(member), position: member.jobTitle || "", userId: member.id }],
+                                    }));
+                                    setExternalInviteDropdownOpen(false);
+                                    setExternalInviteSearch("");
+                                  }}
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-medium text-gray-900 dark:text-white truncate">{getMemberFullName(member)}</div>
+                                    {member.jobTitle && <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{member.jobTitle}</div>}
+                                  </div>
+                                </button>
+                              ))}
+                              {filtered.length === 0 && (
+                                <p className="px-3 py-2 text-xs text-gray-500">
+                                  {available.length === 0
+                                    ? "Нет членов профсоюза для приглашения или все уже добавлены"
+                                    : "Никого не найдено по запросу"}
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                      <div className="p-2 border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 rounded-b-lg">
+                        <button
+                          type="button"
+                          className="w-full rounded-md border border-dashed border-gray-400 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          onClick={() => {
+                            addExternalParticipant();
+                            setExternalInviteDropdownOpen(false);
+                            setExternalInviteSearch("");
+                          }}
+                        >
+                          Ввести ФИО вручную (участник вне системы)
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1016,11 +1092,15 @@ export default function MeetingsPage() {
                           <option value="">Выберите докладчика...</option>
                           {electedBodyMembers.length > 0 && (
                             <optgroup label="Члены выборного органа (председатель, замы, члены профкома)">
-                              {electedBodyMembers.map(m => (
-                                <option key={m.id} value={`user:${m.id}`}>
-                                  {getMemberFullName(m)}{m.jobTitle || m.roleName ? ` (${m.jobTitle || m.roleName})` : ""}
-                                </option>
-                              ))}
+                              {electedBodyMembers.map(m => {
+                                const coSpeakers = (item as AgendaItemForm).coSpeakers ?? [];
+                                const isCoSpeaker = coSpeakers.some(c => c.userId === m.id);
+                                return (
+                                  <option key={m.id} value={`user:${m.id}`} disabled={isCoSpeaker}>
+                                    {getMemberFullName(m)}{m.jobTitle || m.roleName ? ` (${m.jobTitle || m.roleName})` : ""}{isCoSpeaker ? " — уже со-докладчик" : ""}
+                                  </option>
+                                );
+                              })}
                             </optgroup>
                           )}
                         </select>
@@ -1058,15 +1138,17 @@ export default function MeetingsPage() {
                                 {electedBodyMembers.map(m => {
                                   const coSpeakers = (item as AgendaItemForm).coSpeakers ?? [];
                                   const added = coSpeakers.some(c => c.userId === m.id);
+                                  const isMainSpeaker = m.id === item.speakerId;
+                                  const disabled = added || isMainSpeaker;
                                   return (
                                     <button
                                       key={m.id}
                                       type="button"
-                                      disabled={added}
+                                      disabled={disabled}
                                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
                                       onClick={() => addCoSpeaker(index, { userId: m.id, name: getMemberFullName(m), position: m.jobTitle || m.roleName })}
                                     >
-                                      {getMemberFullName(m)}{m.jobTitle || m.roleName ? ` (${m.jobTitle || m.roleName})` : ""}
+                                      {getMemberFullName(m)}{m.jobTitle || m.roleName ? ` (${m.jobTitle || m.roleName})` : ""}{isMainSpeaker ? " — докладчик" : ""}
                                     </button>
                                   );
                                 })}
@@ -1248,25 +1330,35 @@ export default function MeetingsPage() {
           meetings;
 
         if (filteredMeetings.length === 0 && !showCreateForm) {
+          const isAllTab = activeTab === "all";
+          const participantEmpty = isAllTab && !isOrgHead;
           return (
             <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
               <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Нет документов</h3>
+              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+                {participantEmpty ? "Заседания, в которых вы участвуете" : (activeTab === "all" ? "Нет заседаний" : "Нет документов")}
+              </h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {activeTab === "all" ? "Начните с создания нового документа" :
-                 activeTab === "agenda" ? "Нет документов с повестками заседания" :
-                 activeTab === "protocol" ? "Нет документов с протоколами" :
-                 activeTab === "resolutions" ? "Нет документов с постановлениями" :
-                 "Нет документов с выписками"}
+                {participantEmpty
+                  ? "Вас пока не пригласили ни на одно заседание. Документы на согласование приходят во вкладку «Входящие» в разделе Документы."
+                  : activeTab === "all"
+                    ? "Создайте заседание — затем сформируйте повестку и протокол"
+                    : activeTab === "agenda"
+                      ? "Нет документов с повестками заседания"
+                      : activeTab === "protocol"
+                        ? "Нет документов с протоколами"
+                        : activeTab === "resolutions"
+                          ? "Нет документов с постановлениями"
+                          : "Нет документов с выписками"}
               </p>
-              {activeTab === "all" && (
+              {isAllTab && isOrgHead && (
                 <button
                   onClick={() => setShowCreateForm(true)}
                   className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
                 >
-                  Новый документ
+                  Создать заседание
                 </button>
               )}
             </div>
@@ -1307,9 +1399,6 @@ export default function MeetingsPage() {
                       <h3 className="text-base font-semibold text-gray-900 transition-colors group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">
                         {MEETING_TYPE_LABELS[meeting.type] || meeting.type} №{meeting.number}
                       </h3>
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${MEETING_STATUS_COLORS[meeting.status]}`}>
-                        {MEETING_STATUS_LABELS[meeting.status]}
-                      </span>
                       <span className="text-sm text-gray-500 dark:text-gray-400">
                         {new Date(meeting.scheduledDate).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" })}
                         {meeting.scheduledTime && ` · ${meeting.scheduledTime}`}
@@ -1354,6 +1443,18 @@ export default function MeetingsPage() {
                     const primaryTitle = primaryLabel;
                     return (
                       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                        {meeting.groupChat && (
+                          <Link
+                            href={`/dashboard/chat?chatId=${meeting.groupChat.id}`}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 p-2 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700/50 sm:px-3 sm:py-1.5 sm:pr-2"
+                            title="Чат заседания"
+                          >
+                            <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                            <span className="hidden sm:inline">Чат</span>
+                          </Link>
+                        )}
                         {pdfUrl ? (
                           <a
                             href={pdfUrl}
@@ -1379,41 +1480,43 @@ export default function MeetingsPage() {
                             <span className="hidden sm:inline">{primaryLabel}</span>
                           </Link>
                         )}
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const ok = await confirm(
-                              "Удалить это заседание? Действие нельзя отменить.",
-                              "Удаление заседания"
-                            );
-                            if (!ok) return;
-                            setDeletingMeetingId(meeting.id);
-                            try {
-                              const res = await fetch(`/api/ppo-head/meetings/${meeting.id}`, { method: "DELETE" });
-                              if (!res.ok) {
-                                const err = await res.json().catch(() => ({}));
-                                throw new Error(err.error || "Ошибка удаления");
+                        {isOrgHead && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const ok = await confirm(
+                                "Удалить это заседание? Действие нельзя отменить.",
+                                "Удаление заседания"
+                              );
+                              if (!ok) return;
+                              setDeletingMeetingId(meeting.id);
+                              try {
+                                const res = await fetch(`/api/ppo-head/meetings/${meeting.id}`, { method: "DELETE" });
+                                if (!res.ok) {
+                                  const err = await res.json().catch(() => ({}));
+                                  throw new Error(err.error || "Ошибка удаления");
+                                }
+                                alertSuccess("Заседание удалено");
+                                setMeetings((prev) => prev.filter((m) => m.id !== meeting.id));
+                              } catch (e) {
+                                alertError(e instanceof Error ? e.message : "Не удалось удалить заседание");
+                              } finally {
+                                setDeletingMeetingId(null);
                               }
-                              alertSuccess("Заседание удалено");
-                              setMeetings((prev) => prev.filter((m) => m.id !== meeting.id));
-                            } catch (e) {
-                              alertError(e instanceof Error ? e.message : "Не удалось удалить заседание");
-                            } finally {
-                              setDeletingMeetingId(null);
-                            }
-                          }}
-                          disabled={deletingMeetingId === meeting.id}
-                          className="inline-flex items-center justify-center rounded-lg border border-gray-300 p-2 text-gray-500 hover:bg-gray-100 hover:text-red-600 disabled:opacity-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-red-400 sm:p-1.5"
-                          title="Удалить заседание"
-                        >
-                          {deletingMeetingId === meeting.id ? (
-                            <span className="text-xs">…</span>
-                          ) : (
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          )}
-                        </button>
+                            }}
+                            disabled={deletingMeetingId === meeting.id}
+                            className="inline-flex items-center justify-center rounded-lg border border-gray-300 p-2 text-gray-500 hover:bg-gray-100 hover:text-red-600 disabled:opacity-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-red-400 sm:p-1.5"
+                            title="Удалить заседание"
+                          >
+                            {deletingMeetingId === meeting.id ? (
+                              <span className="text-xs">…</span>
+                            ) : (
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
                       </div>
                     );
                   })()}

@@ -916,7 +916,7 @@ export const authOptions: NextAuthOptions = {
         } else {
           // Получаем актуальные данные из БД при каждом запросе сессии
           const userId = typeof token.id === "string" && token.id.trim() ? token.id.trim() : null;
-          if (userId) {
+          if (userId && process.env.DATABASE_URL) {
             try {
               const userData = await prisma.user.findUnique({
                 where: { id: userId },

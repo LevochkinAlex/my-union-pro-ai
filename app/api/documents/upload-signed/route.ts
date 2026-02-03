@@ -95,11 +95,18 @@ export async function POST(request: NextRequest) {
       fileType: file.type,
     });
 
-    // Проверяем что документ принадлежит пользователю
-    const document = await prisma.document.findFirst({
-      where: {
-        id: documentId,
-        userId: session.user.id,
+    // Документ: владелец (userId) или протокол заседания, где текущий пользователь — председатель
+    const document = await prisma.document.findUnique({
+      where: { id: documentId },
+      include: {
+        meetingAsProtocol: {
+          include: {
+            participants: {
+              where: { role: "CHAIRMAN", userId: session.user.id },
+              select: { id: true },
+            },
+          },
+        },
       },
     });
 
@@ -107,6 +114,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Документ не найден" },
         { status: 404 }
+      );
+    }
+
+    const isOwner = document.userId === session.user.id;
+    const isChairmanOfProtocol =
+      document.meetingAsProtocol &&
+      document.meetingAsProtocol.participants.some((p) => p.id);
+
+    if (!isOwner && !isChairmanOfProtocol) {
+      return NextResponse.json(
+        { error: "Нет прав на загрузку подписанного документа" },
+        { status: 403 }
       );
     }
 

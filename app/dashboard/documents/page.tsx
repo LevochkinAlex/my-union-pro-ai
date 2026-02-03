@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { alertError, alertSuccess, alertWarning, confirm } from "@/lib/alert";
 import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
-import PPOHeadDocumentsPage from "./ppo-head/page";
 
 interface Document {
   id: string;
@@ -33,29 +33,54 @@ interface Document {
     lastName: string | null;
     middleName: string | null;
   } | null;
+  /** Для входящих документов заседания (согласование повестки/протокола) */
+  approvalStatus?: { status: string; comment: string | null; approvedAt: string | null };
+  meetingId?: string;
+  originalDocumentId?: string;
 }
 
 export default function DocumentsPage() {
   const { data: session } = useSession();
   const router = useRouter();
-  
-  // Все hooks должны быть объявлены ДО любых условных return
-  const [activeTab, setActiveTab] = useState<"incoming" | "outgoing">("incoming");
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab") === "outgoing" ? "outgoing" : "incoming";
+
+  const [activeTab, setActiveTab] = useState<"incoming" | "outgoing">(tabParam);
   const [incomingDocuments, setIncomingDocuments] = useState<Document[]>([]);
   const [outgoingDocuments, setOutgoingDocuments] = useState<Document[]>([]);
+  const [isElectedBody, setIsElectedBody] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profileChanged, setProfileChanged] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regeneratingDocId, setRegeneratingDocId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
-  
-  // У члена профсоюза — только «Мои документы», без функций председателя (создание, журнал, заседания)
+  const [approvalComment, setApprovalComment] = useState<Record<string, string>>({});
+  const [approvalSubmitting, setApprovalSubmitting] = useState<string | null>(null);
+  /** Фильтр входящих: Все документы | Повестки | Протоколы | Постановления | Выписки | Другие (устав и т.д.) */
+  const [incomingFilter, setIncomingFilter] = useState<"all" | "agenda" | "protocol" | "resolutions" | "extracts" | "other">("all");
+
   const isDemoMember = session?.user?.id === DEMO_MEMBER_USER_ID;
-  const isPPOHead =
-    !isDemoMember &&
-    (session?.user?.viewMode === "PPO_HEAD" ||
-      (session?.user?.role === "PPO_HEAD" && !(session?.user as { isPPOHead?: boolean })?.isPPOHead));
+
+  const INCOMING_FILTERS: { value: typeof incomingFilter; label: string }[] = [
+    { value: "all", label: "Все документы" },
+    { value: "agenda", label: "Повестки" },
+    { value: "protocol", label: "Протоколы" },
+    { value: "resolutions", label: "Постановления" },
+    { value: "extracts", label: "Выписки" },
+    { value: "other", label: "Другие" },
+  ];
+
+  function getDocFilterType(doc: Document): typeof incomingFilter {
+    if (doc.id === "charter-system") return "other";
+    const t = (doc.type || "").toUpperCase();
+    if (t === "AGENDA") return "agenda";
+    if (t === "PROTOCOL") return "protocol";
+    if (t === "RESOLUTION") return "resolutions";
+    if (t === "PROTOCOL_EXTRACT") return "extracts";
+    if (t === "OTHER" || (doc.title?.toLowerCase().includes("устав") || (doc.description && doc.description.toLowerCase().includes("устав")))) return "other";
+    return "other";
+  }
 
   // Функции загрузки данных вынесены из useEffect для повторного использования
   const loadProfileStatus = async () => {
@@ -76,11 +101,11 @@ export default function DocumentsPage() {
       setError(null);
 
       const response = await fetch("/api/documents");
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error("Ошибка загрузки документов");
+        const message = (data && typeof data.error === "string" ? data.error : null) || "Ошибка загрузки документов";
+        throw new Error(message);
       }
-
-      const data = await response.json();
       
       // Входящие документы: устав + назначенные для ознакомления
       const incoming = (data.incomingDocuments || []).map((doc: any) => ({
@@ -93,15 +118,14 @@ export default function DocumentsPage() {
       }));
       
       setIncomingDocuments(incoming);
-      
-      // Исходящие документы: заявления пользователя (MEMBERSHIP_APPLICATION, CONTRIBUTION_APPLICATION)
+      setIsElectedBody(data.isElectedBody === true);
+
+      // Исходящие: у членов выборного органа — цикл заседаний (на странице Исходящие); у участников — только заявления
       const outgoing = (data.outgoingDocuments || []).filter((doc: Document) => {
-        // Показываем только заявления
         return doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION";
       });
-      
       setOutgoingDocuments(outgoing);
-      
+
       return { incoming, outgoing };
     } catch (err) {
       console.error("Ошибка загрузки документов:", err);
@@ -112,20 +136,23 @@ export default function DocumentsPage() {
     }
   };
 
-  // useEffect должен быть ДО условного return (правила хуков React)
   useEffect(() => {
-    // Не загружаем данные для PPO_HEAD - у них своя страница
-    if (!isPPOHead) {
-      loadDocuments();
-      loadProfileStatus();
-    }
+    loadDocuments();
+    loadProfileStatus();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPPOHead]);
-  
-  // Если пользователь - Председатель, показываем специальную страницу
-  if (isPPOHead) {
-    return <PPOHeadDocumentsPage />;
-  }
+  }, []);
+
+  // Синхронизация вкладки с URL
+  useEffect(() => {
+    setActiveTab(tabParam);
+  }, [tabParam]);
+
+  // Члены выборного органа: Исходящие = заседания (редирект на страницу заседаний)
+  useEffect(() => {
+    if (!isLoading && isElectedBody && activeTab === "outgoing") {
+      router.replace("/dashboard/documents/meetings");
+    }
+  }, [isLoading, isElectedBody, activeTab, router]);
 
   const handleRegenerateDocuments = async () => {
     const confirmed = await confirm("Вы уверены, что хотите переформировать документы? Старые документы будут заменены.", "Подтвердите переформирование");
@@ -465,16 +492,39 @@ export default function DocumentsPage() {
     );
   }
 
-  const currentDocuments = activeTab === "incoming" ? incomingDocuments : outgoingDocuments;
+  // Члены выборного органа: Исходящие = страница заседаний (редирект)
+  if (isElectedBody && activeTab === "outgoing") {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+          <p className="text-gray-600 dark:text-gray-400">Переход к заседаниям...</p>
+          <Link href="/dashboard/documents/meetings" className="mt-4 inline-block text-blue-600 dark:text-blue-400 hover:underline">
+            Открыть заседания
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const filteredIncoming =
+    activeTab === "incoming" && incomingFilter !== "all"
+      ? incomingDocuments.filter((doc) => getDocFilterType(doc) === incomingFilter)
+      : activeTab === "incoming"
+        ? incomingDocuments
+        : [];
+  const currentDocuments = activeTab === "incoming" ? filteredIncoming : outgoingDocuments;
 
   return (
     <div className="w-full max-w-full space-y-6 md:space-y-8 pb-8 md:pb-12">
       <div className="mb-6 md:mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white md:text-3xl">Мои документы</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white md:text-3xl">Документы</h1>
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 md:text-base">
-          {activeTab === "incoming" 
-            ? "Документы для ознакомления: устав и документы, назначенные вам"
-            : "Ваши заявления: заявления о вступлении и о перечислении взносов"}
+          {activeTab === "incoming"
+            ? (isElectedBody
+                ? "Входящие: устав, повестки и протоколы на согласование, прочие документы"
+                : "Входящие: устав и документы, назначенные вам")
+            : "Исходящие: ваши заявления (вступление, перечисление взносов)"}
         </p>
       </div>
 
@@ -482,7 +532,10 @@ export default function DocumentsPage() {
       <div className="border-b border-gray-200 dark:border-gray-700">
         <nav className="-mb-px flex space-x-8">
           <button
-            onClick={() => setActiveTab("incoming")}
+            onClick={() => {
+              setActiveTab("incoming");
+              router.replace("/dashboard/documents?tab=incoming");
+            }}
             className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
               activeTab === "incoming"
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
@@ -496,23 +549,70 @@ export default function DocumentsPage() {
               </span>
             )}
           </button>
-          <button
-            onClick={() => setActiveTab("outgoing")}
-            className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
-              activeTab === "outgoing"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            Исходящие
-            {outgoingDocuments.length > 0 && (
-              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                {outgoingDocuments.length}
-              </span>
-            )}
-          </button>
+          {isElectedBody ? (
+            <Link
+              href="/dashboard/documents/meetings"
+              className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+                activeTab === "outgoing"
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+              }`}
+            >
+              Исходящие
+            </Link>
+          ) : (
+            <button
+              onClick={() => {
+                setActiveTab("outgoing");
+                router.replace("/dashboard/documents?tab=outgoing");
+              }}
+              className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${
+                activeTab === "outgoing"
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+              }`}
+            >
+              Исходящие
+              {outgoingDocuments.length > 0 && (
+                <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                  {outgoingDocuments.length}
+                </span>
+              )}
+            </button>
+          )}
         </nav>
       </div>
+
+      {/* Фильтры входящих: Все | Повестки | Протоколы | Постановления | Выписки | Другие */}
+      {activeTab === "incoming" && (
+        <div className="flex flex-wrap items-center gap-2">
+          {INCOMING_FILTERS.map(({ value, label }) => {
+            const count =
+              value === "all"
+                ? incomingDocuments.length
+                : incomingDocuments.filter((d) => getDocFilterType(d) === value).length;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setIncomingFilter(value)}
+                className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                  incomingFilter === value
+                    ? "border-blue-500 bg-blue-500 text-white dark:border-blue-400 dark:bg-blue-600 dark:text-white"
+                    : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                }`}
+              >
+                {label}
+                {count > 0 && (
+                  <span className="ml-1.5 rounded-full bg-white/20 px-1.5 py-0.5 text-xs">
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {error && (
         <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200">
@@ -590,13 +690,28 @@ export default function DocumentsPage() {
             />
           </svg>
           <h3 className="mt-4 text-base font-medium text-gray-900 dark:text-white md:text-lg">
-            {activeTab === "incoming" ? "Нет входящих документов" : "Документов пока нет"}
+            {activeTab === "incoming"
+              ? incomingFilter !== "all"
+                ? "Нет документов в этой категории"
+                : "Нет входящих документов"
+              : "Документов пока нет"}
           </h3>
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 md:text-sm">
-            {activeTab === "incoming" 
-              ? "Здесь будут отображаться документы, назначенные вам для ознакомления"
+            {activeTab === "incoming"
+              ? incomingFilter !== "all"
+                ? "Попробуйте другую категорию или «Все документы»"
+                : "Здесь будут отображаться документы, назначенные вам для ознакомления"
               : "Заполните профиль через AI чат, чтобы система сформировала ваши заявления"}
           </p>
+          {activeTab === "incoming" && incomingFilter !== "all" && (
+            <button
+              type="button"
+              onClick={() => setIncomingFilter("all")}
+              className="mt-4 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              Показать все документы
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid gap-4 w-full max-w-full">
@@ -624,6 +739,11 @@ export default function DocumentsPage() {
                     {isOutgoing && hasUploadedSigned && (
                       <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300 ring-1 ring-green-300 dark:ring-green-700">
                         Заявление загружено
+                      </span>
+                    )}
+                    {activeTab === "incoming" && doc.meetingId && doc.originalDocumentId && (!doc.approvalStatus || doc.approvalStatus.status === "PENDING") && (
+                      <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 ring-1 ring-amber-300 dark:ring-amber-700">
+                        Требуется согласование
                       </span>
                     )}
                     {getStatusBadge(doc.status)}
@@ -708,6 +828,88 @@ export default function DocumentsPage() {
                         <span>Печать</span>
                       </a>
                     </>
+                  )}
+                  {/* Согласование входящего документа заседания (повестка/протокол): показываем для всех копий с meetingId + originalDocumentId */}
+                  {activeTab === "incoming" && doc.meetingId && doc.originalDocumentId && (
+                    <div className="w-full rounded-lg border border-amber-200 bg-amber-50/80 p-3 dark:border-amber-800/50 dark:bg-amber-900/20">
+                      {!doc.approvalStatus || doc.approvalStatus.status === "PENDING" ? (
+                        <>
+                          <p className="mb-2 text-xs font-medium text-gray-700 dark:text-gray-300">
+                            Требуется ваше согласование (можно добавить примечания):
+                          </p>
+                          <textarea
+                            placeholder="Примечания (необязательно)"
+                            value={approvalComment[doc.id] ?? ""}
+                            onChange={(e) => setApprovalComment((prev) => ({ ...prev, [doc.id]: e.target.value }))}
+                            className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            rows={2}
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setApprovalSubmitting(doc.id);
+                                try {
+                                  const res = await fetch(`/api/ppo-head/meetings/${doc.meetingId}/documents/${doc.originalDocumentId}/approve`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ action: "approve", comment: approvalComment[doc.id] || undefined }),
+                                  });
+                                  const data = await res.json().catch(() => ({}));
+                                  if (!res.ok) throw new Error(data.error || "Ошибка");
+                                  alertSuccess(data.message || "Документ согласован");
+                                  setApprovalComment((prev) => ({ ...prev, [doc.id]: "" }));
+                                  loadDocuments();
+                                } catch (e) {
+                                  alertError(e instanceof Error ? e.message : "Не удалось согласовать");
+                                } finally {
+                                  setApprovalSubmitting(null);
+                                }
+                              }}
+                              disabled={approvalSubmitting === doc.id}
+                              className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                            >
+                              {approvalSubmitting === doc.id ? "Отправка…" : "Согласовать"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setApprovalSubmitting(doc.id);
+                                try {
+                                  const res = await fetch(`/api/ppo-head/meetings/${doc.meetingId}/documents/${doc.originalDocumentId}/approve`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ action: "reject", comment: approvalComment[doc.id] || undefined }),
+                                  });
+                                  const data = await res.json().catch(() => ({}));
+                                  if (!res.ok) throw new Error(data.error || "Ошибка");
+                                  alertSuccess(data.message || "Документ отклонён");
+                                  setApprovalComment((prev) => ({ ...prev, [doc.id]: "" }));
+                                  loadDocuments();
+                                } catch (e) {
+                                  alertError(e instanceof Error ? e.message : "Не удалось отклонить");
+                                } finally {
+                                  setApprovalSubmitting(null);
+                                }
+                              }}
+                              disabled={approvalSubmitting === doc.id}
+                              className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300"
+                            >
+                              {approvalSubmitting === doc.id ? "Отправка…" : "Отклонить"}
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {doc.approvalStatus.status === "APPROVED" ? (
+                            <span className="text-green-600 dark:text-green-400">Согласовано</span>
+                          ) : (
+                            <span className="text-red-600 dark:text-red-400">Отклонено</span>
+                          )}
+                          {doc.approvalStatus.comment && ` — ${doc.approvalStatus.comment}`}
+                        </p>
+                      )}
+                    </div>
                   )}
                   {/* Кнопка перегенерации для заявлений */}
                   {(doc.type === "MEMBERSHIP_APPLICATION" || doc.type === "CONTRIBUTION_APPLICATION") && (

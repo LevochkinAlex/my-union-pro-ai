@@ -185,7 +185,7 @@ export default function MembersPage() {
 
   // Проверяем режим просмотра - страница только для председателей
   const isPPOHead = session?.user?.viewMode === "PPO_HEAD" || 
-    (session?.user?.role === "PPO_HEAD" && !(session?.user as any)?.isPPOHead);
+    (session?.user?.role === "PPO_HEAD" && (session?.user as { isPPOHead?: boolean })?.isPPOHead === true);
 
   // Редирект для обычных членов
   useEffect(() => {
@@ -710,6 +710,7 @@ export default function MembersPage() {
                   <th className="w-12 px-4 py-3">
                     <input
                       type="checkbox"
+                      aria-label="Выбрать всех членов"
                       checked={selectedIds.size === members.length && members.length > 0}
                       onChange={handleSelectAll}
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -767,6 +768,7 @@ export default function MembersPage() {
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"
+                        aria-label={`Выбрать ${[member.lastName, member.firstName].filter(Boolean).join(" ") || "участника"}`}
                         checked={selectedIds.has(member.id)}
                         onChange={() => handleSelectOne(member.id)}
                         className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -952,6 +954,8 @@ export default function MembersPage() {
                     </button>
                   )}
                   <button
+                    type="button"
+                    aria-label="Закрыть"
                     onClick={() => {
                       setShowDetailModal(false);
                       setMemberDetails(null);
@@ -960,7 +964,7 @@ export default function MembersPage() {
                     }}
                     className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
                   >
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>

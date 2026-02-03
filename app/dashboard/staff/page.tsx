@@ -37,9 +37,11 @@ interface StaffRole {
 
 // Названия прав на русском
 const PERMISSION_LABELS: Record<string, string> = {
-  documents_view: "Просмотр документов",
-  documents_create: "Создание документов",
-  documents_edit: "Редактирование документов",
+  documents_view: "Просмотр документов (Входящие / Исходящие)",
+  documents_create: "Создание заседаний, повесток, протоколов",
+  documents_edit: "Редактирование черновиков документов",
+  documents_approve: "Согласование повесток и протоколов",
+  documents_sign: "Подписание протоколов",
   discounts_view: "Просмотр скидок",
   discounts_manage: "Управление скидками",
   members_view: "Просмотр членов",
@@ -668,10 +670,11 @@ export default function StaffManagementPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label htmlFor="add-staff-role" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Роль (должность)
                     </label>
                     <select
+                      id="add-staff-role"
                       value={addStaffForm.roleId}
                       onChange={(e) =>
                         setAddStaffForm({ ...addStaffForm, roleId: e.target.value })
@@ -776,10 +779,11 @@ function EditStaffModal({
           )}
         </p>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label htmlFor="edit-member-role" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Роль (должность)
           </label>
           <select
+            id="edit-member-role"
             value={roleId}
             onChange={(e) => setRoleId(e.target.value)}
             className="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -841,7 +845,7 @@ function EditRoleModal({
   const permissionGroups = [
     {
       name: "Документы",
-      keys: ["documents_view", "documents_create", "documents_edit"],
+      keys: ["documents_view", "documents_create", "documents_edit", "documents_approve", "documents_sign"],
     },
     { name: "Скидки", keys: ["discounts_view", "discounts_manage"] },
     {

@@ -174,13 +174,52 @@ export async function mergeUsers(
   }
 
   const [target, source] = await Promise.all([
-    prisma.user.findUnique({ where: { id: targetId } }),
-    prisma.user.findUnique({ where: { id: sourceId } }),
+    prisma.user.findUnique({
+      where: { id: targetId },
+      select: {
+        firstName: true, lastName: true, middleName: true, email: true, phone: true, authPhone: true,
+        address: true, dateOfBirth: true, avatarUrl: true, workplace: true, workplaceInn: true,
+        directorName: true, directorPosition: true, jobTitle: true, organizationId: true,
+      },
+    }),
+    prisma.user.findUnique({
+      where: { id: sourceId },
+      select: {
+        firstName: true, lastName: true, middleName: true, email: true, phone: true, authPhone: true,
+        address: true, dateOfBirth: true, avatarUrl: true, workplace: true, workplaceInn: true,
+        directorName: true, directorPosition: true, jobTitle: true, organizationId: true,
+      },
+    }),
   ]);
   if (!target) return { ok: false, error: "Аккаунт-приёмник не найден" };
   if (!source) return { ok: false, error: "Аккаунт-источник не найден" };
 
   await prisma.$transaction(async (tx) => {
+    // Дополнить профиль основного аккаунта полями из дубликата (только те, которых нет у target)
+    const profilePatch: Record<string, unknown> = {};
+    const setIfMissing = (t: string | null | undefined, s: string | null | undefined) => {
+      if (s != null && s !== "" && (t == null || t === "")) return s;
+      return undefined;
+    };
+    if (setIfMissing(target.firstName, source.firstName) !== undefined) profilePatch.firstName = source.firstName;
+    if (setIfMissing(target.lastName, source.lastName) !== undefined) profilePatch.lastName = source.lastName;
+    if (setIfMissing(target.middleName, source.middleName) !== undefined) profilePatch.middleName = source.middleName;
+    if (setIfMissing(target.email, source.email) !== undefined) profilePatch.email = source.email;
+    if (setIfMissing(target.phone, source.phone ?? source.authPhone) !== undefined)
+      profilePatch.phone = source.phone ?? source.authPhone;
+    if (setIfMissing(target.address, source.address) !== undefined) profilePatch.address = source.address;
+    if (source.dateOfBirth != null && target.dateOfBirth == null) profilePatch.dateOfBirth = source.dateOfBirth;
+    if (setIfMissing(target.avatarUrl, source.avatarUrl) !== undefined) profilePatch.avatarUrl = source.avatarUrl;
+    if (setIfMissing(target.workplace, source.workplace) !== undefined) profilePatch.workplace = source.workplace;
+    if (setIfMissing(target.workplaceInn, source.workplaceInn) !== undefined) profilePatch.workplaceInn = source.workplaceInn;
+    if (setIfMissing(target.directorName, source.directorName) !== undefined) profilePatch.directorName = source.directorName;
+    if (setIfMissing(target.directorPosition, source.directorPosition) !== undefined) profilePatch.directorPosition = source.directorPosition;
+    if (setIfMissing(target.jobTitle, source.jobTitle) !== undefined) profilePatch.jobTitle = source.jobTitle;
+    if (setIfMissing(target.organizationId, source.organizationId) !== undefined) profilePatch.organizationId = source.organizationId;
+    if (Object.keys(profilePatch).length > 0) {
+      await tx.user.update({ where: { id: targetId }, data: profilePatch });
+    }
+
     const tables: Array<{ key: string; field: string }> = [
       { key: "document", field: "userId" },
       { key: "ticket", field: "userId" },

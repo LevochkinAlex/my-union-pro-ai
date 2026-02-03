@@ -938,6 +938,9 @@ model Meeting {
   // Метаданные
   notes String? @db.Text // Примечания
 
+  // Групповой чат заседания (создаётся при отправке на согласование; председатель — админ)
+  groupChat Chat? @relation("MeetingGroupChat")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2096,6 +2099,10 @@ model Chat {
   // Обращения (тикеты) связанные с чатом
   ticket Ticket? @relation("TicketChat")
 
+  // Заседание (групповой чат участников заседания для согласования и обсуждения)
+  meetingId String?  @unique
+  meeting   Meeting? @relation("MeetingGroupChat", fields: [meetingId], references: [id], onDelete: SetNull)
+
   // Канал новостей (для CHANNEL типа чата)
   newsChannelId String?      @unique
   newsChannel   NewsChannel? @relation("ChatNewsChannel", fields: [newsChannelId], references: [id], onDelete: SetNull)
@@ -2109,6 +2116,7 @@ model Chat {
   @@index([createdById])
   @@index([type])
   @@index([lastMessageAt])
+  @@index([meetingId])
 }
 
 // Участники группового чата

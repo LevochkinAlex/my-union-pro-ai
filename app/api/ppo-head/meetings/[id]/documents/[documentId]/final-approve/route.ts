@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrgHead } from "@/lib/ppo-head-utils";
 import { DocumentStatus } from "@prisma/client";
+import { postMeetingChatSystemMessage } from "@/lib/meeting-chat";
 
 /**
  * POST /api/ppo-head/meetings/[id]/documents/[documentId]/final-approve
@@ -28,7 +29,12 @@ export async function POST(
     }
 
     const { id: meetingId, documentId } = await params;
-    const body = await request.json();
+    let body: { comment?: string } = {};
+    try {
+      body = await request.json();
+    } catch {
+      // Пустое тело запроса — допустимо
+    }
     const { comment } = body;
 
     // Проверяем заседание
@@ -144,6 +150,13 @@ export async function POST(
         comment: comment || "Документ утвержден председателем",
       },
     });
+
+    const msg = document.meetingAsAgenda
+      ? "Повестка дня утверждена председателем."
+      : "Протокол утверждён председателем.";
+    postMeetingChatSystemMessage(meetingId, msg).catch((err) =>
+      console.warn("[final-approve] postMeetingChatSystemMessage:", err)
+    );
 
     return NextResponse.json({
       document: updatedDocument,

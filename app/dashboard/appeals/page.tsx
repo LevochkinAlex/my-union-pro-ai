@@ -72,12 +72,28 @@ export default function AppealsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | keyof typeof TICKET_STATUSES>("all");
   
-  // У члена профсоюза — только «Мои обращения», без раздела председателя
+  // Контекст дашборда: председатель или сотрудник с правом appeals_view видит интерфейс ППО
+  const [dashboardContext, setDashboardContext] = useState<{
+    isChairman: boolean;
+    isStaff: boolean;
+    permissions: Record<string, boolean>;
+  } | null>(null);
   const isDemoMember = session?.user?.id === DEMO_MEMBER_USER_ID;
+  // Интерфейс председателя — контекст (isChairman/isStaff) или viewMode PPO_HEAD или фактический председатель (isPPOHead)
   const isPPOHead =
     !isDemoMember &&
-    (session?.user?.viewMode === "PPO_HEAD" ||
-      (session?.user?.role === "PPO_HEAD" && !(session?.user as { isPPOHead?: boolean })?.isPPOHead));
+    (dashboardContext?.isChairman === true ||
+      (dashboardContext?.isStaff === true && dashboardContext?.permissions?.appeals_view === true) ||
+      (session?.user?.viewMode === "PPO_HEAD" ||
+        (session?.user?.role === "PPO_HEAD" && (session?.user as { isPPOHead?: boolean })?.isPPOHead === true)));
+
+  useEffect(() => {
+    if (!session?.user?.id || isDemoMember) return;
+    fetch("/api/dashboard/context")
+      .then((r) => r.json())
+      .then(setDashboardContext)
+      .catch(() => setDashboardContext({ isChairman: false, isStaff: false, permissions: {} }));
+  }, [session?.user?.id, isDemoMember]);
 
   const loadTickets = async () => {
     try {
@@ -105,8 +121,21 @@ export default function AppealsPage() {
       loadTickets();
     }
   }, [filter, isPPOHead]);
-  
-  // Если пользователь - Председатель, показываем специальную страницу
+
+  // Пока контекст не загружен (председатель/сотрудник) — не показывать контент членам, чтобы не мелькало
+  const contextPending = session && !isDemoMember && dashboardContext === null;
+  if (contextPending) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-t-transparent"></div>
+          <p className="text-gray-600 dark:text-gray-400">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Если пользователь — председатель или сотрудник с правом appeals_view, показываем интерфейс ППО
   if (isPPOHead) {
     return <PPOHeadAppealsPage />;
   }

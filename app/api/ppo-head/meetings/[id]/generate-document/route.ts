@@ -99,11 +99,18 @@ export async function POST(
       ? await prisma.document.findUnique({ where: { id: meeting.protocolDocumentId } })
       : null;
 
+    // Для повестки: если уже есть документ — обновляем его при пересоздании (тот же номер)
+    const existingAgendaDoc = documentType === "AGENDA" && meeting.agendaDocumentId
+      ? await prisma.document.findUnique({ where: { id: meeting.agendaDocumentId } })
+      : null;
+
     const docPrefix = documentType === "AGENDA" ? "AG" : "PR";
     const year = meeting.scheduledDate.getFullYear();
     let regNumber: string;
 
-    if (existingProtocolDoc?.regNumber) {
+    if (existingAgendaDoc?.regNumber) {
+      regNumber = existingAgendaDoc.regNumber;
+    } else if (existingProtocolDoc?.regNumber) {
       regNumber = existingProtocolDoc.regNumber;
     } else if (regNumberOverride && typeof regNumberOverride === "string" && regNumberOverride.trim()) {
       regNumber = regNumberOverride.trim();
@@ -247,7 +254,19 @@ export async function POST(
 
     let document: { id: string; regNumber: string; status: string; filePath: string | null; [key: string]: any };
 
-    if (existingProtocolDoc) {
+    if (existingAgendaDoc) {
+      // Пересоздание повестки: обновляем существующий документ (новый контент и PDF)
+      document = await prisma.document.update({
+        where: { id: existingAgendaDoc.id },
+        data: {
+          title: documentTitle,
+          content: htmlContent,
+          filePath,
+          fileName: filePath ? filePath.split("/").pop() : null,
+          updatedAt: new Date(),
+        },
+      });
+    } else if (existingProtocolDoc) {
       // Обновляем существующий протокол (перезаписываем PDF и контент, опционально утверждаем)
       document = await prisma.document.update({
         where: { id: existingProtocolDoc.id },
@@ -319,11 +338,13 @@ export async function POST(
       });
     }
 
-    const message = existingProtocolDoc
-      ? (approve === true ? "Протокол обновлён и утверждён. Можно отправлять в печать." : "Протокол сохранён в черновики.")
-      : (documentType === "PROTOCOL" && approve === true
-        ? "Протокол создан и утверждён. Можно отправлять в печать."
-        : `${documentType === "AGENDA" ? "Повестка" : "Протокол"} успешно сформирован(а).`);
+    const message = existingAgendaDoc
+      ? "Повестка дня пересоздана по текущим пунктам."
+      : existingProtocolDoc
+        ? (approve === true ? "Протокол обновлён и утверждён. Можно отправлять в печать." : "Протокол сохранён в черновики.")
+        : (documentType === "PROTOCOL" && approve === true
+          ? "Протокол создан и утверждён. Можно отправлять в печать."
+          : `${documentType === "AGENDA" ? "Повестка" : "Протокол"} успешно сформирован(а).`);
 
     // Возвращаем обновлённое заседание с актуальными статусами документов для синхронизации UI
     const updatedMeeting = await prisma.meeting.findUnique({

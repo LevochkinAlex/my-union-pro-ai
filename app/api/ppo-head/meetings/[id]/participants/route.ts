@@ -9,6 +9,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrgHead } from "@/lib/ppo-head-utils";
+import { ensureMeetingGroupChat } from "@/lib/meeting-chat";
 
 export async function POST(
   request: NextRequest,
@@ -78,6 +79,11 @@ export async function POST(
         },
       },
     });
+
+    // Синхронизируем чат заседания: добавим новых участников в чат и назначим им повестку (копии во входящие)
+    await ensureMeetingGroupChat(meetingId).catch((err) =>
+      console.warn("[meetings/participants] ensureMeetingGroupChat:", err)
+    );
 
     return NextResponse.json({
       added: toAdd.length,

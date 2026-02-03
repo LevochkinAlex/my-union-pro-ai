@@ -92,33 +92,38 @@ export default async function DashboardPage() {
       };
     } else {
       try {
-        userRole = await prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            role: true,
-            firstName: true,
-            lastName: true,
-            viewMode: true,
-            isPPOHead: true,
-            isMPOHead: true,
-            isRPOHead: true,
-            ppoHeadOrganizationId: true,
-            mpoHeadOrganizationId: true,
-            rpoHeadOrganizationId: true,
-            organization: {
-              select: {
-                id: true,
-                name: true,
+        if (!process.env.DATABASE_URL) {
+          console.warn("[dashboard/page] DATABASE_URL не задан, используем данные из сессии");
+          userRole = null;
+        } else {
+          userRole = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+              role: true,
+              firstName: true,
+              lastName: true,
+              viewMode: true,
+              isPPOHead: true,
+              isMPOHead: true,
+              isRPOHead: true,
+              ppoHeadOrganizationId: true,
+              mpoHeadOrganizationId: true,
+              rpoHeadOrganizationId: true,
+              organization: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+              ppoHeadOrganization: {
+                select: {
+                  id: true,
+                  name: true,
+                },
               },
             },
-            ppoHeadOrganization: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        });
+          });
+        }
       } catch (error) {
         console.error("[dashboard/page] Database query error:", error);
         userRole = null;
@@ -140,10 +145,10 @@ export default async function DashboardPage() {
       ppoHeadOrganization: { id: string; name: string } | null;
     } | null;
 
-  // Определяем показывать ли дашборд председателя на основе viewMode
+  // Определяем показывать ли дашборд председателя: режим PPO_HEAD или фактический председатель (isPPOHead)
   const showPPOHeadDashboard = 
     userRole?.viewMode === "PPO_HEAD" || 
-    (userRole?.role === "PPO_HEAD" && !userRole?.isPPOHead);
+    (userRole?.role === "PPO_HEAD" && userRole?.isPPOHead === true);
   
   // Определяем показывать ли дашборд МПО/РПО руководителя
   const showOrgHeadDashboard = 

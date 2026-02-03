@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrgHead } from "@/lib/ppo-head-utils";
 import { DocumentStatus } from "@prisma/client";
+import { assignAgendaToParticipantsAndNotify } from "@/lib/meeting-agenda-notify";
+import { ensureMeetingGroupChat, postMeetingChatSystemMessage } from "@/lib/meeting-chat";
 
 /**
  * POST /api/ppo-head/meetings/[id]/documents/[documentId]/send-for-approval
@@ -144,9 +146,23 @@ export async function POST(
       },
     });
 
+    const isAgenda = !!document.meetingAsAgenda;
+    if (isAgenda) {
+      await assignAgendaToParticipantsAndNotify(meetingId, session.user.id);
+    }
+
+    const chatResult = await ensureMeetingGroupChat(meetingId);
+    if (chatResult) {
+      const docLabel = isAgenda ? "Повестка дня" : "Протокол";
+      await postMeetingChatSystemMessage(
+        meetingId,
+        `${docLabel} отправлена на согласование участникам. Ознакомьтесь во вкладке «Входящие» и отметьте согласование или примечания.`
+      );
+    }
+
     return NextResponse.json({
       document: updatedDocument,
-      message: `Документ отправлен на согласование ${participantsWithUserId.length} участникам`,
+      message: `Документ отправлен на согласование ${participantsWithUserId.length} участникам${isAgenda ? ". Участники получат документ во входящие, push и email" : ""}`,
     });
   } catch (error: any) {
     console.error("[send-for-approval] POST error:", error);

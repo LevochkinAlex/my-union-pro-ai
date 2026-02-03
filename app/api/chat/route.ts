@@ -9,6 +9,7 @@ import {
   getChatById,
   ChatFilter 
 } from "@/lib/chat-service";
+import { ensureMeetingGroupChat } from "@/lib/meeting-chat";
 import { sendUserNotification } from "@/lib/notifications";
 import { invalidateChatCache, invalidateUserChatsCache } from "@/lib/chat-redis";
 import { withCache, getCacheKey } from "@/lib/cache";
@@ -266,10 +267,40 @@ export async function GET(request: NextRequest) {
       console.warn("[chat] Channel sync check error:", syncError);
     }
 
+    // Для председателя: создаём групповые чаты заседаний, если их ещё нет (чтобы они отображались в списке)
+    let didSyncMeetingChats = false;
+    if (isPPOHeadMode && user) {
+      const organizationId = user.ppoHeadOrganizationId || user.mpoHeadOrganizationId || user.rpoHeadOrganizationId;
+      if (organizationId) {
+        try {
+          const meetingsWithoutChat = await prisma.meeting.findMany({
+            where: {
+              organizationId,
+              groupChat: null,
+              participants: { some: { userId: { not: null } } },
+            },
+            select: { id: true },
+          });
+          for (const meeting of meetingsWithoutChat) {
+            await ensureMeetingGroupChat(meeting.id).catch((err) =>
+              console.warn("[chat] ensureMeetingGroupChat:", meeting.id, err)
+            );
+          }
+          if (meetingsWithoutChat.length > 0) {
+            didSyncMeetingChats = true;
+            await invalidateUserChatsCache(userId).catch(() => {});
+          }
+        } catch (syncErr) {
+          console.warn("[chat] Meeting group chat sync error:", syncErr);
+        }
+      }
+    }
+
     // Кешируем список чатов на короткое время (15 сек)
     let chats: any[] = [];
     try {
       const cacheKey = getCacheKey(`user:chats:${userId}`, filter);
+      const bypassCacheForRequest = didSyncMeetingChats;
       
       const result = await Sentry.startSpan(
         {
@@ -285,6 +316,11 @@ export async function GET(request: NextRequest) {
           if (isMemberMode) {
             console.log(`[chat] MEMBER mode: bypassing cache, fetching directly from DB`);
             return await getUserChats(userId, filter, true); // bypassCache = true
+          }
+          
+          // После синхронизации чатов заседаний обходим кэш, чтобы новые чаты попали в список
+          if (bypassCacheForRequest) {
+            return await getUserChats(userId, filter, true);
           }
           
           try {

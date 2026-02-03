@@ -69,7 +69,10 @@ export const Modal: React.FC<ModalProps> = ({
       >
         {showCloseButton && (
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Закрыть"
+            title="Закрыть"
             className="absolute right-3 top-3 z-999 flex h-9.5 w-9.5 items-center justify-center rounded-full bg-gray-200 text-gray-600 transition-colors hover:bg-gray-300 hover:text-gray-800 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white sm:right-6 sm:top-6 sm:h-11 sm:w-11"
           >
             <svg
@@ -88,7 +91,15 @@ export const Modal: React.FC<ModalProps> = ({
             </svg>
           </button>
         )}
-        <div className={isFullscreen ? "" : "flex min-h-0 flex-1 flex-col overflow-hidden"}>{children}</div>
+        <div
+          className={
+            isFullscreen
+              ? ""
+              : `flex min-h-0 flex-1 flex-col overflow-hidden ${showCloseButton ? "pr-14 sm:pr-16" : ""}`
+          }
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

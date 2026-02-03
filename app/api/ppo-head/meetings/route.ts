@@ -18,19 +18,23 @@ export async function GET(request: NextRequest) {
     }
 
     const orgHead = await getOrgHead(session.user.id);
-
-    if (!orgHead) {
-      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
-    }
+    const organizationId = orgHead?.organizationId ?? null;
+    const isOrgHead = !!orgHead;
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") as MeetingStatus | null;
     const type = searchParams.get("type") as MeetingType | null;
     const year = searchParams.get("year");
 
-    const where: any = {
-      organizationId: orgHead.organizationId,
-    };
+    // Председатель: заседания организации + созданные им. Участник (зам., член профкома): заседания, где он участник, или созданные им
+    const where: any = organizationId
+      ? { OR: [{ organizationId }, { createdById: session.user.id }] }
+      : {
+          OR: [
+            { createdById: session.user.id },
+            { participants: { some: { userId: session.user.id } } },
+          ],
+        };
 
     if (status) {
       where.status = status;
@@ -60,6 +64,7 @@ export async function GET(request: NextRequest) {
         protocolDocument: {
           select: { id: true, regNumber: true, status: true, filePath: true },
         },
+        groupChat: { select: { id: true } },
         _count: {
           select: {
             participants: true,
@@ -75,13 +80,14 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    return NextResponse.json({ meetings });
+    return NextResponse.json({ meetings, isOrgHead });
   } catch (error: any) {
-    console.error("[ppo-head/meetings] GET error:", error);
+    console.error("[ppo-head/meetings] GET error:", error?.message ?? error, error?.stack);
     return NextResponse.json(
       {
         error: "Ошибка при получении заседаний",
-        details: process.env.NODE_ENV === "development" ? error.message : undefined,
+        details: process.env.NODE_ENV === "development" ? error?.message : undefined,
+        stack: process.env.NODE_ENV === "development" ? error?.stack : undefined,
       },
       { status: 500 }
     );

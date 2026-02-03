@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn, getSession } from "next-auth/react";
 
@@ -12,6 +12,7 @@ function EmailSuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
+  const authStartedRef = useRef(false);
 
   useEffect(() => {
     const token = searchParams.get("token");
@@ -21,6 +22,10 @@ function EmailSuccessContent() {
       setTimeout(() => router.push("/login"), 3000);
       return;
     }
+
+    // Защита от двойного вызова (React Strict Mode / двойной mount)
+    if (authStartedRef.current) return;
+    authStartedRef.current = true;
 
     // Авторизуем пользователя по токену
     const authenticate = async () => {
@@ -35,6 +40,18 @@ function EmailSuccessContent() {
         console.log("[Email Success] Результат signIn:", { ok: result?.ok, error: result?.error });
 
         if (result?.error) {
+          // CredentialsSignin = токен уже использован, истёк или не найден
+          if (result.error === "CredentialsSignin") {
+            const session = await getSession();
+            if (session?.user?.id) {
+              // Уже вошли (например, первый вызов успел) — редирект в личный кабинет
+              window.location.href = "/dashboard";
+              return;
+            }
+            setError("Ссылка уже использована или истекла. Запросите новую ссылку для входа.");
+            setTimeout(() => router.push("/login?error=link_used_or_expired"), 3000);
+            return;
+          }
           console.error("[Email Success] Ошибка авторизации:", result.error);
           setError("Ошибка авторизации. Попробуйте снова.");
           setTimeout(() => router.push("/login?error=auth_failed"), 3000);

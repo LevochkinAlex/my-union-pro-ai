@@ -47,7 +47,7 @@ export default function NewsPage() {
   const showPPOHeadView =
     !isDemoMember &&
     (session?.user?.viewMode === "PPO_HEAD" ||
-      ((session?.user as { role?: string; isPPOHead?: boolean })?.role === "PPO_HEAD" && !(session?.user as { isPPOHead?: boolean })?.isPPOHead));
+      ((session?.user as { role?: string; isPPOHead?: boolean })?.role === "PPO_HEAD" && (session?.user as { isPPOHead?: boolean })?.isPPOHead === true));
 
   if (showPPOHeadView) {
     return <PPOHeadNewsPage />;

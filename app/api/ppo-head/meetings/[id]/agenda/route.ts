@@ -106,7 +106,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { title, description, speakerId, speakerName, speakerPosition } = body;
+    const { title, description, speakerId, speakerName, speakerPosition, coSpeakerId, coSpeakerName, attachments } = body;
 
     if (!title) {
       return NextResponse.json({ error: "Укажите название вопроса" }, { status: 400 });
@@ -120,6 +120,11 @@ export async function POST(
 
     const orderNumber = (lastItem?.orderNumber || 0) + 1;
 
+    const attachmentsJson =
+      Array.isArray(attachments) && attachments.length > 0
+        ? JSON.stringify(attachments)
+        : null;
+
     const agendaItem = await prisma.meetingAgendaItem.create({
       data: {
         meetingId: id,
@@ -129,6 +134,9 @@ export async function POST(
         speakerId,
         speakerName,
         speakerPosition,
+        coSpeakerId: coSpeakerId || null,
+        coSpeakerName: coSpeakerName || null,
+        attachments: attachmentsJson,
       },
       include: {
         speaker: {
@@ -201,6 +209,14 @@ export async function PATCH(
         if (item.speakerId !== undefined) updateData.speakerId = item.speakerId;
         if (item.speakerName !== undefined) updateData.speakerName = item.speakerName;
         if (item.speakerPosition !== undefined) updateData.speakerPosition = item.speakerPosition;
+        if (item.coSpeakerId !== undefined) updateData.coSpeakerId = item.coSpeakerId;
+        if (item.coSpeakerName !== undefined) updateData.coSpeakerName = item.coSpeakerName;
+        if (item.attachments !== undefined) {
+          updateData.attachments =
+            Array.isArray(item.attachments) && item.attachments.length > 0
+              ? JSON.stringify(item.attachments)
+              : null;
+        }
         if (item.resolutionText !== undefined) updateData.resolutionText = item.resolutionText;
         if (item.decidedText !== undefined) updateData.decidedText = item.decidedText;
         if (item.votesFor !== undefined) updateData.votesFor = item.votesFor;

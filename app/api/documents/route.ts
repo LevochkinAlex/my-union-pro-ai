@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getOrgHead } from "@/lib/ppo-head-utils";
 import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { getDemoMemberOutgoingDocuments } from "@/lib/demo";
 import fs from "fs";
@@ -65,8 +66,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         incomingDocuments,
         outgoingDocuments,
+        isElectedBody: false,
       });
     }
+
+    // Член выборного органа = председатель (ППО/МПО/РПО) или сотрудник организации (зам., член профкома)
+    const orgHead = await getOrgHead(session.user.id);
+    const isElectedBody =
+      !!orgHead ||
+      !!(await prisma.organizationStaff.findFirst({
+        where: { userId: session.user.id, status: "ACTIVE" },
+        select: { id: true },
+      }));
 
     // Получаем документы пользователя (исходящие - созданные пользователем)
     const outgoingDocuments = await prisma.document.findMany({
@@ -116,6 +127,7 @@ export async function GET(request: NextRequest) {
         verificationMessage: true,
         verifiedAt: true,
         assignedAt: true,
+        metadata: true,
         user: {
           select: {
             id: true,
@@ -127,13 +139,59 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    const originalIds = incomingDocuments
+      .map((d: { metadata?: unknown }) => (d.metadata as { originalDocumentId?: string } | null)?.originalDocumentId)
+      .filter(Boolean) as string[];
+    // Копии с удалённым оригиналом не показываем во входящих
+    let existingOriginalIds = new Set<string>();
+    if (originalIds.length > 0) {
+      const existing = await prisma.document.findMany({
+        where: { id: { in: originalIds } },
+        select: { id: true },
+      });
+      existingOriginalIds = new Set(existing.map((d) => d.id));
+    }
+    const incomingFiltered = incomingDocuments.filter((d: { metadata?: unknown }) => {
+      const originalId = (d.metadata as { originalDocumentId?: string } | null)?.originalDocumentId;
+      if (!originalId) return true;
+      return existingOriginalIds.has(originalId);
+    });
+    const approvalMap: Record<string, { status: string; comment: string | null; approvedAt: Date | null }> = {};
+    if (existingOriginalIds.size > 0) {
+      const approvals = await prisma.documentApproval.findMany({
+        where: { documentId: { in: Array.from(existingOriginalIds) }, userId: session.user.id },
+        select: { documentId: true, status: true, comment: true, approvedAt: true },
+      });
+      approvals.forEach((a) => {
+        approvalMap[a.documentId] = {
+          status: a.status,
+          comment: a.comment,
+          approvedAt: a.approvedAt,
+        };
+      });
+    }
+    type IncomingDoc = { id: string; type: string; title?: string | null; description?: string | null; metadata?: unknown };
+    const incomingWithApproval = incomingFiltered.map((d: IncomingDoc) => {
+      const meta = d.metadata as { originalDocumentId?: string; meetingId?: string } | null;
+      const originalId = meta?.originalDocumentId;
+      const approval = originalId ? approvalMap[originalId] : undefined;
+      return {
+        ...d,
+        approvalStatus: approval
+          ? { status: approval.status, comment: approval.comment, approvedAt: approval.approvedAt }
+          : undefined,
+        meetingId: meta?.meetingId,
+        originalDocumentId: originalId,
+      };
+    });
+
     // Добавляем устав во входящие документы (если его еще нет)
-    const hasCharterInIncoming = incomingDocuments.some(
-      (doc: any) =>
+    const hasCharterInIncoming = incomingWithApproval.some(
+      (doc: { id: string; type: string; title?: string | null; description?: string | null }) =>
         doc.id === "charter-system" ||
         (doc.type === "OTHER" &&
-          (doc.title?.toLowerCase().includes("устав") ||
-            doc.description?.toLowerCase().includes("устав")))
+          ((doc.title?.toLowerCase?.() || "").includes("устав") ||
+            (doc.description?.toLowerCase?.() || "").includes("устав")))
     );
 
     if (!hasCharterInIncoming) {
@@ -177,7 +235,7 @@ export async function GET(request: NextRequest) {
         user: null,
       };
 
-      incomingDocuments.unshift(charterDocument);
+      incomingWithApproval.unshift({ ...charterDocument, approvalStatus: undefined, meetingId: undefined, originalDocumentId: undefined });
     }
 
     // Сортируем исходящие документы по приоритету
@@ -208,8 +266,9 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ 
-      incomingDocuments: incomingDocuments,
+      incomingDocuments: incomingWithApproval,
       outgoingDocuments: sortedOutgoingDocuments,
+      isElectedBody,
     });
   } catch (error) {
     console.error("Ошибка получения документов:", error);

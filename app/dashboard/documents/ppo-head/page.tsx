@@ -140,10 +140,14 @@ export default function PPOHeadDocumentsPage() {
       }
       
       // Загружаем личные документы председателя (только заявления и устав)
+      // API /api/documents возвращает incomingDocuments и outgoingDocuments, не documents
       const personalResponse = await fetch("/api/documents");
       if (personalResponse.ok) {
         const data = await personalResponse.json();
-        const userDocs = data.documents || [];
+        const userDocs = [
+          ...(data.incomingDocuments || []),
+          ...(data.outgoingDocuments || []),
+        ];
         
         // Фильтруем: только личные документы (заявления) и устав (OTHER с уставом)
         const personalDocs = userDocs.filter((d: Document) => {
@@ -468,10 +472,12 @@ export default function PPOHeadDocumentsPage() {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="ppo-head-doc-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Тип документа *
               </label>
               <select
+                id="ppo-head-doc-type"
+                aria-label="Тип документа"
                 value={formData.type}
                 onChange={(e) => {
                   const newType = e.target.value as DocumentType;
@@ -489,10 +495,12 @@ export default function PPOHeadDocumentsPage() {
 
             {templates.length > 0 && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label htmlFor="ppo-head-doc-template" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Шаблон документа *
                 </label>
                 <select
+                  id="ppo-head-doc-template"
+                  aria-label="Шаблон документа"
                   value={formData.templateId}
                   onChange={(e) => {
                     const template = templates.find(t => t.id === e.target.value);
@@ -512,11 +520,13 @@ export default function PPOHeadDocumentsPage() {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="ppo-head-doc-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Название документа *
               </label>
               <input
+                id="ppo-head-doc-title"
                 type="text"
+                aria-label="Название документа"
                 value={formData.title}
                 onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
@@ -526,22 +536,26 @@ export default function PPOHeadDocumentsPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label htmlFor="ppo-head-meeting-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Дата заседания
                 </label>
                 <input
+                  id="ppo-head-meeting-date"
                   type="date"
+                  aria-label="Дата заседания"
                   value={formData.meetingDate}
                   onChange={(e) => setFormData(prev => ({ ...prev, meetingDate: e.target.value }))}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label htmlFor="ppo-head-meeting-time" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Время заседания
                 </label>
                 <input
+                  id="ppo-head-meeting-time"
                   type="time"
+                  aria-label="Время заседания"
                   value={formData.meetingTime}
                   onChange={(e) => setFormData(prev => ({ ...prev, meetingTime: e.target.value }))}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-700"
@@ -710,22 +724,26 @@ export default function PPOHeadDocumentsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label htmlFor="ppo-head-secretary-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                       ФИО секретаря
                     </label>
                     <input
+                      id="ppo-head-secretary-name"
                       type="text"
+                      aria-label="ФИО секретаря"
                       value={formData.secretaryName}
                       onChange={(e) => setFormData(prev => ({ ...prev, secretaryName: e.target.value }))}
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label htmlFor="ppo-head-secretary-job" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                       Должность секретаря
                     </label>
                     <input
+                      id="ppo-head-secretary-job"
                       type="text"
+                      aria-label="Должность секретаря"
                       value={formData.secretaryJobTitle}
                       onChange={(e) => setFormData(prev => ({ ...prev, secretaryJobTitle: e.target.value }))}
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"

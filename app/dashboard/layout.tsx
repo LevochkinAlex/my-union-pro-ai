@@ -10,6 +10,7 @@ import TourGuideProvider from "@/components/dashboard/TourGuideProvider";
 import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
 import DemoBanner from "@/components/dashboard/DemoBanner";
 import { DEMO_USER_ID, DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 // Указываем, что layout динамический (использует getServerSession)
 export const dynamic = 'force-dynamic';
@@ -110,13 +111,26 @@ export default async function DashboardLayout({
     redirect("/admin/dashboard");
   }
 
-  // Определяем какое меню показывать на основе viewMode
-  // ВАЖНО: Всегда используем viewMode для определения меню
-  // Это позволяет руководителям переключаться между режимами
+  // Определяем какое меню показывать на основе viewMode и прав сотрудника
   const showPPOHeadMenu = viewMode === "PPO_HEAD";
   const showMPOHeadMenu = viewMode === "MPO_HEAD";
   const showRPOHeadMenu = viewMode === "RPO_HEAD";
   const showOrgHeadMenu = showMPOHeadMenu || showRPOHeadMenu; // МПО или РПО
+
+  // Сотрудники ППО (не председатель): показываем меню интерфейса ППО, отфильтрованное по правам роли
+  let staffPermissions: { isStaff: boolean; permissions: Record<string, boolean> } | null = null;
+  if (!showPPOHeadMenu && !isDemo && session.user.id !== DEMO_MEMBER_USER_ID) {
+    try {
+      const check = await checkUserPermissions(session.user.id);
+      if (check.isStaff && check.permissions) {
+        staffPermissions = { isStaff: true, permissions: check.permissions };
+      }
+    } catch (e) {
+      console.warn("[dashboard/layout] checkUserPermissions failed:", e);
+    }
+  }
+  const showStaffMenu = staffPermissions?.isStaff === true;
+  const perm = staffPermissions?.permissions ?? {};
 
   // Создаем базовое меню
   let menuItems: Array<{
@@ -147,11 +161,8 @@ export default async function DashboardLayout({
         </svg>
       ),
       subItems: [
-        { href: "/dashboard/documents/meetings", label: "Все документы" },
-        { href: "/dashboard/documents/meetings?tab=agenda", label: "Повестки заседания" },
-        { href: "/dashboard/documents/meetings?tab=protocol", label: "Протоколы" },
-        { href: "/dashboard/documents/meetings?tab=resolutions", label: "Постановления" },
-        { href: "/dashboard/documents/meetings?tab=extracts", label: "Выписки" },
+        { href: "/dashboard/documents?tab=incoming", label: "Входящие" },
+        { href: "/dashboard/documents/meetings", label: "Исходящие" },
       ],
     });
     
@@ -279,6 +290,145 @@ export default async function DashboardLayout({
         </svg>
       ),
     });
+  } else if (showStaffMenu) {
+    // Меню сотрудника ППО: те же разделы, что у председателя, но только с правами по роли
+    if (perm.documents_view) {
+      menuItems.push({
+        href: "/dashboard/documents",
+        label: "Документы",
+        icon: (
+          <svg key="icon-documents-staff" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        ),
+        subItems: [
+          { href: "/dashboard/documents?tab=incoming", label: "Входящие" },
+          { href: "/dashboard/documents/meetings", label: "Исходящие" },
+        ],
+      });
+    }
+    if (perm.appeals_view) {
+      menuItems.push({
+        href: "/dashboard/appeals",
+        label: "Обращения",
+        icon: (
+          <svg key="icon-appeals-staff" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+          </svg>
+        ),
+      });
+    }
+    if (perm.news_view) {
+      menuItems.push({
+        href: "/dashboard/news",
+        label: "Новости",
+        icon: (
+          <svg key="icon-news-staff" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7-8z" />
+          </svg>
+        ),
+      });
+    }
+    if (perm.members_view) {
+      menuItems.push({
+        href: "/dashboard/users",
+        label: "Профсеть",
+        icon: (
+          <svg key="icon-users-staff" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+        ),
+      });
+    }
+    if (perm.chats_view) {
+      menuItems.push({
+        href: "/dashboard/chats/ppo-head",
+        label: "Чаты",
+        icon: (
+          <svg key="icon-chats-staff" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+        ),
+      });
+    }
+    if (perm.discounts_view) {
+      menuItems.push({
+        href: "/dashboard/discounts",
+        label: "Скидки",
+        icon: (
+          <svg key="icon-discounts-staff" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          </svg>
+        ),
+        subItems: [
+          { href: "/dashboard/discounts", label: "Все скидки" },
+          { href: "/dashboard/discounts/my", label: "Мои скидки и льготы" },
+        ],
+      });
+    }
+    menuItems.push({
+      href: "/dashboard/notifications",
+      label: "Уведомления",
+      icon: (
+        <svg key="icon-notifications-staff" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+      ),
+    });
+    if (perm.members_view) {
+      menuItems.push({
+        href: "/dashboard/members",
+        label: "Члены профсоюза",
+        icon: (
+          <svg key="icon-members-staff" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+        ),
+      });
+    }
+    if (perm.reports_view) {
+      menuItems.push({
+        href: "/dashboard/reports",
+        label: "Отчётность",
+        icon: (
+          <svg key="icon-reports-staff" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        ),
+      });
+    }
+    if (perm.staff_view) {
+      menuItems.push({
+        href: "/dashboard/staff",
+        label: "Сотрудники",
+        icon: (
+          <svg key="icon-staff" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+        ),
+      });
+    }
+    if (perm.settings_view || perm.settings_manage) {
+      menuItems.push({
+        href: "/dashboard/settings",
+        label: "Настройки",
+        icon: (
+          <svg key="icon-settings-staff" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        ),
+      });
+    }
+    menuItems.push({
+      href: "/dashboard/profile",
+      label: "Профиль",
+      icon: (
+        <svg key="icon-profile-staff" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+      ),
+    });
   } else if (showOrgHeadMenu) {
     // Меню для руководителей МПО/РПО
     const orgTypeLabel = showRPOHeadMenu ? "РПО" : "МПО";
@@ -378,7 +528,7 @@ export default async function DashboardLayout({
       ),
     });
   } else {
-    // Меню для обычных членов профсоюза
+    // Меню для обычных членов профсоюза: Входящие (устав и т.д.) / Исходящие (заявления)
     menuItems.push({
       href: "/dashboard/documents",
       label: "Документы",
@@ -387,13 +537,15 @@ export default async function DashboardLayout({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       ),
+      subItems: [
+        { href: "/dashboard/documents?tab=incoming", label: "Входящие" },
+        { href: "/dashboard/documents?tab=outgoing", label: "Исходящие" },
+      ],
     });
   }
 
-  // Для обычных членов профсоюза добавляем стандартные пункты
-  // ИСПРАВЛЕНО: Используем проверку на все типы руководителей
-  // чтобы избежать дублирования меню
-  if (!showPPOHeadMenu && !showOrgHeadMenu) {
+  // Для обычных членов профсоюза добавляем стандартные пункты (не председатель, не МПО/РПО, не сотрудник ППО)
+  if (!showPPOHeadMenu && !showOrgHeadMenu && !showStaffMenu) {
     // Обращения (тикеты)
     menuItems.push({
       href: "/dashboard/appeals",

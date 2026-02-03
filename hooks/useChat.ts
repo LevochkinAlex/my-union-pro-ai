@@ -81,6 +81,7 @@ export function useChat(options: UseChatOptions = {}) {
   const selectedChatRef = useRef<Chat | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reloadChatsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const socketErrorLoggedRef = useRef(false);
 
   // Синхронизация refs
   useEffect(() => {
@@ -256,13 +257,18 @@ export function useChat(options: UseChatOptions = {}) {
     socketRef.current = socket;
 
     socket.on("connect", () => {
+      // В Strict Mode или при быстром remount старый сокет может подключиться после cleanup — игнорируем
+      if (socketRef.current !== socket) {
+        socket.disconnect();
+        return;
+      }
+      socketErrorLoggedRef.current = false;
       console.log("[useChat] ✅ Socket connected", {
         socketId: socket.id,
         userId: session.user.id,
       });
       setIsConnected(true);
       
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Переподключаемся к текущему чату
       if (selectedChatRef.current) {
         console.log("[useChat] Rejoining chat after reconnect:", selectedChatRef.current.id);
         socket.emit("chat:join", selectedChatRef.current.id);
@@ -275,9 +281,12 @@ export function useChat(options: UseChatOptions = {}) {
     });
 
     socket.on("connect_error", (error) => {
-      console.warn("[useChat] Socket connection error (will use HTTP fallback):", error.message);
       setIsConnected(false);
-      // Не прерываем работу - используем HTTP fallback
+      // Логируем один раз за сессию, чтобы не засорять консоль при повторных попытках / Strict Mode
+      if (!socketErrorLoggedRef.current) {
+        socketErrorLoggedRef.current = true;
+        console.warn("[useChat] Socket unavailable (will use HTTP fallback):", error.message);
+      }
     });
 
     // Нормализуем вложения сообщения для отображения (url/filePath для getAttachmentUrl)
@@ -448,23 +457,21 @@ export function useChat(options: UseChatOptions = {}) {
     });
 
     return () => {
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отключаем только если это тот же сокет
       if (socketRef.current === socket) {
-        console.log("[useChat] Cleaning up socket connection", {
-          socketId: socket.id,
-          connected: socket.connected,
-        });
-        socket.disconnect();
         socketRef.current = null;
         setIsConnected(false);
+        socket.removeAllListeners();
+        // Отключаем только если сокет уже подключён — иначе в Strict Mode браузер пишет "closed before established"
+        if (socket.connected) {
+          socket.disconnect();
+        }
       }
-      // Cleanup reload timeout
       if (reloadChatsTimeoutRef.current) {
         clearTimeout(reloadChatsTimeoutRef.current);
         reloadChatsTimeoutRef.current = null;
       }
     };
-  }, [session?.user?.id]); // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Только userId в зависимостях, не весь session и не loadChats
+  }, [session?.user?.id]);
 
   // Загрузка сообщений чата (HTTP - для первоначальной загрузки)
   const loadMessages = useCallback(async (chatId: string) => {
