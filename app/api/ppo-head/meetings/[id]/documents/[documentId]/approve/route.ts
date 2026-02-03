@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getOrgHead } from "@/lib/ppo-head-utils";
-import { checkUserPermissions } from "@/lib/staff-permissions";
 import { DocumentStatus } from "@prisma/client";
 import { postMeetingChatSystemMessage } from "@/lib/meeting-chat";
 
@@ -95,17 +93,8 @@ export async function POST(
       );
     }
 
-    // Участник должен иметь право на согласование (председатель имеет все права)
-    const orgHead = await getOrgHead(session.user.id);
-    if (!orgHead) {
-      const perm = await checkUserPermissions(session.user.id, "documents_approve");
-      if (!perm.hasAccess) {
-        return NextResponse.json(
-          { error: "Недостаточно прав для согласования документов" },
-          { status: 403 }
-        );
-      }
-    }
+    // Участник заседания (не председатель) может согласовывать документ этого заседания без отдельного права.
+    // Право documents_approve нужно для общего журнала документов; здесь достаточно участия в заседании.
 
     const newStatus = action === "reject" ? "REJECTED" : "APPROVED";
     const approval = document.approvals.find(a => a.userId === session.user.id);

@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronRight,
   UserPlus,
+  UserMinus,
   X,
   Check,
   Loader2,
@@ -72,11 +73,14 @@ function getChatDisplayName(chat: Chat, currentUserId: string | null): string {
 
 function getChatAvatar(chat: Chat): string | null {
   if (chat.type === "CHANNEL") {
-    // Для каналов используем iconUrl из Chat или NewsChannel
     return chat.iconUrl || null;
   }
   if (chat.type === "GROUP") {
     return chat.iconUrl || null;
+  }
+  // Удалённый пользователь — плейсхолдер без фото
+  if ((chat.otherUser as { isDeleted?: boolean })?.isDeleted) {
+    return null;
   }
   return chat.otherUser?.avatarUrl || null;
 }
@@ -274,10 +278,12 @@ function NewChatModal({ isOpen, onClose, onSelectUser, currentUserId }: NewChatM
             </h2>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            aria-label="Закрыть"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-gray-500" aria-hidden="true" />
           </button>
         </div>
 
@@ -450,8 +456,9 @@ function ChatListItem({ chat, isSelected, currentUserId, onClick }: ChatListItem
   const isAI = isAIChat(chat);
   const hasUnread = (chat.unreadCount || 0) > 0;
   
-  // Проверяем онлайн статус для личных чатов
-  const otherUserId = !isGroup && !isAI && chat.otherUser?.id ? [chat.otherUser.id] : [];
+  // Проверяем онлайн статус для личных чатов (исключаем удалённого пользователя)
+  const isDeleted = (chat.otherUser as { isDeleted?: boolean; id?: string })?.isDeleted || chat.otherUser?.id === "deleted";
+  const otherUserId = !isGroup && !isAI && chat.otherUser?.id && !isDeleted && chat.otherUser.id !== "deleted" ? [chat.otherUser.id] : [];
   const { isOnline, getLastSeenAt } = useOnlineStatus(otherUserId);
   const isOtherUserOnline = otherUserId.length > 0 ? isOnline(otherUserId[0]) : false;
   const lastSeenAt = otherUserId.length > 0 ? getLastSeenAt(otherUserId[0]) : null;
@@ -499,6 +506,10 @@ function ChatListItem({ chat, isSelected, currentUserId, onClick }: ChatListItem
               <Hash className="w-5 h-5 text-white" />
             </div>
           )
+        ) : isDeleted ? (
+          <div className="w-11 h-11 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300" title="Удалённый пользователь">
+            <UserMinus className="w-5 h-5" />
+          </div>
         ) : avatar ? (
           <img
             src={avatar}
@@ -513,10 +524,8 @@ function ChatListItem({ chat, isSelected, currentUserId, onClick }: ChatListItem
         
         {/* Online indicator */}
         {isAI ? (
-          // ИИ помощник всегда онлайн
           <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-gray-900 bg-green-500" />
-        ) : !isGroup && (
-          // Для обычных пользователей показываем реальный статус
+        ) : !isGroup && !isDeleted && (
           <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-gray-900 ${
             isOtherUserOnline ? 'bg-green-500' : 'bg-gray-400'
           }`} />

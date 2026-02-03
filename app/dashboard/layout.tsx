@@ -309,13 +309,17 @@ export default async function DashboardLayout({
     }
     if (perm.appeals_view) {
       menuItems.push({
-        href: "/dashboard/appeals",
+        href: "/dashboard/appeals?tab=incoming",
         label: "Обращения",
         icon: (
           <svg key="icon-appeals-staff" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
           </svg>
         ),
+        subItems: [
+          { href: "/dashboard/appeals?tab=incoming", label: "Входящие" },
+          { href: "/dashboard/appeals?tab=outgoing", label: "Исходящие" },
+        ],
       });
     }
     if (perm.news_view) {

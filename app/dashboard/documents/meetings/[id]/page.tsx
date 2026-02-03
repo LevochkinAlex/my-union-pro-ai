@@ -147,6 +147,7 @@ export default function MeetingDetailPage({
   const { data: session } = useSession();
   const router = useRouter();
   const [meeting, setMeeting] = useState<Meeting | null>(null);
+  const [readOnly, setReadOnly] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const tabFromUrl = searchParams.get("tab");
   const initialTab: "info" | "agenda" | "protocol" | "resolutions" | "extracts" =
@@ -273,7 +274,8 @@ export default function MeetingDetailPage({
       if (response.ok) {
         const data = await response.json();
         setMeeting(data.meeting);
-        
+        setReadOnly(data.readOnly === true);
+
         // Инициализация данных протокола из agendaItems (все поля, которые выводятся в PDF протокола)
         const initialData: Record<string, any> = {};
         data.meeting.agendaItems.forEach((item: AgendaItem) => {
@@ -338,7 +340,7 @@ export default function MeetingDetailPage({
     }
   };
 
-  const canEditAgenda = meeting && (meeting.status === "DRAFT" || meeting.status === "SCHEDULED");
+  const canEditAgenda = meeting && !readOnly && (meeting.status === "DRAFT" || meeting.status === "SCHEDULED");
 
   const parseAgendaAttachments = (item: AgendaItem): AgendaAttachment[] => {
     const raw = item.attachments;
@@ -778,33 +780,40 @@ export default function MeetingDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={async () => {
-              const confirmed = await confirm(
-                "Вы уверены, что хотите удалить это заседание? Это действие нельзя отменить.",
-                "Подтвердите удаление"
-              );
-              if (!confirmed) {
-                return;
-              }
-              try {
-                const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}`, {
-                  method: "DELETE",
-                });
-                if (!response.ok) {
-                  const error = await response.json();
-                  throw new Error(error.error || "Ошибка удаления");
+          {readOnly && (
+            <span className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400">
+              Только просмотр
+            </span>
+          )}
+          {!readOnly && (
+            <button
+              onClick={async () => {
+                const confirmed = await confirm(
+                  "Вы уверены, что хотите удалить это заседание? Это действие нельзя отменить.",
+                  "Подтвердите удаление"
+                );
+                if (!confirmed) {
+                  return;
                 }
-                alertSuccess("Заседание удалено");
-                router.push("/dashboard/documents/meetings");
-              } catch (error) {
-                alertError(error instanceof Error ? error.message : "Не удалось удалить заседание");
-              }
-            }}
-            className="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"
-          >
-            Удалить
-          </button>
+                try {
+                  const response = await fetch(`/api/ppo-head/meetings/${resolvedParams.id}`, {
+                    method: "DELETE",
+                  });
+                  if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || "Ошибка удаления");
+                  }
+                  alertSuccess("Заседание удалено");
+                  router.push("/dashboard/documents/meetings");
+                } catch (error) {
+                  alertError(error instanceof Error ? error.message : "Не удалось удалить заседание");
+                }
+              }}
+              className="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"
+            >
+              Удалить
+            </button>
+          )}
         </div>
       </div>
 
@@ -1180,7 +1189,7 @@ export default function MeetingDetailPage({
                 <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
                   Шаги: 1) Разослать — участники получат документ во входящие, push и email, создаётся групповой чат заседания. 2) Участники согласуют или отклоняют с примечаниями во входящих. 3) После согласования всеми — утвердите повестку. Либо утвердите без согласования (быстрый путь).
                 </p>
-                {(meeting.agendaDocument.status === "DRAFT" || meeting.agendaDocument.status === "PENDING_APPROVAL") && (
+                {!readOnly && (meeting.agendaDocument.status === "DRAFT" || meeting.agendaDocument.status === "PENDING_APPROVAL") && (
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Согласование:</span>
                     {meeting.agendaDocument.status === "DRAFT" && (
@@ -1302,6 +1311,7 @@ export default function MeetingDetailPage({
                     )}
                   </div>
                 )}
+                {!readOnly && (
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Рассылка участникам:</span>
                   <button
@@ -1316,6 +1326,7 @@ export default function MeetingDetailPage({
                     {isSendingNotifications ? "Отправка…" : "Разослать повестку участникам"}
                   </button>
                 </div>
+                )}
               </div>
             </div>
           ) : (
@@ -1327,7 +1338,7 @@ export default function MeetingDetailPage({
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Сформируйте повестку дня на основе пунктов повестки
               </p>
-              {meeting.agendaItems.length > 0 && (
+              {!readOnly && meeting.agendaItems.length > 0 && (
                 <div className="mt-4 flex flex-col items-center gap-3 sm:flex-row sm:justify-center sm:gap-4">
                   <div className="w-full max-w-xs">
                     <label htmlFor="agenda-reg-number" className="block text-left text-xs font-medium text-gray-500 dark:text-gray-400">
@@ -2021,45 +2032,49 @@ export default function MeetingDetailPage({
                     </a>
                     {(meeting.protocolDocument.status === "COMPLETED" || meeting.protocolDocument.status === "SIGNED") && (
                       <>
-                        <input
-                          ref={protocolSignedFileInputRef}
-                          type="file"
-                          accept=".pdf,image/jpeg,image/jpg,image/png"
-                          className="hidden"
-                          aria-label="Загрузить подписанный протокол (скан)"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file || !meeting.protocolDocument) return;
-                            setUploadingSignedProtocol(true);
-                            try {
-                              const fd = new FormData();
-                              fd.append("file", file);
-                              fd.append("documentId", meeting.protocolDocument.id);
-                              const res = await fetch("/api/documents/upload-signed", { method: "POST", body: fd });
-                              const data = await res.json().catch(() => ({}));
-                              if (!res.ok) throw new Error(data.error || "Ошибка загрузки");
-                              alertSuccess(data.message || "Подписанный протокол загружен");
-                              loadMeeting();
-                            } catch (err) {
-                              alertError(err instanceof Error ? err.message : "Не удалось загрузить скан");
-                            } finally {
-                              setUploadingSignedProtocol(false);
-                              e.target.value = "";
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => protocolSignedFileInputRef.current?.click()}
-                          disabled={uploadingSignedProtocol}
-                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-50 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
-                          title="Шаг 8: распечатайте протокол, подпишите у председательствующего и секретаря, загрузите скан"
-                        >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                          </svg>
-                          {uploadingSignedProtocol ? "Загрузка…" : "Загрузить подписанный протокол (скан)"}
-                        </button>
+                        {!readOnly && (
+                          <>
+                            <input
+                              ref={protocolSignedFileInputRef}
+                              type="file"
+                              accept=".pdf,image/jpeg,image/jpg,image/png"
+                              className="hidden"
+                              aria-label="Загрузить подписанный протокол (скан)"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file || !meeting.protocolDocument) return;
+                                setUploadingSignedProtocol(true);
+                                try {
+                                  const fd = new FormData();
+                                  fd.append("file", file);
+                                  fd.append("documentId", meeting.protocolDocument.id);
+                                  const res = await fetch("/api/documents/upload-signed", { method: "POST", body: fd });
+                                  const data = await res.json().catch(() => ({}));
+                                  if (!res.ok) throw new Error(data.error || "Ошибка загрузки");
+                                  alertSuccess(data.message || "Подписанный протокол загружен");
+                                  loadMeeting();
+                                } catch (err) {
+                                  alertError(err instanceof Error ? err.message : "Не удалось загрузить скан");
+                                } finally {
+                                  setUploadingSignedProtocol(false);
+                                  e.target.value = "";
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => protocolSignedFileInputRef.current?.click()}
+                              disabled={uploadingSignedProtocol}
+                              className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-50 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
+                              title="Шаг 8: распечатайте протокол, подпишите у председательствующего и секретаря, загрузите скан"
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                              </svg>
+                              {uploadingSignedProtocol ? "Загрузка…" : "Загрузить подписанный протокол (скан)"}
+                            </button>
+                          </>
+                        )}
                         {(meeting.protocolDocument as { signedFilePath?: string | null }).signedFilePath && (
                           <a
                             href={`${getDocumentDownloadUrl(meeting.protocolDocument.id)}?signed=true`}
@@ -2080,7 +2095,7 @@ export default function MeetingDetailPage({
                 <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
                   Согласование: участники подтверждают протокол в системе, затем вы утверждаете документ. Шаг 8: распечатайте, подпишите у председательствующего и секретаря, загрузите скан. Рассылка: после утверждения — уведомления и ссылка на протокол участникам.
                 </p>
-                {(meeting.protocolDocument.status === "DRAFT" || meeting.protocolDocument.status === "PENDING_APPROVAL") && (
+                {!readOnly && (meeting.protocolDocument.status === "DRAFT" || meeting.protocolDocument.status === "PENDING_APPROVAL") && (
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Согласование протокола:</span>
                     {meeting.protocolDocument.status === "DRAFT" && (
@@ -2149,6 +2164,7 @@ export default function MeetingDetailPage({
                     )}
                   </div>
                 )}
+                {!readOnly && (
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Рассылка участникам:</span>
                   <button
@@ -2183,12 +2199,13 @@ export default function MeetingDetailPage({
                     {isSendingNotifications ? "Отправка…" : "Разослать протокол участникам"}
                   </button>
                 </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* Форма заполнения протокола */}
-          {meeting.agendaDocument && (
+          {/* Форма заполнения протокола (только для председателя) */}
+          {meeting.agendaDocument && !readOnly && (
             <>
               <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
                 <h3 className="font-semibold text-gray-900 dark:text-white">Заполнение протокола</h3>
@@ -2729,6 +2746,7 @@ export default function MeetingDetailPage({
                   >
                     ← Назад к повестке
                   </button>
+                  {!readOnly && (
                   <div className="flex flex-wrap items-center gap-3">
                     <button
                       onClick={async () => {
@@ -2819,10 +2837,13 @@ export default function MeetingDetailPage({
                       {isGenerating ? "Утверждение..." : "Утвердить"}
                     </button>
                   </div>
+                  )}
                 </div>
+                {!readOnly && (
                 <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
                   Предпросмотр — сформирует документ и откроет его в окне. Сохранить в черновики — создаёт/обновляет черновик. Утвердить — документ создаётся и утверждается, после этого можно отправлять в печать.
                 </p>
+                )}
               </div>
             </>
           )}
@@ -2835,7 +2856,7 @@ export default function MeetingDetailPage({
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Постановления ({meeting.resolutions.length})
             </h3>
-            {meeting.protocolDocument && meeting.protocolDocument.status === "COMPLETED" && (
+            {!readOnly && meeting.protocolDocument && meeting.protocolDocument.status === "COMPLETED" && (
               <button
                 onClick={() => {
                   // TODO: Добавить функционал создания постановления
@@ -3019,26 +3040,10 @@ export default function MeetingDetailPage({
         isFullscreen={false}
       >
         <div className="p-4">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Просмотр документа
             </h3>
-            <div className="flex gap-2">
-              {pdfPreviewUrl && (
-                <a
-                  href={pdfPreviewUrl.replace("?inline=1", "")}
-                  download
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  Скачать
-                </a>
-              )}
-            </div>
           </div>
           {pdfPreviewUrl && (
             <div className="w-full h-[80vh] border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-900">
@@ -3047,9 +3052,6 @@ export default function MeetingDetailPage({
                 className="w-full h-full min-h-[600px]"
                 title="PDF Preview"
               />
-              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
-                Если PDF не отображается, используйте кнопку "Скачать" для просмотра в браузере
-              </div>
             </div>
           )}
         </div>

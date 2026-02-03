@@ -161,11 +161,15 @@ export async function GET(request: NextRequest) {
       .filter(Boolean) as string[];
     let existingMeetingIds = new Set<string>();
     let meetingIdsWhereIAmChairman = new Set<string>();
+    /** Для копий заседания: оригинал должен быть текущей повесткой или протоколом этого заседания */
+    const validMeetingOriginalIds = new Set<string>(); // "meetingId:originalDocumentId"
     if (meetingIdsFromCopies.length > 0) {
       const meetings = await prisma.meeting.findMany({
         where: { id: { in: meetingIdsFromCopies } },
         select: {
           id: true,
+          agendaDocumentId: true,
+          protocolDocumentId: true,
           participants: {
             where: { role: "CHAIRMAN", userId: { not: null } },
             select: { userId: true },
@@ -176,17 +180,28 @@ export async function GET(request: NextRequest) {
       meetings.forEach((m) => {
         const chairmanUserId = m.participants[0]?.userId;
         if (chairmanUserId === session.user.id) meetingIdsWhereIAmChairman.add(m.id);
+        if (m.agendaDocumentId) validMeetingOriginalIds.add(`${m.id}:${m.agendaDocumentId}`);
+        if (m.protocolDocumentId) validMeetingOriginalIds.add(`${m.id}:${m.protocolDocumentId}`);
       });
     }
-    const incomingFiltered = incomingDocuments.filter((d: { metadata?: unknown }) => {
+    const incomingFiltered = incomingDocuments.filter((d: { metadata?: unknown; type?: string }) => {
       const meta = d.metadata as { originalDocumentId?: string; meetingId?: string } | null;
       const originalId = meta?.originalDocumentId;
       const meetingId = meta?.meetingId;
-      if (!originalId) return true; // не копия заседания
+      const isAgendaOrProtocol = (d.type || "").toUpperCase() === "AGENDA" || (d.type || "").toUpperCase() === "PROTOCOL";
+      if (!originalId) {
+        if (isAgendaOrProtocol) return false; // повестки/протоколы без привязки к оригиналу не показываем (устаревшие копии)
+        return true; // не копия заседания
+      }
       if (!existingOriginalIds.has(originalId)) return false; // оригинал удалён
       if (meetingId && !existingMeetingIds.has(meetingId)) return false; // заседание удалено
+      // Показывать только копии текущей повестки/протокола заседания (не старые, пересозданные документы)
+      if (meetingId && !validMeetingOriginalIds.has(`${meetingId}:${originalId}`)) return false;
       // Не показывать председателю копии своих заседаний — утверждает на странице заседания
       if (meetingId && meetingIdsWhereIAmChairman.has(meetingId)) return false;
+      // Любая копия (с originalDocumentId): показываем только если оригинал на согласовании (не черновик, не исполнен)
+      const origStatus = originalStatusMap[originalId];
+      if (origStatus && origStatus !== "PENDING_APPROVAL") return false;
       return true;
     });
     const approvalMap: Record<string, { status: string; comment: string | null; approvedAt: Date | null }> = {};

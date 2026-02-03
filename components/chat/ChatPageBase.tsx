@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback, ReactNode } from "react";
+import { useEffect, useState, useCallback, useRef, ReactNode } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import { useToast } from "@/components/ui/Toast";
 import { useChat } from "@/hooks/useChat";
 import { safeJsonParse } from "@/lib/api-client";
+import { isDeletedUser } from "@/lib/chat-utils";
 import { Chat, Message } from "@/types/chat";
 
 // Lazy load компоненты
@@ -100,6 +101,11 @@ export function ChatPageBase({
 }: ChatPageBaseProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (containerRef.current) containerRef.current.style.height = containerHeight;
+  }, [containerHeight]);
   const { data: session } = useSession();
   const { showToast } = useToast();
   const currentUserId = session?.user?.id || null;
@@ -309,10 +315,14 @@ export function ChatPageBase({
         },
       });
 
-      // Пересылка работает только в PRIVATE чаты
+      // Пересылка работает только в PRIVATE чаты и не в чат с удалённым пользователем
       if (targetChat.type !== "PRIVATE" || !targetChat.otherUser?.id) {
         console.warn("[ChatPageBase] Cannot forward to non-private chat:", targetChat.type);
         showToast("Можно переслать только в личный чат", "error");
+        return;
+      }
+      if (targetChat.otherUser.id === "deleted" || isDeletedUser(targetChat.otherUser)) {
+        showToast("Нельзя переслать в чат с удалённым пользователем", "error");
         return;
       }
 
@@ -356,7 +366,7 @@ export function ChatPageBase({
   const Header = ChatHeaderComponent || DefaultChatHeader;
 
   return (
-    <div className="flex flex-col" style={{ height: containerHeight }}>
+    <div ref={containerRef} className="flex flex-col">
       {/* Кастомный заголовок */}
       {headerContent && <div className="shrink-0 mb-4">{headerContent}</div>}
 
@@ -389,7 +399,14 @@ export function ChatPageBase({
               <Header
                 chat={selectedChat}
                 onBack={handleBackToList}
-                onProfileClick={enableProfileClick ? handleProfileClick : undefined}
+                onProfileClick={
+                  enableProfileClick &&
+                  selectedChat.otherUser &&
+                  !isDeletedUser(selectedChat.otherUser) &&
+                  selectedChat.otherUser.id !== "deleted"
+                    ? handleProfileClick
+                    : undefined
+                }
               />
 
               <div className="flex-1 flex flex-col overflow-hidden min-h-0 w-full max-w-full">

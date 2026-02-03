@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Chat, Message } from "@/types/chat";
-import { getUserName, getFileUrl } from "@/lib/chat-utils";
+import { getUserName, getFileUrl, isDeletedUser } from "@/lib/chat-utils";
+import { UserMinus } from "lucide-react";
 
 interface ForwardModalProps {
   message: Message;
@@ -40,10 +41,12 @@ export default function ForwardModal({
             Переслать сообщение
           </h3>
           <button
+            type="button"
             onClick={onClose}
             className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            aria-label="Закрыть"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -85,7 +88,11 @@ export default function ForwardModal({
                 onClick={() => onSelect(chat)}
                 className="w-full flex items-center gap-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
-                {chat.otherUser?.avatarUrl ? (
+                {isDeletedUser(chat.otherUser) ? (
+                  <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300" title="Удалённый пользователь">
+                    <UserMinus className="w-5 h-5" />
+                  </div>
+                ) : chat.otherUser?.avatarUrl ? (
                   <img
                     src={getFileUrl(chat.otherUser.avatarUrl)}
                     alt={getUserName(chat.otherUser)}

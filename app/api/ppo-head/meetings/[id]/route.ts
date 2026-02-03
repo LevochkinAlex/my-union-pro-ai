@@ -19,12 +19,6 @@ export async function GET(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const orgHead = await getOrgHead(session.user.id);
-
-    if (!orgHead) {
-      return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
-    }
-
     const { id } = await params;
 
     const meeting = await prisma.meeting.findUnique({
@@ -103,11 +97,17 @@ export async function GET(
       return NextResponse.json({ error: "Заседание не найдено" }, { status: 404 });
     }
 
-    if (meeting.organizationId !== orgHead.organizationId) {
-      return NextResponse.json({ error: "Нет доступа к этому заседанию" }, { status: 403 });
+    const orgHead = await getOrgHead(session.user.id);
+    const isParticipant = meeting.participants.some((p) => p.userId === session.user.id);
+
+    if (orgHead && meeting.organizationId === orgHead.organizationId) {
+      return NextResponse.json({ meeting });
+    }
+    if (isParticipant) {
+      return NextResponse.json({ meeting, readOnly: true });
     }
 
-    return NextResponse.json({ meeting });
+    return NextResponse.json({ error: "Нет доступа к этому заседанию" }, { status: 403 });
   } catch (error: any) {
     console.error("[ppo-head/meetings/[id]] GET error:", error);
     return NextResponse.json(

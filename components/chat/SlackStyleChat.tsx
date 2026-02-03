@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
@@ -30,6 +30,7 @@ import {
   ArrowLeft,
   MoreVertical,
   UserPlus,
+  UserMinus,
   Hash,
   Bot,
   Info,
@@ -91,6 +92,7 @@ function getChatDisplayInfo(chat: Chat, currentUserId: string | null) {
   const isGroup = chat.type === "GROUP" || chat.type === "CHANNEL";
   const isChannel = chat.type === "CHANNEL";
   const isTicketChat = !!chat.ticketId || !!chat.ticketPublicId;
+  const isDeletedUser = (chat.otherUser as { isDeleted?: boolean })?.isDeleted;
 
   let displayName = "Чат";
   let avatarUrl: string | null = null;
@@ -120,16 +122,21 @@ function getChatDisplayInfo(chat: Chat, currentUserId: string | null) {
       subtitle = `Обращение #${chat.ticketPublicId} · ${subtitle}`;
     }
   } else if (chat.otherUser) {
+    const isDeleted = (chat.otherUser as { isDeleted?: boolean })?.isDeleted;
     displayName = [chat.otherUser.lastName, chat.otherUser.firstName]
       .filter(Boolean)
-      .join(" ") || "Пользователь";
-    // Нормализуем аватар через normalizeUserAvatar для правильного отображения
-    const normalized = normalizeUserAvatar(chat.otherUser);
-    avatarUrl = normalized.avatarUrl || null;
-    subtitle = chat.otherUser.jobTitle || chat.otherUser.profession || "Онлайн";
+      .join(" ") || (isDeleted ? "Удалённый пользователь" : "Пользователь");
+    if (isDeleted) {
+      avatarUrl = null;
+      subtitle = "";
+    } else {
+      const normalized = normalizeUserAvatar(chat.otherUser);
+      avatarUrl = normalized.avatarUrl || null;
+      subtitle = chat.otherUser.jobTitle || chat.otherUser.profession || "Онлайн";
+    }
   }
 
-  return { displayName, avatarUrl, subtitle, isAI, isGroup, isTicketChat };
+  return { displayName, avatarUrl, subtitle, isAI, isGroup, isTicketChat, isDeletedUser };
 }
 
 // ============================================================================
@@ -146,13 +153,21 @@ interface ChatHeaderProps {
   ticketId?: string | null;
   ticketPublicId?: string | null;
   onCloseAppeal?: () => void;
-  isChairman?: boolean; // Для проверки прав доступа
+  isChairman?: boolean;
+  /** Удалить переписку из списка (личные) или выйти из чата (группа). Вызов после успешного API. */
+  onLeaveChat?: () => Promise<void>;
+  /** Полностью удалить чат (только создатель группы/канала). Вызов после успешного API. */
+  onDeleteChat?: () => Promise<void>;
+  /** Личный чат (1-1) */
+  isPrivateChat?: boolean;
+  /** Текущий пользователь — создатель этого чата (группа/канал) */
+  isCreatedByMe?: boolean;
 }
 
-function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditGroup, isCurrentUserAdmin, ticketId, ticketPublicId, onCloseAppeal, isChairman = false }: ChatHeaderProps) {
+function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditGroup, isCurrentUserAdmin, ticketId, ticketPublicId, onCloseAppeal, isChairman = false, onLeaveChat, onDeleteChat, isPrivateChat = false, isCreatedByMe = false }: ChatHeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
   const router = useRouter();
-  const { displayName, avatarUrl, subtitle, isAI, isGroup, isTicketChat } = getChatDisplayInfo(chat, currentUserId);
+  const { displayName, avatarUrl, subtitle, isAI, isGroup, isTicketChat, isDeletedUser } = getChatDisplayInfo(chat, currentUserId);
   const { showToast } = useToast();
   
   // Закрываем меню при клике вне его
@@ -170,8 +185,8 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
     }
   }, [showMenu]);
   
-  // Проверяем онлайн статус для личных чатов
-  const otherUserId = !isGroup && !isAI && chat.otherUser?.id ? [chat.otherUser.id] : [];
+  // Проверяем онлайн статус для личных чатов (исключаем удалённого пользователя)
+  const otherUserId = !isGroup && !isAI && chat.otherUser?.id && !isDeletedUser && chat.otherUser.id !== "deleted" ? [chat.otherUser.id] : [];
   const { isOnline, getLastSeenAt } = useOnlineStatus(otherUserId);
   const isOtherUserOnline = otherUserId.length > 0 ? isOnline(otherUserId[0]) : false;
   const lastSeenAt = otherUserId.length > 0 ? getLastSeenAt(otherUserId[0]) : null;
@@ -193,10 +208,12 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
       <div className="flex items-center gap-3 min-w-0">
         <button
+          type="button"
           onClick={onBack}
           className="md:hidden p-2 -ml-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl"
+          aria-label="Назад"
         >
-          <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+          <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" aria-hidden="true" />
         </button>
 
         {isAI ? (
@@ -211,6 +228,10 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
               <Hash className="w-5 h-5 text-white" />
             </div>
           )
+        ) : isDeletedUser ? (
+          <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 flex-shrink-0" title="Удалённый пользователь">
+            <UserMinus className="w-5 h-5" />
+          </div>
         ) : avatarUrl ? (
           <img 
             src={avatarUrl} 
@@ -273,10 +294,12 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
 
         <div className="relative">
           <button
+            type="button"
             onClick={() => setShowMenu(!showMenu)}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl"
+            aria-label="Меню"
           >
-            <MoreVertical className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+            <MoreVertical className="w-5 h-5 text-gray-600 dark:text-gray-300" aria-hidden="true" />
           </button>
 
           {showMenu && (
@@ -391,6 +414,38 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
                     Очистить историю
                   </button>
                 )}
+                {/* Удалить переписку (личные) / Выйти из чата (группа) / Удалить чат (создатель группы) */}
+                {(onLeaveChat || onDeleteChat) && (
+                  <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
+                )}
+                {onLeaveChat && (isPrivateChat || (isGroup && !isCreatedByMe)) && (
+                  <button
+                    onClick={async () => {
+                      setShowMenu(false);
+                      if (confirm(isPrivateChat ? 'Удалить переписку из списка? Чат исчезнет у вас, собеседник не пострадает.' : 'Выйти из чата? Чат исчезнет из вашего списка.')) {
+                        await onLeaveChat();
+                      }
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    {isPrivateChat ? 'Удалить переписку' : 'Выйти из чата'}
+                  </button>
+                )}
+                {onDeleteChat && isGroup && isCreatedByMe && (
+                  <button
+                    onClick={async () => {
+                      setShowMenu(false);
+                      if (confirm('Полностью удалить чат? Все сообщения и участники будут удалены. Это нельзя отменить.')) {
+                        await onDeleteChat();
+                      }
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Удалить чат
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -414,6 +469,11 @@ export default function SlackStyleChat({
   const { data: session } = useSession();
   const { showToast } = useToast();
   const currentUserId = session?.user?.id || null;
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (containerRef.current) containerRef.current.style.height = containerHeight;
+  }, [containerHeight]);
 
   // State
   const [mounted, setMounted] = useState(false);
@@ -489,6 +549,7 @@ export default function SlackStyleChat({
     aiTyping,
     loadChats,
     selectChat,
+    openChatById,
     createOrOpenChat,
     sendMessage,
     editMessage,
@@ -565,7 +626,8 @@ export default function SlackStyleChat({
     }
   }, [mounted, ticketIdFromUrl, selectedChat?.ticketId, selectedChat?.ticketPublicId, selectedChat?.ticket]);
 
-  // Handle URL params
+  // Handle URL params (userId, chatId — в т.ч. чат заседания по ссылке)
+  const chatIdFromUrlTriedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!mounted || loading) return;
 
@@ -579,12 +641,14 @@ export default function SlackStyleChat({
           router.replace(baseUrl, { scroll: false });
         }
       });
-    } else if (chatId) {
+      return;
+    }
+
+    if (chatId) {
       const chat = chats.find((c) => c.id === chatId);
       if (chat) {
         selectChat(chat);
         setShowChatView(true);
-        // Сохраняем ticketId и messageId в URL
         const ticketId = searchParams.get("ticketId");
         const messageId = searchParams.get("messageId");
         const urlParams = new URLSearchParams();
@@ -592,11 +656,28 @@ export default function SlackStyleChat({
         if (ticketId) urlParams.set("ticketId", ticketId);
         if (messageId) urlParams.set("messageId", messageId);
         router.replace(`${baseUrl}?${urlParams.toString()}`, { scroll: false });
-        
-        // Прокрутка к сообщению будет обработана в отдельном useEffect
+        chatIdFromUrlTriedRef.current = null;
+        return;
       }
+      // Чата нет в списке (например, чат заседания) — пробуем открыть по ID
+      if (chatIdFromUrlTriedRef.current !== chatId) {
+        chatIdFromUrlTriedRef.current = chatId;
+        openChatById(chatId).then((result) => {
+          if (result.success) {
+            setShowChatView(true);
+            const urlParams = new URLSearchParams();
+            urlParams.set("chatId", chatId);
+            router.replace(`${baseUrl}?${urlParams.toString()}`, { scroll: false });
+          } else {
+            chatIdFromUrlTriedRef.current = null;
+            showToast(result.error || "Нет доступа к чату", "error");
+          }
+        });
+      }
+    } else {
+      chatIdFromUrlTriedRef.current = null;
     }
-  }, [mounted, loading, searchParams, chats.length, router, baseUrl]);
+  }, [mounted, loading, searchParams, chats, router, baseUrl, selectChat, createOrOpenChat, openChatById, showToast]);
 
   useEffect(() => {
     if (selectedChat) {
@@ -799,6 +880,42 @@ export default function SlackStyleChat({
     setActiveThread(null);
   }, []);
 
+  const handleLeaveChat = useCallback(async () => {
+    if (!selectedChat?.id) return;
+    try {
+      const res = await fetch(`/api/chat/${selectedChat.id}/leave`, { method: "POST" });
+      const data = await safeJsonParse(res);
+      if (!res.ok) {
+        showToast(data?.error || "Ошибка", "error");
+        return;
+      }
+      showToast("Чат удалён из списка", "success");
+      await loadChats();
+      handleBackToList();
+    } catch (e) {
+      console.error("[SlackStyleChat] leave chat error:", e);
+      showToast("Ошибка при удалении чата", "error");
+    }
+  }, [selectedChat?.id, loadChats, handleBackToList, showToast]);
+
+  const handleDeleteChat = useCallback(async () => {
+    if (!selectedChat?.id) return;
+    try {
+      const res = await fetch(`/api/chat/${selectedChat.id}`, { method: "DELETE" });
+      const data = await safeJsonParse(res);
+      if (!res.ok) {
+        showToast(data?.error || "Ошибка", "error");
+        return;
+      }
+      showToast("Чат удалён", "success");
+      await loadChats();
+      handleBackToList();
+    } catch (e) {
+      console.error("[SlackStyleChat] delete chat error:", e);
+      showToast("Ошибка при удалении чата", "error");
+    }
+  }, [selectedChat?.id, loadChats, handleBackToList, showToast]);
+
   // Format messages
   const formattedMessages = useMemo(() => {
     return messages.map((m) => ({
@@ -822,7 +939,7 @@ export default function SlackStyleChat({
   }
 
   return (
-    <div className="flex flex-col bg-gray-100 dark:bg-gray-950" style={{ height: containerHeight }}>
+    <div ref={containerRef} className="flex flex-col bg-gray-100 dark:bg-gray-950">
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Sidebar */}
         <div className={`${showChatView ? "hidden md:flex" : "flex"} w-full md:w-80 lg:w-96 flex-col min-w-0 border-r border-gray-200 dark:border-gray-800`}>
@@ -862,7 +979,6 @@ export default function SlackStyleChat({
                 ticketId={ticketIdFromUrl || selectedChat?.ticketId || undefined}
                 ticketPublicId={ticketInfo?.publicId || selectedChat?.ticket?.publicId || selectedChat?.ticketPublicId || undefined}
                 onCloseAppeal={
-                  // Показываем кнопку закрытия только для создателя обращения
                   ticketInfo && 
                   ticketInfo.userId === currentUserId && 
                   ticketInfo.status !== 'CLOSED' && 
@@ -871,6 +987,10 @@ export default function SlackStyleChat({
                     : undefined
                 }
                 isChairman={isChairman}
+                onLeaveChat={handleLeaveChat}
+                onDeleteChat={handleDeleteChat}
+                isPrivateChat={selectedChat.type === "PRIVATE"}
+                isCreatedByMe={selectedChat.createdById === currentUserId}
               />
 
               <div className="flex-1 flex overflow-hidden relative">

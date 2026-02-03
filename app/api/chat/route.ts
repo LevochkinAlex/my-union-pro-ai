@@ -267,12 +267,14 @@ export async function GET(request: NextRequest) {
       console.warn("[chat] Channel sync check error:", syncError);
     }
 
-    // Для председателя: создаём групповые чаты заседаний, если их ещё нет (чтобы они отображались в списке)
+    // Синхронизация чатов заседаний:
+    // 1) Для председателя: создаём групповые чаты заседаний организации, если их ещё нет.
+    // 2) Для любого пользователя: заседания, где он участник — ensureMeetingGroupChat добавляет его в чат, если его там ещё нет.
     let didSyncMeetingChats = false;
-    if (isPPOHeadMode && user) {
-      const organizationId = user.ppoHeadOrganizationId || user.mpoHeadOrganizationId || user.rpoHeadOrganizationId;
-      if (organizationId) {
-        try {
+    try {
+      if (isPPOHeadMode && user) {
+        const organizationId = user.ppoHeadOrganizationId || user.mpoHeadOrganizationId || user.rpoHeadOrganizationId;
+        if (organizationId) {
           const meetingsWithoutChat = await prisma.meeting.findMany({
             where: {
               organizationId,
@@ -288,12 +290,28 @@ export async function GET(request: NextRequest) {
           }
           if (meetingsWithoutChat.length > 0) {
             didSyncMeetingChats = true;
-            await invalidateUserChatsCache(userId).catch(() => {});
           }
-        } catch (syncErr) {
-          console.warn("[chat] Meeting group chat sync error:", syncErr);
         }
       }
+      // Участник заседаний (зам., член профкома и т.д.): синхронизируем чаты заседаний, где он участвует (создаём чат при отсутствии, добавляем в участники при наличии)
+      const meetingsWhereUserParticipant = await prisma.meeting.findMany({
+        where: {
+          participants: { some: { userId } },
+        },
+        select: { id: true },
+      });
+      for (const meeting of meetingsWhereUserParticipant) {
+        const result = await ensureMeetingGroupChat(meeting.id).catch((err) => {
+          console.warn("[chat] ensureMeetingGroupChat participant sync:", meeting.id, err);
+          return null;
+        });
+        if (result) didSyncMeetingChats = true;
+      }
+      if (didSyncMeetingChats) {
+        await invalidateUserChatsCache(userId).catch(() => {});
+      }
+    } catch (syncErr) {
+      console.warn("[chat] Meeting group chat sync error:", syncErr);
     }
 
     // Кешируем список чатов на короткое время (15 сек)
@@ -690,12 +708,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Получаем информацию о другом пользователе для личного чата
-    let otherUser = null;
+    // Получаем информацию о другом пользователе для личного чата (в т.ч. удалённый пользователь)
+    let otherUser: { id: string; firstName: string | null; lastName: string | null; middleName?: string | null; avatarUrl?: string | null; phone?: string | null; isDeleted?: boolean } | null = null;
     if (chat.type === 'PRIVATE' && chat.participants) {
       const otherParticipant = chat.participants.find((p: any) => p.userId !== userId);
       if (otherParticipant?.user) {
         otherUser = normalizeUserAvatar(otherParticipant.user);
+      } else if (otherParticipant && (otherParticipant.userId == null || !otherParticipant.user)) {
+        const label = otherParticipant.deletedUserDisplayName ?? "Удалённый пользователь";
+        otherUser = {
+          id: "deleted",
+          firstName: null,
+          lastName: label,
+          middleName: null,
+          avatarUrl: null,
+          phone: null,
+          isDeleted: true,
+        };
       }
     }
 
@@ -714,6 +743,7 @@ export async function POST(request: NextRequest) {
           middleName: otherUser.middleName,
           avatarUrl: otherUser.avatarUrl,
           phone: otherUser.phone,
+          isDeleted: otherUser.isDeleted,
         } : null,
       },
     });

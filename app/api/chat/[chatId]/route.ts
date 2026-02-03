@@ -2189,3 +2189,77 @@ export async function PATCH(
     );
   }
 }
+
+/**
+ * DELETE /api/chat/[chatId]
+ * Полностью удалить чат (только для создателя группы/канала, без привязки к обращению).
+ * Личные чаты не удаляются этим методом — используйте POST /api/chat/[chatId]/leave.
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { chatId: string } | Promise<{ chatId: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Не авторизован' }, { status: 401 });
+    }
+
+    const resolvedParams = await Promise.resolve(params);
+    const chatId = resolvedParams.chatId;
+    const userId = session.user.id;
+
+    const chat = await prisma.chat.findUnique({
+      where: { id: chatId },
+      include: {
+        ticket: { select: { id: true } },
+        participants: { where: { leftAt: null }, select: { userId: true } },
+      },
+    });
+
+    if (!chat) {
+      return NextResponse.json({ error: 'Чат не найден' }, { status: 404 });
+    }
+
+    if (chat.type !== 'GROUP' && chat.type !== 'CHANNEL') {
+      return NextResponse.json(
+        { error: 'Полное удаление доступно только для групп и каналов. Для личного чата используйте «Удалить переписку».' },
+        { status: 400 }
+      );
+    }
+
+    if (chat.createdById !== userId) {
+      return NextResponse.json(
+        { error: 'Удалить чат может только создатель' },
+        { status: 403 }
+      );
+    }
+
+    if (chat.ticket) {
+      return NextResponse.json(
+        { error: 'Нельзя удалить чат, связанный с обращением' },
+        { status: 400 }
+      );
+    }
+
+    await prisma.chat.delete({
+      where: { id: chatId },
+    });
+
+    const participantIds = chat.participants.map((p) => p.userId).filter(Boolean) as string[];
+    await Promise.allSettled(
+      participantIds.map((id) => invalidateUserChatsCache(id))
+    ).catch(() => {});
+
+    return NextResponse.json({
+      success: true,
+      message: 'Чат удалён',
+    });
+  } catch (error: any) {
+    console.error('[chat] DELETE Error:', error);
+    return NextResponse.json(
+      { error: error?.message || 'Ошибка удаления чата' },
+      { status: 500 }
+    );
+  }
+}

@@ -1437,6 +1437,29 @@ export function useChat(options: UseChatOptions = {}) {
     }
   }, [loadChats, loadMessages, options]);
 
+  // Открыть чат по ID (например, чат заседания по ссылке) — добавляет в список и выбирает, если есть доступ
+  const openChatById = useCallback(async (chatId: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const response = await fetch(`/api/chat/${chatId}?limit=1`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const error = data?.error || (response.status === 403 ? "Нет доступа к чату" : response.status === 404 ? "Чат не найден" : "Ошибка загрузки чата");
+        return { success: false, error };
+      }
+      const data = await response.json();
+      const chat = data?.chat;
+      if (!chat || !chat.id) {
+        return { success: false, error: "Чат не найден" };
+      }
+      setChats((prev) => (prev.some((c) => c.id === chat.id) ? prev : [...prev, chat]));
+      selectChat(chat);
+      return { success: true };
+    } catch (e) {
+      console.error("[useChat] openChatById error:", e);
+      return { success: false, error: "Ошибка загрузки чата" };
+    }
+  }, [selectChat]);
+
   // Хранение позиций скролла
   const scrollPositionsRef = useRef<Map<string, number>>(new Map());
   const saveScrollPosition = useCallback((chatId: string, position: number) => {
@@ -1475,6 +1498,7 @@ export function useChat(options: UseChatOptions = {}) {
     loadMessages,
     loadOlderMessages,
     selectChat,
+    openChatById,
     createOrOpenChat,
     sendMessage,
     sendTyping,

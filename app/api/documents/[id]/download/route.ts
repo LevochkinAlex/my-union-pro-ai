@@ -192,7 +192,29 @@ export async function GET(
         }
       }
     }
-    
+
+    // Участник заседания может просматривать повестку и протокол этого заседания (режим только чтение)
+    if (!hasAccess && (document.type === "AGENDA" || document.type === "PROTOCOL")) {
+      const meeting = await prisma.meeting.findFirst({
+        where: {
+          OR: [
+            { agendaDocumentId: id },
+            { protocolDocumentId: id },
+          ],
+        },
+        select: { id: true },
+      });
+      if (meeting) {
+        const participant = await prisma.meetingParticipant.findFirst({
+          where: { meetingId: meeting.id, userId: session.user.id },
+          select: { id: true },
+        });
+        if (participant) {
+          hasAccess = true;
+        }
+      }
+    }
+
     if (!hasAccess) {
       console.log("[documents/download] Access denied:", {
         userId: session.user.id,

@@ -30,6 +30,11 @@ export async function deleteUser(
   }
 
   await prisma.$transaction(async (tx) => {
+    // Участники чатов: помечаем как «Удалённый пользователь», затем User удалится и userId станет null (SetNull).
+    await tx.chatParticipant.updateMany(
+      { where: { userId } },
+      { data: { deletedUserDisplayName: "Удалённый пользователь" } }
+    );
     // Удаляем реакции и «прочитано» пользователя (могут блокировать удаление User без onDelete в БД).
     await tx.chatMessageReaction.deleteMany({ where: { userId } });
     await tx.chatMessageRead.deleteMany({ where: { userId } });

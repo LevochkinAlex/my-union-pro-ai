@@ -10,12 +10,24 @@ import { getFileUrlWithCDN, getFileUrlByCategory } from "@/lib/cdn";
 import { formatFileSize as formatFileSizeUtil } from "@/lib/file-utils";
 
 /**
+ * Проверка: удалённый пользователь (профиль недоступен, показывать плейсхолдер).
+ */
+export function isDeletedUser(user: ChatUser | any | null | undefined): boolean {
+  return !!(user?.isDeleted === true || user?.id === "deleted");
+}
+
+/**
  * Получить полное имя пользователя
  * В русской традиции: Фамилия Имя Отчество
  * Консистентно с остальным приложением (lib/documents.ts, MergeAccountsModal, ppo-head pages)
+ * Для удалённого пользователя возвращает сохранённое имя или "Удалённый пользователь".
  */
 export function getUserName(user: ChatUser | any | null | undefined): string {
   if (!user) return "Пользователь";
+  if (isDeletedUser(user)) {
+    const parts = [user.lastName, user.firstName, user.middleName].filter(Boolean);
+    return parts.length > 0 ? parts.join(" ") : "Удалённый пользователь";
+  }
   const parts = [user.lastName, user.firstName, user.middleName].filter(Boolean);
   return parts.length > 0 ? parts.join(" ") : "Пользователь";
 }

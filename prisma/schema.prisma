@@ -2126,8 +2126,11 @@ model ChatParticipant {
   chatId String
   chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
-  userId String
-  user   User   @relation("ChatParticipants", fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+  user   User?  @relation("ChatParticipants", fields: [userId], references: [id], onDelete: SetNull)
+
+  // Плейсхолдер для удалённого пользователя: при удалении User в этом поле сохраняем "Удалённый пользователь"
+  deletedUserDisplayName String? @db.Text
 
   // Роль в группе
   role String @default("member") // "admin", "member"

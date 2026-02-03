@@ -10,6 +10,7 @@ import { normalizeUserAvatar, normalizeUsersAvatars } from "@/lib/api-helpers";
 import { Prisma } from "@prisma/client";
 import { cacheGet, cacheSet } from "@/lib/cache";
 import { invalidateUserChatsCache, invalidateChatCache } from "@/lib/chat-redis";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 // ============================================================================
 // ТИПЫ
@@ -52,17 +53,19 @@ export interface ChatInfo {
 export interface ParticipantInfo {
   id: string;
   odvisId: string;
-  userId: string;
+  userId: string | null;
   role: ParticipantRole;
   readAt: Date | null;
   joinedAt: Date;
+  /** null для удалённого пользователя (показывать deletedUserDisplayName) */
   user: {
     id: string;
     firstName: string | null;
     lastName: string | null;
     middleName: string | null;
     avatarUrl: string | null;
-  };
+  } | null;
+  deletedUserDisplayName?: string | null;
 }
 
 export interface OtherUserInfo {
@@ -74,6 +77,8 @@ export interface OtherUserInfo {
   phone?: string | null;
   isGroup?: boolean;
   participantsCount?: number;
+  /** Удалённый пользователь: показывать плейсхолдер «Удалённый пользователь» */
+  isDeleted?: boolean;
 }
 
 // ============================================================================
@@ -88,13 +93,20 @@ export async function checkChatAccess(
   chatId: string,
   userId: string
 ): Promise<{ hasAccess: boolean; chat: any | null; participant: any | null }> {
-  // Получаем чат
+  // Получаем чат (включая meetingId и связь с обращением для чатов обращений)
   const chat = await prisma.chat.findUnique({
     where: { id: chatId },
     select: {
       id: true,
       type: true,
       name: true,
+      meetingId: true,
+      ticket: {
+        select: {
+          id: true,
+          organizationId: true,
+        },
+      },
     },
   });
 
@@ -103,13 +115,41 @@ export async function checkChatAccess(
   }
 
   // Проверяем доступ через ChatParticipant
-  const participant = await prisma.chatParticipant.findFirst({
+  let participant = await prisma.chatParticipant.findFirst({
     where: {
       chatId,
       userId,
       leftAt: null,
     },
   });
+
+  // Если не в чате, но это групповой чат заседания — разрешаем доступ участникам заседания
+  if (!participant && chat.meetingId) {
+    const meetingParticipant = await prisma.meetingParticipant.findFirst({
+      where: {
+        meetingId: chat.meetingId,
+        userId,
+      },
+      select: { id: true },
+    });
+    if (meetingParticipant) {
+      return { hasAccess: true, chat, participant: null };
+    }
+  }
+
+  // Если не участник, но чат привязан к обращению — разрешаем доступ председателю или сотрудникам с правом appeals_view той же организации
+  if (!participant && chat.ticket?.organizationId) {
+    const perm = await checkUserPermissions(userId);
+    const orgMatch = perm.organizationId === chat.ticket.organizationId;
+    const isChairmanWithAccess = perm.isChairman === true && orgMatch;
+    const isStaffWithAppeals =
+      perm.isStaff === true &&
+      perm.permissions?.appeals_view === true &&
+      orgMatch;
+    if (isChairmanWithAccess || isStaffWithAppeals) {
+      return { hasAccess: true, chat, participant: null };
+    }
+  }
 
   return {
     hasAccess: !!participant,
@@ -1172,6 +1212,19 @@ export function formatChatInfo(
       avatarUrl: normalized.avatarUrl,
       phone: normalized.phone,
     };
+  } else if (otherParticipant && (otherParticipant.userId == null || otherParticipant.user == null)) {
+    // Удалённый пользователь: участник есть, но user обнулён
+    const label = otherParticipant.deletedUserDisplayName ?? "Удалённый пользователь";
+    displayName = label;
+    displayAvatar = null;
+    otherUser = {
+      id: "deleted",
+      firstName: null,
+      lastName: label,
+      middleName: null,
+      avatarUrl: null,
+      isDeleted: true,
+    };
   } else {
     displayName = "Пользователь";
     displayAvatar = null;
@@ -1184,7 +1237,7 @@ export function formatChatInfo(
     };
   }
 
-  // Форматируем участников
+  // Форматируем участников (удалённый пользователь: user = null, deletedUserDisplayName задан)
   const participants: ParticipantInfo[] = (chat.participants || []).map((p: any) => ({
     id: p.id,
     odvisId: p.id,
@@ -1193,6 +1246,7 @@ export function formatChatInfo(
     readAt: p.readAt,
     joinedAt: p.joinedAt,
     user: p.user ? normalizeUserAvatar(p.user) : null,
+    deletedUserDisplayName: p.deletedUserDisplayName ?? (p.user ? null : "Удалённый пользователь"),
   }));
 
   // Получаем последнее сообщение из relation

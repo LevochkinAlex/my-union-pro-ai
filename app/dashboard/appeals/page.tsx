@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import PPOHeadAppealsPage from "./ppo-head/page";
 import { MembershipGate } from "@/components/MembershipGate";
@@ -65,6 +65,7 @@ const PRIORITY_LABELS = {
 export default function AppealsPage() {
   const { data: session } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   
   // Все hooks должны быть объявлены ДО любых условных return
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -79,13 +80,27 @@ export default function AppealsPage() {
     permissions: Record<string, boolean>;
   } | null>(null);
   const isDemoMember = session?.user?.id === DEMO_MEMBER_USER_ID;
-  // Интерфейс председателя — контекст (isChairman/isStaff) или viewMode PPO_HEAD или фактический председатель (isPPOHead)
-  const isPPOHead =
+  const forceMemberView = useMemo(() => searchParams.get("view") === "member", [searchParams]);
+  // Только председатель (в режиме ППО) видит полный интерфейс председателя
+  const isChairman =
+    !forceMemberView &&
     !isDemoMember &&
     (dashboardContext?.isChairman === true ||
-      (dashboardContext?.isStaff === true && dashboardContext?.permissions?.appeals_view === true) ||
-      (session?.user?.viewMode === "PPO_HEAD" ||
+      ((session?.user as { viewMode?: string })?.viewMode === "PPO_HEAD" &&
         (session?.user?.role === "PPO_HEAD" && (session?.user as { isPPOHead?: boolean })?.isPPOHead === true)));
+  // Сотрудник выборного органа (не председатель) с правом просмотра обращений — Входящие/Исходящие
+  const isStaffAppeals =
+    !forceMemberView &&
+    !isDemoMember &&
+    !isChairman &&
+    dashboardContext?.isStaff === true &&
+    dashboardContext?.permissions?.appeals_view === true;
+  // Участник без роли председателя/сотрудника — только «Мои обращения» и создание
+  const isMemberView = !isChairman && !isStaffAppeals;
+
+  // Раздел у сотрудника задаётся из сайдбара (URL): tab=incoming | tab=outgoing
+  const staffTab: "inbox" | "outgoing" =
+    searchParams.get("tab") === "outgoing" ? "outgoing" : "inbox";
 
   useEffect(() => {
     if (!session?.user?.id || isDemoMember) return;
@@ -95,17 +110,27 @@ export default function AppealsPage() {
       .catch(() => setDashboardContext({ isChairman: false, isStaff: false, permissions: {} }));
   }, [session?.user?.id, isDemoMember]);
 
-  const loadTickets = async () => {
+  // Сотрудник: при заходе без tab подставляем ?tab=incoming, чтобы в сайдбаре подсвечивался «Входящие»
+  useEffect(() => {
+    if (!isStaffAppeals || !searchParams) return;
+    if (!searchParams.get("tab")) {
+      router.replace("/dashboard/appeals?tab=incoming");
+    }
+  }, [isStaffAppeals, searchParams, router]);
+
+  const loadTickets = async (view?: "inbox" | "outgoing") => {
     try {
       setIsLoading(true);
       setError(null);
-
-      const url = filter === "all" ? "/api/tickets" : `/api/tickets?status=${filter}`;
+      const viewParam = view ?? (isStaffAppeals ? staffTab : null);
+      const params = new URLSearchParams();
+      if (filter !== "all") params.set("status", filter);
+      if (viewParam) params.set("view", viewParam);
+      const url = `/api/tickets${params.toString() ? `?${params.toString()}` : ""}`;
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error("Ошибка загрузки обращений");
       }
-
       const data = await response.json();
       setTickets(data.tickets || []);
     } catch (err) {
@@ -117,10 +142,10 @@ export default function AppealsPage() {
   };
 
   useEffect(() => {
-    if (!isPPOHead) {
-      loadTickets();
+    if (isMemberView || isStaffAppeals) {
+      loadTickets(isStaffAppeals ? staffTab : undefined);
     }
-  }, [filter, isPPOHead]);
+  }, [filter, isMemberView, isStaffAppeals, staffTab]);
 
   // Пока контекст не загружен (председатель/сотрудник) — не показывать контент членам, чтобы не мелькало
   const contextPending = session && !isDemoMember && dashboardContext === null;
@@ -135,8 +160,8 @@ export default function AppealsPage() {
     );
   }
 
-  // Если пользователь — председатель или сотрудник с правом appeals_view, показываем интерфейс ППО
-  if (isPPOHead) {
+  // Председатель видит полный интерфейс ППО (все обращения организации, смена статусов и т.д.)
+  if (isChairman) {
     return <PPOHeadAppealsPage />;
   }
 
@@ -172,9 +197,13 @@ export default function AppealsPage() {
     <div className="space-y-6 sm:space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Мои обращения</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+            {isStaffAppeals ? "Обращения членов профсоюза" : "Мои обращения"}
+          </h1>
           <p className="mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400">
-            Отслеживайте статус ваших обращений к профсоюзу
+            {isStaffAppeals
+              ? "Входящие от членов и сотрудников организации, исходящие — ваши обращения председателю"
+              : "Отслеживайте статус ваших обращений к профсоюзу"}
           </p>
         </div>
         <Link
@@ -194,33 +223,39 @@ export default function AppealsPage() {
         </div>
       )}
 
-      {/* Filter tabs */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex gap-4 sm:gap-6 overflow-x-auto scrollbar-hide">
-          <button
-            onClick={() => setFilter("all")}
-            className={`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors ${
-              filter === "all"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            Все
-          </button>
-          {Object.entries(TICKET_STATUSES).map(([key, value]) => (
+      {/* Бейджи фильтров по статусу (как в Документах) */}
+      <div className="flex flex-wrap items-center gap-2">
+        {[
+          { value: "all" as const, label: "Все обращения" },
+          ...Object.entries(TICKET_STATUSES).map(([key, value]) => ({
+            value: key as keyof typeof TICKET_STATUSES,
+            label: value.label,
+          })),
+        ].map(({ value, label }) => {
+          const count =
+            value === "all"
+              ? tickets.length
+              : tickets.filter((t) => t.status === value).length;
+          return (
             <button
-              key={key}
-              onClick={() => setFilter(key as keyof typeof TICKET_STATUSES)}
-              className={`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors ${
-                filter === key
-                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
+              key={value}
+              type="button"
+              onClick={() => setFilter(value)}
+              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                filter === value
+                  ? "border-blue-500 bg-blue-500 text-white dark:border-blue-400 dark:bg-blue-600 dark:text-white"
+                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               }`}
             >
-              {value.label}
+              {label}
+              {count > 0 && (
+                <span className="ml-1.5 rounded-full bg-white/20 px-1.5 py-0.5 text-xs">
+                  {count}
+                </span>
+              )}
             </button>
-          ))}
-        </nav>
+          );
+        })}
       </div>
 
       {tickets.length === 0 ? (

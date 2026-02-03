@@ -1,7 +1,8 @@
 "use client";
 
 import { Chat } from "@/types/chat";
-import { getUserName, getFileUrl } from "@/lib/chat-utils";
+import { getUserName, getFileUrl, isDeletedUser } from "@/lib/chat-utils";
+import { UserMinus } from "lucide-react";
 
 interface DefaultChatHeaderProps {
   chat: Chat;
@@ -14,21 +15,24 @@ export default function DefaultChatHeader({
   onBack,
   onProfileClick,
 }: DefaultChatHeaderProps) {
+  const deleted = isDeletedUser(chat.otherUser);
   const handleClick = () => {
-    if (onProfileClick && chat.otherUser?.id) {
+    if (onProfileClick && chat.otherUser?.id && !deleted && chat.otherUser.id !== "deleted") {
       onProfileClick(chat.otherUser.id);
     }
   };
 
-  const isClickable = !!onProfileClick && !!chat.otherUser?.id;
+  const isClickable = !!onProfileClick && !!chat.otherUser?.id && !deleted && chat.otherUser.id !== "deleted";
 
   return (
     <div className="flex items-center gap-3 p-3 md:p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
       <button
+        type="button"
         onClick={onBack}
         className="md:hidden p-2 -ml-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+        aria-label="Назад"
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -39,13 +43,19 @@ export default function DefaultChatHeader({
       </button>
 
       <button
+        type="button"
         className={`flex-shrink-0 ${
           isClickable ? "cursor-pointer hover:opacity-80 transition-opacity" : "cursor-default"
         }`}
         onClick={handleClick}
         disabled={!isClickable}
+        aria-label={deleted ? "Удалённый пользователь" : getUserName(chat.otherUser)}
       >
-        {chat.otherUser?.avatarUrl ? (
+        {deleted ? (
+          <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300" title="Удалённый пользователь">
+            <UserMinus className="w-5 h-5" />
+          </div>
+        ) : chat.otherUser?.avatarUrl ? (
           <img
             src={getFileUrl(chat.otherUser.avatarUrl)}
             alt={getUserName(chat.otherUser)}
@@ -69,7 +79,7 @@ export default function DefaultChatHeader({
         <h3 className="font-semibold text-gray-900 dark:text-white truncate">
           {getUserName(chat.otherUser)}
         </h3>
-        {chat.otherUser?.phone && (
+        {!deleted && chat.otherUser?.phone && (
           <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
             {chat.otherUser.phone}
           </p>

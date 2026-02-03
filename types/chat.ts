@@ -13,6 +13,8 @@ export interface ChatUser {
     id: string;
     name: string;
   } | null;
+  /** Собеседник удалён; показывать плейсхолдер и не открывать профиль */
+  isDeleted?: boolean;
 }
 
 export interface Chat {

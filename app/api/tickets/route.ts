@@ -7,6 +7,7 @@ import { saveTicketToKnowledgeBase } from "@/lib/user-knowledge-base";
 import { sendUserNotification } from "@/lib/notifications";
 import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
 import { getDemoMemberTickets } from "@/lib/demo";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
 /**
  * GET /api/tickets - Получить тикеты пользователя
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
+    const view = searchParams.get("view") === "inbox" ? "inbox" : searchParams.get("view") === "outbox" ? "outbox" : null;
 
     // Демо-член профсоюза: мок-обращения без БД
     if (session.user.id === DEMO_MEMBER_USER_ID) {
@@ -61,18 +63,26 @@ export async function GET(request: NextRequest) {
     const isPPOHead = (user?.role === "PPO_HEAD" || user?.isPPOHead === true) && user?.viewMode === "PPO_HEAD";
     const chairmanOrgId = user?.ppoHeadOrganizationId || user?.organizationId;
 
+    // Сотрудник (выборный орган): права и организация для Входящих/Исходящих
+    let staffOrgId: string | null = null;
+    let isStaffWithAppeals = false;
+    if (!isPPOHead) {
+      const perm = await checkUserPermissions(session.user.id);
+      isStaffWithAppeals = perm.isStaff === true && perm.permissions?.appeals_view === true && !!perm.organizationId;
+      if (isStaffWithAppeals) staffOrgId = perm.organizationId;
+    }
+
     // Формируем условия фильтрации
-    // Если пользователь председатель - показываем все обращения из его организации
-    // Иначе показываем обращения, созданные пользователем, связанные с чатами или из той же организации
     const where: any = {};
 
     if (isPPOHead && chairmanOrgId) {
       // Председатель видит все обращения из своей организации
       where.organizationId = chairmanOrgId;
+    } else if (view === "inbox" && isStaffWithAppeals && staffOrgId) {
+      // Сотрудник: Входящие — все обращения от членов и сотрудников организации (адресованные в ППО)
+      where.organizationId = staffOrgId;
     } else {
-      // Обычный пользователь (в режиме MEMBER) видит ТОЛЬКО свои обращения.
-      // Обращения, адресованные председателю (organizationId != null), видны только создателю и председателю в режиме PPO_HEAD.
-      // Не показываем обращения по chatId — иначе председатель в режиме MEMBER видел бы чужие обращения из чатов, где он участник.
+      // Обычный участник: только свои обращения. Сотрудник при view=outbox или без view: свои обращения (Исходящие).
       where.userId = session.user.id;
     }
 

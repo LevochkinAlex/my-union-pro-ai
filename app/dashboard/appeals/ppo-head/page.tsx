@@ -112,12 +112,11 @@ export default function PPOHeadAppealsPage() {
       setError(null);
 
       const response = await fetch("/api/ppo-head/appeals");
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error("Ошибка загрузки обращений");
+        throw new Error((data?.error as string) || "Ошибка загрузки обращений");
       }
-
-      const data = await response.json();
-      setTickets(data.tickets || []);
+      setTickets(data?.tickets ?? []);
     } catch (err) {
       console.error("Error loading tickets:", err);
       setError(err instanceof Error ? err.message : "Не удалось загрузить обращения");
@@ -229,8 +228,16 @@ export default function PPOHeadAppealsPage() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200">
-          {error}
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200 space-y-2">
+          <p>{error}</p>
+          {error === "Доступ запрещен или организация не назначена" && (
+            <p className="mt-2">
+              Если вы должны иметь доступ к разделу как председатель ППО, убедитесь, что вам назначена организация.{" "}
+              <Link href="/dashboard/appeals?view=member" className="font-medium underline hover:no-underline">
+                Перейти к моим обращениям
+              </Link>
+            </p>
+          )}
         </div>
       )}
 
@@ -413,10 +420,12 @@ export default function PPOHeadAppealsPage() {
 
                   {/* Стрелка */}
                   <button
+                    type="button"
                     onClick={() => router.push(`/dashboard/appeals/${ticket.id}`)}
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                    aria-label="Открыть обращение"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </button>

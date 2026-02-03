@@ -59,10 +59,54 @@ export default function DocumentsPage() {
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [approvalComment, setApprovalComment] = useState<Record<string, string>>({});
   const [approvalSubmitting, setApprovalSubmitting] = useState<string | null>(null);
+  /** Модалка просмотра во входящих: { id, useSigned?, fileName? } */
+  const [previewDoc, setPreviewDoc] = useState<{ id: string; useSigned?: boolean; fileName?: string | null } | null>(null);
+  /** Blob URL для превью в модалке */
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  /** true = PDF (показываем в iframe), false = Word и др. (показываем сообщение + Скачать) */
+  const [previewIsPdf, setPreviewIsPdf] = useState<boolean | null>(null);
+  const [previewLoadError, setPreviewLoadError] = useState<string | null>(null);
   /** Фильтр входящих: Все документы | Повестки | Протоколы | Постановления | Выписки | Другие (устав и т.д.) */
   const [incomingFilter, setIncomingFilter] = useState<"all" | "agenda" | "protocol" | "resolutions" | "extracts" | "other">("all");
 
   const isDemoMember = session?.user?.id === DEMO_MEMBER_USER_ID;
+
+  // Загрузка документа для превью в модалке (PDF — в iframe, Word и др. — сообщение + Скачать)
+  useEffect(() => {
+    if (!previewDoc) {
+      setPreviewBlobUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      setPreviewIsPdf(null);
+      setPreviewLoadError(null);
+      return;
+    }
+    const url = `/api/documents/${encodeURIComponent(previewDoc.id)}/download?inline=true${previewDoc.useSigned ? "&signed=true" : ""}`;
+    setPreviewBlobUrl(null);
+    setPreviewIsPdf(null);
+    setPreviewLoadError(null);
+    fetch(url, { credentials: "include" })
+      .then((res) => {
+        if (!res.ok) throw new Error(res.status === 403 ? "Доступ запрещён" : res.status === 404 ? "Документ не найден" : "Ошибка загрузки");
+        return res.blob();
+      })
+      .then((blob) => {
+        const contentType = blob.type || "";
+        const isPdf = contentType.includes("pdf") || contentType.includes("octet-stream");
+        setPreviewIsPdf(isPdf);
+        setPreviewBlobUrl(URL.createObjectURL(blob));
+      })
+      .catch((e) => {
+        setPreviewLoadError(e instanceof Error ? e.message : "Не удалось загрузить документ");
+      });
+    return () => {
+      setPreviewBlobUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    };
+  }, [previewDoc?.id, previewDoc?.useSigned]);
 
   const INCOMING_FILTERS: { value: typeof incomingFilter; label: string }[] = [
     { value: "all", label: "Все документы" },
@@ -784,51 +828,103 @@ export default function DocumentsPage() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                  {/* Кнопка скачивания - для входящих и исходящих, когда есть файл */}
+                  {/* Входящие: Открыть (в модалке) + Скачать. Исходящие: Скачать + Печать */}
                   {hasFileToDownload && (
                     <>
-                      <button
-                        onClick={() => handleDownload(doc.id, doc.fileName, !doc.filePath && !!doc.signedFilePath)}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:px-4"
-                      >
-                        <svg
-                          className="h-4 w-4 flex-shrink-0"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                          />
-                        </svg>
-                        <span>Скачать</span>
-                      </button>
-                      {/* Кнопка печати - открывает PDF в новой вкладке для печати */}
-                      <a
-                        href={`/api/documents/${encodeURIComponent(doc.id)}/download${doc.signedFilePath ? "?signed=true" : ""}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:w-auto sm:px-4"
-                        title="Открыть для печати"
-                      >
-                        <svg
-                          className="h-4 w-4 flex-shrink-0"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
-                          />
-                        </svg>
-                        <span>Печать</span>
-                      </a>
+                      {activeTab === "incoming" ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewDoc({ id: doc.id, useSigned: !doc.filePath && !!doc.signedFilePath, fileName: doc.fileName })}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:w-auto sm:px-4"
+                            title="Открыть документ"
+                          >
+                            <svg
+                              className="h-4 w-4 flex-shrink-0"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                              />
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                              />
+                            </svg>
+                            <span>Открыть</span>
+                          </button>
+                          <button
+                            onClick={() => handleDownload(doc.id, doc.fileName, !doc.filePath && !!doc.signedFilePath)}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:px-4"
+                          >
+                            <svg
+                              className="h-4 w-4 flex-shrink-0"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                              />
+                            </svg>
+                            <span>Скачать</span>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleDownload(doc.id, doc.fileName, !doc.filePath && !!doc.signedFilePath)}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:px-4"
+                          >
+                            <svg
+                              className="h-4 w-4 flex-shrink-0"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                              />
+                            </svg>
+                            <span>Скачать</span>
+                          </button>
+                          <a
+                            href={`/api/documents/${encodeURIComponent(doc.id)}/download${doc.signedFilePath ? "?signed=true" : ""}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:w-auto sm:px-4"
+                            title="Открыть для печати"
+                          >
+                            <svg
+                              className="h-4 w-4 flex-shrink-0"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+                              />
+                            </svg>
+                            <span>Печать</span>
+                          </a>
+                        </>
+                      )}
                     </>
                   )}
                   {/* Согласование входящего документа заседания: только если оригинал в статусе «На согласовании» */}
@@ -1018,6 +1114,71 @@ export default function DocumentsPage() {
             </div>
           );
           })}
+        </div>
+      )}
+
+      {/* Модалка просмотра PDF для входящих документов */}
+      {previewDoc && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Просмотр документа"
+          onClick={() => setPreviewDoc(null)}
+        >
+          <div
+            className="relative flex max-h-[90vh] w-full max-w-4xl flex-col rounded-lg bg-white shadow-xl dark:bg-gray-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2 dark:border-gray-700">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Просмотр документа</span>
+              <button
+                type="button"
+                onClick={() => setPreviewDoc(null)}
+                className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                aria-label="Закрыть"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden min-h-[75vh] flex items-center justify-center">
+              {previewLoadError && (
+                <p className="p-4 text-sm text-red-600 dark:text-red-400">{previewLoadError}</p>
+              )}
+              {!previewLoadError && !previewBlobUrl && (
+                <div className="flex flex-col items-center gap-2 p-8">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Загрузка документа…</span>
+                </div>
+              )}
+              {!previewLoadError && previewBlobUrl && previewIsPdf && (
+                <iframe
+                  title="Просмотр PDF"
+                  src={previewBlobUrl}
+                  className="h-[75vh] w-full border-0"
+                />
+              )}
+              {!previewLoadError && previewBlobUrl && previewIsPdf === false && (
+                <div className="flex flex-col items-center justify-center gap-4 p-8 text-center">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Документ в формате Word (DOCX). Браузер не может показать его в окне просмотра.
+                  </p>
+                  <a
+                    href={previewBlobUrl}
+                    download={previewDoc?.fileName || "документ.docx"}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Скачать документ
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
