@@ -15,6 +15,7 @@ import {
   cacheChatData,
   getCachedChatData,
 } from '@/lib/chat-redis';
+import { ensureMeetingGroupChat } from '@/lib/meeting-chat';
 import { ChatType } from '@prisma/client';
 // Динамический импорт для избежания проблем при сборке
 // Кэшируем модуль для производительности
@@ -77,9 +78,25 @@ export async function GET(
       throw error;
     }
 
-    // Пытаемся получить кэшированные данные чата
-    let chat = await getCachedChatData(chatId);
-    
+    // Если доступ по заседанию (participant === null, но есть meetingId) — синхронизируем участников,
+    // чтобы пользователь попал в ChatParticipant и видел переписку без ошибок
+    if (chatAccess.participant === null && chatAccess.chat?.meetingId) {
+      try {
+        await ensureMeetingGroupChat(chatAccess.chat.meetingId);
+        await invalidateChatCache(chatId).catch(() => {});
+        await invalidateUserChatsCache(session.user.id).catch(() => {});
+      } catch (syncErr) {
+        console.warn(`[chat/${chatId}] ensureMeetingGroupChat on open:`, syncErr);
+      }
+    }
+
+    // Пытаемся получить кэшированные данные чата (не даём кэшу ломать ответ)
+    let chat: any = null;
+    try {
+      chat = await getCachedChatData(chatId);
+    } catch (cacheErr) {
+      console.warn(`[chat/${chatId}] getCachedChatData error:`, cacheErr);
+    }
     if (!chat) {
       // Загружаем чат из БД
       chat = await prisma.chat.findUnique({
@@ -786,8 +803,9 @@ export async function GET(
       console.warn(`[chat/${chatId}] No post IDs to load for channel`);
     }
 
-    // Форматируем сообщения
+    // Форматируем сообщения (один битый объект не должен ломать весь ответ)
     const formattedMessages = resultMessages.map((msg: any) => {
+      try {
       // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обработка сообщений от ИИ-ассистента
       const isAIMessage = msg.messageType === 'assistant' || msg.messageType === 'system';
       const AI_BOT_ID = 'ai-assistant-bot';
@@ -960,6 +978,11 @@ export async function GET(
       // Данные поста для channel_post
       post: postData,
       };
+      } catch (err) {
+        console.error(`[chat/${chatId}] Error formatting message ${msg?.id}:`, err);
+        return null;
+      }
+    }
     }).filter((msg: any) => msg !== null);
 
     // Для каналов: добавляем виртуальные сообщения для постов из NewsChannel,
@@ -1291,7 +1314,30 @@ export async function POST(
     }
     
     // Проверяем, что отправитель является участником чата
-    const senderParticipant = chat.participants.find(p => p.userId === userId);
+    let senderParticipant = chat.participants.find(p => p.userId === userId);
+    // Чат заседания: если пользователь ещё не в ChatParticipant — синхронизируем участников
+    if (!senderParticipant && chat?.meetingId) {
+      try {
+        await ensureMeetingGroupChat(chat.meetingId);
+        await invalidateChatCache(chatId).catch(() => {});
+        const refreshed = await prisma.chat.findUnique({
+          where: { id: chatId },
+          include: {
+            participants: {
+              where: { leftAt: null },
+              select: { userId: true, role: true },
+            },
+            ticket: { select: { status: true } },
+          },
+        });
+        if (refreshed) {
+          chat = refreshed as typeof chat;
+          senderParticipant = chat.participants.find((p: { userId: string }) => p.userId === userId);
+        }
+      } catch (syncErr) {
+        console.warn(`[chat/${chatId}] ensureMeetingGroupChat before send:`, syncErr);
+      }
+    }
     if (!senderParticipant) {
       console.error(`[chat/${chatId}] ❌ User ${userId} is not a participant of chat ${chatId}`);
       return NextResponse.json(

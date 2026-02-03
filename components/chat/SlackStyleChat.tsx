@@ -645,6 +645,11 @@ export default function SlackStyleChat({
     }
 
     if (chatId) {
+      // Не вызываем selectChat повторно, если этот чат уже выбран — иначе цикл setState → re-render → effect → setState
+      if (selectedChat?.id === chatId) {
+        setShowChatView(true);
+        return;
+      }
       const chat = chats.find((c) => c.id === chatId);
       if (chat) {
         selectChat(chat);
@@ -677,7 +682,7 @@ export default function SlackStyleChat({
     } else {
       chatIdFromUrlTriedRef.current = null;
     }
-  }, [mounted, loading, searchParams, chats, router, baseUrl, selectChat, createOrOpenChat, openChatById, showToast]);
+  }, [mounted, loading, searchParams, chats, selectedChat?.id, router, baseUrl, selectChat, createOrOpenChat, openChatById, showToast]);
 
   useEffect(() => {
     if (selectedChat) {

@@ -46,6 +46,8 @@ export interface ChatInfo {
   ticketId: string | null;
   ticketPublicId: string | null;
   ticketTitle: string | null;
+  /** Чат заседания (групповой чат участников заседания) */
+  meetingId: string | null;
   // Другой участник (для PRIVATE чатов или основной собеседник в GROUP)
   otherUser: OtherUserInfo | null;
 }
@@ -211,18 +213,36 @@ export async function getUserChats(
   } else {
     console.log(`[chat-service] Bypassing cache for user ${userId}`);
   }
-  // Строим условие WHERE
-  const whereConditions: Prisma.ChatWhereInput[] = [];
-
-  // Базовое условие: пользователь - участник чата
-  whereConditions.push({
-    participants: {
-      some: {
-        userId,
-        leftAt: null,
-      },
-    },
+  // Строим условие WHERE: ID чатов — из ChatParticipant ИЛИ из чатов заседаний (MeetingParticipant)
+  // Два шага вместо сложного OR по meeting, чтобы не вызывать 500 у Prisma
+  const chatIdsFromParticipants = await prisma.chatParticipant.findMany({
+    where: { userId, leftAt: null },
+    select: { chatId: true },
   });
+  const participantChatIds = [...new Set(chatIdsFromParticipants.map((p) => p.chatId))];
+
+  const meetingParticipations = await prisma.meetingParticipant.findMany({
+    where: { userId },
+    select: { meetingId: true },
+  });
+  const meetingIds = [...new Set(meetingParticipations.map((p) => p.meetingId))];
+  const meetingChatIds =
+    meetingIds.length > 0
+      ? (
+          await prisma.chat.findMany({
+            where: { meetingId: { in: meetingIds } },
+            select: { id: true },
+          })
+        ).map((c) => c.id)
+      : [];
+
+  const allChatIds = [...new Set([...participantChatIds, ...meetingChatIds])];
+  if (allChatIds.length === 0) {
+    return [];
+  }
+
+  const whereConditions: Prisma.ChatWhereInput[] = [];
+  whereConditions.push({ id: { in: allChatIds } });
 
   // Фильтр по типу
   if (filter?.type) {
@@ -1332,6 +1352,7 @@ export function formatChatInfo(
     ticketId,
     ticketPublicId,
     ticketTitle,
+    meetingId: chat.meetingId ?? null,
     otherUser,
   };
 }

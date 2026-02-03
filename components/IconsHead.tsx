@@ -35,8 +35,14 @@ export function IconsHead() {
           {...(icon.sizes && { sizes: icon.sizes })}
         />
       ))}
-      
-      {/* Apple Touch Icons */}
+
+      {/* Apple Touch Icon (явный элемент для Safari/iOS и проверок доступности) */}
+      <link
+        rel="apple-touch-icon"
+        sizes="180x180"
+        type="image/png"
+        href={getIconUrl("/apple-touch-icon.png", useCDN)}
+      />
       {appleIcons.map((icon, index) => (
         <link
           key={`apple-${index}`}
@@ -46,14 +52,14 @@ export function IconsHead() {
           type={icon.type}
         />
       ))}
-      
+
       {/* Manifest */}
-        {/* manifest.json должен быть локальным (не через CDN) из-за CORS */}
-        <link rel="manifest" href="/manifest.json" />
-      
-      {/* Meta теги */}
+      {/* manifest.json должен быть локальным (не через CDN) из-за CORS */}
+      <link rel="manifest" href="/manifest.json" />
+
+      {/* Meta теги (theme-color поддерживается Chrome/Edge/Safari, в Firefox — ограниченно) */}
       <meta name="theme-color" content="#3b82f6" />
-      <meta name="apple-mobile-web-app-capable" content="yes" />
+      <meta name="mobile-web-app-capable" content="yes" />
       <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       <meta name="apple-mobile-web-app-title" content="MyUnion Pro" />
     </>

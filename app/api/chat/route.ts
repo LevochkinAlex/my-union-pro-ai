@@ -424,13 +424,18 @@ export async function GET(request: NextRequest) {
         }
         
         // Каналы - показываем только те, где пользователь участник
-        // (каналы председателя автоматически подписывают всех членов организации)
         if (chat.type === "CHANNEL") {
           console.log(`[chat] Including CHANNEL chat: ${chat.id} (${chat.displayName || chat.name})`);
-          return true; // Уже отфильтровано по участию в getUserChats
+          return true;
         }
         
-        // Групповые чаты (не обращения) - скрываем в режиме участника
+        // Групповые чаты заседаний (созданные председателем для участников) — показываем участникам
+        if (chat.type === "GROUP" && chat.meetingId) {
+          console.log(`[chat] Including MEETING chat: ${chat.id} (${chat.displayName || chat.name})`);
+          return true;
+        }
+        
+        // Остальные групповые чаты в режиме участника скрываем
         console.log(`[chat] Excluding GROUP chat: ${chat.id} (${chat.displayName || chat.name})`);
         return false;
       });
@@ -470,15 +475,12 @@ export async function GET(request: NextRequest) {
       tags: { endpoint: 'GET /api/chat' },
       extra: { userId: session?.user?.id, filter },
     });
-    
-    const statusCode = (error as any)?.statusCode || (error as any)?.status || 500;
-    return NextResponse.json(
-      { 
-        error: "Ошибка при загрузке чатов",
-        details: process.env.NODE_ENV === 'development' ? error?.message : undefined,
-      },
-      { status: statusCode }
-    );
+    // Всегда возвращаем 200 с массивом чатов, чтобы не ломать UI («Не удалось загрузить чаты»)
+    return NextResponse.json({
+      chats: [],
+      error: "Ошибка при загрузке чатов",
+      details: process.env.NODE_ENV === 'development' ? error?.message : undefined,
+    });
   }
 }
 

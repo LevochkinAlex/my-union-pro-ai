@@ -6,6 +6,7 @@ import { getOrgHead } from "@/lib/ppo-head-utils";
 import { DocumentStatus } from "@prisma/client";
 import { assignAgendaToParticipantsAndNotify } from "@/lib/meeting-agenda-notify";
 import { ensureMeetingGroupChat, postMeetingChatSystemMessage } from "@/lib/meeting-chat";
+import { sendMassNotification } from "@/lib/notifications";
 
 /**
  * POST /api/ppo-head/meetings/[id]/documents/[documentId]/send-for-approval
@@ -147,13 +148,26 @@ export async function POST(
     });
 
     const isAgenda = !!document.meetingAsAgenda;
+    const chairmanName = [orgHead.lastName, orgHead.firstName].filter(Boolean).join(" ") || "Председатель";
+    const docLabel = isAgenda ? "Повестка дня" : "Протокол";
+    const inboxUrl = "/dashboard/documents?tab=incoming";
+
     if (isAgenda) {
-      await assignAgendaToParticipantsAndNotify(meetingId, session.user.id);
+      await assignAgendaToParticipantsAndNotify(meetingId, session.user.id, chairmanName);
+    } else {
+      // Протокол: приглашённым отправляем push и email с просьбой согласовать/ознакомиться
+      const participantIds = participantsWithUserId.map((p) => p.user!.id);
+      await sendMassNotification({
+        userIds: participantIds,
+        title: `${docLabel} на согласование`,
+        body: `Просьба согласовать или ознакомиться с документом от ${chairmanName}. Документ во вкладке «Входящие».`,
+        url: inboxUrl,
+        type: "meeting_document_approval",
+      });
     }
 
     const chatResult = await ensureMeetingGroupChat(meetingId);
     if (chatResult) {
-      const docLabel = isAgenda ? "Повестка дня" : "Протокол";
       await postMeetingChatSystemMessage(
         meetingId,
         `${docLabel} отправлена на согласование участникам. Ознакомьтесь во вкладке «Входящие» и отметьте согласование или примечания.`

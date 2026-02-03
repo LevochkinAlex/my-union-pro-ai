@@ -15,10 +15,12 @@ export interface AssignAgendaResult {
  * Назначает повестку дня всем участникам заседания (создаёт копии во входящие)
  * и отправляет push + email уведомления.
  * Вызывается после создания повестки (generate-document) или при ручной рассылке (notify-participants).
+ * @param chairmanName — имя председателя для текста «документ от ...» (если не передано, подставляется «Председатель»).
  */
 export async function assignAgendaToParticipantsAndNotify(
   meetingId: string,
-  createdByUserId: string
+  createdByUserId: string,
+  chairmanName?: string
 ): Promise<AssignAgendaResult> {
   const meeting = await prisma.meeting.findUnique({
     where: { id: meetingId },
@@ -46,6 +48,16 @@ export async function assignAgendaToParticipantsAndNotify(
 
   if (!meeting?.agendaDocument) {
     return { assignedCount: 0, notifiedCount: 0 };
+  }
+
+  // Имя председателя для текста «документ от ...»
+  let fromName = chairmanName?.trim();
+  if (!fromName) {
+    const creator = await prisma.user.findUnique({
+      where: { id: createdByUserId },
+      select: { lastName: true, firstName: true },
+    });
+    fromName = [creator?.lastName, creator?.firstName].filter(Boolean).join(" ") || "Председатель";
   }
 
   // Копии и уведомления — только участникам, не председателю (председатель утверждает на странице заседания)
@@ -119,9 +131,9 @@ export async function assignAgendaToParticipantsAndNotify(
 
   await sendMassNotification({
     userIds: participantUserIds,
-    title: `Повестка дня: Заседание №${meeting.number}`,
-    body: `Вы приглашены на заседание ${meetingDate}. Ознакомьтесь с повесткой дня.`,
-    url: `/dashboard/documents`,
+    title: `Повестка дня на согласование: Заседание №${meeting.number}`,
+    body: `Просьба согласовать или ознакомиться с документом от ${fromName}. Заседание ${meetingDate}. Документ во вкладке «Входящие».`,
+    url: `/dashboard/documents?tab=incoming`,
     type: "meeting_agenda_review",
   });
 
