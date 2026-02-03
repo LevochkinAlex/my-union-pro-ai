@@ -258,7 +258,7 @@ export async function GET(request: NextRequest) {
         user: null,
       };
 
-      incomingWithApproval.unshift({ ...charterDocument, approvalStatus: undefined, meetingId: undefined, originalDocumentId: undefined });
+      incomingWithApproval.unshift({ ...charterDocument, approvalStatus: undefined, meetingId: undefined, originalDocumentId: undefined, originalDocumentStatus: undefined });
     }
 
     // Сортируем исходящие документы по приоритету
