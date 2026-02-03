@@ -151,10 +151,26 @@ export async function GET(request: NextRequest) {
       });
       existingOriginalIds = new Set(existing.map((d) => d.id));
     }
+    // Копии с удалённым заседанием не показываем (заседание удалили — документ не актуален)
+    const meetingIdsFromCopies = incomingDocuments
+      .map((d: { metadata?: unknown }) => (d.metadata as { meetingId?: string } | null)?.meetingId)
+      .filter(Boolean) as string[];
+    let existingMeetingIds = new Set<string>();
+    if (meetingIdsFromCopies.length > 0) {
+      const meetings = await prisma.meeting.findMany({
+        where: { id: { in: meetingIdsFromCopies } },
+        select: { id: true },
+      });
+      existingMeetingIds = new Set(meetings.map((m) => m.id));
+    }
     const incomingFiltered = incomingDocuments.filter((d: { metadata?: unknown }) => {
-      const originalId = (d.metadata as { originalDocumentId?: string } | null)?.originalDocumentId;
-      if (!originalId) return true;
-      return existingOriginalIds.has(originalId);
+      const meta = d.metadata as { originalDocumentId?: string; meetingId?: string } | null;
+      const originalId = meta?.originalDocumentId;
+      const meetingId = meta?.meetingId;
+      if (!originalId) return true; // не копия заседания
+      if (!existingOriginalIds.has(originalId)) return false; // оригинал удалён
+      if (meetingId && !existingMeetingIds.has(meetingId)) return false; // заседание удалено
+      return true;
     });
     const approvalMap: Record<string, { status: string; comment: string | null; approvedAt: Date | null }> = {};
     if (existingOriginalIds.size > 0) {

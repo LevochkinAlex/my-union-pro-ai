@@ -931,9 +931,9 @@ model Meeting {
   secretaryUserId        String? // Секретарь заседания (из выборного органа)
   voteCounterUserIds     String? @db.Text // JSON: массив userId ответственных за подсчёт голосов
 
-  // Созыватель/Организатор
-  createdById String
-  createdBy   User   @relation("MeetingCreatedBy", fields: [createdById], references: [id])
+  // Созыватель/Организатор (опционально: при удалении пользователя можно обнулить в коде)
+  createdById String?
+  createdBy   User?  @relation("MeetingCreatedBy", fields: [createdById], references: [id])
 
   // Метаданные
   notes String? @db.Text // Примечания

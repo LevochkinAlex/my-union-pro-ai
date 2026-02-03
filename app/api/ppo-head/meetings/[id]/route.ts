@@ -245,6 +245,12 @@ export async function DELETE(
 
     const meeting = await prisma.meeting.findUnique({
       where: { id },
+      select: {
+        id: true,
+        organizationId: true,
+        agendaDocumentId: true,
+        protocolDocumentId: true,
+      },
     });
 
     if (!meeting) {
@@ -253,6 +259,37 @@ export async function DELETE(
 
     if (meeting.organizationId !== orgHead.organizationId) {
       return NextResponse.json({ error: "Нет доступа к этому заседанию" }, { status: 403 });
+    }
+
+    const originalDocIds = [meeting.agendaDocumentId, meeting.protocolDocumentId].filter(
+      (x): x is string => x != null
+    );
+
+    // Удаляем копии документов заседания во входящих у участников (metadata.originalDocumentId = повестка/протокол)
+    if (originalDocIds.length > 0) {
+      const copyDocs = await prisma.document.findMany({
+        where: {
+          assignedToId: { not: null },
+          OR: originalDocIds.map((originalId) => ({
+            metadata: { path: ["originalDocumentId"], equals: originalId },
+          })),
+        },
+        select: { id: true },
+      });
+      const copyIds = copyDocs.map((d) => d.id);
+      if (copyIds.length > 0) {
+        await prisma.document.deleteMany({
+          where: { id: { in: copyIds } },
+        });
+      }
+      // Согласования по оригинальным повестке/протоколу
+      await prisma.documentApproval.deleteMany({
+        where: { documentId: { in: originalDocIds } },
+      });
+      // Удаляем сами документы повестки и протокола (связь с Meeting обнулится при delete за счёт FK)
+      await prisma.document.deleteMany({
+        where: { id: { in: originalDocIds } },
+      });
     }
 
     await prisma.meeting.delete({
