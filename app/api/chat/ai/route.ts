@@ -156,15 +156,12 @@ export async function GET() {
       tags: { endpoint: 'GET /api/chat/ai' },
       extra: { userId: session?.user?.id },
     });
-    
-    const statusCode = (error as any)?.statusCode || (error as any)?.status || 500;
-    return NextResponse.json(
-      {
-        error: "Ошибка при получении чата с ИИ",
-        details: process.env.NODE_ENV === "development" ? error.message : undefined,
-      },
-      { status: statusCode }
-    );
+    // Возвращаем 200 с пустым чатом, чтобы клиент не падал и не ретраил бесконечно
+    return NextResponse.json({
+      chat: null,
+      error: "Ошибка при получении чата с ИИ",
+      details: process.env.NODE_ENV === "development" ? error?.message : undefined,
+    });
   }
 }
 

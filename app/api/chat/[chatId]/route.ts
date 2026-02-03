@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { requireChatAccess, ChatAccessError } from '@/lib/chat-service';
+import { requireChatAccess, ChatAccessError, ChatNotFoundError } from '@/lib/chat-service';
 import { normalizeUserAvatar } from '@/lib/api-helpers';
 import { getFileUrlWithCDN } from '@/lib/cdn';
 import * as Sentry from '@sentry/nextjs';
@@ -71,6 +71,10 @@ export async function GET(
         allParticipants.map(p => ({ userId: p.userId, role: p.role }))
       );
     } catch (error) {
+      if (error instanceof ChatNotFoundError) {
+        console.warn(`[chat/${chatId}] Chat not found for user ${session.user.id}`);
+        return NextResponse.json({ error: error.message }, { status: 404 });
+      }
       if (error instanceof ChatAccessError) {
         console.warn(`[chat/${chatId}] Access denied for user ${session.user.id}: ${error.message}`);
         return NextResponse.json({ error: error.message }, { status: 403 });
@@ -87,6 +91,37 @@ export async function GET(
         await invalidateUserChatsCache(session.user.id).catch(() => {});
       } catch (syncErr) {
         console.warn(`[chat/${chatId}] ensureMeetingGroupChat on open:`, syncErr);
+      }
+    }
+
+    // Если доступ по обращению (participant === null, но пользователь — автор Ticket.userId) —
+    // добавляем автора в ChatParticipant, чтобы чат отображался в списке и не было 403 при отправке
+    if (chatAccess.participant === null && chatAccess.chat?.ticket?.userId === session.user.id) {
+      try {
+        const existing = await prisma.chatParticipant.findFirst({
+          where: { chatId, userId: session.user.id },
+        });
+        if (!existing) {
+          await prisma.chatParticipant.create({
+            data: {
+              chatId,
+              userId: session.user.id,
+              role: 'member',
+              invitedById: null,
+            },
+          });
+          console.log(`[chat/${chatId}] Added ticket author ${session.user.id} to ChatParticipant`);
+        } else if (existing.leftAt) {
+          await prisma.chatParticipant.update({
+            where: { id: existing.id },
+            data: { leftAt: null },
+          });
+          console.log(`[chat/${chatId}] Re-joined ticket author ${session.user.id} to ChatParticipant`);
+        }
+        await invalidateChatCache(chatId).catch(() => {});
+        await invalidateUserChatsCache(session.user.id).catch(() => {});
+      } catch (syncErr) {
+        console.warn(`[chat/${chatId}] ensureTicketAuthorParticipant:`, syncErr);
       }
     }
 
@@ -1199,6 +1234,12 @@ export async function GET(
   } catch (error: any) {
     Sentry.captureException(error);
     console.error('[chat] GET Error:', error);
+    if (error instanceof ChatNotFoundError) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
+    if (error instanceof ChatAccessError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

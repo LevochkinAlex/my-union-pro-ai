@@ -107,6 +107,7 @@ export async function checkChatAccess(
         select: {
           id: true,
           organizationId: true,
+          userId: true, // автор обращения — всегда даём доступ к своему чату
         },
       },
     },
@@ -139,17 +140,24 @@ export async function checkChatAccess(
     }
   }
 
-  // Если не участник, но чат привязан к обращению — разрешаем доступ председателю или сотрудникам с правом appeals_view той же организации
-  if (!participant && chat.ticket?.organizationId) {
-    const perm = await checkUserPermissions(userId);
-    const orgMatch = perm.organizationId === chat.ticket.organizationId;
-    const isChairmanWithAccess = perm.isChairman === true && orgMatch;
-    const isStaffWithAppeals =
-      perm.isStaff === true &&
-      perm.permissions?.appeals_view === true &&
-      orgMatch;
-    if (isChairmanWithAccess || isStaffWithAppeals) {
+  // Если не участник, но чат привязан к обращению — разрешаем доступ:
+  // 1) автору обращения (Ticket.userId) — всегда;
+  // 2) председателю или сотрудникам с правом appeals_view той же организации
+  if (!participant && chat.ticket) {
+    if (chat.ticket.userId === userId) {
       return { hasAccess: true, chat, participant: null };
+    }
+    if (chat.ticket.organizationId) {
+      const perm = await checkUserPermissions(userId);
+      const orgMatch = perm.organizationId === chat.ticket.organizationId;
+      const isChairmanWithAccess = perm.isChairman === true && orgMatch;
+      const isStaffWithAppeals =
+        perm.isStaff === true &&
+        perm.permissions?.appeals_view === true &&
+        orgMatch;
+      if (isChairmanWithAccess || isStaffWithAppeals) {
+        return { hasAccess: true, chat, participant: null };
+      }
     }
   }
 
@@ -163,18 +171,31 @@ export async function checkChatAccess(
 /**
  * Проверяет доступ и возвращает ошибку если нет доступа
  * Удобная обёртка для API routes
+ * — Если чат не найден: выбрасывает ChatNotFoundError (→ 404).
+ * — Если чат есть, но нет доступа: выбрасывает ChatAccessError (→ 403).
  */
 export async function requireChatAccess(
   chatId: string,
   userId: string
 ): Promise<{ chat: any; participant: any }> {
   const { hasAccess, chat, participant } = await checkChatAccess(chatId, userId);
-  
+
+  if (!chat) {
+    throw new ChatNotFoundError("Чат не найден");
+  }
+
   if (!hasAccess) {
     throw new ChatAccessError("Нет доступа к этому чату");
   }
 
   return { chat, participant };
+}
+
+export class ChatNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ChatNotFoundError";
+  }
 }
 
 export class ChatAccessError extends Error {

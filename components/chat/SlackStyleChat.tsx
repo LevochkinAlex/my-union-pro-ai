@@ -664,7 +664,7 @@ export default function SlackStyleChat({
         chatIdFromUrlTriedRef.current = null;
         return;
       }
-      // Чата нет в списке (например, чат заседания) — пробуем открыть по ID
+      // Чата нет в списке (например, чат заседания) — пробуем открыть по ID (один раз на chatId)
       if (chatIdFromUrlTriedRef.current !== chatId) {
         chatIdFromUrlTriedRef.current = chatId;
         openChatById(chatId).then((result) => {
@@ -674,7 +674,8 @@ export default function SlackStyleChat({
             urlParams.set("chatId", chatId);
             router.replace(`${baseUrl}?${urlParams.toString()}`, { scroll: false });
           } else {
-            chatIdFromUrlTriedRef.current = null;
+            // Не сбрасываем ref — больше не повторяем запрос для этого chatId; очищаем URL
+            router.replace(baseUrl, { scroll: false });
             showToast(result.error || "Нет доступа к чату", "error");
           }
         });
