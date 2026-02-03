@@ -39,14 +39,14 @@ export async function deleteUser(
     // Обнуляем ссылки, которые могут мешать удалению (на случай старых миграций без onDelete).
     await tx.chat.updateMany({ where: { createdById: userId }, data: { createdById: null } });
     await tx.chatParticipant.updateMany({ where: { invitedById: userId }, data: { invitedById: null } });
-    await tx.documentTemplate.updateMany(
-      { where: { createdByUserId: userId } },
-      { data: { createdByUserId: null } }
-    );
-    await tx.documentTemplate.updateMany(
-      { where: { updatedByUserId: userId } },
-      { data: { updatedByUserId: null } }
-    );
+    await tx.documentTemplate.updateMany({
+      where: { createdByUserId: userId },
+      data: { createdByUserId: null },
+    });
+    await tx.documentTemplate.updateMany({
+      where: { updatedByUserId: userId },
+      data: { updatedByUserId: null },
+    });
     await tx.meeting.updateMany({ where: { createdById: userId }, data: { createdById: null } });
     await tx.meetingAgendaItem.updateMany({
       where: { OR: [{ speakerId: userId }, { coSpeakerId: userId }] },
