@@ -33,6 +33,10 @@ echo ""
 echo "=== Installing dependencies ==="
 pnpm install
 echo ""
+echo "=== Applying database migrations ==="
+npx prisma migrate deploy
+bash scripts/fix-chat-participant-columns-on-server.sh
+echo ""
 echo "=== Building project ==="
 pnpm build
 echo ""
