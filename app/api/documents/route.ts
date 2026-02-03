@@ -144,12 +144,16 @@ export async function GET(request: NextRequest) {
       .filter(Boolean) as string[];
     // Копии с удалённым оригиналом не показываем во входящих
     let existingOriginalIds = new Set<string>();
+    const originalStatusMap: Record<string, string> = {};
     if (originalIds.length > 0) {
       const existing = await prisma.document.findMany({
         where: { id: { in: originalIds } },
-        select: { id: true },
+        select: { id: true, status: true },
       });
-      existingOriginalIds = new Set(existing.map((d) => d.id));
+      existing.forEach((d) => {
+        existingOriginalIds.add(d.id);
+        originalStatusMap[d.id] = d.status;
+      });
     }
     // Копии с удалённым заседанием не показываем (заседание удалили — документ не актуален)
     const meetingIdsFromCopies = incomingDocuments
@@ -191,6 +195,7 @@ export async function GET(request: NextRequest) {
       const meta = d.metadata as { originalDocumentId?: string; meetingId?: string } | null;
       const originalId = meta?.originalDocumentId;
       const approval = originalId ? approvalMap[originalId] : undefined;
+      const originalStatus = originalId ? originalStatusMap[originalId] : undefined;
       return {
         ...d,
         approvalStatus: approval
@@ -198,6 +203,8 @@ export async function GET(request: NextRequest) {
           : undefined,
         meetingId: meta?.meetingId,
         originalDocumentId: originalId,
+        /** Статус оригинала: кнопка «Согласовать» только при PENDING_APPROVAL */
+        originalDocumentStatus: originalStatus,
       };
     });
 

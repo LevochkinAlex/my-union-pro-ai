@@ -37,6 +37,8 @@ interface Document {
   approvalStatus?: { status: string; comment: string | null; approvedAt: string | null };
   meetingId?: string;
   originalDocumentId?: string;
+  /** Статус оригинала: кнопка «Согласовать» только при PENDING_APPROVAL */
+  originalDocumentStatus?: string;
 }
 
 export default function DocumentsPage() {
@@ -741,7 +743,7 @@ export default function DocumentsPage() {
                         Заявление загружено
                       </span>
                     )}
-                    {activeTab === "incoming" && doc.meetingId && doc.originalDocumentId && (!doc.approvalStatus || doc.approvalStatus.status === "PENDING") && (
+                    {activeTab === "incoming" && doc.meetingId && doc.originalDocumentId && doc.originalDocumentStatus === "PENDING_APPROVAL" && (!doc.approvalStatus || doc.approvalStatus.status === "PENDING") && (
                       <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 ring-1 ring-amber-300 dark:ring-amber-700">
                         Требуется согласование
                       </span>
@@ -829,10 +831,10 @@ export default function DocumentsPage() {
                       </a>
                     </>
                   )}
-                  {/* Согласование входящего документа заседания (повестка/протокол): показываем для всех копий с meetingId + originalDocumentId */}
+                  {/* Согласование входящего документа заседания: только если оригинал в статусе «На согласовании» */}
                   {activeTab === "incoming" && doc.meetingId && doc.originalDocumentId && (
                     <div className="w-full rounded-lg border border-amber-200 bg-amber-50/80 p-3 dark:border-amber-800/50 dark:bg-amber-900/20">
-                      {!doc.approvalStatus || doc.approvalStatus.status === "PENDING" ? (
+                      {doc.originalDocumentStatus === "PENDING_APPROVAL" && (!doc.approvalStatus || doc.approvalStatus.status === "PENDING") ? (
                         <>
                           <p className="mb-2 text-xs font-medium text-gray-700 dark:text-gray-300">
                             Требуется ваше согласование (можно добавить примечания):
@@ -899,7 +901,7 @@ export default function DocumentsPage() {
                             </button>
                           </div>
                         </>
-                      ) : (
+                      ) : doc.approvalStatus ? (
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           {doc.approvalStatus.status === "APPROVED" ? (
                             <span className="text-green-600 dark:text-green-400">Согласовано</span>
@@ -908,7 +910,11 @@ export default function DocumentsPage() {
                           )}
                           {doc.approvalStatus.comment && ` — ${doc.approvalStatus.comment}`}
                         </p>
-                      )}
+                      ) : doc.originalDocumentStatus !== "PENDING_APPROVAL" ? (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Документ уже утверждён председателем или не отправлен на согласование.
+                        </p>
+                      ) : null}
                     </div>
                   )}
                   {/* Кнопка перегенерации для заявлений */}
