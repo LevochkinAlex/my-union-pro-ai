@@ -80,13 +80,17 @@ export async function POST(
       return NextResponse.json({ error: "Заседание не найдено" }, { status: 404 });
     }
 
-    const isParticipant = meeting.participants.some(
-      p => p.user?.id === session.user.id && p.role !== "CHAIRMAN"
-    );
+    const myParticipation = meeting.participants.find(p => p.user?.id === session.user.id);
+    const isChairman = myParticipation?.role === "CHAIRMAN";
+    const isParticipant = myParticipation != null && !isChairman;
 
     if (!isParticipant) {
       return NextResponse.json(
-        { error: "Вы не являетесь участником этого заседания" },
+        {
+          error: isChairman
+            ? "Председатель утверждает документ на странице заседания (кнопка «Утвердить повестку» / «Утвердить протокол»)"
+            : "Вы не являетесь участником этого заседания",
+        },
         { status: 403 }
       );
     }

@@ -160,12 +160,23 @@ export async function GET(request: NextRequest) {
       .map((d: { metadata?: unknown }) => (d.metadata as { meetingId?: string } | null)?.meetingId)
       .filter(Boolean) as string[];
     let existingMeetingIds = new Set<string>();
+    let meetingIdsWhereIAmChairman = new Set<string>();
     if (meetingIdsFromCopies.length > 0) {
       const meetings = await prisma.meeting.findMany({
         where: { id: { in: meetingIdsFromCopies } },
-        select: { id: true },
+        select: {
+          id: true,
+          participants: {
+            where: { role: "CHAIRMAN", userId: { not: null } },
+            select: { userId: true },
+          },
+        },
       });
       existingMeetingIds = new Set(meetings.map((m) => m.id));
+      meetings.forEach((m) => {
+        const chairmanUserId = m.participants[0]?.userId;
+        if (chairmanUserId === session.user.id) meetingIdsWhereIAmChairman.add(m.id);
+      });
     }
     const incomingFiltered = incomingDocuments.filter((d: { metadata?: unknown }) => {
       const meta = d.metadata as { originalDocumentId?: string; meetingId?: string } | null;
@@ -174,6 +185,8 @@ export async function GET(request: NextRequest) {
       if (!originalId) return true; // не копия заседания
       if (!existingOriginalIds.has(originalId)) return false; // оригинал удалён
       if (meetingId && !existingMeetingIds.has(meetingId)) return false; // заседание удалено
+      // Не показывать председателю копии своих заседаний — утверждает на странице заседания
+      if (meetingId && meetingIdsWhereIAmChairman.has(meetingId)) return false;
       return true;
     });
     const approvalMap: Record<string, { status: string; comment: string | null; approvedAt: Date | null }> = {};

@@ -48,8 +48,9 @@ export async function assignAgendaToParticipantsAndNotify(
     return { assignedCount: 0, notifiedCount: 0 };
   }
 
+  // Копии и уведомления — только участникам, не председателю (председатель утверждает на странице заседания)
   const participantUserIds = meeting.participants
-    .filter((p): p is typeof p & { user: { id: string } } => p.user != null)
+    .filter((p): p is typeof p & { user: { id: string } } => p.user != null && p.role !== "CHAIRMAN")
     .map((p) => p.user.id);
 
   if (participantUserIds.length === 0) {
@@ -141,6 +142,10 @@ export async function assignAgendaToUserIds(
   const meeting = await prisma.meeting.findUnique({
     where: { id: meetingId },
     include: {
+      participants: {
+        where: { userId: { not: null } },
+        select: { userId: true, role: true },
+      },
       agendaDocument: {
         select: {
           id: true,
@@ -156,6 +161,11 @@ export async function assignAgendaToUserIds(
 
   if (!meeting?.agendaDocument) return { assignedCount: 0, notifiedCount: 0 };
 
+  // Не назначаем копии председателю — он утверждает на странице заседания
+  const chairmanUserId = meeting.participants.find((p) => p.role === "CHAIRMAN")?.userId ?? null;
+  const userIdsToAssign = chairmanUserId ? userIds.filter((id) => id !== chairmanUserId) : userIds;
+  if (userIdsToAssign.length === 0) return { assignedCount: 0, notifiedCount: userIds.length };
+
   const existingAssigned = await prisma.document.findMany({
     where: {
       OR: [
@@ -164,14 +174,14 @@ export async function assignAgendaToUserIds(
           metadata: { path: ["originalDocumentId"], equals: meeting.agendaDocument!.id },
         },
       ],
-      assignedToId: { in: userIds },
+      assignedToId: { in: userIdsToAssign },
     },
     select: { assignedToId: true },
   });
   const assignedUserIds = new Set(
     (existingAssigned.map((d) => d.assignedToId).filter(Boolean) as string[])
   );
-  const usersToAssign = userIds.filter((id) => !assignedUserIds.has(id));
+  const usersToAssign = userIdsToAssign.filter((id) => !assignedUserIds.has(id));
 
   let assignedCount = 0;
   if (usersToAssign.length > 0) {
@@ -222,5 +232,5 @@ export async function assignAgendaToUserIds(
     });
   }
 
-  return { assignedCount, notifiedCount: userIds.length };
+  return { assignedCount, notifiedCount: userIdsToAssign.length };
 }
