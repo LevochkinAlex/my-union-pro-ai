@@ -30,6 +30,7 @@ interface Ticket {
   lastCommentAt: string | null;
   chatId: string | null;
   rejectionReason: string | null;
+  isOverdue?: boolean;
 }
 
 const TICKET_TYPES: Record<string, { label: string; icon: React.ReactNode }> = {
@@ -106,12 +107,21 @@ export default function PPOHeadAppealsPage() {
     loadTickets();
   }, []);
 
+  // Обновление списка при возврате на вкладку (например после закрытия обращения из чата)
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") loadTickets();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
   const loadTickets = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch("/api/ppo-head/appeals");
+      const response = await fetch("/api/ppo-head/appeals", { cache: "no-store" });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error((data?.error as string) || "Ошибка загрузки обращений");
@@ -364,9 +374,16 @@ export default function PPOHeadAppealsPage() {
                   {priorityInfo.icon}
                 </div>
 
-                {/* Статус */}
-                <div className={`flex-shrink-0 px-2 py-1 rounded text-xs font-medium ${statusInfo.bgClass}`}>
-                  {statusInfo.label}
+                {/* Статус и просрочка */}
+                <div className="flex-shrink-0 flex items-center gap-1.5">
+                  {ticket.isOverdue && ticket.status !== "CLOSED" && ticket.status !== "RESOLVED" && (
+                    <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
+                      Просрочено
+                    </span>
+                  )}
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.bgClass}`}>
+                    {statusInfo.label}
+                  </span>
                 </div>
 
                 {/* Действия */}

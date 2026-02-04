@@ -59,14 +59,14 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Проверяем, является ли пользователь председателем И находится ли он в режиме председателя
-    const isPPOHead = (user?.role === "PPO_HEAD" || user?.isPPOHead === true) && user?.viewMode === "PPO_HEAD";
+    // Председатель ППО (по роли, независимо от viewMode): Входящие/Исходящие по view
     const chairmanOrgId = user?.ppoHeadOrganizationId || user?.organizationId;
+    const isChairmanRole = (user?.role === "PPO_HEAD" || user?.isPPOHead === true) && !!chairmanOrgId;
 
     // Сотрудник (выборный орган): права и организация для Входящих/Исходящих
     let staffOrgId: string | null = null;
     let isStaffWithAppeals = false;
-    if (!isPPOHead) {
+    if (!isChairmanRole) {
       const perm = await checkUserPermissions(session.user.id);
       isStaffWithAppeals = perm.isStaff === true && perm.permissions?.appeals_view === true && !!perm.organizationId;
       if (isStaffWithAppeals) staffOrgId = perm.organizationId;
@@ -75,9 +75,13 @@ export async function GET(request: NextRequest) {
     // Формируем условия фильтрации
     const where: any = {};
 
-    if (isPPOHead && chairmanOrgId) {
-      // Председатель видит все обращения из своей организации
-      where.organizationId = chairmanOrgId;
+    if (isChairmanRole && chairmanOrgId) {
+      // Председатель (в любом режиме): Входящие — все в организацию; Исходящие — свои
+      if (view === "outbox") {
+        where.userId = session.user.id;
+      } else {
+        where.organizationId = chairmanOrgId;
+      }
     } else if (view === "inbox" && isStaffWithAppeals && staffOrgId) {
       // Сотрудник: Входящие — все обращения от членов и сотрудников организации (адресованные в ППО)
       where.organizationId = staffOrgId;
@@ -105,6 +109,7 @@ export async function GET(request: NextRequest) {
               lastName: true,
               middleName: true,
               email: true,
+              avatarUrl: true,
             },
           },
           attachments: {
@@ -169,6 +174,7 @@ export async function GET(request: NextRequest) {
           lastName: ticket.user.lastName,
           middleName: ticket.user.middleName,
           email: ticket.user.email,
+          avatarUrl: ticket.user.avatarUrl ?? null,
         },
         // Является ли текущий пользователь создателем обращения
         isOwner: ticket.userId === session.user.id,

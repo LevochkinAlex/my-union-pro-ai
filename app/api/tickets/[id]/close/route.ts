@@ -21,10 +21,13 @@ export async function POST(
     const { id } = await params;
     const { rating, comment } = await request.json();
 
-    // Find ticket by publicId
+    // Нормализуем id: в БД publicId хранится без дефиса (35604798), из чата может прийти 3560-4798
+    const publicIdNormalized = typeof id === 'string' ? id.replace(/-/g, '') : id;
+
+    // Find ticket by publicId (или по внутреннему id, если передан cuid)
     const ticket = await prisma.ticket.findFirst({
       where: { 
-        publicId: id 
+        OR: [{ publicId: publicIdNormalized }, { id }],
       },
       select: {
         id: true,
@@ -67,16 +70,17 @@ export async function POST(
     const userName = [ticket.user.firstName, ticket.user.lastName].filter(Boolean).join(' ') || 'Пользователь';
     const ratingStars = '⭐'.repeat(rating || 0);
 
-    // Update ticket
+    // Update ticket: CLOSED при закрытии пользователем, сбрасываем просрочку
     const updatedTicket = await prisma.ticket.update({
       where: { id: ticket.id },
       data: {
-        status: 'RESOLVED',
+        status: 'CLOSED',
         resolved: true,
         resolvedAt: new Date(),
         helpfulRating: rating ? Math.min(5, Math.max(1, rating)) : null,
         helpfulRatingComment: comment || null,
         helpfulRatingAt: new Date(),
+        isOverdue: false,
       },
     });
 

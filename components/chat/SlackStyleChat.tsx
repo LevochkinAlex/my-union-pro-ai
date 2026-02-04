@@ -511,7 +511,7 @@ export default function SlackStyleChat({
         const errMsg = data?.error || 'Ошибка закрытия обращения';
         // Обращение уже закрыто — обновляем UI, чтобы скрыть кнопку и инпут
         if (response.status === 400 && typeof errMsg === 'string' && errMsg.toLowerCase().includes('уже закрыто')) {
-          setTicketInfo((prev) => (prev ? { ...prev, status: 'RESOLVED' } : null));
+          setTicketInfo((prev) => (prev ? { ...prev, status: 'CLOSED' } : null));
           setShowCloseAppealModal(false);
           showToast('Обращение уже закрыто', 'info');
           return;

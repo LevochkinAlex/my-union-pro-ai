@@ -263,7 +263,7 @@ export async function GET(request: NextRequest) {
 
     for (const ticket of ticketsToAutoClose) {
       try {
-        // Автоматически закрываем обращение
+        // Автоматически закрываем обращение (сбрасываем просрочку)
         await prisma.ticket.update({
           where: { id: ticket.id },
           data: {
@@ -271,6 +271,7 @@ export async function GET(request: NextRequest) {
             resolved: true,
             resolvedAt: now,
             autoClosedAt: now,
+            isOverdue: false,
             // Не устанавливаем helpfulRating, так как пользователь не ответил
           },
         });

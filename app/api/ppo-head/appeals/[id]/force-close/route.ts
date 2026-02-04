@@ -92,7 +92,7 @@ export async function POST(
       );
     }
 
-    // Закрываем обращение
+    // Закрываем обращение (сбрасываем просрочку, чтобы не показывать «Просрочено» у закрытых)
     const updatedTicket = await prisma.ticket.update({
       where: { id: ticket.id },
       data: {
@@ -100,6 +100,7 @@ export async function POST(
         resolved: true,
         resolvedAt: new Date(),
         rejectionReason: reason.trim(),
+        isOverdue: false,
       },
     });
 
