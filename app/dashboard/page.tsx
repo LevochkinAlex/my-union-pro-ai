@@ -145,10 +145,8 @@ export default async function DashboardPage() {
       ppoHeadOrganization: { id: string; name: string } | null;
     } | null;
 
-  // Определяем показывать ли дашборд председателя: режим PPO_HEAD или фактический председатель (isPPOHead)
-  const showPPOHeadDashboard = 
-    userRole?.viewMode === "PPO_HEAD" || 
-    (userRole?.role === "PPO_HEAD" && userRole?.isPPOHead === true);
+  // Показываем дашборд председателя только когда выбран режим председателя ППО (в режиме «Участник» — дашборд участника)
+  const showPPOHeadDashboard = userRole?.viewMode === "PPO_HEAD";
   
   // Определяем показывать ли дашборд МПО/РПО руководителя
   const showOrgHeadDashboard = 
