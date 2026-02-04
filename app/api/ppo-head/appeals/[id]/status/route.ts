@@ -49,8 +49,7 @@ export async function PATCH(
 
     const chairman = await getPPOHead(session.user.id);
     const perm = await checkUserPermissions(session.user.id);
-    const isChairman =
-      chairman && (ticket.organizationId === chairman.ppoHeadOrganizationId || ticket.organizationId === chairman.organizationId);
+    const isChairman = chairman && ticket.organizationId === chairman.organizationId;
     const isStaffWithAppeals =
       perm.isStaff && perm.permissions?.appeals_view && perm.organizationId === ticket.organizationId;
 
