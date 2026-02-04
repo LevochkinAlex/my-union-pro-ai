@@ -151,8 +151,8 @@ export async function sendUserNotification(data: NotificationData) {
                 },
                 webpush: {
                   notification: {
-                    icon: "/icons/icon-192x192.png",
-                    badge: "/icons/badge-72x72.png",
+                    icon: "/icon-192x192.png",
+                    badge: "/badge-96x96.png",
                     sound: user.pushSoundEnabled ? "default" : undefined,
                     requireInteraction: true,
                     tag: data.type,
@@ -561,8 +561,8 @@ export async function sendMassNotification(data: {
                     },
                     webpush: {
                       notification: {
-                        icon: "/icons/icon-192x192.png",
-                        badge: "/icons/badge-72x72.png",
+                        icon: "/icon-192x192.png",
+                        badge: "/badge-96x96.png",
                         sound: user.pushSoundEnabled ? "default" : undefined,
                         requireInteraction: true,
                         data: {

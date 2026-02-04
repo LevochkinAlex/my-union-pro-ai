@@ -44,7 +44,7 @@ export function useOnlineStatus(userIds: string[]) {
         {
           maxRetries: 2, // Меньше попыток для онлайн статуса (не критично)
           retryDelay: 500,
-          retryableStatuses: [500, 502, 503, 504], // Повторяем только при серверных ошибках
+          retryableStatuses: [500, 502, 504], // Не повторяем при 503 (Service Unavailable), чтобы не нагружать сервер
         }
       );
 

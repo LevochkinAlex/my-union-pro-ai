@@ -130,7 +130,7 @@ export async function syncPushSubscription(): Promise<void> {
         if (!registration) {
           try {
             registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
-            console.log("[Firebase] Service Worker registered:", registration.scope);
+            if (process.env.NODE_ENV === 'development') console.log("[Firebase] Service Worker registered:", registration.scope);
           } catch (error) {
             console.error("[Firebase] ❌ Service Worker registration failed:", error);
             return;
@@ -140,7 +140,7 @@ export async function syncPushSubscription(): Promise<void> {
         // Wait for Service Worker to be ready
         try {
           registration = await navigator.serviceWorker.ready;
-          console.log("[Firebase] Service Worker ready:", registration.scope);
+          if (process.env.NODE_ENV === 'development') console.log("[Firebase] Service Worker ready:", registration.scope);
         } catch (error) {
           console.warn("[Firebase] Service Worker not ready yet:", error);
           // Wait a bit more and retry
@@ -192,7 +192,7 @@ export async function syncPushSubscription(): Promise<void> {
 
     let token: string | null = null;
     try {
-      console.log("[Firebase] Requesting FCM token with VAPID key...");
+      if (process.env.NODE_ENV === 'development') console.log("[Firebase] Requesting FCM token...");
       // Ensure we have a valid service worker registration before calling getToken
       const currentRegistration = await navigator.serviceWorker.ready;
       if (!currentRegistration || !currentRegistration.pushManager) {
@@ -204,10 +204,7 @@ export async function syncPushSubscription(): Promise<void> {
         vapidKey: VAPID_PUBLIC_KEY,
         serviceWorkerRegistration: currentRegistration,
       });
-      console.log("[Firebase] ✅ FCM token obtained:", {
-        tokenPrefix: token ? token.substring(0, 20) + "..." : "null",
-        tokenLength: token?.length || 0,
-      });
+      if (process.env.NODE_ENV === 'development') console.log("[Firebase] ✅ FCM token obtained");
     } catch (tokenError: any) {
       const errorMessage = tokenError?.message || String(tokenError);
       const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
@@ -224,7 +221,7 @@ export async function syncPushSubscription(): Promise<void> {
         errorMessage.includes('Registration failed') ||
         errorMessage.includes('AbortError')
       )) {
-        console.log("[Firebase] ℹ️ Push notifications not available on localhost (requires HTTPS)");
+        if (process.env.NODE_ENV === 'development') console.log("[Firebase] Push not available on localhost (HTTPS required)");
         return;
       }
       
@@ -242,7 +239,7 @@ export async function syncPushSubscription(): Promise<void> {
     }
 
     // Save subscription to backend
-    console.log("[Firebase] Saving token to backend...");
+    if (process.env.NODE_ENV === 'development') console.log("[Firebase] Saving token to backend...");
     await saveSubscription(token).catch((err) => {
       // Silently handle subscription save errors - not critical
       console.warn("[Firebase] Subscription save failed (non-critical):", err);
@@ -266,10 +263,7 @@ export async function syncPushSubscription(): Promise<void> {
 // Save subscription to backend
 async function saveSubscription(fcmToken: string): Promise<void> {
   try {
-    console.log("[Firebase] Saving subscription to backend...", {
-      tokenPrefix: fcmToken.substring(0, 20) + "...",
-      tokenLength: fcmToken.length,
-    });
+    if (process.env.NODE_ENV === 'development') console.log("[Firebase] Saving subscription...");
     
     const response = await fetch("/api/push/subscribe", {
       method: "POST",
@@ -302,11 +296,7 @@ async function saveSubscription(fcmToken: string): Promise<void> {
     let result;
     try {
       result = await response.json();
-      console.log("[Firebase] ✅ Subscription saved successfully:", {
-        subscriptionId: result.subscription?.id,
-        lastSyncAt: result.subscription?.lastSyncAt,
-        success: result.success,
-      });
+      if (process.env.NODE_ENV === 'development') console.log("[Firebase] ✅ Subscription saved");
     } catch (jsonError) {
       console.error("[Firebase] ❌ Failed to parse subscription response:", jsonError);
       return;

@@ -21,7 +21,7 @@ export default function FirebasePushInit() {
     const initFirebase = async () => {
       try {
         firebaseLoadedRef.current = true;
-        console.log("[Firebase] Session ready, loading Firebase module...");
+        if (process.env.NODE_ENV === 'development') console.log("[Firebase] Session ready, loading Firebase...");
         
         const { syncPushSubscription, setupForegroundMessageHandler } = await import("@/lib/firebase-push-notifications");
 
@@ -42,10 +42,9 @@ export default function FirebasePushInit() {
         // Check notification permission
         if (typeof window !== "undefined" && "Notification" in window) {
           const permission = Notification.permission;
-          console.log("[Firebase] Browser notification permission:", permission);
-
+          if (process.env.NODE_ENV === 'development') console.log("[Firebase] Notification permission:", permission);
           if (permission === "granted") {
-            console.log("[Firebase] ✅ Notifications are allowed");
+            if (process.env.NODE_ENV === 'development') console.log("[Firebase] ✅ Notifications allowed");
             setTimeout(() => {
               syncPushSubscription().catch((error: any) => {
                 const errorMessage = error?.message || String(error);
@@ -60,10 +59,10 @@ export default function FirebasePushInit() {
                 console.warn("[Firebase] Sync error (non-critical):", error);
               });
             }, 2000);
-          } else if (permission === "default") {
-            console.log("[Firebase] ⚠️ Notification permission not requested yet");
-          } else {
-            console.log("[Firebase] ❌ Notifications are blocked by browser");
+          } else if (permission === "default" && process.env.NODE_ENV === 'development') {
+            console.log("[Firebase] Notification permission not requested yet");
+          } else if (permission !== "default" && process.env.NODE_ENV === 'development') {
+            console.log("[Firebase] Notifications blocked");
           }
         }
 

@@ -38,27 +38,9 @@ export default function ChatUnreadBadge() {
         return sum + Math.max(0, count);
       }, 0);
       
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Детальное логирование для диагностики
-      console.log('[ChatUnreadBadge] ========== FETCHED UNREAD COUNT ==========');
-      console.log('[ChatUnreadBadge] Total unread (excl. bot/assistant):', total);
-      console.log('[ChatUnreadBadge] Rooms count:', rooms.length, '| for badge:', roomsForBadge.length);
-      console.log('[ChatUnreadBadge] Rooms with unread:', roomsWithUnread.length);
-      console.log('[ChatUnreadBadge] Rooms with unread details:', JSON.stringify(roomsWithUnread.map(r => ({
-        id: r.id,
-        name: r.name || r.displayName,
-        unreadCount: r.unreadCount,
-        type: r.type,
-        isDirect: r.isDirect,
-        isGroup: r.isGroup,
-        isTicket: r.isTicket,
-      })), null, 2));
-      console.log('[ChatUnreadBadge] ALL ROOMS:', JSON.stringify(rooms.map(r => ({
-        id: r.id,
-        name: r.name || r.displayName,
-        unreadCount: r.unreadCount || 0,
-        type: r.type,
-      })), null, 2));
-      console.log('[ChatUnreadBadge] ==========================================');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[ChatUnreadBadge] FETCHED UNREAD COUNT:', total, '| rooms:', roomsForBadge.length, '| with unread:', roomsWithUnread.length);
+      }
       
       // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Всегда обновляем счетчик, даже если он 0
       setUnreadCount(total);
@@ -99,11 +81,10 @@ export default function ChatUnreadBadge() {
       // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: При прочтении сообщений обновляем счетчик немедленно
       const customEvent = e as CustomEvent;
       const chatId = customEvent?.detail?.chatId;
-      console.log('[ChatUnreadBadge] Messages read event received:', { chatId });
-      
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем счетчик с задержкой, чтобы дать время серверу обновить readAt и перезагрузить чаты
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[ChatUnreadBadge] Messages read event:', chatId);
+      }
       setTimeout(() => {
-        console.log('[ChatUnreadBadge] Fetching unread count after messages read');
         fetchUnreadCount();
       }, 1500); // Увеличена задержка для синхронизации с перезагрузкой чатов
     };
@@ -117,12 +98,9 @@ export default function ChatUnreadBadge() {
       if (customEvent.detail?.totalUnread === undefined) return;
       const newCount = Math.max(0, customEvent.detail.totalUnread);
       const oldCount = unreadCount;
-      console.log('[ChatUnreadBadge] Unread count changed via event:', {
-        oldCount,
-        newCount,
-        difference: newCount - oldCount,
-        eventDetail: customEvent.detail,
-      });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[ChatUnreadBadge] Unread count event:', oldCount, '->', newCount);
+      }
       queueMicrotask(() => {
         setUnreadCount(newCount);
         setIsInitialized(true);
