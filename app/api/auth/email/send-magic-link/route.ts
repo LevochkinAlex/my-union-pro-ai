@@ -101,25 +101,31 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Отправляем magic link на email: ссылка должна вести на тот же хост, с которого запросили
+    // Ссылка в письме всегда должна вести на публичный домен (продакшен).
+    // На проде за прокси request.url часто приходит как localhost — используем env.
+    const envUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL;
+    const isEnvProduction =
+      envUrl &&
+      !envUrl.includes("localhost") &&
+      !envUrl.includes("127.0.0.1");
     let baseUrl: string;
-    try {
-      const requestOrigin = new URL(request.url).origin;
-      if (requestOrigin.includes("localhost") || requestOrigin.includes("127.0.0.1")) {
-        baseUrl = requestOrigin;
-      } else {
-        // Продакшен: используем хост из запроса, чтобы ссылка из письма открывалась на том же домене
-        baseUrl = requestOrigin.replace(/^http:/, "https:");
+    if (isEnvProduction) {
+      baseUrl = envUrl.replace(/^http:/, "https:");
+    } else {
+      try {
+        const requestOrigin = new URL(request.url).origin;
+        if (requestOrigin.includes("localhost") || requestOrigin.includes("127.0.0.1")) {
+          baseUrl = requestOrigin;
+        } else {
+          baseUrl = requestOrigin.replace(/^http:/, "https:");
+        }
+      } catch {
+        baseUrl = "https://myunion.pro";
       }
-    } catch {
-      baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
-                process.env.NEXTAUTH_URL ||
-                "https://myunion.pro";
     }
     if (!baseUrl.includes("localhost") && !baseUrl.includes("127.0.0.1")) {
       baseUrl = baseUrl.replace(/^http:/, "https:");
     }
-    
     const magicLink = `${baseUrl}/api/auth/email/verify?token=${token}`;
 
     const emailSent = await sendMagicLinkEmail(
