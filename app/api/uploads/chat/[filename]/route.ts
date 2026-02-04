@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
+import fs from "fs/promises";
 import { initVDSStorageFromEnv, getFileFromVDS, isVDSStorageConfigured } from "@/lib/vds-storage";
 
 // Инициализируем VDS хранилище при загрузке модуля
@@ -24,24 +25,35 @@ export async function GET(
       return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
     }
 
-    // Загружаем файл только с VDS
-    if (!isVDSStorageConfigured()) {
-      console.error("[uploads/chat] VDS storage is not configured");
-      return NextResponse.json({ error: "Storage not configured" }, { status: 500 });
+    let fileBuffer: Buffer | null = null;
+
+    // 1) Пробуем VDS, если настроен
+    if (isVDSStorageConfigured()) {
+      try {
+        const fileKey = `chat/${filename}`;
+        fileBuffer = await getFileFromVDS(fileKey);
+        if (fileBuffer?.length) {
+          console.log(`[uploads/chat] Served from VDS: ${fileKey}`);
+        }
+      } catch (vdsError) {
+        console.warn("[uploads/chat] VDS error, trying local:", vdsError);
+      }
     }
 
-    let fileBuffer: Buffer | null = null;
-    
-    try {
-      const fileKey = `chat/${filename}`;
-      console.log(`[uploads/chat] Trying to get file from VDS: ${fileKey}`);
-      fileBuffer = await getFileFromVDS(fileKey);
-      console.log(`[uploads/chat] File retrieved from VDS: ${fileKey}, size: ${fileBuffer?.length || 0} bytes`);
-    } catch (vdsError) {
-      console.error("[uploads/chat] VDS error:", vdsError);
+    // 2) Fallback: локальная папка public/uploads/chat (вложения из обращений и т.д.)
+    if (!fileBuffer || fileBuffer.length === 0) {
+      const localPath = path.join(process.cwd(), "public", "uploads", "chat", filename);
+      try {
+        fileBuffer = await fs.readFile(localPath);
+        if (fileBuffer?.length) {
+          console.log(`[uploads/chat] Served from local: ${filename}`);
+        }
+      } catch (localError) {
+        // файл не найден локально — оставляем fileBuffer пустым
+      }
     }
-    
-    if (!fileBuffer) {
+
+    if (!fileBuffer || fileBuffer.length === 0) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 

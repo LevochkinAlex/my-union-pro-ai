@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { MembershipGate } from "@/components/MembershipGate";
 import { DEMO_MEMBER_USER_ID } from "@/lib/demo-constants";
+import CloseAppealModal from "@/components/appeals/CloseAppealModal";
 
 interface Ticket {
   id: string;
@@ -73,7 +74,8 @@ export default function AppealsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | keyof typeof TICKET_STATUSES>("all");
-  
+  const [closeModalTicket, setCloseModalTicket] = useState<Ticket | null>(null);
+
   // Контекст дашборда: председатель или сотрудник с правом appeals_view видит интерфейс ППО
   const [dashboardContext, setDashboardContext] = useState<{
     isChairman: boolean;
@@ -157,6 +159,26 @@ export default function AppealsPage() {
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [isMemberView, isAppealsInboxOutboxView, staffTab]);
+
+  const handleCloseAppeal = useCallback(async (rating: number, comment: string) => {
+    if (!closeModalTicket) return;
+    try {
+      const res = await fetch(`/api/tickets/${closeModalTicket.publicId}/close`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating, comment }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d?.error || "Ошибка закрытия");
+      }
+      setCloseModalTicket(null);
+      loadTickets(isAppealsInboxOutboxView ? staffTab : undefined);
+    } catch (e) {
+      console.error(e);
+      throw e;
+    }
+  }, [closeModalTicket, isAppealsInboxOutboxView, staffTab]);
 
   // Пока контекст не загружен (председатель/сотрудник) — не показывать контент членам, чтобы не мелькало
   const contextPending = session && !isDemoMember && dashboardContext === null;
@@ -359,6 +381,17 @@ export default function AppealsPage() {
                       </svg>
                     </Link>
                   ) : null}
+                  {ticket.isOwner && ticket.status !== "CLOSED" && ticket.status !== "RESOLVED" && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setCloseModalTicket(ticket); }}
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition-colors"
+                      title="Закрыть обращение"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
                   <button
                     onClick={() => router.push(`/dashboard/appeals/${ticket.id}`)}
                     className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
@@ -373,6 +406,15 @@ export default function AppealsPage() {
             );
           })}
         </div>
+      )}
+      {closeModalTicket && (
+        <CloseAppealModal
+          isOpen={!!closeModalTicket}
+          onClose={() => setCloseModalTicket(null)}
+          onConfirm={handleCloseAppeal}
+          ticketId={closeModalTicket.id}
+          ticketPublicId={closeModalTicket.publicId}
+        />
       )}
     </div>
     </MembershipGate>

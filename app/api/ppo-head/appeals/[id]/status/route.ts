@@ -3,189 +3,94 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getPPOHead } from "@/lib/ppo-head-utils";
-import { sendUserNotification } from "@/lib/notifications";
+import { checkUserPermissions } from "@/lib/staff-permissions";
 
-// Статусы с их названиями для системных сообщений
-const STATUS_NAMES: Record<string, string> = {
-  PENDING: "Ожидает рассмотрения",
-  IN_PROGRESS: "В работе",
-  RESOLVED: "Решено",
-  CLOSED: "Закрыто",
-  REJECTED: "Отклонено",
-};
-
-// Эмодзи для статусов
-const STATUS_EMOJI: Record<string, string> = {
-  PENDING: "⏳",
-  IN_PROGRESS: "🔄",
-  RESOLVED: "✅",
-  CLOSED: "📁",
-  REJECTED: "❌",
-};
+const ALLOWED_STATUSES = ["PENDING", "IN_PROGRESS", "RESOLVED"] as const;
 
 /**
- * PUT /api/ppo-head/appeals/[id]/status
- * Изменить статус обращения
+ * PATCH /api/ppo-head/appeals/[id]/status
+ * Смена статуса обращения председателем или сотрудником с правом appeals_view
  */
-export async function PUT(
+export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } | Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
-
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем, что пользователь является Председателем
-    const chairman = await getPPOHead(session.user.id);
+    const { id } = await params;
+    const body = await request.json();
+    const status = body?.status;
 
-    if (!chairman) {
+    if (!status || !ALLOWED_STATUSES.includes(status)) {
       return NextResponse.json(
-        { error: "Доступ запрещен или организация не назначена" },
-        { status: 403 }
-      );
-    }
-
-    const resolvedParams = await Promise.resolve(params);
-    const ticketId = resolvedParams.id;
-    const { status, comment } = await request.json();
-
-    if (!status) {
-      return NextResponse.json(
-        { error: "Укажите новый статус" },
+        { error: "Укажите статус: PENDING, IN_PROGRESS или RESOLVED" },
         { status: 400 }
       );
     }
 
-    // Проверяем допустимость статуса
-    const validStatuses = ["PENDING", "IN_PROGRESS", "RESOLVED", "CLOSED"];
-    if (!validStatuses.includes(status)) {
-      return NextResponse.json(
-        { error: "Недопустимый статус" },
-        { status: 400 }
-      );
-    }
-
-    // Получаем обращение
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
-      include: {
-        user: true,
+    const publicIdNormalized = typeof id === "string" ? id.replace(/-/g, "") : id;
+    const ticket = await prisma.ticket.findFirst({
+      where: { OR: [{ publicId: publicIdNormalized }, { id }] },
+      select: {
+        id: true,
+        publicId: true,
+        status: true,
+        organizationId: true,
       },
     });
 
     if (!ticket) {
-      return NextResponse.json(
-        { error: "Обращение не найдено" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Обращение не найдено" }, { status: 404 });
     }
 
-    if (ticket.organizationId !== chairman.organizationId) {
+    const chairman = await getPPOHead(session.user.id);
+    const perm = await checkUserPermissions(session.user.id);
+    const isChairman =
+      chairman && (ticket.organizationId === chairman.ppoHeadOrganizationId || ticket.organizationId === chairman.organizationId);
+    const isStaffWithAppeals =
+      perm.isStaff && perm.permissions?.appeals_view && perm.organizationId === ticket.organizationId;
+
+    if (!isChairman && !isStaffWithAppeals) {
       return NextResponse.json(
-        { error: "Доступ запрещен" },
+        { error: "Только председатель или сотрудник с правом обращений может менять статус" },
         { status: 403 }
       );
     }
 
-    const oldStatus = ticket.status;
-    
-    // Не обновляем если статус не изменился
-    if (oldStatus === status) {
-      return NextResponse.json({ success: true, unchanged: true });
+    if (ticket.status === "CLOSED" || ticket.status === "REJECTED") {
+      return NextResponse.json(
+        { error: "Нельзя изменить статус закрытого или отклонённого обращения" },
+        { status: 400 }
+      );
     }
 
-    // Обновляем статус обращения
-    await prisma.ticket.update({
-      where: { id: ticketId },
-      data: { status },
-    });
-
-    // Логируем действие
-    await prisma.ticketActionLog.create({
+    const updated = await prisma.ticket.update({
+      where: { id: ticket.id },
       data: {
-        ticketId,
-        userId: chairman.id,
-        actionType: "status_changed",
-        description: `Статус изменен: ${STATUS_NAMES[oldStatus] || oldStatus} → ${STATUS_NAMES[status] || status}`,
-        oldValue: oldStatus,
-        newValue: status,
-        metadata: comment ? { comment } : undefined,
+        status,
+        ...(status === "RESOLVED"
+          ? { resolved: true, resolvedAt: new Date() }
+          : {}),
       },
     });
 
-    // Отправляем системное сообщение в чат обращения
-    if (ticket.chatId) {
-      const emoji = STATUS_EMOJI[status] || "📌";
-      let systemMessage = `${emoji} **Статус обращения изменен**\n\n`;
-      systemMessage += `${STATUS_NAMES[oldStatus] || oldStatus} → ${STATUS_NAMES[status] || status}`;
-      
-      if (comment) {
-        systemMessage += `\n\n💬 Комментарий: ${comment}`;
-      }
-
-      // Отправляем сообщение в чат через наш API
-      try {
-        await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3004'}/api/chat/${ticket.chatId}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Internal-Token': process.env.INTERNAL_API_TOKEN || '',
-          },
-          body: JSON.stringify({
-            content: systemMessage,
-            senderUserId: session.user.id,
-          }),
-        }).catch(err => {
-          console.error('[appeals/status] Error sending status message:', err);
-        });
-      } catch (err) {
-        console.error('[appeals/status] Error:', err);
-      }
-      // TODO: Отправить системное сообщение в чат обращения
-      
-      // Обновляем lastMessageAt в чате
-      if (ticket.chatId) {
-        await prisma.chat.update({
-          where: { id: ticket.chatId },
-          data: {
-            lastMessageAt: new Date(),
-          },
-        });
-      }
-    }
-
-    // Отправляем уведомление пользователю
-    try {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myunion.pro";
-      await sendUserNotification({
-        userId: ticket.userId,
-        type: "ticket_response",
-        title: `${STATUS_EMOJI[status] || "📌"} Статус обращения изменен`,
-        body: `Обращение #${ticket.publicId}: ${STATUS_NAMES[status] || status}`,
-        url: `${baseUrl}/dashboard/appeals/${ticket.id}`,
-        senderName: "Профсоюз",
-      });
-    } catch (notificationError) {
-      console.error("[ppo-head/appeals/status] Notification error:", notificationError);
-    }
-
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
-      oldStatus,
-      newStatus: status,
+      ticket: {
+        id: updated.id,
+        publicId: updated.publicId,
+        status: updated.status,
+      },
     });
   } catch (error: any) {
-    console.error("[ppo-head/appeals/status] PUT error:", error);
+    console.error("[ppo-head/appeals/status] Error:", error);
     return NextResponse.json(
-      {
-        error: "Ошибка при изменении статуса",
-        details: process.env.NODE_ENV === "development" ? error.message : undefined,
-      },
+      { error: "Ошибка смены статуса", details: error?.message },
       { status: 500 }
     );
   }
 }
-

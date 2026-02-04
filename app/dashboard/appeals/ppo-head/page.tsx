@@ -168,12 +168,33 @@ export default function PPOHeadAppealsPage() {
     }
   };
 
+  const handleStatusChange = async (ticket: Ticket, newStatus: string) => {
+    if (ticket.status === newStatus) return;
+    try {
+      const id = ticket.publicId.replace(/-/g, "");
+      const response = await fetch(`/api/ppo-head/appeals/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.error || "Ошибка смены статуса");
+      }
+      await loadTickets();
+    } catch (err) {
+      console.error("Error changing status:", err);
+      alertError(err instanceof Error ? err.message : "Не удалось изменить статус");
+    }
+  };
+
   const handleForceClose = async (reason: string) => {
     if (!selectedTicket) return;
 
     try {
+      const id = selectedTicket.publicId.replace(/-/g, "");
       const response = await fetch(
-        `/api/ppo-head/appeals/${selectedTicket.publicId}/force-close`,
+        `/api/ppo-head/appeals/${id}/force-close`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -381,9 +402,26 @@ export default function PPOHeadAppealsPage() {
                       Просрочено
                     </span>
                   )}
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.bgClass}`}>
-                    {statusInfo.label}
-                  </span>
+                  {ticket.status !== "CLOSED" && ticket.status !== "REJECTED" ? (
+                    <select
+                      value={ticket.status}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleStatusChange(ticket, e.target.value);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className={`min-w-0 rounded border-0 text-xs font-medium cursor-pointer bg-transparent ${statusInfo.bgClass} py-1 px-2 focus:ring-2 focus:ring-blue-500`}
+                      title="Изменить статус"
+                    >
+                      <option value="PENDING">Ожидание</option>
+                      <option value="IN_PROGRESS">В работе</option>
+                      <option value="RESOLVED">Решено</option>
+                    </select>
+                  ) : (
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.bgClass}`}>
+                      {statusInfo.label}
+                    </span>
+                  )}
                 </div>
 
                 {/* Действия */}

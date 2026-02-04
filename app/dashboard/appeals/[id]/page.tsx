@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import FileAttachment from "@/components/shared/FileAttachment";
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
 import RichTextEditor from "@/components/admin/RichTextEditor";
+import CloseAppealModal from "@/components/appeals/CloseAppealModal";
 
 interface Ticket {
   id: string;
@@ -19,6 +20,7 @@ interface Ticket {
   createdAt: string;
   updatedAt: string;
   chatId: string | null;
+  userId?: string;
   rejectionReason: string | null;
   helpfulRating: number | null;
   helpfulRatingComment: string | null;
@@ -77,6 +79,7 @@ export default function TicketDetailPage() {
   const [selectedRating, setSelectedRating] = useState(0);
   const [ratingComment, setRatingComment] = useState("");
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+  const [showCloseModal, setShowCloseModal] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -121,6 +124,28 @@ export default function TicketDetailPage() {
   const canEdit = ticket?.status === "PENDING";
   const canDelete = ticket?.status === "PENDING" || ticket?.status === "REJECTED";
   const canRate = (ticket?.status === "RESOLVED" || ticket?.status === "CLOSED") && !ticket?.helpfulRating;
+  const canClose = ticket && ticket.status !== "CLOSED" && ticket.status !== "RESOLVED" && ticket.userId === session?.user?.id;
+
+  const handleCloseAppeal = useCallback(async (rating: number, comment: string) => {
+    if (!ticket) return;
+    try {
+      const res = await fetch(`/api/tickets/${ticket.publicId}/close`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating, comment }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d?.error || "Ошибка закрытия");
+      }
+      setShowCloseModal(false);
+      await loadTicket(ticket.id);
+    } catch (e) {
+      console.error(e);
+      alertError(e instanceof Error ? e.message : "Ошибка закрытия обращения");
+      throw e;
+    }
+  }, [ticket]);
 
   const handleSubmitRating = async () => {
     if (!ticket || selectedRating === 0) {
@@ -307,6 +332,17 @@ export default function TicketDetailPage() {
                 />
               </svg>
               Редактировать
+            </button>
+          )}
+          {canClose && (
+            <button
+              onClick={() => setShowCloseModal(true)}
+              className="inline-flex items-center gap-2 rounded-lg bg-gray-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Закрыть обращение
             </button>
           )}
           {canDelete && (
@@ -503,6 +539,16 @@ export default function TicketDetailPage() {
         )}
       </div>
 
+      {ticket && showCloseModal && (
+        <CloseAppealModal
+          isOpen={showCloseModal}
+          onClose={() => setShowCloseModal(false)}
+          onConfirm={handleCloseAppeal}
+          ticketId={ticket.id}
+          ticketPublicId={ticket.publicId}
+        />
+      )}
+
       {/* Модалка оценки */}
       {showRatingModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
@@ -517,8 +563,11 @@ export default function TicketDetailPage() {
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
+                  type="button"
                   onClick={() => setSelectedRating(star)}
                   className="focus:outline-none transition-transform hover:scale-110"
+                  title={`Оценка ${star} из 5`}
+                  aria-label={`Оценка ${star} из 5`}
                 >
                   <svg
                     className={`h-10 w-10 ${

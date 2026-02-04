@@ -340,9 +340,15 @@ function ContextMenu({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [onClose]);
 
-  // Корректировка позиции меню чтобы не выходило за границы экрана
+  // Корректировка позиции меню чтобы не выходило за границы экрана (через ref, без inline style)
   const adjustedX = Math.min(x, window.innerWidth - 220);
   const adjustedY = Math.min(y, window.innerHeight - 350);
+  useEffect(() => {
+    if (menuRef.current) {
+      menuRef.current.style.left = `${adjustedX}px`;
+      menuRef.current.style.top = `${adjustedY}px`;
+    }
+  }, [adjustedX, adjustedY]);
 
   const quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🎉", "👏", "🔥"];
 
@@ -350,7 +356,6 @@ function ContextMenu({
     <div
       ref={menuRef}
       className="fixed z-[100] bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 py-2 min-w-[200px] animate-in fade-in zoom-in-95 duration-100"
-      style={{ left: adjustedX, top: adjustedY }}
     >
       {/* Quick reactions */}
       <div className="px-2 pb-2 border-b border-gray-100 dark:border-gray-700">
@@ -369,10 +374,12 @@ function ContextMenu({
           ))}
           <div className="relative">
             <button
+              type="button"
+              title="Добавить эмодзи"
               onClick={() => setShowEmojiPicker(!showEmojiPicker)}
               className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
             >
-              <Smile className="w-5 h-5 text-gray-500" />
+              <Smile className="w-5 h-5 text-gray-500" aria-hidden />
             </button>
             {showEmojiPicker && (
               <div className="absolute left-0 bottom-full mb-2">
@@ -647,9 +654,16 @@ function LazyImage({
     return null;
   }, []);
 
-  // Для старых сообщений используем Intersection Observer
-  const containerRef = useRef<HTMLButtonElement>(null);
+  // Для старых сообщений используем Intersection Observer (div, не button — внутри есть кнопка «Загрузить»)
+  const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClick?.();
+    }
+  }, [onClick]);
 
   useEffect(() => {
     if (!isOld || shouldLoad) return;
@@ -701,12 +715,18 @@ function LazyImage({
     );
   }
 
+  const isInteractive = !!onClick;
   return (
-    <button
+    <div
       ref={containerRef}
+      {...(isInteractive && {
+        role: "button" as const,
+        "aria-label": "Открыть изображение",
+        tabIndex: 0,
+        onKeyDown: handleKeyDown,
+      })}
       onClick={onClick}
       className={`relative group overflow-hidden rounded-xl ${className} ${!onClick ? 'cursor-default' : 'cursor-pointer'}`}
-      type="button"
     >
       {displaySrc && displaySrc.trim() !== '' ? (
         <img
@@ -757,16 +777,8 @@ function LazyImage({
               }
             }
             
-            console.error('[LazyImage] ❌ Failed to load image:', {
-              displaySrc: displaySrc?.substring(0, 100),
-              cdnSrc: cdnSrc?.substring(0, 100),
-              cdnThumbnail: cdnThumbnail?.substring(0, 100),
-              fallbackSrc: fallbackSrc?.substring(0, 100),
-              originalSrc: src?.substring(0, 100),
-              isOld,
-              shouldLoad,
-              fallbackTried,
-            });
+            // Ошибка загрузки (404, сеть) — не логируем как error, чтобы не вызывать ErrorHandler
+            console.warn('[LazyImage] Image failed to load:', displaySrc?.substring(0, 80) || src?.substring(0, 80));
             setImageError(true);
           }}
         />
@@ -785,6 +797,8 @@ function LazyImage({
               <ImageIcon className="w-6 h-6 text-gray-600 dark:text-gray-400" />
             </div>
             <button
+              type="button"
+              title="Загрузить изображение"
               onClick={(e) => {
                 e.stopPropagation();
                 setShouldLoad(true);
@@ -812,7 +826,7 @@ function LazyImage({
           <ImageIcon className="w-8 h-8 text-gray-400" />
         </div>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -1291,7 +1305,9 @@ function ChannelPostDisplay({
                                 ? 'bg-blue-500 dark:bg-blue-400'
                                 : 'bg-blue-400 dark:bg-blue-500'
                             )}
-                            style={{ width: `${percentage}%` }}
+                            ref={(el) => {
+                              if (el) el.style.width = `${percentage}%`;
+                            }}
                           />
                         </div>
                       )}
@@ -1333,9 +1349,11 @@ function ChannelPostDisplay({
                     "rounded-full border",
                     isOwn 
                       ? "w-4 h-4 border-white/30" 
-                      : "w-4 h-4 border-white dark:border-gray-900"
+                      : "w-4 h-4 border-white dark:border-gray-900",
+                    idx === 0 && "z-10",
+                    idx === 1 && "z-[9]",
+                    idx === 2 && "z-[8]"
                   )}
-                  style={{ zIndex: 10 - idx }}
                 />
               ))}
               {participants.length > 3 && (
@@ -1512,7 +1530,9 @@ const MessageBubble = memo(function MessageBubble({
                             "h-full rounded-full transition-all duration-300",
                             isOwn ? "bg-white" : "bg-blue-500"
                           )}
-                          style={{ width: `${message.uploadProgress}%` }}
+                          ref={(el) => {
+                            if (el && message.uploadProgress != null) el.style.width = `${message.uploadProgress}%`;
+                          }}
                         />
                       </div>
                       <span className={clsx("text-xs font-medium", isOwn ? "text-white" : "text-gray-700 dark:text-gray-200")}>
@@ -2025,7 +2045,7 @@ export default function SlackStyleMessages({
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900"
+      className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-gray-50 dark:bg-gray-900"
       onScroll={handleScroll}
     >
       <div className="py-4 px-4 space-y-1 min-h-full">
@@ -2057,8 +2077,8 @@ export default function SlackStyleMessages({
                 <div className="flex items-center gap-2">
                   <div className="flex gap-1">
                     <div className="w-2 h-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.15s" }} />
-                    <div className="w-2 h-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.3s" }} />
+                    <div className="w-2 h-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                    <div className="w-2 h-2 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
                   </div>
                   <span className="text-sm text-gray-600 dark:text-gray-300">думает...</span>
                 </div>
@@ -2067,8 +2087,8 @@ export default function SlackStyleMessages({
               <>
                 <div className="flex gap-1">
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.4s" }} />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:200ms]" />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:400ms]" />
                 </div>
                 <span className="text-sm text-gray-500 dark:text-gray-400">печатает...</span>
               </>
@@ -2082,10 +2102,12 @@ export default function SlackStyleMessages({
       {/* Scroll to bottom button */}
       {!isAtBottom && (
         <button
+          type="button"
+          title="Прокрутить вниз"
           onClick={() => scrollToBottom()}
           className="absolute bottom-24 right-6 p-3 bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all hover:scale-105"
         >
-          <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+          <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-300" aria-hidden />
         </button>
       )}
 

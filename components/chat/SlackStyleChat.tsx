@@ -152,7 +152,10 @@ interface ChatHeaderProps {
   isCurrentUserAdmin?: boolean;
   ticketId?: string | null;
   ticketPublicId?: string | null;
+  /** Закрыть обращение (автор — с оценкой) */
   onCloseAppeal?: () => void;
+  /** Принудительно закрыть обращение (председатель/получатель) */
+  onForceCloseAppeal?: () => void;
   isChairman?: boolean;
   /** Удалить переписку из списка (личные) или выйти из чата (группа). Вызов после успешного API. */
   onLeaveChat?: () => Promise<void>;
@@ -164,7 +167,7 @@ interface ChatHeaderProps {
   isCreatedByMe?: boolean;
 }
 
-function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditGroup, isCurrentUserAdmin, ticketId, ticketPublicId, onCloseAppeal, isChairman = false, onLeaveChat, onDeleteChat, isPrivateChat = false, isCreatedByMe = false }: ChatHeaderProps) {
+function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditGroup, isCurrentUserAdmin, ticketId, ticketPublicId, onCloseAppeal, onForceCloseAppeal, isChairman = false, onLeaveChat, onDeleteChat, isPrivateChat = false, isCreatedByMe = false }: ChatHeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
   const router = useRouter();
   const { displayName, avatarUrl, subtitle, isAI, isGroup, isTicketChat, isDeletedUser } = getChatDisplayInfo(chat, currentUserId);
@@ -270,10 +273,10 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
       </div>
 
       <div className="flex items-center gap-1">
-        {/* Кнопка закрытия обращения */}
-        {(isTicketChat || ticketId) && onCloseAppeal && (
+        {/* Кнопка закрытия обращения (автор — с оценкой; председатель — принудительно) */}
+        {(isTicketChat || ticketId) && (onCloseAppeal || onForceCloseAppeal) && (
           <button
-            onClick={onCloseAppeal}
+            onClick={onCloseAppeal || onForceCloseAppeal}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl text-green-600 dark:text-green-400"
             title="Закрыть обращение"
           >
@@ -489,6 +492,7 @@ export default function SlackStyleChat({
   const [selectedImage, setSelectedImage] = useState<{ url: string; name?: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; messageId: string | null }>({ isOpen: false, messageId: null });
   const [showCloseAppealModal, setShowCloseAppealModal] = useState(false);
+  const [showForceCloseAppealModal, setShowForceCloseAppealModal] = useState(false);
   const [ticketInfo, setTicketInfo] = useState<{ id: string; publicId: string; status: string; userId: string } | null>(null);
   const [showAddParticipantModal, setShowAddParticipantModal] = useState(false);
 
@@ -536,6 +540,28 @@ export default function SlackStyleChat({
       throw error;
     }
   }, [ticketInfo, showToast]);
+
+  const handleForceCloseAppeal = useCallback(async (reason: string) => {
+    if (!ticketInfo?.publicId) return;
+    try {
+      const publicId = ticketInfo.publicId.replace(/-/g, '');
+      const response = await fetch(`/api/ppo-head/appeals/${publicId}/force-close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      const data = await safeJsonParse(response);
+      if (!response.ok) throw new Error(data?.error || 'Ошибка закрытия');
+      showToast('Обращение закрыто', 'success');
+      setShowForceCloseAppealModal(false);
+      setTicketInfo((prev) => (prev ? { ...prev, status: 'CLOSED' } : null));
+    } catch (error) {
+      console.error('[SlackStyleChat] Error force closing appeal:', error);
+      const msg = error instanceof Error ? error.message : 'Ошибка закрытия обращения';
+      showToast(msg, 'error');
+      throw error;
+    }
+  }, [ticketInfo?.publicId, showToast]);
 
   // Chat hook
   const {
@@ -945,7 +971,7 @@ export default function SlackStyleChat({
   }
 
   return (
-    <div ref={containerRef} className="flex flex-col bg-gray-100 dark:bg-gray-950">
+    <div ref={containerRef} className="flex flex-col h-full min-h-0 bg-gray-100 dark:bg-gray-950">
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Sidebar */}
         <div className={`${showChatView ? "hidden md:flex" : "flex"} w-full md:w-80 lg:w-96 flex-col min-w-0 border-r border-gray-200 dark:border-gray-800`}>
@@ -967,7 +993,7 @@ export default function SlackStyleChat({
         </div>
 
         {/* Chat area */}
-        <div className={`${showChatView ? "flex" : "hidden md:flex"} flex-1 flex-col min-w-0 bg-white dark:bg-gray-900`}>
+        <div className={`${showChatView ? "flex" : "hidden md:flex"} flex-1 flex-col min-w-0 min-h-0 bg-white dark:bg-gray-900`}>
           {selectedChat ? (
             <>
               <ChatHeader
@@ -992,6 +1018,15 @@ export default function SlackStyleChat({
                     ? () => setShowCloseAppealModal(true)
                     : undefined
                 }
+                onForceCloseAppeal={
+                  ticketInfo &&
+                  ticketInfo.userId !== currentUserId &&
+                  isChairman &&
+                  ticketInfo.status !== 'CLOSED' &&
+                  ticketInfo.status !== 'RESOLVED'
+                    ? () => setShowForceCloseAppealModal(true)
+                    : undefined
+                }
                 isChairman={isChairman}
                 onLeaveChat={handleLeaveChat}
                 onDeleteChat={handleDeleteChat}
@@ -999,9 +1034,9 @@ export default function SlackStyleChat({
                 isCreatedByMe={selectedChat.createdById === currentUserId}
               />
 
-              <div className="flex-1 flex overflow-hidden relative">
+              <div className="flex-1 flex min-h-0 overflow-hidden relative">
                       <div className={clsx(
-                        "flex flex-col min-w-0 transition-all duration-300",
+                        "flex flex-col min-w-0 min-h-0 transition-all duration-300",
                         "flex-1",
                       )}>
                   <SlackStyleMessages
@@ -1125,6 +1160,16 @@ export default function SlackStyleChat({
           isOpen={showCloseAppealModal}
           onClose={() => setShowCloseAppealModal(false)}
           onConfirm={handleCloseAppeal}
+          ticketId={ticketInfo.id}
+          ticketPublicId={ticketInfo.publicId}
+        />
+      )}
+      {showForceCloseAppealModal && ticketInfo && (
+        <CloseAppealModal
+          isOpen={showForceCloseAppealModal}
+          onClose={() => setShowForceCloseAppealModal(false)}
+          isForceClose
+          onForceClose={handleForceCloseAppeal}
           ticketId={ticketInfo.id}
           ticketPublicId={ticketInfo.publicId}
         />

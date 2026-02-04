@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { UserRound } from "lucide-react";
 
 interface ImpersonateButtonProps {
   userId: string;
@@ -56,12 +57,14 @@ export default function ImpersonateButton({ userId, userEmail }: ImpersonateButt
 
   return (
     <button
+      type="button"
       onClick={handleImpersonate}
       disabled={loading}
-      className="text-green-600 hover:text-green-700 dark:text-green-400 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 hover:text-green-700 dark:text-green-400 dark:hover:bg-green-950/30 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       title="Войти от имени пользователя"
     >
-      {loading ? "..." : "👤"}
+      <UserRound className="h-4 w-4 shrink-0" aria-hidden />
+      <span>{loading ? "Вход…" : "Войти"}</span>
     </button>
   );
 }
