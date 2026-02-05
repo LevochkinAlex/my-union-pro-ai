@@ -103,14 +103,21 @@ export async function POST(
       return NextResponse.json({ error: "Только админ может добавлять участников" }, { status: 403 });
     }
 
-    // Проверяем, что чат является групповым
+    // Проверяем, что чат является групповым и не чатом заседания
     const chat = await prisma.chat.findUnique({
       where: { id: chatId },
-      select: { type: true },
+      select: { type: true, meetingId: true },
     });
 
     if (!chat || (chat.type !== 'GROUP' && chat.type !== 'CHANNEL')) {
       return NextResponse.json({ error: "Участников можно добавлять только в групповые чаты" }, { status: 400 });
+    }
+
+    if (chat.meetingId) {
+      return NextResponse.json(
+        { error: "Участников чата заседания можно добавлять только через редактирование повестки дня или протокола в разделе «Документы» (у председателя или выборного органа)" },
+        { status: 400 }
+      );
     }
 
     const body = await request.json();

@@ -42,6 +42,8 @@ export interface Chat {
     participants?: number;
     messages?: number;
   };
+  /** Чат заседания — участников можно добавлять только через повестку/протокол в разделе «Документы» */
+  meetingId?: string | null;
   // Ticket-related fields (for appeal chats)
   ticketId?: string | null;
   ticketPublicId?: string | null;

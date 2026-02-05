@@ -98,8 +98,13 @@ export default function LandingPricing() {
               {formatPrice(totalPrice)} ₽
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {perUser} ₽ за пользователя в {periodLabel}
+              {perUser} ₽ за пользователя в месяц
             </p>
+            {period !== "month" && (
+              <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+                Экономия {Math.round((1 - perUser / row.perUserMonth!) * 100)}% при оплате за {periodLabel}
+              </p>
+            )}
           </div>
         </div>
 

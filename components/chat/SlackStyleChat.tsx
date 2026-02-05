@@ -1297,10 +1297,10 @@ export default function SlackStyleChat({
             p => p.userId === currentUserId && p.role === 'admin'
           )}
           onAddParticipant={
-            // Показываем кнопку добавления участника только для админов
-            (selectedChat.type === 'GROUP' || selectedChat.type === 'CHANNEL') && selectedChat.participants?.some(
-              p => p.userId === currentUserId && p.role === 'admin'
-            )
+            // Кнопка «добавить участника»: только для админов и не для чатов заседаний (участников добавляют через повестку/протокол в Документах)
+            (selectedChat.type === 'GROUP' || selectedChat.type === 'CHANNEL') &&
+            !selectedChat.meetingId &&
+            selectedChat.participants?.some(p => p.userId === currentUserId && p.role === 'admin')
               ? () => {
                   setShowParticipantsPanel(false);
                   setShowAddParticipantModal(true);
