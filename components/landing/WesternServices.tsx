@@ -5,8 +5,8 @@ import { WESTERN_SERVICES } from "@/lib/constants/landing-members";
 // SVG логотипы сервисов
 const serviceLogo: Record<string, React.ReactNode> = {
   Netflix: (
-    <svg viewBox="0 0 111 30" className="h-8 w-auto fill-[#E50914]">
-      <path d="M105.062 14.28L111 30c-1.75-.25-3.499-.563-5.28-.845l-3.345-8.686-3.437 7.969c-1.687-.282-3.344-.376-5.031-.595l6.031-13.75L94.468 0h5.063l3.062 7.874L105.875 0h5.124l-5.937 14.28zM90.47 0h-4.594v27.25c1.5.094 3.062.156 4.594.343V0zm-8.563 26.937c-4.187-.281-8.375-.53-12.656-.625V0h4.687v21.875c2.688.062 5.375.28 7.969.405v4.657zM64.25 10.657v4.687h-6.406V26H53.22V0h13.125v4.687h-8.5v5.97h6.406zm-18.906-5.97V26.25c-1.563 0-3.156 0-4.688.062V4.687h-4.844V0h14.406v4.687h-4.874zM30.75 0v21.875c2.75.156 5.5.343 8.22.562v4.563L26.062 26V0H30.75zM21.657 6.125L21.562 26c-1.5 0-3.062.031-4.594.062l.062-15.187-4.093 15.187c-1.25.062-2.53.094-3.78.125l-4.063-15.5v15.75h-4.5V0H7.78l4.188 15.656L16 0h5.657v6.125z" />
+    <svg viewBox="0 0 24 24" className="h-10 w-10 fill-[#E50914]" aria-label="Netflix">
+      <path d="M5.008 0v24h3.276V14.4l8.712 9.6h3.276V0h-3.276v9.6L8.284 0H5.008z" />
     </svg>
   ),
   Spotify: (
@@ -25,15 +25,19 @@ const serviceLogo: Record<string, React.ReactNode> = {
     </svg>
   ),
   Midjourney: (
-    <svg viewBox="0 0 24 24" className="h-10 w-10">
+    <svg viewBox="0 0 24 24" className="h-10 w-10" aria-label="Midjourney">
       <defs>
-        <linearGradient id="mj-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#000" />
-          <stop offset="100%" stopColor="#333" />
+        <linearGradient id="mj-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#0d0d0d" />
+          <stop offset="100%" stopColor="#1a1a1a" />
         </linearGradient>
       </defs>
-      <rect width="24" height="24" rx="4" fill="url(#mj-gradient)" />
-      <path d="M7 8h2l3 8 3-8h2l-4 10h-2L7 8z" fill="white" />
+      <rect width="24" height="24" rx="6" fill="url(#mj-bg)" />
+      {/* Эмблема Midjourney: две симметричные кривые (официальный мотив, public domain) */}
+      <path
+        fill="#22c55e"
+        d="M9 12a3 3 0 1 1 6 0 3 3 0 1 1-6 0zm6 0a3 3 0 1 1 6 0 3 3 0 1 1-6 0z"
+      />
     </svg>
   ),
   "Apple One": (
