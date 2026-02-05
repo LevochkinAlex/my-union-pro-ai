@@ -84,7 +84,7 @@ export async function POST(
       },
     });
 
-    // Отправляем сообщение в чат обращения
+    // Отправляем сообщение в чат обращения и архивируем чат
     if (ticket.chatId) {
       const closeMessage = `Обращение закрыто пользователем ${userName}.\n\nОценка: ${ratingStars} (${rating}/5)${comment ? `\nКомментарий: ${comment}` : ''}`;
       try {
@@ -97,7 +97,7 @@ export async function POST(
           },
         });
 
-        // Обновляем lastMessageId в чате
+        // Обновляем lastMessageId в чате и архивируем его
         const lastMessage = await prisma.chatMessage.findFirst({
           where: { chatId: ticket.chatId },
           orderBy: { createdAt: 'desc' },
@@ -109,6 +109,15 @@ export async function POST(
             data: {
               lastMessageId: lastMessage.id,
               lastMessageAt: lastMessage.createdAt,
+              archivedAt: new Date(), // Архивируем чат при закрытии обращения
+            },
+          });
+        } else {
+          // Архивируем чат даже если нет последнего сообщения
+          await prisma.chat.update({
+            where: { id: ticket.chatId },
+            data: {
+              archivedAt: new Date(),
             },
           });
         }

@@ -138,7 +138,17 @@ export function useChat(options: UseChatOptions = {}) {
           lastMessageAt: (c as any).lastMessageAt,
           unreadCount: (c as any).unreadCount || 0,
           otherUser: (c as any).otherUser?.id || null,
+          archivedAt: (c as any).archivedAt || null,
         })));
+        // Логируем архивные чаты отдельно
+        const archivedChats = data.chats.filter((c: Chat) => (c as any).archivedAt);
+        if (archivedChats.length > 0) {
+          console.log("[useChat] 📦 Archived chats:", archivedChats.length, archivedChats.map((c: Chat) => ({
+            id: c.id,
+            name: c.name || (c as any).displayName,
+            archivedAt: (c as any).archivedAt,
+          })));
+        }
         setChats(data.chats);
         
         // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем событие с общим количеством непрочитанных для обновления бейджа.
@@ -529,8 +539,10 @@ export function useChat(options: UseChatOptions = {}) {
             attachmentsCount: messages[messages.length - 1]?.attachments?.length || 0,
           });
         } else {
-          console.warn(`[useChat] ⚠️ No messages loaded for chat ${chatId} - this might indicate a problem!`);
-          console.warn(`[useChat] ⚠️ Check server logs for why messages are not being returned`);
+          const chatType = (data as any).chat?.type ?? chats.find((c: { id: string }) => c.id === chatId)?.type;
+          if (chatType === "GROUP" || chatType === "CHANNEL") {
+            console.warn(`[useChat] ⚠️ No messages loaded for ${chatType} chat ${chatId} - check server logs if unexpected`);
+          }
         }
         
         // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Убеждаемся что сообщения устанавливаются даже если их 0

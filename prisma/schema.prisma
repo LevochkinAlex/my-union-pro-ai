@@ -252,6 +252,8 @@ model User {
   messageReactions ChatMessageReaction[] @relation("ChatMessageReactions")
   // Прочитанные сообщения
   messageReads     ChatMessageRead[]     @relation("ChatMessageReads")
+  // Созданные папки для чатов
+  chatFolders      ChatFolder[]          @relation("UserChatFolders")
 
   // Посты пользователя
   posts        UserPost[]    @relation("UserPostAuthor")
@@ -482,6 +484,9 @@ model Organization {
 
   // Отчёты организации
   reports Report[] @relation("OrganizationReports")
+
+  // Папки для чатов организации
+  chatFolders ChatFolder[] @relation("OrganizationChatFolders")
 
   // Заседания профкома
   meetings Meeting[]
@@ -2110,6 +2115,9 @@ model Chat {
   // Архивирован ли чат
   archivedAt DateTime?
 
+  // Папки, в которых находится этот чат
+  folders ChatFolderChat[] @relation("ChatFolders")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2685,4 +2693,59 @@ model ReportStatusHistory {
 
   @@index([reportId])
   @@index([createdAt])
+}
+
+// ============================================================================
+// ПАПКИ ДЛЯ ЧАТОВ
+// ============================================================================
+
+// Папка для группировки чатов (для председателей и сотрудников)
+model ChatFolder {
+  id   String @id @default(cuid())
+  name String // Название папки
+
+  // Организация, к которой привязана папка (опционально)
+  organizationId String?
+  organization   Organization? @relation("OrganizationChatFolders", fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Кто создал папку
+  createdById String
+  createdBy   User   @relation("UserChatFolders", fields: [createdById], references: [id], onDelete: Cascade)
+
+  // Иконка папки (emoji или цвет)
+  icon  String? // Emoji: 📁, 📂, 🗂️, 📋, 💼
+  color String? // HEX цвет: #FF5733
+
+  // Порядок отображения
+  order Int @default(0)
+
+  // Чаты в папке
+  chats ChatFolderChat[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([createdById])
+  @@index([order])
+}
+
+// Связь чата с папкой (many-to-many через промежуточную таблицу)
+model ChatFolderChat {
+  id String @id @default(cuid())
+
+  folderId String
+  folder   ChatFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  chatId String
+  chat   Chat @relation("ChatFolders", fields: [chatId], references: [id], onDelete: Cascade)
+
+  // Порядок чата внутри папки
+  order Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@unique([folderId, chatId])
+  @@index([folderId])
+  @@index([chatId])
 }

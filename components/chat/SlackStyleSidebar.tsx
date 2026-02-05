@@ -21,8 +21,33 @@ import {
   Check,
   Loader2,
   Image as ImageIcon,
+  Archive,
+  FolderPlus,
+  Folder,
+  FolderOpen,
+  ArrowLeft,
+  Trash2,
 } from "lucide-react";
+import CreateFolderModal from "./CreateFolderModal";
 import { Chat, ChatUser } from "@/types/chat";
+import styles from "./SlackStyleSidebar.module.css";
+
+// Цвета папок (тот же порядок, что в CreateFolderModal) для маппинга в классы
+const FOLDER_COLOR_HEXES = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#6B7280"];
+const FOLDER_ICON_CLASSES = [
+  styles.folderIconBlue,
+  styles.folderIconGreen,
+  styles.folderIconOrange,
+  styles.folderIconRed,
+  styles.folderIconViolet,
+  styles.folderIconPink,
+  styles.folderIconGray,
+];
+function getFolderIconClass(color: string | null | undefined): string {
+  if (!color) return styles.folderIconDefault;
+  const i = FOLDER_COLOR_HEXES.indexOf(color);
+  return i >= 0 ? FOLDER_ICON_CLASSES[i] : styles.folderIconDefault;
+}
 
 // ============================================================================
 // ТИПЫ
@@ -30,12 +55,33 @@ import { Chat, ChatUser } from "@/types/chat";
 
 export type ChatCategory = "work" | "personal" | "ai";
 
+// Интерфейс для папки чатов
+export interface ChatFolder {
+  id: string;
+  name: string;
+  icon?: string;
+  color?: string | null;
+  order: number;
+  chatCount: number;
+  unreadCount: number;
+  chats: Array<{
+    id: string;
+    type: string;
+    name?: string;
+    avatarUrl?: string | null;
+  }>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface SlackStyleSidebarProps {
   chats: Chat[];
   selectedChat: Chat | null;
   loading: boolean;
   currentUserId: string | null;
   isChairman?: boolean;
+  /** Может ли пользователь создавать папки (председатель, сотрудник, член выборного органа) */
+  canCreateFolders?: boolean;
   onSelectChat: (chat: Chat) => void;
   onCreateChat?: (userId: string) => void;
   onCreateGroup?: () => void;
@@ -535,9 +581,16 @@ function ChatListItem({ chat, isSelected, currentUserId, onClick }: ChatListItem
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-0.5">
-          <span className={`font-semibold text-sm truncate text-gray-900 dark:text-white ${hasUnread ? "font-bold" : ""}`}>
-            {displayName}
-          </span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className={`font-semibold text-sm truncate text-gray-900 dark:text-white ${hasUnread ? "font-bold" : ""}`}>
+              {displayName}
+            </span>
+            {(chat as any).archivedAt && (
+              <span title="В архиве">
+                <Archive className="w-3.5 h-3.5 flex-shrink-0 text-gray-400 dark:text-gray-500" />
+              </span>
+            )}
+          </div>
           {chat.lastMessageAt && (
             <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0 ml-2">
               {formatLastMessageTime(chat.lastMessageAt)}
@@ -642,6 +695,7 @@ export default function SlackStyleSidebar({
   loading,
   currentUserId,
   isChairman = false,
+  canCreateFolders = false,
   onSelectChat,
   onCreateChat,
   onCreateGroup,
@@ -649,21 +703,134 @@ export default function SlackStyleSidebar({
   onOpenAIChat,
 }: SlackStyleSidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | "work" | "personal">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "work" | "personal" | "archived">("all");
   const [showNewChatModal, setShowNewChatModal] = useState(false);
+  
+  // Состояния для папок
+  const [folders, setFolders] = useState<ChatFolder[]>([]);
+  const [foldersLoading, setFoldersLoading] = useState(false);
+  const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
+  const [openFolderId, setOpenFolderId] = useState<string | null>(null);
+  const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
+
+  // Загрузка папок
+  const loadFolders = useCallback(async () => {
+    if (!canCreateFolders && !isChairman) return;
+    
+    setFoldersLoading(true);
+    try {
+      const response = await fetch("/api/chat/folders");
+      if (response.ok) {
+        const data = await safeJsonParse(response);
+        setFolders(data?.folders || []);
+      }
+    } catch (error) {
+      console.error("Failed to load folders:", error);
+    } finally {
+      setFoldersLoading(false);
+    }
+  }, [canCreateFolders, isChairman]);
+
+  // Загружаем папки при монтировании и при изменении чатов (для обновления непрочитанных)
+  useEffect(() => {
+    if (canCreateFolders || isChairman) {
+      loadFolders();
+    }
+  }, [canCreateFolders, isChairman, loadFolders]);
+
+  // Обновляем непрочитанные в папках при изменении чатов
+  useEffect(() => {
+    if ((canCreateFolders || isChairman) && folders.length > 0) {
+      // Debounce обновления папок при изменении чатов
+      const timer = setTimeout(() => {
+        loadFolders();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [chats, canCreateFolders, isChairman]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Создание папки
+  const handleCreateFolder = useCallback(async (data: { name: string; chatIds: string[]; icon?: string; color?: string }) => {
+    const response = await fetch("/api/chat/folders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    
+    if (!response.ok) {
+      const error = await safeJsonParse(response);
+      throw new Error(error?.error || "Ошибка создания папки");
+    }
+    
+    // Перезагружаем папки
+    await loadFolders();
+  }, [loadFolders]);
+
+  // Удаление (разбор) папки
+  const handleDeleteFolder = useCallback(async (folderId: string) => {
+    if (!confirm("Вы уверены, что хотите разобрать эту папку? Чаты останутся на месте.")) {
+      return;
+    }
+    
+    setDeletingFolderId(folderId);
+    try {
+      const response = await fetch(`/api/chat/folders/${folderId}`, {
+        method: "DELETE",
+      });
+      
+      if (response.ok) {
+        // Если была открыта удаляемая папка, закрываем её
+        if (openFolderId === folderId) {
+          setOpenFolderId(null);
+        }
+        // Перезагружаем папки
+        await loadFolders();
+      } else {
+        const error = await safeJsonParse(response);
+        alert(error?.error || "Ошибка удаления папки");
+      }
+    } catch (error) {
+      console.error("Failed to delete folder:", error);
+      alert("Ошибка удаления папки");
+    } finally {
+      setDeletingFolderId(null);
+    }
+  }, [openFolderId, loadFolders]);
+
+  // Получаем чаты внутри открытой папки
+  const openFolder = useMemo(() => {
+    if (!openFolderId) return null;
+    return folders.find(f => f.id === openFolderId) || null;
+  }, [folders, openFolderId]);
+
+  // Получаем ID чатов, которые находятся в папках (для скрытия из общего списка)
+  const chatsInFolders = useMemo(() => {
+    const ids = new Set<string>();
+    folders.forEach(folder => {
+      folder.chats.forEach(chat => ids.add(chat.id));
+    });
+    return ids;
+  }, [folders]);
 
   // Разделяем чаты по категориям
-  const { workChats, personalChats, channels, aiChat } = useMemo(() => {
-    const filtered = searchQuery
+  const { workChats, personalChats, channels, archivedChats, aiChat } = useMemo(() => {
+    // Фильтруем по поиску
+    let filtered = searchQuery
       ? chats.filter((chat) => {
           const name = getChatDisplayName(chat, currentUserId);
           return name.toLowerCase().includes(searchQuery.toLowerCase());
         })
       : chats;
+    
+    // Если не смотрим содержимое папки, скрываем чаты из папок
+    if (!openFolderId) {
+      filtered = filtered.filter(chat => !chatsInFolders.has(chat.id));
+    }
 
     const work: Chat[] = [];
     const personal: Chat[] = [];
     const channelList: Chat[] = [];
+    const archived: Chat[] = [];
     let ai: Chat | null = null;
 
     for (const chat of filtered) {
@@ -677,6 +844,15 @@ export default function SlackStyleSidebar({
         }
         // Все остальные ИИ-чаты просто пропускаем (не добавляем никуда)
         continue; // Явно пропускаем, чтобы не попало в personal
+      }
+      
+      // Проверяем, архивирован ли чат
+      const isArchived = !!(chat as any).archivedAt;
+      
+      if (isArchived) {
+        // Архивные чаты идут в отдельный список
+        archived.push(chat);
+        continue;
       }
       
       // Каналы - отдельная секция (обрабатываем первыми)
@@ -706,28 +882,26 @@ export default function SlackStyleSidebar({
       }
     }
 
-    return { workChats: work, personalChats: personal, channels: channelList, aiChat: ai };
-  }, [chats, searchQuery, currentUserId]);
+    return { workChats: work, personalChats: personal, channels: channelList, archivedChats: archived, aiChat: ai };
+  }, [chats, searchQuery, currentUserId, openFolderId, chatsInFolders]);
 
   const displayedChats = useMemo(() => {
-    // Для участников (не председателей) всегда показываем все чаты без фильтрации по табам
-    if (!isChairman) {
-      return { work: workChats, personal: personalChats, channels: channels, ai: aiChat };
-    }
-    
-    // Для председателей применяем фильтрацию по табам
+    // Фильтрация по табам применяется для всех пользователей
     switch (activeTab) {
       case "work": 
-        // В "Рабочие" включаем обращения и каналы
-        return { work: workChats, personal: [], channels: channels, ai: null };
+        // В "Рабочие" включаем обращения и каналы (только для председателей)
+        return { work: workChats, personal: [], channels: channels, archived: [], ai: null };
       case "personal": 
-        // В "Личные" только приватные чаты
-        return { work: [], personal: personalChats, channels: [], ai: null };
+        // В "Личные" только приватные чаты (только для председателей)
+        return { work: [], personal: personalChats, channels: [], archived: [], ai: null };
+      case "archived":
+        // В "Архив" только архивные чаты
+        return { work: [], personal: [], channels: [], archived: archivedChats, ai: null };
       default: 
-        // "Все" - показываем всё
-        return { work: workChats, personal: personalChats, channels: channels, ai: aiChat };
+        // "Все" - показываем всё (кроме архивных)
+        return { work: workChats, personal: personalChats, channels: channels, archived: [], ai: aiChat };
     }
-  }, [activeTab, workChats, personalChats, channels, aiChat, isChairman]);
+  }, [activeTab, workChats, personalChats, channels, archivedChats, aiChat]);
 
   const handleAIChatClick = useCallback(() => {
     if (aiChat) {
@@ -796,6 +970,15 @@ export default function SlackStyleSidebar({
                 <Hash className="w-5 h-5 text-gray-600 dark:text-gray-300" />
               </button>
             )}
+            {(canCreateFolders || isChairman) && (
+              <button
+                onClick={() => setShowCreateFolderModal(true)}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                title="Создать папку"
+              >
+                <FolderPlus className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -811,29 +994,35 @@ export default function SlackStyleSidebar({
           />
         </div>
 
-        {/* Tabs for Chairman */}
-        {/* Табы фильтрации - показываем только для председателей */}
-        {isChairman && (
-          <div className="flex mt-3 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
-            {[
-              { key: "all", label: "Все" },
-              { key: "work", label: "Рабочие" },
-              { key: "personal", label: "Личные" },
-            ].map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key as any)}
-                className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-all ${
-                  activeTab === key
-                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
-                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Табы фильтрации - показываем всем пользователям */}
+        {/* Для председателей: Все, Рабочие, Личные, Архив */}
+        {/* Для участников: Все, Архив */}
+        <div className="flex mt-3 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+          {(isChairman
+            ? [
+                { key: "all", label: "Все" },
+                { key: "work", label: "Рабочие" },
+                { key: "personal", label: "Личные" },
+                { key: "archived", label: "Архив" },
+              ]
+            : [
+                { key: "all", label: "Все" },
+                { key: "archived", label: "Архив" },
+              ]
+          ).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key as any)}
+              className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-all ${
+                activeTab === key
+                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Chat List */}
@@ -863,56 +1052,186 @@ export default function SlackStyleSidebar({
           <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
         </button>
 
-        {/* Work Chats - для председателей показываем по табам, для участников всегда показываем если есть */}
-        {((isChairman && (activeTab === "all" || activeTab === "work")) || (!isChairman && displayedChats.work.length > 0)) && (
-          <>
-            {displayedChats.work.length > 0 ? (
-              <ChatSection
-                title={isChairman ? "Рабочие чаты" : "Мои обращения"}
-                icon={<Briefcase className="w-4 h-4" />}
-                chats={displayedChats.work}
-                selectedChat={selectedChat}
-                currentUserId={currentUserId}
-                onSelectChat={onSelectChat}
-              />
-            ) : isChairman && activeTab === "work" ? (
-              <div className="mb-4 px-3">
-                <div className="flex items-center gap-2 mb-2 px-1">
-                  <Briefcase className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    Рабочие чаты
-                  </h3>
+        {/* Папки - показываем если есть и не открыта папка */}
+        {!openFolderId && folders.length > 0 && activeTab === "all" && (
+          <div className="mb-3">
+            <div className="flex items-center gap-2 px-3 py-2 text-gray-500 dark:text-gray-400">
+              <Folder className="w-4 h-4" />
+              <span className="font-semibold text-xs uppercase tracking-wider">Папки</span>
+              <span className="text-xs text-gray-400">({folders.length})</span>
+            </div>
+            <div className="space-y-1 px-1">
+              {folders.map((folder) => (
+                <div
+                  key={folder.id}
+                  className="group flex items-center gap-2"
+                >
+                  <button
+                    onClick={() => setOpenFolderId(folder.id)}
+                    className={`flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-150 hover:bg-gray-100 dark:hover:bg-gray-800 ${
+                      folder.unreadCount > 0 ? 'bg-blue-50 dark:bg-blue-900/10' : ''
+                    }`}
+                  >
+                    {/* Иконка папки с индикатором непрочитанных */}
+                    <div className="relative flex-shrink-0">
+                      <div
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${getFolderIconClass(folder.color)}`}
+                      >
+                        {folder.icon || "📁"}
+                      </div>
+                      {/* Красная точка если есть непрочитанные */}
+                      {folder.unreadCount > 0 && (
+                        <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-gray-900" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={`font-semibold text-sm truncate ${
+                        folder.unreadCount > 0 
+                          ? 'text-gray-900 dark:text-white font-bold' 
+                          : 'text-gray-900 dark:text-white'
+                      }`}>
+                        {folder.name}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {folder.chatCount} чат{folder.chatCount === 1 ? '' : folder.chatCount < 5 ? 'а' : 'ов'}
+                        {folder.unreadCount > 0 && (
+                          <span className="text-blue-600 dark:text-blue-400 ml-1">
+                            · {folder.unreadCount} непрочит.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Бейдж с числом непрочитанных */}
+                    {folder.unreadCount > 0 && (
+                      <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs font-bold bg-blue-500 text-white rounded-full">
+                        {folder.unreadCount > 99 ? "99+" : folder.unreadCount}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleDeleteFolder(folder.id)}
+                    disabled={deletingFolderId === folder.id}
+                    className="p-2 opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                    title="Разобрать папку"
+                  >
+                    {deletingFolderId === folder.id ? (
+                      <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                    )}
+                  </button>
                 </div>
-                <div className="rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-6 text-center">
-                  <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                    <Briefcase className="w-6 h-6 text-gray-400 dark:text-gray-500" />
-                  </div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                    Нет обращений
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-500">
-                    Обращения от членов профсоюза будут отображаться здесь
-                  </p>
-                </div>
-              </div>
-            ) : null}
-          </>
+              ))}
+            </div>
+          </div>
         )}
 
-        {/* Personal Chats - для председателей по табам, для участников всегда если есть */}
-        {((isChairman && (activeTab === "all" || activeTab === "personal")) || !isChairman) && displayedChats.personal.length > 0 && (
+        {/* Режим просмотра содержимого папки */}
+        {openFolder && (
+          <div className="mb-3">
+            {/* Кнопка "Назад" и название папки */}
+            <div className="flex items-center gap-2 px-3 py-2 mb-2">
+              <button
+                onClick={() => setOpenFolderId(null)}
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                title="Назад к списку"
+              >
+                <ArrowLeft className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+              </button>
+              <div
+                className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg ${getFolderIconClass(openFolder.color)}`}
+              >
+                {openFolder.icon || "📁"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm text-gray-900 dark:text-white truncate">
+                  {openFolder.name}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {openFolder.chatCount} чат{openFolder.chatCount === 1 ? '' : openFolder.chatCount < 5 ? 'а' : 'ов'}
+                </div>
+              </div>
+              <button
+                onClick={() => handleDeleteFolder(openFolder.id)}
+                disabled={deletingFolderId === openFolder.id}
+                className="p-2 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                title="Разобрать папку"
+              >
+                {deletingFolderId === openFolder.id ? (
+                  <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4 text-red-500" />
+                )}
+              </button>
+            </div>
+            
+            {/* Чаты внутри папки */}
+            <div className="space-y-1 px-1">
+              {openFolder.chats.map((folderChat) => {
+                const chat = chats.find(c => c.id === folderChat.id);
+                if (!chat) return null;
+                return (
+                  <ChatListItem
+                    key={chat.id}
+                    chat={chat}
+                    isSelected={selectedChat?.id === chat.id}
+                    currentUserId={currentUserId}
+                    onClick={() => onSelectChat(chat)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Work Chats (Обращения) - показываем если есть и папка не открыта */}
+        {!openFolderId && displayedChats.work.length > 0 && (
+          <ChatSection
+            title={isChairman ? "Рабочие чаты" : "Мои обращения"}
+            icon={<Briefcase className="w-4 h-4" />}
+            chats={displayedChats.work}
+            selectedChat={selectedChat}
+            currentUserId={currentUserId}
+            onSelectChat={onSelectChat}
+          />
+        )}
+        {/* Пустое состояние для рабочих чатов (только на вкладке "Рабочие") */}
+        {!openFolderId && activeTab === "work" && displayedChats.work.length === 0 && (
+          <div className="mb-4 px-3">
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <Briefcase className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                Рабочие чаты
+              </h3>
+            </div>
+            <div className="rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-6 text-center">
+              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                <Briefcase className="w-6 h-6 text-gray-400 dark:text-gray-500" />
+              </div>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+                Нет обращений
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-500">
+                Обращения будут отображаться здесь
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Personal Chats - показываем если есть */}
+        {!openFolderId && displayedChats.personal.length > 0 && (
           <ChatSection
             title={isChairman ? "Личные чаты" : "Чаты"}
             icon={<MessageCircle className="w-4 h-4" />}
-            chats={displayedChats.personal.filter(chat => !isAIChat(chat))} // Дополнительная фильтрация AI чатов
+            chats={displayedChats.personal.filter(chat => !isAIChat(chat))}
             selectedChat={selectedChat}
             currentUserId={currentUserId}
             onSelectChat={onSelectChat}
           />
         )}
 
-        {/* Channels - показываем всегда если есть (для председателей по табам, для участников всегда) */}
-        {((isChairman && (activeTab === "all" || activeTab === "work")) || !isChairman) && displayedChats.channels.length > 0 && (
+        {/* Channels - показываем если есть */}
+        {!openFolderId && displayedChats.channels.length > 0 && (
           <ChatSection
             title="Каналы"
             icon={<Hash className="w-4 h-4" />}
@@ -921,6 +1240,42 @@ export default function SlackStyleSidebar({
             currentUserId={currentUserId}
             onSelectChat={onSelectChat}
           />
+        )}
+
+        {/* Archived Chats - показываем если есть или на вкладке "Архив" */}
+        {!openFolderId && (activeTab === "archived" || displayedChats.archived.length > 0) && (
+          <>
+            {displayedChats.archived.length > 0 ? (
+              <ChatSection
+                title="Архив"
+                icon={<Archive className="w-4 h-4" />}
+                chats={displayedChats.archived}
+                selectedChat={selectedChat}
+                currentUserId={currentUserId}
+                onSelectChat={onSelectChat}
+              />
+            ) : activeTab === "archived" ? (
+              <div className="mb-4 px-3">
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <Archive className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    Архив
+                  </h3>
+                </div>
+                <div className="rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-6 text-center">
+                  <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                    <Archive className="w-6 h-6 text-gray-400 dark:text-gray-500" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Архив пуст
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500">
+                    Закрытые обращения и завершённые заседания будут здесь
+                  </p>
+                </div>
+              </div>
+            ) : null}
+          </>
         )}
 
         {/* Empty state */}
@@ -957,6 +1312,17 @@ export default function SlackStyleSidebar({
         onSelectUser={handleCreateChat}
         currentUserId={currentUserId}
       />
+
+      {/* Create Folder Modal */}
+      {(canCreateFolders || isChairman) && (
+        <CreateFolderModal
+          isOpen={showCreateFolderModal}
+          onClose={() => setShowCreateFolderModal(false)}
+          onCreate={handleCreateFolder}
+          chats={chats}
+          currentUserId={currentUserId || undefined}
+        />
+      )}
     </div>
   );
 }

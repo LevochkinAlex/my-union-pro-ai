@@ -36,6 +36,8 @@ export interface ChatInfo {
   lastMessageAt: Date | null;
   unreadCount: number;
   createdAt: Date;
+  /** Дата архивации чата (null если не архивирован) */
+  archivedAt: Date | null;
   // Для отображения в UI
   displayName: string;
   displayAvatar: string | null;
@@ -1201,6 +1203,11 @@ export function formatChatInfo(
     return null;
   }
   
+  // Логируем archivedAt для отладки
+  if (chat.archivedAt) {
+    console.log(`[chat-service] 📦 Chat ${chat.id} (${chat.name || 'no name'}) is archived at:`, chat.archivedAt);
+  }
+  
   const isGroup = chat.type === "GROUP";
   const isChannel = chat.type === "CHANNEL";
   const participantsCount = chat._count?.participants || chat.participants?.length || 0;
@@ -1366,6 +1373,7 @@ export function formatChatInfo(
     lastMessageAt: chat.lastMessageAt,
     unreadCount,
     createdAt: chat.createdAt,
+    archivedAt: chat.archivedAt ?? null,
     displayName,
     displayAvatar,
     participants,

@@ -104,7 +104,7 @@ export async function POST(
       },
     });
 
-    // Отправляем сообщение в чат обращения
+    // Отправляем сообщение в чат обращения и архивируем чат
     if (ticket.chatId) {
       const chairmanName = [session.user.firstName, session.user.lastName]
         .filter(Boolean)
@@ -127,6 +127,12 @@ export async function POST(
           }
         ).catch((err) => {
           console.error('[appeals/force-close] Error sending close message:', err);
+        });
+        
+        // Архивируем чат при закрытии обращения
+        await prisma.chat.update({
+          where: { id: ticket.chatId },
+          data: { archivedAt: new Date() },
         });
       } catch (err) {
         console.error('[appeals/force-close] Error:', err);

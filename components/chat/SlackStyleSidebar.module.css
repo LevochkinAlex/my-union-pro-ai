@@ -1,0 +1,39 @@
+/* Folder icon colors - same palette as CreateFolderModal FOLDER_COLORS */
+.folderIconDefault {
+  background-color: rgb(243 244 246);
+}
+
+.folderIconBlue {
+  background-color: #3B82F620;
+  color: #3B82F6;
+}
+
+.folderIconGreen {
+  background-color: #10B98120;
+  color: #10B981;
+}
+
+.folderIconOrange {
+  background-color: #F59E0B20;
+  color: #F59E0B;
+}
+
+.folderIconRed {
+  background-color: #EF444420;
+  color: #EF4444;
+}
+
+.folderIconViolet {
+  background-color: #8B5CF620;
+  color: #8B5CF6;
+}
+
+.folderIconPink {
+  background-color: #EC489920;
+  color: #EC4899;
+}
+
+.folderIconGray {
+  background-color: #6B728020;
+  color: #6B7280;
+}

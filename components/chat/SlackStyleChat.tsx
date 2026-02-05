@@ -259,16 +259,36 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
         )}
 
         <div className="min-w-0">
-          <h2 className="font-semibold text-gray-900 dark:text-white truncate">{displayName}</h2>
-          <p className={`text-sm truncate ${
-            isAI
-              ? 'text-green-600 dark:text-green-400' // ИИ помощник всегда онлайн - зеленый цвет
-              : !isGroup && isOtherUserOnline 
-                ? 'text-green-600 dark:text-green-400' 
-                : 'text-gray-500 dark:text-gray-400'
-          }`}>
-            {statusSubtitle}
-          </p>
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold text-gray-900 dark:text-white truncate">{displayName}</h2>
+            {(chat as any).archivedAt && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                <Archive className="w-3 h-3" />
+                Архив
+              </span>
+            )}
+          </div>
+          {/* Для групповых чатов делаем subtitle кликабельным для открытия списка участников */}
+          {isGroup && onManageParticipants ? (
+            <button
+              type="button"
+              onClick={onManageParticipants}
+              className="text-sm truncate text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors cursor-pointer text-left"
+              title="Показать участников"
+            >
+              {statusSubtitle}
+            </button>
+          ) : (
+            <p className={`text-sm truncate ${
+              isAI
+                ? 'text-green-600 dark:text-green-400' // ИИ помощник всегда онлайн - зеленый цвет
+                : !isGroup && isOtherUserOnline 
+                  ? 'text-green-600 dark:text-green-400' 
+                  : 'text-gray-500 dark:text-gray-400'
+            }`}>
+              {statusSubtitle}
+            </p>
+          )}
         </div>
       </div>
 
@@ -284,8 +304,9 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
           </button>
         )}
         
-        {/* Кнопка "Участники" - только для председателей в группах и каналах */}
-        {isGroup && !isAI && onManageParticipants && isChairman && (
+        {/* Кнопка "Участники" - только для председателей в группах и каналах, но НЕ для чатов заседаний */}
+        {/* Для чатов заседаний участники управляются через документооборот (повестка, протокол) */}
+        {isGroup && !isAI && onManageParticipants && isChairman && !chat.meetingId && (
           <button
             onClick={onManageParticipants}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl"
@@ -343,32 +364,36 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
                   <Info className="w-4 h-4" />
                   Подробности
                 </button>
-                <button 
+                {/* TODO: Уведомления - реализовать позже */}
+                {/* <button 
                   onClick={() => {
                     setShowMenu(false);
                     showToast('Настройки уведомлений для чата', 'info');
-                    // TODO: Реализовать модальное окно с настройками уведомлений
                   }}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
                   <Bell className="w-4 h-4" />
                   Уведомления
-                </button>
+                </button> */}
                 <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
-                {/* Архивировать - только для председателей и админов групп */}
+                {/* Архивировать / Разархивировать - только для председателей и админов групп */}
                 {isGroup && isChairman && (isCurrentUserAdmin || chat.type === 'CHANNEL') && (
                   <button 
                     onClick={async () => {
                       setShowMenu(false);
-                      if (confirm('Вы уверены, что хотите архивировать этот чат?')) {
+                      const isArchived = !!(chat as any).archivedAt;
+                      const confirmMessage = isArchived
+                        ? 'Вы уверены, что хотите разархивировать этот чат?'
+                        : 'Вы уверены, что хотите архивировать этот чат?';
+                      if (confirm(confirmMessage)) {
                         try {
                           const response = await fetch(`/api/chat/${chat.id}/archive`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ archive: true }),
+                            body: JSON.stringify({ archive: !isArchived }),
                           });
                           if (response.ok) {
-                            showToast('Чат архивирован', 'success');
+                            showToast(isArchived ? 'Чат разархивирован' : 'Чат архивирован', 'success');
                             setTimeout(() => window.location.reload(), 1000);
                           } else {
                             const error = await safeJsonParse(response);
@@ -383,7 +408,7 @@ function ChatHeader({ chat, currentUserId, onBack, onManageParticipants, onEditG
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
                     <Archive className="w-4 h-4" />
-                    Архивировать
+                    {(chat as any).archivedAt ? 'Разархивировать' : 'Архивировать'}
                   </button>
                 )}
                 {/* Очистить историю - только для председателей и админов групп */}
@@ -933,7 +958,7 @@ export default function SlackStyleChat({
   const handleDeleteChat = useCallback(async () => {
     if (!selectedChat?.id) return;
     try {
-      const res = await fetch(`/api/chat/${selectedChat.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/chat/${selectedChat.id}/delete`, { method: "POST" });
       const data = await safeJsonParse(res);
       if (!res.ok) {
         showToast(data?.error || "Ошибка", "error");
@@ -981,6 +1006,7 @@ export default function SlackStyleChat({
             loading={loading}
             currentUserId={currentUserId}
             isChairman={isChairman}
+            canCreateFolders={isChairman}
             onSelectChat={handleSelectChat}
             onCreateChat={handleCreateChat}
             onCreateGroup={() => setShowGroupModal(true)}

@@ -728,7 +728,7 @@ function LazyImage({
       onClick={onClick}
       className={`relative group overflow-hidden rounded-xl ${className} ${!onClick ? 'cursor-default' : 'cursor-pointer'}`}
     >
-      {displaySrc && displaySrc.trim() !== '' ? (
+      {displaySrc && displaySrc.trim() !== '' && !imageError ? (
         <img
           ref={imgRef}
           src={displaySrc}
@@ -783,9 +783,10 @@ function LazyImage({
           }}
         />
       ) : (
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Показываем плейсхолдер если displaySrc пустой
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-xl">
+        // Плейсхолдер: пустой displaySrc или ошибка загрузки (404 после CDN + fallback)
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl min-h-[80px]">
           <ImageIcon className="w-8 h-8 text-gray-400" />
+          <span className="text-xs text-gray-500 dark:text-gray-400">Изображение недоступно</span>
         </div>
       )}
       

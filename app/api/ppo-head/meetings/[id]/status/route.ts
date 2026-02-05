@@ -137,7 +137,7 @@ export async function POST(
       },
     });
 
-    // Если заседание завершено, обновим статус протокола на COMPLETED
+    // Если заседание завершено, обновим статус протокола на COMPLETED и архивируем чат
     if (action === "complete" && meeting.protocolDocument) {
       await prisma.document.update({
         where: { id: meeting.protocolDocument.id },
@@ -153,6 +153,16 @@ export async function POST(
           },
         },
       });
+      
+      // Архивируем групповой чат заседания, если он есть
+      try {
+        await prisma.chat.updateMany({
+          where: { meetingId: id },
+          data: { archivedAt: new Date() },
+        });
+      } catch (err) {
+        console.warn("[meetings/status] Error archiving meeting chat:", err);
+      }
     }
 
     return NextResponse.json({

@@ -378,6 +378,15 @@ export async function GET(request: NextRequest) {
       GROUP: filteredChats.filter((c: any) => c?.type === "GROUP").length,
       CHANNEL: filteredChats.filter((c: any) => c?.type === "CHANNEL").length,
     });
+    // Логируем архивные чаты
+    const archivedChats = filteredChats.filter((c: any) => c?.archivedAt);
+    if (archivedChats.length > 0) {
+      console.log(`[chat] 📦 Archived chats:`, archivedChats.length, archivedChats.map((c: any) => ({
+        id: c?.id,
+        name: c?.name || c?.displayName,
+        archivedAt: c?.archivedAt,
+      })));
+    }
     console.log(`[chat] Filtered chats details:`, filteredChats.map((c: any) => ({
       id: c?.id,
       type: c?.type,

@@ -26,6 +26,8 @@ export interface Chat {
   unreadCount: number;
   createdAt?: Date | string | null;
   createdById?: string | null;
+  /** Дата архивации чата (null если не архивирован) */
+  archivedAt?: Date | string | null;
   // Group-specific fields
   name?: string | null;
   description?: string | null;
