@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isDemoUserId } from "@/lib/demo";
 
 // POST /api/posts/[postId]/view - увеличить счётчик просмотров (только один раз на пользователя)
 export async function POST(
@@ -19,6 +20,11 @@ export async function POST(
 
     if (!postId) {
       return NextResponse.json({ error: "ID поста не указан" }, { status: 400 });
+    }
+
+    // Демо: не обращаемся к БД для демо-постов или демо-пользователей
+    if (postId.startsWith("demo-post-") || isDemoUserId(userId)) {
+      return NextResponse.json({ viewCount: 0 });
     }
 
     // Используем транзакцию для атомарности операции

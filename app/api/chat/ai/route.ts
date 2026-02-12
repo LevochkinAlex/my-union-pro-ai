@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import * as Sentry from "@sentry/nextjs";
+import { isDemoUserId } from "@/lib/demo";
 
 const AI_CHAT_NAME = "ИИ-Ассистент";
 const AI_BOT_ID = "ai-assistant-bot"; // Виртуальный ID бота
@@ -21,6 +22,30 @@ export async function GET() {
     }
 
     const userId = session.user.id;
+
+    // Демо: возвращаем мок-чат для демо-пользователей
+    if (isDemoUserId(userId)) {
+      const now = new Date().toISOString();
+      return NextResponse.json({
+        chat: {
+          id: "demo-ai-chat",
+          type: "PRIVATE" as const,
+          name: AI_CHAT_NAME,
+          description: "Персональный ИИ-помощник по профсоюзным вопросам",
+          iconUrl: null,
+          isPublic: false,
+          lastMessage: null,
+          lastMessageAt: now,
+          unreadCount: 0,
+          createdAt: now,
+          otherUser: { id: AI_BOT_ID, firstName: "ИИ", lastName: "Ассистент", middleName: null, avatarUrl: null, isBot: true },
+          participants: [],
+          participantsCount: 1,
+          _count: { messages: 1 },
+          isAIChat: true,
+        },
+      });
+    }
 
     // Ищем существующий чат с ИИ для пользователя
     let aiChat = await prisma.chat.findFirst({
@@ -186,6 +211,36 @@ export async function POST(request: NextRequest) {
 
     if (!content?.trim()) {
       return NextResponse.json({ error: "Сообщение не может быть пустым" }, { status: 400 });
+    }
+
+    // Демо: возвращаем мок-ответ от ИИ для демо-пользователей
+    if (isDemoUserId(userId)) {
+      const now = new Date();
+      const demoResponses = [
+        "Спасибо за вопрос! В демо-режиме я показываю, как работает ИИ-ассистент. В реальном режиме я помогу с любыми профсоюзными вопросами.",
+        "Это демо-версия ИИ-ассистента. После регистрации вы сможете задавать вопросы о членстве, льготах, документах и трудовых правах.",
+        "Отличный вопрос! В полной версии я могу помочь с оформлением документов, разъяснить права членов профсоюза и подсказать про доступные льготы.",
+      ];
+      const randomResponse = demoResponses[Math.floor(Math.random() * demoResponses.length)];
+      
+      return NextResponse.json({
+        userMessage: {
+          id: `demo-user-msg-${Date.now()}`,
+          content: content.trim(),
+          senderId: userId,
+          sender: { id: userId, firstName: "Демо", lastName: "Пользователь", avatarUrl: null },
+          messageType: "text",
+          createdAt: now.toISOString(),
+        },
+        botMessage: {
+          id: `demo-bot-msg-${Date.now()}`,
+          content: randomResponse,
+          senderId: AI_BOT_ID,
+          sender: { id: AI_BOT_ID, firstName: "ИИ", lastName: "Ассистент", avatarUrl: null },
+          messageType: "assistant",
+          createdAt: new Date(now.getTime() + 1000).toISOString(),
+        },
+      });
     }
 
     // Проверяем, что чат существует и пользователь является участником

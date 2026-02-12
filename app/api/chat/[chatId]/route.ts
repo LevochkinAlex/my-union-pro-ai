@@ -18,6 +18,9 @@ import {
 import { ensureMeetingGroupChat } from '@/lib/meeting-chat';
 import { getOrCreateAIBotUser } from '@/lib/ai-assistant-bot';
 import { ChatType } from '@prisma/client';
+import { isDemoUserId } from '@/lib/demo';
+
+const DEMO_CHAT_IDS = ['demo-ai-chat', 'demo-chat-ticket-1', 'demo-ai-chat-ppo', 'demo-chat-ticket-ppo'];
 // Динамический импорт для избежания проблем при сборке
 // Кэшируем модуль для производительности
 let socketModule: typeof import('@/server/socket') | null = null;
@@ -54,6 +57,66 @@ export async function GET(
     const limit = parseInt(searchParams.get('limit') || '50');
     const cursor = searchParams.get('cursor');
     const direction = searchParams.get('direction') || 'newer';
+
+    // Демо: возвращаем мок-данные для демо-чатов
+    if (DEMO_CHAT_IDS.includes(chatId) || isDemoUserId(session.user.id)) {
+      const now = new Date().toISOString();
+      const isAIChat = chatId.includes('ai-chat');
+      const isTicketChat = chatId.includes('ticket');
+
+      const demoMessages: any[] = [];
+      if (isAIChat) {
+        demoMessages.push({
+          id: `${chatId}-msg-1`,
+          chatId,
+          senderId: 'ai-assistant-bot',
+          content: `Здравствуйте! Я ИИ-Ассистент МойСоюз.\n\nЯ помогу вам с вопросами о:\n- Профсоюзном членстве и взносах\n- Оформлении документов и заявлений\n- Правовых вопросах и трудовых спорах\n- Льготах и скидках для членов профсоюза\n- Работе приложения МойСоюз\n\nЗадайте свой вопрос, и я постараюсь помочь!`,
+          messageType: 'assistant',
+          createdAt: now,
+          editedAt: null,
+          isRead: false,
+          sender: { id: 'ai-assistant-bot', firstName: 'ИИ', lastName: 'Ассистент', middleName: null, avatarUrl: null },
+          replyTo: null,
+          reactions: {},
+          attachments: [],
+          threadRepliesCount: 0,
+        });
+      } else if (isTicketChat) {
+        demoMessages.push({
+          id: `${chatId}-msg-1`,
+          chatId,
+          senderId: session.user.id,
+          content: '**Обращение #1001-0001**\n\n**Тема:** Вопрос по отпуску\n\n**Текст обращения:**\nДобрый день! Подскажите, пожалуйста, порядок оформления ежегодного оплачиваемого отпуска. Какие документы нужно подать и за сколько дней до начала?',
+          messageType: 'text',
+          createdAt: now,
+          editedAt: null,
+          isRead: false,
+          sender: { id: session.user.id, firstName: 'Демо', lastName: 'Пользователь', middleName: null, avatarUrl: null },
+          replyTo: null,
+          reactions: {},
+          attachments: [],
+          threadRepliesCount: 0,
+        });
+      }
+
+      const demoChat = {
+        id: chatId,
+        type: isAIChat ? 'PRIVATE' : 'GROUP',
+        name: isAIChat ? 'ИИ-Ассистент' : 'Обращение #1001-0001: Вопрос по отпуску',
+        description: null,
+        iconUrl: null,
+        isPublic: false,
+        createdAt: now,
+        participants: [],
+        ticket: isTicketChat ? { id: 'demo-ticket-1', publicId: '1001-0001', title: 'Вопрос по отпуску', status: 'OPEN', userId: session.user.id } : null,
+      };
+
+      return NextResponse.json({
+        chat: demoChat,
+        messages: demoMessages,
+        pagination: { hasMore: false, oldestMessageId: demoMessages[0]?.id || null, newestMessageId: demoMessages[demoMessages.length - 1]?.id || null },
+      });
+    }
 
     // Проверяем доступ к чату
     let chatAccess: { chat: any; participant: any } | null = null;
@@ -1265,6 +1328,30 @@ export async function POST(
     const resolvedParams = await Promise.resolve(params);
     const chatId = resolvedParams.chatId;
     const userId = session.user.id;
+
+    // Демо: возвращаем мок-сообщение для демо-чатов
+    if (DEMO_CHAT_IDS.includes(chatId) || isDemoUserId(userId)) {
+      let body;
+      try { body = await request.json(); } catch { body = {}; }
+      const content = body.content || '';
+      const now = new Date();
+      return NextResponse.json({
+        message: {
+          id: `demo-msg-${Date.now()}`,
+          chatId,
+          senderId: userId,
+          content: content.trim(),
+          messageType: 'text',
+          createdAt: now.toISOString(),
+          editedAt: null,
+          sender: { id: userId, firstName: 'Демо', lastName: 'Пользователь', middleName: null, avatarUrl: null },
+          replyTo: null,
+          threadRootId: null,
+          attachments: [],
+          reactions: {},
+        },
+      });
+    }
 
     // Проверяем доступ
     try {
