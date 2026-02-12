@@ -7,7 +7,7 @@ import MemberFAQ from "@/components/landing/MemberFAQ";
 import MemberStats from "@/components/landing/MemberStats";
 import LandingFloatingBot from "@/components/landing/LandingFloatingBot";
 import MemberDemoLink from "@/components/landing/MemberDemoLink";
-import { COMPANY } from "@/lib/constants/landing";
+import { COMPANY, CONTACTS } from "@/lib/constants/landing";
 
 export const metadata = {
   title: "MyUnion Pro — платформа для членов профсоюза",
@@ -81,7 +81,7 @@ export default function MemberLandingPage() {
                 
                 <p className="mb-8 max-w-xl text-lg text-muted-foreground md:text-xl leading-relaxed">
                   Обращения, чаты с коллегами, профсеть, эксклюзивные скидки, 
-                  ИИ-помощник и скоро — оплата Netflix, Spotify, ChatGPT
+                  ИИ-помощник и скоро — блок санаторно-курортного оздоравления
                 </p>
                 
                 <div className="flex flex-wrap items-center justify-center gap-4 lg:justify-start">
@@ -89,7 +89,7 @@ export default function MemberLandingPage() {
                     href="/login"
                     className="group relative overflow-hidden rounded-xl bg-primary px-8 py-4 text-base font-semibold text-primary-foreground shadow-lg transition-all hover:shadow-xl hover:scale-105"
                   >
-                    <span className="relative z-10">Войти в личный кабинет</span>
+                    <span className="relative z-10">Вход в личный кабинет</span>
                     <div className="absolute inset-0 -z-0 bg-gradient-to-r from-primary to-purple-600 opacity-0 transition-opacity group-hover:opacity-100" />
                   </Link>
                   <a
@@ -263,6 +263,40 @@ export default function MemberLandingPage() {
                   </Link>
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Контакты */}
+        <section id="contacts" className="scroll-mt-20 border-b border-border py-16 md:py-24">
+          <div className="container mx-auto px-4">
+            <h2 className="mb-2 text-center text-3xl font-bold tracking-tight text-foreground md:text-4xl landing-animate-in">
+              Контакты
+            </h2>
+            <p className="mx-auto mb-10 max-w-2xl text-center text-muted-foreground landing-animate-in landing-animate-in-delay-1">
+              Свяжитесь с нами по вопросам платформы и сотрудничества.
+            </p>
+            <div className="mx-auto grid max-w-4xl gap-6 md:grid-cols-3">
+              {CONTACTS.map((c, i) => (
+                <div
+                  key={i}
+                  className={`landing-animate-in rounded-xl border border-border bg-card p-6 transition-shadow hover:shadow-md ${i === 0 ? "landing-animate-in-delay-2" : i === 1 ? "landing-animate-in-delay-3" : "landing-animate-in-delay-4"}`}
+                >
+                  <p className="font-semibold text-foreground">{c.name}</p>
+                  <p className="mb-2 text-sm text-muted-foreground">{c.role}</p>
+                  <a href={`mailto:${c.email}`} className="block text-sm text-primary hover:underline">
+                    {c.email}
+                  </a>
+                  <a href={`tel:${c.phone.replace(/\s/g, "")}`} className="mt-1 block text-sm text-primary hover:underline">
+                    {c.phone}
+                  </a>
+                </div>
+              ))}
+            </div>
+            <div className="mx-auto mt-10 max-w-xl rounded-xl border border-border bg-card p-6 text-center landing-animate-in landing-animate-in-delay-5">
+              <p className="font-semibold text-foreground">{COMPANY.name}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{COMPANY.address}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{COMPANY.workingHours}</p>
             </div>
           </div>
         </section>

@@ -33,7 +33,7 @@ function formatPhoneForDisplay(phone: string): string {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { update: updateSession } = useSession();
+  const { data: session, status, update: updateSession } = useSession();
   const [loginMethod, setLoginMethod] = useState<"sms" | "email">("sms"); // Вкладка: SMS или Email (magic link)
   const [input, setInput] = useState(""); // Универсальное поле: телефон или email
   const [inputType, setInputType] = useState<"phone" | "email" | null>(null);
@@ -50,6 +50,15 @@ function LoginForm() {
   const [isNewUser, setIsNewUser] = useState(false);
   const [hasTelegram, setHasTelegram] = useState(false);
   const [devMagicLink, setDevMagicLink] = useState<string | null>(null);
+
+  // Если уже авторизован — сразу в личный кабинет
+  useEffect(() => {
+    if (status === "authenticated" && session?.user) {
+      const raw = searchParams.get("callbackUrl");
+      const url = raw ? decodeURIComponent(raw) : "/dashboard";
+      router.replace(url.startsWith("/") ? url : "/dashboard");
+    }
+  }, [status, session, router, searchParams]);
 
   // Получаем callbackUrl и error из query параметров при монтировании
   useEffect(() => {
@@ -479,6 +488,16 @@ function LoginForm() {
     router.push(callbackUrl);
     router.refresh();
   };
+
+  // Пока проверяем сессию — не показываем форму, чтобы не мигал экран перед редиректом
+  if (status === "loading") {
+    return (
+      <div className="flex flex-col flex-1 w-full items-center justify-center min-h-[50vh]">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
+        <p className="mt-4 text-sm text-muted-foreground">Загрузка...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col flex-1 w-full">

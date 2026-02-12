@@ -35,6 +35,16 @@ const iconMap: Record<string, ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
     </svg>
   ),
+  resort: (
+    <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+    </svg>
+  ),
+  news: (
+    <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 002.25 2.25h13.5M6 7.5h3v3H6v-3z" />
+    </svg>
+  ),
 };
 
 const colorMap: Record<string, { bg: string; text: string; gradient: string }> = {
@@ -44,6 +54,8 @@ const colorMap: Record<string, { bg: string; text: string; gradient: string }> =
   discounts: { bg: "bg-orange-500/10", text: "text-orange-500", gradient: "from-orange-500/20 to-orange-600/5" },
   ai: { bg: "bg-pink-500/10", text: "text-pink-500", gradient: "from-pink-500/20 to-pink-600/5" },
   documents: { bg: "bg-cyan-500/10", text: "text-cyan-500", gradient: "from-cyan-500/20 to-cyan-600/5" },
+  resort: { bg: "bg-amber-500/10", text: "text-amber-500", gradient: "from-amber-500/20 to-amber-600/5" },
+  news: { bg: "bg-indigo-500/10", text: "text-indigo-500", gradient: "from-indigo-500/20 to-indigo-600/5" },
 };
 
 export default function MemberBenefits() {

@@ -344,11 +344,11 @@ export default function FloatingChatBot() {
           }),
         });
 
-        if (!response.ok) {
-          throw new Error("Ошибка отправки сообщения");
-        }
-
         const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data?.error || "Ошибка отправки сообщения");
+        }
 
         // Сохраняем chatId если его еще нет
         if (data.chatId && !chatId) {
@@ -379,11 +379,14 @@ export default function FloatingChatBot() {
         });
         conversationHistoryRef.current.push(aiMsg);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("[FloatingChatBot] Error sending message:", error);
+      const errorContent = error?.message?.includes("Бот не настроен")
+        ? "ИИ-помощник временно недоступен. Попробуйте позже или обратитесь в поддержку."
+        : "Извините, произошла ошибка. Попробуйте еще раз.";
       const errorMsg: ChatMessage = {
         role: "assistant",
-        content: "Извините, произошла ошибка. Попробуйте еще раз.",
+        content: errorContent,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -420,7 +423,6 @@ export default function FloatingChatBot() {
         onClick={() => setIsOpen(!isOpen)}
         className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-blue-600 shadow-lg transition-all hover:from-purple-600 hover:to-blue-700 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:from-purple-600 dark:to-blue-700 dark:hover:from-purple-700 dark:hover:to-blue-800"
         aria-label="Открыть чат с ИИ помощником"
-        disabled={!isSessionReady}
       >
         {/* Иконка ИИ */}
         <img

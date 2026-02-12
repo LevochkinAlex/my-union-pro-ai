@@ -4,8 +4,6 @@ import { useSession } from "next-auth/react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import FloatingChatBot from "@/components/common/FloatingChatBot";
-
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -41,17 +39,44 @@ export default function LandingFloatingBot() {
     textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + "px";
   }, [input]);
 
+  // Определяем endpoint: авторизованные используют assistant/chat, гости — landing-chat
+  const isAuthenticated = status === "authenticated" && !!session?.user;
+  const chatEndpoint = isAuthenticated ? "/api/assistant/chat" : "/api/landing-chat";
+
+  // Запрос к ИИ с fallback на landing-chat при ошибке
+  const fetchAI = useCallback(
+    async (message: string, history: Array<{ role: string; content: string }>) => {
+      const doFetch = async (url: string) => {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, history }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || "Ошибка");
+        return data;
+      };
+
+      try {
+        return await doFetch(chatEndpoint);
+      } catch {
+        // Fallback на landing-chat если assistant/chat не сработал
+        if (chatEndpoint !== "/api/landing-chat") {
+          return await doFetch("/api/landing-chat");
+        }
+        throw new Error("Не удалось получить ответ");
+      }
+    },
+    [chatEndpoint]
+  );
+
   // При первом открытии чата запрашиваем приветствие у бота
   useEffect(() => {
-    if (status !== "authenticated" && open && messages.length === 0 && !isLoading && !initialRequestDone) {
+    if (open && messages.length === 0 && !isLoading && !initialRequestDone) {
       setInitialRequestDone(true);
       setIsLoading(true);
-      fetch("/api/landing-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "Начало диалога", history: [] }),
-      })
-        .then((res) => res.json())
+      const greeting = isAuthenticated ? "Привет" : "Начало диалога";
+      fetchAI(greeting, [])
         .then((data) => {
           if (data.message) {
             setMessages([
@@ -68,7 +93,9 @@ export default function LandingFloatingBot() {
           setMessages([
             {
               role: "assistant",
-              content: "Здравствуйте! Я помощник MyUnion Pro. Расскажите, вы председатель профсоюзной организации, член профсоюза или интересуетесь платформой? Подскажу, как лучше попробовать демо.",
+              content: isAuthenticated
+                ? "Привет! Я ваш ИИ-помощник. Задайте любой вопрос о профсоюзе, платформе или ваших правах."
+                : "Здравствуйте! Я помощник MyUnion Pro. Расскажите, вы председатель профсоюзной организации, член профсоюза или интересуетесь платформой? Подскажу, как лучше попробовать демо.",
               timestamp: Date.now(),
               id: `fallback-${Date.now()}`,
             },
@@ -76,7 +103,7 @@ export default function LandingFloatingBot() {
         })
         .finally(() => setIsLoading(false));
     }
-  }, [open, messages.length, isLoading, initialRequestDone, status]);
+  }, [open, messages.length, isLoading, initialRequestDone, isAuthenticated, fetchAI]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -95,24 +122,8 @@ export default function LandingFloatingBot() {
 
       const history = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
 
-      fetch("/api/landing-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, history }),
-      })
-        .then((res) => res.json())
+      fetchAI(text, history)
         .then((data) => {
-          if (data.error) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                role: "assistant",
-                content: "Не удалось отправить сообщение. Попробуйте ещё раз.",
-                timestamp: Date.now(),
-              },
-            ]);
-            return;
-          }
           if (data.message) {
             setMessages((prev) => [
               ...prev,
@@ -137,17 +148,15 @@ export default function LandingFloatingBot() {
         })
         .finally(() => setIsLoading(false));
     },
-    [canSend, input, messages]
+    [canSend, input, messages, fetchAI]
   );
 
   if (status === "loading") {
     return null;
   }
 
-  if (session?.user?.id) {
-    return <FloatingChatBot />;
-  }
-
+  // Для авторизованных пользователей на лендинге используем тот же лендинговый чат,
+  // а полноценный FloatingChatBot доступен внутри дашборда
   return (
     <>
       <button

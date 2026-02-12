@@ -41,14 +41,14 @@ export default function MemberLandingHeader() {
               href="/dashboard"
               className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-hover"
             >
-              Кабинет
+              Личный кабинет
             </Link>
           ) : (
             <Link
               href="/login"
               className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-hover"
             >
-              Войти
+              Вход в личный кабинет
             </Link>
           )}
         </div>
