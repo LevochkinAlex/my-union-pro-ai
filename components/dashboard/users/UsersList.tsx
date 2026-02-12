@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
 
 const UserCard = dynamic(() => import("@/components/dashboard/users/UserCard"), {
@@ -44,6 +44,46 @@ export default function UsersList({
   observerTarget,
   isMobile = false,
 }: UsersListProps) {
+  const [subscriptions, setSubscriptions] = useState<Record<string, boolean>>({});
+  const fetchedIdsRef = useRef<Set<string>>(new Set());
+
+  // Загружаем статусы подписок пачкой при изменении списка пользователей
+  const fetchBatchSubscriptions = useCallback(async (userIds: string[]) => {
+    // Фильтруем только те ID, которые ещё не загружены
+    const newIds = userIds.filter((id) => !fetchedIdsRef.current.has(id));
+    if (newIds.length === 0) return;
+
+    try {
+      const response = await fetch("/api/subscriptions/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userIds: newIds }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const batchResult: Record<string, boolean> = data.subscriptions || {};
+        // Помечаем как загруженные
+        for (const id of newIds) {
+          fetchedIdsRef.current.add(id);
+        }
+        setSubscriptions((prev) => ({ ...prev, ...batchResult }));
+      }
+    } catch (error) {
+      console.error("[UsersList] batch subscription check error:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (users.length > 0 && !loading) {
+      const userIds = users.map((u) => u.id);
+      fetchBatchSubscriptions(userIds);
+    }
+  }, [users, loading, fetchBatchSubscriptions]);
+
+  // Обновить статус подписки для конкретного пользователя (после подписки/отписки)
+  const handleSubscriptionChange = useCallback((userId: string, isSubscribed: boolean) => {
+    setSubscriptions((prev) => ({ ...prev, [userId]: isSubscribed }));
+  }, []);
   if (loading) {
     const skeletonCount = isMobile ? 4 : 6;
     return (
@@ -131,6 +171,8 @@ export default function UsersList({
                   ? new Date(user.createdAt)
                   : user.createdAt,
             }}
+            initialIsSubscribed={subscriptions[user.id] ?? null}
+            onSubscriptionChange={handleSubscriptionChange}
           />
         ))}
       </div>

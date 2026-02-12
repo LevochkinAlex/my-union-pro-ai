@@ -205,7 +205,12 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     if (!filePath) return "";
     
     const trimmedPath = filePath.trim();
-    
+    // Статика из public/demo — используем общий хелпер (абсолютный URL на клиенте)
+    if (trimmedPath.startsWith("/demo/")) {
+      const { getFileUrlWithCDN } = require("@/lib/cdn");
+      return getFileUrlWithCDN(trimmedPath, true);
+    }
+
     // Validate: reject obviously invalid paths (single characters like "Z" that aren't URLs)
     // Reject paths shorter than 3 characters unless they start with / or http or data:
     if (trimmedPath.length < 3) {

@@ -22,13 +22,15 @@ interface UserCardProps {
     createdAt: Date;
   };
   hideOrganization?: boolean;
+  initialIsSubscribed?: boolean | null; // null = ещё не загружено
+  onSubscriptionChange?: (userId: string, isSubscribed: boolean) => void;
 }
 
-export default function UserCard({ user, hideOrganization = false }: UserCardProps) {
+export default function UserCard({ user, hideOrganization = false, initialIsSubscribed = null, onSubscriptionChange }: UserCardProps) {
   const [avatarError, setAvatarError] = useState(false);
-  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(initialIsSubscribed === true);
   const [isLoading, setIsLoading] = useState(false);
-  const [subscriptionChecked, setSubscriptionChecked] = useState(false);
+  const [subscriptionChecked, setSubscriptionChecked] = useState(initialIsSubscribed !== null);
   const router = useRouter();
   const { showToast } = useToast();
   
@@ -58,15 +60,25 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
      user.avatarUrl.startsWith('data:') || 
      user.avatarUrl.startsWith('/'));
 
-  // Проверяем статус подписки сразу при монтировании компонента
+  // Синхронизация с batch-данными от родителя
   useEffect(() => {
-    checkSubscriptionStatus();
+    if (initialIsSubscribed !== null) {
+      setIsSubscribed(initialIsSubscribed);
+      setSubscriptionChecked(true);
+    }
+  }, [initialIsSubscribed]);
+
+  // Фолбэк: проверяем индивидуально, если batch не предоставил данные
+  useEffect(() => {
+    if (initialIsSubscribed === null && !subscriptionChecked) {
+      checkSubscriptionStatus();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user.id]);
+  }, [user.id, initialIsSubscribed]);
 
   // Проверяем статус подписки
   const checkSubscriptionStatus = async () => {
-    if (subscriptionChecked || isLoading) return; // Уже проверяли или идет загрузка
+    if (subscriptionChecked || isLoading) return;
     
     setSubscriptionChecked(true);
     try {
@@ -77,7 +89,7 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
       }
     } catch (error) {
       console.error("Error checking subscription:", error);
-      setSubscriptionChecked(false); // Разрешаем повторную попытку при ошибке
+      setSubscriptionChecked(false);
     }
   };
 
@@ -106,7 +118,9 @@ export default function UserCard({ user, hideOrganization = false }: UserCardPro
           });
 
           if (response.ok) {
-            setIsSubscribed(!isSubscribed);
+            const newState = !isSubscribed;
+            setIsSubscribed(newState);
+            onSubscriptionChange?.(user.id, newState);
             span.setAttribute("success", true);
             showToast(isSubscribed ? "Подписка отменена" : "Подписка оформлена", "success");
           } else {

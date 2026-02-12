@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { isDemoUserId } from "@/lib/demo";
 import { fetchBestBenefitsDiscounts } from "@/lib/best-benefits";
 import type { DiscountSearchParams, DiscountOption } from "@/types/discounts";
 import { prisma } from "@/lib/prisma";
@@ -13,6 +14,20 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    // Демо-режим: мок-ответ без BestBenefits и БД (избегаем 503/таймаутов)
+    if (isDemoUserId(session.user.id)) {
+      return NextResponse.json(
+        {
+          discounts: [],
+          meta: { total: 0, page: 1, limit: 15, syncNeeded: false, activatedCount: 0 },
+        },
+        {
+          status: 200,
+          headers: { "Cache-Control": "private, max-age=30" },
+        }
+      );
     }
 
     const params = buildSearchParams(request);

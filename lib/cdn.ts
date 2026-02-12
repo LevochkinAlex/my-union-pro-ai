@@ -31,6 +31,19 @@ export function isCDNConfigured(): boolean {
 export function getFileUrlWithCDN(filePath: string, useCDN: boolean = true): string {
   if (!filePath) return "";
 
+  // Статика из public (демо-картинки) — абсолютный URL для надёжной загрузки за прокси и с Next/Image
+  if (filePath.startsWith("/demo/")) {
+    const path = filePath.startsWith("/") ? filePath : `/${filePath}`;
+    if (typeof window !== "undefined" && window.location?.origin) {
+      return `${window.location.origin}${path}`;
+    }
+    const base =
+      typeof process !== "undefined" && process.env.NEXT_PUBLIC_APP_URL
+        ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")
+        : "";
+    return base ? `${base}${path}` : path;
+  }
+
   // Если это base64 data URL, возвращаем как есть (не обрабатываем через CDN)
   if (filePath.startsWith("data:")) {
     return filePath;

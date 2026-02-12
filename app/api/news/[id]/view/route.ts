@@ -18,6 +18,11 @@ export async function POST(
     const { id: newsPostId } = resolvedParams;
     const userId = session.user.id;
 
+    // Демо-новости: не пишем в БД, сразу успех
+    if (newsPostId?.startsWith("demo-news-")) {
+      return NextResponse.json({ viewCount: 0 });
+    }
+
     // Используем транзакцию для атомарности операции
     const result = await prisma.$transaction(async (tx) => {
       // Проверяем, не просматривал ли уже пользователь эту новость
