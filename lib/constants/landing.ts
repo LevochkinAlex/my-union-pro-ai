@@ -7,29 +7,29 @@ export const COMPANY = {
   name: "ООО ЯППИКС",
   product: "MyUnion Pro",
   tagline: "Единая панель управления профсоюзом",
-  address: "ул. Автозаводская, д. 19, к. 1, этаж 4, офис 7",
-  addressNote: "5 минут пешком от метро Автозаводская (1 выход). Вход — ориентир «Штаб народной дружины»",
+  address: "127055, г. Москва, муниципальный округ Тверской, ул. Палиха, д. 7-9, к. 4, помещ. 1/1",
+  addressNote: "",
   workingHours: "пн–пт 09:00–18:00",
 } as const;
 
 export const CONTACTS = [
   {
-    name: "Виталий Еременко",
+    name: "Анастасия Стрелкова",
     role: "Отдел продаж",
     email: "sales@myunion.pro",
-    phone: "+7 (495) 000-00-00",
+    phone: "+7 995 095 55 93",
   },
   {
     name: "Ренат Усманов",
     role: "Генеральный директор",
-    email: "info@myunion.pro",
-    phone: "+7 (495) 000-00-00",
+    email: "ceo@yappix.ru",
+    phone: "+7 987 415 78 97",
   },
   {
     name: "Алексей Новиков",
     role: "Безопасность и инфраструктура",
     email: "security@myunion.pro",
-    phone: "+7 (495) 000-00-00",
+    phone: "+7 995 095 55 93",
   },
 ] as const;
 
