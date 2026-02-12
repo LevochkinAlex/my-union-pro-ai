@@ -16,6 +16,7 @@ import {
   getCachedChatData,
 } from '@/lib/chat-redis';
 import { ensureMeetingGroupChat } from '@/lib/meeting-chat';
+import { getOrCreateAIBotUser } from '@/lib/ai-assistant-bot';
 import { ChatType } from '@prisma/client';
 // Динамический импорт для избежания проблем при сборке
 // Кэшируем модуль для производительности
@@ -1674,6 +1675,86 @@ export async function POST(
         readAt: null,
       },
     });
+
+    // Если чат с ИИ-ботом — запрашиваем ответ и сохраняем сообщение бота (виджет и полная страница чата)
+    const otherParticipantIds = chat.participants
+      .filter((p: { userId: string }) => p.userId !== userId)
+      .map((p: { userId: string }) => p.userId);
+    if (otherParticipantIds.length === 1) {
+      getOrCreateAIBotUser()
+        .then((botUser) => {
+          if (otherParticipantIds[0] !== botUser.id) return;
+          const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3004";
+          return fetch(`${baseUrl}/api/assistant/chat`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Cookie: request.headers.get("cookie") || "",
+            },
+            body: JSON.stringify({ message: content.trim() }),
+          })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data: { message?: string } | null) => {
+              if (!data?.message?.trim()) return;
+              return prisma.chatMessage
+                .create({
+                  data: {
+                    chatId,
+                    senderId: botUser.id,
+                    content: data.message.trim(),
+                    messageType: "text",
+                  },
+                  include: {
+                    sender: {
+                      select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        avatarUrl: true,
+                      },
+                    },
+                  },
+                })
+                .then((botMessage) => {
+                  return prisma.chat
+                    .update({
+                      where: { id: chatId },
+                      data: {
+                        lastMessageId: botMessage.id,
+                        lastMessageAt: botMessage.createdAt,
+                      },
+                    })
+                    .then(() => botMessage);
+                });
+            })
+            .then((botMessage) => {
+              if (!botMessage) return;
+              const normalizedBot = {
+                id: botMessage.id,
+                chatId: botMessage.chatId,
+                senderId: botMessage.senderId,
+                sender: botMessage.sender
+                  ? {
+                      id: botMessage.sender.id,
+                      firstName: botMessage.sender.firstName || "ИИ",
+                      lastName: botMessage.sender.lastName || "Помощник",
+                      avatarUrl: botMessage.sender.avatarUrl ?? null,
+                    }
+                  : null,
+                content: botMessage.content,
+                messageType: botMessage.messageType,
+                createdAt: botMessage.createdAt,
+                editedAt: botMessage.editedAt,
+                replyTo: null,
+                threadRootId: botMessage.threadRootId,
+                attachments: [],
+                reactions: {},
+              };
+              return emitNewMessage(chatId, normalizedBot);
+            });
+        })
+        .catch((err) => console.error("[chat] AI reply for widget:", err));
+    }
 
     // Отслеживание ответов в чате обращения (только если поля существуют в БД)
     try {

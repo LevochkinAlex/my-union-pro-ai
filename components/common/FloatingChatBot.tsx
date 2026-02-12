@@ -182,8 +182,11 @@ export default function FloatingChatBot() {
       if (chatsResponse.ok) {
         const chatsData = await chatsResponse.json();
         const botChat = chatsData.chats?.find((chat: any) => 
+          chat.isAIChat === true ||
+          chat.otherUser?.id === "ai-assistant-bot" ||
           chat.otherUser?.email === "ai-assistant@myunion.pro" ||
           (chat.otherUser?.firstName === "AI" && chat.otherUser?.lastName === "Помощник") ||
+          (chat.otherUser?.firstName === "ИИ" && chat.otherUser?.lastName === "Ассистент") ||
           chat.otherUser?.firstName?.includes("AI") ||
           chat.otherUser?.firstName?.includes("Помощник")
         );
@@ -289,26 +292,46 @@ export default function FloatingChatBot() {
     conversationHistoryRef.current.push(userMsg);
 
     try {
-      // Если chatId есть, отправляем через /api/chat/[chatId]
+      // Если chatId есть, отправляем через /api/chat/ai (сохраняет сообщение + вызывает ИИ + возвращает ответ)
       if (chatId) {
-        const response = await fetch(`/api/chat/${chatId}`, {
+        const response = await fetch("/api/chat/ai", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             content: userMessage,
+            chatId,
           }),
         });
 
-        if (!response.ok) {
-          throw new Error("Ошибка отправки сообщения");
-        }
-
         const data = await response.json();
 
-        // Перезагружаем историю для получения ответа бота
-        setTimeout(() => {
-          loadChatHistory();
-        }, 1000);
+        if (!response.ok) {
+          // Чат не «ИИ-Ассистент» (404) — отправляем в чат и полагаемся на бэкенд: он вызовет ИИ для чата с ботом
+          if (response.status === 404) {
+            const fallbackRes = await fetch(`/api/chat/${chatId}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ content: userMessage }),
+            });
+            if (!fallbackRes.ok) throw new Error("Ошибка отправки сообщения");
+            setTimeout(() => loadChatHistory(), 1500);
+          } else {
+            throw new Error(data?.error || "Ошибка отправки сообщения");
+          }
+        } else if (data.botMessage) {
+          const aiMsgId = data.botMessage.id || `ai-${Date.now()}-${Math.random()}`;
+          const aiMsg: ChatMessage = {
+            role: "assistant",
+            content: data.botMessage.content || "",
+            timestamp: data.botMessage.createdAt ? new Date(data.botMessage.createdAt).getTime() : Date.now(),
+            id: aiMsgId,
+          };
+          setMessages((prev) => [...prev, aiMsg]);
+          conversationHistoryRef.current = [...conversationHistoryRef.current, aiMsg];
+          setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+        } else {
+          setTimeout(() => loadChatHistory(), 1000);
+        }
       } else if (isDemo) {
         // Демо: только API помощника, история передаётся и сохраняется в localStorage
         const history = conversationHistoryRef.current.map((m) => ({ role: m.role, content: m.content }));
