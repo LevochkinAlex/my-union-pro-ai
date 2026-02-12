@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Нормализуем номер перед валидацией (маска может содержать символы форматирования)
+    // Нормализуем номер перед проверкой (маска может содержать символы форматирования)
     const normalizedPhone = normalizePhone(phone);
     console.log("[2FA Auth] Нормализованный номер:", normalizedPhone, "(исходный:", phone, ")");
 

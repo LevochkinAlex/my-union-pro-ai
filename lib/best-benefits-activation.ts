@@ -461,7 +461,7 @@ export async function getUserActivatedDiscounts(
           console.log(`[BestBenefits Activation] ⚠️ No active code found for product ${id} (checked ${p.codes.length} codes)`);
         }
       } else if (p.promo_code) {
-        // Прямое поле promo_code - применяем валидацию
+        // Прямое поле promo_code - применяем проверку
         const code = String(p.promo_code).trim();
         if (code && 
             code.length > 0 && 
@@ -472,7 +472,7 @@ export async function getUserActivatedDiscounts(
           promoCode = code;
         }
       } else if (p.promoCode) {
-        // Прямое поле promoCode - применяем валидацию
+        // Прямое поле promoCode - применяем проверку
         const code = String(p.promoCode).trim();
         if (code && 
             code.length > 0 && 
@@ -483,7 +483,7 @@ export async function getUserActivatedDiscounts(
           promoCode = code;
         }
       } else if (p.code) {
-        // Прямое поле code - применяем валидацию
+        // Прямое поле code - применяем проверку
         const code = String(p.code).trim();
         if (code && 
             code.length > 0 && 

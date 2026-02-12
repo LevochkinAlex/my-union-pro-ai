@@ -65,7 +65,7 @@ export default function DateInput({
       const month = cleaned.substring(2, 4);
       const year = cleaned.substring(4, 8);
       
-      // Простая валидация
+      // Простая проверка
       const dayNum = parseInt(day, 10);
       const monthNum = parseInt(month, 10);
       const yearNum = parseInt(year, 10);

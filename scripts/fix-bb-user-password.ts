@@ -136,7 +136,7 @@ async function fixBbUserPassword(email: string, newPassword?: string) {
       const isUserExists = 
         errorMessage.includes('уже существует') || 
         errorMessage.includes('422') ||
-        errorMessage.includes('Ошибка валидации') ||
+        errorMessage.includes('Ошибка проверки') ||
         errorString.includes('уже существует') ||
         errorString.includes('E-Mail адрес уже существует');
       

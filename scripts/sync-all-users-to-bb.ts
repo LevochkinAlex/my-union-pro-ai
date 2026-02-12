@@ -119,7 +119,7 @@ async function syncAllUsers() {
           if (
             errorMessage.includes("уже существует") ||
             errorMessage.includes("already exists") ||
-            errorMessage.includes("Ошибка валидации") ||
+            errorMessage.includes("Ошибка проверки") ||
             (errorData?.errors?.email && 
              (errorData.errors.email.some((e: string) => e.includes("уже существует")) ||
               errorData.errors.email.some((e: string) => e.includes("already exists"))))

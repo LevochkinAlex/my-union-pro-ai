@@ -284,14 +284,14 @@ export default function AdminUserDetailsPage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Ошибка валидации");
+        throw new Error(error.error || "Ошибка проверки");
       }
 
       await loadUser();
       alert(status === "APPROVED" ? "Пользователь успешно одобрен" : "Пользователь отклонен");
       setValidationComment("");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Ошибка валидации");
+      alert(err instanceof Error ? err.message : "Ошибка проверки");
     } finally {
       setValidating(false);
     }

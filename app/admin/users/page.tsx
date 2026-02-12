@@ -61,7 +61,7 @@ export default async function AdminUsers() {
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {users.map((user) => {
-              // Проверяем, есть ли документы, ожидающие валидации
+              // Проверяем, есть ли документы, ожидающие проверки
               const hasPendingDocuments = user.documents.length > 0;
               const needsAttention = hasPendingDocuments && 
                 (user.membershipStatus === "DOCUMENTS_PENDING" || 

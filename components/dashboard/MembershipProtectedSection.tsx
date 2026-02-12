@@ -11,7 +11,7 @@ interface MembershipProtectedSectionProps {
 
 /**
  * Компонент для защиты секций на главной странице
- * Показывает блюр с замком для невалидированных членов
+ * Показывает блюр с замком для непроверенных членов
  */
 export default function MembershipProtectedSection({
   children,

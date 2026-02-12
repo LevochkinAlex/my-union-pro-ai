@@ -4,11 +4,11 @@ import { authOptions } from "@/lib/auth";
 
 /**
  * POST /api/documents/validate
- * Валидирует загруженный документ
+ * Проверяет загруженный документ
  * 
- * NOTE: AI-валидация временно отключена из-за проблем с зависимостями (tesseract.js, sharp).
+ * NOTE: AI-проверка временно отключена из-за проблем с зависимостями (tesseract.js, sharp).
  * Документы принимаются без проверки содержимого.
- * TODO: Включить AI-валидацию после установки зависимостей на сервере.
+ * TODO: Включить AI-проверку после установки зависимостей на сервере.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
       documentType,
     });
 
-    // Базовая валидация типа файла
+    // Базовая проверка типа файла
     const allowedTypes = [
       "application/pdf",
       "image/jpeg",
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Валидация размера (максимум 50 МБ)
+    // Проверка размера (максимум 50 МБ)
     const maxSize = 50 * 1024 * 1024;
     if (file.size > maxSize) {
       return NextResponse.json({
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // AI-валидация временно отключена
+    // AI-проверка временно отключена
     // Принимаем документ без проверки содержимого
     console.log("[validate-document] ✅ Document accepted (AI validation disabled)");
     
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         valid: true, // Принимаем даже при ошибке
-        message: "Документ принят (ошибка валидации)",
+        message: "Документ принят (ошибка проверки)",
         skippedValidation: true,
       }
     );

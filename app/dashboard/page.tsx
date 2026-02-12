@@ -207,7 +207,7 @@ export default async function DashboardPage() {
           status: "PENDING",
         },
       }),
-      // Количество заявок на валидации
+      // Количество заявок на проверке
       prisma.user.count({
         where: {
           organizationId: ppoOrganization.id,

@@ -122,7 +122,7 @@
             }
           },
           "422": {
-            "description": "Ошибка валидации",
+            "description": "Ошибка проверки",
             "content": {
               "application/json": {
                 "schema": {
@@ -134,7 +134,7 @@
                     },
                     "message": {
                       "type": "string",
-                      "example": "Ошибка валидации"
+                      "example": "Ошибка проверки"
                     },
                     "errors": {
                       "type": "object",
@@ -282,7 +282,7 @@
             }
           },
           "422": {
-            "description": "Ошибка валидации",
+            "description": "Ошибка проверки",
             "content": {
               "application/json": {
                 "schema": {
@@ -294,7 +294,7 @@
                     },
                     "message": {
                       "type": "string",
-                      "example": "Ошибка валидации"
+                      "example": "Ошибка проверки"
                     },
                     "errors": {
                       "type": "object",

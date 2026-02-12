@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Аккаунт BestBenefits НЕ создается при регистрации
-    // Аккаунт BestBenefits будет создан только после валидации email в анкете
+    // Аккаунт BestBenefits будет создан только после подтверждения email в анкете
     // когда пользователь подтвердит email через /api/auth/email/verify-pin
 
     // Удалено: создание ChatSession и ChatMessage - больше не используется

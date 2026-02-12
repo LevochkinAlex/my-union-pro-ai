@@ -59,7 +59,7 @@ export function useMembershipAccess(): MembershipAccessResult {
             subscriptionBlockedAt: data.user?.subscriptionBlockedAt ?? null,
           });
         } else {
-          // Fallback: при 404/503 используем данные сессии, чтобы валидированные члены и председатели видели контент
+          // Fallback: при 404/503 используем данные сессии, чтобы проверенные члены и председатели видели контент
           setMembershipData({
             membershipStatus: session?.user?.membershipStatus ?? null,
             unionMembershipStatus: null,
@@ -119,7 +119,7 @@ export function useMembershipAccess(): MembershipAccessResult {
       return "incomplete";
     }
 
-    // PENDING_VERIFICATION - еще не валидирован, должен видеть заглушку
+    // PENDING_VERIFICATION - ещё не проверен, должен видеть заглушку
     // Все остальные статусы (SUSPENDED, EXCLUDED) - тоже не имеют доступа
     return "pending";
   };

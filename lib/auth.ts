@@ -299,7 +299,7 @@ export const authOptions: NextAuthOptions = {
                 authPhone: normalizedPhone, // Устанавливаем authPhone при первой SMS авторизации
                 role: "PENDING_MEMBER",
                 membershipStatus: "PROFILE_INCOMPLETE",
-                emailVerified: null, // Email не верифицирован до валидации в анкете
+                emailVerified: null, // Email не верифицирован до подтверждения в анкете
               },
             });
             console.log("[NextAuth] ✅ Создан новый пользователь при первом входе:", {

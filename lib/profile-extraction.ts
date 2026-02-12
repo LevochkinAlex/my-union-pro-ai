@@ -3,7 +3,7 @@ import { detectGenderByName } from "./utils/genderDetector";
 import { findProfession } from "./dictionaries";
 
 /**
- * Список регионов России для валидации
+ * Список регионов России для проверки
  */
 const RUSSIAN_REGIONS = [
   'москва', 'санкт-петербург', 'ленинградская', 'московская',
@@ -378,7 +378,7 @@ export async function extractProfileDataFromMessages(
   }
 
   // ⚠️ preferredDiscountCity НЕ извлекается из текста пользователя!
-  // Город заполняется ТОЛЬКО из валидированного адреса DaData (см. ниже, строка ~787)
+  // Город заполняется ТОЛЬКО из проверенного адреса DaData (см. ниже, строка ~787)
   // Это предотвращает захват мусора типа "ага", "хирургия" и т.д.
 
   // ========== ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ ==========
@@ -586,7 +586,7 @@ export async function extractProfileDataFromMessages(
       }
     }
     
-    // АДРЕС из подтверждения: "Адрес: Москва, улица... Верно?" (только если валидированного нет)
+    // АДРЕС из подтверждения: "Адрес: Москва, улица... Верно?" (только если проверенного нет)
     if ((botQuestion.includes('адрес:') || botQuestion.includes('адрес проживания:')) && 
         botQuestion.includes('верно') && 
         !profileData.address) {
@@ -626,7 +626,7 @@ export async function extractProfileDataFromMessages(
           }
         }
       } else if (userAnswer.length >= 2 && !userAnswer.toLowerCase().match(/^(да|нет|верно)$/)) {
-        // Прямой ответ пользователя - валидируем что это регион
+        // Прямой ответ пользователя - проверяем, что это регион
         if (!isPlaceholder(userAnswer) && isValidRegion(userAnswer)) {
           profileData.region = userAnswer;
           console.log('[profile-extraction] ✅ Extracted region (context):', userAnswer);
@@ -792,7 +792,7 @@ export async function extractProfileDataFromMessages(
   if (profileData.address && !profileData.preferredDiscountCity) {
     try {
       console.log(`[profile-extraction] Extracting city from existing address: ${profileData.address}`);
-      // Пытаемся валидировать существующий адрес через DaData, чтобы получить город
+      // Пытаемся проверить существующий адрес через DaData, чтобы получить город
       const validatedData = await validateAddressWithDaData(profileData.address);
       if (validatedData?.city) {
         const city = validatedData.city.trim();
@@ -953,7 +953,7 @@ export async function extractProfileDataFromMessages(
     }
   }
 
-  // Финальная валидация извлеченных данных
+  // Финальная проверка извлечённых данных
   return validateExtractedProfile(profileData);
 }
 
@@ -1055,7 +1055,7 @@ function validateExtractedProfile(data: Record<string, any>): Record<string, any
   }
   
   // Валидация preferredDiscountCity
-  // ⚠️ Город должен быть ТОЛЬКО из валидированного адреса DaData, не из текста пользователя!
+  // ⚠️ Город должен быть ТОЛЬКО из проверенного адреса DaData, не из текста пользователя!
   if (data.preferredDiscountCity && typeof data.preferredDiscountCity === 'string') {
     const city = data.preferredDiscountCity.trim();
     // Проверяем что это не плейсхолдер и валидный город

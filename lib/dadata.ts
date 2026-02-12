@@ -59,7 +59,7 @@ interface DaDataResponse {
 }
 
 /**
- * Результат валидации адреса
+ * Результат проверки адреса
  */
 export interface ValidatedAddress {
   address: string;
@@ -67,7 +67,7 @@ export interface ValidatedAddress {
 }
 
 /**
- * Результат валидации ФИО
+ * Результат проверки ФИО
  */
 export interface ValidatedName {
   lastName: string;

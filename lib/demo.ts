@@ -199,7 +199,7 @@ export function getDemoNews(limit = 15): any[] {
       id: "demo-news-1",
       title: "Очередное заседание профкома",
       content: "<p>Состоялось плановое заседание профсоюзного комитета. Обсудили вопросы организации летнего отдыха и материальной помощи.</p>",
-      coverImage: null,
+      coverImage: "/demo/demo-news-committee-meeting.png",
       publishedAt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(),
       viewCount: 42,
       author: { id: DEMO_USER_ID, firstName: "Иван", lastName: "Еременко", email: "demo-chairman@demo.local", avatarUrl: null },
@@ -212,7 +212,7 @@ export function getDemoNews(limit = 15): any[] {
       id: "demo-news-2",
       title: "Льготы для членов профсоюза в 2025 году",
       content: "<p>Напоминаем о действующих скидках и специальных предложениях для членов профсоюза. Подробности в разделе «Скидки».</p>",
-      coverImage: null,
+      coverImage: "/demo/demo-news-benefits.png",
       publishedAt: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(),
       viewCount: 128,
       author: { id: "demo-u2", firstName: "Мария", lastName: "Козлова", email: "", avatarUrl: null },
@@ -225,7 +225,7 @@ export function getDemoNews(limit = 15): any[] {
       id: "demo-news-3",
       title: "День здоровья — приглашаем на мероприятие",
       content: "<p>Профком организует День здоровья для сотрудников и их семей. Регистрация до конца месяца.</p>",
-      coverImage: null,
+      coverImage: "/demo/demo-news-health-day.png",
       publishedAt: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(),
       viewCount: 89,
       author: { id: DEMO_USER_ID, firstName: "Иван", lastName: "Еременко", email: "demo-chairman@demo.local", avatarUrl: null },
@@ -283,9 +283,9 @@ export function getDemoProfsetyPosts(opts?: { limit?: number; page?: number }): 
   const now = new Date();
   const org = { id: "demo-org", name: DEMO_NEWS_ORG_NAME };
   const all = [
-    { id: "demo-post-1", content: "Коллеги, напоминаю о предстоящем Дне здоровья в эту субботу. Регистрация до четверга!", postType: "TEXT", author: { id: DEMO_USER_ID, firstName: "Иван", lastName: "Еременко", middleName: null, avatarUrl: null, jobTitle: "Председатель ППО", profession: null, organization: org }, attachments: [], linkMetadata: null, videoMetadata: null, coverImage: null, isLiked: false, likesCount: 5, commentsCount: 2, viewCount: 0, createdAt: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString() },
-    { id: "demo-post-2", content: "Поделилась полезной статьёй про льготы для членов профсоюза — в разделе «Скидки» появились новые предложения.", postType: "TEXT", author: { id: DEMO_MEMBER_USER_ID, firstName: "Анна", lastName: "Сидорова", middleName: "Петровна", avatarUrl: null, jobTitle: "Медсестра", profession: "Здравоохранение", organization: org }, attachments: [], linkMetadata: null, videoMetadata: null, coverImage: null, isLiked: false, likesCount: 3, commentsCount: 0, viewCount: 0, createdAt: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString() },
-    { id: "demo-post-3", content: "Спасибо профкому за организацию экскурсии — было очень интересно!", postType: "TEXT", author: { id: "demo-u2", firstName: "Иван", lastName: "Петров", middleName: "Сергеевич", avatarUrl: null, jobTitle: "Врач", profession: "Терапия", organization: org }, attachments: [], linkMetadata: null, videoMetadata: null, coverImage: null, isLiked: false, likesCount: 12, commentsCount: 4, viewCount: 0, createdAt: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString() },
+    { id: "demo-post-1", content: "Коллеги, напоминаю о предстоящем Дне здоровья в эту субботу. Регистрация до четверга!", postType: "TEXT", author: { id: DEMO_USER_ID, firstName: "Иван", lastName: "Еременко", middleName: null, avatarUrl: null, jobTitle: "Председатель ППО", profession: null, organization: org }, attachments: [], linkMetadata: null, videoMetadata: null, coverImage: "/demo/demo-post-health-event.png", isLiked: false, likesCount: 5, commentsCount: 2, viewCount: 0, createdAt: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString() },
+    { id: "demo-post-2", content: "Поделилась полезной статьёй про льготы для членов профсоюза — в разделе «Скидки» появились новые предложения.", postType: "TEXT", author: { id: DEMO_MEMBER_USER_ID, firstName: "Анна", lastName: "Сидорова", middleName: "Петровна", avatarUrl: null, jobTitle: "Медсестра", profession: "Здравоохранение", organization: org }, attachments: [], linkMetadata: null, videoMetadata: null, coverImage: "/demo/demo-post-discounts.png", isLiked: false, likesCount: 3, commentsCount: 0, viewCount: 0, createdAt: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString() },
+    { id: "demo-post-3", content: "Спасибо профкому за организацию экскурсии — было очень интересно!", postType: "TEXT", author: { id: "demo-u2", firstName: "Иван", lastName: "Петров", middleName: "Сергеевич", avatarUrl: null, jobTitle: "Врач", profession: "Терапия", organization: org }, attachments: [], linkMetadata: null, videoMetadata: null, coverImage: "/demo/demo-post-excursion.png", isLiked: false, likesCount: 12, commentsCount: 4, viewCount: 0, createdAt: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString() },
   ];
   return all.slice(skip, skip + limit);
 }

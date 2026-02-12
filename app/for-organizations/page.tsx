@@ -1,14 +1,14 @@
 import Link from "next/link";
 import LandingHeader from "@/components/landing/LandingHeader";
 import LandingFloatingBot from "@/components/landing/LandingFloatingBot";
-import LandingPricing from "@/components/landing/LandingPricing";
+import LandingPricingForm from "@/components/landing/LandingPricingForm";
 import LandingDemoLinks from "@/components/landing/LandingDemoLinks";
 import { COMPANY, CONTACTS, ROADMAP } from "@/lib/constants/landing";
 
 export const metadata = {
   title: "MyUnion Pro для организаций — автоматизация профсоюзов",
   description:
-    "Платформа для автоматизации ППО: документооборот, учёт членов профсоюза, обращения, ИИ-помощник. Цены, калькулятор, контакты ООО ЯППИКС.",
+    "Платформа для автоматизации ППО: документооборот, учёт членов профсоюза, обращения, ИИ-помощник. Узнать цены, контакты ООО ЯППИКС.",
 };
 
 export default function OrganizationsLandingPage() {
@@ -80,7 +80,7 @@ export default function OrganizationsLandingPage() {
                 href="#pricing"
                 className="rounded-lg border border-border bg-background px-6 py-3 text-base font-semibold text-foreground hover:bg-muted"
               >
-                Посмотреть цены
+                Узнать цены
               </a>
             </div>
             <LandingDemoLinks />
@@ -188,8 +188,8 @@ export default function OrganizationsLandingPage() {
           </div>
         </section>
 
-        {/* Цены */}
-        <LandingPricing />
+        {/* Узнать цены — форма заявки */}
+        <LandingPricingForm />
 
         {/* Контакты */}
         <section id="contacts" className="scroll-mt-20 border-b border-border py-16 md:py-24">

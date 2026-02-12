@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     console.log("[verify-email] Email verified for user:", user.id, user.email);
 
     // Синхронизируем с BestBenefits только после подтверждения email
-    // Примечание: Основной способ создания аккаунта BestBenefits - через валидацию email в анкете (/api/auth/email/verify-pin)
+    // Примечание: Основной способ создания аккаунта BestBenefits - через подтверждение email в анкете (/api/auth/email/verify-pin)
     // Этот endpoint также создает аккаунт для обратной совместимости (подтверждение email по токену из письма)
     if (
       process.env.USE_REAL_BB_API === "true" &&

@@ -2,7 +2,6 @@ import Link from "next/link";
 import MemberLandingHeader from "@/components/landing/MemberLandingHeader";
 import MemberBenefits from "@/components/landing/MemberBenefits";
 import MemberRoadmap from "@/components/landing/MemberRoadmap";
-import WesternServices from "@/components/landing/WesternServices";
 import MemberFAQ from "@/components/landing/MemberFAQ";
 import MemberStats from "@/components/landing/MemberStats";
 import LandingFloatingBot from "@/components/landing/LandingFloatingBot";
@@ -212,9 +211,6 @@ export default function MemberLandingPage() {
 
         {/* Roadmap */}
         <MemberRoadmap />
-
-        {/* Western Services */}
-        <WesternServices />
 
         {/* FAQ */}
         <MemberFAQ />

@@ -693,7 +693,7 @@ export default function MembersPage() {
             />
           </svg>
           <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">
-            {activeTab === "validation" ? "Нет заявок на валидацию" : "Нет активных членов"}
+            {activeTab === "validation" ? "Нет заявок на проверку" : "Нет активных членов"}
           </h3>
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
             {activeTab === "validation"

@@ -138,7 +138,7 @@ export async function PUT(request: NextRequest) {
           }
         }
       } catch (error) {
-        // Если не удалось распарсить JSON, пропускаем валидацию (может быть пустая строка)
+        // Если не удалось распарсить JSON, пропускаем проверку (может быть пустая строка)
         if (body.childrenBirthDates.trim() !== "") {
           console.error("[additional-info] Failed to parse childrenBirthDates:", error);
         }

@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json({
       success: true,
-      message: "Email сохранен. Используйте поле валидации для подтверждения через PIN код.",
+      message: "Email сохранён. Используйте поле для подтверждения через PIN-код.",
     });
   } catch (error) {
     console.error("[send-verification-email] Error:", error);

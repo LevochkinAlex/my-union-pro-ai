@@ -742,7 +742,7 @@ export default function QuestionnaireModal({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
             isExistingMember: true,
-            membershipStatus: "DOCUMENTS_PENDING" // Отправляем на валидацию председателю
+            membershipStatus: "DOCUMENTS_PENDING" // Отправляем на проверку председателю
           }),
         });
       }
