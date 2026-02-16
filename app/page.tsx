@@ -80,7 +80,7 @@ export default function MemberLandingPage() {
                 
                 <p className="mb-8 max-w-xl text-lg text-muted-foreground md:text-xl leading-relaxed">
                   Обращения, чаты с коллегами, профсеть, эксклюзивные скидки, 
-                  ИИ-помощник и скоро — блок санаторно-курортного оздоравления
+                  ИИ-помощник и скоро — блок санаторно-курортного оздоровления
                 </p>
                 
                 <div className="flex flex-wrap items-center justify-center gap-4 lg:justify-start">

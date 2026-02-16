@@ -140,7 +140,7 @@ export default async function DiscountsPage() {
           Партнёрские программы
         </p>
         <h1 className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
-          Скидки от партнеров
+          Скидки от партнёров
         </h1>
         <p className="mt-2 max-w-2xl text-gray-600 dark:text-gray-400">
           Подборка скидок, бонусов и специальных предложений для членов профсоюзов.

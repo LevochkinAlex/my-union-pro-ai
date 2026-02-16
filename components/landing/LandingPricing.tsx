@@ -41,7 +41,7 @@ export default function LandingPricing() {
           Выберите количество пользователей и период — стоимость рассчитается автоматически.
         </p>
 
-        <div className="mx-auto max-w-2xl rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md md:p-8 landing-animate-in landing-animate-in-delay-2">
+        <div className="mx-auto max-w-2xl rounded-2xl border border-border bg-card p-4 sm:p-6 md:p-8 shadow-sm transition-shadow hover:shadow-md landing-animate-in landing-animate-in-delay-2">
           {/* Период */}
           <div className="mb-6">
             <p className="mb-2 text-sm font-medium text-muted-foreground">Период оплаты</p>
@@ -52,7 +52,7 @@ export default function LandingPricing() {
                   type="button"
                   onClick={() => setPeriod(p.key)}
                   className={cn(
-                    "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+                    "rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap",
                     period === p.key
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -66,11 +66,11 @@ export default function LandingPricing() {
 
           {/* Ползунок */}
           <div className="mb-8">
-            <div className="mb-2 flex items-center justify-between">
-              <label htmlFor="pricing-slider" className="text-sm font-medium text-foreground">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <label htmlFor="pricing-slider" className="text-sm font-medium text-foreground whitespace-nowrap">
                 Пользователей
               </label>
-              <span className="text-lg font-semibold tabular-nums text-foreground">
+              <span className="text-lg font-semibold tabular-nums text-foreground whitespace-nowrap">
                 {users.toLocaleString("ru-RU")}
               </span>
             </div>
@@ -81,23 +81,23 @@ export default function LandingPricing() {
               max={MAX_INDEX}
               value={sliderIndex}
               onChange={(e) => setSliderIndex(Number(e.target.value))}
-              className="h-3 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-0 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-md [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-primary"
+              className="h-3 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-0 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-track]:bg-muted [&::-moz-range-track]:rounded-full"
             />
             <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-              <span>{PRICING_TIERS[MIN_INDEX].users}</span>
-              <span>{PRICING_TIERS[MAX_INDEX].users}</span>
+              <span>{PRICING_TIERS[MIN_INDEX].users.toLocaleString("ru-RU")}</span>
+              <span>{PRICING_TIERS[MAX_INDEX].users.toLocaleString("ru-RU")}</span>
             </div>
           </div>
 
           {/* Итог */}
-          <div className="rounded-xl bg-primary/10 p-6 text-center dark:bg-primary/15">
+          <div className="rounded-xl bg-primary/10 p-4 sm:p-6 text-center dark:bg-primary/15">
             <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
               Стоимость за {periodLabel}
             </p>
-            <p className="mt-2 text-3xl font-bold tabular-nums text-foreground md:text-4xl">
+            <p className="mt-2 text-2xl sm:text-3xl md:text-4xl font-bold tabular-nums text-foreground">
               {formatPrice(totalPrice)} ₽
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
               {perUser} ₽ за пользователя в месяц
             </p>
             {period !== "month" && (
