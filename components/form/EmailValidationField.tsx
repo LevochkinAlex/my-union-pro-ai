@@ -133,21 +133,21 @@ export default function EmailValidationField({
       {mode === "initial" || mode === "verified" ? (
         // Режим ввода email
         <>
-          <div className="flex gap-2 items-start">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-start">
             <input
               type="email"
               value={email || ""}
               onChange={(e) => onEmailChange(e.target.value)}
               placeholder="example@mail.com"
               disabled={mode === "verified"}
-              className="flex-1 h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
+              className="flex-1 min-w-0 h-11 appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-400"
             />
             {mode === "initial" && (
               <button
                 type="button"
                 onClick={handleSendPin}
                 disabled={loading || !email || !email.trim()}
-                className="h-11 px-4 py-2.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors whitespace-nowrap"
+                className="h-11 px-4 py-2.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors whitespace-nowrap flex-shrink-0 w-full sm:w-auto"
               >
                 {loading ? "Отправка..." : "Валидировать"}
               </button>

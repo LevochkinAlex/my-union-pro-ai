@@ -812,7 +812,7 @@ export default function QuestionnaireModal({
   return (
     <>
       <Modal isOpen={isOpen} onClose={onClose} className="w-full max-w-2xl lg:max-w-3xl flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[85vh]">
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 w-full">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 md:p-6 w-full">
           <div className="mb-4 sm:mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white pr-8 sm:pr-0">
               Заполнение анкеты для вступления в профсоюз
@@ -849,13 +849,13 @@ export default function QuestionnaireModal({
 
           {/* Шаг 1: Основная информация */}
           {currentStep === 1 && (
-            <div className="space-y-4 sm:space-y-6">
+            <div className="space-y-3 sm:space-y-4 md:space-y-6">
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
                 Основная информация
               </h3>
 
               {/* Место работы и Должность — первая строка */}
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Место работы <span className="text-red-500">*</span>
@@ -997,7 +997,7 @@ export default function QuestionnaireModal({
                 />
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
                 <div>
                   <label htmlFor="questionnaire-lastName" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Фамилия <span className="text-red-500">*</span>
@@ -1525,7 +1525,7 @@ export default function QuestionnaireModal({
         </div>
 
         {/* Кнопки навигации — всегда внизу модалки, не скроллятся */}
-        <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 sm:p-6 pt-4 rounded-b-3xl">
+        <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 sm:p-4 md:p-6 pt-3 sm:pt-4 rounded-b-3xl">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button
               onClick={() => {
