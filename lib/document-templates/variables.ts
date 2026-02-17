@@ -19,6 +19,8 @@ export interface TemplateVariables {
   organizationChairmanName?: string;
   organizationChairmanJobTitle?: string;
   organizationChairmanFullName?: string;
+  /** ФИО председателя в дательном падеже (Председателю кому? — Иванову Андрею Степановичу) */
+  organizationChairmanNameDative?: string;
   workplace?: string;
   workplaceInn?: string;
   directorName?: string;
@@ -56,6 +58,7 @@ export const TEMPLATE_VARIABLES_FOR_EDITOR: { key: keyof TemplateVariables | str
   { key: "organizationChairmanName", label: "ФИО председателя организации" },
   { key: "organizationChairmanJobTitle", label: "Должность председателя организации" },
   { key: "organizationChairmanFullName", label: "Полное ФИО председателя с должностью (для шапки «Кому»)" },
+  { key: "organizationChairmanNameDative", label: "ФИО председателя в дательном падеже (Председателю кому?)" },
   { key: "workplace", label: "Место работы (компания)" },
   { key: "workplaceInn", label: "ИНН места работы" },
   { key: "directorName", label: "ФИО руководителя с места работы" },

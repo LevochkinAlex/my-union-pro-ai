@@ -3,14 +3,14 @@
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 
-// Динамический импорт TinyMCE редактора для уменьшения бандла
+// Динамический импорт TinyMCE редактора для уменьшения бандла (с fallback при ошибке загрузки)
 const DocumentTemplateEditor = dynamic(
   () => import("@/components/admin/DocumentTemplateEditor"),
   { 
     loading: () => (
       <div className="h-64 animate-pulse rounded-md border border-gray-300 bg-gray-200 dark:border-gray-600 dark:bg-gray-700" />
     ),
-    ssr: false 
+    ssr: false,
   }
 );
 import { alertSuccess, alertError, confirm } from "@/lib/alert";
@@ -50,7 +50,7 @@ export default function DocumentTemplatesPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [editorMode, setEditorMode] = useState<"wysiwyg" | "html">("wysiwyg");
+  const [editorMode, setEditorMode] = useState<"wysiwyg" | "html">("html");
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [formData, setFormData] = useState<{
     name: string;
@@ -74,23 +74,28 @@ export default function DocumentTemplatesPage() {
     loadTemplates();
   }, []);
 
+  // При ошибке загрузки API (403 и т.д.) показываем понятное сообщение
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const loadTemplates = async () => {
     try {
       setIsLoading(true);
+      setLoadError(null);
       const response = await fetch("/api/admin/document-templates");
-      console.log("[DocumentTemplates] Response status:", response.status);
       if (response.ok) {
         const data = await response.json();
-        console.log("[DocumentTemplates] Loaded templates:", data.templates?.length || 0);
         setTemplates(data.templates || []);
       } else {
         const errorData = await response.json().catch(() => ({}));
-        console.error("[DocumentTemplates] Error loading templates:", response.status, errorData);
-        alert(`Ошибка загрузки шаблонов: ${errorData.error || response.statusText}`);
+        const msg = errorData.error || response.statusText;
+        setLoadError(response.status === 403 ? "Нет доступа. Войдите под учётной записью супер-администратора или обновите страницу после назначения прав." : msg);
+        if (response.status !== 403) {
+          alert(`Ошибка загрузки шаблонов: ${msg}`);
+        }
       }
     } catch (error) {
       console.error("[DocumentTemplates] Exception loading templates:", error);
-      alert("Ошибка при загрузке шаблонов. Проверьте консоль.");
+      setLoadError("Не удалось загрузить шаблоны. Проверьте сеть и повторите.");
     } finally {
       setIsLoading(false);
     }
@@ -227,6 +232,25 @@ export default function DocumentTemplatesPage() {
         <div className="text-center">
           <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
           <p className="text-gray-600 dark:text-gray-400">Загрузка шаблонов...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Конструктор документов</h1>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+          <p className="font-medium">Конструктор недоступен</p>
+          <p className="mt-1 text-sm">{loadError}</p>
+          <button
+            type="button"
+            onClick={() => loadTemplates()}
+            className="mt-3 rounded-lg bg-amber-600 px-4 py-2 text-white hover:bg-amber-700"
+          >
+            Повторить загрузку
+          </button>
         </div>
       </div>
     );

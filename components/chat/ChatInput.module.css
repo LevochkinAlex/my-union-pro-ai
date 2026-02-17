@@ -1,0 +1,5 @@
+/* Поле ввода сообщения: мин/макс высота без inline-стилей */
+.chatTextarea {
+  min-height: 40px;
+  max-height: 200px;
+}

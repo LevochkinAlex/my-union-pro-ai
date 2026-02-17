@@ -62,12 +62,13 @@ const MEMBERSHIP_APPLICATION_TEMPLATE = `
 <body>
   <div class="header">
     Председателю {{organizationName}}<br>
-    от {{fullNameGenitive}}.<br>
+    {{organizationChairmanNameDative}}<br>
+    от {{fullNameGenitive}}<br>
     {{jobTitle}}
   </div>
   
   <div class="title">
-    ЗАЯВЛЕНИЕ.
+    ЗАЯВЛЕНИЕ
   </div>
   
   <div class="content">

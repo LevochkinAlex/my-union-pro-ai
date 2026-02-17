@@ -53,12 +53,13 @@ const MEMBERSHIP_TEMPLATE_HTML = `<!DOCTYPE html>
 <body>
   <div class="header">
     Председателю {{organizationName}}<br>
-    от {{fullNameGenitive}}.<br>
+    {{organizationChairmanNameDative}}<br>
+    от {{fullNameGenitive}}<br>
     работающего(ей) {{jobTitle}}
   </div>
   
   <div class="title">
-    ЗАЯВЛЕНИЕ.
+    ЗАЯВЛЕНИЕ
   </div>
   
   <div class="content">
@@ -135,7 +136,7 @@ const CONTRIBUTION_TEMPLATE_HTML = `<!DOCTYPE html>
   </div>
   
   <div class="title">
-    ЗАЯВЛЕНИЕ.
+    ЗАЯВЛЕНИЕ
   </div>
   
   <div class="content">

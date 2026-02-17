@@ -16,14 +16,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    // Проверяем права доступа (только SUPER_ADMIN)
+    // Проверяем права доступа (только SUPER_ADMIN); при первом входе после назначения роли проверяем по БД
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { role: true },
     });
 
     if (user?.role !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Доступ запрещен" }, { status: 403 });
+      return NextResponse.json({ error: "Доступ запрещен. Только супер-администратор может открыть конструктор документов." }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);

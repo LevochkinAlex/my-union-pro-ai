@@ -46,16 +46,17 @@ ssh -i ~/.ssh/myunion_vds root@194.87.49.210 'tail -50 /var/log/myunion/sync-dis
 |-----------|-----------|
 | Продакшн | https://myunion.pro |
 | CDN | https://cdn.myunion.pro |
-| VDS IP | 194.87.49.210 |
+| VDS (сервер приложения) | 194.87.49.210 |
+| БД PostgreSQL | VK Cloud 83.166.237.161, база myunion_db |
 | Проект на сервере | /opt/my-union-pro |
 | Grafana | https://myunion.pro/grafana/ |
 | Sentry | yappix-llc-vk.sentry.io |
 
 ## База данных
 
-- **PostgreSQL** на VDS
+- **PostgreSQL** в VK Cloud (83.166.237.161, myunion_db). Локально и на сервере в `DATABASE_URL` указан один и тот же хост.
 - **Prisma ORM**
-- Миграции: `prisma db push` (на VDS)
+- Миграции: `pnpm prisma migrate deploy` (на сервере при деплое)
 
 ## Устаревшие файлы
 

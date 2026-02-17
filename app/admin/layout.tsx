@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/dashboard/Sidebar";
 import MobileLayout from "@/components/dashboard/MobileLayout";
 
@@ -11,12 +12,24 @@ export default async function AdminLayout({
 }) {
   const session = await getServerSession(authOptions);
 
-  if (!session) {
+  if (!session?.user?.id) {
     redirect("/login");
   }
 
-  if (session.user.role !== "SUPER_ADMIN") {
-    redirect("/dashboard");
+  const role = (session.user as { role?: string }).role;
+  if (role !== "SUPER_ADMIN") {
+    // При первом входе после назначения SUPER_ADMIN роль в сессии может ещё не обновиться — проверяем по БД
+    try {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { role: true },
+      });
+      if (dbUser?.role !== "SUPER_ADMIN") {
+        redirect("/dashboard");
+      }
+    } catch {
+      redirect("/dashboard");
+    }
   }
 
   const adminMenuItems = [

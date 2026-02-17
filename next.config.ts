@@ -82,7 +82,7 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'cdn.myunion.pro', // Selectel CDN
+        hostname: 'cdn.myunion.pro', // VK Cloud CDN
       },
       {
         protocol: 'https',

@@ -17,6 +17,7 @@ import {
 import EmojiPicker from './EmojiPicker';
 import MentionAutocomplete, { Participant } from './MentionAutocomplete';
 import { compressImages } from '@/lib/compress-image';
+import styles from './ChatInput.module.css';
 
 /** Проверяет, нужно ли конвертировать файл из HEIC/HEIF в JPEG (браузер не показывает HEIC в <img>) */
 function isHeicFile(file: File): boolean {
@@ -133,12 +134,14 @@ export default function ChatInput({
     }
   }, [editingMessage]);
 
-  // Автоматическое изменение высоты textarea
+  // Автоматическое изменение высоты textarea (не меньше 40px — одна строка с отступами)
+  const TEXTAREA_MIN_HEIGHT = 40;
+  const TEXTAREA_MAX_HEIGHT = 200;
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = 'auto';
-      const newHeight = Math.min(textarea.scrollHeight, 200); // Максимум 200px
+      const newHeight = Math.min(Math.max(textarea.scrollHeight, TEXTAREA_MIN_HEIGHT), TEXTAREA_MAX_HEIGHT);
       textarea.style.height = `${newHeight}px`;
     }
   }, [content]);
@@ -413,8 +416,11 @@ export default function ChatInput({
           </div>
           {onCancelEdit && (
             <button
+              type="button"
               onClick={onCancelEdit}
               className="p-1 hover:bg-amber-100 dark:hover:bg-amber-800/30 rounded transition-colors"
+              title="Отменить редактирование"
+              aria-label="Отменить редактирование"
             >
               <X className="w-4 h-4 text-amber-600 dark:text-amber-400" />
             </button>
@@ -438,8 +444,11 @@ export default function ChatInput({
           </div>
           {onCancelReply && (
             <button
+              type="button"
               onClick={onCancelReply}
               className="p-1 hover:bg-blue-100 dark:hover:bg-blue-800/30 rounded transition-colors flex-shrink-0 ml-2"
+              title="Отменить ответ"
+              aria-label="Отменить ответ"
             >
               <X className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             </button>
@@ -490,8 +499,11 @@ export default function ChatInput({
                     </div>
                   )}
                   <button
+                    type="button"
                     onClick={() => removeFile(index)}
                     className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Удалить вложение"
+                    aria-label={`Удалить вложение ${file.name}`}
                   >
                     <X className="w-3 h-3 text-white" />
                   </button>
@@ -520,6 +532,7 @@ export default function ChatInput({
               onClick={() => imageInputRef.current?.click()}
               className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
               title="Прикрепить изображение"
+              aria-label="Прикрепить изображение"
             >
               <ImageIcon className="w-5 h-5" />
             </button>
@@ -530,6 +543,8 @@ export default function ChatInput({
               multiple
               onChange={handleFileSelect}
               className="hidden"
+              title="Выбрать изображение"
+              aria-label="Прикрепить изображение"
             />
 
             {/* File upload */}
@@ -538,6 +553,7 @@ export default function ChatInput({
               onClick={() => fileInputRef.current?.click()}
               className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
               title="Прикрепить документ"
+              aria-label="Прикрепить документ"
             >
               <Paperclip className="w-5 h-5" />
             </button>
@@ -548,6 +564,8 @@ export default function ChatInput({
               multiple
               onChange={handleFileSelect}
               className="hidden"
+              title="Выбрать файл"
+              aria-label="Прикрепить документ"
             />
 
             {/* Emoji picker */}
@@ -557,6 +575,7 @@ export default function ChatInput({
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                 className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
                 title="Добавить эмодзи"
+                aria-label="Добавить эмодзи"
               >
                 <Smile className="w-5 h-5" />
               </button>
@@ -573,8 +592,8 @@ export default function ChatInput({
             </div>
           </div>
 
-          {/* Text input */}
-          <div className="flex-1 min-w-0 relative">
+          {/* Text input — min-height под одну строку, чтобы текст/плейсхолдер не обрезались на мобильных */}
+          <div className="flex-1 min-w-0 relative flex items-center">
             <textarea
               ref={textareaRef}
               value={content}
@@ -583,8 +602,9 @@ export default function ChatInput({
               placeholder={isEditing ? "Редактировать сообщение..." : placeholder}
               disabled={disabled}
               rows={1}
-              className="w-full resize-none bg-transparent border-none outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-[15px] leading-relaxed py-1"
-              style={{ maxHeight: '200px' }}
+              className={`w-full resize-none bg-transparent border-none outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-[15px] leading-normal py-2 box-border align-middle ${styles.chatTextarea}`}
+              title="Поле ввода сообщения"
+              aria-label={isEditing ? "Редактировать сообщение" : "Напишите сообщение"}
             />
             
             {/* Mention Autocomplete */}
@@ -610,6 +630,8 @@ export default function ChatInput({
               type="button"
               onClick={handleSend}
               disabled={!canSend || disabled}
+              title={isEditing ? "Сохранить правки" : "Отправить сообщение"}
+              aria-label={isEditing ? "Сохранить правки" : "Отправить сообщение"}
               className={`
                 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200
                 ${canSend && !disabled

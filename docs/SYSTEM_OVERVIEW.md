@@ -154,7 +154,8 @@ my-union-pro-ai/
 ### Обязательные
 
 ```env
-DATABASE_URL=postgresql://user:password@host:5432/database
+# БД — VK Cloud (83.166.237.161, myunion_db). В пароле запятую кодировать как %2C.
+DATABASE_URL=postgresql://myadminunion:YOUR_PASSWORD@83.166.237.161:5432/myunion_db
 NEXTAUTH_URL=http://localhost:3004
 NEXTAUTH_SECRET=your-secret-key
 ```

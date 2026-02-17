@@ -359,6 +359,85 @@ export async function declineNameToGenitive(
 }
 
 /**
+ * Склоняет ФИО в дательный падеж (кому? чему?) — для «Председателю Иванову А.С.»
+ * @param lastName Фамилия
+ * @param firstName Имя
+ * @param middleName Отчество
+ * @returns ФИО в дательном падеже
+ */
+export async function declineNameToDative(
+  lastName: string,
+  firstName: string,
+  middleName?: string | null
+): Promise<string> {
+  const token = getDaDataToken();
+  const secret = getDaDataSecret();
+  const fullName = `${lastName} ${firstName}${middleName ? ` ${middleName}` : ""}`.trim();
+
+  if (!token || !secret) {
+    return fallbackDative(lastName, firstName, middleName);
+  }
+
+  try {
+    const response = await fetch(DADATA_CLEAN_NAME_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Token ${token}`,
+        "X-Secret": secret,
+      },
+      body: JSON.stringify([fullName]),
+    });
+
+    if (!response.ok) return fallbackDative(lastName, firstName, middleName);
+
+    const data: DaDataNameResponse[] = await response.json();
+    if (data.length > 0 && data[0].result_dative) {
+      return data[0].result_dative;
+    }
+    return fallbackDative(lastName, firstName, middleName);
+  } catch (error) {
+    console.error("[dadata] Error declining name to dative:", error);
+    return fallbackDative(lastName, firstName, middleName);
+  }
+}
+
+/**
+ * Упрощенное склонение ФИО в дательный падеж (fallback)
+ */
+function fallbackDative(
+  lastName: string,
+  firstName: string,
+  middleName?: string | null
+): string {
+  let lastD = lastName;
+  if (lastName.endsWith("ов") || lastName.endsWith("ев") || lastName.endsWith("ин")) {
+    lastD = lastName + "у";
+  } else if (lastName.endsWith("ский") || lastName.endsWith("цкий")) {
+    lastD = lastName.slice(0, -2) + "ому";
+  } else if (lastName.endsWith("а") || lastName.endsWith("я")) {
+    lastD = lastName.slice(0, -1) + "ой";
+  } else if (!lastName.endsWith("о") && !lastName.endsWith("ко") && !lastName.endsWith("енко")) {
+    lastD = lastName + "у";
+  }
+
+  let firstD = firstName;
+  if (firstName.endsWith("а") || firstName.endsWith("я")) {
+    firstD = firstName.slice(0, -1) + (firstName.endsWith("ия") ? "и" : "е");
+  } else if (firstName.endsWith("й")) {
+    firstD = firstName.slice(0, -1) + "ю";
+  } else {
+    firstD = firstName + "у";
+  }
+
+  let middleD = middleName || "";
+  if (middleName?.endsWith("ич")) middleD = middleName + "у";
+  else if (middleName?.endsWith("на")) middleD = middleName.slice(0, -1) + "е";
+
+  return `${lastD} ${firstD}${middleD ? ` ${middleD}` : ""}`.trim();
+}
+
+/**
  * Упрощенное склонение ФИО (fallback если DaData недоступен)
  */
 function fallbackDeclension(

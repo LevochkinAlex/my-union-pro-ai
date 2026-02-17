@@ -1,7 +1,19 @@
 import { User, Organization, DocumentTemplate } from "@prisma/client";
 import puppeteer from "puppeteer";
-import { declineNameToGenitive } from "../dadata";
+import { declineNameToGenitive, declineNameToDative } from "../dadata";
 import type { TemplateVariables } from "./variables";
+
+/** Парсит строку ФИО "Фамилия Имя Отчество" в части */
+function parseFullName(fullName: string): { lastName: string; firstName: string; middleName?: string } {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { lastName: "", firstName: "" };
+  if (parts.length === 1) return { lastName: parts[0], firstName: "" };
+  return {
+    lastName: parts[0],
+    firstName: parts[1],
+    middleName: parts.slice(2).join(" ") || undefined,
+  };
+}
 
 export { type TemplateVariables, TEMPLATE_VARIABLES_FOR_EDITOR } from "./variables";
 
@@ -13,7 +25,7 @@ export async function extractUserVariables(
 ): Promise<TemplateVariables> {
   const fullName = `${user.lastName || ""} ${user.firstName || ""} ${user.middleName || ""}`.trim();
   
-  // Получаем ФИО в родительном падеже
+  // Получаем ФИО в родительном падеже (от кого?)
   let fullNameGenitive = "";
   try {
     fullNameGenitive = await declineNameToGenitive(
@@ -25,6 +37,20 @@ export async function extractUserVariables(
     console.error("[document-templates] Error declining name:", error);
     fullNameGenitive = fullName; // Fallback на обычное ФИО
   }
+
+  // ФИО председателя в дательном падеже (Председателю кому?)
+  let organizationChairmanNameDative = "";
+  const chairmanName = user.organization?.chairmanName || "";
+  if (chairmanName) {
+    try {
+      const { lastName, firstName, middleName } = parseFullName(chairmanName);
+      if (lastName && firstName) {
+        organizationChairmanNameDative = await declineNameToDative(lastName, firstName, middleName);
+      }
+    } catch (error) {
+      console.error("[document-templates] Error declining chairman name:", error);
+    }
+  }
   
   // Форматируем дату рождения
   let dateOfBirth = "";
@@ -33,10 +59,10 @@ export async function extractUserVariables(
     dateOfBirth = `${date.getDate().toString().padStart(2, "0")}.${(date.getMonth() + 1).toString().padStart(2, "0")}.${date.getFullYear()}`;
   }
   
-  // Форматируем текущую дату
+  // Форматируем текущую дату (без точки в конце)
   const now = new Date();
   const currentDate = `${now.getDate().toString().padStart(2, "0")}.${(now.getMonth() + 1).toString().padStart(2, "0")}.${now.getFullYear()}`;
-  
+
   return {
     firstName: user.firstName || "",
     lastName: user.lastName || "",
@@ -56,6 +82,7 @@ export async function extractUserVariables(
     organizationChairmanFullName: user.organization?.chairmanName && user.organization?.chairmanJobTitle
       ? `${user.organization.chairmanJobTitle} ${user.organization.chairmanName}`
       : user.organization?.chairmanName || "",
+    organizationChairmanNameDative,
     // Место работы и руководитель
     workplace: (user as any).workplace || "",
     workplaceInn: (user as any).workplaceInn || "",

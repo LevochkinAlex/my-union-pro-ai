@@ -21,7 +21,7 @@ function createPrismaClient(): PrismaClient {
         console.warn(
           '[prisma] В dev DATABASE_URL указывает на удалённый хост:',
           host,
-          '\n  Если видите "Can\'t reach database server" — в .env.local укажите локальную БД (localhost) или поднимите SSH-туннель:\n  ssh -L 5432:localhost:5432 root@' + host
+          '\n  Prod-БД в VK Cloud (83.166.237.161). Если "Can\'t reach database server" — проверьте сеть и белый список IP в VK Cloud.'
         );
       }
     } catch {

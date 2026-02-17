@@ -84,11 +84,16 @@ function main() {
     const createDb = runQuiet(
       `psql "${urlToPostgres}" -tAc "CREATE DATABASE \\"${newDbName}\\";"`
     );
-    if (!createDb.ok) {
-      console.error("❌ Не удалось создать БД:", createDb.stderr || createDb.stdout);
-      process.exit(1);
+    if (createDb.ok) {
+      console.log("   БД создана.");
+    } else {
+      if (createDb.stderr.includes("permission denied") || createDb.stdout.includes("permission denied")) {
+        console.log("   Создать БД не удалось (нет прав). Убедитесь, что БД '" + newDbName + "' создана в панели VK Cloud.");
+      } else {
+        console.error("❌ Не удалось создать БД:", createDb.stderr || createDb.stdout);
+        process.exit(1);
+      }
     }
-    console.log("   БД создана.");
   } else {
     console.log("   БД уже существует.");
   }
@@ -121,18 +126,19 @@ function main() {
   const check = runQuiet(
     `psql "${newUrl}" -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';"`
   );
-  if (check.ok && parseInt(check.stdout.trim(), 10) > 0) {
-    console.log("   Таблицы в public:", check.stdout.trim());
+  const tableCount = check.ok ? parseInt(check.stdout.trim(), 10) : 0;
+  if (tableCount > 0) {
+    console.log("   Таблицы в public:", tableCount);
   } else {
-    console.error("   Предупреждение: не удалось прочитать количество таблиц.");
+    console.error("   Таблицы не восстановились (0). Часто это из‑за прав: создайте БД в панели VK Cloud и дайте пользователю права на неё, затем запустите скрипт с NEW_DATABASE_URL=.../имя_этой_бд");
   }
 
   fs.unlinkSync(dumpPath);
-  console.log("\n✅ Перенос завершён. Дамп удалён.");
+  console.log("\n✅ Скрипт завершён. Временный дамп удалён.");
   console.log("\nДальше:");
-  console.log("  1. Обновите DATABASE_URL на сервере (и в .env.local для деплоя) на NEW_DATABASE_URL.");
-  console.log("  2. Перезапустите приложение (pm2 restart).");
-  console.log("  3. Убедитесь, что в VK Cloud открыт доступ с IP вашего приложения (194.87.49.210).");
+  console.log("  1. Если таблиц > 0: обновите DATABASE_URL на сервере на NEW_DATABASE_URL и перезапустите pm2.");
+  console.log("  2. Если таблиц 0: создайте БД в панели VK Cloud (см. docs/MIGRATION_VK_CLOUD.md) и запустите миграцию снова.");
+  console.log("  3. Добавьте IP 194.87.49.210 в белый список доступа в VK Cloud.");
 }
 
 main();

@@ -23,15 +23,17 @@
 
 ## 🚀 Команды для деплоя
 
+БД — VK Cloud (83.166.237.161, myunion_db). На сервере в `.env.local` задан `DATABASE_URL` на этот хост.
+
 ```bash
 ssh root@194.87.49.210
 cd /opt/my-union-pro
 git pull origin main
 pnpm install
-npx prisma db push --accept-data-loss
-npx prisma generate
+npx prisma migrate deploy
 pnpm build
 pm2 restart my-union-pro
+pm2 restart my-union-socket
 pm2 logs my-union-pro --lines 50
 ```
 

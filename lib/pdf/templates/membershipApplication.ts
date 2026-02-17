@@ -44,7 +44,7 @@ export async function generateMembershipApplication(userData: UserData): Promise
       .text(`Председателю ${ppoName}`, { align: "right" })
     .moveDown(0.3)
     .fontSize(14)
-    .text(`от ${fullNameGenitive}.`, { align: "right" })
+    .text(`от ${fullNameGenitive}`, { align: "right" })
     .moveDown(0.3)
     .fontSize(14)
     .text(userData.jobTitle || "", { align: "right" });
@@ -65,10 +65,10 @@ export async function generateMembershipApplication(userData: UserData): Promise
   
   doc.moveDown(2);
 
-  // Название документа по центру (жирный шрифт через fontSize)
+  // Название документа по центру (без точки после заголовка)
   doc
     .fontSize(16)
-    .text("ЗАЯВЛЕНИЕ.", { align: "center" })
+    .text("ЗАЯВЛЕНИЕ", { align: "center" })
     .moveDown(1.5);
 
   // Текст заявления

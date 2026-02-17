@@ -10,7 +10,7 @@
 - **Real-time**: WebSocket (Socket.IO) - кастомный сервер (`server/chat-server.ts`)
 - **AI**: OpenRouter API для AI-чата с поддержкой баз знаний (RAG)
 - **Auth**: NextAuth.js с поддержкой SMS, Email, Yandex OAuth
-- **Deployment**: PM2 на VDS (194.87.49.210)
+- **Deployment**: PM2 на VDS (194.87.49.210). БД — PostgreSQL в VK Cloud (83.166.237.161, myunion_db).
 
 ### ⚠️ ВАЖНО: Matrix удален полностью
 - Все упоминания Matrix удалены из кода
@@ -379,10 +379,13 @@ socket.data.userId = decoded.sub;
 
 ## 🚀 Деплой
 
-### Сервер
+### Сервер приложения
 - **Host**: 194.87.49.210
 - **Path**: `/opt/my-union-pro`
 - **PM2**: `my-union-pro` (Next.js), `my-union-socket` (WebSocket)
+
+### База данных
+- **VK Cloud PostgreSQL**: 83.166.237.161, база `myunion_db`. На сервере и локально в `DATABASE_URL` указан этот хост.
 
 ### Команды деплоя
 ```bash
@@ -390,7 +393,7 @@ ssh root@194.87.49.210
 cd /opt/my-union-pro
 git pull origin main
 pnpm install
-npx prisma db push
+npx prisma migrate deploy   # миграции в БД VK Cloud
 pnpm build
 pm2 restart my-union-pro
 pm2 restart my-union-socket
