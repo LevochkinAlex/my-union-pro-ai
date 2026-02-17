@@ -114,6 +114,7 @@ export default function ProfilePage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [emailVerified, setEmailVerified] = useState<Date | null>(null);
   const [lastSavedField, setLastSavedField] = useState<string | null>(null);
+  const [dateOfBirthError, setDateOfBirthError] = useState<string | null>(null);
   
   // Справочники профессий и должностей
   const [jobTitles, setJobTitles] = useState<string[]>([]);
@@ -1396,8 +1397,34 @@ export default function ProfilePage() {
               <DateInput
                 name="dateOfBirth"
                 value={profileData.dateOfBirth}
-                onChange={handleProfileChange}
-                onBlur={() => handleFieldBlur("dateOfBirth", profileData.dateOfBirth)}
+                onChange={(e) => {
+                  handleProfileChange(e);
+                  // Сбрасываем ошибку при изменении
+                  setDateOfBirthError(null);
+                }}
+                onBlur={(e) => {
+                  // Валидация будет выполнена в DateInput, но мы также проверяем здесь
+                  if (profileData.dateOfBirth) {
+                    const birthDate = new Date(profileData.dateOfBirth);
+                    const today = new Date();
+                    const ageInYears = (today.getTime() - birthDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+                    
+                    if (birthDate > today) {
+                      setDateOfBirthError("Дата рождения не может быть в будущем");
+                      setMessage({ type: "error", text: "Дата рождения не может быть в будущем" });
+                    } else if (ageInYears > 100) {
+                      setDateOfBirthError("Возраст не может превышать 100 лет");
+                      setMessage({ type: "error", text: "Возраст не может превышать 100 лет" });
+                    } else {
+                      setDateOfBirthError(null);
+                      handleFieldBlur("dateOfBirth", profileData.dateOfBirth);
+                    }
+                  } else {
+                    handleFieldBlur("dateOfBirth", profileData.dateOfBirth);
+                  }
+                }}
+                error={dateOfBirthError || undefined}
+                maxAge={100}
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>

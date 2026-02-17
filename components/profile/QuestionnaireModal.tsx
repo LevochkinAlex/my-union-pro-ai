@@ -68,6 +68,7 @@ export default function QuestionnaireModal({
   const [currentStep, setCurrentStep] = useState(1);
   const [autoSaving, setAutoSaving] = useState(false);
   const [lastSavedField, setLastSavedField] = useState<string | null>(null);
+  const [dateOfBirthError, setDateOfBirthError] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
     firstName: "",
     lastName: "",
@@ -441,6 +442,31 @@ export default function QuestionnaireModal({
   };
 
   const handleSaveStep1 = async () => {
+    // Проверяем валидность даты рождения перед сохранением
+    if (formData.dateOfBirth) {
+      const birthDate = new Date(formData.dateOfBirth);
+      const today = new Date();
+      const ageInYears = (today.getTime() - birthDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+      
+      if (birthDate > today) {
+        setDateOfBirthError("Дата рождения не может быть в будущем");
+        showAlert({
+          message: "Дата рождения не может быть в будущем",
+          type: "error",
+        });
+        return;
+      }
+      
+      if (ageInYears > 100) {
+        setDateOfBirthError("Возраст не может превышать 100 лет");
+        showAlert({
+          message: "Возраст не может превышать 100 лет",
+          type: "error",
+        });
+        return;
+      }
+    }
+    
     setIsSaving(true);
     try {
       const response = await fetch("/api/profile", {
@@ -766,6 +792,17 @@ export default function QuestionnaireModal({
   };
 
   const canProceedToStep2 = () => {
+    // Проверяем валидность даты рождения
+    if (formData.dateOfBirth) {
+      const birthDate = new Date(formData.dateOfBirth);
+      const today = new Date();
+      const ageInYears = (today.getTime() - birthDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+      
+      if (birthDate > today || ageInYears > 100) {
+        return false;
+      }
+    }
+    
     return (
       formData.firstName &&
       formData.lastName &&
@@ -776,7 +813,8 @@ export default function QuestionnaireModal({
       formData.address &&
       formData.organizationId &&
       formData.workplace &&
-      formData.jobTitle
+      formData.jobTitle &&
+      !dateOfBirthError
     );
   };
 
@@ -1060,8 +1098,32 @@ export default function QuestionnaireModal({
                   </label>
                   <DateInput
                     value={formData.dateOfBirth}
-                    onChange={(value) => setFormData({ ...formData, dateOfBirth: value })}
-                    onBlur={() => handleFieldBlur("dateOfBirth", formData.dateOfBirth)}
+                    onChange={(value) => {
+                      setFormData({ ...formData, dateOfBirth: value });
+                      // Сбрасываем ошибку при изменении
+                      setDateOfBirthError(null);
+                    }}
+                    onBlur={() => {
+                      // Валидация будет выполнена в DateInput, но мы также проверяем здесь
+                      if (formData.dateOfBirth) {
+                        const birthDate = new Date(formData.dateOfBirth);
+                        const today = new Date();
+                        const ageInYears = (today.getTime() - birthDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+                        
+                        if (birthDate > today) {
+                          setDateOfBirthError("Дата рождения не может быть в будущем");
+                        } else if (ageInYears > 100) {
+                          setDateOfBirthError("Возраст не может превышать 100 лет");
+                        } else {
+                          setDateOfBirthError(null);
+                          handleFieldBlur("dateOfBirth", formData.dateOfBirth);
+                        }
+                      } else {
+                        handleFieldBlur("dateOfBirth", formData.dateOfBirth);
+                      }
+                    }}
+                    error={dateOfBirthError || undefined}
+                    maxAge={100}
                   />
                 </div>
                 <div>
