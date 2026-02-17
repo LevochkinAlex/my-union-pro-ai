@@ -7,6 +7,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getFileUrlWithCDN } from "@/lib/cdn";
 import NewsComments from "@/components/dashboard/news/NewsComments";
+import styles from "./NewsDetail.module.css";
 
 interface NewsPost {
   id: string;
@@ -133,6 +134,8 @@ export default function NewsDetailPage() {
 
       if (response.ok) {
         const data = await response.json();
+        const updated = data.poll; // API возвращает { success, poll: { options, totalVotes, userVote, ... } }
+        if (!updated) return;
         setNews(prev => {
           if (!prev) return null;
           return {
@@ -141,9 +144,10 @@ export default function NewsDetailPage() {
               poll.id === pollId
                 ? {
                     ...poll,
-                    options: data.options,
-                    totalVotes: data.totalVotes,
-                    userVote: optionId,
+                    options: updated.options ?? poll.options,
+                    totalVotes: updated.totalVotes ?? 0,
+                    userVote: updated.userVote ?? optionId,
+                    isClosed: updated.isClosed ?? poll.isClosed,
                   }
                 : poll
             ),
@@ -292,8 +296,7 @@ export default function NewsDetailPage() {
                         >
                           {hasVoted && (
                             <div
-                              className="absolute inset-0 bg-blue-100 dark:bg-blue-900/30 transition-all"
-                              style={{ width: `${percentage}%` }}
+                              className={`absolute inset-0 bg-blue-100 dark:bg-blue-900/30 transition-all ${styles[`pollFill${Math.round(percentage)}` as keyof typeof styles] ?? styles.pollFill0}`}
                             />
                           )}
                           <div className="relative px-4 py-2 flex items-center justify-between">

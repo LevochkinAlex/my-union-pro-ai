@@ -599,6 +599,7 @@ export default function SlackStyleChat({
     typingUsers,
     aiTyping,
     loadChats,
+    loadMessages,
     selectChat,
     openChatById,
     createOrOpenChat,
@@ -1096,8 +1097,8 @@ export default function SlackStyleChat({
                     }}
                     onImageClick={(url, name) => setSelectedImage({ url, name })}
                     onPollVote={async (pollId, optionId) => {
-                      // Обновляем сообщения после голосования
-                      await loadChats();
+                      // Обновляем сообщения текущего чата, чтобы подтянуть новые данные опроса
+                      if (selectedChat?.id) await loadMessages(selectedChat.id);
                     }}
                     onQuestionClick={(question) => {
                       // Отправляем вопрос как сообщение
