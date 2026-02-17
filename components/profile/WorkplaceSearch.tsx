@@ -3,6 +3,23 @@
 import { useState, useEffect, useRef } from "react";
 import { CompanySuggestion } from "@/lib/dadata";
 
+// Хук для определения размера экрана
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    if (media.matches !== matches) {
+      setMatches(media.matches);
+    }
+    const listener = () => setMatches(media.matches);
+    media.addEventListener('change', listener);
+    return () => media.removeEventListener('change', listener);
+  }, [matches, query]);
+
+  return matches;
+}
+
 interface WorkplaceSearchProps {
   value?: {
     name: string;
@@ -37,6 +54,8 @@ export default function WorkplaceSearch({
   const [isFocused, setIsFocused] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isSmallScreen = useMediaQuery('(max-width: 1024px)');
+  const placeholder = isSmallScreen ? "Название компании или ИНН" : "Введите название компании или ИНН";
 
   // Синхронизируем query с value при изменении value извне (но не открываем dropdown)
   useEffect(() => {
@@ -179,13 +198,13 @@ export default function WorkplaceSearch({
   };
 
   return (
-    <div ref={wrapperRef} className="relative">
+    <div ref={wrapperRef} className="relative min-w-0">
       {!hideLabel && (
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           Место работы {required && <span className="text-red-500">*</span>}
         </label>
       )}
-      <div className="relative">
+      <div className="relative min-w-0">
         <input
           ref={inputRef}
           type="text"
@@ -209,7 +228,8 @@ export default function WorkplaceSearch({
             }, 200);
           }}
           placeholder="Введите название компании или ИНН"
-          className={`block w-full rounded-lg border ${
+          title={query ? query : "Введите название компании или ИНН"}
+          className={`block w-full min-w-0 rounded-lg border ${
             error ? "border-red-500" : "border-gray-300"
           } bg-white px-3 py-2.5 pr-10 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white`}
           required={required}
