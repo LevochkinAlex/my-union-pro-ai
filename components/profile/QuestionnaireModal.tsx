@@ -856,7 +856,7 @@ export default function QuestionnaireModal({
 
               {/* Место работы и Должность — первая строка */}
               <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
-                <div>
+                <div className="min-w-0">
                   <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Место работы <span className="text-red-500">*</span>
                   </label>
@@ -895,7 +895,7 @@ export default function QuestionnaireModal({
                     Поиск по названию или укажите ИНН организации
                   </p>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Должность <span className="text-red-500">*</span>
                   </label>

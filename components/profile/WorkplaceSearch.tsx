@@ -179,13 +179,13 @@ export default function WorkplaceSearch({
   };
 
   return (
-    <div ref={wrapperRef} className="relative">
+    <div ref={wrapperRef} className="relative min-w-0">
       {!hideLabel && (
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           Место работы {required && <span className="text-red-500">*</span>}
         </label>
       )}
-      <div className="relative">
+      <div className="relative min-w-0">
         <input
           ref={inputRef}
           type="text"
@@ -209,7 +209,8 @@ export default function WorkplaceSearch({
             }, 200);
           }}
           placeholder="Введите название компании или ИНН"
-          className={`block w-full rounded-lg border ${
+          title={query || "Введите название компании или ИНН"}
+          className={`block w-full min-w-0 rounded-lg border ${
             error ? "border-red-500" : "border-gray-300"
           } bg-white px-3 py-2.5 pr-10 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white`}
           required={required}
