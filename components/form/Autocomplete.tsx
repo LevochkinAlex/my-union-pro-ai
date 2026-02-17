@@ -6,6 +6,7 @@ interface AutocompleteProps {
   value: string;
   onChange: (value: string) => void;
   onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
+  onSelect?: (value: string) => void; // Вызывается при выборе опции из списка
   options: string[];
   placeholder?: string;
   className?: string;
@@ -16,6 +17,7 @@ export default function Autocomplete({
   value,
   onChange,
   onBlur,
+  onSelect,
   options,
   placeholder = "",
   className = "",
@@ -109,6 +111,8 @@ export default function Autocomplete({
 
   const handleOptionClick = (option: string) => {
     onChange(option);
+    // Вызываем onSelect сразу при выборе опции, чтобы родитель мог сохранить значение
+    onSelect?.(option);
     setJustSelected(true); // Устанавливаем флаг что значение выбрано
     setUserTyping(false); // Сбрасываем флаг ввода
     setIsOpen(false);
@@ -135,7 +139,13 @@ export default function Autocomplete({
       case "Enter":
         e.preventDefault();
         if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
-          handleOptionClick(filteredOptions[highlightedIndex]);
+          const selectedOption = filteredOptions[highlightedIndex];
+          onChange(selectedOption);
+          onSelect?.(selectedOption);
+          setJustSelected(true);
+          setUserTyping(false);
+          setIsOpen(false);
+          inputRef.current?.blur();
         }
         break;
       case "Escape":

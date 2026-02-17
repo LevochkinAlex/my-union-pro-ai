@@ -413,14 +413,24 @@ export default function QuestionnaireModal({
       });
 
       if (!response.ok) {
-        throw new Error("Ошибка при загрузке фото");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Ошибка при загрузке фото");
       }
 
       const data = await response.json();
-      setFormData({ ...formData, avatarUrl: data.avatarUrl });
+      
+      // Обновляем состояние с новым URL аватара
+      if (data.avatarUrl) {
+        setFormData((prev) => ({ ...prev, avatarUrl: data.avatarUrl }));
+      }
+      
       showAlert({ message: "Фото успешно загружено", type: "success" });
-      // Перезагружаем данные после загрузки аватара
-      await loadData();
+      
+      // Перезагружаем данные после загрузки аватара с небольшой задержкой,
+      // чтобы сервер успел обработать файл
+      setTimeout(async () => {
+        await loadData();
+      }, 500);
     } catch (error) {
       showAlert({
         message: error instanceof Error ? error.message : "Ошибка при загрузке фото",
@@ -855,7 +865,7 @@ export default function QuestionnaireModal({
               </h3>
 
               {/* Место работы и Должность — первая строка */}
-              <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2">
                 <div className="min-w-0">
                   <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Место работы <span className="text-red-500">*</span>
@@ -902,6 +912,11 @@ export default function QuestionnaireModal({
                   <Autocomplete
                     value={formData.jobTitle}
                     onChange={(value) => setFormData({ ...formData, jobTitle: value })}
+                    onSelect={(value) => {
+                      // Сохраняем должность сразу при выборе из списка
+                      setFormData({ ...formData, jobTitle: value });
+                      handleFieldBlur("jobTitle", value);
+                    }}
                     onBlur={() => handleFieldBlur("jobTitle", formData.jobTitle)}
                     options={jobTitles}
                     placeholder="Начните вводить должность..."
