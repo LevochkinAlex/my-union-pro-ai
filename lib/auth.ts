@@ -91,10 +91,10 @@ export const authOptions: NextAuthOptions = {
           }),
         ]
       : []),
-    // Авторизация по временному токену (для соцсетей: Telegram, VK, Google)
+    // Авторизация по временному токену (для MAX, Telegram и др.)
     CredentialsProvider({
-      id: "credentials",
-      name: "Credentials",
+      id: "login-token",
+      name: "LoginToken",
       credentials: {
         loginToken: { label: "Login Token", type: "text" },
       },

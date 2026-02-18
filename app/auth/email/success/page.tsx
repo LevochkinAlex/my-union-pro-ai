@@ -32,7 +32,7 @@ function EmailSuccessContent() {
       try {
         console.log("[Email Success] Начало авторизации с токеном:", token?.substring(0, 10) + "...");
         
-        const result = await signIn("credentials", {
+        const result = await signIn("login-token", {
           loginToken: token,
           redirect: false,
         });

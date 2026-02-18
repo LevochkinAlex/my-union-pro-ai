@@ -22,7 +22,7 @@ function MaxSuccessContent() {
 
     const authenticate = async () => {
       try {
-        const result = await signIn("credentials", {
+        const result = await signIn("login-token", {
           loginToken: token,
           redirect: false,
         });

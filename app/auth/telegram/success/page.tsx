@@ -36,7 +36,7 @@ function TelegramSuccessContent() {
       let result;
       try {
         console.log("[Telegram Success] Попытка авторизации по токену");
-        result = await signIn("credentials", {
+        result = await signIn("login-token", {
           loginToken: token,
           redirect: false,
         });

@@ -81,12 +81,12 @@ function validateInitDataSignature(initData: string): boolean {
 }
 
 /**
- * Проверяет, что auth_date не старше 24 часов.
+ * Проверяет, что auth_date (Unix timestamp в секундах) не старше 24 часов.
  */
-function isAuthDateFresh(authDateMs: number): boolean {
-  const now = Date.now();
-  const maxAge = 24 * 60 * 60 * 1000; // 24 часа
-  return now - authDateMs < maxAge;
+function isAuthDateFresh(authDateSec: number): boolean {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const maxAgeSec = 24 * 60 * 60;
+  return nowSec - authDateSec < maxAgeSec;
 }
 
 /**
