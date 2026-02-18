@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPPOHead } from "@/lib/ppo-head-utils";
+import { getPPOHead, isMemberOfOrganization } from "@/lib/ppo-head-utils";
 
 /**
  * GET /api/ppo-head/members/[id]
@@ -121,6 +121,82 @@ export async function GET(
     return NextResponse.json(
       {
         error: "Ошибка при получении данных члена профсоюза",
+        details: process.env.NODE_ENV === "development" ? error.message : undefined,
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * PATCH /api/ppo-head/members/[id]
+ * Редактирование данных члена (например дата вступления). Доступно председателю ППО.
+ * При изменении даты вступления у пользователя ставится флаг необходимости перегенерации заявлений.
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } | Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    const chairman = await getPPOHead(session.user.id);
+    if (!chairman || !chairman.organizationId) {
+      return NextResponse.json(
+        { error: "Доступ запрещен или организация не назначена" },
+        { status: 403 }
+      );
+    }
+
+    const resolvedParams = await Promise.resolve(params);
+    const memberId = resolvedParams.id;
+
+    const belongs = await isMemberOfOrganization(memberId, chairman.organizationId);
+    if (!belongs) {
+      return NextResponse.json(
+        { error: "Член профсоюза не принадлежит вашей организации" },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const membershipJoinedAtRaw = body.membershipJoinedAt;
+
+    if (membershipJoinedAtRaw === undefined || membershipJoinedAtRaw === null) {
+      return NextResponse.json(
+        { error: "Укажите membershipJoinedAt (дата вступления)" },
+        { status: 400 }
+      );
+    }
+
+    const parsed = new Date(membershipJoinedAtRaw);
+    if (isNaN(parsed.getTime()) || parsed > new Date()) {
+      return NextResponse.json(
+        { error: "Некорректная дата вступления" },
+        { status: 400 }
+      );
+    }
+
+    await prisma.user.update({
+      where: { id: memberId },
+      data: {
+        membershipJoinedAt: parsed,
+        profileChangedAfterDocuments: true,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Дата вступления обновлена. Потребуется перегенерировать заявления участника.",
+    });
+  } catch (error: any) {
+    console.error("[ppo-head/members/[id]] PATCH error:", error);
+    return NextResponse.json(
+      {
+        error: "Ошибка при обновлении данных члена",
         details: process.env.NODE_ENV === "development" ? error.message : undefined,
       },
       { status: 500 }

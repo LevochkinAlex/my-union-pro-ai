@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { alertSuccess, alertError } from "@/lib/alert";
+import { Modal } from "@/components/ui/modal";
 
 interface Document {
   id: string;
@@ -163,6 +164,17 @@ export default function MembersPage() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // Approve modal state
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [approveTargetIds, setApproveTargetIds] = useState<string[]>([]);
+  const [approveDate, setApproveDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [isApproving, setIsApproving] = useState(false);
+
+  // Edit membership joined date modal (chairman/profkom)
+  const [showEditJoinedDateModal, setShowEditJoinedDateModal] = useState(false);
+  const [editJoinedDateValue, setEditJoinedDateValue] = useState("");
+  const [isSavingJoinedDate, setIsSavingJoinedDate] = useState(false);
+
   // Detail modal state
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [memberDetails, setMemberDetails] = useState<MemberDetails | null>(null);
@@ -220,22 +232,52 @@ export default function MembersPage() {
     }
   };
 
-  const handleApprove = async (memberId: string) => {
-    try {
-      const response = await fetch(`/api/ppo-head/members/${memberId}/approve`, {
-        method: "POST",
-      });
+  const openApproveModal = (memberIds: string[]) => {
+    setApproveTargetIds(memberIds);
+    setApproveDate(new Date().toISOString().split("T")[0]);
+    setShowApproveModal(true);
+  };
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Ошибка при одобрении");
+  const handleApproveConfirm = async () => {
+    if (approveTargetIds.length === 0 || !approveDate) return;
+    setIsApproving(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const id of approveTargetIds) {
+      try {
+        const response = await fetch(`/api/ppo-head/members/${id}/approve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ membershipJoinedAt: approveDate }),
+        });
+        if (response.ok) {
+          successCount++;
+        } else {
+          const err = await response.json().catch(() => ({}));
+          console.error("Approve error for", id, err);
+          errorCount++;
+        }
+      } catch {
+        errorCount++;
       }
+    }
 
-      alertSuccess("Заявка одобрена! Пользователю отправлено поздравление.");
+    setIsApproving(false);
+    setShowApproveModal(false);
+    setApproveTargetIds([]);
+    setSelectedIds(new Set());
+
+    if (successCount > 0) {
+      alertSuccess(
+        approveTargetIds.length === 1
+          ? "Заявка одобрена! Пользователю отправлено поздравление."
+          : `Одобрено ${successCount} членов`
+      );
       await loadMembers();
-    } catch (err) {
-      console.error("Error approving member:", err);
-      alertError(err instanceof Error ? err.message : "Не удалось одобрить заявку");
+    }
+    if (errorCount > 0) {
+      alertError(`Ошибка при одобрении ${errorCount} членов`);
     }
   };
 
@@ -467,37 +509,38 @@ export default function MembersPage() {
   };
 
   // Bulk одобрение
-  const handleBulkApprove = async () => {
+  const handleBulkApprove = () => {
     if (selectedIds.size === 0) return;
-    
-    setIsBulkProcessing(true);
-    let successCount = 0;
-    let errorCount = 0;
-    
-    for (const id of selectedIds) {
-      try {
-        const response = await fetch(`/api/ppo-head/members/${id}/approve`, {
-          method: "POST",
-        });
-        if (response.ok) {
-          successCount++;
-        } else {
-          errorCount++;
-        }
-      } catch {
-        errorCount++;
-      }
+    openApproveModal(Array.from(selectedIds));
+  };
+
+  const openEditJoinedDateModal = () => {
+    if (!memberDetails?.membershipJoinedAt) {
+      setEditJoinedDateValue(new Date().toISOString().split("T")[0]);
+    } else {
+      setEditJoinedDateValue(new Date(memberDetails.membershipJoinedAt).toISOString().split("T")[0]);
     }
-    
-    setIsBulkProcessing(false);
-    setSelectedIds(new Set());
-    
-    if (successCount > 0) {
-      alertSuccess(`Одобрено ${successCount} членов`);
-      loadMembers();
-    }
-    if (errorCount > 0) {
-      alertError(`Ошибка при одобрении ${errorCount} членов`);
+    setShowEditJoinedDateModal(true);
+  };
+
+  const handleSaveJoinedDate = async () => {
+    if (!memberDetails?.id || !editJoinedDateValue) return;
+    setIsSavingJoinedDate(true);
+    try {
+      const res = await fetch(`/api/ppo-head/members/${memberDetails.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ membershipJoinedAt: editJoinedDateValue }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Ошибка сохранения");
+      alertSuccess("Дата вступления обновлена. Потребуется перегенерировать заявления участника.");
+      setShowEditJoinedDateModal(false);
+      await loadMemberDetails(memberDetails.id);
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Не удалось сохранить дату");
+    } finally {
+      setIsSavingJoinedDate(false);
     }
   };
 
@@ -828,7 +871,7 @@ export default function MembersPage() {
                         {activeTab === "validation" && (
                           <>
                             <button
-                              onClick={() => handleApprove(member.id)}
+                              onClick={() => openApproveModal([member.id])}
                               className="rounded bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700"
                             >
                               ✓
@@ -862,11 +905,124 @@ export default function MembersPage() {
         </div>
       )}
 
+      {/* Модалка одобрения — выбор даты вступления */}
+      <Modal
+        isOpen={showApproveModal}
+        onClose={() => {
+          setShowApproveModal(false);
+          setApproveTargetIds([]);
+        }}
+        className="max-w-md"
+      >
+        <div className="p-6 w-full">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            Одобрить {approveTargetIds.length > 1 ? `(${approveTargetIds.length})` : "заявку"}
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Укажите дату зачисления в члены ППО. Если участник вступил ранее (оффлайн), выберите фактическую дату.
+          </p>
+          <div className="mb-4">
+            <label htmlFor="approve-date" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Дата вступления <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="approve-date"
+              type="date"
+              value={approveDate}
+              onChange={(e) => setApproveDate(e.target.value)}
+              max={new Date().toISOString().split("T")[0]}
+              required
+              className="block w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 shadow-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleApproveConfirm}
+              disabled={isApproving || !approveDate}
+              className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-white font-medium hover:bg-green-700 disabled:opacity-50"
+            >
+              {isApproving ? "Одобрение..." : "Одобрить"}
+            </button>
+            <button
+              onClick={() => {
+                setShowApproveModal(false);
+                setApproveTargetIds([]);
+              }}
+              className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Модалка редактирования даты вступления (председатель / член профкома) */}
+      <Modal
+        isOpen={showEditJoinedDateModal && !!memberDetails}
+        onClose={() => setShowEditJoinedDateModal(false)}
+        className="max-w-md"
+      >
+        {memberDetails && (
+          <div className="p-6">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+              Редактировать дату вступления
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Участник:{" "}
+              <strong>
+                {[memberDetails.lastName, memberDetails.firstName, memberDetails.middleName]
+                  .filter(Boolean)
+                  .join(" ")}
+              </strong>
+            </p>
+            <div className="mb-4">
+              <label htmlFor="edit-joined-date" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Дата вступления
+              </label>
+              <input
+                id="edit-joined-date"
+                type="date"
+                value={editJoinedDateValue}
+                onChange={(e) => setEditJoinedDateValue(e.target.value)}
+                max={new Date().toISOString().split("T")[0]}
+                className="block w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 shadow-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+              После сохранения потребуется перегенерировать заявления участника (дата вступления в них изменится).
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveJoinedDate}
+                disabled={isSavingJoinedDate || !editJoinedDateValue}
+                className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-white font-medium hover:bg-green-700 disabled:opacity-50"
+              >
+                {isSavingJoinedDate ? "Сохранение..." : "Сохранить"}
+              </button>
+              <button
+                onClick={() => setShowEditJoinedDateModal(false)}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* Модалка отклонения */}
-      {showRejectModal && selectedMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800 w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Отклонить заявку</h2>
+      <Modal
+        isOpen={showRejectModal && !!selectedMember}
+        onClose={() => {
+          setShowRejectModal(false);
+          setSelectedMember(null);
+          setRejectionReason("");
+        }}
+        className="max-w-md"
+      >
+        {selectedMember && (
+          <div className="p-6">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Отклонить заявку</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               Заявка от:{" "}
               <strong>
@@ -881,7 +1037,7 @@ export default function MembersPage() {
             <textarea
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 mb-4"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white mb-4"
               rows={4}
               placeholder="Например: В документах обнаружены ошибки, требуется корректировка..."
             />
@@ -899,14 +1055,14 @@ export default function MembersPage() {
                   setSelectedMember(null);
                   setRejectionReason("");
                 }}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
               >
                 Отмена
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* Модалка с детальной информацией о члене */}
       {showDetailModal && (
@@ -1024,8 +1180,8 @@ export default function MembersPage() {
                         <div className="flex flex-col gap-2">
                           <button
                             onClick={() => {
-                              handleApprove(memberDetails.id);
                               setShowDetailModal(false);
+                              openApproveModal([memberDetails.id]);
                             }}
                             className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
                           >
@@ -1083,7 +1239,23 @@ export default function MembersPage() {
                           <InfoField label="Дата рождения" value={memberDetails.dateOfBirth ? new Date(memberDetails.dateOfBirth).toLocaleDateString("ru-RU") : null} />
                           <InfoField label="Адрес" value={memberDetails.address} className="md:col-span-2" />
                           <InfoField label="Город для скидок" value={memberDetails.preferredDiscountCity} />
-                          <InfoField label="Дата вступления" value={memberDetails.membershipJoinedAt ? new Date(memberDetails.membershipJoinedAt).toLocaleDateString("ru-RU") : null} />
+                          <div className="space-y-1">
+                            <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">Дата вступления</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-900 dark:text-white">
+                                {memberDetails.membershipJoinedAt ? new Date(memberDetails.membershipJoinedAt).toLocaleDateString("ru-RU") : "—"}
+                              </span>
+                              {memberDetails.membershipStatus === "APPROVED" && (
+                                <button
+                                  type="button"
+                                  onClick={openEditJoinedDateModal}
+                                  className="rounded bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                >
+                                  Изменить
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
                         {(memberDetails.aboutMe || memberDetails.hobbies) && (
                           <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
@@ -1243,7 +1415,23 @@ export default function MembersPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <InfoField label="Статус членства" value={MEMBERSHIP_STATUS_MAP[memberDetails.membershipStatus] || memberDetails.membershipStatus} />
                           {memberDetails.unionCardNumber && <InfoField label="Номер профсоюзного билета" value={memberDetails.unionCardNumber} />}
-                          {memberDetails.membershipJoinedAt && <InfoField label="Дата вступления" value={new Date(memberDetails.membershipJoinedAt).toLocaleDateString("ru-RU")} />}
+                          <div className="space-y-1">
+                            <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">Дата вступления</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-900 dark:text-white">
+                                {memberDetails.membershipJoinedAt ? new Date(memberDetails.membershipJoinedAt).toLocaleDateString("ru-RU") : "—"}
+                              </span>
+                              {memberDetails.membershipStatus === "APPROVED" && (
+                                <button
+                                  type="button"
+                                  onClick={openEditJoinedDateModal}
+                                  className="rounded bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                >
+                                  Изменить
+                                </button>
+                              )}
+                            </div>
+                          </div>
                           {memberDetails.unionMembershipStatus && <InfoField label="Статус в профсоюзе" value={UNION_MEMBERSHIP_STATUS_MAP[memberDetails.unionMembershipStatus] || memberDetails.unionMembershipStatus} />}
                           {memberDetails.organization?.name && <InfoField label="Организация" value={memberDetails.organization.name} />}
                           {memberDetails.bestBenefitsUserId && <InfoField label="Best Benefits ID" value={memberDetails.bestBenefitsUserId} />}

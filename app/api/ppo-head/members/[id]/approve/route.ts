@@ -34,6 +34,19 @@ export async function POST(
 
     const { id } = await params;
 
+    let membershipJoinedAt: Date = new Date();
+    try {
+      const body = await request.json().catch(() => ({}));
+      if (body.membershipJoinedAt) {
+        const parsed = new Date(body.membershipJoinedAt);
+        if (!isNaN(parsed.getTime()) && parsed <= new Date()) {
+          membershipJoinedAt = parsed;
+        }
+      }
+    } catch {
+      // body may be empty — keep default (today)
+    }
+
     // Находим члена профсоюза
     const member = await prisma.user.findUnique({
       where: { id },
@@ -68,7 +81,7 @@ export async function POST(
       data: {
         membershipStatus: "APPROVED",
         unionMembershipStatus: "ACCEPTED", // Принят на учет
-        membershipJoinedAt: new Date(),
+        membershipJoinedAt,
       },
     });
 

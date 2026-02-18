@@ -187,3 +187,53 @@ export async function GET() {
   }
 }
 
+/**
+ * PATCH /api/profile/membership
+ * Обновление своей даты вступления в профсоюз (для текущего пользователя).
+ * После изменения потребуется перегенерировать заявления.
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const raw = body.membershipJoinedAt;
+    if (raw === undefined || raw === null) {
+      return NextResponse.json(
+        { error: "Укажите дату вступления (membershipJoinedAt)" },
+        { status: 400 }
+      );
+    }
+
+    const parsed = new Date(raw);
+    if (isNaN(parsed.getTime()) || parsed > new Date()) {
+      return NextResponse.json(
+        { error: "Некорректная дата вступления" },
+        { status: 400 }
+      );
+    }
+
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: {
+        membershipJoinedAt: parsed,
+        profileChangedAfterDocuments: true,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Дата вступления обновлена. Потребуется перегенерировать заявления.",
+    });
+  } catch (error) {
+    console.error("[profile/membership] PATCH error:", error);
+    return NextResponse.json(
+      { error: "Не удалось обновить дату вступления" },
+      { status: 500 }
+    );
+  }
+}
+

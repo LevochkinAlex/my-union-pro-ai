@@ -104,9 +104,10 @@ model User {
   telegramChatId   String? @unique // Chat ID пользователя в Telegram для отправки PIN-кодов
   telegramUsername String? // Username пользователя в Telegram (для справки)
 
-  // MAX Messenger интеграция для 2FA
+  // MAX Messenger интеграция для 2FA и мини-приложения
   maxChatId   String? @unique // Chat ID пользователя в MAX для отправки PIN-кодов
   maxUsername String? // Username пользователя в MAX (для справки)
+  maxUserId   String? @unique // User ID из MAX WebApp initData — для входа через мини-приложение
 
   // Яндекс ID интеграция
   yandexId String? @unique // Yandex ID пользователя для связи аккаунтов

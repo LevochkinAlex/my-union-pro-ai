@@ -50,9 +50,10 @@ export const Modal: React.FC<ModalProps> = ({
 
   if (!isOpen) return null;
 
+  const hasCustomMaxWidth = className?.includes("max-w-");
   const contentClasses = isFullscreen
     ? "w-full h-full"
-    : "relative flex min-h-0 flex-col w-full max-w-[calc(100vw-1rem)] sm:max-w-[calc(100vw-3rem)] rounded-3xl bg-white dark:bg-gray-900 shadow-xl max-h-[calc(100vh-2rem)] sm:max-h-[85vh] overflow-hidden";
+    : `relative flex min-h-0 flex-col w-full rounded-3xl bg-white dark:bg-gray-900 shadow-xl max-h-[calc(100vh-2rem)] sm:max-h-[85vh] overflow-hidden ${!hasCustomMaxWidth ? "max-w-[calc(100vw-1rem)] sm:max-w-[calc(100vw-3rem)]" : ""}`;
 
   return (
     <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-99999 p-2 sm:p-4 md:p-6">
@@ -73,15 +74,9 @@ export const Modal: React.FC<ModalProps> = ({
             onClick={onClose}
             aria-label="Закрыть"
             title="Закрыть"
-            className="absolute right-3 top-3 z-999 flex h-9.5 w-9.5 items-center justify-center rounded-full bg-gray-200 text-gray-600 transition-colors hover:bg-gray-300 hover:text-gray-800 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white sm:right-6 sm:top-6 sm:h-11 sm:w-11"
+            className="absolute right-2 top-2 z-10 flex flex-wrap h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-gray-600 transition-colors hover:bg-gray-300 hover:text-gray-800 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:hover:text-white sm:right-3 sm:top-3 sm:h-9 sm:w-9"
           >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
+            <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24" fill="none" aria-hidden>
               <path
                 fillRule="evenodd"
                 clipRule="evenodd"
@@ -95,7 +90,7 @@ export const Modal: React.FC<ModalProps> = ({
           className={
             isFullscreen
               ? ""
-              : `flex min-h-0 flex-1 flex-col overflow-hidden ${showCloseButton ? "pr-14 sm:pr-16" : ""}`
+              : "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
           }
         >
           {children}

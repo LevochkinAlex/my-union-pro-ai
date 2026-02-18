@@ -139,13 +139,15 @@ export async function PATCH(
       }
     }
 
-    // Лог действия
+    // Лог действия (описание с русским названием статуса для отображения в чате)
+    const statusLabelForLog =
+      status === "IN_PROGRESS" ? "В работе" : status === "RESOLVED" ? "Решено" : status === "PENDING" ? "Ожидание" : status === "REJECTED" ? "Отклонено" : status === "CLOSED" ? "Закрыто" : status;
     await prisma.ticketActionLog.create({
       data: {
         ticketId: ticket.id,
         userId: session.user.id,
         actionType: "status_changed",
-        description: `Статус изменён на ${status}${message ? `. Сообщение: ${message.substring(0, 200)}` : ""}`,
+        description: `Статус изменён на «${statusLabelForLog}»${message ? `. Сообщение: ${message.substring(0, 200)}` : ""}`,
         oldValue: ticket.status,
         newValue: status,
       },

@@ -12,6 +12,7 @@ import EmailValidationField from "@/components/form/EmailValidationField";
 import WorkplaceSearch from "@/components/profile/WorkplaceSearch";
 import { EDUCATION_LEVELS } from "@/lib/constants/education";
 import { capitalizeName } from "@/lib/utils/nameFormatting";
+import { Modal } from "@/components/ui/modal";
 
 // Маппинг между enum значениями в БД и человекочитаемыми значениями
 const MARITAL_STATUS_MAP = {
@@ -198,6 +199,9 @@ export default function ProfilePage() {
     }>;
   } | null>(null);
   const [loadingMembership, setLoadingMembership] = useState(false);
+  const [showEditJoinedDateModal, setShowEditJoinedDateModal] = useState(false);
+  const [editJoinedDateValue, setEditJoinedDateValue] = useState("");
+  const [isSavingJoinedDate, setIsSavingJoinedDate] = useState(false);
   const [ppoOptionsForWorkplace, setPpoOptionsForWorkplace] = useState<Array<{ id: string; name: string }>>([]);
   const [ppoAutoFilled, setPpoAutoFilled] = useState(false);
   const [showManualPpo, setShowManualPpo] = useState(false);
@@ -747,6 +751,36 @@ export default function ProfilePage() {
     }
   }, [activeTab]);
 
+  const openEditJoinedDateModal = () => {
+    if (membershipData?.membershipJoinedAt) {
+      setEditJoinedDateValue(new Date(membershipData.membershipJoinedAt).toISOString().split("T")[0]);
+    } else {
+      setEditJoinedDateValue(new Date().toISOString().split("T")[0]);
+    }
+    setShowEditJoinedDateModal(true);
+  };
+
+  const handleSaveJoinedDate = async () => {
+    if (!editJoinedDateValue) return;
+    setIsSavingJoinedDate(true);
+    try {
+      const res = await fetch("/api/profile/membership", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ membershipJoinedAt: editJoinedDateValue }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Ошибка сохранения");
+      setMessage({ type: "success", text: "Дата вступления обновлена. Потребуется перегенерировать заявления." });
+      setShowEditJoinedDateModal(false);
+      const refetch = await fetch("/api/profile/membership");
+      if (refetch.ok) setMembershipData(await refetch.json());
+    } catch (err) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "Не удалось сохранить дату" });
+    } finally {
+      setIsSavingJoinedDate(false);
+    }
+  };
 
   useEffect(() => {
     if (message) {
@@ -2252,6 +2286,13 @@ export default function ProfilePage() {
                         с {new Date(membershipData.membershipJoinedAt).toLocaleDateString("ru-RU")}
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={openEditJoinedDateModal}
+                      className="rounded border border-gray-300 bg-white px-2 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                    >
+                      Изменить дату
+                    </button>
                   </>
                 ) : membershipData.membershipStatus === "REMOVED" ? (
                   <span className="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-800 dark:bg-red-900/30 dark:text-red-200">
@@ -2264,6 +2305,52 @@ export default function ProfilePage() {
                 )}
               </div>
             </div>
+
+            {/* Модалка редактирования своей даты вступления */}
+            <Modal
+              isOpen={showEditJoinedDateModal}
+              onClose={() => setShowEditJoinedDateModal(false)}
+              className="max-w-md"
+            >
+              <div className="p-6">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                  Редактировать дату вступления
+                </h2>
+                <div className="mb-4">
+                  <label htmlFor="profile-edit-joined-date" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Дата вступления
+                  </label>
+                  <input
+                    id="profile-edit-joined-date"
+                    type="date"
+                    value={editJoinedDateValue}
+                    onChange={(e) => setEditJoinedDateValue(e.target.value)}
+                    max={new Date().toISOString().split("T")[0]}
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 shadow-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                  После сохранения потребуется перегенерировать заявления (дата вступления в них изменится).
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveJoinedDate}
+                    disabled={isSavingJoinedDate || !editJoinedDateValue}
+                    className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-white font-medium hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {isSavingJoinedDate ? "Сохранение..." : "Сохранить"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowEditJoinedDateModal(false)}
+                    className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                  >
+                    Отмена
+                  </button>
+                </div>
+              </div>
+            </Modal>
 
             {/* Текущая организация */}
             {membershipData.currentOrganization && (
