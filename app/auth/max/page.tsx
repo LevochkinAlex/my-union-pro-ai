@@ -12,23 +12,37 @@ declare global {
   }
 }
 
-/** QR-код со ссылкой на эту страницу — для сканирования с телефона и открытия в MAX */
+/**
+ * QR-код для входа через MAX с десктопа.
+ * Если задан NEXT_PUBLIC_MAX_BOT_USERNAME — в QR диплинк max.ru/BotName?startapp (откроет MAX и мини-приложение).
+ * Иначе — прямая ссылка на /auth/max; тогда важно открыть её именно в приложении MAX, а не в браузере.
+ */
+const MAX_BOT_USERNAME = typeof process.env.NEXT_PUBLIC_MAX_BOT_USERNAME === "string"
+  ? process.env.NEXT_PUBLIC_MAX_BOT_USERNAME.trim()
+  : "";
+
 function AuthMaxQR() {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   useEffect(() => {
-    const url =
-      typeof window !== "undefined"
-        ? `${window.location.origin}/auth/max`
-        : "https://myunion.pro/auth/max";
+    const url = MAX_BOT_USERNAME
+      ? `https://max.ru/${MAX_BOT_USERNAME}?startapp`
+      : (typeof window !== "undefined"
+          ? `${window.location.origin}/auth/max`
+          : "https://myunion.pro/auth/max");
     QRCode.toDataURL(url, { width: 220, margin: 2 }).then(setDataUrl).catch(() => {});
   }, []);
   if (!dataUrl) return null;
   return (
     <div className="mb-6 flex flex-col items-center">
       <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-        Отсканируйте камерой телефона и откройте ссылку в MAX
+        Отсканируйте камерой телефона. Ссылка должна открыться в приложении MAX — тогда войдёте автоматически.
       </p>
       <img src={dataUrl} alt="QR-код для входа через MAX" className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white p-2" width={220} height={220} />
+      {!MAX_BOT_USERNAME && (
+        <p className="mt-3 max-w-xs text-xs text-amber-600 dark:text-amber-400">
+          Если открылось в браузере — авторизация не сработает. Откройте приложение MAX и нажмите кнопку под чатом с ботом МойСоюз.
+        </p>
+      )}
     </div>
   );
 }
