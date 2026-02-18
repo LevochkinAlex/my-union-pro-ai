@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import Script from "next/script";
 import QRCode from "qrcode";
+import { getSession } from "next-auth/react";
 
 declare global {
   interface Window {
@@ -153,6 +154,15 @@ export default function AuthMaxPage() {
       startPolling();
     }
   }, [startPolling]);
+
+  // Если уже залогинен — сразу в личный кабинет (редирект обратно в мини-приложении)
+  useEffect(() => {
+    getSession().then((session) => {
+      if (session?.user) {
+        window.location.replace("/dashboard");
+      }
+    });
+  }, []);
 
   if (status === "no_webapp") {
     const openInMaxUrl = MAX_BOT_USERNAME

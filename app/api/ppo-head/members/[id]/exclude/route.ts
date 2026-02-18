@@ -76,11 +76,12 @@ export async function POST(
       // Если тело запроса пустое, продолжаем без причины
     }
 
-    // Обновляем статус на "EXCLUDED"
+    // Обновляем статус на "EXCLUDED" и сбрасываем все связанные поля
     await prisma.user.update({
       where: { id: memberId },
       data: {
         membershipStatus: "EXCLUDED",
+        unionMembershipStatus: "REMOVED",
         membershipExcludedAt: new Date(),
         membershipExclusionReason: reason || null,
       },

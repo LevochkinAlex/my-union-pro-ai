@@ -9,6 +9,7 @@ export type MembershipAccessStatus =
   | "pending"       // Ожидает проверки/одобрения
   | "incomplete"    // Профиль не заполнен
   | "rejected"      // Отклонён
+  | "excluded"      // Исключён из профсоюза
   | "subscription_blocked" // Доступ закрыт по лимиту подписки организации
   | "unauthenticated";
 
@@ -102,8 +103,12 @@ export function useMembershipAccess(): MembershipAccessResult {
       return "subscription_blocked";
     }
 
+    // Исключённые из профсоюза — блокируем до проверки ACCEPTED
+    if (membershipStatus === "EXCLUDED" || unionMembershipStatus === "REMOVED") {
+      return "excluded";
+    }
+
     // Полный доступ имеют только одобренные члены и привилегированные роли.
-    // DOCUMENTS_PENDING = документы отправлены на проверку, но председатель ещё НЕ одобрил — полного доступа нет.
     if (
       membershipStatus === "APPROVED" ||
       unionMembershipStatus === "ACCEPTED"
@@ -120,7 +125,7 @@ export function useMembershipAccess(): MembershipAccessResult {
     }
 
     // PENDING_VERIFICATION - ещё не проверен, должен видеть заглушку
-    // Все остальные статусы (SUSPENDED, EXCLUDED) - тоже не имеют доступа
+    // Все остальные статусы (SUSPENDED) - тоже не имеют доступа
     return "pending";
   };
 
@@ -136,6 +141,8 @@ export function useMembershipAccess(): MembershipAccessResult {
         return "Заполните анкету и подайте заявку на вступление в профсоюз.";
       case "rejected":
         return "Ваша заявка была отклонена. Свяжитесь с председателем для уточнения причин.";
+      case "excluded":
+        return "Вы были исключены из профсоюза. Свяжитесь с председателем для уточнения причин.";
       case "subscription_blocked":
         return "Доступ приостановлен по лимиту подписки организации. Свяжитесь с председателем для уточнения.";
       case "unauthenticated":

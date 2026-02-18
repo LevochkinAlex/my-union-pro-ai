@@ -165,9 +165,11 @@ export async function GET() {
 
     // Маппинг статуса: APPROVED -> ACCEPTED для совместимости с фронтендом
     let membershipStatusDisplay = "NOT_ACCEPTED";
-    if (user.membershipStatus === "APPROVED" || user.unionMembershipStatus === "ACCEPTED") {
+    if (user.membershipStatus === "EXCLUDED" || user.unionMembershipStatus === "REMOVED") {
+      membershipStatusDisplay = "REMOVED";
+    } else if (user.membershipStatus === "APPROVED" || user.unionMembershipStatus === "ACCEPTED") {
       membershipStatusDisplay = "ACCEPTED";
-    } else if (user.membershipStatus === "REJECTED" || user.unionMembershipStatus === "REMOVED") {
+    } else if (user.membershipStatus === "REJECTED") {
       membershipStatusDisplay = "REMOVED";
     }
 

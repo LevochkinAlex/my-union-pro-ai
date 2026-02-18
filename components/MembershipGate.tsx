@@ -94,6 +94,14 @@ export function MembershipGate({
           buttonText: "Связаться с поддержкой",
           buttonLink: "/dashboard/appeals/new",
         };
+      case "excluded":
+        return {
+          icon: icons.rejected,
+          title: "Вы исключены из профсоюза",
+          description: "Вы были исключены из профсоюза. Для уточнения причин свяжитесь с председателем.",
+          buttonText: "На главную",
+          buttonLink: "/dashboard",
+        };
       default:
         return {
           icon: icons.lock,

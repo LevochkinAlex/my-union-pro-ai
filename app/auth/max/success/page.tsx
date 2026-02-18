@@ -32,14 +32,8 @@ function MaxSuccessContent() {
         }
         if (result?.ok) {
           await updateSession();
-          setTimeout(async () => {
-            const session = await getSession();
-            if (session?.user?.id) {
-              window.location.href = "/dashboard";
-            } else {
-              setTimeout(() => (window.location.href = "/dashboard"), 1000);
-            }
-          }, 800);
+          // Один редирект в личный кабинет, остаёмся в том же окне (WebView MAX)
+          window.location.replace("/dashboard");
         }
       } catch (err) {
         console.error("[MAX Success] Ошибка:", err);
