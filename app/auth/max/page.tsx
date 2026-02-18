@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import QRCode from "qrcode";
 
 declare global {
   interface Window {
@@ -9,6 +10,27 @@ declare global {
       ready?: () => void;
     };
   }
+}
+
+/** QR-код со ссылкой на эту страницу — для сканирования с телефона и открытия в MAX */
+function AuthMaxQR() {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const url =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/auth/max`
+        : "https://myunion.pro/auth/max";
+    QRCode.toDataURL(url, { width: 220, margin: 2 }).then(setDataUrl).catch(() => {});
+  }, []);
+  if (!dataUrl) return null;
+  return (
+    <div className="mb-6 flex flex-col items-center">
+      <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+        Отсканируйте камерой телефона и откройте ссылку в MAX
+      </p>
+      <img src={dataUrl} alt="QR-код для входа через MAX" className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white p-2" width={220} height={220} />
+    </div>
+  );
 }
 
 const DETECT_TIMEOUT_MS = 3000;
@@ -87,6 +109,7 @@ export default function AuthMaxPage() {
         <p className="text-gray-600 dark:text-gray-400 mb-4">
           Откройте это приложение в мессенджере MAX (кнопка под чатом с ботом МойСоюз).
         </p>
+        <AuthMaxQR />
         <a href="/login" className="text-blue-600 dark:text-blue-400 hover:underline mb-2">
           Вернуться на страницу входа
         </a>

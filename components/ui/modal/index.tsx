@@ -74,7 +74,7 @@ export const Modal: React.FC<ModalProps> = ({
             onClick={onClose}
             aria-label="Закрыть"
             title="Закрыть"
-            className="absolute right-2 top-2 z-10 flex flex-wrap h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-gray-600 transition-colors hover:bg-gray-300 hover:text-gray-800 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:hover:text-white sm:right-3 sm:top-3 sm:h-9 sm:w-9"
+            className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-gray-100/80 text-gray-500 backdrop-blur-sm transition-colors hover:bg-gray-200 hover:text-gray-800 dark:bg-gray-800/80 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white sm:right-4 sm:top-4"
           >
             <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24" fill="none" aria-hidden>
               <path
