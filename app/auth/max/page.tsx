@@ -65,8 +65,10 @@ function AuthMaxQR() {
   );
 }
 
-const DETECT_TIMEOUT_MS = 5000;
+const DETECT_TIMEOUT_MS = 8000;
 const POLL_INTERVAL_MS = 100;
+const BRIDGE_WAIT_MS = 2500;
+// В business.max.ru → Чат-бот и мини-приложение → URL мини-приложения должен быть ровно https://myunion.pro/auth/max
 
 export default function AuthMaxPage() {
   const [status, setStatus] = useState<
@@ -133,6 +135,16 @@ export default function AuthMaxPage() {
     }, DETECT_TIMEOUT_MS);
   }, [tryAuth]);
 
+  const retryDetection = useCallback(() => {
+    clearInterval(pollRef.current);
+    clearTimeout(timeoutRef.current);
+    pollRef.current = undefined;
+    timeoutRef.current = undefined;
+    ran.current = false;
+    setStatus("loading");
+    startPolling();
+  }, [startPolling]);
+
   useEffect(() => {
     if (window.WebApp) {
       startPolling();
@@ -155,6 +167,16 @@ export default function AuthMaxPage() {
     }
   }, [startPolling]);
 
+  // Если Bridge долго не загрузился — всё равно начинаем опрос (MAX мог инжектить WebApp до скрипта)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (!ran.current && typeof window !== "undefined" && window.WebApp) {
+        startPolling();
+      }
+    }, BRIDGE_WAIT_MS);
+    return () => clearTimeout(t);
+  }, [startPolling]);
+
   // Если уже залогинен — сразу в личный кабинет (редирект обратно в мини-приложении)
   useEffect(() => {
     getSession().then((session) => {
@@ -168,16 +190,42 @@ export default function AuthMaxPage() {
     const openInMaxUrl = MAX_BOT_USERNAME
       ? `https://max.ru/${MAX_BOT_USERNAME}?startapp`
       : "https://max.ru";
+    const isWebMax =
+      typeof document !== "undefined" &&
+      (document.referrer?.includes("web.max.ru") ||
+        document.referrer?.includes("max.ru"));
 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen px-4 text-center">
         <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
           Вход через MAX
         </h1>
-        <p className="text-gray-600 dark:text-gray-400 mb-4 max-w-sm">
-          Для авторизации откройте бота «Мой Союз» в мессенджере MAX
-          и&nbsp;нажмите кнопку внизу чата.
-        </p>
+        {isWebMax ? (
+          <>
+            <p className="text-gray-600 dark:text-gray-400 mb-3 max-w-sm">
+              Вы открыли мини-приложение в веб-версии MAX (web.max.ru). Вход через MAX в браузере не поддерживается.
+            </p>
+            <p className="text-sm text-amber-600 dark:text-amber-400 mb-4 max-w-sm">
+              Используйте приложение MAX на телефоне: откройте бота «Мой Союз» и нажмите кнопку под чатом — или отсканируйте QR-код ниже.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-gray-600 dark:text-gray-400 mb-3 max-w-sm">
+              Авторизация сработает только внутри приложения MAX: откройте чат с ботом «Мой Союз» и нажмите кнопку под чатом (Старт / Открыть).
+            </p>
+            <p className="text-sm text-amber-600 dark:text-amber-400 mb-4 max-w-sm">
+              Если вы уже в MAX — закройте эту вкладку и нажмите кнопку под чатом с ботом ещё раз.
+            </p>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={retryDetection}
+          className="mb-4 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+        >
+          Попробовать снова
+        </button>
         <a
           href={openInMaxUrl}
           className="mb-6 inline-flex items-center justify-center w-full max-w-xs px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"

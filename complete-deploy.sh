@@ -2,8 +2,10 @@
 set -e
 
 # Сервер: 194.87.49.210, путь: /opt/my-union-pro
-# Пароль: export VDS_PASSWORD='...' (не хранить в репо!)
-VDS_PASSWORD="${VDS_PASSWORD:?Set VDS_PASSWORD: export VDS_PASSWORD='your_password'}"
+# Пароль: в vds.deploy.env (файл в .gitignore) или export VDS_PASSWORD='...'
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+[ -f "$SCRIPT_DIR/vds.deploy.env" ] && source "$SCRIPT_DIR/vds.deploy.env"
+VDS_PASSWORD="${VDS_PASSWORD:?Set VDS_PASSWORD или создайте vds.deploy.env с export VDS_PASSWORD='...'}"
 
 COMMIT_MSG="${1:-Fix: обновления и исправления}"
 

@@ -1,79 +1,42 @@
-# Чеклист проверки доставки сообщений и push-уведомлений
+# Деплой и проверки
 
-## ✅ Проверено перед деплоем
+## Актуальные скрипты
 
-### 1. WebSocket доставка сообщений
-- ✅ `emitNewMessage` вызывается в `/api/chat/[chatId]/route.ts` (POST)
-- ✅ `emitNewMessage` вызывается в `/api/chat/[chatId]/attachments/route.ts` (POST)
-- ✅ Формат комнаты: используется просто `chatId` (без префикса `chat:`)
-- ✅ В `server/socket.ts` клиенты присоединяются к комнате через `socket.join(chatId)`
-- ✅ Событие `message:new` отправляется в комнату через `io.to(chatId).emit()`
+| Скрипт | Назначение |
+|--------|------------|
+| **complete-deploy.sh** | Основной деплой: коммит, пуш, pull на сервере, build, restart PM2, проверка API. Запуск: `VDS_PASSWORD='...' ./complete-deploy.sh "Сообщение коммита"` |
+| **commit-and-deploy.sh** | Полный деплой с pre-deploy, миграциями Prisma и перезапуском my-union-pro + my-union-socket. Запуск: `VDS_PASSWORD='...' ./commit-and-deploy.sh "Сообщение"` |
+| **check-deploy-status.sh** | Только проверка: PM2, последний коммит, git status, наличие .next, HTTP myunion.pro. Запуск: `VDS_PASSWORD='...' ./check-deploy-status.sh` |
 
-### 2. Push-уведомления через Firebase
-- ✅ Настроены в обоих endpoint'ах (обычные сообщения и вложения)
-- ✅ Отправляются всем участникам чата кроме отправителя
-- ✅ Используется `sendEachForMulticast` для массовой отправки
-- ✅ Включают `chatId` и `messageId` в data для навигации
-- ✅ Service worker обрабатывает клики по уведомлениям с правильным URL
+Пароль не хранить в репозитории: `export VDS_PASSWORD='...'` перед запуском.
 
-### 3. Redis для масштабирования
-- ✅ Redis adapter для Socket.io настроен
-- ✅ Кэширование списков чатов (TTL: 30 сек)
-- ✅ Redis утилиты для typing indicators и online status
+- Сервер: **194.87.49.210**
+- Путь на сервере: **/opt/my-union-pro**
+- БД: **VK Cloud** (PostgreSQL), в `.env.local` на сервере задан `DATABASE_URL`
 
-## 🚀 Команды для деплоя
-
-БД — VK Cloud (83.166.237.161, myunion_db). На сервере в `.env.local` задан `DATABASE_URL` на этот хост.
+## Ручные команды на сервере
 
 ```bash
 ssh root@194.87.49.210
 cd /opt/my-union-pro
 git pull origin main
 pnpm install
-npx prisma migrate deploy
+npx prisma migrate deploy   # при необходимости
 pnpm build
 pm2 restart my-union-pro
 pm2 restart my-union-socket
 pm2 logs my-union-pro --lines 50
 ```
 
-## 🔍 Проверка после деплоя
+## Проверка после деплоя
 
-1. **WebSocket соединение:**
-   - Откройте консоль браузера
-   - Проверьте логи `[useChat] ✅ Socket connected`
-   - Отправьте сообщение и проверьте, что оно приходит в реальном времени
+1. **Сайт:** https://myunion.pro — открывается, логин работает.
+2. **WebSocket:** в консоли браузера есть `[useChat] ✅ Socket connected`; сообщения приходят в реальном времени.
+3. **Push:** отправить сообщение с одного устройства — на другом приходит уведомление; клик открывает нужный чат.
+4. **Логи:** `ssh root@194.87.49.210 'pm2 logs my-union-pro --lines 100'`
 
-2. **Push-уведомления:**
-   - Откройте приложение в двух разных браузерах/устройствах
-   - Отправьте сообщение с одного устройства
-   - Проверьте, что push-уведомление приходит на другое устройство
-   - Проверьте, что клик по уведомлению открывает правильный чат
+## Возможные проблемы
 
-3. **Логи сервера:**
-   ```bash
-   pm2 logs my-union-pro --lines 100 | grep -E "(chat|socket|push|notification)"
-   ```
-
-4. **Проверка Redis:**
-   ```bash
-   redis-cli ping
-   redis-cli keys "user:chats:*" | head -5
-   ```
-
-## ⚠️ Возможные проблемы
-
-1. **WebSocket не работает:**
-   - Проверьте, что Socket.io сервер запущен
-   - Проверьте переменные окружения `NEXT_PUBLIC_SOCKET_URL`
-   - Проверьте логи на наличие ошибок подключения
-
-2. **Push-уведомления не приходят:**
-   - Проверьте, что Firebase Admin SDK настроен
-   - Проверьте, что FCM токены сохраняются в БД
-   - Проверьте логи Firebase в консоли
-
-3. **Redis ошибки:**
-   - Проверьте, что Redis запущен: `redis-cli ping`
-   - Проверьте переменные окружения `REDIS_URL`
-   - Socket.io будет работать без Redis (fallback на in-memory)
+- **502:** приложение не поднялось после build — смотреть `pm2 logs my-union-pro --err`.
+- **WebSocket не подключается:** проверить `NEXT_PUBLIC_SOCKET_URL`, что my-union-socket запущен.
+- **Миграции:** при изменении схемы Prisma на сервере выполнить `npx prisma migrate deploy`.

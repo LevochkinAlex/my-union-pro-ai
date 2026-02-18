@@ -1,15 +1,18 @@
 #!/bin/bash
+# Проверка статуса деплоя на сервере. Пароль: vds.deploy.env или export VDS_PASSWORD='...'
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+[ -f "$SCRIPT_DIR/vds.deploy.env" ] && source "$SCRIPT_DIR/vds.deploy.env"
 
 SERVER="root@194.87.49.210"
-PASSWORD="wu,iMrZj6goZh?"
 PROJECT_DIR="/opt/my-union-pro"
+VDS_PASSWORD="${VDS_PASSWORD:?Set VDS_PASSWORD или создайте vds.deploy.env}"
 
 echo "🔍 Checking deployment status..."
 echo ""
 
-# Function to run command on server
 run_remote() {
-    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "$SERVER" "$1" 2>&1
+    sshpass -p "$VDS_PASSWORD" ssh -o StrictHostKeyChecking=no "$SERVER" "$1" 2>&1
 }
 
 echo "📊 PM2 Status:"
