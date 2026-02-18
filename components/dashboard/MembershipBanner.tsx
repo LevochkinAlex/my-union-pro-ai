@@ -198,6 +198,7 @@ export default function MembershipBanner({
     }
 
     return (
+      <>
       <div className="relative overflow-hidden rounded-xl border border-green-200 bg-gradient-to-br from-green-50 via-green-50/50 to-blue-50 p-6 shadow-lg dark:border-green-900/50 dark:from-green-900/20 dark:via-green-900/10 dark:to-blue-900/20">
         <div className="absolute right-0 top-0 -mr-20 -mt-20 h-40 w-40 rounded-full bg-green-200/30 blur-3xl dark:bg-green-500/20" />
         <div className="absolute bottom-0 left-0 -mb-10 -ml-10 h-32 w-32 rounded-full bg-blue-200/30 blur-2xl dark:bg-blue-500/20" />
@@ -269,6 +270,16 @@ export default function MembershipBanner({
           </button>
         </div>
       </div>
+
+      <AdditionalInfoModal
+        isOpen={isAdditionalInfoModalOpen}
+        onClose={() => setIsAdditionalInfoModalOpen(false)}
+        onComplete={() => {
+          setIsAdditionalInfoModalOpen(false);
+          window.location.reload();
+        }}
+      />
+    </>
     );
   }
 
