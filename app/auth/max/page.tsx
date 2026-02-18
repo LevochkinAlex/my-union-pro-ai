@@ -1,118 +1,158 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
+import Script from "next/script";
 import QRCode from "qrcode";
 
 declare global {
   interface Window {
     WebApp?: {
       initData: string;
+      initDataUnsafe?: {
+        query_id?: string;
+        auth_date?: number;
+        hash?: string;
+        start_param?: string;
+        user?: {
+          id: number;
+          first_name?: string;
+          last_name?: string;
+          username?: string;
+          language_code?: string;
+          photo_url?: string;
+        };
+      };
+      platform?: string;
+      version?: string;
       ready?: () => void;
+      close?: () => void;
     };
   }
 }
 
-/**
- * QR-код для входа через MAX с десктопа.
- * Если задан NEXT_PUBLIC_MAX_BOT_USERNAME — в QR диплинк max.ru/BotName?startapp (откроет MAX и мини-приложение).
- * Иначе — прямая ссылка на /auth/max; тогда важно открыть её именно в приложении MAX, а не в браузере.
- */
-const MAX_BOT_USERNAME = typeof process.env.NEXT_PUBLIC_MAX_BOT_USERNAME === "string"
-  ? process.env.NEXT_PUBLIC_MAX_BOT_USERNAME.trim()
-  : "";
+const MAX_BOT_USERNAME =
+  typeof process.env.NEXT_PUBLIC_MAX_BOT_USERNAME === "string"
+    ? process.env.NEXT_PUBLIC_MAX_BOT_USERNAME.trim()
+    : "";
 
 function AuthMaxQR() {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   useEffect(() => {
     const url = MAX_BOT_USERNAME
       ? `https://max.ru/${MAX_BOT_USERNAME}?startapp`
-      : (typeof window !== "undefined"
-          ? `${window.location.origin}/auth/max`
-          : "https://myunion.pro/auth/max");
-    QRCode.toDataURL(url, { width: 220, margin: 2 }).then(setDataUrl).catch(() => {});
+      : typeof window !== "undefined"
+        ? `${window.location.origin}/auth/max`
+        : "https://myunion.pro/auth/max";
+    QRCode.toDataURL(url, { width: 220, margin: 2 })
+      .then(setDataUrl)
+      .catch(() => {});
   }, []);
   if (!dataUrl) return null;
   return (
     <div className="mb-6 flex flex-col items-center">
       <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-        Отсканируйте камерой телефона. Ссылка должна открыться в приложении MAX — тогда войдёте автоматически.
+        Отсканируйте QR камерой телефона — откроется бот в MAX и авторизация произойдёт автоматически.
       </p>
-      <img src={dataUrl} alt="QR-код для входа через MAX" className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white p-2" width={220} height={220} />
-      {!MAX_BOT_USERNAME && (
-        <p className="mt-3 max-w-xs text-xs text-amber-600 dark:text-amber-400">
-          Если открылось в браузере — авторизация не сработает. Откройте приложение MAX и нажмите кнопку под чатом с ботом МойСоюз.
-        </p>
-      )}
+      <img
+        src={dataUrl}
+        alt="QR-код для входа через MAX"
+        className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white p-2"
+        width={220}
+        height={220}
+      />
     </div>
   );
 }
 
-const DETECT_TIMEOUT_MS = 3000;
+const DETECT_TIMEOUT_MS = 5000;
+const POLL_INTERVAL_MS = 100;
 
-/**
- * Точка входа мини-приложения MAX.
- * MAX-клиент инжектирует window.WebApp с initData в WebView.
- * Если initData не появляется за 3 сек — значит, открыто вне MAX.
- */
 export default function AuthMaxPage() {
-  const [status, setStatus] = useState<"loading" | "sending" | "done" | "error" | "no_webapp">("loading");
+  const [status, setStatus] = useState<
+    "loading" | "bridge_loading" | "sending" | "done" | "error" | "no_webapp"
+  >("bridge_loading");
   const [errorMessage, setErrorMessage] = useState("");
   const ran = useRef(false);
+  const pollRef = useRef<ReturnType<typeof setInterval>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-  useEffect(() => {
+  const tryAuth = useCallback(() => {
+    const wa = window.WebApp;
+    if (!wa?.initData) return false;
+
+    console.log("[MAX Auth] initData found, platform:", wa.platform, "version:", wa.version);
+    wa.ready?.();
+    setStatus("sending");
+
+    fetch("/api/auth/max/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initData: wa.initData }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.redirectUrl) {
+          setStatus("done");
+          window.location.href = data.redirectUrl;
+        } else {
+          setStatus("error");
+          setErrorMessage(data?.error || "Ошибка верификации");
+        }
+      })
+      .catch(() => {
+        setStatus("error");
+        setErrorMessage("Ошибка соединения с сервером");
+      });
+
+    return true;
+  }, []);
+
+  const startPolling = useCallback(() => {
     if (ran.current) return;
     ran.current = true;
 
-    const tryAuth = () => {
-      const wa = window.WebApp;
-      if (!wa?.initData) return false;
-
-      wa.ready?.();
-      setStatus("sending");
-
-      fetch("/api/auth/max/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ initData: wa.initData }),
-      })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data?.redirectUrl) {
-            setStatus("done");
-            window.location.href = data.redirectUrl;
-          } else {
-            setStatus("error");
-            setErrorMessage(data?.error || "Ошибка верификации");
-          }
-        })
-        .catch(() => {
-          setStatus("error");
-          setErrorMessage("Ошибка соединения с сервером");
-        });
-
-      return true;
-    };
-
     if (tryAuth()) return;
 
-    const poll = setInterval(() => {
+    setStatus("loading");
+
+    pollRef.current = setInterval(() => {
       if (window.WebApp?.initData) {
-        clearInterval(poll);
-        clearTimeout(timeout);
+        clearInterval(pollRef.current);
+        clearTimeout(timeoutRef.current);
         tryAuth();
       }
-    }, 150);
+    }, POLL_INTERVAL_MS);
 
-    const timeout = setTimeout(() => {
-      clearInterval(poll);
-      setStatus("no_webapp");
+    timeoutRef.current = setTimeout(() => {
+      clearInterval(pollRef.current);
+      if (!tryAuth()) {
+        console.log("[MAX Auth] No initData after timeout — not inside MAX WebView");
+        setStatus("no_webapp");
+      }
     }, DETECT_TIMEOUT_MS);
+  }, [tryAuth]);
 
+  useEffect(() => {
+    if (window.WebApp) {
+      startPolling();
+    }
     return () => {
-      clearInterval(poll);
-      clearTimeout(timeout);
+      clearInterval(pollRef.current);
+      clearTimeout(timeoutRef.current);
     };
-  }, []);
+  }, [startPolling]);
+
+  const handleBridgeLoad = useCallback(() => {
+    console.log("[MAX Auth] MAX Bridge script loaded, WebApp:", !!window.WebApp);
+    startPolling();
+  }, [startPolling]);
+
+  const handleBridgeError = useCallback(() => {
+    console.warn("[MAX Auth] MAX Bridge script failed to load");
+    if (!ran.current) {
+      startPolling();
+    }
+  }, [startPolling]);
 
   if (status === "no_webapp") {
     const openInMaxUrl = MAX_BOT_USERNAME
@@ -124,17 +164,21 @@ export default function AuthMaxPage() {
         <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
           Вход через MAX
         </h1>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
-          Откройте это приложение в мессенджере MAX (кнопка под чатом с ботом МойСоюз).
+        <p className="text-gray-600 dark:text-gray-400 mb-4 max-w-sm">
+          Для авторизации откройте бота «Мой Союз» в мессенджере MAX
+          и&nbsp;нажмите кнопку внизу чата.
         </p>
         <a
           href={openInMaxUrl}
-          className="mb-6 w-full max-w-xs px-4 py-3 rounded-lg bg-gray-800 hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-medium"
+          className="mb-6 inline-flex items-center justify-center w-full max-w-xs px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
         >
-          Открыть в MAX
+          Открыть бота в MAX
         </a>
         <AuthMaxQR />
-        <a href="/login" className="text-blue-600 dark:text-blue-400 hover:underline mb-2">
+        <a
+          href="/login"
+          className="text-blue-600 dark:text-blue-400 hover:underline mb-2"
+        >
           Вернуться на страницу входа
         </a>
         <a
@@ -156,7 +200,10 @@ export default function AuthMaxPage() {
           Ошибка входа
         </h1>
         <p className="text-red-600 dark:text-red-400 mb-4">{errorMessage}</p>
-        <a href="/login" className="text-blue-600 dark:text-blue-400 hover:underline">
+        <a
+          href="/login"
+          className="text-blue-600 dark:text-blue-400 hover:underline"
+        >
           На страницу входа
         </a>
       </div>
@@ -164,10 +211,22 @@ export default function AuthMaxPage() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen px-4">
-      <div className="animate-pulse text-gray-600 dark:text-gray-400">
-        {status === "sending" ? "Вход в МойСоюз…" : "Загрузка…"}
+    <>
+      <Script
+        src="https://cdn.max.ru/js/max-web-app.js"
+        strategy="afterInteractive"
+        onLoad={handleBridgeLoad}
+        onError={handleBridgeError}
+      />
+      <div className="flex flex-col items-center justify-center min-h-screen px-4">
+        <div className="animate-pulse text-gray-600 dark:text-gray-400">
+          {status === "sending"
+            ? "Вход в МойСоюз…"
+            : status === "bridge_loading"
+              ? "Подключение к MAX…"
+              : "Проверка авторизации…"}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
