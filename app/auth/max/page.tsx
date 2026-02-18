@@ -74,8 +74,8 @@ export default function AuthMaxPage() {
   >("bridge_loading");
   const [errorMessage, setErrorMessage] = useState("");
   const ran = useRef(false);
-  const pollRef = useRef<ReturnType<typeof setInterval>>();
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const tryAuth = useCallback(() => {
     const wa = window.WebApp;
