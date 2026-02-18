@@ -38,15 +38,15 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user) {
-      // Создаём нового пользователя по MAX
+      // Создаём нового пользователя по MAX. MAX Bridge: first_name = имя, last_name = фамилия — без перестановки
       try {
         user = await prisma.user.create({
           data: {
             maxUserId: maxUserIdStr,
             maxChatId: maxUserIdStr, // для личного чата chat_id обычно совпадает с user_id
             maxUsername: maxUser.username ?? null,
-            firstName: maxUser.first_name ?? null,
-            lastName: maxUser.last_name ?? null,
+            firstName: maxUser.first_name ?? null, // имя (given name)
+            lastName: maxUser.last_name ?? null,  // фамилия (surname)
             role: "PENDING_MEMBER",
             membershipStatus: "PROFILE_INCOMPLETE",
           },
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
         if (!user) throw e;
       }
     } else {
-      // Обновляем профиль из MAX при повторном входе
+      // Обновляем профиль из MAX при повторном входе (first_name → firstName, last_name → lastName)
       await prisma.user.update({
         where: { id: user.id },
         data: {

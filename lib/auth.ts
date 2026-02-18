@@ -20,8 +20,9 @@ function normalizePhone(phone: string): string {
 }
 
 /**
- * Парсинг ФИО из данных Яндекс API
- * Приоритет: first_name/last_name > real_name (с умным парсингом)
+ * Парсинг ФИО из данных Яндекс API.
+ * ВАЖНО: firstName = имя (given name), lastName = фамилия (surname). Не менять местами.
+ * Яндекс отдаёт first_name = имя, last_name = фамилия — используем как есть.
  */
 function parseYandexName(yandexUserInfo: {
   first_name?: string;
@@ -30,7 +31,7 @@ function parseYandexName(yandexUserInfo: {
 }): { firstName?: string; lastName?: string; middleName?: string } {
   const result: { firstName?: string; lastName?: string; middleName?: string } = {};
 
-  // Приоритет: используем first_name и last_name из Yandex API (наиболее надежно)
+  // Приоритет: first_name и last_name из API (имя и фамилия соответственно — без перестановки)
   if (yandexUserInfo.first_name || yandexUserInfo.last_name) {
     if (yandexUserInfo.first_name) {
       result.firstName = yandexUserInfo.first_name.trim();
@@ -41,30 +42,29 @@ function parseYandexName(yandexUserInfo: {
     return result;
   }
 
-  // Fallback: парсим real_name
-  // Формат может быть: "Фамилия Имя Отчество" или "Имя Фамилия" или другой
+  // Fallback: парсим real_name (полная строка "Имя Фамилия" или "Фамилия Имя Отчество")
   if (yandexUserInfo.real_name) {
     const realName = yandexUserInfo.real_name.trim();
     const nameParts = realName.split(/\s+/).filter(p => p.length > 0);
-    
+
     if (nameParts.length >= 2) {
-      // Пробуем определить формат по длине и окончанию
-      // Если первое слово длиннее и заканчивается на -ов/-ев/-ин - скорее всего фамилия
       const firstPart = nameParts[0];
       const secondPart = nameParts[1];
-      const isLikelySurnameFirst = 
+      // Окончания фамилий (целые суффиксы), чтобы не путать с именами: "Иван" не должен считаться фамилией
+      const surnameEndings = /(ов|ова|ев|ева|ин|ина|ын|ына|ий|ая|ский|ская|цкий|цкая)$/i;
+      const isLikelySurnameFirst =
         firstPart.length > secondPart.length ||
-        /[-ов|-ев|-ин|-ая|-ий]$/i.test(firstPart);
-      
+        surnameEndings.test(firstPart);
+
       if (isLikelySurnameFirst) {
-        // Формат: "Фамилия Имя Отчество"
+        // Формат: "Фамилия Имя [Отчество]"
         result.lastName = firstPart;
         result.firstName = secondPart;
         if (nameParts.length >= 3) {
           result.middleName = nameParts.slice(2).join(" ");
         }
       } else {
-        // Формат: "Имя Фамилия" или другой
+        // Формат: "Имя Фамилия [Отчество]"
         result.firstName = firstPart;
         result.lastName = secondPart;
         if (nameParts.length >= 3) {
@@ -72,7 +72,6 @@ function parseYandexName(yandexUserInfo: {
         }
       }
     } else if (nameParts.length === 1) {
-      // Только одно слово - используем как имя
       result.firstName = nameParts[0];
     }
   }
