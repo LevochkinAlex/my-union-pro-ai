@@ -854,14 +854,14 @@ function TelegramLoginButton() {
 }
 
 function MaxLoginButton() {
-  const handleMaxLogin = () => {
-    window.location.href = "/auth/max";
-  };
+  const isMobile =
+    typeof window !== "undefined" &&
+    /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test((navigator.userAgent || "").toLowerCase());
+  const href = isMobile ? "/auth/max/launch" : "/auth/max";
 
   return (
-    <button
-      type="button"
-      onClick={handleMaxLogin}
+    <a
+      href={href}
       className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-gray-800 hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-medium rounded-lg transition-colors border border-gray-700 dark:border-gray-600"
     >
       <Image
@@ -872,7 +872,7 @@ function MaxLoginButton() {
         className="w-6 h-6 flex-shrink-0"
       />
       <span>Войти с MAX</span>
-    </button>
+    </a>
   );
 }
 

@@ -115,6 +115,10 @@ export default function AuthMaxPage() {
   }, []);
 
   if (status === "no_webapp") {
+    const openInMaxUrl = MAX_BOT_USERNAME
+      ? `https://max.ru/${MAX_BOT_USERNAME}?startapp`
+      : "https://max.ru";
+
     return (
       <div className="flex flex-col items-center justify-center min-h-screen px-4 text-center">
         <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
@@ -123,6 +127,12 @@ export default function AuthMaxPage() {
         <p className="text-gray-600 dark:text-gray-400 mb-4">
           Откройте это приложение в мессенджере MAX (кнопка под чатом с ботом МойСоюз).
         </p>
+        <a
+          href={openInMaxUrl}
+          className="mb-6 w-full max-w-xs px-4 py-3 rounded-lg bg-gray-800 hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-medium"
+        >
+          Открыть в MAX
+        </a>
         <AuthMaxQR />
         <a href="/login" className="text-blue-600 dark:text-blue-400 hover:underline mb-2">
           Вернуться на страницу входа
