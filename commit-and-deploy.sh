@@ -1,11 +1,16 @@
 #!/bin/bash
-
 set -e
 
+# Сервер: 194.87.49.210, путь: /opt/my-union-pro
+# Пароль: export VDS_PASSWORD='...' (не хранить в репо!)
+VDS_PASSWORD="${VDS_PASSWORD:?Set VDS_PASSWORD: export VDS_PASSWORD='your_password'}"
+
+COMMIT_MSG="${1:-Fix: обновления и исправления}"
+
 echo "📦 Step 1: Committing changes..."
-cd /Users/renatusmanov/my-union-pro-ai
+cd "$(dirname "$0")"
 git add -A
-git commit -m "Fix: исправлено отображение кнопки закрытия обращения, обновление статуса чата после создания, исправлена статистика по обращениям" || echo "No changes to commit"
+git commit -m "$COMMIT_MSG" || echo "No changes to commit"
 echo "✅ Changes committed"
 echo ""
 
@@ -15,7 +20,6 @@ echo "✅ Changes pushed"
 echo ""
 
 echo "🧪 Step 2.5: Running pre-deploy checks..."
-cd /Users/renatusmanov/my-union-pro-ai
 if pnpm pre-deploy; then
   echo "✅ Pre-deploy checks passed"
 else
@@ -25,7 +29,7 @@ fi
 echo ""
 
 echo "📥 Step 3: Deploying to server..."
-sshpass -p 'wu,iMrZj6goZh?' ssh -o StrictHostKeyChecking=no root@194.87.49.210 << 'EOF'
+sshpass -p "$VDS_PASSWORD" ssh -o StrictHostKeyChecking=no root@194.87.49.210 << 'EOF'
 cd /opt/my-union-pro
 echo "=== Git Pull ==="
 git pull

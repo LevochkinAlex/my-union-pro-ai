@@ -1,11 +1,17 @@
 #!/bin/bash
 set -e
 
+# Сервер: 194.87.49.210, путь: /opt/my-union-pro
+# Пароль: export VDS_PASSWORD='...' (не хранить в репо!)
+VDS_PASSWORD="${VDS_PASSWORD:?Set VDS_PASSWORD: export VDS_PASSWORD='your_password'}"
+
+COMMIT_MSG="${1:-Fix: обновления и исправления}"
+
 echo "=========================================="
 echo "COMPLETE DEPLOY SCRIPT"
 echo "=========================================="
 
-cd /Users/renatusmanov/my-union-pro-ai
+cd "$(dirname "$0")"
 
 echo ""
 echo "Step 1: Checking git status..."
@@ -17,7 +23,7 @@ git add -A
 
 echo ""
 echo "Step 3: Committing changes..."
-git commit -m "Fix: версия 1.7.2, исправления создания чата и уведомлений" || echo "Nothing to commit or already committed"
+git commit -m "$COMMIT_MSG" || echo "Nothing to commit or already committed"
 
 echo ""
 echo "Step 4: Pushing to remote..."
@@ -25,7 +31,7 @@ git push
 
 echo ""
 echo "Step 5: Deploying to server..."
-sshpass -p 'wu,iMrZj6goZh?' ssh -o StrictHostKeyChecking=no root@194.87.49.210 bash << 'EOF'
+sshpass -p "$VDS_PASSWORD" ssh -o StrictHostKeyChecking=no root@194.87.49.210 bash << 'EOF'
 cd /opt/my-union-pro
 echo "--- Pulling code ---"
 git pull
