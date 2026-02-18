@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { TicketStatus } from "@prisma/client";
 import { getPPOHead } from "@/lib/ppo-head-utils";
 import { checkUserPermissions } from "@/lib/staff-permissions";
 import { sendUserNotification } from "@/lib/notifications";
@@ -83,7 +84,7 @@ export async function PATCH(
     const updated = await prisma.ticket.update({
       where: { id: ticket.id },
       data: {
-        status,
+        status: status as TicketStatus,
         ...(status === "IN_PROGRESS" ? { lastResponseAt: new Date() } : {}),
         ...(status === "RESOLVED" ? { resolved: true, resolvedAt: new Date(), isOverdue: false } : {}),
       },

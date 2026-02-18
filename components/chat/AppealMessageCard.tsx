@@ -115,7 +115,7 @@ export default function AppealMessageCard({ content, isOwn = false }: AppealMess
               }
             `}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {displayText}{!expanded && hasLongText ? "…" : ""}
+                {`${displayText}${!expanded && hasLongText ? "…" : ""}`}
               </ReactMarkdown>
             </div>
             {showExpandButton && (
